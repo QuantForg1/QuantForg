@@ -124,6 +124,44 @@ def _join(lines: list[str | None]) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def _attach_trade_fields(
+    notices: list[dict[str, Any]],
+    *,
+    symbol: str | None = None,
+    direction: str | None = None,
+    entry: object = None,
+    stop_loss: object = None,
+    take_profit: object = None,
+    current_price: object = None,
+    ticket: object = None,
+) -> list[dict[str, Any]]:
+    """Attach structured trade facts for Jimvio. Telegram still uses text."""
+    base: dict[str, Any] = {}
+    if symbol:
+        base["symbol"] = symbol
+    if direction:
+        base["direction"] = direction
+    if entry is not None and entry != "":
+        base["entry"] = entry
+    if stop_loss is not None and stop_loss != "":
+        base["stop_loss"] = stop_loss
+    if take_profit is not None and take_profit != "":
+        base["take_profit"] = take_profit
+    if current_price is not None and current_price != "":
+        base["current_price"] = current_price
+    if ticket not in (None, "", 0, "0"):
+        base["ticket"] = ticket
+    if not base:
+        return notices
+    for notice in notices:
+        merged = dict(base)
+        extra = notice.get("fields")
+        if isinstance(extra, dict):
+            merged.update(extra)
+        notice["fields"] = merged
+    return notices
+
+
 def format_test_message() -> str:
     return _join(
         [
@@ -794,7 +832,15 @@ def classify_cycle_notices(
                     ),
                 }
             )
-        return notices
+        return _attach_trade_fields(
+            notices,
+            symbol=symbol,
+            direction=direction or action,
+            entry=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            ticket=ticket,
+        )
 
     safety = tuple(getattr(cycle, "safety_failed_reasons", ()) or ())
     safety_text = " ".join(str(item) for item in safety).upper()
@@ -823,7 +869,14 @@ def classify_cycle_notices(
                 ),
             }
         )
-        return notices
+        return _attach_trade_fields(
+            notices,
+            symbol=symbol,
+            direction=direction or action,
+            entry=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
     if _contains(abort, _OMS_ABORT_MARKERS):
         notices.append(
             {
@@ -836,7 +889,14 @@ def classify_cycle_notices(
                 ),
             }
         )
-        return notices
+        return _attach_trade_fields(
+            notices,
+            symbol=symbol,
+            direction=direction or action,
+            entry=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
     if _contains(abort, _EXEC_ABORT_MARKERS):
         notices.append(
             {
@@ -849,7 +909,14 @@ def classify_cycle_notices(
                 ),
             }
         )
-        return notices
+        return _attach_trade_fields(
+            notices,
+            symbol=symbol,
+            direction=direction or action,
+            entry=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
     if abort and (confirmed or generated):
         notices.append(
             {
@@ -862,7 +929,14 @@ def classify_cycle_notices(
                 ),
             }
         )
-    return notices
+    return _attach_trade_fields(
+        notices,
+        symbol=symbol,
+        direction=direction or action,
+        entry=entry,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+    )
 
 
 def classify_pme_notices(
@@ -1025,4 +1099,13 @@ def classify_pme_notices(
                 ),
             }
         )
-    return notices
+    return _attach_trade_fields(
+        notices,
+        symbol=symbol,
+        direction=side,
+        entry=getattr(position, "entry_price", None),
+        stop_loss=new_sl or old_sl,
+        take_profit=new_tp or old_tp,
+        current_price=current_price,
+        ticket=ticket,
+    )

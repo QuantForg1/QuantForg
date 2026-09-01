@@ -381,15 +381,30 @@ def reset_telegram_dispatcher_for_tests(
     return _dispatcher
 
 
-def emit_telegram(event: str, event_id: str, text: str) -> None:
-    """Process-wide fail-open emit. Safe to call from any trading observer."""
+def emit_telegram(
+    event: str,
+    event_id: str,
+    text: str,
+    *,
+    fields: dict[str, Any] | None = None,
+) -> None:
+    """Process-wide fail-open emit. Safe to call from any trading observer.
+
+    Telegram and Jimvio are independent delivery targets. Failure of one
+    never blocks the other, Risk, OMS, MT5, or the ITE loop.
+    """
     try:
         dispatcher = get_telegram_dispatcher()
-        if dispatcher is None:
-            return
-        dispatcher.emit(event, event_id, text)
+        if dispatcher is not None:
+            dispatcher.emit(event, event_id, text)
     except Exception:
         logger.exception("telegram_emit_failed")
+    try:
+        from app.application.services.jimvio_publisher import emit_jimvio
+
+        emit_jimvio(event, event_id, text, fields=fields)
+    except Exception:
+        logger.exception("jimvio_fanout_failed")
 
 
 async def start_telegram_dispatcher(settings: Any) -> TelegramDispatcher:
@@ -498,7 +513,17 @@ def notify_cycle(
             bridge=bridge,
             pipeline=pipeline,
         ):
-            emit_telegram(notice["event"], notice["event_id"], notice["text"])
+            fields = (
+                notice.get("fields")
+                if isinstance(notice.get("fields"), dict)
+                else None
+            )
+            emit_telegram(
+                notice["event"],
+                notice["event_id"],
+                notice["text"],
+                fields=fields,
+            )
     except Exception:
         logger.exception("telegram_cycle_notify_failed")
 
@@ -508,7 +533,17 @@ def notify_pme(result: Any, *, current_price: object = None) -> None:
         from app.application.services.telegram_events import classify_pme_notices
 
         for notice in classify_pme_notices(result=result, current_price=current_price):
-            emit_telegram(notice["event"], notice["event_id"], notice["text"])
+            fields = (
+                notice.get("fields")
+                if isinstance(notice.get("fields"), dict)
+                else None
+            )
+            emit_telegram(
+                notice["event"],
+                notice["event_id"],
+                notice["text"],
+                fields=fields,
+            )
     except Exception:
         logger.exception("telegram_pme_notify_failed")
 

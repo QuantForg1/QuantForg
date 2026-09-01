@@ -534,6 +534,7 @@ class TestTelegramDoesNotBlockTrading:
         for rel in forbidden:
             text = (REPO / rel).read_text(encoding="utf-8").lower()
             assert "telegram" not in text, rel
+            assert "jimvio" not in text, rel
 
     @pytest.mark.asyncio
     async def test_telegram_failure_does_not_fail_notify_cycle(self) -> None:

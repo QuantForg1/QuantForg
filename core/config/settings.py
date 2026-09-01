@@ -438,6 +438,42 @@ class Settings(BaseSettings):
         ),
     ] = ""
 
+    # -- Jimvio webhook (observability only — never on the trading path) ----
+    jimvio_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Enable outbound Jimvio webhook publishing. Delivery is "
+                "asynchronous and fail-open: Jimvio errors never affect "
+                "orders, risk, OMS, Telegram, or the ITE loop."
+            ),
+            validation_alias=AliasChoices("JIMVIO_ENABLED", "jimvio_enabled"),
+        ),
+    ] = False
+    jimvio_webhook_url: Annotated[
+        str,
+        Field(
+            description="Jimvio QuantForg webhook URL.",
+            validation_alias=AliasChoices(
+                "JIMVIO_WEBHOOK_URL",
+                "jimvio_webhook_url",
+            ),
+        ),
+    ] = "https://www.jimvio.com/api/webhooks/quantforg"
+    quantforg_webhook_secret: Annotated[
+        SecretStr | None,
+        Field(
+            description=(
+                "HMAC-SHA256 secret for X-QuantForg-Signature. "
+                "Never log, print, or expose via API."
+            ),
+            validation_alias=AliasChoices(
+                "QUANTFORG_WEBHOOK_SECRET",
+                "quantforg_webhook_secret",
+            ),
+        ),
+    ] = None
+
     # -- RC1 Production Validation Pipeline ----------------------------------
     production_validation_mode: Annotated[
         bool,

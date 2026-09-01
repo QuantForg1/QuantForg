@@ -328,6 +328,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             str(getattr(settings, "telegram_chat_id", "") or "").strip()
         ),
         telegram_token_configured=telegram_token_configured,
+        jimvio_enabled=bool(getattr(settings, "jimvio_enabled", False)),
+        jimvio_secret_configured=bool(
+            getattr(settings, "quantforg_webhook_secret", None)
+        ),
     )
 
     from urllib.parse import urlparse
@@ -410,6 +414,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await start_telegram_dispatcher(settings)
     except Exception:
         logger.exception("telegram_dispatcher_start_failed")
+    try:
+        from app.application.services.jimvio_publisher import start_jimvio_publisher
+
+        await start_jimvio_publisher(settings)
+    except Exception:
+        logger.exception("jimvio_publisher_start_failed")
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)
@@ -670,6 +680,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await stop_telegram_dispatcher()
     except Exception as exc:
         logger.warning("telegram_dispatcher_shutdown_error", error=str(exc))
+    try:
+        from app.application.services.jimvio_publisher import stop_jimvio_publisher
+
+        await stop_jimvio_publisher()
+    except Exception as exc:
+        logger.warning("jimvio_publisher_shutdown_error", error=str(exc))
     try:
         from app.application.services.blocking_io_offload import (
             shutdown_blocking_io_executor,
