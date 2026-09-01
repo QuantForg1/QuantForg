@@ -130,6 +130,49 @@ _TF_COUNTS: tuple[tuple[Timeframe, int], ...] = (
     (Timeframe.M5, 400),
     (Timeframe.M1, 500),
 )
+_MIN_BARS = 50
+_SCALP_REQUIRED_TFS: tuple[Timeframe, ...] = (
+    Timeframe.H1,
+    Timeframe.M15,
+    Timeframe.M5,
+    Timeframe.M1,
+)
+
+
+def _scalping_stack() -> bool:
+    """LIVE default is scalping (H1→M1). Swing still requires the H4 stack."""
+    try:
+        from app.domain.institutional_trading.ai_scalping.config import (
+            scalping_ite_config,
+        )
+
+        return bool(scalping_ite_config().is_scalping())
+    except Exception:
+        return True
+
+
+def _tf_plan() -> tuple[
+    tuple[tuple[Timeframe, int], ...],
+    tuple[tuple[Timeframe, int], ...],
+]:
+    """Required vs optional candle fetches. One optional TF must not fail the desk."""
+    by_tf = {tf: n for tf, n in _TF_COUNTS}
+    if _scalping_stack():
+        required = tuple(
+            (tf, by_tf[tf]) for tf in _SCALP_REQUIRED_TFS if tf in by_tf
+        )
+        optional = (
+            ((Timeframe.H4, by_tf[Timeframe.H4]),) if Timeframe.H4 in by_tf else ()
+        )
+        return required, optional
+    return _TF_COUNTS, ()
+
+
+def _symbol_context_not_ready(code: str, detail: str) -> str:
+    extra = str(detail or "").strip()
+    if extra:
+        return f"SYMBOL_CONTEXT_NOT_READY:{code}:{extra}"
+    return f"SYMBOL_CONTEXT_NOT_READY:{code}"
 # Cap concurrent candle fetches below TRADING_READ_LIMIT (6).
 _TF_GATE_LIMIT = 4
 _tf_fetch_gate: asyncio.Semaphore | None = None
@@ -366,12 +409,17 @@ async def build_ite_cycle_market_context(
     position_engine: Any | None = None,
     reuse_cycle: bool = True,
     research_mode: bool = False,
+    purpose: str = "execution",
 ) -> IteCycleMarketContext:
     """Load multi-TF bars + account for one cycle.
 
     ``research_mode=True`` loads market data for research scoring across
     catalogue symbols without changing gold-only LIVE execution gates.
     Research never authorizes OMS / order_send.
+
+    ``purpose="scan"`` skips per-symbol history/position/health stampedes so
+    the bounded multi-market scan can finish inside the cycle budget. The
+    execution path still loads the full account bundle.
     """
     import time
 
@@ -519,11 +567,19 @@ async def build_ite_cycle_market_context(
     canonical_symbol = symbol_candidates[0]
     diag["canonical_broker_symbol"] = canonical_symbol
     diag["requested_symbol"] = logical_symbol
+    diag["context_purpose"] = str(purpose or "execution")
     bars_by_tf: dict[Timeframe, list[Candle]] = {}
     bars_loaded: dict[str, int] = {}
+    required_tfs, optional_tfs = _tf_plan()
+    diag["required_timeframes"] = [tf.value for tf, _ in required_tfs]
+    diag["optional_timeframes"] = [tf.value for tf, _ in optional_tfs]
     last_bar_exc: Exception | None = None
-    try:
-        async def _one_tf(tf: Timeframe, count: int) -> tuple[Timeframe, list[Candle]]:
+    failed_required_tf: Timeframe | None = None
+
+    async def _one_tf(
+        tf: Timeframe, count: int
+    ) -> tuple[Timeframe, list[Candle], BaseException | None]:
+        try:
             async with _tf_fetch_semaphore():
                 rates = await _io(
                     mt5_adapter.copy_rates_from_pos,
@@ -532,27 +588,44 @@ async def build_ite_cycle_market_context(
                     0,
                     count,
                 )
-            return tf, [_rate_to_candle(r) for r in (rates or [])]
+            return tf, [_rate_to_candle(r) for r in (rates or [])], None
+        except Exception as exc:
+            return tf, [], exc
 
-        loaded = await asyncio.gather(
-            *[_one_tf(tf, count) for tf, count in _TF_COUNTS]
-        )
-        for tf, candles in loaded:
-            bars_by_tf[tf] = candles
-            bars_loaded[tf.value] = len(candles)
-            diag["bars"][tf.value] = {
-                "requested": dict(_TF_COUNTS).get(tf, 0),
-                "loaded": len(candles),
-                "ok": len(candles) >= 50,
-            }
-            if len(candles) < 50:
-                raise RuntimeError(
-                    f"Insufficient {tf.value} bars for analysis "
-                    f"(got {len(candles)}, need ≥50)"
+    plan = list(required_tfs) + list(optional_tfs)
+    required_set = {tf for tf, _ in required_tfs}
+    loaded = await asyncio.gather(*[_one_tf(tf, n) for tf, n in plan])
+    for tf, candles, exc in loaded:
+        bars_loaded[tf.value] = len(candles)
+        diag["bars"][tf.value] = {
+            "requested": dict(plan).get(tf, 0),
+            "loaded": len(candles),
+            "ok": len(candles) >= _MIN_BARS and exc is None,
+            "required": tf in required_set,
+            "error": type(exc).__name__ if exc else None,
+        }
+        if tf not in required_set:
+            if exc is None and len(candles) >= _MIN_BARS:
+                bars_by_tf[tf] = candles
+            else:
+                logger.warning(
+                    "optional_timeframe_unavailable",
+                    timeframe=tf.value,
+                    error=str(exc) if exc else f"bars={len(candles)}",
                 )
-        last_bar_exc = None
-    except Exception as exc:
-        last_bar_exc = exc
+            continue
+        bars_by_tf[tf] = candles
+        if failed_required_tf is not None:
+            continue
+        if exc is not None:
+            last_bar_exc = exc if isinstance(exc, Exception) else Exception(str(exc))
+            failed_required_tf = tf
+        elif len(candles) < _MIN_BARS:
+            last_bar_exc = RuntimeError(
+                f"Insufficient {tf.value} bars for analysis "
+                f"(got {len(candles)}, need ≥{_MIN_BARS})"
+            )
+            failed_required_tf = tf
     if last_bar_exc is not None or not bars_by_tf:
         err_text = str(last_bar_exc or "no bars")
         md_fields = _market_data_failure_fields(
@@ -560,15 +633,31 @@ async def build_ite_cycle_market_context(
             logical_symbol=logical_symbol,
             canonical_broker_symbol=canonical_symbol,
         )
-        prefix = str(md_fields.pop("reason_prefix", "Market data load failed"))
+        tf_code = (
+            failed_required_tf.value if failed_required_tf is not None else "BARS"
+        )
+        if "Insufficient" in err_text:
+            reason = _symbol_context_not_ready(
+                f"INSUFFICIENT_{tf_code}_DATA", err_text
+            )
+        elif md_fields.get("failure_class"):
+            reason = _symbol_context_not_ready(
+                str(md_fields.get("failure_class")), f"{tf_code}:{err_text}"
+            )
+        else:
+            reason = _symbol_context_not_ready(
+                f"MISSING_TIMEFRAME_{tf_code}", err_text
+            )
         logger.warning(
             "ite_cycle_bars_load_failed",
             error=err_text,
             tried=list(symbol_candidates),
+            required_timeframe=tf_code,
             **md_fields,
         )
+        md_fields.pop("reason_prefix", None)
         return _fail(
-            f"{prefix}: {err_text}",
+            reason,
             bars=bars_loaded,
             broker_symbol_tried=list(symbol_candidates),
             **md_fields,
@@ -628,6 +717,27 @@ async def build_ite_cycle_market_context(
         logger.info("ite_cycle_tick_failed", error=str(exc))
         diag["ticks"] = f"ERROR: {exc}"
 
+    tick_state = str(diag.get("ticks") or "UNKNOWN")
+    if not market_data_live:
+        if tick_state == "EMPTY":
+            return _fail(
+                _symbol_context_not_ready("MISSING_TICK", canonical_symbol),
+                ticks=tick_state,
+                bars=bars_loaded,
+            )
+        if tick_state == "INVALID":
+            return _fail(
+                _symbol_context_not_ready("INVALID_TICK", canonical_symbol),
+                ticks=tick_state,
+                bars=bars_loaded,
+            )
+        if tick_state.startswith("ERROR"):
+            return _fail(
+                _symbol_context_not_ready("TICK_ERROR", tick_state),
+                ticks=tick_state,
+                bars=bars_loaded,
+            )
+
     try:
         snapshot = await InstitutionalTradingAnalysisService().analyze_bars(
             bars_by_tf,
@@ -668,27 +778,40 @@ async def build_ite_cycle_market_context(
     )
     day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     health_diag_box: dict[str, Any] = {}
+    skip_account_bundle = str(purpose or "execution").strip().lower() == "scan"
     bundled = await asyncio.gather(
         _io(mt5_adapter.account_info),
-        _io(
-            force_sync_positions,
-            mt5_adapter,
-            symbol=symbol,
-            position_engine=position_engine,
-            fresh=True,
-        ),
-        _io(
-            _load_history_deals,
-            mt5_adapter,
-            date_from=day_start,
-            date_to=datetime.now(UTC) + timedelta(days=1),
+        (
+            _io(lambda: None)
+            if skip_account_bundle
+            else _io(
+                force_sync_positions,
+                mt5_adapter,
+                symbol=symbol,
+                position_engine=position_engine,
+                fresh=True,
+            )
         ),
         (
-            _io(orders_fn)
-            if callable(orders_fn)
-            else _io(lambda: "N/A")
+            _io(lambda: (False, None, "SKIPPED_SCAN"))
+            if skip_account_bundle
+            else _io(
+                _load_history_deals,
+                mt5_adapter,
+                date_from=day_start,
+                date_to=datetime.now(UTC) + timedelta(days=1),
+            )
         ),
-        _io(_read_mt5_autotrading_enabled, mt5_adapter, health_diag_box),
+        (
+            _io(lambda: "N/A")
+            if skip_account_bundle or not callable(orders_fn)
+            else _io(orders_fn)
+        ),
+        (
+            _io(lambda: None)
+            if skip_account_bundle
+            else _io(_read_mt5_autotrading_enabled, mt5_adapter, health_diag_box)
+        ),
         (
             _io(specs_fn, symbol)
             if callable(specs_fn)

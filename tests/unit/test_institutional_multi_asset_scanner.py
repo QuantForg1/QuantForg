@@ -392,3 +392,73 @@ async def test_dynamic_symbol_reaches_eligible_after_universe_align(
     assert row["reject"] is True
     assert row["symbol"] == "NAS100"
     assert "no bars" in str(row["reject_reason"])
+    assert row["context_status"] == "SYMBOL_CONTEXT_NOT_READY"
+    assert row["context_reason"] == "no bars"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+@pytest.mark.asyncio
+async def test_score_records_ready_context_and_broker_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    ctx = SimpleNamespace(
+        ok=True,
+        snapshot=SimpleNamespace(
+            entry_opens=(),
+            entry_highs=(),
+            entry_lows=(),
+            entry_closes=(),
+            trend=None,
+        ),
+        account=SimpleNamespace(
+            atr=Decimal("1"),
+            mid_price=Decimal("1.1"),
+            bid=Decimal("1.1"),
+            ask=Decimal("1.11"),
+        ),
+        reason="market context ready",
+        diagnostics={"broker_symbol_resolved": "EURUSD_i", "symbol": "EURUSD_i"},
+        spread=Decimal("0.0001"),
+        market_data_live=True,
+    )
+
+    async def _ok_ctx(*_a: Any, **_k: Any) -> Any:
+        assert _k.get("purpose") == "scan"
+        return ctx
+
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.domain.trading.execution_universe.broker_discovered_enabled",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "app.domain.trading.execution_universe.execution_symbol_allowed",
+        lambda *_a, **_k: True,
+    )
+
+    score = MagicMock()
+    score.to_dict.return_value = {
+        "symbol": "EURUSD",
+        "direction": "BUY",
+        "reject": False,
+        "trade_quality": 90,
+        "ai_confidence": 90,
+    }
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.build_ite_cycle_market_context",
+        _ok_ctx,
+    )
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.score_scalping_setup",
+        lambda *_a, **_k: score,
+    )
+    row = await score_symbol_for_scan(object(), "EURUSD")
+    assert row["context_status"] == "SYMBOL_CONTEXT_READY"
+    assert row["broker_symbol"] == "EURUSD_I"
+    assert row["reject"] is False

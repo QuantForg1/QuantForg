@@ -5572,6 +5572,8 @@ class InstitutionalIteRuntime:
                 last
                 and last.get("as_of")
                 and last.get("note") != "multi_asset_scan_disabled"
+                and last.get("note") != "scan_in_flight_no_prior_snapshot"
+                and not last.get("scan_incomplete")
             )
             eligible = list(
                 filter_autonomous_symbols(last.get("eligible_symbols") or [])
@@ -5608,6 +5610,8 @@ class InstitutionalIteRuntime:
             and last.get("enabled")
             and last.get("as_of")
             and last.get("note") != "multi_asset_scan_disabled"
+            and last.get("note") != "scan_in_flight_no_prior_snapshot"
+            and not last.get("scan_incomplete")
         )
         if not preferred:
             if scan_complete:
@@ -6365,6 +6369,41 @@ class InstitutionalIteRuntime:
                         str(getattr(self, "_last_pick_abort", None) or "").strip()
                         or "NO_EXECUTABLE_SYMBOL"
                     )
+                    scan_diag: dict[str, Any] = {}
+                    try:
+                        with self._lock:
+                            last_scan_m = (
+                                dict(self._last_multi_asset_scan)
+                                if isinstance(self._last_multi_asset_scan, dict)
+                                else None
+                            )
+                        if isinstance(last_scan_m, dict):
+                            rows = last_scan_m.get("rows") or last_scan_m.get("noc_rows") or []
+                            scan_diag = {
+                                "symbols_queued": last_scan_m.get("symbols_queued"),
+                                "symbols_evaluated": last_scan_m.get(
+                                    "symbols_evaluated"
+                                ),
+                                "eligible_count": last_scan_m.get("eligible_count"),
+                                "universe": list(last_scan_m.get("universe") or [])[:36],
+                                "first_blocking_gate": last_scan_m.get(
+                                    "first_blocking_gate"
+                                ),
+                                "context_reject_sample": [
+                                    {
+                                        "symbol": r.get("symbol"),
+                                        "broker_symbol": r.get("broker_symbol"),
+                                        "context_status": r.get("context_status"),
+                                        "context_reason": r.get("context_reason")
+                                        or r.get("reject_reason"),
+                                        "direction": r.get("direction"),
+                                    }
+                                    for r in rows[:12]
+                                    if isinstance(r, dict)
+                                ],
+                            }
+                    except Exception:
+                        scan_diag = {}
                     logger.warning(
                         "AI Decision",
                         action="NO_TRADE",
@@ -6416,6 +6455,11 @@ class InstitutionalIteRuntime:
                         cycle_outcome="waiting_next_cycle",
                         abort_reason=pick_abort,
                         snapshot_present=True,
+                        market_context_diagnostics=scan_diag or None,
+                        market_context_reason=(
+                            str(scan_diag.get("first_blocking_gate") or "")
+                            or None
+                        ),
                     )
                     with self._lock:
                         self._last_cycle = result

@@ -895,6 +895,7 @@ async def score_symbol_for_scan(
             mt5_adapter,
             symbol=code,
             position_engine=position_engine,
+            purpose="scan",
         )
     except Exception as exc:
         logger.exception("multi_asset_market_context_failed", symbol=code)
@@ -902,6 +903,8 @@ async def score_symbol_for_scan(
             "symbol": code,
             "reject": True,
             "reject_reason": f"market_context_error:{type(exc).__name__}",
+            "context_status": "SYMBOL_CONTEXT_NOT_READY",
+            "context_reason": f"market_context_error:{type(exc).__name__}",
             "direction": "NONE",
             "ai_confidence": 0,
             "trade_quality": 0,
@@ -911,6 +914,9 @@ async def score_symbol_for_scan(
             "symbol": code,
             "reject": True,
             "reject_reason": ctx.reason or "market_context_unavailable",
+            "context_status": "SYMBOL_CONTEXT_NOT_READY",
+            "context_reason": ctx.reason,
+            "broker_symbol": code,
             "direction": "NONE",
             "ai_confidence": 0,
             "trade_quality": 0,
@@ -942,7 +948,10 @@ async def score_symbol_for_scan(
         payload = score.to_dict()
         payload["symbol"] = resolved or code
         payload["requested_symbol"] = code
+        payload["broker_symbol"] = resolved or code
         payload["broker_ok"] = True
+        payload["context_status"] = "SYMBOL_CONTEXT_READY"
+        payload["context_reason"] = ctx.reason or "market context ready"
         payload["mtf_alignment"] = int(
             getattr(getattr(snapshot, "trend", None), "alignment_score", 0) or 0
         )
@@ -1008,8 +1017,9 @@ async def run_institutional_multi_asset_scan(
                 publish_current_scan_decision(current)
             except Exception:
                 logger.exception("current_scan_overlap_publish_failed")
+            _store_last_scan(skipped, mt5_adapter=mt5_adapter)
             return skipped
-        return {
+        empty = {
             "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "enabled": True,
             "universe": [],
@@ -1025,11 +1035,14 @@ async def run_institutional_multi_asset_scan(
             "eligible_count": 0,
             "eligible_symbols": [],
             "overlap_skipped": True,
+            "scan_incomplete": True,
             "note": "scan_in_flight_no_prior_snapshot",
             "version": cfg.version,
             "forced_trades": False,
             "governed_by_existing_ai_and_risk": True,
         }
+        _store_last_scan(empty, mt5_adapter=mt5_adapter)
+        return empty
     try:
         return await _run_institutional_multi_asset_scan_body(
             mt5_adapter,
