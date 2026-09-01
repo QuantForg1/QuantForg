@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,7 +8,7 @@
       name="description"
       content="Institutional trading terminal for operators who demand clarity. Live MT5 portfolio sync, risk before fill, research loop, and AI workspace."
     />
-    <meta name="theme-color" content="#00D4E0" />
+    <meta name="theme-color" content="#FF5A1F" />
     <meta name="robots" content="index,follow" />
     <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
@@ -24,21 +24,21 @@
     <meta name="twitter:image" content="/og-image.png" />
     <style>
       :root {
-        --bg: #111827;
-        --bg-elevated: #151b23;
-        --surface: #1a2330;
-        --surface-2: #202938;
-        --border: #2f3b4d;
-        --border-strong: #3d4d63;
-        --fg: #f4f7fb;
-        --fg-muted: #9aa8bc;
-        --fg-subtle: #6b7a8f;
-        --accent: #00d4e0;
-        --accent-fg: #0b1219;
-        --accent-soft: rgba(0, 212, 224, 0.14);
-        --accent-gradient: linear-gradient(135deg, #5ef6ff 0%, #00d4e0 48%, #0891a8 100%);
-        --ring: rgba(0, 212, 224, 0.55);
-        --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.28);
+        --bg: #f7f9fc;
+        --bg-elevated: #ffffff;
+        --surface: #ffffff;
+        --surface-2: #f1f5f9;
+        --border: #e5e7eb;
+        --border-strong: #d1d5db;
+        --fg: #111827;
+        --fg-muted: #64748b;
+        --fg-subtle: #94a3b8;
+        --accent: #ff5a1f;
+        --accent-fg: #ffffff;
+        --accent-soft: rgba(255, 90, 31, 0.1);
+        --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
+        --ring: rgba(255, 90, 31, 0.45);
+        --shadow-card: 0 1px 0 rgba(17, 24, 39, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
       }
       * { box-sizing: border-box; }
       body {
@@ -47,9 +47,8 @@
         color: var(--fg);
         font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
         background:
-          radial-gradient(ellipse 80% 55% at 85% 15%, rgba(0, 212, 224, 0.1), transparent 55%),
-          radial-gradient(ellipse 60% 45% at 10% 90%, rgba(8, 145, 168, 0.08), transparent 50%),
-          linear-gradient(180deg, #151b23 0%, #111827 48%, #0f1419 100%);
+          radial-gradient(ellipse 70% 50% at 92% 0%, rgba(255, 90, 31, 0.06), transparent 52%),
+          linear-gradient(180deg, #f8fafc 0%, #f7f9fc 42%, #eef2f7 100%);
         background-attachment: fixed;
         -webkit-font-smoothing: antialiased;
       }
@@ -131,7 +130,7 @@
       }
       .panel::before {
         content: ""; position: absolute; inset: 0;
-        background: radial-gradient(circle at top right, rgba(0,212,224,0.16), transparent 48%);
+        background: radial-gradient(circle at top right, rgba(255,90,31,0.12), transparent 48%);
       }
       .panel > * { position: relative; }
       .row {
@@ -146,7 +145,7 @@
         letter-spacing: 0.06em; text-transform: uppercase;
       }
       .live::before {
-        content: ""; width: 0.45rem; height: 0.45rem; border-radius: 999px; background: #2f9e7a;
+        content: ""; width: 0.45rem; height: 0.45rem; border-radius: 999px; background: #16a34a;
       }
       .lattice {
         display: flex; align-items: flex-end; gap: 0.35rem;
