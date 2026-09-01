@@ -263,6 +263,20 @@ class InstitutionalIteRuntime:
         with self._lock:
             self._last_bridge_result = None
 
+    def _emit_telegram_cycle(self, result: ShadowCycleResult) -> None:
+        """Post-cycle observability only. Never raises into the trading path."""
+        try:
+            from app.application.services.telegram_dispatcher import notify_cycle
+
+            notify_cycle(
+                result,
+                decision=self._last_decision,
+                bridge=self._last_bridge_result,
+                pipeline=self.decision_pipeline,
+            )
+        except Exception:
+            logger.exception("telegram_cycle_notify_failed")
+
     def _gold_exec_symbol(self, snapshot: Any) -> str:
         from app.domain.trading.gold_only import canonical_gold_execution_symbol
 
@@ -364,6 +378,17 @@ class InstitutionalIteRuntime:
             "supabase": probes.supabase_up,
             "cloudflare": probes.cloudflare_tunnel_up,
         }
+        try:
+            from app.application.services.telegram_dispatcher import (
+                notify_connectivity,
+            )
+
+            notify_connectivity(
+                mt5_connected=bool(probes.mt5_connected),
+                gateway_available=bool(probes.gateway_available),
+            )
+        except Exception:
+            logger.exception("telegram_connectivity_hook_failed")
         # v7.1 continuous ops — heal deps, pause new entries only, never abandon book
         try:
             from app.domain.institutional_trading.ai_scalping.config import (
@@ -1044,6 +1069,7 @@ class InstitutionalIteRuntime:
                         )
                     except Exception:
                         logger.exception("strategy_diagnostics_safety_blocked_failed")
+                    self._emit_telegram_cycle(result)
                     try:
                         from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
@@ -1374,6 +1400,12 @@ class InstitutionalIteRuntime:
             )
             result = self.position_management.evaluate(ticket, pctx)
             managed += 1
+            try:
+                from app.application.services.telegram_dispatcher import notify_pme
+
+                notify_pme(result, current_price=current_px)
+            except Exception:
+                logger.exception("telegram_pme_hook_failed")
             # Phase B — live MAE/MFE mark (observe-only; never changes PME action)
             try:
                 from app.domain.institutional_trading.phase_b import get_phase_b_plane
@@ -3329,6 +3361,7 @@ class InstitutionalIteRuntime:
                 self._last_decision = decision
                 self._cycles += 1
                 self._last_bridge_result = None
+            self._emit_telegram_cycle(result)
             return result
 
         from app.application.services.ite_cycle_market_context import (
@@ -3961,8 +3994,10 @@ class InstitutionalIteRuntime:
         if entry is not None:
             oms_message = getattr(entry, "comment", None)
             broker_retcode = getattr(entry, "retcode", None)
-            mt5_ticket = getattr(entry, "ticket", None) or getattr(
-                entry, "order_ticket", None
+            mt5_ticket = (
+                getattr(entry, "mt5_ticket", None)
+                or getattr(entry, "ticket", None)
+                or getattr(entry, "order_ticket", None)
             )
 
         if bridge_result.forwarded_to_oms:
@@ -4116,6 +4151,7 @@ class InstitutionalIteRuntime:
             )
         except Exception:
             logger.exception("strategy_diagnostics_record_failed")
+        self._emit_telegram_cycle(result)
         if force_shadow and bridge_result.forwarded_to_oms:
             logger.error(
                 "shadow_cycle_forwarded_to_oms",
@@ -6181,6 +6217,14 @@ class InstitutionalIteRuntime:
             continuous_24_7=True,
         )
         try:
+            from app.application.services.telegram_dispatcher import (
+                notify_robot_started,
+            )
+
+            notify_robot_started()
+        except Exception:
+            logger.exception("telegram_robot_started_hook_failed")
+        try:
             from app.domain.institutional_trading.operations.fast_decision_path import (
                 ensure_opportunity_window,
             )
@@ -6839,6 +6883,10 @@ class InstitutionalIteRuntime:
                     self._last_failure = "CYCLE_EXCEPTION"
                 self._clear_ephemeral_cycle_state()
                 try:
+                    self._emit_telegram_cycle(self._last_cycle)
+                except Exception:
+                    logger.exception("telegram_cycle_exception_notify_failed")
+                try:
                     from app.application.services.cycle_evidence import (
                         record_cycle_evidence,
                     )
@@ -7091,6 +7139,14 @@ class InstitutionalIteRuntime:
                     break
                 await asyncio.sleep(1)
         logger.info("ite_orchestrator_stopped")
+        try:
+            from app.application.services.telegram_dispatcher import (
+                notify_robot_stopped,
+            )
+
+            notify_robot_stopped(reason="orchestrator_stopped")
+        except Exception:
+            logger.exception("telegram_robot_stopped_hook_failed")
 
 
 def build_ite_runtime(

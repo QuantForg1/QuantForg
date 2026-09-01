@@ -313,11 +313,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     port_env = os.environ.get("PORT") or str(settings.port)
     host_env = os.environ.get("HOST") or settings.host or "0.0.0.0"
     print("Environment loaded...", flush=True)
+    telegram_token_configured = False
+    telegram_token = getattr(settings, "telegram_bot_token", None)
+    if telegram_token is not None:
+        with contextlib.suppress(Exception):
+            telegram_token_configured = bool(telegram_token.get_secret_value().strip())
     logger.info(
         "environment_loaded",
         port=port_env,
         host=host_env,
         app_env=settings.app_env.value,
+        telegram_enabled=bool(getattr(settings, "telegram_enabled", False)),
+        telegram_chat_id_configured=bool(
+            str(getattr(settings, "telegram_chat_id", "") or "").strip()
+        ),
+        telegram_token_configured=telegram_token_configured,
     )
 
     from urllib.parse import urlparse
@@ -391,6 +401,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
     except Exception:
         logger.exception("production_finalization_log_failed")
+
+    try:
+        from app.application.services.telegram_dispatcher import (
+            start_telegram_dispatcher,
+        )
+
+        await start_telegram_dispatcher(settings)
+    except Exception:
+        logger.exception("telegram_dispatcher_start_failed")
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)
@@ -641,6 +660,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await container.shutdown()
     except Exception as exc:
         logger.warning("application_shutdown_error", error=str(exc))
+    try:
+        from app.application.services.telegram_dispatcher import (
+            notify_robot_stopped,
+            stop_telegram_dispatcher,
+        )
+
+        notify_robot_stopped(reason="application_shutdown")
+        await stop_telegram_dispatcher()
+    except Exception as exc:
+        logger.warning("telegram_dispatcher_shutdown_error", error=str(exc))
     try:
         from app.application.services.blocking_io_offload import (
             shutdown_blocking_io_executor,

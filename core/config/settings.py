@@ -403,6 +403,41 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Telegram observability (never on the trading path) -----------------
+    telegram_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Enable outbound Telegram notifications. Delivery is "
+                "asynchronous and fail-open: Telegram errors never affect "
+                "orders, risk, OMS, or the ITE loop."
+            ),
+            validation_alias=AliasChoices("TELEGRAM_ENABLED", "telegram_enabled"),
+        ),
+    ] = False
+    telegram_bot_token: Annotated[
+        SecretStr | None,
+        Field(
+            description=(
+                "Telegram Bot API token. Never log, print, or expose via API."
+            ),
+            validation_alias=AliasChoices(
+                "TELEGRAM_BOT_TOKEN",
+                "telegram_bot_token",
+            ),
+        ),
+    ] = None
+    telegram_chat_id: Annotated[
+        str,
+        Field(
+            description=(
+                "Telegram destination chat id or @channel username "
+                "(e.g. @QuantForgSignals)."
+            ),
+            validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "telegram_chat_id"),
+        ),
+    ] = ""
+
     # -- RC1 Production Validation Pipeline ----------------------------------
     production_validation_mode: Annotated[
         bool,
