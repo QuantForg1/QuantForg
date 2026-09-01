@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import {
   presentField,
   presentLevel,
-  presentPrice,
   rowRegime,
   scoreDisplay,
   signalBoardDirection,
@@ -14,7 +13,6 @@ import {
   signalFreshness,
   signalFreshnessLabel,
   signalMt5Ticket,
-  signalStrength,
   signalTimestampLabel,
   signalHumanExplanation,
   signalExecutionStatusLabel,
@@ -41,11 +39,6 @@ export function DirectionBadge({
       {dir}
     </Badge>
   );
-}
-
-function displayPrice(value: unknown): string {
-  const shown = presentPrice(value);
-  return shown === "Price unavailable" ? "Not available" : shown;
 }
 
 function displayScore(value: unknown): string {
@@ -125,18 +118,18 @@ export function SignalCard({
       <div className="mt-4 grid grid-cols-2 gap-3 pl-1">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Score
+            Opportunity
           </p>
           <p className="mt-0.5 font-mono text-xl font-semibold tabular leading-none text-[var(--fg)]">
-            {signalStrength(row)}
+            {displayScore(row.opportunity_score ?? row.research_rank_score)}
           </p>
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Current price
+            Confidence
           </p>
           <p className="mt-0.5 font-mono text-xl font-semibold tabular leading-none text-[var(--fg)]">
-            {displayPrice(row.price ?? row.mid ?? row.bid)}
+            {displayScore(row.ai_confidence ?? row.confidence_state ?? row.confidence)}
           </p>
         </div>
       </div>

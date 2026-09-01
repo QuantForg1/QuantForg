@@ -631,47 +631,45 @@ export function signalExecutionStatusLabel(row: Record<string, unknown>): string
   const card = String(row.card_status || "")
     .trim()
     .toUpperCase();
+  if (card === "CLOSED" && ticket) return "CLOSED";
+  if (card === "BREAKEVEN" && ticket) return "BREAKEVEN";
+  if (card === "TRAILING" && ticket) return "TRAILING";
   if (card === "EXECUTED") return ticket ? "EXECUTED" : "REJECTED";
-  if (card === "TRADEABLE") return "TRADEABLE";
+  if (card === "TRADEABLE") return "EXECUTION_READY";
   if (card === "WAITING") return "WAITING";
-  if (card === "RISK_BLOCKED") return "RISK BLOCKED";
+  if (card === "RISK_BLOCKED") return "RISK_BLOCKED";
   if (card === "REJECTED") return "REJECTED";
-  if (card === "EXPIRED") return "EXPIRED";
+  if (card === "EXPIRED") return "REJECTED";
   const raw = String(row.execution_status || "")
     .trim()
     .toUpperCase();
-  if (raw === "LIVE_ELIGIBLE" || raw === "WAITING_FOR_EXECUTION") {
-    return "WAITING";
-  }
-  if (raw === "RISK_BLOCKED") return "RISK BLOCKED";
+  if (raw === "LIVE_ELIGIBLE") return "EXECUTION_READY";
+  if (raw === "WAITING_FOR_EXECUTION") return "WAITING";
+  if (raw === "RISK_BLOCKED") return "RISK_BLOCKED";
   if (raw === "EXECUTION_BLOCKED") return "REJECTED";
-  if (raw === "LIVE_TRADING_AUTHORIZED") return "LIVE TRADING AUTHORIZED";
-  const allowed = new Set([
-    "RESEARCH_ONLY",
-    "READY_FOR_REVIEW",
-    "ORDER_SUBMITTED",
-    "POSITION_OPEN",
-    "EXPIRED",
-    "FILLED",
-    "NO_ORDER",
-  ]);
+  if (raw === "LIVE_TRADING_AUTHORIZED") return "EXECUTION_READY";
   if (raw === "POSITION_OPEN") return ticket ? "EXECUTED" : "WAITING";
-  if (raw === "ORDER_SUBMITTED") return ticket ? "WAITING" : "REJECTED";
+  if (raw === "ORDER_SUBMITTED") return ticket ? "EXECUTED" : "WAITING";
   if (raw === "FILLED") return ticket ? "EXECUTED" : "REJECTED";
-  if (allowed.has(raw)) return raw;
-  return "RESEARCH_ONLY";
+  if (raw === "READY_FOR_REVIEW") return "WAITING";
+  if (raw === "RESEARCH_ONLY" || raw === "NO_ORDER") return "WAITING";
+  if (raw === "EXPIRED") return "REJECTED";
+  if (ticket) return "EXECUTED";
+  return "WAITING";
 }
 
 export function signalCardTone(
   row: Record<string, unknown>,
 ): "neutral" | "success" | "warning" | "danger" | "accent" {
   const label = signalExecutionStatusLabel(row);
-  if (label === "TRADEABLE" || label === "EXECUTED") return "success";
-  if (label === "WAITING" || label === "ORDER_SUBMITTED" || label === "READY_FOR_REVIEW") {
+  if (label === "EXECUTED" || label === "EXECUTION_READY" || label === "BREAKEVEN") {
+    return "success";
+  }
+  if (label === "WAITING" || label === "TRAILING") {
     return "accent";
   }
-  if (label === "RISK BLOCKED") return "warning";
-  if (label === "REJECTED" || label === "EXECUTION BLOCKED") return "danger";
+  if (label === "RISK_BLOCKED") return "warning";
+  if (label === "REJECTED" || label === "CLOSED") return "danger";
   return "neutral";
 }
 

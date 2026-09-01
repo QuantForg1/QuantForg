@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,6 +27,7 @@ from app.application.services.telegram_dispatcher import (
 from app.application.services.telegram_events import (
     BREAKEVEN_SET,
     OMS_REJECTED,
+    PARTIAL_CLOSE,
     RISK_BLOCKED,
     SIGNAL_CONFIRMED,
     SIGNAL_GENERATED,
@@ -39,6 +41,12 @@ from app.application.services.telegram_events import (
     classify_pme_notices,
     format_test_message,
     format_trade_opened,
+    opportunity_score_above_70,
+    public_channel_notices,
+)
+from app.application.services.telegram_thread_store import (
+    drop_telegram_threads_cache,
+    reset_telegram_threads_for_tests,
 )
 from app.domain.institutional_trading.management.models import (
     ManageActionKind,
@@ -62,8 +70,15 @@ class _FakeResponse:
         headers: dict[str, str] | None = None,
     ) -> None:
         self.status_code = status_code
-        self.text = text
+        self.text = text or '{"ok":true,"result":{"message_id":1001}}'
         self.headers = headers or {}
+
+    def json(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.text)
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
 
 
 @dataclass
@@ -126,10 +141,16 @@ class _Pipeline:
 
 
 @pytest.fixture(autouse=True)
-def _reset_dispatcher() -> None:
+def _reset_dispatcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "QUANTFORG_TELEGRAM_THREADS_PATH",
+        str(tmp_path / "telegram_threads.json"),
+    )
+    reset_telegram_threads_for_tests()
     reset_telegram_dispatcher_for_tests(None)
     yield
     reset_telegram_dispatcher_for_tests(None)
+    reset_telegram_threads_for_tests()
 
 
 async def _unused_sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
@@ -451,7 +472,7 @@ class TestTelegramEventTruth:
         )
         notices = classify_pme_notices(result=result)
         assert notices[0]["event"] == BREAKEVEN_SET
-        assert "PROTECTED" in notices[0]["text"]
+        assert "BREAKEVEN ACTIVE" in notices[0]["text"]
 
     def test_trailing_notification(self) -> None:
         pos = ManagedPosition(
@@ -560,6 +581,539 @@ class TestTelegramDoesNotBlockTrading:
         )
         assert "575000111" in text
         assert "EXECUTED" in text
+
+
+def _exec_pipeline(**extra: Any) -> _Pipeline:
+    payload: dict[str, Any] = {
+        "signal_action": "BUY",
+        "direction": "BUY",
+        "opportunity_score": 87,
+        "ai_confidence": 91,
+        "entry": "1.08500",
+        "stop_loss": "1.08200",
+        "take_profit": "1.09400",
+        "expected_rr": "3.0",
+        "market_regime": "TRENDING",
+    }
+    payload.update(extra)
+    return _Pipeline(payload)
+
+
+def _filled_cycle(
+    *,
+    ticket: int = 575929789,
+    symbol: str = "EURUSD",
+) -> tuple[Any, Any, Any]:
+    del symbol
+    cycle = _Cycle(
+        decision_action="BUY",
+        forwarded_to_oms=True,
+        cycle_outcome="forwarded",
+        abort_reason="none",
+        mt5_ticket=ticket,
+        broker_retcode=10009,
+        signal_id="sig-eurusd-1",
+    )
+    decision = _Decision(
+        symbol="EURUSD",
+        entry_zone=_Zone(Decimal("1.085"), Decimal("1.085"), Decimal("1.085")),
+        stop_zone=_Zone(Decimal("1.082"), Decimal("1.082"), Decimal("1.082")),
+        target_zone=_Zone(Decimal("1.094"), Decimal("1.094"), Decimal("1.094")),
+        estimated_rr=Decimal("3.0"),
+        confidence=91,
+    )
+    bridge = _Bridge(journal_entry=_Journal(mt5_ticket=ticket, retcode=10009))
+    return cycle, decision, bridge
+
+
+def _pme_success(
+    *,
+    action: ManageActionKind,
+    ticket: int = 575929789,
+    old_sl: str = "1.08200",
+    new_sl: str = "1.08500",
+    to_state: PositionLifecycleState = PositionLifecycleState.BE_MOVED,
+    reason: str = "Break-even",
+    fingerprint: str = "be1",
+    remaining: str = "0.01",
+    volume: str | None = None,
+    pnl: str | None = None,
+    exit_reason: str | None = None,
+) -> PositionManageResult:
+    pos = ManagedPosition(
+        ticket=ticket,
+        symbol="EURUSD",
+        side="buy",
+        entry_price=Decimal("1.08500"),
+        initial_volume=Decimal("0.01"),
+        remaining_volume=Decimal(remaining),
+        initial_stop=Decimal(old_sl),
+        risk_distance=Decimal("0.003"),
+        opened_at=datetime.now(UTC),
+        current_stop=Decimal(new_sl),
+    )
+    record = PositionManageRecord(
+        ticket=ticket,
+        action=action,
+        from_state=PositionLifecycleState.OPEN,
+        to_state=to_state,
+        reason=reason,
+        timestamp=pos.opened_at,
+        latency_ms=1.0,
+        outcome=ManageOutcome.SUCCESS,
+        old_sl=Decimal(old_sl),
+        new_sl=Decimal(new_sl),
+        fingerprint=fingerprint,
+        symbol="EURUSD",
+        volume=Decimal(volume) if volume is not None else None,
+        pnl=pnl,
+        exit_reason=exit_reason,
+    )
+    return PositionManageResult(position=pos, action=action, record=record)
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+class TestPublicTelegramChannel:
+    def test_score_70_is_not_public_execution(self) -> None:
+        assert opportunity_score_above_70(70) is False
+        assert opportunity_score_above_70(70.0) is False
+        assert opportunity_score_above_70(65) is False
+        assert opportunity_score_above_70(71) is True
+        cycle, decision, bridge = _filled_cycle()
+        notices = classify_cycle_notices(
+            cycle=cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(opportunity_score=70),
+        )
+        assert public_channel_notices(notices) == []
+
+    def test_score_above_70_can_be_execution_candidate(self) -> None:
+        cycle, decision, bridge = _filled_cycle()
+        notices = classify_cycle_notices(
+            cycle=cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(opportunity_score=71),
+        )
+        public = public_channel_notices(notices)
+        events = [row["event"] for row in public]
+        assert SIGNAL_CONFIRMED in events
+        assert TRADE_OPENED in events
+        assert any(
+            "READY FOR EXECUTION" in row["text"] or "EXECUTED" in row["text"]
+            for row in public
+        )
+
+    def test_score_above_70_still_fails_invalid_setup(self) -> None:
+        notices = classify_cycle_notices(
+            cycle=_Cycle(decision_action="NO_TRADE", mt5_ticket=None),
+            decision=_Decision(action="NO_TRADE", direction="NONE"),
+            pipeline=_exec_pipeline(opportunity_score=72, signal_action="NONE"),
+        )
+        assert public_channel_notices(notices) == []
+
+    def test_score_above_70_still_fails_if_risk_rejects(self) -> None:
+        notices = classify_cycle_notices(
+            cycle=_Cycle(
+                decision_action="BUY",
+                abort_reason="MAX_POSITIONS_REACHED",
+                mt5_ticket=None,
+            ),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=87),
+        )
+        events = [row["event"] for row in notices]
+        assert RISK_BLOCKED in events
+        assert TRADE_OPENED not in events
+        assert public_channel_notices(notices) == []
+
+    def test_score_above_70_still_fails_if_oms_rejects(self) -> None:
+        notices = classify_cycle_notices(
+            cycle=_Cycle(
+                decision_action="BUY",
+                abort_reason="OMS_FAILURE",
+                oms_message="volume invalid",
+            ),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=87),
+        )
+        assert any(row["event"] == OMS_REJECTED for row in notices)
+        assert public_channel_notices(notices) == []
+
+    def test_research_only_is_not_public(self) -> None:
+        notices = classify_cycle_notices(
+            cycle=_Cycle(decision_action=None, mt5_ticket=None, abort_reason="none"),
+            decision=_Decision(action="NO_TRADE", direction="BUY"),
+            pipeline=_exec_pipeline(opportunity_score=65, signal_action="BUY"),
+        )
+        events = [row["event"] for row in notices]
+        assert SIGNAL_GENERATED in events or events == []
+        assert TRADE_OPENED not in events
+        assert public_channel_notices(notices) == []
+
+    def test_rejected_and_no_trade_noise_is_not_public(self) -> None:
+        for abort in (
+            "MAX_POSITIONS_REACHED",
+            "MIN_LOT",
+            "SPREAD_TOO_HIGH",
+            "PYRAMIDING_BLOCKED",
+            "NO_EXECUTABLE_SYMBOL",
+        ):
+            notices = classify_cycle_notices(
+                cycle=_Cycle(
+                    decision_action="BUY",
+                    abort_reason=abort,
+                    mt5_ticket=None,
+                ),
+                decision=_Decision(),
+                pipeline=_exec_pipeline(),
+            )
+            assert public_channel_notices(notices) == []
+
+    def test_executed_requires_real_ticket(self) -> None:
+        notices = classify_cycle_notices(
+            cycle=_Cycle(decision_action="BUY", mt5_ticket=None, abort_reason="none"),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(),
+        )
+        public = public_channel_notices(notices)
+        assert TRADE_OPENED not in [row["event"] for row in public]
+        cycle, decision, bridge = _filled_cycle(ticket=888111)
+        filled = classify_cycle_notices(
+            cycle=cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(),
+        )
+        public = public_channel_notices(filled)
+        opened = [row for row in public if row["event"] == TRADE_OPENED]
+        assert opened
+        assert "888111" in opened[0]["text"]
+        assert "EXECUTED" in opened[0]["text"]
+
+    def test_pme_without_success_is_silent(self) -> None:
+        pos = ManagedPosition(
+            ticket=10,
+            symbol="EURUSD",
+            side="buy",
+            entry_price=Decimal("1.08"),
+            initial_volume=Decimal("0.01"),
+            remaining_volume=Decimal("0.01"),
+            initial_stop=Decimal("1.07"),
+            risk_distance=Decimal("0.01"),
+            opened_at=datetime.now(UTC),
+        )
+        failed = PositionManageResult(
+            position=pos,
+            action=ManageActionKind.BREAK_EVEN,
+            record=PositionManageRecord(
+                ticket=10,
+                action=ManageActionKind.BREAK_EVEN,
+                from_state=PositionLifecycleState.OPEN,
+                to_state=PositionLifecycleState.OPEN,
+                reason="no-op",
+                timestamp=pos.opened_at,
+                latency_ms=1.0,
+                outcome=ManageOutcome.ABORTED,
+                fingerprint="nope",
+            ),
+        )
+        assert classify_pme_notices(result=failed) == []
+        assert public_channel_notices([]) == []
+
+    def test_lifecycle_event_ids_are_stable(self) -> None:
+        be = classify_pme_notices(
+            result=_pme_success(action=ManageActionKind.BREAK_EVEN)
+        )
+        assert be[0]["event_id"].startswith("be:575929789:")
+        trail = classify_pme_notices(
+            result=_pme_success(
+                action=ManageActionKind.TRAIL,
+                to_state=PositionLifecycleState.TRAILING,
+                fingerprint="trail1",
+                old_sl="1.08500",
+                new_sl="1.08600",
+            )
+        )
+        assert trail[0]["event"] == TRAILING_STOP_UPDATED
+        assert trail[0]["event_id"].startswith("trail:575929789:")
+        partial = classify_pme_notices(
+            result=_pme_success(
+                action=ManageActionKind.PARTIAL_CLOSE,
+                to_state=PositionLifecycleState.PARTIAL,
+                fingerprint="deal-9",
+                remaining="0.005",
+                volume="0.005",
+                pnl="12.5",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        assert partial[0]["event"] == PARTIAL_CLOSE
+        assert partial[0]["event_id"] == "partial:575929789:deal-9"
+        closed = classify_pme_notices(
+            result=_pme_success(
+                action=ManageActionKind.EMERGENCY_EXIT,
+                to_state=PositionLifecycleState.EXITED,
+                fingerprint="tp-1",
+                exit_reason="TAKE_PROFIT",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        assert closed[-1]["event"] == TAKE_PROFIT
+        sl_hit = classify_pme_notices(
+            result=_pme_success(
+                action=ManageActionKind.EMERGENCY_EXIT,
+                to_state=PositionLifecycleState.EXITED,
+                fingerprint="sl-1",
+                exit_reason="STOP_LOSS",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        assert sl_hit[-1]["event"] == STOP_LOSS
+        other = classify_pme_notices(
+            result=_pme_success(
+                action=ManageActionKind.EMERGENCY_EXIT,
+                to_state=PositionLifecycleState.EXITED,
+                fingerprint="man-1",
+                exit_reason="Manually closed",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        assert other[-1]["event"] == TRADE_CLOSED
+
+    def test_notify_cycle_research_does_not_enqueue_telegram(self) -> None:
+        disp = _dispatcher(_unused_sender)
+        notify_cycle(
+            _Cycle(decision_action="BUY", mt5_ticket=None),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=65),
+        )
+        assert disp.pending == 0
+
+    def test_notify_cycle_risk_block_does_not_enqueue_telegram(self) -> None:
+        disp = _dispatcher(_unused_sender)
+        notify_cycle(
+            _Cycle(
+                decision_action="BUY",
+                abort_reason="MAX_POSITIONS_REACHED",
+                mt5_ticket=None,
+            ),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(),
+        )
+        assert disp.pending == 0
+
+    @pytest.mark.asyncio
+    async def test_fill_posts_signal_and_opened(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            captured.append(payload)
+            n = 10 + len(captured)
+            return _FakeResponse(
+                200,
+                json.dumps({"ok": True, "result": {"message_id": n}}),
+            )
+
+        disp = _dispatcher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(),
+        )
+        await disp.flush()
+        texts = [row["text"] for row in captured]
+        assert any("QUANTFORG SIGNAL" in text for text in texts)
+        assert any("QUANTFORG TRADE OPENED" in text for text in texts)
+        assert any("575929789" in text for text in texts)
+        assert captured[1].get("reply_to_message_id") == 11
+
+    @pytest.mark.asyncio
+    async def test_breakeven_replies_to_original_after_broker_success(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            captured.append(payload)
+            n = 20 + len(captured)
+            return _FakeResponse(
+                200,
+                json.dumps({"ok": True, "result": {"message_id": n}}),
+            )
+
+        disp = _dispatcher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        await disp.flush()
+        notify_pme(_pme_success(action=ManageActionKind.BREAK_EVEN))
+        await disp.flush()
+        be = [row for row in captured if "QUANTFORG BREAKEVEN" in row["text"]]
+        assert be
+        assert be[0]["reply_to_message_id"] == 21
+        assert "BREAKEVEN ACTIVE" in be[0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_replies_only_after_broker_success(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            captured.append(payload)
+            n = 30 + len(captured)
+            return _FakeResponse(
+                200,
+                json.dumps({"ok": True, "result": {"message_id": n}}),
+            )
+
+        disp = _dispatcher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        await disp.flush()
+        root_id = 31
+        notify_pme(
+            _pme_success(
+                action=ManageActionKind.TRAIL,
+                to_state=PositionLifecycleState.TRAILING,
+                fingerprint="t1",
+                old_sl="1.08500",
+                new_sl="1.08620",
+            )
+        )
+        notify_pme(
+            _pme_success(
+                action=ManageActionKind.PARTIAL_CLOSE,
+                to_state=PositionLifecycleState.PARTIAL,
+                fingerprint="p1",
+                remaining="0.005",
+                volume="0.005",
+                pnl="4.2",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        notify_pme(
+            _pme_success(
+                action=ManageActionKind.EMERGENCY_EXIT,
+                to_state=PositionLifecycleState.EXITED,
+                fingerprint="tp1",
+                exit_reason="TAKE_PROFIT",
+                pnl="18.0",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        await disp.flush()
+        trail = next(row for row in captured if "TRAILING STOP" in row["text"])
+        partial = next(row for row in captured if "PARTIAL CLOSE" in row["text"])
+        tp = next(row for row in captured if "TAKE PROFIT" in row["text"])
+        assert trail["reply_to_message_id"] == root_id
+        assert partial["reply_to_message_id"] == root_id
+        assert tp["reply_to_message_id"] == root_id
+
+    @pytest.mark.asyncio
+    async def test_duplicate_lifecycle_deduped(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            captured.append(payload)
+            return _FakeResponse(200, '{"ok":true,"result":{"message_id":40}}')
+
+        disp = _dispatcher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        await disp.flush()
+        opened = [row for row in captured if "TRADE OPENED" in row["text"]]
+        assert len(opened) == 1
+
+    @pytest.mark.asyncio
+    async def test_restart_does_not_duplicate_lifecycle(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            captured.append(payload)
+            return _FakeResponse(200, '{"ok":true,"result":{"message_id":50}}')
+
+        disp = _dispatcher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        await disp.flush()
+        first = len(captured)
+        drop_telegram_threads_cache()
+        disp2 = _dispatcher(sender)
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        await disp2.flush()
+        assert len(captured) == first
+
+    @pytest.mark.asyncio
+    async def test_telegram_failure_does_not_block_or_stop_worker(self) -> None:
+        hits = {"n": 0}
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            hits["n"] += 1
+            raise httpx.ConnectError("down")
+
+        disp = _dispatcher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
+        )
+        notify_cycle(
+            _Cycle(abort_reason="MAX_POSITIONS_REACHED", decision_action="BUY"),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(),
+        )
+        await disp.flush()
+        assert hits["n"] >= 1
+        assert disp.last_success is False
+
+    def test_multi_market_symbols_are_public_when_filled(self) -> None:
+        for symbol in ("EURUSD", "GBPUSD", "XAGUSD", "BTCUSD"):
+            cycle = _Cycle(
+                decision_action="BUY",
+                mt5_ticket=100 + len(symbol),
+                abort_reason="none",
+                broker_retcode=10009,
+            )
+            decision = _Decision(symbol=symbol)
+            notices = classify_cycle_notices(
+                cycle=cycle,
+                decision=decision,
+                bridge=_Bridge(
+                    journal_entry=_Journal(
+                        mt5_ticket=100 + len(symbol), retcode=10009
+                    )
+                ),
+                pipeline=_exec_pipeline(),
+            )
+            public = public_channel_notices(notices)
+            assert TRADE_OPENED in [row["event"] for row in public], symbol
+            assert symbol in public[0]["text"]
+
+    def test_cycle_timeout_stays_quiet(self) -> None:
+        notices = classify_cycle_notices(
+            cycle=_Cycle(abort_reason="CYCLE_TIMEOUT", decision_action="BUY")
+        )
+        assert notices == []
+        assert public_channel_notices(notices) == []
 
 
 def get_disp() -> TelegramDispatcher:

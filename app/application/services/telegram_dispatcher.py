@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import re
 import time
@@ -23,6 +24,12 @@ import httpx
 from app.application.services.telegram_events import (
     TELEGRAM_TEST,
     format_test_message,
+)
+from app.application.services.telegram_thread_store import (
+    bind_thread,
+    lookup_message_id,
+    mark_event_seen,
+    persisted_seen_ids,
 )
 from core.logging import get_logger
 
@@ -49,6 +56,37 @@ def _secret_text(value: Any) -> str | None:
     raw = getter() if callable(getter) else str(value)
     text = str(raw or "").strip()
     return text or None
+
+
+def _telegram_message_id(response: object) -> int | None:
+    parser = getattr(response, "json", None)
+    data: Any
+    if callable(parser):
+        try:
+            data = parser()
+        except Exception:
+            data = None
+    else:
+        data = None
+    if not isinstance(data, dict):
+        text = getattr(response, "text", None)
+        if isinstance(text, str) and text.strip().startswith("{"):
+            try:
+                data = json.loads(text)
+            except Exception:
+                return None
+        else:
+            return None
+    if data.get("ok") is False:
+        return None
+    result = data.get("result")
+    if not isinstance(result, dict):
+        return None
+    try:
+        mid = int(result.get("message_id"))
+    except (TypeError, ValueError):
+        return None
+    return mid if mid > 0 else None
 
 
 def redact_secrets(text: str, *secrets: str | None) -> str:
@@ -116,6 +154,10 @@ class TelegramNotice:
     event: str
     event_id: str
     text: str
+    reply_ticket: str | None = None
+    bind_ticket: str | None = None
+    bind_signal: str | None = None
+    require_thread: bool = False
 
 
 class TelegramDispatcher:
@@ -143,6 +185,11 @@ class TelegramDispatcher:
         self._task: asyncio.Task[Any] | None = None
         self._running = False
         self._last_success = False
+        try:
+            for key in persisted_seen_ids():
+                self._seen[key] = time.monotonic() + _SEEN_TTL_SECONDS
+        except Exception:
+            logger.exception("telegram_seen_restore_failed")
         if self._enabled and not (self._token and self._chat_id):
             self._enabled = False
             logger.warning(
@@ -170,13 +217,31 @@ class TelegramDispatcher:
         with self._lock:
             return len(self._queue)
 
-    def emit(self, event: str, event_id: str, text: str) -> None:
+    def emit(
+        self,
+        event: str,
+        event_id: str,
+        text: str,
+        *,
+        reply_ticket: str | None = None,
+        bind_ticket: str | None = None,
+        bind_signal: str | None = None,
+        require_thread: bool = False,
+    ) -> None:
         """Enqueue a notice. Never raises. Never awaits Telegram HTTP."""
         try:
             if not self._enabled:
                 return
             key = str(event_id or "").strip() or f"{event}:{time.time_ns()}"
-            notice = TelegramNotice(event=str(event), event_id=key, text=str(text))
+            notice = TelegramNotice(
+                event=str(event),
+                event_id=key,
+                text=str(text),
+                reply_ticket=str(reply_ticket).strip() if reply_ticket else None,
+                bind_ticket=str(bind_ticket).strip() if bind_ticket else None,
+                bind_signal=str(bind_signal).strip() if bind_signal else None,
+                require_thread=bool(require_thread),
+            )
             with self._lock:
                 if self._already_seen(key):
                     logger.info(
@@ -194,6 +259,10 @@ class TelegramDispatcher:
                         telegram_event=notice.event,
                     )
                 self._queue.append(notice)
+            try:
+                mark_event_seen(key)
+            except Exception:
+                logger.exception("telegram_seen_persist_failed")
         except Exception:
             logger.exception("telegram_emit_failed")
 
@@ -292,11 +361,30 @@ class TelegramDispatcher:
         if not self._token or not self._chat_id:
             return
         url = f"{_TELEGRAM_API}/bot{self._token}/sendMessage"
-        payload = {
+        payload: dict[str, Any] = {
             "chat_id": self._chat_id,
             "text": notice.text,
             "disable_web_page_preview": True,
         }
+        reply_id = None
+        if notice.reply_ticket:
+            try:
+                reply_id = lookup_message_id(
+                    ticket=notice.reply_ticket,
+                    signal_id=notice.bind_signal,
+                )
+            except Exception:
+                logger.exception("telegram_thread_lookup_failed")
+                reply_id = None
+        if notice.require_thread and reply_id is None:
+            logger.info(
+                "telegram_lifecycle_skipped_no_thread",
+                telegram_event=notice.event,
+                event_id=notice.event_id,
+            )
+            return
+        if reply_id is not None:
+            payload["reply_to_message_id"] = reply_id
         last_error = "unknown"
         for attempt in range(1, self._max_attempts + 1):
             try:
@@ -315,6 +403,16 @@ class TelegramDispatcher:
             status = int(getattr(response, "status_code", 0) or 0)
             if 200 <= status < 300:
                 self._last_success = True
+                try:
+                    mid = _telegram_message_id(response)
+                    if mid is not None and (notice.bind_ticket or notice.bind_signal):
+                        bind_thread(
+                            message_id=mid,
+                            ticket=notice.bind_ticket,
+                            signal_id=notice.bind_signal,
+                        )
+                except Exception:
+                    logger.exception("telegram_thread_bind_failed")
                 logger.info(
                     "telegram_notification_sent",
                     telegram_event=notice.event,
@@ -387,24 +485,40 @@ def emit_telegram(
     text: str,
     *,
     fields: dict[str, Any] | None = None,
+    telegram: bool = True,
+    jimvio: bool = True,
+    reply_ticket: str | None = None,
+    bind_ticket: str | None = None,
+    bind_signal: str | None = None,
+    require_thread: bool = False,
 ) -> None:
     """Process-wide fail-open emit. Safe to call from any trading observer.
 
     Telegram and Jimvio are independent delivery targets. Failure of one
     never blocks the other, Risk, OMS, MT5, or the ITE loop.
     """
-    try:
-        dispatcher = get_telegram_dispatcher()
-        if dispatcher is not None:
-            dispatcher.emit(event, event_id, text)
-    except Exception:
-        logger.exception("telegram_emit_failed")
-    try:
-        from app.application.services.jimvio_publisher import emit_jimvio
+    if telegram:
+        try:
+            dispatcher = get_telegram_dispatcher()
+            if dispatcher is not None:
+                dispatcher.emit(
+                    event,
+                    event_id,
+                    text,
+                    reply_ticket=reply_ticket,
+                    bind_ticket=bind_ticket,
+                    bind_signal=bind_signal,
+                    require_thread=require_thread,
+                )
+        except Exception:
+            logger.exception("telegram_emit_failed")
+    if jimvio:
+        try:
+            from app.application.services.jimvio_publisher import emit_jimvio
 
-        emit_jimvio(event, event_id, text, fields=fields)
-    except Exception:
-        logger.exception("jimvio_fanout_failed")
+            emit_jimvio(event, event_id, text, fields=fields)
+        except Exception:
+            logger.exception("jimvio_fanout_failed")
 
 
 async def start_telegram_dispatcher(settings: Any) -> TelegramDispatcher:
@@ -421,7 +535,6 @@ async def start_telegram_dispatcher(settings: Any) -> TelegramDispatcher:
         await previous.stop()
     dispatcher.start()
     if dispatcher.enabled:
-        dispatcher.emit_test()
         logger.info(
             "telegram_dispatcher_started",
             chat_id_configured=bool(dispatcher.configured),
@@ -469,12 +582,14 @@ def notify_connectivity(
                             MT5_CONNECTED,
                             f"mt5:connected:{time.time_ns()}",
                             format_mt5_connected(),
+                            telegram=False,
                         )
                     else:
                         emit_telegram(
                             MT5_DISCONNECTED,
                             f"mt5:disconnected:{time.time_ns()}",
                             format_mt5_disconnected(),
+                            telegram=False,
                         )
         if gateway_available is not None:
             previous = _connectivity.get("gateway")
@@ -486,12 +601,14 @@ def notify_connectivity(
                             GATEWAY_ONLINE,
                             f"gw:online:{time.time_ns()}",
                             format_gateway_online(),
+                            telegram=False,
                         )
                     else:
                         emit_telegram(
                             GATEWAY_OFFLINE,
                             f"gw:offline:{time.time_ns()}",
                             format_gateway_offline(),
+                            telegram=False,
                         )
     except Exception:
         logger.exception("telegram_connectivity_notify_failed")
@@ -505,14 +622,18 @@ def notify_cycle(
     pipeline: Any = None,
 ) -> None:
     try:
-        from app.application.services.telegram_events import classify_cycle_notices
+        from app.application.services.telegram_events import (
+            classify_cycle_notices,
+            public_channel_notices,
+        )
 
-        for notice in classify_cycle_notices(
+        classified = classify_cycle_notices(
             cycle=cycle,
             decision=decision,
             bridge=bridge,
             pipeline=pipeline,
-        ):
+        )
+        for notice in classified:
             fields = (
                 notice.get("fields")
                 if isinstance(notice.get("fields"), dict)
@@ -523,6 +644,24 @@ def notify_cycle(
                 notice["event_id"],
                 notice["text"],
                 fields=fields,
+                telegram=False,
+            )
+        for notice in public_channel_notices(classified):
+            fields = (
+                notice.get("fields")
+                if isinstance(notice.get("fields"), dict)
+                else None
+            )
+            emit_telegram(
+                notice["event"],
+                notice["event_id"],
+                notice["text"],
+                fields=fields,
+                jimvio=False,
+                reply_ticket=notice.get("reply_ticket"),
+                bind_ticket=notice.get("bind_ticket"),
+                bind_signal=notice.get("bind_signal"),
+                require_thread=bool(notice.get("require_thread")),
             )
     except Exception:
         logger.exception("telegram_cycle_notify_failed")
@@ -530,9 +669,15 @@ def notify_cycle(
 
 def notify_pme(result: Any, *, current_price: object = None) -> None:
     try:
-        from app.application.services.telegram_events import classify_pme_notices
+        from app.application.services.telegram_events import (
+            classify_pme_notices,
+            public_channel_notices,
+        )
 
-        for notice in classify_pme_notices(result=result, current_price=current_price):
+        classified = classify_pme_notices(
+            result=result, current_price=current_price
+        )
+        for notice in classified:
             fields = (
                 notice.get("fields")
                 if isinstance(notice.get("fields"), dict)
@@ -543,6 +688,24 @@ def notify_pme(result: Any, *, current_price: object = None) -> None:
                 notice["event_id"],
                 notice["text"],
                 fields=fields,
+                telegram=False,
+            )
+        for notice in public_channel_notices(classified):
+            fields = (
+                notice.get("fields")
+                if isinstance(notice.get("fields"), dict)
+                else None
+            )
+            emit_telegram(
+                notice["event"],
+                notice["event_id"],
+                notice["text"],
+                fields=fields,
+                jimvio=False,
+                reply_ticket=notice.get("reply_ticket"),
+                bind_ticket=notice.get("bind_ticket"),
+                bind_signal=notice.get("bind_signal"),
+                require_thread=bool(notice.get("require_thread")),
             )
     except Exception:
         logger.exception("telegram_pme_notify_failed")
@@ -565,6 +728,7 @@ def notify_robot_started() -> None:
             ROBOT_STARTED,
             "robot:started",
             format_robot_started(telegram_status=status),
+            telegram=False,
         )
     except Exception:
         logger.exception("telegram_robot_started_failed")
@@ -584,6 +748,7 @@ def notify_robot_stopped(*, reason: str | None = None) -> None:
             ROBOT_STOPPED,
             "robot:stopped",
             format_robot_stopped(reason=reason),
+            telegram=False,
         )
     except Exception:
         logger.exception("telegram_robot_stopped_failed")
@@ -600,6 +765,7 @@ def notify_system_error(*, reason: str | None) -> None:
             SYSTEM_ERROR,
             f"sys:{reason or 'error'}",
             format_system_error(reason=reason),
+            telegram=False,
         )
     except Exception:
         logger.exception("telegram_system_error_notify_failed")

@@ -58,6 +58,40 @@ _EXEC_ABORT_MARKERS = (
     "ORDER_SEND",
     "EXECUTION_DISABLED",
 )
+# Public channel uses strict greater-than. Not an order_send gate.
+PUBLIC_EXECUTION_SCORE_FLOOR = Decimal("70")
+_PUBLIC_LIFECYCLE_EVENTS = frozenset(
+    {
+        TRADE_OPENED,
+        BREAKEVEN_SET,
+        SL_UPDATED,
+        TRAILING_STOP_UPDATED,
+        PARTIAL_CLOSE,
+        TAKE_PROFIT,
+        STOP_LOSS,
+        TRADE_CLOSED,
+    }
+)
+_PUBLIC_NOISE_EVENTS = frozenset(
+    {
+        SIGNAL_GENERATED,
+        TRADE_REJECTED,
+        RISK_BLOCKED,
+        OMS_REJECTED,
+        ORDER_EXECUTION_ERROR,
+        SYSTEM_ERROR,
+        SL_CREATED,
+        TP_CREATED,
+        TP_UPDATED,
+        TELEGRAM_TEST,
+        ROBOT_STARTED,
+        ROBOT_STOPPED,
+        MT5_CONNECTED,
+        MT5_DISCONNECTED,
+        GATEWAY_ONLINE,
+        GATEWAY_OFFLINE,
+    }
+)
 
 
 def _clean(value: object) -> str | None:
@@ -99,6 +133,20 @@ def _rr(value: object) -> str | None:
     return f"1:{number}"
 
 
+def _pnl_text(value: object) -> str | None:
+    pnl_text = _clean(value)
+    if pnl_text is None:
+        return None
+    if pnl_text.startswith(("+", "-", "$")):
+        return pnl_text
+    try:
+        amount = Decimal(pnl_text)
+    except (InvalidOperation, ValueError):
+        return pnl_text
+    sign = "+" if amount > 0 else ""
+    return f"{sign}${format(amount.normalize(), 'f')}"
+
+
 def _side(value: object) -> str | None:
     text = _clean(value)
     if text is None:
@@ -124,6 +172,49 @@ def _join(lines: list[str | None]) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def opportunity_score_above_70(value: object) -> bool:
+    """Public execution threshold: opportunity_score > 70 (not >= 70)."""
+    try:
+        return Decimal(str(value)) > PUBLIC_EXECUTION_SCORE_FLOOR
+    except (InvalidOperation, ValueError, TypeError):
+        return False
+
+
+def is_valid_execution_setup(
+    *,
+    direction: object,
+    entry: object,
+    stop_loss: object,
+    take_profit: object,
+) -> bool:
+    return (
+        _side(direction) in {"BUY", "SELL"}
+        and _num(entry, treat_zero_missing=True) is not None
+        and _num(stop_loss, treat_zero_missing=True) is not None
+        and _num(take_profit, treat_zero_missing=True) is not None
+    )
+
+
+def is_public_execution_setup(
+    *,
+    opportunity: object,
+    direction: object,
+    entry: object,
+    stop_loss: object,
+    take_profit: object,
+) -> bool:
+    return opportunity_score_above_70(opportunity) and is_valid_execution_setup(
+        direction=direction,
+        entry=entry,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+    )
+
+
+def _level_id(value: object) -> str:
+    return _num(value, treat_zero_missing=True) or "na"
+
+
 def _attach_trade_fields(
     notices: list[dict[str, Any]],
     *,
@@ -134,6 +225,11 @@ def _attach_trade_fields(
     take_profit: object = None,
     current_price: object = None,
     ticket: object = None,
+    opportunity: object = None,
+    confidence: object = None,
+    signal_id: object = None,
+    risk_reward: object = None,
+    regime: str | None = None,
 ) -> list[dict[str, Any]]:
     """Attach structured trade facts for Jimvio. Telegram still uses text."""
     base: dict[str, Any] = {}
@@ -151,6 +247,16 @@ def _attach_trade_fields(
         base["current_price"] = current_price
     if ticket not in (None, "", 0, "0"):
         base["ticket"] = ticket
+    if opportunity not in (None, ""):
+        base["opportunity"] = opportunity
+    if confidence not in (None, ""):
+        base["confidence"] = confidence
+    if signal_id not in (None, ""):
+        base["signal_id"] = signal_id
+    if risk_reward not in (None, ""):
+        base["risk_reward"] = risk_reward
+    if regime:
+        base["regime"] = regime
     if not base:
         return notices
     for notice in notices:
@@ -249,8 +355,14 @@ def format_signal(
     take_profit: object = None,
     risk_reward: object = None,
     regime: str | None = None,
+    status: str | None = None,
 ) -> str:
-    status = "SIGNAL CONFIRMED" if confirmed else "SIGNAL GENERATED"
+    if status:
+        status_line = f"Status: {status}"
+    elif confirmed:
+        status_line = "Status: READY FOR EXECUTION"
+    else:
+        status_line = "Status: SIGNAL GENERATED"
     emoji = "🟢" if _side(direction) != "SELL" else "🔴"
     return _join(
         [
@@ -269,7 +381,7 @@ def format_signal(
             _line("Risk/Reward", _rr(risk_reward)),
             "",
             _line("Regime", regime),
-            f"Status: {status}",
+            status_line,
         ]
     )
 
@@ -289,7 +401,7 @@ def format_trade_opened(
             "🚀 QUANTFORG TRADE OPENED",
             "",
             _line("Symbol", symbol),
-            _line("Side", _side(side)),
+            _line("Direction", _side(side)),
             "",
             _line("Volume", _num(volume, treat_zero_missing=True)),
             _line("Entry", _num(entry, treat_zero_missing=True)),
@@ -317,14 +429,14 @@ def format_breakeven(
             "🔒 QUANTFORG BREAKEVEN",
             "",
             _line("Symbol", symbol),
-            _line("Side", _side(side)),
+            _line("Direction", _side(side)),
             "",
             _line("Entry", _num(entry, treat_zero_missing=True)),
             "",
             _line("Previous SL", _num(previous_sl, treat_zero_missing=True)),
             _line("New SL", _num(new_sl, treat_zero_missing=True)),
             "",
-            "Status: PROTECTED ✅",
+            "Status: BREAKEVEN ACTIVE ✅",
         ]
     )
 
@@ -341,12 +453,12 @@ def format_trailing(
             "🔄 QUANTFORG TRAILING STOP",
             "",
             _line("Symbol", symbol),
-            _line("Side", _side(side)),
+            _line("Direction", _side(side)),
             "",
             _line("Previous SL", _num(previous_sl, treat_zero_missing=True)),
             _line("New SL", _num(new_sl, treat_zero_missing=True)),
             "",
-            "Profit protection: ACTIVE ✅",
+            "Status: TRAILING ACTIVE ✅",
         ]
     )
 
@@ -356,16 +468,27 @@ def format_partial_close(
     symbol: str | None,
     side: str | None,
     volume: object = None,
+    remaining_volume: object = None,
+    pnl: object = None,
     ticket: object = None,
 ) -> str:
+    del ticket
     return _join(
         [
-            "✂️ QUANTFORG PARTIAL CLOSE",
+            "🟣 QUANTFORG PARTIAL CLOSE",
             "",
             _line("Symbol", symbol),
-            _line("Side", _side(side)),
-            _line("Volume", _num(volume, treat_zero_missing=True)),
-            _line("MT5 Ticket", ticket),
+            _line("Direction", _side(side)),
+            "",
+            _line("Closed volume", _num(volume, treat_zero_missing=True)),
+            _line(
+                "Remaining volume",
+                _num(remaining_volume, treat_zero_missing=True),
+            ),
+            "",
+            _line("Realized P/L", _pnl_text(pnl)),
+            "",
+            "Status: PARTIAL CLOSE EXECUTED ✅",
         ]
     )
 
@@ -390,10 +513,32 @@ def format_sl_tp(
             title,
             "",
             _line("Symbol", symbol),
-            _line("Side", _side(side)),
+            _line("Direction", _side(side)),
             _line("Previous", _num(previous, treat_zero_missing=True), missing=None),
             _line("New", _num(new, treat_zero_missing=True)),
             _line("MT5 Ticket", ticket),
+        ]
+    )
+
+
+def format_sl_updated(
+    *,
+    symbol: str | None,
+    side: str | None,
+    previous_sl: object = None,
+    new_sl: object = None,
+) -> str:
+    return _join(
+        [
+            "🛡️ QUANTFORG SL UPDATED",
+            "",
+            _line("Symbol", symbol),
+            _line("Direction", _side(side)),
+            "",
+            _line("Previous SL", _num(previous_sl, treat_zero_missing=True)),
+            _line("New SL", _num(new_sl, treat_zero_missing=True)),
+            "",
+            "Status: PROTECTED ✅",
         ]
     )
 
@@ -409,40 +554,36 @@ def format_trade_closed(
     reason: str | None = None,
     event: str = TRADE_CLOSED,
 ) -> str:
+    del volume
     if event == TAKE_PROFIT:
-        headline = "🟢 QUANTFORG TAKE PROFIT"
-        reason_line = "Reason: TAKE PROFIT ✅"
+        headline = "🎯 QUANTFORG TAKE PROFIT"
+        pnl_label = "Profit"
+        status_line = "Status: CLOSED — TAKE PROFIT ✅"
     elif event == STOP_LOSS:
-        headline = "🔴 QUANTFORG STOP LOSS"
-        reason_line = "Reason: STOP LOSS"
+        headline = "🛑 QUANTFORG STOP LOSS"
+        pnl_label = "P/L"
+        status_line = "Status: CLOSED — STOP LOSS"
     else:
         headline = "🔴 QUANTFORG TRADE CLOSED"
-        reason_line = f"Reason: {_clean(reason) or 'CLOSED'}"
-    pnl_text = _clean(pnl)
-    if pnl_text is not None and not pnl_text.startswith(("+", "-", "$")):
-        try:
-            amount = Decimal(pnl_text)
-            sign = "+" if amount > 0 else ""
-            pnl_text = f"{sign}${format(amount.normalize(), 'f')}"
-        except (InvalidOperation, ValueError):
-            pass
-    return _join(
-        [
-            headline,
-            "",
-            _line("Symbol", symbol),
-            _line("Side", _side(side)),
-            "",
-            _line("Entry", _num(entry, treat_zero_missing=True)),
-            _line("Exit", _num(exit_price, treat_zero_missing=True)),
-            "",
-            _line("Volume", _num(volume, treat_zero_missing=True)),
-            "",
-            _line("P/L", pnl_text),
-            "",
-            reason_line,
-        ]
-    )
+        pnl_label = "P/L"
+        status_line = "Status: CLOSED"
+    lines = [
+        headline,
+        "",
+        _line("Symbol", symbol),
+        _line("Direction", _side(side)),
+        "",
+        _line("Entry", _num(entry, treat_zero_missing=True)),
+        _line("Exit", _num(exit_price, treat_zero_missing=True)),
+        "",
+        _line(pnl_label, _pnl_text(pnl)),
+        "",
+    ]
+    if event == TRADE_CLOSED:
+        lines.append(_line("Reason", _clean(reason) or "CLOSED"))
+        lines.append("")
+    lines.append(status_line)
+    return _join(lines)
 
 
 def format_risk_block(
@@ -663,6 +804,128 @@ def signal_fingerprint(
     )
 
 
+def _notice_fields(notice: dict[str, Any]) -> dict[str, Any]:
+    raw = notice.get("fields")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _ticket_from_notices(notices: list[dict[str, Any]]) -> int | None:
+    for notice in notices:
+        fields = _notice_fields(notice)
+        ticket = _int_ticket(fields.get("ticket"))
+        if ticket is not None:
+            return ticket
+        event_id = str(notice.get("event_id") or "")
+        if event_id.startswith("open:"):
+            ticket = _int_ticket(event_id.split(":", 1)[-1])
+            if ticket is not None:
+                return ticket
+    return None
+
+
+def public_channel_notices(
+    notices: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Filter classified notices for the public Signals channel.
+
+    Research, rejects, risk/OMS noise, and operational events stay out.
+    A cycle becomes a public signal only after a real MT5 ticket AND
+    opportunity_score > 70 with a valid BUY/SELL setup.
+    """
+    if not notices:
+        return []
+    facts: dict[str, Any] = {}
+    for notice in notices:
+        facts.update(_notice_fields(notice))
+    ticket = _int_ticket(facts.get("ticket")) or _ticket_from_notices(notices)
+    opportunity = facts.get("opportunity")
+    direction = facts.get("direction")
+    entry = facts.get("entry")
+    stop_loss = facts.get("stop_loss")
+    take_profit = facts.get("take_profit")
+    setup_ok = is_public_execution_setup(
+        opportunity=opportunity,
+        direction=direction,
+        entry=entry,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+    )
+    fp = signal_fingerprint(
+        symbol=facts.get("symbol"),
+        direction=direction,
+        entry=entry,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+    )
+    signal_id = _clean(facts.get("signal_id")) or f"sig:{fp}"
+    out: list[dict[str, Any]] = []
+    events = {str(n.get("event")) for n in notices}
+
+    if TRADE_OPENED in events and ticket is not None and setup_ok:
+        root_src = next(
+            (
+                n
+                for n in notices
+                if n.get("event") in {SIGNAL_CONFIRMED, SIGNAL_GENERATED}
+            ),
+            None,
+        )
+        root_fields = dict(facts)
+        if root_src is not None:
+            root_fields.update(_notice_fields(root_src))
+        root_id = f"signal:{signal_id}"
+        out.append(
+            {
+                "event": SIGNAL_CONFIRMED,
+                "event_id": root_id,
+                "text": format_signal(
+                    confirmed=True,
+                    symbol=_clean(root_fields.get("symbol")),
+                    direction=_side(root_fields.get("direction")),
+                    opportunity=root_fields.get("opportunity"),
+                    confidence=root_fields.get("confidence"),
+                    entry=root_fields.get("entry"),
+                    stop_loss=root_fields.get("stop_loss"),
+                    take_profit=root_fields.get("take_profit"),
+                    risk_reward=root_fields.get("risk_reward"),
+                    regime=_clean(root_fields.get("regime")),
+                    status="EXECUTED ✅",
+                ),
+                "fields": root_fields,
+                "bind_ticket": str(ticket),
+                "bind_signal": signal_id,
+                "require_thread": False,
+            }
+        )
+        opened = next(n for n in notices if n.get("event") == TRADE_OPENED)
+        opened_out = dict(opened)
+        opened_out["reply_ticket"] = str(ticket)
+        opened_out["bind_ticket"] = str(ticket)
+        opened_out["bind_signal"] = signal_id
+        opened_out["require_thread"] = False
+        out.append(opened_out)
+        return out
+
+    if TRADE_OPENED in events:
+        return []
+
+    for notice in notices:
+        event = str(notice.get("event") or "")
+        if event in _PUBLIC_NOISE_EVENTS or event == SIGNAL_CONFIRMED:
+            continue
+        if event not in _PUBLIC_LIFECYCLE_EVENTS:
+            continue
+        row = dict(notice)
+        fields = _notice_fields(notice)
+        reply = _int_ticket(fields.get("ticket")) or ticket
+        if reply is None:
+            continue
+        row["reply_ticket"] = str(reply)
+        row["require_thread"] = True
+        out.append(row)
+    return out
+
+
 def classify_cycle_notices(
     *,
     cycle: Any,
@@ -743,6 +1006,23 @@ def classify_cycle_notices(
     if volume is None:
         journal = getattr(bridge, "journal_entry", None) if bridge is not None else None
         volume = getattr(journal, "approved_lots", None)
+    sig_id = _clean(getattr(cycle, "signal_id", None)) or f"sig:{sig_fp}"
+
+    def _with_fields(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return _attach_trade_fields(
+            rows,
+            symbol=symbol,
+            direction=direction or action,
+            entry=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            ticket=ticket,
+            opportunity=opportunity,
+            confidence=confidence,
+            signal_id=sig_id,
+            risk_reward=rr,
+            regime=regime,
+        )
 
     notices: list[dict[str, Any]] = []
     generated = signal_action in {"BUY", "SELL"} or (
@@ -832,15 +1112,7 @@ def classify_cycle_notices(
                     ),
                 }
             )
-        return _attach_trade_fields(
-            notices,
-            symbol=symbol,
-            direction=direction or action,
-            entry=entry,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-            ticket=ticket,
-        )
+        return _with_fields(notices)
 
     safety = tuple(getattr(cycle, "safety_failed_reasons", ()) or ())
     safety_text = " ".join(str(item) for item in safety).upper()
@@ -869,14 +1141,7 @@ def classify_cycle_notices(
                 ),
             }
         )
-        return _attach_trade_fields(
-            notices,
-            symbol=symbol,
-            direction=direction or action,
-            entry=entry,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
+        return _with_fields(notices)
     if _contains(abort, _OMS_ABORT_MARKERS):
         notices.append(
             {
@@ -889,14 +1154,7 @@ def classify_cycle_notices(
                 ),
             }
         )
-        return _attach_trade_fields(
-            notices,
-            symbol=symbol,
-            direction=direction or action,
-            entry=entry,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
+        return _with_fields(notices)
     if _contains(abort, _EXEC_ABORT_MARKERS):
         notices.append(
             {
@@ -909,14 +1167,7 @@ def classify_cycle_notices(
                 ),
             }
         )
-        return _attach_trade_fields(
-            notices,
-            symbol=symbol,
-            direction=direction or action,
-            entry=entry,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
+        return _with_fields(notices)
     if abort and (confirmed or generated):
         notices.append(
             {
@@ -929,14 +1180,7 @@ def classify_cycle_notices(
                 ),
             }
         )
-    return _attach_trade_fields(
-        notices,
-        symbol=symbol,
-        direction=direction or action,
-        entry=entry,
-        stop_loss=stop_loss,
-        take_profit=take_profit,
-    )
+    return _with_fields(notices)
 
 
 def classify_pme_notices(
@@ -990,6 +1234,7 @@ def classify_pme_notices(
     fingerprint = _clean(getattr(record, "fingerprint", None)) or (
         f"{ticket}:{action}:{new_sl}"
     )
+    sl_key = _level_id(new_sl)
     to_state = str(
         getattr(
             getattr(record, "to_state", None),
@@ -1005,7 +1250,7 @@ def classify_pme_notices(
         notices.append(
             {
                 "event": BREAKEVEN_SET,
-                "event_id": f"be:{fingerprint}",
+                "event_id": f"be:{ticket}:{sl_key}",
                 "text": format_breakeven(
                     symbol=symbol,
                     side=side,
@@ -1019,7 +1264,7 @@ def classify_pme_notices(
         notices.append(
             {
                 "event": TRAILING_STOP_UPDATED,
-                "event_id": f"trail:{fingerprint}",
+                "event_id": f"trail:{ticket}:{sl_key}",
                 "text": format_trailing(
                     symbol=symbol,
                     side=side,
@@ -1036,14 +1281,12 @@ def classify_pme_notices(
         notices.append(
             {
                 "event": SL_UPDATED,
-                "event_id": f"slu:{fingerprint}",
-                "text": format_sl_tp(
-                    kind=SL_UPDATED,
+                "event_id": f"sl:{ticket}:{sl_key}",
+                "text": format_sl_updated(
                     symbol=symbol,
                     side=side,
-                    previous=old_sl,
-                    new=new_sl,
-                    ticket=ticket,
+                    previous_sl=old_sl,
+                    new_sl=new_sl,
                 ),
             }
         )
@@ -1068,11 +1311,13 @@ def classify_pme_notices(
         notices.append(
             {
                 "event": PARTIAL_CLOSE,
-                "event_id": f"part:{fingerprint}",
+                "event_id": f"partial:{ticket}:{fingerprint}",
                 "text": format_partial_close(
                     symbol=symbol,
                     side=side,
                     volume=getattr(record, "volume", None),
+                    remaining_volume=getattr(position, "remaining_volume", None),
+                    pnl=getattr(record, "pnl", None),
                     ticket=ticket,
                 ),
             }
@@ -1084,7 +1329,7 @@ def classify_pme_notices(
         notices.append(
             {
                 "event": event,
-                "event_id": f"close:{ticket}:{event}",
+                "event_id": f"close:{ticket}:{fingerprint or event}",
                 "text": format_trade_closed(
                     symbol=symbol,
                     side=side,

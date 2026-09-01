@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -33,6 +34,9 @@ from app.application.services.telegram_events import (
     SIGNAL_GENERATED,
     TRADE_OPENED,
 )
+from app.application.services.telegram_thread_store import (
+    reset_telegram_threads_for_tests,
+)
 from core.config.settings import AppEnvironment, Settings
 
 SECRET = "jimvio-test-secret-do-not-log"
@@ -46,12 +50,18 @@ class _FakeResponse:
 
 
 @pytest.fixture(autouse=True)
-def _reset_publishers() -> None:
+def _reset_publishers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "QUANTFORG_TELEGRAM_THREADS_PATH",
+        str(tmp_path / "telegram_threads.json"),
+    )
+    reset_telegram_threads_for_tests()
     reset_jimvio_publisher_for_tests(None)
     reset_telegram_dispatcher_for_tests(None)
     yield
     reset_jimvio_publisher_for_tests(None)
     reset_telegram_dispatcher_for_tests(None)
+    reset_telegram_threads_for_tests()
 
 
 def _publisher(
@@ -294,7 +304,8 @@ class TestJimvioDoesNotAffectTelegram:
         class _Disp:
             enabled = True
 
-            def emit(self, event: str, event_id: str, text: str) -> None:
+            def emit(self, event: str, event_id: str, text: str, **kwargs: Any) -> None:
+                del kwargs
                 sent.append(event)
 
         reset_telegram_dispatcher_for_tests(_Disp())  # type: ignore[arg-type]
@@ -331,7 +342,7 @@ class TestJimvioDoesNotAffectTelegram:
             },
         )()
         notify_cycle(cycle, decision=decision, pipeline=None)
-        assert SIGNAL_GENERATED in sent or "RISK_BLOCKED" in sent
+        assert sent == []
 
 
 @pytest.mark.unit
