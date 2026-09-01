@@ -27,7 +27,9 @@ def _secret() -> str:
         getter = getattr(configured, "get_secret_value", None)
         raw = getter() if callable(getter) else str(configured)
     raw = str(raw or "").strip() or (
-        os.environ.get("QUANTFORG_WEBHOOK_SECRET") or ""
+        os.environ.get("QUANTFORG_WEBHOOK_SECRET")
+        or os.environ.get("JIMVIO_WEBHOOK_SECRET")
+        or ""
     ).strip()
     return raw
 

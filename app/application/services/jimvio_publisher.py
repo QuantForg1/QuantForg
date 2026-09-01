@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import os
 import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass
@@ -435,13 +436,45 @@ class JimvioPublisher:
             SIGNATURE_HEADER: signature,
         }
         last_error = "unknown"
+        logger.info(
+            "jimvio_webhook_request_started",
+            jimvio_event=notice.event,
+            event_id=notice.event_id,
+        )
         for attempt in range(1, self._max_attempts + 1):
             try:
                 response = await self._post(self._url, headers, body)
-            except (httpx.TimeoutException, httpx.NetworkError, OSError) as exc:
+            except httpx.TimeoutException as exc:
+                last_error = type(exc).__name__
+                logger.warning(
+                    "jimvio_webhook_timeout",
+                    jimvio_event=notice.event,
+                    event_id=notice.event_id,
+                    attempt=attempt,
+                )
+                if attempt >= self._max_attempts:
+                    break
+                logger.info(
+                    "jimvio_webhook_retry",
+                    jimvio_event=notice.event,
+                    event_id=notice.event_id,
+                    attempt=attempt,
+                )
+                await asyncio.sleep(
+                    _BACKOFF_SECONDS[min(attempt - 1, len(_BACKOFF_SECONDS) - 1)]
+                )
+                continue
+            except (httpx.NetworkError, OSError) as exc:
                 last_error = type(exc).__name__
                 if attempt >= self._max_attempts:
                     break
+                logger.info(
+                    "jimvio_webhook_retry",
+                    jimvio_event=notice.event,
+                    event_id=notice.event_id,
+                    attempt=attempt,
+                    error=last_error,
+                )
                 await asyncio.sleep(
                     _BACKOFF_SECONDS[min(attempt - 1, len(_BACKOFF_SECONDS) - 1)]
                 )
@@ -450,6 +483,12 @@ class JimvioPublisher:
                 last_error = type(exc).__name__
                 break
             status = int(getattr(response, "status_code", 0) or 0)
+            logger.info(
+                "jimvio_webhook_response",
+                jimvio_event=notice.event,
+                event_id=notice.event_id,
+                status=status,
+            )
             if 200 <= status < 300:
                 self._last_success = True
                 logger.info(
@@ -463,6 +502,12 @@ class JimvioPublisher:
             retryable = status == 429 or status >= 500
             if not retryable or attempt >= self._max_attempts:
                 logger.warning(
+                    "jimvio_webhook_failed",
+                    jimvio_event=notice.event,
+                    event_id=notice.event_id,
+                    status=status,
+                )
+                logger.warning(
                     "jimvio_notification_failed",
                     jimvio_event=notice.event,
                     event_id=notice.event_id,
@@ -470,9 +515,22 @@ class JimvioPublisher:
                 )
                 self._last_success = False
                 return
+            logger.info(
+                "jimvio_webhook_retry",
+                jimvio_event=notice.event,
+                event_id=notice.event_id,
+                attempt=attempt,
+                status=status,
+            )
             wait = _BACKOFF_SECONDS[min(attempt - 1, len(_BACKOFF_SECONDS) - 1)]
             await asyncio.sleep(wait)
         self._last_success = False
+        logger.warning(
+            "jimvio_webhook_failed",
+            jimvio_event=notice.event,
+            event_id=notice.event_id,
+            error=last_error,
+        )
         logger.warning(
             "jimvio_notification_failed",
             jimvio_event=notice.event,
@@ -524,13 +582,25 @@ def emit_jimvio(
         logger.exception("jimvio_emit_failed")
 
 
+def _settings_webhook_secret(settings: Any) -> Any:
+    primary = getattr(settings, "quantforg_webhook_secret", None)
+    if _secret_text(primary):
+        return primary
+    fallback = (
+        os.environ.get("QUANTFORG_WEBHOOK_SECRET")
+        or os.environ.get("JIMVIO_WEBHOOK_SECRET")
+        or ""
+    ).strip()
+    return fallback or None
+
+
 async def start_jimvio_publisher(settings: Any) -> JimvioPublisher:
     global _publisher
     publisher = JimvioPublisher(
         enabled=bool(getattr(settings, "jimvio_enabled", False)),
         webhook_url=getattr(settings, "jimvio_webhook_url", None)
         or DEFAULT_JIMVIO_WEBHOOK_URL,
-        secret=getattr(settings, "quantforg_webhook_secret", None),
+        secret=_settings_webhook_secret(settings),
     )
     with _publisher_lock:
         previous = _publisher

@@ -100,6 +100,50 @@ class TestJimvioHmac:
         assert pretty != body
         assert jimvio_signature(pretty, SECRET) != signature
 
+    def test_python_hmac_matches_node_crypto_hex(self) -> None:
+        """Jimvio verifies HMAC-SHA256 hex of the raw body (Node crypto)."""
+        import base64
+        import shutil
+        import subprocess
+
+        payload = {
+            "event_id": "quantforg-e2e-hmac",
+            "event_type": "SYSTEM_ERROR",
+            "status": "TEST",
+        }
+        body, signature = signed_request(payload, SECRET)
+        if shutil.which("node") is None:
+            expected = hmac.new(
+                SECRET.encode("utf-8"), body, hashlib.sha256
+            ).hexdigest()
+            assert signature == expected
+            return
+        encoded = base64.b64encode(body).decode("ascii")
+        script = (
+            "const crypto=require('crypto');"
+            "const secret=process.env.QF_HMAC_SECRET;"
+            "const body=Buffer.from(process.env.QF_HMAC_BODY,'base64');"
+            "process.stdout.write("
+            "crypto.createHmac('sha256',secret).update(body).digest('hex')"
+            ");"
+        )
+        env = {
+            **__import__("os").environ,
+            "QF_HMAC_SECRET": SECRET,
+            "QF_HMAC_BODY": encoded,
+        }
+        node_bin = shutil.which("node")
+        assert node_bin is not None
+        node = subprocess.run(  # noqa: S603
+            [node_bin, "-e", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert node.stdout.strip() == signature
+        assert SECRET not in node.stdout
+
     def test_missing_secret_refuses_to_sign(self) -> None:
         with pytest.raises(ValueError, match="missing_webhook_secret"):
             jimvio_signature(b"{}", "")
@@ -357,6 +401,23 @@ def test_settings_secret_not_dumped_as_plaintext() -> None:
     dumped = str(settings.model_dump())
     assert SECRET not in dumped
     assert settings.jimvio_webhook_url == DEFAULT_JIMVIO_WEBHOOK_URL
+
+
+@pytest.mark.unit
+def test_settings_accepts_jimvio_webhook_secret_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUANTFORG_WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("JIMVIO_WEBHOOK_SECRET", SECRET)
+    settings = Settings(
+        _env_file=None,
+        secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+        app_env=AppEnvironment.TESTING,
+        jimvio_enabled=True,
+    )
+    configured = settings.quantforg_webhook_secret
+    assert configured is not None
+    assert configured.get_secret_value() == SECRET
 
 
 @pytest.mark.unit

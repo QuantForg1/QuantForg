@@ -469,6 +469,7 @@ class Settings(BaseSettings):
             ),
             validation_alias=AliasChoices(
                 "QUANTFORG_WEBHOOK_SECRET",
+                "JIMVIO_WEBHOOK_SECRET",
                 "quantforg_webhook_secret",
             ),
         ),

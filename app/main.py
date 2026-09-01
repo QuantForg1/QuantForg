@@ -318,6 +318,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if telegram_token is not None:
         with contextlib.suppress(Exception):
             telegram_token_configured = bool(telegram_token.get_secret_value().strip())
+    jimvio_secret_configured = False
+    jimvio_secret = getattr(settings, "quantforg_webhook_secret", None)
+    if jimvio_secret is not None:
+        with contextlib.suppress(Exception):
+            getter = getattr(jimvio_secret, "get_secret_value", None)
+            raw = getter() if callable(getter) else str(jimvio_secret)
+            jimvio_secret_configured = bool(str(raw or "").strip())
     logger.info(
         "environment_loaded",
         port=port_env,
@@ -329,9 +336,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         ),
         telegram_token_configured=telegram_token_configured,
         jimvio_enabled=bool(getattr(settings, "jimvio_enabled", False)),
-        jimvio_secret_configured=bool(
-            getattr(settings, "quantforg_webhook_secret", None)
-        ),
+        jimvio_secret_configured=jimvio_secret_configured,
     )
 
     from urllib.parse import urlparse
