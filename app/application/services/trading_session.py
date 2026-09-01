@@ -130,9 +130,18 @@ class GetTradingSessionUseCase:
 
     async def execute(self, *, user_id: UUID) -> dict[str, Any]:
         try:
-            connection = await ensure_live_mt5_session_for_user(
-                self.uow_factory, self.adapter, user_id
+            connection = await asyncio.wait_for(
+                ensure_live_mt5_session_for_user(
+                    self.uow_factory, self.adapter, user_id
+                ),
+                timeout=4.0,
             )
+        except TimeoutError:
+            logger.warning(
+                "trading_session_ensure_timeout",
+                user_id=str(user_id),
+            )
+            connection = None
         except Exception as exc:
             logger.warning(
                 "trading_session_ensure_failed",

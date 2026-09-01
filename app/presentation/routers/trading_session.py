@@ -7,6 +7,8 @@ Owner/admin global kill-switch and mode remain on /ite/ops.
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Request
 
 from app.application.services.trading_session import (
@@ -44,8 +46,16 @@ async def get_trading_session(
     # Owner/admin adopt after Railway redeploy loses ephemeral profile/DB bind.
     # Best-effort: a bind failure must not 500 the whole workspace.
     try:
-        await weltrade.ensure_user_session_bound(
-            user_id=user.id, role=str(getattr(user, "role", "") or "")
+        await asyncio.wait_for(
+            weltrade.ensure_user_session_bound(
+                user_id=user.id, role=str(getattr(user, "role", "") or "")
+            ),
+            timeout=4.0,
+        )
+    except TimeoutError:
+        logger.warning(
+            "trading_session_bind_timeout",
+            user_id=str(user.id),
         )
     except Exception as exc:
         logger.warning(
