@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import re
 import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass
@@ -33,6 +35,7 @@ _SEEN_TTL_SECONDS = 6 * 3600
 _TIMEOUT_SECONDS = 4.0
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = (0.5, 1.0, 2.0)
+_BOT_URL_RE = re.compile(r"(https://api\.telegram\.org/bot)[^/\s]+", re.IGNORECASE)
 
 
 class TelegramSender(Protocol):
@@ -49,7 +52,7 @@ def _secret_text(value: Any) -> str | None:
 
 
 def redact_secrets(text: str, *secrets: str | None) -> str:
-    redacted = text
+    redacted = _BOT_URL_RE.sub(r"\1***", text)
     for secret in secrets:
         if secret:
             redacted = redacted.replace(secret, "***")
@@ -57,7 +60,8 @@ def redact_secrets(text: str, *secrets: str | None) -> str:
 
 
 def _safe_url_for_logs(url: str) -> str:
-    parts = urlsplit(url)
+    redacted = _BOT_URL_RE.sub(r"\1***", url)
+    parts = urlsplit(redacted)
     path = parts.path
     if "/bot" in path:
         head, _sep, tail = path.partition("/bot")
@@ -66,6 +70,45 @@ def _safe_url_for_logs(url: str) -> str:
         rest = token_and_rest[slash:] if slash >= 0 else ""
         path = f"{head}/bot***/{rest.lstrip('/')}"
     return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
+
+
+def _redact_log_value(value: object) -> object:
+    text = str(value)
+    if "api.telegram.org/bot" in text.lower():
+        return _BOT_URL_RE.sub(r"\1***", text)
+    return value
+
+
+class _TelegramUrlRedactFilter(logging.Filter):
+    """Prevent httpx/httpcore from logging the Bot API token in the URL."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            args = record.args
+            if isinstance(args, dict):
+                record.args = {k: _redact_log_value(v) for k, v in args.items()}
+            elif isinstance(args, tuple):
+                record.args = tuple(_redact_log_value(a) for a in args)
+            elif args:
+                record.args = _redact_log_value(args)
+            if isinstance(record.msg, str) and "api.telegram.org" in record.msg:
+                record.msg = _BOT_URL_RE.sub(r"\1***", record.msg)
+        except Exception:
+            return True
+        return True
+
+
+_httpx_filter_installed = False
+
+
+def _install_httpx_telegram_redact_filter() -> None:
+    global _httpx_filter_installed
+    if _httpx_filter_installed:
+        return
+    redact = _TelegramUrlRedactFilter()
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).addFilter(redact)
+    _httpx_filter_installed = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +150,8 @@ class TelegramDispatcher:
                 token_configured=bool(self._token),
                 chat_id_configured=bool(self._chat_id),
             )
+        if self._enabled:
+            _install_httpx_telegram_redact_filter()
 
     @property
     def enabled(self) -> bool:

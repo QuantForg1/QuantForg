@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -256,6 +257,29 @@ class TestTelegramDispatcher:
         raw = f"POST https://api.telegram.org/bot{TOKEN}/sendMessage failed"
         assert TOKEN not in redact_secrets(raw, TOKEN)
         assert "***" in redact_secrets(raw, TOKEN)
+
+    def test_httpx_log_filter_redacts_bot_url(self) -> None:
+        from app.application.services.telegram_dispatcher import (
+            _TelegramUrlRedactFilter,
+        )
+
+        filt = _TelegramUrlRedactFilter()
+        record = logging.LogRecord(
+            name="httpx",
+            level=logging.INFO,
+            pathname="x",
+            lineno=1,
+            msg="HTTP Request: %s %s",
+            args=(
+                "POST",
+                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+            ),
+            exc_info=None,
+        )
+        assert filt.filter(record) is True
+        rendered = record.getMessage()
+        assert TOKEN not in rendered
+        assert "api.telegram.org/bot***" in rendered
 
     def test_duplicate_event_suppressed(self) -> None:
         disp = _dispatcher(_unused_sender)
