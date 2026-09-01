@@ -17,7 +17,6 @@ from app.application.services.live_account_risk_tracker import (
 )
 from app.domain.entities.mt5 import MT5AccountInfo
 from app.domain.entities.mt5_market import MT5Rate
-from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.market_data.timeframe import Timeframe
 
 
@@ -130,9 +129,10 @@ async def test_history_deals_failure_trips_daily_loss_fail_closed(
     assert ctx.account is not None
     assert ctx.diagnostics.get("daily_pnl_fail_closed") is True
     assert ctx.diagnostics.get("daily_pnl_trusted") is False
-    max_dd = Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct))
-    expected = -(Decimal("10000") * max_dd / Decimal("100"))
-    assert ctx.account.daily_pnl == expected
+    assert ctx.account.daily_pnl == Decimal("0")
+    assert ctx.diagnostics.get("daily_loss_source") == "fail_closed"
+    # This cycle is blocked; the durable latch is not armed from missing deals.
+    assert ctx.diagnostics.get("daily_loss_exceeded") is True
 
 
 @pytest.mark.unit

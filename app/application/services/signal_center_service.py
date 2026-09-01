@@ -1468,6 +1468,53 @@ def _honest_numeric(value: Any) -> Any:
         return None
 
 
+def _promote_pipeline_trade_levels(row: dict[str, Any]) -> dict[str, Any]:
+    """Expose existing pipeline entry/SL/TP/opportunity on the signal row.
+
+    Does not invent values — copies only what the pipeline already computed.
+    """
+    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+    if row.get("entry") in (None, "", "UNKNOWN"):
+        entry = _honest_numeric(pipe.get("entry") or pipe.get("entry_price"))
+        if entry is not None:
+            row["entry"] = entry
+            row["entry_candidate"] = entry
+    if row.get("stop_loss") in (None, "", "UNKNOWN") and row.get("stop") in (
+        None,
+        "",
+        "UNKNOWN",
+    ):
+        stop = _honest_numeric(
+            pipe.get("stop") or pipe.get("stop_loss") or pipe.get("sl")
+        )
+        if stop is not None:
+            row["stop"] = stop
+            row["stop_loss"] = stop
+            row["SL_candidate"] = stop
+    if row.get("take_profit") in (None, "", "UNKNOWN") and row.get("target") in (
+        None,
+        "",
+        "UNKNOWN",
+    ):
+        take = _honest_numeric(
+            pipe.get("target") or pipe.get("take_profit") or pipe.get("tp")
+        )
+        if take is not None:
+            row["target"] = take
+            row["take_profit"] = take
+            row["TP_candidate"] = take
+    if row.get("opportunity_score") in (None, "", "UNKNOWN"):
+        opp = pipe.get("opportunity_score")
+        if isinstance(opp, (int, float)):
+            row["opportunity_score"] = opp
+    if row.get("rr") in (None, "", "UNKNOWN") and row.get("RR") in (None, "", "UNKNOWN"):
+        rr = _honest_numeric(pipe.get("rr") or pipe.get("RR") or pipe.get("risk_reward"))
+        if rr is not None:
+            row["rr"] = rr
+            row["RR"] = rr
+    return row
+
+
 def _signal_type_from_row(row: dict[str, Any]) -> str | None:
     raw = str(
         row.get("signal_type")
@@ -1978,6 +2025,7 @@ def list_live_signals(
     for row in signals:
         if not isinstance(row, dict):
             continue
+        _promote_pipeline_trade_levels(row)
         status = signal_execution_status(
             row,
             live_state=str(auth.get("live_trading_state") or ""),

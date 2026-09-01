@@ -288,3 +288,78 @@ def test_empty_universe_does_not_inject_research_symbols() -> None:
         research_focus=["EURUSD"],
     )
     assert merged == ["XAUUSD_I"]
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_gold_only_research_handoff_does_not_reinject_fx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: True,
+    )
+    merged = merge_research_into_execution_handoff(
+        ["XAUUSD_I"],
+        universe=["EURUSD", "GBPUSD", "XAUUSD_I"],
+        research_focus=["EURUSD", "NZDUSD", "XAUUSD_I"],
+    )
+    assert "EURUSD" not in merged
+    assert "NZDUSD" not in merged
+    assert any(str(s).upper().startswith("XAUUSD") for s in merged)
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_gold_only_live_eligible_is_gold_not_research_focus(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: True,
+    )
+    gold = signal_execution_status(
+        {"symbol": "XAUUSD", "direction": "SELL"},
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["EURUSD", "NZDUSD"],
+    )
+    fx = signal_execution_status(
+        {"symbol": "EURUSD", "direction": "BUY"},
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["EURUSD", "NZDUSD"],
+    )
+    assert gold == "LIVE_ELIGIBLE"
+    assert fx == "RESEARCH_ONLY"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_promote_pipeline_levels_does_not_invent_values() -> None:
+    from app.application.services.signal_center_service import (
+        _promote_pipeline_trade_levels,
+    )
+
+    row = _promote_pipeline_trade_levels(
+        {
+            "symbol": "XAUUSD",
+            "direction": "SELL",
+            "entry": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "pipeline": {
+                "entry": "4429.935",
+                "stop": "4438.14",
+                "target": "4420.08",
+                "opportunity_score": 75,
+            },
+        }
+    )
+    assert row["entry"] == 4429.935
+    assert row["stop_loss"] == 4438.14
+    assert row["take_profit"] == 4420.08
+    assert row["opportunity_score"] == 75
+    empty = _promote_pipeline_trade_levels({"symbol": "XAUUSD", "pipeline": {}})
+    assert empty.get("entry") is None
+    assert empty.get("stop_loss") is None

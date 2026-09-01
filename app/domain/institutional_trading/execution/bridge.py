@@ -1430,7 +1430,7 @@ class ExecutionBridge:
                 equity=context.account.equity,
                 balance=context.account.balance,
                 max_daily_loss_pct=Decimal(str(self.ite_config.max_daily_loss_pct)),
-                trusted=True,
+                trusted=context.daily_pnl_trusted is not False,
                 floating_pnl=getattr(context.account, "floating_pnl", None),
             )
             account_daily = bool(lock.get("daily_loss_exceeded"))

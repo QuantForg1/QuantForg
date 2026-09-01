@@ -923,14 +923,14 @@ async def build_ite_cycle_market_context(
             peak_equity = tracker.observe_equity(login=login, equity=equity)
             if balance > peak_equity:
                 peak_equity = tracker.observe_equity(login=login, equity=balance)
-            max_dd = Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct))
-            # Fail closed: trip daily-loss gate until deals can be read.
-            daily_pnl = -(equity * max_dd / Decimal("100"))
+            # Fail closed this cycle. Do not write a fabricated -40% PnL onto
+            # the account object — that value was treated as trusted by the
+            # execution bridge and could arm a durable daily-loss latch.
+            daily_pnl = Decimal("0")
             diag["daily_pnl_fail_closed"] = True
             logger.warning(
                 "ite_cycle_daily_pnl_fail_closed",
                 reason="history_deals_unavailable",
-                daily_pnl=str(daily_pnl),
             )
         diag["peak_equity"] = str(peak_equity)
         diag["daily_pnl"] = str(daily_pnl)
@@ -939,10 +939,7 @@ async def build_ite_cycle_market_context(
         logger.warning("ite_cycle_live_risk_resolve_failed", error=str(exc))
         diag["live_risk_resolve"] = f"ERROR: {exc}"
         diag["daily_pnl_fail_closed"] = True
-        from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
-
-        max_dd = Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct))
-        daily_pnl = -(equity * max_dd / Decimal("100"))
+        daily_pnl = Decimal("0")
         daily_pnl_trusted = False
         diag["daily_pnl"] = str(daily_pnl)
         diag["daily_pnl_trusted"] = False

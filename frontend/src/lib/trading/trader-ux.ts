@@ -909,15 +909,28 @@ export function normalizeSignalCenterPayload(
       item.edge;
     const rank = numericSortValue(item.research_rank_score);
     const stamped = item.time_generated ?? item.as_of ?? asOf;
-    const entry = item.entry ?? item.entry_candidate ?? detail.entry;
+    const entry =
+      item.entry ?? item.entry_candidate ?? detail.entry ?? pipeline.entry;
     const stop =
-      item.stop_loss ?? item.stop ?? item.SL_candidate ?? detail.stop_loss;
+      item.stop_loss ??
+      item.stop ??
+      item.SL_candidate ??
+      detail.stop_loss ??
+      pipeline.stop ??
+      pipeline.stop_loss;
     const take =
-      item.take_profit ?? item.target ?? item.TP_candidate ?? detail.take_profit;
+      item.take_profit ??
+      item.target ??
+      item.TP_candidate ??
+      detail.take_profit ??
+      pipeline.target ??
+      pipeline.take_profit;
     const price =
       item.price ?? item.mid ?? item.last ?? item.last_price ?? detail.price;
     const bid = item.bid ?? detail.bid;
     const ask = item.ask ?? detail.ask;
+    const opportunity =
+      item.opportunity_score ?? item.quality ?? pipeline.opportunity_score;
     const signalTypeRaw = String(item.signal_type || item.entry_type || "")
       .trim()
       .toUpperCase();
@@ -932,7 +945,7 @@ export function normalizeSignalCenterPayload(
       symbol,
       canonical_symbol: item.canonical_symbol || symbol,
       direction: dir,
-      opportunity_score: item.opportunity_score ?? item.quality,
+      opportunity_score: opportunity,
       directional_edge: edge,
       edge,
       RR: item.rr ?? item.RR,

@@ -252,6 +252,19 @@ function StatusDot({
   );
 }
 
+function signalNote(row: Record<string, unknown>): string {
+  const pipe = asRecord(row.pipeline);
+  const blocker = str(
+    pipe.first_blocker || pipe.blocker_reason || row.eligibility_reason,
+    "",
+  );
+  if (blocker) return blocker;
+  const setup = str(pipe.setup_state || pipe.final_decision, "");
+  if (setup) return setup;
+  const reason = str(row.reason || row.explanation || row.eligibility_status, "");
+  return reason || "—";
+}
+
 export function SignalsWorkspace() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
@@ -269,6 +282,7 @@ export function SignalsWorkspace() {
     retry: false,
     refetchInterval: TRADER_POLL_MS,
     staleTime: 10_000,
+    placeholderData: (prev) => prev,
   });
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
@@ -279,6 +293,7 @@ export function SignalsWorkspace() {
     queryFn: () => signalCenterApi.list({ enabled_only: false }),
     retry: false,
     refetchInterval: TRADER_POLL_MS,
+    placeholderData: (prev) => prev,
   });
 
   const universeQ = useQuery({
@@ -286,6 +301,7 @@ export function SignalsWorkspace() {
     queryFn: () => marketUniverseApi.snapshot(),
     retry: false,
     refetchInterval: UNIVERSE_POLL_MS,
+    placeholderData: (prev) => prev,
   });
   const universeSnap = asRecord(universeQ.data);
   const universeInstruments = useMemo(() => {
@@ -448,7 +464,7 @@ export function SignalsWorkspace() {
       <PageHeader
         eyebrow="Signals"
         title="GLOBAL MARKET SIGNALS"
-        description="Real-time research-backed opportunities across the QuantForg market universe."
+        description="Research opportunities ranked by strength. Live execution still requires the existing risk, OMS, and broker gates."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="hidden min-w-[12rem] md:block">
@@ -613,6 +629,9 @@ export function SignalsWorkspace() {
                       Execution
                     </th>
                     <th className="px-3 py-2.5 font-medium" scope="col">
+                      Note
+                    </th>
+                    <th className="px-3 py-2.5 font-medium" scope="col">
                       Updated
                     </th>
                 </tr>
@@ -671,6 +690,9 @@ export function SignalsWorkspace() {
                       </td>
                       <td className="px-3 py-2.5 text-[11px] font-medium tracking-wide text-[var(--fg)]">
                         {signalExecutionStatusLabel(row)}
+                      </td>
+                      <td className="max-w-[14rem] px-3 py-2.5 text-[11px] leading-snug text-[var(--fg-muted)]">
+                        {signalNote(row)}
                       </td>
                       <td className="px-3 py-2.5 text-[var(--fg-subtle)]">
                         {signalUpdatedAgo(row)}
@@ -818,8 +840,14 @@ export function SignalsWorkspace() {
           not necessarily analyzed.
         </p>
         <div className="min-w-0 space-y-4">
-          {universeQ.isLoading ? (
+          {universeQ.isLoading && universeInstruments.length === 0 ? (
             <DeskSkeleton rows={6} />
+          ) : universeQ.isError && universeInstruments.length === 0 ? (
+            <DeskEmpty
+              icon={Radar}
+              title="Catalogue timed out"
+              description="Signals above remain from the research API. Catalogue snapshot is independent and will retry."
+            />
           ) : filteredUniverse.length === 0 ? (
             <DeskEmpty
               icon={Radar}

@@ -106,7 +106,9 @@ def merge_research_into_execution_handoff(
         )
         if str(s).strip()
     ]
-    ordered = prefer_allowlisted_handoff(eligible, focus)
+    ordered = _clamp_handoff_to_execution_policy(
+        prefer_allowlisted_handoff(eligible, focus)
+    )
     if not focus:
         return ordered
     uni = {str(s).strip().upper() for s in (universe or ()) if str(s).strip()}
@@ -123,7 +125,7 @@ def merge_research_into_execution_handoff(
         seen.add(sym)
     merged = extra + ordered
     cap = max(len(ordered), min(int(limit or 12), len(merged)))
-    return merged[:cap]
+    return _clamp_handoff_to_execution_policy(merged[:cap])
 
 
 def signal_execution_status(
@@ -173,11 +175,56 @@ def signal_execution_status(
         return "RESEARCH_ONLY"
     if direction not in _BUY_SELL:
         return "RESEARCH_ONLY"
+    if not _symbol_in_execution_universe(sym):
+        return "RESEARCH_ONLY"
     focus = {str(s).strip().upper() for s in (research_focus or ()) if str(s).strip()}
     focus_keys = {_desk_key(s) for s in focus}
-    if focus and sym not in focus and _desk_key(sym) not in focus_keys:
+    if (
+        focus
+        and not _gold_only_execution()
+        and sym not in focus
+        and _desk_key(sym) not in focus_keys
+    ):
         return "RESEARCH_ONLY"
     return "LIVE_ELIGIBLE"
+
+
+def _gold_only_execution() -> bool:
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled
+
+        return bool(gold_only_enabled())
+    except Exception:
+        return False
+
+
+def _clamp_handoff_to_execution_policy(
+    symbols: Sequence[str] | Iterable[str],
+) -> list[str]:
+    """Research focus must not re-inject desks outside the live execution universe."""
+    out = [str(s).strip().upper() for s in symbols if str(s).strip()]
+    if not _gold_only_execution():
+        return out
+    try:
+        from app.domain.trading.gold_only import filter_autonomous_symbols
+
+        return list(filter_autonomous_symbols(out))
+    except Exception:
+        logger.exception("research_handoff_gold_clamp_failed")
+        return [s for s in out if _desk_key(s) in {"XAUUSD", "GOLD"}]
+
+
+def _symbol_in_execution_universe(sym: str) -> bool:
+    if not sym:
+        return False
+    if not _gold_only_execution():
+        return True
+    try:
+        from app.domain.trading.gold_only import is_gold_symbol
+
+        return bool(is_gold_symbol(sym))
+    except Exception:
+        return _desk_key(sym) in {"XAUUSD", "GOLD"}
 
 
 def overlay_cycle_matches_row(row: dict[str, Any], last: dict[str, Any]) -> bool:

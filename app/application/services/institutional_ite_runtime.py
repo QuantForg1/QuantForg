@@ -2904,6 +2904,14 @@ class InstitutionalIteRuntime:
                 True if force_shadow else session_obs.broker_session_open
             ),
             session_source=session_obs.session_source,
+            daily_pnl_trusted=(
+                True
+                if force_shadow
+                else (
+                    market_context_diagnostics.get("daily_pnl_fail_closed") is not True
+                    and market_context_diagnostics.get("daily_pnl_trusted") is not False
+                )
+            ),
         )
         if self._manual_execution:
             logger.warning(
@@ -5015,6 +5023,16 @@ class InstitutionalIteRuntime:
                 )
             except Exception:
                 logger.exception("research_execution_handoff_failed")
+            try:
+                from app.domain.trading.gold_only import (
+                    filter_autonomous_symbols,
+                    gold_only_enabled,
+                )
+
+                if gold_only_enabled():
+                    eligible = list(filter_autonomous_symbols(eligible))
+            except Exception:
+                logger.exception("gold_only_post_research_handoff_failed")
             with self._lock:
                 self._last_multi_asset_scan = (
                     dict(scan) if isinstance(scan, dict) else None
