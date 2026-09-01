@@ -147,11 +147,24 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _json_safe(value: object) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
 def serialize_jimvio_body(payload: dict[str, Any]) -> bytes:
     """Compact JSON bytes that must match the POST body exactly."""
-    return json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode(
-        "utf-8"
-    )
+    return json.dumps(
+        payload,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=_json_safe,
+    ).encode("utf-8")
 
 
 def jimvio_signature(body: bytes, secret: str) -> str:
@@ -193,6 +206,12 @@ def build_jimvio_payload(
     status = str(status_override or "").strip() or JIMVIO_STATUS.get(
         event_type, "UPDATED"
     )
+    if (
+        event_type == "SIGNAL_CONFIRMED"
+        and ticket not in (None, "", 0, "0")
+        and not str(status_override or "").strip()
+    ):
+        status = "EXECUTED"
     payload: dict[str, Any] = {
         "event_id": key,
         "event_type": event_type,
@@ -220,9 +239,19 @@ def build_jimvio_payload(
     metadata: dict[str, Any] = {"quantforg_event": str(event)}
     if ticket not in (None, "", 0, "0"):
         metadata["mt5_ticket"] = ticket
-    for meta_key in ("reason", "test", "volume", "retcode"):
+    for meta_key in (
+        "reason",
+        "test",
+        "volume",
+        "retcode",
+        "opportunity",
+        "confidence",
+        "risk_reward",
+        "regime",
+        "signal_id",
+    ):
         if extra.get(meta_key) not in (None, ""):
-            metadata[meta_key] = extra[meta_key]
+            metadata[meta_key] = _json_safe(extra[meta_key])
     payload["metadata"] = metadata
     return payload
 

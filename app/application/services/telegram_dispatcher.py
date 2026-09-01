@@ -494,8 +494,9 @@ def emit_telegram(
 ) -> None:
     """Process-wide fail-open emit. Safe to call from any trading observer.
 
-    Telegram and Jimvio are independent delivery targets. Failure of one
-    never blocks the other, Risk, OMS, MT5, or the ITE loop.
+    Telegram and Jimvio are independent delivery targets for the same
+    verified public notice. Failure of one never blocks the other, Risk,
+    OMS, MT5, or the ITE loop.
     """
     if telegram:
         try:
@@ -583,6 +584,7 @@ def notify_connectivity(
                             f"mt5:connected:{time.time_ns()}",
                             format_mt5_connected(),
                             telegram=False,
+                            jimvio=False,
                         )
                     else:
                         emit_telegram(
@@ -590,6 +592,7 @@ def notify_connectivity(
                             f"mt5:disconnected:{time.time_ns()}",
                             format_mt5_disconnected(),
                             telegram=False,
+                            jimvio=False,
                         )
         if gateway_available is not None:
             previous = _connectivity.get("gateway")
@@ -602,6 +605,7 @@ def notify_connectivity(
                             f"gw:online:{time.time_ns()}",
                             format_gateway_online(),
                             telegram=False,
+                            jimvio=False,
                         )
                     else:
                         emit_telegram(
@@ -609,9 +613,34 @@ def notify_connectivity(
                             f"gw:offline:{time.time_ns()}",
                             format_gateway_offline(),
                             telegram=False,
+                            jimvio=False,
                         )
     except Exception:
         logger.exception("telegram_connectivity_notify_failed")
+
+
+def _emit_verified_public_notices(classified: list[dict[str, Any]]) -> None:
+    """Fan the public Signals filter to Telegram and Jimvio together.
+
+    Research, risk, OMS, and operational notices stay off both public
+    destinations. Qualification lives in public_channel_notices only.
+    """
+    from app.application.services.telegram_events import public_channel_notices
+
+    for notice in public_channel_notices(classified):
+        fields = (
+            notice.get("fields") if isinstance(notice.get("fields"), dict) else None
+        )
+        emit_telegram(
+            notice["event"],
+            notice["event_id"],
+            notice["text"],
+            fields=fields,
+            reply_ticket=notice.get("reply_ticket"),
+            bind_ticket=notice.get("bind_ticket"),
+            bind_signal=notice.get("bind_signal"),
+            require_thread=bool(notice.get("require_thread")),
+        )
 
 
 def notify_cycle(
@@ -622,10 +651,7 @@ def notify_cycle(
     pipeline: Any = None,
 ) -> None:
     try:
-        from app.application.services.telegram_events import (
-            classify_cycle_notices,
-            public_channel_notices,
-        )
+        from app.application.services.telegram_events import classify_cycle_notices
 
         classified = classify_cycle_notices(
             cycle=cycle,
@@ -633,80 +659,19 @@ def notify_cycle(
             bridge=bridge,
             pipeline=pipeline,
         )
-        for notice in classified:
-            fields = (
-                notice.get("fields")
-                if isinstance(notice.get("fields"), dict)
-                else None
-            )
-            emit_telegram(
-                notice["event"],
-                notice["event_id"],
-                notice["text"],
-                fields=fields,
-                telegram=False,
-            )
-        for notice in public_channel_notices(classified):
-            fields = (
-                notice.get("fields")
-                if isinstance(notice.get("fields"), dict)
-                else None
-            )
-            emit_telegram(
-                notice["event"],
-                notice["event_id"],
-                notice["text"],
-                fields=fields,
-                jimvio=False,
-                reply_ticket=notice.get("reply_ticket"),
-                bind_ticket=notice.get("bind_ticket"),
-                bind_signal=notice.get("bind_signal"),
-                require_thread=bool(notice.get("require_thread")),
-            )
+        _emit_verified_public_notices(classified)
     except Exception:
         logger.exception("telegram_cycle_notify_failed")
 
 
 def notify_pme(result: Any, *, current_price: object = None) -> None:
     try:
-        from app.application.services.telegram_events import (
-            classify_pme_notices,
-            public_channel_notices,
-        )
+        from app.application.services.telegram_events import classify_pme_notices
 
         classified = classify_pme_notices(
             result=result, current_price=current_price
         )
-        for notice in classified:
-            fields = (
-                notice.get("fields")
-                if isinstance(notice.get("fields"), dict)
-                else None
-            )
-            emit_telegram(
-                notice["event"],
-                notice["event_id"],
-                notice["text"],
-                fields=fields,
-                telegram=False,
-            )
-        for notice in public_channel_notices(classified):
-            fields = (
-                notice.get("fields")
-                if isinstance(notice.get("fields"), dict)
-                else None
-            )
-            emit_telegram(
-                notice["event"],
-                notice["event_id"],
-                notice["text"],
-                fields=fields,
-                jimvio=False,
-                reply_ticket=notice.get("reply_ticket"),
-                bind_ticket=notice.get("bind_ticket"),
-                bind_signal=notice.get("bind_signal"),
-                require_thread=bool(notice.get("require_thread")),
-            )
+        _emit_verified_public_notices(classified)
     except Exception:
         logger.exception("telegram_pme_notify_failed")
 
@@ -729,6 +694,7 @@ def notify_robot_started() -> None:
             "robot:started",
             format_robot_started(telegram_status=status),
             telegram=False,
+            jimvio=False,
         )
     except Exception:
         logger.exception("telegram_robot_started_failed")
@@ -749,6 +715,7 @@ def notify_robot_stopped(*, reason: str | None = None) -> None:
             "robot:stopped",
             format_robot_stopped(reason=reason),
             telegram=False,
+            jimvio=False,
         )
     except Exception:
         logger.exception("telegram_robot_stopped_failed")
@@ -766,6 +733,7 @@ def notify_system_error(*, reason: str | None) -> None:
             f"sys:{reason or 'error'}",
             format_system_error(reason=reason),
             telegram=False,
+            jimvio=False,
         )
     except Exception:
         logger.exception("telegram_system_error_notify_failed")

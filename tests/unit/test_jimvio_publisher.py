@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,11 @@ from app.application.services.jimvio_publisher import (
 from app.application.services.telegram_dispatcher import (
     TelegramDispatcher,
     emit_telegram,
+    notify_connectivity,
     notify_cycle,
+    notify_pme,
+    notify_robot_started,
+    notify_system_error,
     reset_telegram_dispatcher_for_tests,
 )
 from app.application.services.telegram_events import (
@@ -201,6 +206,32 @@ class TestJimvioPayload:
         assert ghost is not None
         assert ghost["event_type"] == "TRADE_REJECTED"
         assert ghost["status"] == "REJECTED"
+
+    def test_confirmed_fill_is_executed_with_ticket_metadata(self) -> None:
+        payload = build_jimvio_payload(
+            event="SIGNAL_CONFIRMED",
+            event_id="signal:sig-eurusd-1",
+            message="QUANTFORG SIGNAL",
+            fields={
+                "symbol": "EURUSD",
+                "direction": "BUY",
+                "entry": "1.08500",
+                "stop_loss": "1.08200",
+                "take_profit": "1.09400",
+                "ticket": 575929789,
+                "opportunity": 87,
+                "confidence": 91,
+                "risk_reward": "3.0",
+                "regime": "TRENDING",
+                "signal_id": "sig-eurusd-1",
+            },
+        )
+        assert payload is not None
+        assert payload["event_type"] == "SIGNAL_CONFIRMED"
+        assert payload["status"] == "EXECUTED"
+        assert payload["metadata"]["mt5_ticket"] == 575929789
+        assert payload["metadata"]["opportunity"] == 87
+        assert payload["metadata"]["signal_id"] == "sig-eurusd-1"
 
     def test_telegram_test_is_not_published(self) -> None:
         assert map_jimvio_event_type("TELEGRAM_TEST") is None
@@ -424,3 +455,319 @@ def test_settings_accepts_jimvio_webhook_secret_alias(
 def test_emit_jimvio_noop_without_publisher() -> None:
     reset_jimvio_publisher_for_tests(None)
     emit_jimvio("SYSTEM_ERROR", "sys:none", "x")
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+class TestJimvioMatchesTelegramPublicFilter:
+    def _wire(self) -> tuple[JimvioPublisher, list[dict[str, Any]], list[str]]:
+        telegram_ids: list[str] = []
+
+        class _Disp:
+            enabled = True
+            pending = 0
+
+            def emit(self, event: str, event_id: str, text: str, **kwargs: Any) -> None:
+                del event, text, kwargs
+                telegram_ids.append(event_id)
+                self.pending += 1
+
+        reset_telegram_dispatcher_for_tests(_Disp())  # type: ignore[arg-type]
+        bodies: list[dict[str, Any]] = []
+
+        async def sender(
+            url: str, headers: dict[str, str], body: bytes
+        ) -> _FakeResponse:
+            del url, headers
+            bodies.append(json.loads(body.decode()))
+            return _FakeResponse(200)
+
+        pub = _publisher(sender)
+        return pub, bodies, telegram_ids
+
+    def test_p_at_or_below_70_is_quiet_on_both(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _Cycle,
+            _Decision,
+            _exec_pipeline,
+        )
+
+        pub, _bodies, telegram_ids = self._wire()
+        notify_cycle(
+            _Cycle(decision_action="BUY", mt5_ticket=None),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=65),
+        )
+        notify_cycle(
+            _Cycle(decision_action="BUY", mt5_ticket=None),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=70),
+        )
+        assert pub.pending == 0
+        assert telegram_ids == []
+
+    def test_invalid_strategy_is_quiet_on_both(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _Cycle,
+            _Decision,
+            _exec_pipeline,
+        )
+
+        pub, _bodies, telegram_ids = self._wire()
+        notify_cycle(
+            _Cycle(decision_action="NO_TRADE", mt5_ticket=None),
+            decision=_Decision(action="NO_TRADE", direction="NONE"),
+            pipeline=_exec_pipeline(opportunity_score=72, signal_action="NONE"),
+        )
+        assert pub.pending == 0
+        assert telegram_ids == []
+
+    def test_risk_and_oms_rejection_are_quiet_on_both(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _Cycle,
+            _Decision,
+            _exec_pipeline,
+        )
+
+        pub, _bodies, telegram_ids = self._wire()
+        notify_cycle(
+            _Cycle(
+                decision_action="BUY",
+                abort_reason="MAX_POSITIONS_REACHED",
+                mt5_ticket=None,
+            ),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=87),
+        )
+        notify_cycle(
+            _Cycle(
+                decision_action="BUY",
+                abort_reason="OMS_FAILURE",
+                oms_message="volume invalid",
+            ),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=87),
+        )
+        assert pub.pending == 0
+        assert telegram_ids == []
+
+    def test_no_ticket_is_not_executed_on_either(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _Cycle,
+            _Decision,
+            _exec_pipeline,
+        )
+
+        pub, _bodies, telegram_ids = self._wire()
+        notify_cycle(
+            _Cycle(decision_action="BUY", mt5_ticket=None, abort_reason="none"),
+            decision=_Decision(),
+            pipeline=_exec_pipeline(opportunity_score=87),
+        )
+        assert pub.pending == 0
+        assert telegram_ids == []
+
+    @pytest.mark.asyncio
+    async def test_real_ticket_sends_identical_verified_event_ids(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _exec_pipeline,
+            _filled_cycle,
+        )
+
+        pub, bodies, telegram_ids = self._wire()
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(opportunity_score=87),
+        )
+        await pub.flush()
+        jimvio_ids = [row["event_id"] for row in bodies]
+        assert telegram_ids == jimvio_ids
+        assert "signal:sig-eurusd-1" in jimvio_ids
+        assert "open:575929789" in jimvio_ids
+        types = {row["event_type"] for row in bodies}
+        assert "SIGNAL_DETECTED" not in types
+        assert "RISK_REJECTED" not in types
+        opened = next(row for row in bodies if row["event_id"] == "open:575929789")
+        assert opened["status"] == "EXECUTED"
+        assert opened["metadata"]["mt5_ticket"] == 575929789
+        confirmed = next(
+            row for row in bodies if row["event_id"] == "signal:sig-eurusd-1"
+        )
+        assert confirmed["status"] == "EXECUTED"
+        assert confirmed["symbol"] == "EURUSD"
+        assert confirmed["direction"] == "BUY"
+        assert confirmed["metadata"]["opportunity"] == 87
+
+    @pytest.mark.asyncio
+    async def test_lifecycle_success_mirrors_to_both(self) -> None:
+        from app.domain.institutional_trading.management.models import (
+            ManageActionKind,
+            PositionLifecycleState,
+        )
+        from tests.unit.test_telegram_dispatcher import (
+            _exec_pipeline,
+            _filled_cycle,
+            _pme_success,
+        )
+
+        pub, bodies, telegram_ids = self._wire()
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(),
+        )
+        notify_pme(_pme_success(action=ManageActionKind.BREAK_EVEN))
+        notify_pme(
+            _pme_success(
+                action=ManageActionKind.TRAIL,
+                to_state=PositionLifecycleState.TRAILING,
+                fingerprint="t1",
+                old_sl="1.08500",
+                new_sl="1.08620",
+            )
+        )
+        notify_pme(
+            _pme_success(
+                action=ManageActionKind.PARTIAL_CLOSE,
+                to_state=PositionLifecycleState.PARTIAL,
+                fingerprint="p1",
+                remaining="0.005",
+                volume="0.005",
+                pnl="4.2",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        notify_pme(
+            _pme_success(
+                action=ManageActionKind.EMERGENCY_EXIT,
+                to_state=PositionLifecycleState.EXITED,
+                fingerprint="tp1",
+                exit_reason="TAKE_PROFIT",
+                pnl="18.0",
+                old_sl="1.08500",
+                new_sl="1.08500",
+            )
+        )
+        await pub.flush()
+        assert telegram_ids == [row["event_id"] for row in bodies]
+        kinds = {row["event_type"] for row in bodies}
+        assert "BREAKEVEN_SET" in kinds
+        assert "TRAILING_STOP_UPDATED" in kinds
+        assert "PARTIAL_CLOSE" in kinds
+        assert "TAKE_PROFIT_HIT" in kinds
+
+    def test_failed_pme_and_ops_noise_stay_off_jimvio(self) -> None:
+        from datetime import UTC, datetime
+        from decimal import Decimal
+
+        from app.domain.institutional_trading.management.models import (
+            ManageActionKind,
+            ManagedPosition,
+            ManageOutcome,
+            PositionLifecycleState,
+            PositionManageRecord,
+            PositionManageResult,
+        )
+
+        pub, _bodies, telegram_ids = self._wire()
+        pos = ManagedPosition(
+            ticket=10,
+            symbol="EURUSD",
+            side="buy",
+            entry_price=Decimal("1.08"),
+            initial_volume=Decimal("0.01"),
+            remaining_volume=Decimal("0.01"),
+            initial_stop=Decimal("1.07"),
+            risk_distance=Decimal("0.01"),
+            opened_at=datetime.now(UTC),
+        )
+        failed = PositionManageResult(
+            position=pos,
+            action=ManageActionKind.BREAK_EVEN,
+            record=PositionManageRecord(
+                ticket=10,
+                action=ManageActionKind.BREAK_EVEN,
+                from_state=PositionLifecycleState.OPEN,
+                to_state=PositionLifecycleState.OPEN,
+                reason="no-op",
+                timestamp=pos.opened_at,
+                latency_ms=1.0,
+                outcome=ManageOutcome.ABORTED,
+                fingerprint="nope",
+            ),
+        )
+        notify_pme(failed)
+        notify_robot_started()
+        notify_system_error(reason="boom")
+        notify_connectivity(mt5_connected=True, gateway_available=False)
+        assert pub.pending == 0
+        assert telegram_ids == []
+
+    @pytest.mark.asyncio
+    async def test_duplicate_fill_is_not_reposted(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _exec_pipeline,
+            _filled_cycle,
+        )
+
+        pub, bodies, _telegram_ids = self._wire()
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(),
+        )
+        notify_cycle(
+            cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(),
+        )
+        await pub.flush()
+        opened = [row for row in bodies if row["event_id"] == "open:575929789"]
+        assert len(opened) == 1
+
+    @pytest.mark.asyncio
+    async def test_jimvio_outage_does_not_block_telegram_or_trading(self) -> None:
+        from tests.unit.test_telegram_dispatcher import (
+            _exec_pipeline,
+            _filled_cycle,
+        )
+
+        telegram_ids: list[str] = []
+
+        class _Disp:
+            enabled = True
+            pending = 0
+
+            def emit(self, event: str, event_id: str, text: str, **kwargs: Any) -> None:
+                del event, text, kwargs
+                telegram_ids.append(event_id)
+                self.pending += 1
+
+        reset_telegram_dispatcher_for_tests(_Disp())  # type: ignore[arg-type]
+
+        async def sender(
+            url: str, headers: dict[str, str], body: bytes
+        ) -> _FakeResponse:
+            del url, headers, body
+            raise httpx.ConnectError("jimvio down")
+
+        pub = _publisher(sender)
+        cycle, decision, bridge = _filled_cycle()
+        notify_cycle(
+            cycle,
+            decision=decision,
+            bridge=bridge,
+            pipeline=_exec_pipeline(),
+        )
+        await pub.flush(wait_seconds=8)
+        assert telegram_ids
+        assert pub.last_success is False
