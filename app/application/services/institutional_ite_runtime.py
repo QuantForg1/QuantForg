@@ -4873,6 +4873,23 @@ class InstitutionalIteRuntime:
             positions_managed=positions_n,
         )
         payload["cycle_ops"] = cycle_ops
+        if isinstance(last_scan, dict):
+            payload["last_scan_summary"] = {
+                "as_of": last_scan.get("as_of"),
+                "enabled": last_scan.get("enabled"),
+                "note": last_scan.get("note"),
+                "scan_incomplete": last_scan.get("scan_incomplete"),
+                "eligible_count": last_scan.get("eligible_count"),
+                "eligible_symbols": list(last_scan.get("eligible_symbols") or [])[:16],
+                "symbols_queued": last_scan.get("symbols_queued"),
+                "symbols_evaluated": last_scan.get("symbols_evaluated"),
+                "symbols_completed": last_scan.get("symbols_completed"),
+                "first_blocking_gate": last_scan.get("first_blocking_gate"),
+                "blocked_by_portfolio": last_scan.get("blocked_by_portfolio"),
+                "scanner_duration_ms": last_scan.get("scanner_duration_ms"),
+            }
+        else:
+            payload["last_scan_summary"] = None
         for key in (
             "symbols_targeted",
             "symbols_ready",
@@ -5254,27 +5271,51 @@ class InstitutionalIteRuntime:
             _scan_budget = cycle_scan_budget_seconds(
                 self.interval_seconds, remaining=remaining
             )
-            scan = await run_institutional_multi_asset_scan(
-                self.mt5_adapter,
-                position_engine=getattr(self.position_management, "engine", None),
-                open_positions=open_n,
-                plane=self.plane,
-                config=DEFAULT_AI_SCALPING_CONFIG,
-                ite_config=ite,
-                scan_budget_seconds=_scan_budget,
-            )
+            scan: dict[str, Any] | None = None
+            try:
+                scan = await run_institutional_multi_asset_scan(
+                    self.mt5_adapter,
+                    position_engine=getattr(self.position_management, "engine", None),
+                    open_positions=open_n,
+                    plane=self.plane,
+                    config=DEFAULT_AI_SCALPING_CONFIG,
+                    ite_config=ite,
+                    scan_budget_seconds=_scan_budget,
+                )
+            except Exception:
+                logger.exception("multi_asset_scan_call_failed")
+                try:
+                    from app.application.services.institutional_multi_asset_scanner import (
+                        get_last_multi_asset_scan,
+                    )
+
+                    prior = get_last_multi_asset_scan()
+                    scan = prior if isinstance(prior, dict) else None
+                except Exception:
+                    scan = None
             scan_ms = round((time.perf_counter() - t_scan) * 1000.0, 1)
-            if isinstance(scan, dict) and scan.get("scanner_duration_ms") is None:
+            if not isinstance(scan, dict):
+                scan = {
+                    "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                    "enabled": True,
+                    "universe": [],
+                    "rows": [],
+                    "ranked": [],
+                    "opportunity_ranked": [],
+                    "eligible_symbols": [],
+                    "eligible_count": 0,
+                    "scan_incomplete": True,
+                    "note": "multi_asset_scan_unavailable",
+                    "scanner_duration_ms": scan_ms,
+                }
+            if scan.get("scanner_duration_ms") is None:
                 scan["scanner_duration_ms"] = scan_ms
             logger.warning(
                 "multi_asset_scan_timing",
-                scanner_duration_ms=scan.get("scanner_duration_ms")
-                if isinstance(scan, dict)
-                else scan_ms,
+                scanner_duration_ms=scan.get("scanner_duration_ms"),
             )
-            if isinstance(scan, dict):
-                with self._lock:
-                    self._last_multi_asset_scan = dict(scan)
+            with self._lock:
+                self._last_multi_asset_scan = dict(scan)
             eligible = [
                 str(s).upper()
                 for s in (scan.get("eligible_symbols") or [])
@@ -5325,9 +5366,32 @@ class InstitutionalIteRuntime:
                     merge_research_into_execution_handoff,
                 )
 
+                uni = [
+                    str(s).strip().upper()
+                    for s in (scan.get("universe") or [])
+                    if str(s).strip()
+                ]
+                if not uni:
+                    try:
+                        from app.domain.trading.gold_only import (
+                            gold_only_diagnostics,
+                        )
+
+                        g = gold_only_diagnostics() or {}
+                        uni = [
+                            str(s).strip().upper()
+                            for s in (
+                                g.get("execution_universe_gateway")
+                                or g.get("execution_universe")
+                                or []
+                            )
+                            if str(s).strip()
+                        ]
+                    except Exception:
+                        uni = []
                 eligible = merge_research_into_execution_handoff(
                     eligible,
-                    universe=scan.get("universe") if isinstance(scan, dict) else (),
+                    universe=uni,
                 )
             except Exception:
                 logger.exception("research_execution_handoff_failed")
@@ -5381,10 +5445,10 @@ class InstitutionalIteRuntime:
                     )
                 except Exception:
                     logger.exception("independent_evaluation_fallback_failed")
+            scan["eligible_symbols"] = list(eligible)
+            scan["eligible_count"] = len(eligible)
             with self._lock:
-                self._last_multi_asset_scan = (
-                    dict(scan) if isinstance(scan, dict) else None
-                )
+                self._last_multi_asset_scan = dict(scan)
                 self._eligible_handoff_queue = list(eligible)
                 self._eligible_consumed = set()
                 self._entries_this_scan = 0
@@ -5419,6 +5483,20 @@ class InstitutionalIteRuntime:
             return None
         except Exception:
             logger.exception("multi_asset_preferred_symbol_failed")
+            with self._lock:
+                if not isinstance(self._last_multi_asset_scan, dict):
+                    self._last_multi_asset_scan = {
+                        "as_of": datetime.now(UTC).isoformat().replace(
+                            "+00:00", "Z"
+                        ),
+                        "enabled": True,
+                        "scan_incomplete": True,
+                        "note": "multi_asset_scan_exception",
+                        "eligible_symbols": [],
+                        "eligible_count": 0,
+                        "universe": [],
+                        "rows": [],
+                    }
             return None
 
     def _take_next_handoff_symbol(self) -> str | None:

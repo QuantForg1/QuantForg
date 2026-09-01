@@ -109,6 +109,14 @@ def test_research_merge_never_drops_scanner_eligible() -> None:
     assert room[0] == "EURUSD"
     assert "GBPUSD" in room
     assert "USDJPY" in room
+    catalogue_only = merge_research_into_execution_handoff(
+        [],
+        universe=["EURGBP", "NZDUSD", "USDCHF", "XAUUSD"],
+        research_focus=["EURGBP", "NZDUSD"],
+        limit=12,
+    )
+    assert catalogue_only[0] == "EURGBP"
+    assert "NZDUSD" in catalogue_only
 
 
 def test_handoff_continues_after_one_symbol_consumed() -> None:

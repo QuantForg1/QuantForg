@@ -1097,6 +1097,27 @@ async def run_institutional_multi_asset_scan(
             ite_config=ite_config,
             scan_budget_seconds=scan_budget_seconds,
         )
+    except Exception:
+        logger.exception("institutional_multi_asset_scan_body_failed")
+        failed = {
+            "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "enabled": True,
+            "universe": [],
+            "rows": [],
+            "noc_rows": [],
+            "ranked": [],
+            "best": None,
+            "best_symbol": None,
+            "eligible_count": 0,
+            "eligible_symbols": [],
+            "scan_incomplete": True,
+            "note": "multi_asset_scan_body_failed",
+            "version": cfg.version,
+            "forced_trades": False,
+            "governed_by_existing_ai_and_risk": True,
+        }
+        _store_last_scan(failed, mt5_adapter=mt5_adapter)
+        return failed
     finally:
         _SCAN_GATE.release()
 
@@ -1276,15 +1297,24 @@ async def _run_institutional_multi_asset_scan_body(
     )
     conc = max(1, min(2, int(getattr(cfg, "parallel_scan_concurrency", 2) or 2)))
     if universe:
-        scored, scan_stats = await score_universe_with_budget(
-            mt5_adapter,
-            universe,
-            position_engine=position_engine,
-            config=cfg,
-            budget_seconds=budget,
-            per_symbol_timeout=SCAN_SYMBOL_TIMEOUT_SECONDS,
-            concurrency=conc,
-        )
+        try:
+            scored, scan_stats = await score_universe_with_budget(
+                mt5_adapter,
+                universe,
+                position_engine=position_engine,
+                config=cfg,
+                budget_seconds=budget,
+                per_symbol_timeout=SCAN_SYMBOL_TIMEOUT_SECONDS,
+                concurrency=conc,
+            )
+        except Exception:
+            logger.exception("score_universe_with_budget_failed")
+            scored = []
+            scan_stats = {
+                **scan_stats,
+                "symbols_queued": len(universe),
+                "score_universe_failed": True,
+            }
 
     for row in scored:
         logger.warning(
