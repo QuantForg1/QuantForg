@@ -116,8 +116,8 @@ def derive_worker_state(
         return RECOVERING
     if broker_session_open is False:
         return WAITING_SESSION
-    if last_outcome == "error" and cycles > 0:
-        return ERROR
+    # Recoverable cycle failures (CYCLE_TIMEOUT / CYCLE_EXCEPTION) keep the
+    # loop alive. ERROR is reserved for a stopped or stalled scheduler.
     if degraded:
         return DEGRADED
     if cycles <= 0:
@@ -140,6 +140,82 @@ def derive_scheduler_state(
     if broker_session_open is False:
         return WAITING_SESSION
     return RUNNING
+
+
+def build_cycle_ops_summary(
+    *,
+    cycle_id: Any = None,
+    cycle_start: str | None = None,
+    cycle_end: str | None = None,
+    last_cycle: dict[str, Any] | None = None,
+    last_scan: dict[str, Any] | None = None,
+    positions_managed: int | None = None,
+) -> dict[str, Any]:
+    """Per-cycle ops snapshot. Observability only — never authorizes orders."""
+    cycle = last_cycle if isinstance(last_cycle, dict) else {}
+    scan = last_scan if isinstance(last_scan, dict) else {}
+    rows = scan.get("rows") or scan.get("noc_rows") or []
+    if not isinstance(rows, list):
+        rows = []
+    ready = 0
+    failed = 0
+    signals = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("context_status") or "")
+        if status == "SYMBOL_CONTEXT_READY":
+            ready += 1
+        reason = str(row.get("reject_reason") or row.get("context_reason") or "")
+        isolated = str(row.get("failure_class") or "") == "SYMBOL_FAILURE"
+        not_ready = bool(row.get("reject")) and status == "SYMBOL_CONTEXT_NOT_READY"
+        named = reason in {
+            "SYMBOL_TIMEOUT",
+            "SYMBOL_UNAVAILABLE",
+            "CYCLE_BUDGET_EXHAUSTED",
+        }
+        if isolated or not_ready or named:
+            failed += 1
+        if str(row.get("direction") or "").upper() in {"BUY", "SELL"}:
+            signals += 1
+    handoff = cycle.get("execution_handoff")
+    if not isinstance(handoff, dict):
+        diag = cycle.get("market_context_diagnostics")
+        raw_h = diag.get("execution_handoff") if isinstance(diag, dict) else None
+        handoff = raw_h if isinstance(raw_h, dict) else {}
+    ticket = cycle.get("mt5_ticket") or cycle.get("broker_ticket")
+    no_ticket = ticket in (None, "", 0, "0")
+    forwarded = bool(cycle.get("forwarded_to_oms") or handoff.get("oms_forwarded"))
+    risk_passed = bool(handoff.get("risk_passed"))
+    risk_entered = bool(handoff.get("risk_entered"))
+    oms_passed = bool(handoff.get("oms_forwarded") or handoff.get("oms_entered"))
+    abort = str(cycle.get("abort_reason") or "") or None
+    outcome = str(cycle.get("cycle_outcome") or "") or None
+    return {
+        "cycle_id": cycle_id,
+        "cycle_start": cycle_start,
+        "cycle_end": cycle_end,
+        "symbols_targeted": int(
+            scan.get("symbols_queued") or len(scan.get("universe") or []) or 0
+        ),
+        "symbols_evaluated": int(scan.get("symbols_evaluated") or 0),
+        "symbols_ready": ready,
+        "signals_found": int(scan.get("signals_found") or signals),
+        "tradeable_count": int(scan.get("eligible_count") or 0),
+        "risk_approved": 1 if risk_passed else 0,
+        "risk_rejected": 1 if risk_entered and not risk_passed else 0,
+        "oms_approved": 1 if bool(handoff.get("oms_forwarded")) else 0,
+        "oms_rejected": (
+            1 if oms_passed and not bool(handoff.get("oms_forwarded")) else 0
+        ),
+        "orders_attempted": 1 if forwarded else 0,
+        "orders_submitted": 1 if forwarded else 0,
+        "tickets_confirmed": 0 if no_ticket else 1,
+        "positions_managed": int(positions_managed or 0),
+        "symbols_failed": failed,
+        "cycle_status": abort or outcome or "RUNNING",
+        "mt5_ticket": None if no_ticket else ticket,
+    }
 
 
 def last_blocker_from_cycle(cycle: Any) -> tuple[str | None, str | None]:

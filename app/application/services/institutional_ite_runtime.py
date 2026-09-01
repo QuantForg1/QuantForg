@@ -4591,6 +4591,11 @@ class InstitutionalIteRuntime:
             started_mono = self._started_mono
             cycle_started = self._cycle_started_mono
             daily_loss_latched = bool(self.plane.daily_loss_exceeded)
+            last_scan = (
+                dict(self._last_multi_asset_scan)
+                if isinstance(self._last_multi_asset_scan, dict)
+                else None
+            )
         settings = get_settings()
         gold = {}
         try:
@@ -4605,6 +4610,7 @@ class InstitutionalIteRuntime:
             runtime_git_commit,
         )
         from app.domain.institutional_trading.operations.worker_runtime_state import (
+            build_cycle_ops_summary,
             derive_scheduler_state,
             derive_worker_state,
             last_blocker_from_cycle,
@@ -4815,6 +4821,42 @@ class InstitutionalIteRuntime:
                     last_d.get("execution_result")
                     or "NO BROKER ORDER WAS SUBMITTED",
                 )
+        positions_n = 0
+        try:
+            positions_n = len(
+                getattr(self.position_management.engine, "_positions", {}) or {}
+            )
+        except Exception:
+            positions_n = 0
+        cycle_ops = build_cycle_ops_summary(
+            cycle_id=cycles,
+            cycle_start=self._cycle_started_at,
+            cycle_end=last_at,
+            last_cycle=last.to_dict() if last else None,
+            last_scan=last_scan,
+            positions_managed=positions_n,
+        )
+        payload["cycle_ops"] = cycle_ops
+        for key in (
+            "symbols_targeted",
+            "symbols_ready",
+            "tradeable_count",
+            "risk_approved",
+            "risk_rejected",
+            "oms_approved",
+            "oms_rejected",
+            "orders_attempted",
+            "orders_submitted",
+            "tickets_confirmed",
+            "positions_managed",
+            "symbols_failed",
+            "cycle_status",
+        ):
+            payload.setdefault(key, cycle_ops.get(key))
+        if payload.get("symbols_evaluated") is None:
+            payload["symbols_evaluated"] = cycle_ops.get("symbols_evaluated")
+        if payload.get("signals_found") is None:
+            payload["signals_found"] = cycle_ops.get("signals_found")
         try:
             from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
                 RAILWAY_ITE_HEARTBEAT,
@@ -6060,6 +6102,8 @@ class InstitutionalIteRuntime:
         remaining = timeout - (time.monotonic() - started)
         if remaining <= 0:
             if cancel_on_timeout:
+                if asyncio.iscoroutine(awaitable):
+                    awaitable.close()
                 raise TimeoutError(f"cycle_budget_exhausted:{what}")
             return await awaitable
         if not cancel_on_timeout:
@@ -6778,6 +6822,10 @@ class InstitutionalIteRuntime:
                 )
             except Exception as exc:
                 logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
+                try:
+                    self._protect_open_positions(reason="cycle_exception_manage")
+                except Exception:
+                    logger.exception("cycle_exception_position_manage_failed")
                 with self._lock:
                     self._last_cycle = ShadowCycleResult(
                         ok=False,
@@ -6788,6 +6836,7 @@ class InstitutionalIteRuntime:
                         abort_reason="CYCLE_EXCEPTION",
                     )
                     self._cycles += 1
+                    self._last_failure = "CYCLE_EXCEPTION"
                 self._clear_ephemeral_cycle_state()
                 try:
                     from app.application.services.cycle_evidence import (

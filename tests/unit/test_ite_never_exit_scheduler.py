@@ -352,6 +352,29 @@ async def test_stale_state_cleared_after_failed_and_blocked_cycles() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cycle_exception_still_protects_positions() -> None:
+    rt = _runtime()
+    reasons: list[str] = []
+    orig = rt._protect_open_positions
+
+    def _wrap(*, reason: str = "cycle") -> None:
+        reasons.append(reason)
+        return orig(reason=reason)
+
+    rt._protect_open_positions = _wrap  # type: ignore[method-assign]
+
+    def _pick():
+        raise RuntimeError("boom")
+
+    await _drive(rt, cycles=1, pick=_pick, context=_ok_ctx())
+    assert rt._last_cycle is not None
+    assert rt._last_cycle.abort_reason == "CYCLE_EXCEPTION"
+    assert "pre_scan_manage" in reasons
+    assert "cycle_exception_manage" in reasons
+    rt.guarded_submit.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_session_reopen_wakeup_is_consumed() -> None:
     rt = _runtime()
     consumed: list[str] = []
@@ -583,7 +606,7 @@ async def test_hung_pick_times_out_and_loop_continues(
 
     monkeypatch.setattr(
         "app.domain.institutional_trading.operations.worker_runtime_state.cycle_hard_timeout_seconds",
-        lambda _interval: 0.05,
+        lambda _interval: 0.5,
     )
     await _drive(rt, cycles=2, pick=_pick, context=_ok_ctx())
     assert hits["n"] >= 2

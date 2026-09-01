@@ -394,6 +394,7 @@ async def test_dynamic_symbol_reaches_eligible_after_universe_align(
     assert "no bars" in str(row["reject_reason"])
     assert row["context_status"] == "SYMBOL_CONTEXT_NOT_READY"
     assert row["context_reason"] == "no bars"
+    assert row["failure_class"] == "SYMBOL_FAILURE"
 
 
 @pytest.mark.unit

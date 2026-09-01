@@ -300,3 +300,82 @@ def test_in_progress_cycle_stalls_only_after_hard_timeout() -> None:
         )
         is True
     )
+
+
+def test_recoverable_cycle_timeout_does_not_mark_running_worker_error() -> None:
+    state = derive_worker_state(
+        running=True,
+        cycles=8,
+        broker_session_open=True,
+        operator_halt=False,
+        risk_halt=False,
+        recovering=False,
+        degraded=False,
+        last_outcome="error",
+        stalled=False,
+    )
+    assert state == RUNNING
+    assert state != ERROR
+
+
+def test_stopped_worker_after_error_is_still_error() -> None:
+    assert (
+        derive_worker_state(
+            running=False,
+            cycles=8,
+            broker_session_open=True,
+            operator_halt=False,
+            risk_halt=False,
+            recovering=False,
+            degraded=False,
+            last_outcome="error",
+            stalled=False,
+        )
+        == ERROR
+    )
+
+
+def test_cycle_ops_summary_never_confirms_ticket_without_mt5() -> None:
+    from app.domain.institutional_trading.operations.worker_runtime_state import (
+        build_cycle_ops_summary,
+    )
+
+    ops = build_cycle_ops_summary(
+        cycle_id=3,
+        cycle_start="2026-09-01T15:00:00Z",
+        cycle_end="2026-09-01T15:00:40Z",
+        last_cycle={
+            "abort_reason": "CYCLE_TIMEOUT",
+            "cycle_outcome": "error",
+            "mt5_ticket": None,
+            "forwarded_to_oms": False,
+        },
+        last_scan={
+            "symbols_queued": 36,
+            "symbols_evaluated": 10,
+            "eligible_count": 2,
+            "rows": [
+                {
+                    "symbol": "EURJPY",
+                    "context_status": "SYMBOL_CONTEXT_READY",
+                    "direction": "BUY",
+                },
+                {
+                    "symbol": "USDCHF",
+                    "failure_class": "SYMBOL_FAILURE",
+                    "reject_reason": "SYMBOL_TIMEOUT",
+                    "reject": True,
+                },
+            ],
+        },
+        positions_managed=1,
+    )
+    assert ops["tickets_confirmed"] == 0
+    assert ops["mt5_ticket"] is None
+    assert ops["symbols_targeted"] == 36
+    assert ops["symbols_ready"] == 1
+    assert ops["symbols_failed"] == 1
+    assert ops["signals_found"] == 1
+    assert ops["tradeable_count"] == 2
+    assert ops["positions_managed"] == 1
+    assert ops["cycle_status"] == "CYCLE_TIMEOUT"

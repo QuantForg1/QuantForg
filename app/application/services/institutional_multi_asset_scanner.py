@@ -39,6 +39,22 @@ _LAST_SCAN: dict[str, Any] | None = None
 _SCAN_GATE = asyncio.Lock()
 
 
+def _isolated_symbol_failure(symbol: str, reason: str) -> dict[str, Any]:
+    """Record one desk failure without aborting the remaining universe."""
+    code = str(symbol or "").strip().upper()
+    return {
+        "symbol": code,
+        "reject": True,
+        "reject_reason": reason,
+        "failure_class": "SYMBOL_FAILURE",
+        "context_status": "SYMBOL_CONTEXT_NOT_READY",
+        "context_reason": reason,
+        "direction": "NONE",
+        "ai_confidence": 0,
+        "trade_quality": 0,
+    }
+
+
 def _execution_universe_obs(mt5_adapter: Any | None = None) -> dict[str, Any]:
     try:
         from app.domain.trading.execution_universe import execution_universe_diagnostics
@@ -544,14 +560,7 @@ async def score_universe_with_budget(
             )
         except TimeoutError:
             stats["symbols_timed_out"] = int(stats["symbols_timed_out"]) + 1
-            return {
-                "symbol": str(sym).strip().upper(),
-                "reject": True,
-                "reject_reason": "SYMBOL_TIMEOUT",
-                "direction": "NONE",
-                "ai_confidence": 0,
-                "trade_quality": 0,
-            }
+            return _isolated_symbol_failure(sym, "SYMBOL_TIMEOUT")
 
     def _cancel_in_flight() -> None:
         for task in list(in_flight.keys()):
@@ -573,14 +582,7 @@ async def score_universe_with_budget(
                         int(stats["symbols_budget_skipped"]) + 1
                     )
                     rows.append(
-                        {
-                            "symbol": str(leftover).strip().upper(),
-                            "reject": True,
-                            "reject_reason": "CYCLE_BUDGET_EXHAUSTED",
-                            "direction": "NONE",
-                            "ai_confidence": 0,
-                            "trade_quality": 0,
-                        }
+                        _isolated_symbol_failure(leftover, "CYCLE_BUDGET_EXHAUSTED")
                     )
                 pending.clear()
                 break
@@ -595,16 +597,7 @@ async def score_universe_with_budget(
                     if not task.done():
                         task.cancel()
                         stats["symbols_timed_out"] = int(stats["symbols_timed_out"]) + 1
-                        rows.append(
-                            {
-                                "symbol": str(sym).strip().upper(),
-                                "reject": True,
-                                "reject_reason": "SYMBOL_TIMEOUT",
-                                "direction": "NONE",
-                                "ai_confidence": 0,
-                                "trade_quality": 0,
-                            }
-                        )
+                        rows.append(_isolated_symbol_failure(sym, "SYMBOL_TIMEOUT"))
                 in_flight.clear()
                 continue
             for task in done:
@@ -612,16 +605,11 @@ async def score_universe_with_budget(
                 try:
                     result = task.result()
                 except asyncio.CancelledError:
-                    continue
+                    result = _isolated_symbol_failure(sym, "SYMBOL_TIMEOUT")
                 except Exception as exc:
-                    result = {
-                        "symbol": str(sym).strip().upper(),
-                        "reject": True,
-                        "reject_reason": f"EXECUTION_ERROR:{type(exc).__name__}",
-                        "direction": "NONE",
-                        "ai_confidence": 0,
-                        "trade_quality": 0,
-                    }
+                    result = _isolated_symbol_failure(
+                        sym, f"EXECUTION_ERROR:{type(exc).__name__}"
+                    )
                 if isinstance(result, dict):
                     rows.append(result)
                     stats["symbols_completed"] = int(stats["symbols_completed"]) + 1
@@ -646,7 +634,8 @@ def resolve_scan_universe(
 
     BROKER_DISCOVERED maps research BUY/SELL plus the scalping seed onto
     LIVE_BROKER catalogue codes, then expands with remaining liquid desks
-    from the live catalogue (capped). Injected rows never invent symbols
+    from the live catalogue (capped). Unresolved desks are SYMBOL_UNAVAILABLE
+    and do not abort the remaining universe. Injected rows never invent symbols
     absent from ``live_execution_symbols``. The full broker book is not
     scanned every cycle.
     """
@@ -871,14 +860,7 @@ async def score_symbol_for_scan(
         )
 
         if broker_discovered_enabled() and code and not execution_symbol_allowed(code):
-            return {
-                "symbol": code,
-                "reject": True,
-                "reject_reason": "SYMBOL_NOT_AVAILABLE",
-                "direction": "NONE",
-                "ai_confidence": 0,
-                "trade_quality": 0,
-            }
+            return _isolated_symbol_failure(code, "SYMBOL_UNAVAILABLE")
     except Exception:
         logger.exception("gold_only_score_gate_failed")
     if not code:
@@ -899,30 +881,17 @@ async def score_symbol_for_scan(
         )
     except Exception as exc:
         logger.exception("multi_asset_market_context_failed", symbol=code)
-        return {
-            "symbol": code,
-            "reject": True,
-            "reject_reason": f"market_context_error:{type(exc).__name__}",
-            "context_status": "SYMBOL_CONTEXT_NOT_READY",
-            "context_reason": f"market_context_error:{type(exc).__name__}",
-            "direction": "NONE",
-            "ai_confidence": 0,
-            "trade_quality": 0,
-        }
+        return _isolated_symbol_failure(
+            code, f"market_context_error:{type(exc).__name__}"
+        )
     if not ctx.ok or ctx.snapshot is None or ctx.account is None:
-        return {
-            "symbol": code,
-            "reject": True,
-            "reject_reason": ctx.reason or "market_context_unavailable",
-            "context_status": "SYMBOL_CONTEXT_NOT_READY",
-            "context_reason": ctx.reason,
-            "broker_symbol": code,
-            "direction": "NONE",
-            "ai_confidence": 0,
-            "trade_quality": 0,
-            "market_context_reason": ctx.reason,
-            "broker_ok": False,
-        }
+        row = _isolated_symbol_failure(
+            code, ctx.reason or "market_context_unavailable"
+        )
+        row["broker_symbol"] = code
+        row["market_context_reason"] = ctx.reason
+        row["broker_ok"] = False
+        return row
     snapshot = ctx.snapshot
     account: AccountRiskState = ctx.account
     resolved = str(
