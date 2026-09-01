@@ -15,6 +15,8 @@ import {
   signalStrength,
   signalTimestampLabel,
   signalHumanExplanation,
+  signalExecutionStatusLabel,
+  signalKindLabel,
 } from "@/lib/trading/trader-ux";
 import { freshnessTone } from "@/components/trading/intelligence-detail";
 
@@ -170,6 +172,9 @@ export function SignalCard({
             <Badge tone={freshnessTone(freshness)}>
               {signalFreshnessLabel(freshness)}
             </Badge>
+            <span className="font-medium tracking-wide text-[var(--fg)]">
+              {signalKindLabel(row)} · {signalExecutionStatusLabel(row)}
+            </span>
           </div>
           <p className="mt-3 line-clamp-2 pl-1 text-[12px] leading-relaxed text-[var(--fg-muted)]">
             {signalHumanExplanation(row)}

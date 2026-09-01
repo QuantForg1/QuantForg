@@ -5001,6 +5001,17 @@ class InstitutionalIteRuntime:
                     eligible = prefer_allowlisted_handoff(eligible, allow_seed)
             except Exception:
                 logger.exception("prefer_allowlisted_handoff_failed")
+            try:
+                from app.application.services.research_execution_bridge import (
+                    merge_research_into_execution_handoff,
+                )
+
+                eligible = merge_research_into_execution_handoff(
+                    eligible,
+                    universe=scan.get("universe") if isinstance(scan, dict) else (),
+                )
+            except Exception:
+                logger.exception("research_execution_handoff_failed")
             with self._lock:
                 self._last_multi_asset_scan = (
                     dict(scan) if isinstance(scan, dict) else None

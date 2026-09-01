@@ -338,6 +338,11 @@ export function BrokerConfigWorkspace() {
   const liveTradingHint = researchDeskLiveTradingStatus(
     connectionView,
     tradingSnap.trading,
+    {
+      liveTradingState: tradingSnap.live_trading_state,
+      ordersMaySubmit: tradingSnap.orders_may_submit,
+      liveAuthorization: tradingSnap.live_authorization,
+    },
   );
   const isLiveAccount = accountType === "live";
   const latency =

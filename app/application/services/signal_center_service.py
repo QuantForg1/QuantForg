@@ -1154,6 +1154,16 @@ def _overlay_last_ite_cycle(
     """
     if not isinstance(last, dict) or not isinstance(row, dict):
         return row
+    try:
+        from app.application.services.research_execution_bridge import (
+            overlay_cycle_matches_row,
+        )
+
+        if not overlay_cycle_matches_row(row, last):
+            return row
+    except Exception:
+        logger.exception("overlay_cycle_symbol_match_failed")
+        return row
     forwarded = bool(last.get("forwarded_to_oms"))
     blocked = last.get("execution_blocked")
     if not isinstance(blocked, dict):
@@ -1919,6 +1929,7 @@ def list_live_signals(
             research_meta["scanner_status"] = "UNAVAILABLE"
 
     last_cycle = None
+    open_symbols: list[str] = []
     try:
         from app.application.services.institutional_ite_runtime import get_ite_runtime
 
@@ -1927,10 +1938,63 @@ def list_live_signals(
             st = runtime.status() or {}
             raw_last = st.get("last_cycle")
             last_cycle = raw_last if isinstance(raw_last, dict) else None
+            try:
+                from app.domain.institutional_trading.operations.quantforg_position_cap import (
+                    engine_position_rows,
+                    quantforg_open_symbols,
+                )
+
+                open_symbols = sorted(
+                    quantforg_open_symbols(
+                        engine_position_rows(runtime.position_management.engine)
+                    )
+                )
+            except Exception:
+                open_symbols = []
     except Exception:
         last_cycle = None
     if last_cycle:
         signals = [_overlay_last_ite_cycle(s, last_cycle) for s in signals]
+
+    auth = {
+        "live_trading_state": "DISABLED",
+        "orders_may_submit": False,
+        "live_authorization": "LIVE_DISABLED",
+        "research_can_execute": False,
+    }
+    research_focus: list[str] = []
+    from app.application.services.research_execution_bridge import (
+        live_authorization_snapshot,
+        research_live_focus_symbols,
+        signal_execution_status,
+    )
+
+    try:
+        auth = live_authorization_snapshot()
+        research_focus = research_live_focus_symbols()
+    except Exception:
+        logger.exception("signal_center_live_authorization_failed")
+
+    for row in signals:
+        if not isinstance(row, dict):
+            continue
+        status = signal_execution_status(
+            row,
+            live_state=str(auth.get("live_trading_state") or ""),
+            orders_ok=bool(auth.get("orders_may_submit")),
+            research_focus=research_focus,
+            open_symbols=open_symbols,
+        )
+        row["execution_status"] = status
+        row["live_eligible"] = status == "LIVE_ELIGIBLE"
+        row["kind"] = (
+            "LIVE_OPPORTUNITY"
+            if status not in {"RESEARCH_ONLY", "EXPIRED"}
+            else "RESEARCH_SIGNAL"
+        )
+        if status != "ORDER_SUBMITTED" and status != "POSITION_OPEN":
+            row["would_submit_order"] = False
+        row["authorizes_trade"] = False
 
     qn = (q or "").strip().upper()
     if qn:
@@ -2062,7 +2126,12 @@ def list_live_signals(
         "scan_note": scan.get("note") or research_snap.get("note"),
         "universe_size": universe_size,
         "scanner_status": scanner_status,
-        "research_can_execute": _research_can_execute(),
+        "research_can_execute": auth.get(
+            "research_can_execute", _research_can_execute()
+        ),
+        "orders_may_submit": bool(auth.get("orders_may_submit")),
+        "live_trading_state": auth.get("live_trading_state"),
+        "live_authorization": auth.get("live_authorization"),
         "allow_live_promotion": False,
         "broker_required_for_research": False,
         "research_meta": research_meta,

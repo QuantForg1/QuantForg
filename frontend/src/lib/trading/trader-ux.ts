@@ -503,30 +503,97 @@ export function researchUniverseViewState(input: {
   return input.instrumentCount === 0 ? "LIVE_EMPTY" : "LIVE_ROWS";
 }
 
+export type LiveAuthorizationState =
+  | "LIVE_DISABLED"
+  | "LIVE_PAUSED"
+  | "LIVE_ENABLED"
+  | "EXECUTION_BLOCKED";
+
 export type ResearchDeskLiveTradingState =
   | "LIVE_TRADING_UNAVAILABLE"
-  | "LIVE_TRADING_DISABLED";
+  | "LIVE_TRADING_DISABLED"
+  | "LIVE_TRADING_ENABLED"
+  | "LIVE_TRADING_PAUSED"
+  | "LIVE_TRADING_BLOCKED";
 
-/** Research desk never authorizes trades. Broker connection is independent. */
+function liveStateFromSession(live?: {
+  liveTradingState?: unknown;
+  ordersMaySubmit?: unknown;
+  liveAuthorization?: unknown;
+}): LiveAuthorizationState | null {
+  const auth = String(live?.liveAuthorization || "")
+    .trim()
+    .toUpperCase();
+  if (
+    auth === "LIVE_ENABLED" ||
+    auth === "LIVE_PAUSED" ||
+    auth === "LIVE_DISABLED" ||
+    auth === "EXECUTION_BLOCKED"
+  ) {
+    return auth;
+  }
+  const state = String(live?.liveTradingState || "")
+    .trim()
+    .toUpperCase();
+  if (state === "ENABLED" || state === "LIVE_ENABLED") return "LIVE_ENABLED";
+  if (state === "PAUSED") return "LIVE_PAUSED";
+  if (live?.ordersMaySubmit === true) return "LIVE_ENABLED";
+  if (live?.ordersMaySubmit === false && (state === "ENABLED" || state === "LIVE_ENABLED")) {
+    return "EXECUTION_BLOCKED";
+  }
+  if (state === "DISABLED" || state === "ARMED" || state === "KILLED") {
+    return "LIVE_DISABLED";
+  }
+  return null;
+}
+
+/** Live authorization comes from the backend controller, never from broker connection. */
 export function researchDeskLiveTradingStatus(
   connection: {
     connected: boolean;
     state: string;
   },
   trading?: unknown,
+  live?: {
+    liveTradingState?: unknown;
+    ordersMaySubmit?: unknown;
+    liveAuthorization?: unknown;
+  },
 ): {
   label: string;
   detail: string;
   state: ResearchDeskLiveTradingState;
 } {
-  const authorized =
+  const auth = liveStateFromSession(live);
+  if (auth === "LIVE_ENABLED") {
+    return {
+      label: "LIVE_ENABLED",
+      detail: "Existing live-trading controller currently permits order evaluation.",
+      state: "LIVE_TRADING_ENABLED",
+    };
+  }
+  if (auth === "LIVE_PAUSED") {
+    return {
+      label: "LIVE_PAUSED",
+      detail: "Live trading is paused. Research continues independently.",
+      state: "LIVE_TRADING_PAUSED",
+    };
+  }
+  if (auth === "EXECUTION_BLOCKED") {
+    return {
+      label: "EXECUTION_BLOCKED",
+      detail: "Live trading is authorized but a safety gate is blocking new orders.",
+      state: "LIVE_TRADING_BLOCKED",
+    };
+  }
+  const legacyAuthorized =
     connection.connected &&
     (trading === "Enabled" || trading === true || trading === "AUTHORIZED");
-  if (authorized) {
+  if (legacyAuthorized && auth == null) {
     return {
-      label: "AUTHORIZED",
+      label: "LIVE_ENABLED",
       detail: "Existing authorization and risk controls currently permit execution.",
-      state: "LIVE_TRADING_DISABLED",
+      state: "LIVE_TRADING_ENABLED",
     };
   }
   const disconnected =
@@ -534,11 +601,35 @@ export function researchDeskLiveTradingStatus(
     connection.state === "BROKER_NOT_CONNECTED" ||
     connection.state === "ACCOUNT_SESSION_MISMATCH";
   return {
-    label: "NOT AUTHORIZED",
+    label: "LIVE_DISABLED",
     detail:
       "Connecting a broker does not authorize live trading. Existing authorization and risk controls remain required.",
     state: disconnected ? "LIVE_TRADING_UNAVAILABLE" : "LIVE_TRADING_DISABLED",
   };
+}
+
+export function signalExecutionStatusLabel(row: Record<string, unknown>): string {
+  const raw = String(row.execution_status || "")
+    .trim()
+    .toUpperCase();
+  const allowed = new Set([
+    "RESEARCH_ONLY",
+    "READY_FOR_REVIEW",
+    "LIVE_ELIGIBLE",
+    "EXECUTION_BLOCKED",
+    "ORDER_SUBMITTED",
+    "POSITION_OPEN",
+    "EXPIRED",
+  ]);
+  if (allowed.has(raw)) return raw;
+  return "RESEARCH_ONLY";
+}
+
+export function signalKindLabel(row: Record<string, unknown>): string {
+  if (String(row.kind || "").trim().toUpperCase() === "LIVE_OPPORTUNITY") {
+    return "LIVE OPPORTUNITY";
+  }
+  return "RESEARCH SIGNAL";
 }
 
 export function catalogueStatusLabel(state: CatalogueViewState): string {
@@ -706,6 +797,9 @@ export type NormalizedSignalCenter = {
   brokerRequiredForResearch?: boolean;
   /** Research analysis worker health — never live trading. */
   researchAnalysis?: Record<string, unknown>;
+  liveTradingState?: string;
+  liveAuthorization?: string;
+  ordersMaySubmit?: boolean;
 };
 
 function optionalConfirmedCount(raw: unknown): number | null {
@@ -743,6 +837,9 @@ export function normalizeSignalCenterPayload(
       scannerStatus: undefined,
       brokerRequiredForResearch: false,
       researchAnalysis: undefined,
+      liveTradingState: undefined,
+      liveAuthorization: undefined,
+      ordersMaySubmit: undefined,
     };
   }
   const asOf = String(payload.as_of || "").trim();
@@ -777,6 +874,9 @@ export function normalizeSignalCenterPayload(
       scannerStatus: "NO_ACTIVE_SIGNALS",
       brokerRequiredForResearch: false,
       researchAnalysis,
+      liveTradingState: String(payload.live_trading_state || "") || undefined,
+      liveAuthorization: String(payload.live_authorization || "") || undefined,
+      ordersMaySubmit: payload.orders_may_submit === true,
     };
   }
   const items = Array.isArray(payload.items) ? payload.items : [];
@@ -895,7 +995,10 @@ export function normalizeSignalCenterPayload(
       badge: item.badge,
       research_only: true,
       authorizes_trade: false,
-      kind: "RESEARCH_SIGNAL",
+      kind:
+        String(item.kind || "").toUpperCase() === "LIVE_OPPORTUNITY"
+          ? "LIVE_OPPORTUNITY"
+          : "RESEARCH_SIGNAL",
       evidence:
         item.evidence && typeof item.evidence === "object"
           ? (item.evidence as Record<string, unknown>)
@@ -908,6 +1011,10 @@ export function normalizeSignalCenterPayload(
       invalidation: item.invalidation,
       blocker: item.blocker,
       research_lifecycle: item.research_lifecycle,
+      execution_status: item.execution_status,
+      live_eligible: item.live_eligible === true,
+      first_blocker: item.first_blocker ?? pipeline.first_blocker,
+      ticket: item.ticket ?? pipeline.ticket,
     });
   }
   // Stamp research-signal flag only after honest hasResearchSignal evaluation.
@@ -941,6 +1048,9 @@ export function normalizeSignalCenterPayload(
     scannerStatus: scannerStatus || undefined,
     brokerRequiredForResearch: payload.broker_required_for_research === true,
     researchAnalysis,
+    liveTradingState: String(payload.live_trading_state || "") || undefined,
+    liveAuthorization: String(payload.live_authorization || "") || undefined,
+    ordersMaySubmit: payload.orders_may_submit === true,
   };
 }
 

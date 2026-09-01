@@ -118,7 +118,11 @@ export default function DashboardPage() {
   const noBroker = connection.state === "BROKER_NOT_CONNECTED";
   const sessionMismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
   const robot = robotDisplayState(session, connection);
-  const liveTradingHint = researchDeskLiveTradingStatus(connection, session.trading);
+  const liveTradingHint = researchDeskLiveTradingStatus(connection, session.trading, {
+    liveTradingState: session.live_trading_state,
+    ordersMaySubmit: session.orders_may_submit,
+    liveAuthorization: session.live_authorization,
+  });
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -347,7 +351,7 @@ export default function DashboardPage() {
             Live trading{" "}
           </span>
           <span className="font-medium text-[var(--fg)]">
-            {liveTradingHint.label === "AUTHORIZED" ? "Authorized" : "Not authorized"}
+            {liveTradingHint.label}
           </span>
         </span>
         <span>

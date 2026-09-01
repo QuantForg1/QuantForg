@@ -66,15 +66,24 @@ def _live_trading_session_fields() -> dict[str, Any]:
         from app.domain.institutional_trading.live_trading_control import (
             get_live_trading_controller,
             orders_may_submit,
+            public_authorization_state,
         )
 
         state = get_live_trading_controller().snapshot_state()
+        may_submit = orders_may_submit(state)
         return {
             "live_trading_state": state,
-            "orders_may_submit": orders_may_submit(state),
+            "orders_may_submit": may_submit,
+            "live_authorization": public_authorization_state(
+                state, orders_may_submit_flag=may_submit
+            ),
         }
     except Exception:
-        return {"live_trading_state": "UNAVAILABLE", "orders_may_submit": False}
+        return {
+            "live_trading_state": "UNAVAILABLE",
+            "orders_may_submit": False,
+            "live_authorization": "LIVE_DISABLED",
+        }
 
 
 def _robot_status(
@@ -325,6 +334,9 @@ class GetTradingSessionUseCase:
                 else "Disabled"
             ),
             "live_trading_state": lt_fields["live_trading_state"],
+            "live_authorization": (
+                lt_fields.get("live_authorization") or "LIVE_DISABLED"
+            ),
             "orders_may_submit": bool(
                 lt_fields["orders_may_submit"]
                 and ctx.execution_permitted

@@ -65,6 +65,8 @@ import {
   marketSignalLabel,
   normalizeSignalCenterPayload,
   researchDeskLiveTradingStatus,
+  signalExecutionStatusLabel,
+  signalKindLabel,
   researchFeedState,
   researchFeedStateLabel,
   researchLifecycleCounts,
@@ -832,19 +834,54 @@ assert.equal(
     state: "BROKER_NOT_CONNECTED",
   });
   assert.equal(liveHint.state, "LIVE_TRADING_UNAVAILABLE");
-  assert.equal(liveHint.label, "NOT AUTHORIZED");
+  assert.equal(liveHint.label, "LIVE_DISABLED");
   assert.match(liveHint.detail, /does not authorize live trading/i);
   const connectedHint = researchDeskLiveTradingStatus({
     connected: true,
     state: "CONNECTED",
   });
   assert.equal(connectedHint.state, "LIVE_TRADING_DISABLED");
-  assert.equal(connectedHint.label, "NOT AUTHORIZED");
+  assert.equal(connectedHint.label, "LIVE_DISABLED");
   const authorizedHint = researchDeskLiveTradingStatus(
     { connected: true, state: "CONNECTED" },
     "Enabled",
   );
-  assert.equal(authorizedHint.label, "AUTHORIZED");
+  assert.equal(authorizedHint.label, "LIVE_ENABLED");
+  const controllerHint = researchDeskLiveTradingStatus(
+    { connected: false, state: "BROKER_NOT_CONNECTED" },
+    "Disabled",
+    { ordersMaySubmit: true, liveTradingState: "ENABLED" },
+  );
+  assert.equal(controllerHint.label, "LIVE_ENABLED");
+  const pausedHint = researchDeskLiveTradingStatus(
+    { connected: true, state: "CONNECTED" },
+    "Enabled",
+    { liveAuthorization: "LIVE_PAUSED" },
+  );
+  assert.equal(pausedHint.label, "LIVE_PAUSED");
+  const blockedHint = researchDeskLiveTradingStatus(
+    { connected: true, state: "CONNECTED" },
+    "Disabled",
+    { liveAuthorization: "EXECUTION_BLOCKED" },
+  );
+  assert.equal(blockedHint.label, "EXECUTION_BLOCKED");
+}
+
+{
+  assert.equal(
+    signalExecutionStatusLabel({ execution_status: "LIVE_ELIGIBLE" }),
+    "LIVE_ELIGIBLE",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({ execution_status: "ORDER_SUBMITTED" }),
+    "ORDER_SUBMITTED",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({ execution_status: "FILLED" }),
+    "RESEARCH_ONLY",
+  );
+  assert.equal(signalKindLabel({ kind: "LIVE_OPPORTUNITY" }), "LIVE OPPORTUNITY");
+  assert.equal(signalKindLabel({ kind: "RESEARCH_SIGNAL" }), "RESEARCH SIGNAL");
 }
 
 {

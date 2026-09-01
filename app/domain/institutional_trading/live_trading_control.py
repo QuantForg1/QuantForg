@@ -173,6 +173,20 @@ def public_state_name(
     return canonical
 
 
+def public_authorization_state(
+    state: Any, *, orders_may_submit_flag: bool | None = None
+) -> str:
+    """Trader-facing live-authorization. Never inferred from broker connection."""
+    canonical = normalize_state(state)
+    if canonical == "ENABLED":
+        if orders_may_submit_flag is False:
+            return "EXECUTION_BLOCKED"
+        return "LIVE_ENABLED"
+    if canonical == "PAUSED":
+        return "LIVE_PAUSED"
+    return "LIVE_DISABLED"
+
+
 def recover_after_restart(persisted: Any) -> LiveTradingState:
     """Fail closed after deploy / reconnect / uncertain hydrate.
 

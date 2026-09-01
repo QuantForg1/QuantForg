@@ -27,6 +27,8 @@ import {
   signalUpdatedAgo,
   SIGNALS_NOT_AUTHORIZATION,
   RESEARCH_SIGNAL,
+  signalExecutionStatusLabel,
+  signalKindLabel,
 } from "@/lib/trading/trader-ux";
 
 export function directionTone(
@@ -148,6 +150,16 @@ export function IntelligenceDetail({
           value={presentUnavailable(presentField(rowRegime(row)))}
         />
         <Detail label="Signal freshness" value={signalUpdatedAgo(row)} />
+        {kind === "signal" ? (
+          <>
+            <Detail label="Kind" value={signalKindLabel(row)} />
+            <Detail
+              label="Session"
+              value={presentUnavailable(presentField(rowSession(row)))}
+            />
+            <Detail label="Execution" value={signalExecutionStatusLabel(row)} />
+          </>
+        ) : null}
         {kind === "market" ? (
           <>
             <Detail

@@ -45,6 +45,8 @@ import {
   scoreDisplay,
   SIGNAL_CENTER_QUERY_KEY,
   signalBoardDirection,
+  signalExecutionStatusLabel,
+  signalKindLabel,
   signalFreshness,
   signalFreshnessLabel,
   signalRiskRewardDisplay,
@@ -272,7 +274,6 @@ export function SignalsWorkspace() {
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
   const accountHint = accountConnectionHint(connection);
-  const liveTradingHint = researchDeskLiveTradingStatus(connection, session.trading);
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -371,6 +372,12 @@ export function SignalsWorkspace() {
     universeSize: normalized.universeSize,
   });
   const analysisLabel = analysisDeskStatusLabel(analysisStatus);
+  const liveTradingHint = researchDeskLiveTradingStatus(connection, session.trading, {
+    liveTradingState: session.live_trading_state || normalized.liveTradingState,
+    ordersMaySubmit:
+      session.orders_may_submit === true || normalized.ordersMaySubmit === true,
+    liveAuthorization: session.live_authorization || normalized.liveAuthorization,
+  });
   const emptyCopy = researchSignalsEmptyCopy({
     fetchError: Boolean(signalsQ.isError),
     fabricatedBlocked: normalized.fabricatedBlocked,
@@ -492,6 +499,14 @@ export function SignalsWorkspace() {
         <StatusDot label="Research" value={researchLabel} />
         <StatusDot label="Broker" value={brokerLabel} />
         <StatusDot label="Live trading" value={liveTradingHint.label} />
+        <StatusDot
+          label="Orders may submit"
+          value={
+            session.orders_may_submit === true || normalized.ordersMaySubmit === true
+              ? "TRUE"
+              : "FALSE"
+          }
+        />
       </section>
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--fg-muted)]">
@@ -547,6 +562,9 @@ export function SignalsWorkspace() {
                     Symbol
                   </th>
                   <th className="px-3 py-2.5 font-medium" scope="col">
+                    Kind
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
                     Asset
                   </th>
                   <th className="px-3 py-2.5 font-medium" scope="col">
@@ -570,15 +588,21 @@ export function SignalsWorkspace() {
                   <th className="px-3 py-2.5 font-medium" scope="col">
                     Take profit
                   </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    R/R
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Regime
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Updated
-                  </th>
+                    <th className="px-3 py-2.5 font-medium" scope="col">
+                      R/R
+                    </th>
+                    <th className="px-3 py-2.5 font-medium" scope="col">
+                      Session
+                    </th>
+                    <th className="px-3 py-2.5 font-medium" scope="col">
+                      Freshness
+                    </th>
+                    <th className="px-3 py-2.5 font-medium" scope="col">
+                      Execution
+                    </th>
+                    <th className="px-3 py-2.5 font-medium" scope="col">
+                      Updated
+                    </th>
                 </tr>
               </thead>
               <tbody>
@@ -592,6 +616,9 @@ export function SignalsWorkspace() {
                       onClick={() => setSelected(row)}
                     >
                       <td className="px-3 py-2.5 font-semibold">{symbol}</td>
+                      <td className="px-3 py-2.5 text-[11px] tracking-wide text-[var(--fg-muted)]">
+                        {signalKindLabel(row)}
+                      </td>
                       <td className="px-3 py-2.5 text-[var(--fg-muted)]">
                         {presentUnavailable(presentField(row.asset_class))}
                       </td>
@@ -623,7 +650,15 @@ export function SignalsWorkspace() {
                         {signalRiskRewardDisplay(row)}
                       </td>
                       <td className="px-3 py-2.5 text-[var(--fg-muted)]">
-                        {presentUnavailable(presentField(rowRegime(row)))}
+                        {presentUnavailable(presentField(rowSession(row)))}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <Badge tone={freshnessTone(signalFreshness(row))}>
+                          {signalFreshnessLabel(signalFreshness(row))}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2.5 text-[11px] font-medium tracking-wide text-[var(--fg)]">
+                        {signalExecutionStatusLabel(row)}
                       </td>
                       <td className="px-3 py-2.5 text-[var(--fg-subtle)]">
                         {signalUpdatedAgo(row)}
