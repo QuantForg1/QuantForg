@@ -91,6 +91,13 @@ def _reasons_indicate_max_positions(
     )
 
 
+def _reasons_indicate_min_lot_exceeds_budget(
+    reasons: tuple[str, ...] | list[str] | None,
+) -> bool:
+    hay = " ".join(str(r).lower() for r in (reasons or ()) if str(r).strip())
+    return "min_lot_exceeds_risk_budget" in hay or "min lot exceeds risk" in hay
+
+
 def _reasons_indicate_min_lot(reasons: tuple[str, ...] | list[str] | None) -> bool:
     hay = " ".join(str(r).lower() for r in (reasons or ()) if str(r).strip())
     return any(
@@ -98,7 +105,9 @@ def _reasons_indicate_min_lot(reasons: tuple[str, ...] | list[str] | None) -> bo
         for token in (
             "min_lot_constraint",
             "min_lot_infeasible",
+            "min_lot_exceeds_risk_budget",
             "min lot constraint",
+            "min lot exceeds risk",
             "below_min_lot",
             "below broker volume_min",
             "below broker minimum",
@@ -567,12 +576,20 @@ def evaluate_gold_execution_contract(
         mark("RISK", StageStatus.BLOCK.value)
         failures.append(risk_fail)
     elif min_lot_blocked:
+        exceeds = _reasons_indicate_min_lot_exceeds_budget(facts.risk_reasons)
+        lot_code = (
+            "MIN_LOT_EXCEEDS_RISK_BUDGET" if exceeds else "MIN_LOT_CONSTRAINT"
+        )
         risk_fail = _stage_fail(
             stage="RISK",
-            code="MIN_LOT_CONSTRAINT",
+            code=lot_code,
             reason=(
                 "; ".join(facts.risk_reasons)
-                or "minimum lot would violate hard max risk — do not upsize"
+                or (
+                    "minimum lot exceeds configured risk budget — do not upsize"
+                    if exceeds
+                    else "minimum lot would violate hard max risk — do not upsize"
+                )
             ),
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
             next_action=CandidateAction.WAIT_SAME_FOCUS.value,
@@ -837,6 +854,7 @@ def evaluate_gold_execution_contract(
             "MIN_LOT_CONSTRAINT",
             "MIN_LOT_INFEASIBLE",
             "MIN_LOT_RISK_INFEASIBLE",
+            "MIN_LOT_EXCEEDS_RISK_BUDGET",
         }:
             decision_state = DecisionState.CANDIDATE_BLOCK.value
         readiness = "NOT_READY"

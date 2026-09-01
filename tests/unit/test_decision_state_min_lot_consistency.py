@@ -330,7 +330,7 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
     )
     assert result.decision is RiskDecision.REJECT
     assert result.approved_lots == Decimal("0")
-    assert "MIN_LOT_CONSTRAINT" in " ".join(result.reasons)
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in " ".join(result.reasons)
 
 
 def test_hard_max_and_min_lot_unchanged() -> None:

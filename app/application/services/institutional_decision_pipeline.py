@@ -56,10 +56,16 @@ def risk_config_from_ite(
     *,
     min_lot: Decimal | None = None,
     lot_step: Decimal | None = None,
+    max_lot: Decimal | None = None,
     contract_size: Decimal | None = None,
 ) -> RiskEngineConfig:
     """Map ITE defaults onto RiskEngineConfig (live broker specs when provided)."""
-    from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
+    from app.domain.trading.xauusd_specs import (
+        CONTRACT_SIZE,
+        VOLUME_MAX,
+        VOLUME_MIN,
+        VOLUME_STEP,
+    )
 
     return RiskEngineConfig(
         max_risk_per_trade_pct=cfg.risk_per_trade_pct,
@@ -70,6 +76,7 @@ def risk_config_from_ite(
         max_spread=cfg.max_spread_reject,
         min_lot=min_lot if min_lot is not None and min_lot > 0 else VOLUME_MIN,
         lot_step=lot_step if lot_step is not None and lot_step > 0 else VOLUME_STEP,
+        max_lot=max_lot if max_lot is not None and max_lot > 0 else VOLUME_MAX,
         contract_size=(
             contract_size
             if contract_size is not None and contract_size > 0
@@ -108,9 +115,28 @@ def _live_broker_lot_specs(
             client = getattr(adapter, "client", None) or getattr(
                 adapter, "_client", None
             )
+        candidates = [symbol]
+        try:
+            from app.domain.trading.gold_only import (
+                canonical_gold_execution_symbol,
+                is_gold_symbol,
+            )
+
+            if is_gold_symbol(symbol):
+                canon = canonical_gold_execution_symbol(symbol)
+                if canon and canon not in candidates:
+                    candidates.append(canon)
+        except Exception:
+            logger.debug(
+                "live_broker_gold_symbol_candidates_failed",
+                symbol=symbol,
+                exc_info=True,
+            )
         if client is not None and hasattr(client, "symbol_info"):
-            info = client.symbol_info(symbol)
-            if info is not None:
+            for candidate in candidates:
+                info = client.symbol_info(candidate)
+                if info is None:
+                    continue
                 vmin = Decimal(str(getattr(info, "volume_min", None) or min_lot))
                 vstep = Decimal(str(getattr(info, "volume_step", None) or lot_step))
                 vmax = Decimal(str(getattr(info, "volume_max", None) or max_lot))
@@ -123,9 +149,9 @@ def _live_broker_lot_specs(
                     max_lot = vmax
                 if cs > 0:
                     contract_size = cs
-                # Optional freeze/stops for callers that need them later
                 _ = getattr(info, "stops_level", None)
                 _ = getattr(info, "freeze_level", None)
+                break
     except Exception:
         logger.debug("live_broker_lot_specs_unavailable", symbol=symbol, exc_info=True)
     return min_lot, lot_step, max_lot, contract_size
@@ -546,6 +572,7 @@ class InstitutionalDecisionPipeline:
                 cfg,
                 min_lot=live_min,
                 lot_step=live_step,
+                max_lot=live_max,
                 contract_size=live_cs,
             )
         )
@@ -591,6 +618,9 @@ class InstitutionalDecisionPipeline:
                 DEFAULT_AI_SCALPING_CONFIG,
                 broker_min_lot=live_min,
                 broker_lot_step=live_step,
+                broker_max_lot=min(live_max, DEFAULT_AI_SCALPING_CONFIG.broker_max_lot)
+                if live_max > 0
+                else DEFAULT_AI_SCALPING_CONFIG.broker_max_lot,
             )
             ai_payload = (
                 self._last_ai_score if isinstance(self._last_ai_score, dict) else {}
@@ -911,6 +941,7 @@ class InstitutionalDecisionPipeline:
                         contract_size=live_cs,
                         min_lot=live_min,
                         lot_step=live_step,
+                        max_lot=live_max,
                         session_risk_multiplier=sess_risk,
                         daily_exposure_used_pct=portfolio_exp,
                         portfolio_exposure_pct=portfolio_exp,
@@ -958,6 +989,8 @@ class InstitutionalDecisionPipeline:
                         peak_equity=account.peak_equity,
                         compounding_enabled=scalp_cfg.compounding_enabled,
                         contract_size=live_cs,
+                        min_lot=live_min,
+                        lot_step=live_step,
                         session_risk_multiplier=sess_risk,
                         daily_exposure_used_pct=portfolio_exp,
                         config=scalp_cfg,

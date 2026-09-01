@@ -1069,14 +1069,17 @@ async def build_ite_cycle_market_context(
     )
 
     # Sizing diagnostics (observational) — live broker volume_min/step when available.
-    from decimal import ROUND_DOWN
-
-    from app.domain.institutional_trading.atr import stop_distance_from_atr
     from app.domain.institutional_trading.ai_scalping.config import (
         DEFAULT_AI_SCALPING_CONFIG,
     )
+    from app.domain.institutional_trading.atr import stop_distance_from_atr
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
-    from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
+    from app.domain.trading.xauusd_specs import (
+        CONTRACT_SIZE,
+        VOLUME_MAX,
+        VOLUME_MIN,
+        VOLUME_STEP,
+    )
 
     stop_dist = stop_distance_from_atr(
         atr_dec, multiplier=DEFAULT_AI_SCALPING_CONFIG.stop_atr_mult
@@ -1086,17 +1089,23 @@ async def build_ite_cycle_market_context(
     contract_size = CONTRACT_SIZE
     lot_step = VOLUME_STEP
     min_lot = VOLUME_MIN
+    max_lot = VOLUME_MAX
+    tick_size = None
+    tick_value = None
     specs_source = "xauusd_specs_fallback"
     try:
         spec = None if isinstance(pre_specs, Exception) else pre_specs
         if spec is not None:
             vmin = Decimal(str(getattr(spec, "volume_min", None) or VOLUME_MIN))
             vstep = Decimal(str(getattr(spec, "volume_step", None) or VOLUME_STEP))
+            vmax = Decimal(str(getattr(spec, "volume_max", None) or VOLUME_MAX))
             cs = Decimal(str(getattr(spec, "contract_size", None) or CONTRACT_SIZE))
             if vmin > 0:
                 min_lot = vmin
             if vstep > 0:
                 lot_step = vstep
+            if vmax > 0:
+                max_lot = vmax
             if cs > 0:
                 contract_size = cs
             specs_source = "live_broker"
@@ -1108,6 +1117,16 @@ async def build_ite_cycle_market_context(
             diag["symbol_market_open"] = spec_market_open
             diag["trade_mode"] = trade_mode
             diag["trade_allowed"] = trade_allowed
+            ts = getattr(spec, "trade_tick_size", None) or getattr(
+                spec, "tick_size", None
+            )
+            tv = getattr(spec, "trade_tick_value", None) or getattr(
+                spec, "tick_value", None
+            )
+            if ts not in (None, "", 0, "0"):
+                tick_size = Decimal(str(ts))
+            if tv not in (None, "", 0, "0"):
+                tick_value = Decimal(str(tv))
     except Exception as exc:
         logger.debug("ite_cycle_live_lot_specs_failed", error=str(exc))
 
@@ -1115,41 +1134,63 @@ async def build_ite_cycle_market_context(
     calc_lots: Decimal | None = None
     sizing_status = "unavailable"
     if stop_dist is not None and stop_dist > 0 and contract_size > 0:
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            STATUS_BELOW_MIN,
+            STATUS_EXCEEDS_BUDGET,
+            STATUS_INVALID_SPEC,
+            normalize_lots_against_broker,
+        )
+
         raw_lots = risk_budget / (stop_dist * contract_size)
-        quantized = raw_lots.quantize(lot_step, rounding=ROUND_DOWN)
-        if quantized < min_lot:
-            calc_lots = Decimal("0")
-            sizing_status = "below_min_lot"
+        norm = normalize_lots_against_broker(
+            calculated_lot=raw_lots,
+            min_lot=min_lot,
+            lot_step=lot_step,
+            max_lot=max_lot,
+            equity=equity,
+            stop_distance=stop_dist,
+            contract_size=contract_size,
+            risk_budget=risk_budget,
+            tick_size=tick_size,
+            tick_value=tick_value,
+        )
+        calc_lots = norm.normalized_lot if norm.approved else Decimal("0")
+        sizing_status = norm.sizing_status
+        diag.update(norm.to_observability())
+        if not norm.approved:
+            diag["rejection_reason"] = norm.block_reason
+            diag["signal_state"] = "VALID_SIGNAL"
+            diag["execution_state"] = "EXECUTION_BLOCKED"
+            if norm.sizing_status in {STATUS_BELOW_MIN, STATUS_EXCEEDS_BUDGET}:
+                diag["block_reason"] = norm.block_reason
         else:
-            calc_lots = quantized
-            sizing_status = "tradable"
+            diag["rejection_reason"] = None
+            diag["block_reason"] = None
+        if sizing_status == STATUS_INVALID_SPEC:
+            diag["signal_state"] = "VALID_SIGNAL"
+            diag["execution_state"] = "EXECUTION_BLOCKED"
 
     diag["atr"] = str(atr_dec) if atr_dec is not None else None
     diag["stop_distance"] = str(stop_dist) if stop_dist is not None else None
-    diag["risk_budget"] = str(risk_budget)
-    diag["risk_amount"] = str(risk_budget)
+    diag["risk_budget"] = str(diag.get("risk_budget") or risk_budget)
+    diag["risk_amount"] = str(diag.get("estimated_risk_amount") or risk_budget)
     diag["risk_pct"] = str(risk_pct)
     diag["raw_lots"] = str(raw_lots) if raw_lots is not None else None
     diag["raw_volume"] = str(raw_lots) if raw_lots is not None else None
     diag["calculated_lots"] = str(calc_lots) if calc_lots is not None else None
-    diag["normalized_volume"] = (
-        str(raw_lots.quantize(lot_step, rounding=ROUND_DOWN))
-        if raw_lots is not None
-        else None
-    )
+    diag["calculated_lot"] = str(diag.get("calculated_lot") or raw_lots or "")
+    diag["normalized_volume"] = str(diag.get("normalized_lot") or calc_lots or "")
     diag["final_volume"] = str(calc_lots) if calc_lots is not None else None
-    diag["broker_min_lot"] = str(min_lot)
+    diag["broker_min_lot"] = str(diag.get("broker_min_lot") or min_lot)
     diag["volume_min"] = str(min_lot)
-    diag["broker_lot_step"] = str(lot_step)
+    diag["broker_lot_step"] = str(diag.get("broker_lot_step") or lot_step)
     diag["volume_step"] = str(lot_step)
+    diag["broker_max_lot"] = str(diag.get("broker_max_lot") or max_lot)
+    diag["volume_max"] = str(max_lot)
     diag["contract_size"] = str(contract_size)
     diag["lot_specs_source"] = specs_source
     diag["sizing_status"] = sizing_status
-    if sizing_status == "below_min_lot":
-        diag["rejection_reason"] = "MIN_LOT_CONSTRAINT"
-        diag["signal_state"] = "VALID_SIGNAL"
-        diag["execution_state"] = "EXECUTION_BLOCKED"
-    else:
+    if "rejection_reason" not in diag:
         diag["rejection_reason"] = None
 
     from app.application.services.market_closed_cooldown import is_market_closed_cooled

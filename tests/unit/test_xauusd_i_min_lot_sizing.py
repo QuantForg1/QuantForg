@@ -140,7 +140,7 @@ def test_risk_engine_labels_min_lot_constraint_not_missing_signal() -> None:
     assert result.decision is RiskDecision.REJECT
     assert result.approved_lots == Decimal("0")
     joined = " ".join(result.reasons)
-    assert "MIN_LOT_CONSTRAINT" in joined
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in joined
     assert "missing signal" not in joined.lower()
 
 

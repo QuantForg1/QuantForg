@@ -111,6 +111,7 @@ class PositionSizeResult:
     capped: bool = False
     dollar_risk: Decimal = Decimal("0")
     stop_distance: Decimal = Decimal("0")
+    block_reason: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -120,6 +121,7 @@ class PositionSizeResult:
             "capped": self.capped,
             "dollar_risk": str(self.dollar_risk),
             "stop_distance": str(self.stop_distance),
+            "block_reason": self.block_reason,
         }
 
 

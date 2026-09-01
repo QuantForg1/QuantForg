@@ -102,7 +102,8 @@ _ROTATE_NEEDLES: tuple[str, ...] = (
     "min_lot_constraint",
     "below min lot",
     "minimum lot causes risk",
-    "min lot constraint",
+    "min lot exceeds risk",
+    "min_lot_exceeds_risk_budget",
     "min lot risk",
     "symbol not tradable",
     "symbol tradable",
@@ -387,6 +388,11 @@ def classify_candidate_outcome(
     ):
         code = "CANDIDATE_BLOCK"
         if (
+            "min_lot_exceeds_risk_budget" in hay
+            or "min lot exceeds risk" in hay
+        ):
+            code = "MIN_LOT_EXCEEDS_RISK_BUDGET"
+        elif (
             "min_lot_constraint" in hay
             or "min lot" in hay
             or "minimum lot" in hay
@@ -417,7 +423,8 @@ def classify_candidate_outcome(
             "next_action": rotate,
             "blocking_stage": "RISK"
             if (
-                "min_lot_constraint" in hay
+                "min_lot_exceeds_risk_budget" in hay
+                or "min_lot_constraint" in hay
                 or "min lot" in hay
                 or "minimum lot" in hay
             )

@@ -78,6 +78,7 @@ def test_stop_above_threshold_is_min_lot_infeasible() -> None:
     assert result.stop_changed is False
     assert result.lot_changed is False
     assert "MIN_LOT_INFEASIBLE" in result.risk_reasons
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in result.risk_reasons
 
 
 def test_observed_live_stops_are_infeasible_on_201_equity() -> None:
@@ -205,7 +206,11 @@ def test_contract_min_lot_infeasible_does_not_submit() -> None:
     assert out.may_submit_oms is False
     assert out.blocking_stage == "RISK"
     assert out.decision_state == DecisionState.CANDIDATE_BLOCK.value
-    assert out.fault_code in {"MIN_LOT_CONSTRAINT", "MIN_LOT_INFEASIBLE"}
+    assert out.fault_code in {
+        "MIN_LOT_CONSTRAINT",
+        "MIN_LOT_INFEASIBLE",
+        "MIN_LOT_EXCEEDS_RISK_BUDGET",
+    }
     assert out.execute_now_required is False
 
 

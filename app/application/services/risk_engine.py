@@ -148,100 +148,94 @@ class RiskEngine:
                 # Prefer smaller of calculated vs requested
                 lots = min(lots, requested_lots)
 
-        if lots < cfg.min_lot:
-            # Micro CONDITIONAL — mirror AI scalping sizing: approve broker
-            # min_lot when dollar risk fits hard_max on sub-$500 equity.
-            from core.logging import get_logger
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            STATUS_NORMALIZED_TO_MIN,
+            normalize_lots_against_broker,
+        )
+        from core.logging import get_logger
 
-            _log = get_logger(__name__)
-            try:
-                from app.domain.institutional_trading.micro_account_mode import (
-                    MicroAccountProfile,
-                )
-
-                profile = MicroAccountProfile()
-                if equity > 0 and stop > 0 and equity <= Decimal("500"):
-                    min_loss = (cfg.min_lot * cs * stop).quantize(Decimal("0.01"))
-                    needed_pct = (min_loss / equity * Decimal("100")).quantize(
-                        Decimal("0.01")
-                    )
-                    if needed_pct <= profile.hard_max_risk_pct:
-                        _log.info(
-                            "risk_engine_micro_min_lot_approved",
-                            equity=str(equity),
-                            stop=str(stop),
-                            contract_size=str(cs),
-                            min_lot=str(cfg.min_lot),
-                            min_loss=str(min_loss),
-                            needed_pct=str(needed_pct),
-                            hard_max_pct=str(profile.hard_max_risk_pct),
-                        )
-                        return PositionSizeResult(
-                            method=method,
-                            requested_lots=(
-                                requested_lots
-                                if requested_lots is not None
-                                else cfg.min_lot
-                            ),
-                            approved_lots=cfg.min_lot,
-                            capped=False,
-                            dollar_risk=min_loss,
-                            stop_distance=stop,
-                        )
-                    _log.warning(
-                        "risk_engine_micro_min_lot_rejected",
-                        condition="needed_pct > hard_max_risk_pct",
-                        equity=str(equity),
-                        risk_pct=str(risk_pct),
-                        risk_amount=str(
-                            (equity * risk_pct / Decimal("100")).quantize(
-                                Decimal("0.01")
-                            )
-                        ),
-                        stop_distance=str(stop),
-                        contract_size=str(cs),
-                        volume_min=str(cfg.min_lot),
-                        volume_step=str(cfg.lot_step),
-                        raw_volume=str(lots),
-                        normalized_volume=str(lots),
-                        final_volume="0",
-                        min_lot_dollar_risk=str(min_loss),
-                        needed_pct_at_min_lot=str(needed_pct),
-                        hard_max_pct=str(profile.hard_max_risk_pct),
-                        rejection_reason="MIN_LOT_CONSTRAINT",
-                        signal_state="VALID_SIGNAL",
-                        execution_state="EXECUTION_BLOCKED",
-                    )
-                else:
-                    _log.warning(
-                        "risk_engine_micro_min_lot_skipped",
-                        equity=str(equity),
-                        stop=str(stop),
-                        equity_cap="500",
-                    )
-            except Exception:
-                _log.exception("risk_engine_micro_min_lot_path_failed")
-            # Never promote undersized risk to min_lot — reject via 0 lots.
+        _log = get_logger(__name__)
+        raw_lots = lots
+        if stop > 0 and cs > 0 and dollar > 0:
+            raw_lots = dollar / (stop * cs)
+        if requested_lots is not None and requested_lots > 0:
+            raw_lots = min(raw_lots, requested_lots)
+        norm = normalize_lots_against_broker(
+            calculated_lot=raw_lots,
+            min_lot=cfg.min_lot,
+            lot_step=cfg.lot_step,
+            max_lot=cfg.max_lot,
+            equity=equity,
+            stop_distance=stop,
+            contract_size=cs,
+            risk_budget=dollar.quantize(Decimal("0.01")) if dollar > 0 else None,
+        )
+        requested = (
+            requested_lots
+            if requested_lots is not None
+            else (norm.normalized_lot if norm.approved else cfg.min_lot)
+        )
+        if not norm.approved:
+            _log.warning(
+                "risk_engine_broker_lot_rejected",
+                rejection_reason=norm.block_reason,
+                sizing_status=norm.sizing_status,
+                equity=str(equity),
+                risk_pct=str(risk_pct),
+                stop_distance=str(stop),
+                contract_size=str(cs),
+                volume_min=str(cfg.min_lot),
+                volume_step=str(cfg.lot_step),
+                volume_max=str(cfg.max_lot),
+                calculated_lot=str(norm.calculated_lot),
+                normalized_lot=str(norm.normalized_lot),
+                estimated_risk_amount=str(norm.estimated_risk_amount),
+                risk_budget=str(norm.risk_budget),
+                needed_pct=(
+                    str(norm.needed_pct) if norm.needed_pct is not None else None
+                ),
+                signal_state="VALID_SIGNAL",
+                execution_state="EXECUTION_BLOCKED",
+            )
             return PositionSizeResult(
                 method=method,
-                requested_lots=(
-                    requested_lots if requested_lots is not None else cfg.min_lot
-                ),
+                requested_lots=requested,
                 approved_lots=Decimal("0"),
                 capped=True,
                 dollar_risk=dollar.quantize(Decimal("0.01")),
                 stop_distance=stop,
+                block_reason=norm.block_reason,
             )
-        capped = lots > cfg.max_lot
-        approved = min(lots, cfg.max_lot)
-        requested = approved if requested_lots is None else requested_lots
+        if norm.sizing_status == STATUS_NORMALIZED_TO_MIN:
+            _log.info(
+                "risk_engine_micro_min_lot_approved",
+                equity=str(equity),
+                stop=str(stop),
+                min_lot=str(cfg.min_lot),
+                normalized_lot=str(norm.normalized_lot),
+                estimated_risk_amount=str(norm.estimated_risk_amount),
+                needed_pct=str(norm.needed_pct),
+                hard_max_pct=str(norm.hard_max_risk_pct),
+            )
+        approved = norm.normalized_lot
+        capped = False
+        dollar_out = dollar.quantize(Decimal("0.01"))
+        if norm.sizing_status == STATUS_NORMALIZED_TO_MIN:
+            dollar_out = norm.estimated_risk_amount
+        elif norm.sizing_status == "capped_max_lot":
+            capped = True
+            if norm.estimated_risk_amount > 0:
+                dollar_out = norm.estimated_risk_amount
+        elif requested_lots is not None and requested_lots > approved:
+            capped = True
         return PositionSizeResult(
             method=method,
             requested_lots=requested,
             approved_lots=approved,
-            capped=capped or (requested > approved),
-            dollar_risk=dollar.quantize(Decimal("0.01")),
+            capped=capped,
+            dollar_risk=dollar_out,
             stop_distance=stop,
+            block_reason=None,
         )
 
     # -- 2. Exposure ---------------------------------------------------------
@@ -1208,9 +1202,9 @@ class RiskEngine:
         ):
             decision = RiskDecision.REJECT
             approved = Decimal("0")
+            lot_code = size.block_reason or "MIN_LOT_CONSTRAINT"
             reasons.append(
-                "MIN_LOT_CONSTRAINT: calculated volume below broker volume_min "
-                "(no upsize to min_lot) "
+                f"{lot_code}: calculated volume below broker volume_min "
                 f"requested={size.requested_lots} stop={size.stop_distance} "
                 f"dollar_risk={size.dollar_risk}"
             )

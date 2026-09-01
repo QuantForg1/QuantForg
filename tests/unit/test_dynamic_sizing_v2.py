@@ -114,8 +114,12 @@ class TestDynamicSizingSafety:
         )
         assert d.valid is False
         assert d.final_lot == Decimal("0")
-        assert d.method == "below_min_lot"
-        assert "below_min_lot" in (d.rejection_reason or "")
+        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
+        assert d.rejection_reason is not None
+        assert (
+            "below_min_lot" in d.rejection_reason
+            or "MIN_LOT_EXCEEDS_RISK_BUDGET" in d.rejection_reason
+        )
         assert d.calculated_lot < d.broker_min_lot
 
     def test_micro_conditional_approves_when_min_lot_within_hard_max(self) -> None:
@@ -191,7 +195,7 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is False
-        assert d.method == "below_min_lot"
+        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
         assert d.final_lot == Decimal("0")
 
     def test_never_exceed_configured_max_risk(self) -> None:

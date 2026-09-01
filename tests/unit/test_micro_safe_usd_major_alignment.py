@@ -144,7 +144,7 @@ def test_xauusd_i_still_min_lot_constrained_on_micro_equity() -> None:
     )
     assert result.decision is RiskDecision.REJECT
     assert result.approved_lots == Decimal("0")
-    assert "MIN_LOT_CONSTRAINT" in " ".join(result.reasons)
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in " ".join(result.reasons)
     profile = MicroAccountProfile()
     min_loss = (Decimal("0.01") * Decimal("100") * dist).quantize(Decimal("0.01"))
     needed = (min_loss / equity * Decimal("100")).quantize(Decimal("0.01"))

@@ -47,6 +47,9 @@ _REASON_LABELS: dict[str, str] = {
     "MIN_LOT_CONSTRAINT": (
         "VALID_SIGNAL blocked: calculated volume below broker volume_min"
     ),
+    "MIN_LOT_EXCEEDS_RISK_BUDGET": (
+        "VALID_SIGNAL blocked: broker minimum lot exceeds risk budget"
+    ),
     "SAFETY_BLOCKED": "Auto-trade safety gate blocked",
     "NO_SNAPSHOT": "No market snapshot",
     "NO_MARKET_CONTEXT": "No market context",
@@ -69,6 +72,7 @@ _REASON_PRIORITY: tuple[str, ...] = (
     "spread_too_wide",
     "below_min_lot",
     "MIN_LOT_CONSTRAINT",
+    "MIN_LOT_EXCEEDS_RISK_BUDGET",
     "mtf_not_aligned",
     "quality_below_threshold",
     "confidence_below_threshold",
@@ -291,11 +295,14 @@ def extract_cycle_diagnostics(
         low = s.lower()
         if (
             "min_lot_constraint" in low
+            or "min_lot_exceeds_risk_budget" in low
             or "below_min_lot" in low
             or "below broker min" in low
             or "below broker volume_min" in low
         ):
-            if "min_lot_constraint" in low or "volume_min" in low:
+            if "min_lot_exceeds_risk_budget" in low:
+                rejected_codes.append("MIN_LOT_EXCEEDS_RISK_BUDGET")
+            elif "min_lot_constraint" in low or "volume_min" in low:
                 rejected_codes.append("MIN_LOT_CONSTRAINT")
             else:
                 rejected_codes.append("below_min_lot")
@@ -395,13 +402,20 @@ def extract_cycle_diagnostics(
             "risk_pct": diag.get("risk_pct"),
             "raw_lots": diag.get("raw_lots"),
             "calculated_lots": diag.get("calculated_lots"),
-            "calculated_lot": diag.get("raw_lots") or diag.get("calculated_lots"),
+            "calculated_lot": diag.get("calculated_lot")
+            or diag.get("raw_lots")
+            or diag.get("calculated_lots"),
             "broker_min_lot": diag.get("broker_min_lot"),
             "broker_minimum": diag.get("broker_min_lot"),
+            "broker_lot_step": diag.get("broker_lot_step"),
+            "broker_max_lot": diag.get("broker_max_lot"),
+            "normalized_lot": diag.get("normalized_lot"),
+            "estimated_risk_amount": diag.get("estimated_risk_amount"),
             "account_balance": diag.get("equity") or diag.get("balance"),
             "risk_percentage": diag.get("risk_pct"),
             "approved_lots": diag.get("approved_lots"),
             "sizing_status": diag.get("sizing_status"),
+            "block_reason": diag.get("block_reason") or diag.get("rejection_reason"),
         },
         "atr": diag.get("atr"),
         "stop_distance": diag.get("stop_distance"),

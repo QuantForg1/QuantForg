@@ -686,59 +686,39 @@ def calculate_dynamic_lots_v2(
                     suggested = afford2
                     method_suffix += "+margin_usage_cap"
 
-    final = _quantize_lot(
-        suggested,
-        step=broker_step,
-        min_lot=broker_min,
-        max_lot=broker_max,
-    )
+    final_norm = None
+    try:
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            STATUS_EXCEEDS_BUDGET,
+            STATUS_NORMALIZED_TO_MIN,
+            normalize_lots_against_broker,
+        )
+
+        final_norm = normalize_lots_against_broker(
+            calculated_lot=suggested if suggested > 0 else raw,
+            min_lot=broker_min,
+            lot_step=broker_step,
+            max_lot=broker_max,
+            equity=equity,
+            stop_distance=dist,
+            contract_size=cs,
+            risk_budget=(
+                (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
+                if equity > 0 and base_risk > 0
+                else None
+            ),
+        )
+        final = final_norm.normalized_lot if final_norm.approved else Decimal("0")
+    except Exception:
+        final = _quantize_lot(
+            suggested,
+            step=broker_step,
+            min_lot=broker_min,
+            max_lot=broker_max,
+        )
 
     if final <= 0:
-        # Micro CONDITIONAL — same hard_max path as percentage-risk sizing.
-        try:
-            from app.domain.institutional_trading.micro_account_mode import (
-                MicroAccountProfile,
-            )
-
-            profile = MicroAccountProfile()
-            min_loss = (broker_min * cs * dist).quantize(Decimal("0.01"))
-            if equity > 0 and min_loss > 0 and equity <= Decimal("500"):
-                needed_pct = (min_loss / equity * Decimal("100")).quantize(
-                    Decimal("0.01")
-                )
-                if needed_pct <= profile.hard_max_risk_pct:
-                    return DynamicSizingDecision(
-                        valid=True,
-                        method=f"dynamic_v2_micro_conditional{method_suffix}",
-                        reason=(
-                            f"micro hard_max: min_lot risk {needed_pct}% "
-                            f"<= {profile.hard_max_risk_pct}% "
-                            f"(raw={raw})"
-                        ),
-                        balance=bal,
-                        equity=equity,
-                        free_margin=free_margin,
-                        suggested_lot=broker_min,
-                        calculated_lot=raw,
-                        final_lot=broker_min,
-                        stop_loss_distance=dist,
-                        risk_pct=needed_pct,
-                        configured_max_risk_pct=configured_max,
-                        quality_score=quality_score,
-                        quality_band=band,
-                        quality_risk_scale=q_scale,
-                        equity_tier=tier,
-                        broker_min_lot=broker_min,
-                        broker_lot_step=broker_step,
-                        broker_max_lot=broker_max,
-                        contract_size=cs,
-                        margin_required=None,
-                        margin_usage_pct=None,
-                        session_risk_multiplier=session_risk_multiplier,
-                        rejection_reason=None,
-                    )
-        except Exception:
-            pass
         detail = (
             "below_min_lot "
             f"calculated_lot={raw} suggested_lot={suggested} "
@@ -746,14 +726,37 @@ def calculate_dynamic_lots_v2(
             f"equity={equity} risk_percentage={base_risk} "
             f"quality_band={band} equity_tier={tier.tier_label}"
         )
+        if final_norm is not None and final_norm.block_reason:
+            if final_norm.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET:
+                detail = (
+                    f"{CODE_MIN_LOT_EXCEEDS_RISK_BUDGET}: min_lot {broker_min} "
+                    f"estimated_risk_amount={final_norm.estimated_risk_amount} "
+                    f"needed_pct={final_norm.needed_pct}% "
+                    f"> hard_max={final_norm.hard_max_risk_pct}% "
+                    f"(calculated_lot={raw})"
+                )
+            else:
+                detail = f"{final_norm.block_reason}: {detail}"
+        method = (
+            "min_lot_exceeds_risk_budget"
+            if final_norm is not None
+            and final_norm.sizing_status == STATUS_EXCEEDS_BUDGET
+            else "below_min_lot"
+        )
         return _reject(
-            "below_min_lot",
+            method,
             detail,
             calculated=raw,
             suggested=suggested,
             risk=base_risk,
             dist=dist,
         )
+
+    if (
+        final_norm is not None
+        and final_norm.sizing_status == STATUS_NORMALIZED_TO_MIN
+    ):
+        method_suffix += "+micro_conditional"
 
     # Recompute margin at final lot
     if mid_price is not None and mid_price > 0:

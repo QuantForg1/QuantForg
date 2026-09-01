@@ -204,6 +204,8 @@ def _block_code_from_reason(reason: str | None) -> str:
     low = str(reason or "").lower()
     if _is_min_lot_constraint(reason):
         upper = str(reason or "").upper()
+        if "MIN_LOT_EXCEEDS_RISK_BUDGET" in upper:
+            return "MIN_LOT_EXCEEDS_RISK_BUDGET"
         if "MIN_LOT_INFEASIBLE" in upper:
             return "MIN_LOT_INFEASIBLE"
         return "MIN_LOT_CONSTRAINT"
@@ -327,6 +329,8 @@ def _is_min_lot_constraint(text: str | None) -> bool:
             "below broker volume_min",
             "below broker minimum",
             "reduced size below min_lot",
+            "min_lot_exceeds_risk_budget",
+            "min lot exceeds",
             "below broker min",
         )
     )
@@ -353,9 +357,13 @@ def _execution_classification(
     if min_lot and (directional or strong_enough or reject):
         upper = str(reason or "").upper()
         lot_code = (
-            "MIN_LOT_INFEASIBLE"
-            if "MIN_LOT_INFEASIBLE" in upper
-            else "MIN_LOT_CONSTRAINT"
+            "MIN_LOT_EXCEEDS_RISK_BUDGET"
+            if "MIN_LOT_EXCEEDS_RISK_BUDGET" in upper
+            else (
+                "MIN_LOT_INFEASIBLE"
+                if "MIN_LOT_INFEASIBLE" in upper
+                else "MIN_LOT_CONSTRAINT"
+            )
         )
         return {
             "signal_state": "VALID_SIGNAL",
@@ -754,6 +762,7 @@ def _pipeline_snapshot(
         "OMS_BLOCK",
         "MIN_LOT_CONSTRAINT",
         "MIN_LOT_INFEASIBLE",
+        "MIN_LOT_EXCEEDS_RISK_BUDGET",
         "SYMBOL_ROUTING_BLOCK",
         "PORTFOLIO_BLOCK",
     }
@@ -802,7 +811,12 @@ def _pipeline_snapshot(
     safety_state = not_reached
     oms_state = not_reached
     if reached_risk:
-        if code in {"RISK_BLOCK", "MIN_LOT_CONSTRAINT", "MIN_LOT_INFEASIBLE"}:
+        if code in {
+            "RISK_BLOCK",
+            "MIN_LOT_CONSTRAINT",
+            "MIN_LOT_INFEASIBLE",
+            "MIN_LOT_EXCEEDS_RISK_BUDGET",
+        }:
             risk_state = "BLOCK"
         else:
             risk_state = "READY"
@@ -812,6 +826,7 @@ def _pipeline_snapshot(
             "RISK_BLOCK",
             "MIN_LOT_CONSTRAINT",
             "MIN_LOT_INFEASIBLE",
+            "MIN_LOT_EXCEEDS_RISK_BUDGET",
         }:
             safety_state = "READY"
         if code == "OMS_BLOCK":
@@ -1891,9 +1906,12 @@ def list_live_signals(
         row["asset_class"] = str(pref.get("asset_class") or "other")
         # Explicit empty-state for NO_TRADE so UI never looks "broken".
         # Preserve MIN_LOT_CONSTRAINT execution blocks (valid signal, blocked).
-        if row.get("block_code") == "MIN_LOT_CONSTRAINT":
+        if row.get("block_code") in {
+            "MIN_LOT_CONSTRAINT",
+            "MIN_LOT_EXCEEDS_RISK_BUDGET",
+        }:
             row.setdefault("decision", "EXECUTION_BLOCKED")
-            row.setdefault("status", "MIN_LOT_CONSTRAINT")
+            row.setdefault("status", str(row.get("block_code") or "MIN_LOT_CONSTRAINT"))
         elif not row.get("direction") or str(row.get("direction")).upper() in {
             "",
             "NONE",

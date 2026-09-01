@@ -241,7 +241,7 @@ class TestFailClosed:
         )
         assert d.valid is False
         assert d.final_lot == Decimal("0")
-        assert d.method == "below_min_lot"
+        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
 
     def test_insufficient_margin_cannot_force_size(self) -> None:
         d = _size(free_margin=Decimal("0.01"), mid_price=Decimal("2650"))

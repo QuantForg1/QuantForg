@@ -22,8 +22,15 @@ class LotSizingResult:
     # Structured fields for reject evidence (especially below_min_lot)
     calculated_lot: Decimal = Decimal("0")
     broker_min_lot: Decimal = Decimal("0")
+    broker_lot_step: Decimal = Decimal("0")
+    broker_max_lot: Decimal = Decimal("0")
     account_balance: Decimal = Decimal("0")
     risk_percentage: Decimal = Decimal("0")
+    normalized_lot: Decimal = Decimal("0")
+    estimated_risk_amount: Decimal = Decimal("0")
+    risk_budget: Decimal = Decimal("0")
+    sizing_status: str = ""
+    block_reason: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -36,11 +43,20 @@ class LotSizingResult:
             "calculated_lot": str(self.calculated_lot),
             "broker_min_lot": str(self.broker_min_lot),
             "broker_minimum": str(self.broker_min_lot),
+            "broker_lot_step": str(self.broker_lot_step),
+            "broker_max_lot": str(self.broker_max_lot),
             "account_balance": str(self.account_balance),
             "equity": str(self.account_balance),
             "risk_percentage": str(self.risk_percentage),
             "risk_pct": str(self.risk_percentage),
             "raw_lots": str(self.calculated_lot),
+            "normalized_lot": str(self.normalized_lot),
+            "estimated_risk_amount": str(
+                self.estimated_risk_amount or self.risk_amount
+            ),
+            "risk_budget": str(self.risk_budget or self.risk_amount),
+            "sizing_status": self.sizing_status,
+            "block_reason": self.block_reason,
         }
 
     def below_min_lot_detail(self) -> dict[str, str]:
@@ -55,14 +71,14 @@ class LotSizingResult:
 def _quantize_lot(
     raw: Decimal, *, step: Decimal, min_lot: Decimal, max_lot: Decimal
 ) -> Decimal:
-    if step <= 0:
-        step = Decimal("0.01")
+    if step <= 0 or min_lot <= 0 or max_lot <= 0:
+        return Decimal("0")
     steps = (raw / step).to_integral_value(rounding=ROUND_DOWN)
     lots = steps * step
     if lots < min_lot:
         return Decimal("0")
     if lots > max_lot:
-        return max_lot
+        lots = max_lot
     return lots.quantize(step)
 
 
@@ -204,76 +220,88 @@ def calculate_scalping_lots(
     risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
     # XAU: risk ≈ lots * contract_size * stop_distance
     raw = risk_amount / (cs * dist)
-    lots = _quantize_lot(
-        raw,
-        step=broker_step,
-        min_lot=broker_min,
-        max_lot=cfg.broker_max_lot,
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        STATUS_EXCEEDS_BUDGET,
+        STATUS_NORMALIZED_TO_MIN,
+        normalize_lots_against_broker,
     )
-    if lots <= 0:
-        # Micro CONDITIONAL: when institutional % risk cannot reach broker
-        # min_lot, approve min_lot only if dollar risk fits hard_max (never
-        # invent lots; never exceed micro hard ceiling). Live blocker: $181
-        # XAUUSD desk with ATR stops needed ~4% (<5% hard_max) but 0.5–1%
-        # risk produced raw_lots≈0.0025 → permanent NO_TRADE after AI SELL.
-        try:
-            from app.domain.institutional_trading.micro_account_mode import (
-                MicroAccountProfile,
-            )
 
-            profile = MicroAccountProfile()
-            min_loss = (broker_min * cs * dist).quantize(Decimal("0.01"))
-            if equity > 0 and min_loss > 0 and equity <= Decimal("500"):
-                needed_pct = (min_loss / equity * Decimal("100")).quantize(
-                    Decimal("0.01")
-                )
-                if needed_pct <= profile.hard_max_risk_pct:
-                    return LotSizingResult(
-                        lots=broker_min,
-                        risk_amount=min_loss,
-                        stop_distance=dist,
-                        method="micro_conditional_min_lot",
-                        reason=(
-                            f"micro hard_max: min_lot risk {needed_pct}% "
-                            f"<= {profile.hard_max_risk_pct}% "
-                            f"(institutional raw={raw})"
-                        ),
-                        valid=True,
-                        calculated_lot=raw,
-                        broker_min_lot=broker_min,
-                        account_balance=equity,
-                        risk_percentage=needed_pct,
-                    )
-        except Exception:
-            pass
-        detail = (
-            f"below_min_lot calculated_lot={raw} broker_minimum={broker_min} "
-            f"account_balance={equity} risk_percentage={base_risk}"
+    broker_max = cfg.broker_max_lot
+    norm = normalize_lots_against_broker(
+        calculated_lot=raw,
+        min_lot=broker_min,
+        lot_step=broker_step,
+        max_lot=broker_max,
+        equity=equity,
+        stop_distance=dist,
+        contract_size=cs,
+        risk_budget=risk_amount,
+    )
+    if not norm.approved:
+        method = (
+            "min_lot_exceeds_risk_budget"
+            if norm.sizing_status == STATUS_EXCEEDS_BUDGET
+            else "below_min_lot"
         )
+        detail = (
+            f"{norm.block_reason or method} calculated_lot={raw} "
+            f"broker_minimum={broker_min} broker_lot_step={broker_step} "
+            f"account_balance={equity} risk_percentage={base_risk} "
+            f"estimated_risk_amount={norm.estimated_risk_amount} "
+            f"risk_budget={risk_amount}"
+        )
+        if norm.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET:
+            detail = (
+                f"{CODE_MIN_LOT_EXCEEDS_RISK_BUDGET}: min_lot {broker_min} "
+                f"estimated_risk_amount={norm.estimated_risk_amount} exceeds "
+                f"hard_max={norm.hard_max_risk_pct}% "
+                f"(calculated_lot={raw} risk_budget={risk_amount})"
+            )
         return LotSizingResult(
             lots=Decimal("0"),
-            risk_amount=risk_amount,
+            risk_amount=norm.estimated_risk_amount or risk_amount,
             stop_distance=dist,
-            method="below_min_lot",
+            method=method,
             reason=detail,
             valid=False,
             calculated_lot=raw,
             broker_min_lot=broker_min,
+            broker_lot_step=broker_step,
+            broker_max_lot=broker_max,
             account_balance=equity,
             risk_percentage=base_risk,
+            normalized_lot=norm.normalized_lot,
+            estimated_risk_amount=norm.estimated_risk_amount,
+            risk_budget=risk_amount,
+            sizing_status=norm.sizing_status,
+            block_reason=norm.block_reason,
         )
+    method = f"percentage_risk{method_suffix}"
+    risk_pct_out = base_risk
+    if norm.sizing_status == STATUS_NORMALIZED_TO_MIN:
+        method = "micro_conditional_min_lot"
+        risk_pct_out = norm.needed_pct or base_risk
     return LotSizingResult(
-        lots=lots,
-        risk_amount=risk_amount,
+        lots=norm.normalized_lot,
+        risk_amount=norm.estimated_risk_amount or risk_amount,
         stop_distance=dist,
-        method=f"percentage_risk{method_suffix}",
+        method=method,
         reason=(
             f"risk={base_risk}% equity={equity} stop={dist} "
-            f"→ lots={lots} (min={broker_min} step={broker_step})"
+            f"→ lots={norm.normalized_lot} (min={broker_min} step={broker_step} "
+            f"status={norm.sizing_status})"
         ),
         valid=True,
         calculated_lot=raw,
         broker_min_lot=broker_min,
+        broker_lot_step=broker_step,
+        broker_max_lot=broker_max,
         account_balance=equity,
-        risk_percentage=base_risk,
+        risk_percentage=risk_pct_out,
+        normalized_lot=norm.normalized_lot,
+        estimated_risk_amount=norm.estimated_risk_amount,
+        risk_budget=risk_amount,
+        sizing_status=norm.sizing_status,
+        block_reason=None,
     )
