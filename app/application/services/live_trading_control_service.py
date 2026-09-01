@@ -68,7 +68,10 @@ def hydrate_live_trading_from_ops_state(
 ) -> LiveTradingState:
     ctrl = get_live_trading_controller()
     recovered = ctrl.hydrate(state or {})
-    if ctrl.recovered_from_enabled or recovered != "ENABLED":
+    # Runtime is fail-closed (PAUSED) after restart from ENABLED, but the
+    # durable authorization must remain ENABLED so safe recovery can resume.
+    # Persisting restart-PAUSED made the next hydrate look like an operator pause.
+    if recovered != "ENABLED" and not ctrl.recovered_from_enabled:
         persist_live_trading(ctrl)
     return recovered
 
@@ -560,17 +563,34 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
         )
     state = ctrl.snapshot_state()
     ready = _activation_ready(facts)
+    blockers = activation_probe_failures(facts)
     emergency = bool(ctrl.emergency_latched) or state == "KILLED"
+    can_activate = ready and state in {"DISABLED", "ARMED", "PAUSED"}
     display = public_state_name(
-        state, activation_ready=ready and state == "DISABLED", emergency=emergency
+        state,
+        activation_ready=can_activate and state == "DISABLED",
+        emergency=emergency,
     )
+    pause_reason = None
+    if state == "PAUSED":
+        if ctrl.recovered_from_enabled:
+            pause_reason = "restart_recovery"
+        elif ctrl.paused_for_safety:
+            pause_reason = "safety_pause"
+        else:
+            pause_reason = "operator"
     last_fill = ctrl.fills[-1].to_dict() if ctrl.fills else None
     last_rej = ctrl.rejections[-1] if ctrl.rejections else None
     return strip_secrets(
         {
             "live_trading_state": state,
             "display_state": display,
-            "activation_ready": ready and state == "DISABLED",
+            "activation_ready": can_activate,
+            "activation_blockers": blockers,
+            "activation_blocker": blockers[0] if blockers else None,
+            "pause_reason": pause_reason,
+            "recovered_from_enabled": bool(ctrl.recovered_from_enabled),
+            "paused_for_safety": bool(ctrl.paused_for_safety),
             "research_can_execute": ctrl.research_can_execute(),
             "allow_live_promotion": False,
             "kill_switch": emergency,
@@ -852,20 +872,79 @@ def update_live_risk(
     return build_live_trading_status()
 
 
-def apply_fail_closed_from_probes() -> LiveTradingState:
-    """When ENABLED, pause if gateway/MT5/ownership becomes uncertain."""
+def apply_fail_closed_from_probes(
+    *,
+    gateway_online: bool | None = None,
+    mt5_connected: bool | None = None,
+    mt5_attached: bool | None = None,
+    ownership: str | None = None,
+) -> LiveTradingState:
+    """When ENABLED, pause if gateway/MT5/ownership becomes uncertain.
+
+    Does not persist PAUSED over durable ENABLED. Runtime stays fail-closed
+    until resume_live_trading_after_safe_recovery() re-enables.
+    Callers may pass this cycle's ITE facts so a failed status probe cannot
+    clobber a connected execution cycle.
+    """
     ctrl = get_live_trading_controller()
     if not orders_may_submit(ctrl.snapshot_state()):
         return ctrl.snapshot_state()
-    facts = _live_probe_facts(enrich_account=False)
-    if not facts.get("gateway_online"):
+    if (
+        gateway_online is None
+        and mt5_connected is None
+        and mt5_attached is None
+        and ownership is None
+    ):
+        facts = _live_probe_facts(enrich_account=False)
+        gateway_online = bool(facts.get("gateway_online"))
+        mt5_connected = bool(facts.get("mt5_connected"))
+        mt5_attached = bool(facts.get("mt5_attached"))
+        ownership = str(facts.get("ownership") or "")
+    if gateway_online is False:
         return ctrl.safety_pause(reason="gateway_offline")
-    if not facts.get("mt5_connected"):
+    if mt5_connected is False:
         return ctrl.safety_pause(reason="mt5_disconnected")
-    if facts.get("ownership") != "OWNED":
+    if mt5_attached is False:
+        return ctrl.safety_pause(reason="mt5_not_attached")
+    if ownership is not None and ownership != "OWNED":
         return ctrl.safety_pause(reason="broker_ownership_uncertain")
-    persist_live_trading(ctrl)
     return ctrl.snapshot_state()
+
+
+def resume_live_trading_after_safe_recovery() -> LiveTradingState:
+    """Re-ENABLE after restart or safety pause when activation probes pass.
+
+    Never resumes an operator-initiated PAUSE. Never skips probes. Prior
+    owner ENABLE remains the authorization; this is not a new enable path.
+    """
+    ctrl = get_live_trading_controller()
+    if ctrl.snapshot_state() != "PAUSED":
+        return ctrl.snapshot_state()
+    if not (ctrl.recovered_from_enabled or ctrl.paused_for_safety):
+        return ctrl.snapshot_state()
+    facts = _live_probe_facts(enrich_account=True)
+    failures = activation_probe_failures(facts)
+    if failures:
+        logger.info("live_trading_safe_recovery_blocked", failures=failures)
+        return ctrl.snapshot_state()
+    try:
+        recovered = ctrl.resume_after_safe_recovery()
+    except LiveTradingTransitionError as exc:
+        logger.warning("live_trading_safe_recovery_transition_failed", error=str(exc))
+        return ctrl.snapshot_state()
+    try:
+        from app.domain.institutional_trading.operations.control_plane import (
+            get_control_plane,
+        )
+
+        plane = get_control_plane()
+        if str(getattr(plane, "auto_trading_run_state", "")) != "running":
+            plane.auto_trading_run_state = "running"
+            plane.auto_trading_enabled = True
+    except Exception as exc:
+        logger.warning("live_trading_resume_auto_trade_sync_failed", error=str(exc))
+    persist_live_trading(ctrl)
+    return recovered
 
 
 def evaluate_live_order_request(req: LiveOrderRequest) -> dict[str, Any]:

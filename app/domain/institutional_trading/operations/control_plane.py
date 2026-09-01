@@ -746,6 +746,25 @@ class OperationsControlPlane:
 
     def evaluate_auto_trading(self, facts: AutoTradeLiveFacts) -> AutoTradeSafetyResult:
         """Evaluate whether auto-submit is allowed. Fail-closed."""
+        try:
+            from app.application.services.live_trading_control_service import (
+                apply_fail_closed_from_probes,
+                resume_live_trading_after_safe_recovery,
+            )
+
+            resume_live_trading_after_safe_recovery()
+            apply_fail_closed_from_probes(
+                gateway_online=bool(facts.gateway_connected),
+                mt5_connected=bool(facts.broker_connected),
+                mt5_attached=bool(facts.broker_connected or facts.gateway_connected),
+            )
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "live_trading_cycle_guard_failed",
+                error=str(exc),
+            )
         with self._lock:
             state = normalize_run_state(
                 self.auto_trading_run_state,
@@ -797,20 +816,7 @@ class OperationsControlPlane:
                 status_snapshot=facts.status_snapshot,
                 live_trading_state=_live_trading_state_or_unset(),
             )
-        result = evaluate_auto_trade_safety(policy, merged)
-        try:
-            from app.domain.institutional_trading.live_trading_control import (
-                get_live_trading_controller,
-            )
-
-            ctrl = get_live_trading_controller()
-            if ctrl.snapshot_state() == "ENABLED" and (
-                not merged.gateway_connected or not merged.broker_connected
-            ):
-                ctrl.safety_pause(reason="gateway_or_mt5_disconnected")
-        except Exception:
-            pass
-        return result
+        return evaluate_auto_trade_safety(policy, merged)
 
     def emergency_stop(
         self,

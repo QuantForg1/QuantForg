@@ -60,6 +60,23 @@ def _ux_state(
     return "ROBOT_READY"
 
 
+def _live_trading_session_fields() -> dict[str, Any]:
+    """Backend live-trading controller is authoritative for order submission."""
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+            orders_may_submit,
+        )
+
+        state = get_live_trading_controller().snapshot_state()
+        return {
+            "live_trading_state": state,
+            "orders_may_submit": orders_may_submit(state),
+        }
+    except Exception:
+        return {"live_trading_state": "UNAVAILABLE", "orders_may_submit": False}
+
+
 def _robot_status(
     *,
     owned: bool,
@@ -288,6 +305,7 @@ class GetTradingSessionUseCase:
             robot_status=ctx.robot_status,
             session_code=session_code,
         )
+        lt_fields = _live_trading_session_fields()
         return {
             "broker": "Connected" if ctx.connected else "Disconnected",
             "account": ctx.broker_account_id or "—",
@@ -301,7 +319,17 @@ class GetTradingSessionUseCase:
                 else "Degraded"
             ),
             "robot": ctx.robot_status,
-            "trading": "Enabled" if ctx.trading_enabled else "Disabled",
+            "trading": (
+                "Enabled"
+                if ctx.trading_enabled and lt_fields["orders_may_submit"]
+                else "Disabled"
+            ),
+            "live_trading_state": lt_fields["live_trading_state"],
+            "orders_may_submit": bool(
+                lt_fields["orders_may_submit"]
+                and ctx.execution_permitted
+                and session_code != ACCOUNT_SESSION_MISMATCH
+            ),
             "connection_status": ctx.connection_status,
             "execution_permitted": ctx.execution_permitted
             and session_code != ACCOUNT_SESSION_MISMATCH,

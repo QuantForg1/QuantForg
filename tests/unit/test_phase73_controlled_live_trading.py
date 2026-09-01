@@ -245,6 +245,197 @@ def test_restart_recovery_never_auto_enables() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
+def test_restart_hydrate_does_not_persist_paused_over_enabled() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        hydrate_live_trading_from_ops_state,
+    )
+
+    reset_live_trading_controller_for_tests()
+    with patch(
+        "app.application.services.live_trading_control_service.persist_live_trading"
+    ) as persist:
+        recovered = hydrate_live_trading_from_ops_state(
+            {"live_trading_state": "ENABLED"}
+        )
+    assert recovered == "PAUSED"
+    persist.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_restart_hydrate_persists_when_dropping_incomplete_arm() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        hydrate_live_trading_from_ops_state,
+    )
+
+    reset_live_trading_controller_for_tests()
+    with patch(
+        "app.application.services.live_trading_control_service.persist_live_trading"
+    ) as persist:
+        recovered = hydrate_live_trading_from_ops_state({"live_trading_state": "ARMED"})
+    assert recovered == "DISABLED"
+    persist.assert_called_once()
+
+
+_PASS_PROBE_FACTS = {
+    "gateway_online": True,
+    "mt5_connected": True,
+    "mt5_attached": True,
+    "ownership": "OWNED",
+    "account_available": True,
+    "equity": Decimal("33.12"),
+    "balance": Decimal("33.12"),
+}
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_safe_recovery_resumes_only_when_probes_pass() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        resume_live_trading_after_safe_recovery,
+    )
+
+    ctrl = reset_live_trading_controller_for_tests()
+    recovered = ctrl.hydrate({"live_trading_state": "ENABLED"})
+    assert recovered == "PAUSED"
+    assert ctrl.research_can_execute() is False
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value={
+            "gateway_online": False,
+            "mt5_connected": False,
+            "mt5_attached": False,
+            "ownership": "NOT_OWNED",
+            "account_available": False,
+        },
+    ), patch(
+        "app.application.services.live_trading_control_service.persist_live_trading",
+        return_value=True,
+    ):
+        assert resume_live_trading_after_safe_recovery() == "PAUSED"
+        assert ctrl.research_can_execute() is False
+        assert ctrl.recovered_from_enabled is True
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value=_PASS_PROBE_FACTS,
+    ), patch(
+        "app.application.services.live_trading_control_service.persist_live_trading",
+        return_value=True,
+    ), patch(
+        "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+    ):
+        assert resume_live_trading_after_safe_recovery() == "ENABLED"
+    assert ctrl.research_can_execute() is True
+    assert ctrl.recovered_from_enabled is False
+    assert ctrl.paused_for_safety is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_operator_pause_does_not_auto_resume() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        resume_live_trading_after_safe_recovery,
+    )
+
+    ctrl = reset_live_trading_controller_for_tests()
+    op = _op("owner")
+    ctrl.transition(op, "ARMED", confirmed=True, reason="arm")
+    ctrl.transition(op, "ENABLED", confirmed=True, reason="enable")
+    assert ctrl.transition(op, "PAUSED", confirmed=True, reason="operator") == "PAUSED"
+    assert ctrl.recovered_from_enabled is False
+    assert ctrl.paused_for_safety is False
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value=_PASS_PROBE_FACTS,
+    ), patch(
+        "app.application.services.live_trading_control_service.persist_live_trading",
+        return_value=True,
+    ), patch(
+        "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+    ):
+        assert resume_live_trading_after_safe_recovery() == "PAUSED"
+    assert ctrl.research_can_execute() is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_safety_pause_resumes_when_probes_pass() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        apply_fail_closed_from_probes,
+        resume_live_trading_after_safe_recovery,
+    )
+
+    ctrl = reset_live_trading_controller_for_tests()
+    op = _op("owner")
+    ctrl.transition(op, "ARMED", confirmed=True, reason="arm")
+    ctrl.transition(op, "ENABLED", confirmed=True, reason="enable")
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value={
+            "gateway_online": False,
+            "mt5_connected": False,
+            "mt5_attached": False,
+            "ownership": "NOT_OWNED",
+        },
+    ):
+        assert apply_fail_closed_from_probes() == "PAUSED"
+    assert ctrl.paused_for_safety is True
+    assert ctrl.research_can_execute() is False
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value=_PASS_PROBE_FACTS,
+    ), patch(
+        "app.application.services.live_trading_control_service.persist_live_trading",
+        return_value=True,
+    ), patch(
+        "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+    ):
+        assert resume_live_trading_after_safe_recovery() == "ENABLED"
+    assert ctrl.research_can_execute() is True
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_status_reports_activation_blockers() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        build_live_trading_status,
+    )
+
+    ctrl = reset_live_trading_controller_for_tests()
+    ctrl.hydrate({"live_trading_state": "ENABLED"})
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value={
+            "gateway_online": False,
+            "mt5_connected": False,
+            "mt5_attached": False,
+            "ownership": "NOT_OWNED",
+            "account_available": False,
+        },
+    ):
+        status = build_live_trading_status()
+    assert status["live_trading_state"] == "PAUSED"
+    assert status["orders_may_submit"] is False
+    assert status["pause_reason"] == "restart_recovery"
+    assert "gateway_offline" in status["activation_blockers"]
+    assert status["activation_ready"] is False
+    assert status["allow_live_promotion"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
 def test_risk_ceiling_cannot_bypass() -> None:
     cfg = LiveTradingRiskConfig(
         risk_per_trade_pct=Decimal("50"),

@@ -1089,6 +1089,7 @@ class LiveTradingController:
     kill_reason: str | None = None
     emergency_latched: bool = False
     recovered_from_enabled: bool = False
+    paused_for_safety: bool = False
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def snapshot_state(self) -> LiveTradingState:
@@ -1127,6 +1128,8 @@ class LiveTradingController:
                 normalize_state(data.get("live_trading_state")) == "ENABLED"
                 and recovered == "PAUSED"
             )
+            # Restart-PAUSE is safety recovery, not an operator pause.
+            self.paused_for_safety = self.recovered_from_enabled
             persisted_killed = (
                 normalize_state(data.get("live_trading_state")) == "KILLED"
             )
@@ -1227,16 +1230,26 @@ class LiveTradingController:
                 self.armed_at = moment
             if wanted == "ENABLED":
                 self.enabled_at = moment
+                self.recovered_from_enabled = False
+                self.paused_for_safety = False
+            if wanted == "PAUSED":
+                # Operator pause must not auto-resume after probes recover.
+                self.recovered_from_enabled = False
+                self.paused_for_safety = False
             if wanted == "DISABLED":
                 self.armed_at = None
                 self.enabled_at = None
                 self.kill_reason = None
                 self.emergency_latched = False
                 self.paused_symbols.clear()
+                self.recovered_from_enabled = False
+                self.paused_for_safety = False
             if wanted == "KILLED":
                 self.enabled_at = None
                 self.kill_reason = reason or "kill_switch"
                 self.emergency_latched = True
+                self.recovered_from_enabled = False
+                self.paused_for_safety = False
             self._record_locked(
                 operator=operator,
                 action=f"transition_{current}_{wanted}".lower(),
@@ -1267,6 +1280,8 @@ class LiveTradingController:
             self.kill_reason = reason or "emergency_stop"
             self.emergency_latched = True
             self.paused_symbols.clear()
+            self.recovered_from_enabled = False
+            self.paused_for_safety = False
             self._record_locked(
                 operator=operator,
                 action="emergency_stop",
@@ -1287,6 +1302,7 @@ class LiveTradingController:
                 return self.state
             before = self.state
             self.state = "PAUSED"
+            self.paused_for_safety = True
             self._record_locked(
                 operator=_system_operator("safety"),
                 action="safety_pause",
@@ -1295,6 +1311,22 @@ class LiveTradingController:
                 reason=reason,
             )
             return self.state
+
+    def resume_after_safe_recovery(
+        self, *, reason: str = "resume_after_safe_recovery"
+    ) -> LiveTradingState:
+        """PAUSED → ENABLED only after restart/safety pause. Not operator pause."""
+        with self._lock:
+            if self.state != "PAUSED":
+                return self.state
+            if not (self.recovered_from_enabled or self.paused_for_safety):
+                return self.state
+        return self.transition(
+            _system_operator("safe_recovery"),
+            "ENABLED",
+            confirmed=True,
+            reason=reason,
+        )
 
     def remember_signal(self, signal_id: str, *, now: datetime | None = None) -> None:
         sid = str(signal_id or "").strip()

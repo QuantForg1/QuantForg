@@ -39,6 +39,23 @@ function connTone(ok: boolean): "success" | "danger" {
   return ok ? "success" : "danger";
 }
 
+const BLOCKER_LABELS: Record<string, string> = {
+  gateway_offline: "Gateway is offline.",
+  mt5_disconnected: "MT5 is disconnected.",
+  mt5_not_attached: "MT5 is not attached.",
+  broker_ownership_failure: "Broker account is not owned by this operator.",
+  account_unavailable: "Broker account details are unavailable.",
+  equity_unavailable: "Account equity is unavailable or not positive.",
+  balance_unavailable: "Account balance is unavailable or not positive.",
+  restart_recovery: "Restart recovery — waiting for broker, MT5, and account probes.",
+  safety_pause: "Safety pause — waiting for gateway, MT5, or ownership to recover.",
+  operator: "Operator paused live trading. Resume requires ENABLE confirmation.",
+};
+
+function blockerCopy(code: string): string {
+  return BLOCKER_LABELS[code] || code;
+}
+
 export function LiveTradingControlPanel() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -222,8 +239,8 @@ export function LiveTradingControlPanel() {
               label="OMS"
               value={
                 gates.some((g) => str(g.key) === "oms_healthy" && g.passed === true)
-                  ? "READY"
-                  : "NOT READY"
+                  ? "HEALTHY"
+                  : "NOT HEALTHY"
               }
               ok={gates.some((g) => str(g.key) === "oms_healthy" && g.passed === true)}
             />
@@ -237,7 +254,31 @@ export function LiveTradingControlPanel() {
               value={d.kill_switch ? "LATCHED" : "READY"}
               ok={!Boolean(d.kill_switch)}
             />
+            <StatusTile
+              label="Orders may submit"
+              value={d.orders_may_submit ? "TRUE" : "FALSE"}
+              ok={Boolean(d.orders_may_submit)}
+            />
           </div>
+          {!liveConfirmed ? (
+            <div className="rounded-[var(--radius-sm)] border border-[var(--warning)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--fg)]">
+              <p className="font-medium text-[var(--warning)]">Activation blocker</p>
+              {str(d.pause_reason, "") ? (
+                <p>{blockerCopy(str(d.pause_reason))}</p>
+              ) : null}
+              {asList(d.activation_blockers).length > 0 ? (
+                <ul className="mt-1 list-disc pl-4">
+                  {asList(d.activation_blockers).map((item) => (
+                    <li key={String(item)}>{blockerCopy(String(item))}</li>
+                  ))}
+                </ul>
+              ) : str(d.activation_blocker, "") ? (
+                <p>{blockerCopy(str(d.activation_blocker))}</p>
+              ) : str(d.pause_reason, "") ? null : (
+                <p>Live trading is not ENABLED. ARM and ENABLE remain required.</p>
+              )}
+            </div>
+          ) : null}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Balance" value={str(account.balance, "—")} />
             <Metric label="Equity" value={str(account.equity, "—")} />
