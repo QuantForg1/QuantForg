@@ -28,7 +28,8 @@ from app.domain.institutional_trading.ai_scalping.sizing import (
 from app.domain.institutional_trading.config import (
     MAX_DAILY_LOSS_PCT,
     MAX_TOTAL_PLANNED_RISK_USD,
-    TARGET_RISK_PER_TRADE_USD,
+    MIN_PLANNED_RISK_USD,
+    TARGET_PLANNED_RISK_USD,
 )
 from app.domain.trading.xauusd_specs import (
     CONTRACT_SIZE,
@@ -633,20 +634,30 @@ def calculate_dynamic_lots_v2(
         if target_risk_usd is not None and target_risk_usd > 0
         else Decimal(
             str(
-                getattr(cfg, "target_risk_per_trade_usd", TARGET_RISK_PER_TRADE_USD)
-                or TARGET_RISK_PER_TRADE_USD
+                getattr(cfg, "target_risk_per_trade_usd", TARGET_PLANNED_RISK_USD)
+                or TARGET_PLANNED_RISK_USD
             )
         )
     )
     usd_budget = resolve_target_risk_budget_usd(
         equity=equity, target_usd=usd_target
     )
-    # Quality / session / adaptive / vol already folded into base_risk vs
-    # configured_max. Apply the same reduce-only scale to the dollar target.
-    if configured_max > 0 and base_risk < configured_max:
-        usd_budget = (usd_budget * base_risk / configured_max).quantize(
-            Decimal("0.01")
+    min_floor = Decimal(
+        str(
+            getattr(cfg, "min_planned_risk_usd", MIN_PLANNED_RISK_USD)
+            or MIN_PLANNED_RISK_USD
         )
+    )
+    quality_reduced = False
+    # Quality / session / adaptive / vol already folded into base_risk vs
+    # configured_max. Apply the same reduce-only scale to the dollar target,
+    # but never silently collapse a live setup below the min planned floor.
+    if configured_max > 0 and base_risk < configured_max:
+        scaled = (usd_budget * base_risk / configured_max).quantize(Decimal("0.01"))
+        quality_reduced = scaled < usd_budget
+        usd_budget = scaled
+        if usd_budget > 0 and min_floor > 0 and usd_budget < min_floor:
+            usd_budget = min_floor
     if usd_budget <= 0:
         return _reject(
             "invalid_inputs",
@@ -675,18 +686,28 @@ def calculate_dynamic_lots_v2(
         if open_planned_risk_usd is not None and open_planned_risk_usd > 0
         else Decimal("0")
     )
-    if agg_cap > 0 and open_usd + usd_budget > agg_cap:
-        remaining = agg_cap - open_usd
-        if remaining <= 0:
-            return _reject(
-                "aggregate_planned_risk",
-                (
-                    f"Aggregate planned SL risk {open_usd} at cap {agg_cap} "
-                    f"(proposed={usd_budget})"
-                ),
-                risk=base_risk,
-                dist=dist,
-            )
+    remaining = agg_cap - open_usd if agg_cap > 0 else usd_budget
+    if remaining <= 0:
+        return _reject(
+            "aggregate_planned_risk",
+            (
+                f"Aggregate planned SL risk {open_usd} at cap {agg_cap} "
+                f"(proposed={usd_budget})"
+            ),
+            risk=base_risk,
+            dist=dist,
+        )
+    if remaining < min_floor:
+        return _reject(
+            "aggregate_planned_risk",
+            (
+                f"Remaining portfolio SL risk {remaining} below min planned "
+                f"{min_floor} (open={open_usd} cap={agg_cap})"
+            ),
+            risk=base_risk,
+            dist=dist,
+        )
+    if usd_budget > remaining:
         usd_budget = remaining
 
     per_lot = lot_dollar_risk(
@@ -706,36 +727,47 @@ def calculate_dynamic_lots_v2(
     risk_amount = usd_budget
     raw = risk_amount / per_lot
 
-    # Equity-tier soft target: high/exceptional may approach preferred_hi,
-    # but NEVER above risk-based raw and NEVER force up to preferred_lo.
+    # Dollar target is primary. Equity-tier preferred_hi may cap oversized
+    # lots only when the cap still clears the min planned SL floor.
     suggested = raw
     if band in {"high", "exceptional"} and raw > 0:
-        # Blend toward preferred mid only when raw already supports growth
         pref_mid = (tier.preferred_lot_lo + tier.preferred_lot_hi) / Decimal("2")
         if raw >= tier.preferred_lot_lo:
-            # Cap at preferred_hi to avoid abrupt oversizing vs equity tier
-            suggested = min(raw, tier.preferred_lot_hi)
-            method_suffix += "+equity_tier_cap"
+            capped = min(raw, tier.preferred_lot_hi)
+            if capped < raw and (capped * per_lot) > min_floor:
+                suggested = capped
+                method_suffix += "+equity_tier_cap"
+            else:
+                suggested = raw
+                method_suffix += "+equity_tier_keep_target"
         elif raw >= pref_mid * Decimal("0.5"):
-            # Gradual approach — keep risk-based raw (no upsize)
             suggested = raw
             method_suffix += "+equity_tier_grow"
     else:
-        # Average setups: stay strictly at risk-based, also respect preferred_hi
-        suggested = min(raw, tier.preferred_lot_hi)
-        method_suffix += "+avg_tier_cap"
+        capped = min(raw, tier.preferred_lot_hi)
+        if capped < raw and (capped * per_lot) > min_floor:
+            suggested = capped
+            method_suffix += "+avg_tier_cap"
+        else:
+            suggested = raw
+            method_suffix += "+avg_keep_target"
 
-    # Smooth growth vs previous lot
+    # Smooth growth vs previous lot — never lock a prior 0.01 when the
+    # dollar target requires a larger broker-valid volume.
     growth_step = (
         lot_growth_max_step_pct
         if lot_growth_max_step_pct is not None
         else getattr(cfg, "lot_growth_max_step_pct", Decimal("0.35"))
     )
-    suggested = _dampen_lot_growth(
+    damped = _dampen_lot_growth(
         candidate=suggested,
         previous_lot=previous_final_lot,
         max_step_pct=growth_step,
     )
+    if damped < suggested and (damped * per_lot) <= min_floor:
+        method_suffix += "+skip_growth_dampen"
+    else:
+        suggested = damped
 
     # Broker max cap
     suggested = min(suggested, broker_max)
@@ -797,6 +829,9 @@ def calculate_dynamic_lots_v2(
             risk_budget=risk_amount,
             tick_size=tick_size,
             tick_value=tick_value,
+            remaining_portfolio_risk=remaining,
+            min_planned_risk=min_floor,
+            allow_below_min_planned=quality_reduced and usd_budget < min_floor,
         )
         final = final_norm.normalized_lot if final_norm.approved else Decimal("0")
     except Exception:
@@ -906,15 +941,23 @@ def calculate_dynamic_lots_v2(
             "consecutive_losses": int(consecutive_losses or 0),
             "consecutive_wins": int(consecutive_wins or 0),
             "target_risk_usd": str(usd_target),
+            "min_planned_risk_usd": str(min_floor),
             "calculated_volume": str(raw),
             "normalized_volume": str(final),
+            "selected_volume": str(final),
             "actual_estimated_risk": str(
+                final_norm.estimated_risk_amount
+                if final_norm is not None
+                else (final * per_lot).quantize(Decimal("0.01"))
+            ),
+            "final_planned_sl_loss": str(
                 final_norm.estimated_risk_amount
                 if final_norm is not None
                 else (final * per_lot).quantize(Decimal("0.01"))
             ),
             "aggregate_open_planned_risk": str(open_usd),
             "aggregate_risk_cap": str(agg_cap),
+            "remaining_portfolio_risk": str(remaining),
         },
     )
     if log:

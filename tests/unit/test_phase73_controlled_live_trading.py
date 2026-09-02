@@ -466,7 +466,14 @@ def test_account_too_small_for_min_lot() -> None:
     assert result.accepted is False
     assert result.reason == ACCOUNT_TOO_SMALL
     decision = evaluate_live_order(
-        _req(spec=spec), state="ENABLED", cfg=LiveTradingRiskConfig()
+        _req(
+            spec=spec,
+            entry=Decimal("1.10000"),
+            stop_loss=Decimal("1.09000"),
+            take_profit=Decimal("1.12000"),
+        ),
+        state="ENABLED",
+        cfg=LiveTradingRiskConfig(),
     )
     assert decision.allowed is False
     assert ACCOUNT_TOO_SMALL in decision.reasons or any(
@@ -495,9 +502,10 @@ def test_size_uses_broker_specs_not_generic_lot() -> None:
         stop_distance=Decimal("5"),
         spec=spec,
     )
-    # 0.50% of $33 = $0.165; loss/lot = 5 * 100 = $500; min lot 0.01 = $5 > budget
-    assert sized.accepted is False
-    assert sized.reason == ACCOUNT_TOO_SMALL
+    # Min 0.01 at $5 SL = $5 (<= $6 floor) → 0.02 = $10, fits remaining $30.
+    assert sized.accepted is True
+    assert sized.volume == Decimal("0.02")
+    assert sized.monetary_loss_at_sl == Decimal("10.00")
 
 
 @pytest.mark.unit
@@ -879,17 +887,18 @@ def test_safe_size_accepted_when_min_lot_fits_risk() -> None:
     )
     assert sized.accepted is True
     assert sized.volume >= Decimal("0.01")
+    assert sized.monetary_loss_at_sl > Decimal("6.00")
     decision = evaluate_live_order(
         _req(
             spec=spec,
-            stop_loss=Decimal("1.09900"),
+            stop_loss=Decimal("1.00000"),
             entry=Decimal("1.10000"),
-            take_profit=Decimal("1.10200"),
+            take_profit=Decimal("1.30000"),
         ),
         state="ENABLED",
         cfg=LiveTradingRiskConfig(),
     )
-    # 0.001 stop * contract 10 = 0.01/lot; min lot is inside $0.165.
+    # 0.10 stop * contract 10 = $1/lot; size to planned risk > $6.
     assert decision.allowed is True
 
 

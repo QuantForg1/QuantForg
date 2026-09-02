@@ -16,9 +16,12 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 # It is a maximum, not a target. Boundary: pct > cap blocks; pct == cap does not.
 MAX_DAILY_LOSS_PCT = Decimal("80.0")
 
-# Planned SL-loss targets (not margin). Size from broker tick value / stop
-# distance so ~$6 is lost if SL hits. Aggregate is a ceiling, not a fill quota.
-TARGET_RISK_PER_TRADE_USD = Decimal("6.00")
+# Planned SL-loss (not margin). Accepted normal trades must be STRICTLY above
+# MIN. TARGET is the single sizing budget. Aggregate is a hard ceiling, not a
+# fill quota — capacity is floor(ceiling / actual sized risk), not "five trades".
+MIN_PLANNED_RISK_USD = Decimal("6.00")
+TARGET_PLANNED_RISK_USD = Decimal("7.00")
+TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
 MAX_TOTAL_PLANNED_RISK_USD = Decimal("30.00")
 
 
@@ -53,7 +56,8 @@ class ITEConfig:
 
     # Risk (Phase B+ uses these; stored here for single source of truth)
     risk_per_trade_pct: Decimal = Decimal("1.0")
-    target_risk_per_trade_usd: Decimal = TARGET_RISK_PER_TRADE_USD
+    min_planned_risk_usd: Decimal = MIN_PLANNED_RISK_USD
+    target_risk_per_trade_usd: Decimal = TARGET_PLANNED_RISK_USD
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_drawdown_pct: Decimal = Decimal("8.0")
@@ -124,6 +128,7 @@ class ITEConfig:
             "high_confidence_score": self.high_confidence_score,
             "min_trade_quality_score": self.min_trade_quality_score,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
+            "min_planned_risk_usd": str(self.min_planned_risk_usd),
             "target_risk_per_trade_usd": str(self.target_risk_per_trade_usd),
             "max_total_planned_risk_usd": str(self.max_total_planned_risk_usd),
             "max_daily_loss_pct": str(self.max_daily_loss_pct),

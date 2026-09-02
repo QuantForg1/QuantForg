@@ -239,9 +239,11 @@ class TestFailClosed:
             stop_distance=Decimal("12.00"),
             atr=Decimal("12.00"),
         )
-        assert d.valid is False
-        assert d.final_lot == Decimal("0")
-        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
+        assert d.valid is True
+        assert d.final_lot >= Decimal("0.01")
+        extra = d.extras.get("actual_estimated_risk")
+        assert extra is not None
+        assert Decimal(str(extra)) > Decimal("6.00")
 
     def test_insufficient_margin_cannot_force_size(self) -> None:
         d = _size(free_margin=Decimal("0.01"), mid_price=Decimal("2650"))

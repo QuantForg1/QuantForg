@@ -25,7 +25,6 @@ from app.domain.institutional_trading.operations.gold_execution_contract import 
 )
 from app.domain.institutional_trading.operations.min_lot_feasibility import (
     CODE_INVALID_BROKER_SPEC,
-    CODE_MIN_LOT_CONSTRAINT,
     CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
     STATUS_CAPPED_MAX,
     STATUS_EXCEEDS_BUDGET,
@@ -85,6 +84,8 @@ def test_calculated_lot_below_min_uses_min_when_budget_allows() -> None:
         calculated_lot=Decimal("0.0025"),
         stop_distance=Decimal("4.00"),
         risk_budget=Decimal("5.00"),
+        min_planned_risk=Decimal("0"),
+        remaining_portfolio_risk=Decimal("5.00"),
     )
     assert out.calculated_lot == Decimal("0.0025")
     assert out.broker_min_lot == _MIN
@@ -95,8 +96,12 @@ def test_calculated_lot_below_min_uses_min_when_budget_allows() -> None:
     assert out.approved is True
 
 
-def test_minimum_lot_exceeding_dollar_budget_is_blocked() -> None:
-    out = _norm(calculated_lot=Decimal("0.0025"), stop_distance=Decimal("4.00"))
+def test_minimum_lot_exceeding_remaining_portfolio_is_blocked() -> None:
+    out = _norm(
+        calculated_lot=Decimal("0.0025"),
+        stop_distance=Decimal("4.00"),
+        remaining_portfolio_risk=Decimal("1.62"),
+    )
     assert out.normalized_lot == Decimal("0")
     assert out.sizing_status == STATUS_EXCEEDS_BUDGET
     assert out.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
@@ -104,14 +109,24 @@ def test_minimum_lot_exceeding_dollar_budget_is_blocked() -> None:
 
 
 def test_calculated_lot_exactly_at_broker_minimum() -> None:
-    out = _norm(calculated_lot=_MIN, stop_distance=Decimal("4.00"))
+    out = _norm(
+        calculated_lot=_MIN,
+        stop_distance=Decimal("4.00"),
+        min_planned_risk=Decimal("0"),
+        remaining_portfolio_risk=Decimal("5.00"),
+    )
     assert out.normalized_lot == _MIN
     assert out.sizing_status == STATUS_OK
     assert out.block_reason is None
 
 
 def test_normalization_to_broker_lot_step() -> None:
-    out = _norm(calculated_lot=Decimal("0.037"), stop_distance=Decimal("2.00"))
+    out = _norm(
+        calculated_lot=Decimal("0.037"),
+        stop_distance=Decimal("2.00"),
+        min_planned_risk=Decimal("0"),
+        remaining_portfolio_risk=Decimal("30.00"),
+    )
     assert out.normalized_lot == Decimal("0.03")
     assert out.broker_lot_step == _STEP
     assert out.sizing_status == STATUS_OK
@@ -119,7 +134,12 @@ def test_normalization_to_broker_lot_step() -> None:
 
 
 def test_calculated_lot_above_minimum() -> None:
-    out = _norm(calculated_lot=Decimal("0.05"), stop_distance=Decimal("2.00"))
+    out = _norm(
+        calculated_lot=Decimal("0.05"),
+        stop_distance=Decimal("2.00"),
+        min_planned_risk=Decimal("0"),
+        remaining_portfolio_risk=Decimal("30.00"),
+    )
     assert out.normalized_lot == Decimal("0.05")
     assert out.sizing_status == STATUS_OK
     assert out.approved is True
@@ -148,7 +168,13 @@ def test_minimum_lot_exceeding_risk_budget_is_blocked() -> None:
 
 
 def test_broker_max_lot_cap() -> None:
-    out = _norm(calculated_lot=Decimal("25"), stop_distance=Decimal("1.00"))
+    out = _norm(
+        calculated_lot=Decimal("25"),
+        stop_distance=Decimal("1.00"),
+        equity=Decimal("100000"),
+        remaining_portfolio_risk=Decimal("2000"),
+        min_planned_risk=Decimal("0"),
+    )
     assert out.normalized_lot == _MAX
     assert out.broker_max_lot == _MAX
     assert out.sizing_status == STATUS_CAPPED_MAX
@@ -174,7 +200,8 @@ def test_xauusd_i_sizing_helper_and_scalping() -> None:
         lot_step=_STEP,
     )
     assert sized.valid is True
-    assert sized.lots == _MIN
+    assert sized.lots > _MIN
+    assert sized.estimated_risk_amount > Decimal("6.00")
     assert sized.broker_min_lot == _MIN
     assert sized.block_reason is None
     wide = calculate_scalping_lots(
@@ -265,7 +292,8 @@ def test_risk_engine_xauusd_i_min_lot_within_budget() -> None:
         contract_size=_CS,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == _MIN
+    assert size.approved_lots == Decimal("0.02")
+    assert size.dollar_risk == Decimal("8.00")
     assert size.capped is False
     assert size.block_reason is None
 
@@ -313,16 +341,17 @@ def test_gold_contract_min_lot_exceeds_budget_does_not_submit() -> None:
     assert out.next_action == CandidateAction.WAIT_SAME_FOCUS.value
 
 
-def test_institutional_equity_never_upsizes_to_min_lot() -> None:
+def test_institutional_equity_upsizes_to_meet_min_planned_risk() -> None:
     out = _norm(
         equity=Decimal("501.00"),
         calculated_lot=Decimal("0.002"),
         stop_distance=Decimal("4.00"),
-        risk_budget=Decimal("5.01"),
+        risk_budget=Decimal("7.00"),
+        remaining_portfolio_risk=Decimal("30.00"),
     )
-    assert out.normalized_lot == Decimal("0")
-    assert out.block_reason == CODE_MIN_LOT_CONSTRAINT
-    assert out.approved is False
+    assert out.normalized_lot > Decimal("0.01")
+    assert out.estimated_risk_amount > Decimal("6.00")
+    assert out.approved is True
 
 
 def test_calculated_lot_0_001_normalizes_to_broker_min_when_budget_allows() -> None:
@@ -330,6 +359,8 @@ def test_calculated_lot_0_001_normalizes_to_broker_min_when_budget_allows() -> N
         calculated_lot=Decimal("0.001"),
         stop_distance=Decimal("4.00"),
         risk_budget=Decimal("5.00"),
+        min_planned_risk=Decimal("0"),
+        remaining_portfolio_risk=Decimal("5.00"),
     )
     assert out.normalized_lot == _MIN
     assert out.broker_min_lot == Decimal("0.01")

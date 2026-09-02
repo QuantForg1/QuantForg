@@ -123,7 +123,7 @@ class TestDynamicSizingSafety:
         assert d.calculated_lot < d.broker_min_lot
 
     def test_micro_conditional_approves_when_min_lot_within_hard_max(self) -> None:
-        """Gold min-lot $7.26 exceeds $6 planned SL cap → reject."""
+        """Gold min-lot $7.26 is above $6 and fits remaining portfolio."""
         d = calculate_dynamic_lots_v2(
             equity=Decimal("181.53"),
             balance=Decimal("181.53"),
@@ -138,9 +138,11 @@ class TestDynamicSizingSafety:
             quality_reject=False,
             log=False,
         )
-        assert d.valid is False
-        assert d.final_lot == Decimal("0")
-        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
+        assert d.valid is True
+        assert d.final_lot >= Decimal("0.01")
+        extra = d.extras.get("actual_estimated_risk")
+        assert extra is not None
+        assert Decimal(str(extra)) > Decimal("6.00")
 
     def test_weak_setup_rejects(self) -> None:
         d = calculate_dynamic_lots_v2(
@@ -177,7 +179,7 @@ class TestDynamicSizingSafety:
         assert d.quality_band == "average"
         assert "Weak setup" not in (d.rejection_reason or "")
 
-    def test_opportunity_pass_still_min_lot_infeasible(self) -> None:
+    def test_opportunity_pass_sizes_gold_above_six_when_remaining_allows(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("139.90"),
             stop_distance=Decimal("9.1724"),
@@ -192,9 +194,11 @@ class TestDynamicSizingSafety:
             sniper_passed=True,
             log=False,
         )
-        assert d.valid is False
-        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
-        assert d.final_lot == Decimal("0")
+        assert d.valid is True
+        assert d.final_lot >= Decimal("0.01")
+        extra = d.extras.get("actual_estimated_risk")
+        assert extra is not None
+        assert Decimal(str(extra)) > Decimal("6.00")
 
     def test_never_exceed_configured_max_risk(self) -> None:
         d = calculate_dynamic_lots_v2(

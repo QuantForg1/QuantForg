@@ -218,7 +218,10 @@ def calculate_scalping_lots(
         )
 
     risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
-    from app.domain.institutional_trading.config import TARGET_RISK_PER_TRADE_USD
+    from app.domain.institutional_trading.config import (
+        MIN_PLANNED_RISK_USD,
+        TARGET_PLANNED_RISK_USD,
+    )
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
         CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
         STATUS_EXCEEDS_BUDGET,
@@ -230,8 +233,14 @@ def calculate_scalping_lots(
 
     usd_target = Decimal(
         str(
-            getattr(cfg, "target_risk_per_trade_usd", TARGET_RISK_PER_TRADE_USD)
-            or TARGET_RISK_PER_TRADE_USD
+            getattr(cfg, "target_risk_per_trade_usd", TARGET_PLANNED_RISK_USD)
+            or TARGET_PLANNED_RISK_USD
+        )
+    )
+    min_floor = Decimal(
+        str(
+            getattr(cfg, "min_planned_risk_usd", MIN_PLANNED_RISK_USD)
+            or MIN_PLANNED_RISK_USD
         )
     )
     if usd_target > 0:
@@ -242,6 +251,8 @@ def calculate_scalping_lots(
             usd_budget = (usd_budget * base_risk / cfg.risk_per_trade_pct).quantize(
                 Decimal("0.01")
             )
+            if usd_budget > 0 and min_floor > 0 and usd_budget < min_floor:
+                usd_budget = min_floor
         risk_amount = usd_budget
     per_lot = lot_dollar_risk(
         Decimal("1"), stop_distance=dist, contract_size=cs
@@ -258,6 +269,7 @@ def calculate_scalping_lots(
         stop_distance=dist,
         contract_size=cs,
         risk_budget=risk_amount,
+        min_planned_risk=min_floor,
     )
     if not norm.approved:
         method = (

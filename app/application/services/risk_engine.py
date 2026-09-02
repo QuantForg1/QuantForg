@@ -130,6 +130,7 @@ class RiskEngine:
         risk_per_trade_pct: Decimal | None = None,
         tick_size: Decimal | None = None,
         tick_value: Decimal | None = None,
+        remaining_portfolio_risk: Decimal | None = None,
     ) -> PositionSizeResult:
         from app.domain.institutional_trading.operations.min_lot_feasibility import (
             STATUS_NORMALIZED_TO_MIN,
@@ -181,6 +182,14 @@ class RiskEngine:
                 )
             else:
                 dollar = pct_budget
+            min_floor = cfg.min_planned_risk_usd
+            if (
+                min_floor is not None
+                and min_floor > 0
+                and dollar > 0
+                and dollar < min_floor
+            ):
+                dollar = min_floor
             lots = (
                 (dollar / (stop * cs)).quantize(cfg.lot_step, rounding=ROUND_DOWN)
                 if stop > 0 and cs > 0
@@ -215,6 +224,8 @@ class RiskEngine:
             risk_budget=dollar.quantize(Decimal("0.01")) if dollar > 0 else None,
             tick_size=tick_size,
             tick_value=tick_value,
+            remaining_portfolio_risk=remaining_portfolio_risk,
+            min_planned_risk=cfg.min_planned_risk_usd,
         )
         requested = (
             requested_lots
@@ -1164,6 +1175,12 @@ class RiskEngine:
             account, fallback=self.config.exposure_leverage
         )
 
+        cap = self.config.max_total_planned_risk_usd
+        open_planned = self._aggregate_planned_sl_risk(positions)
+        remaining = (cap - open_planned) if cap > 0 else None
+        if remaining is not None and remaining < 0:
+            remaining = Decimal("0")
+
         size = self.size_position(
             equity=account.equity,
             method=check.sizing_method,
@@ -1175,13 +1192,33 @@ class RiskEngine:
             risk_per_trade_pct=check.risk_per_trade_pct,
             tick_size=check.tick_size,
             tick_value=check.tick_value,
+            remaining_portfolio_risk=remaining,
         )
         checks["position_sizing"] = size.approved_lots >= self.config.min_lot
+        if size.approved_lots > 0:
+            from core.logging import get_logger as _risk_log
 
-        open_planned = self._aggregate_planned_sl_risk(positions)
+            _risk_log(__name__).info(
+                "planned_risk_lot_selected",
+                symbol=check.symbol,
+                direction=check.side,
+                entry=str(check.entry_price),
+                stop_loss=str(check.stop_loss_distance),
+                tick_size=str(check.tick_size) if check.tick_size is not None else None,
+                tick_value=(
+                    str(check.tick_value) if check.tick_value is not None else None
+                ),
+                contract_size=str(contract_size),
+                selected_volume=str(size.approved_lots),
+                final_planned_sl_loss=str(size.dollar_risk),
+                remaining_portfolio_risk=(
+                    str(remaining) if remaining is not None else None
+                ),
+                target_planned_risk=str(self.config.target_risk_per_trade_usd),
+            )
+
         proposed_planned = size.dollar_risk if size.approved_lots > 0 else Decimal("0")
         total_planned = open_planned + proposed_planned
-        cap = self.config.max_total_planned_risk_usd
         checks["aggregate_planned_risk"] = cap <= 0 or total_planned <= cap
         if not checks["aggregate_planned_risk"]:
             reasons.append(
@@ -1308,13 +1345,18 @@ class RiskEngine:
                         tick_size=check.tick_size,
                         tick_value=check.tick_value,
                     )
-                    cap_usd = self.config.target_risk_per_trade_usd
-                    if cap_usd > 0 and est_min > cap_usd:
+                    remaining_cap = remaining if remaining is not None else cap
+                    if (
+                        remaining_cap is not None
+                        and remaining_cap >= 0
+                        and est_min > remaining_cap
+                    ):
                         decision = RiskDecision.REJECT
                         approved = Decimal("0")
                         reasons.append(
                             "MIN_LOT_EXCEEDS_RISK_BUDGET: min_lot actual risk "
-                            f"{est_min} exceeds target {cap_usd}"
+                            f"{est_min} exceeds remaining portfolio "
+                            f"{remaining_cap}"
                         )
                 else:
                     decision = RiskDecision.REJECT

@@ -329,6 +329,8 @@ class BrokerLotNormalization:
     block_reason: str | None
     needed_pct: Decimal | None = None
     hard_max_risk_pct: Decimal | None = None
+    remaining_portfolio_risk: Decimal | None = None
+    min_planned_risk: Decimal | None = None
 
     @property
     def approved(self) -> bool:
@@ -351,6 +353,16 @@ class BrokerLotNormalization:
                 if self.hard_max_risk_pct is not None
                 else None
             ),
+            "remaining_portfolio_risk": (
+                str(self.remaining_portfolio_risk)
+                if self.remaining_portfolio_risk is not None
+                else None
+            ),
+            "min_planned_risk": (
+                str(self.min_planned_risk)
+                if self.min_planned_risk is not None
+                else None
+            ),
         }
 
 
@@ -368,12 +380,22 @@ def normalize_lots_against_broker(
     tick_size: Decimal | None = None,
     tick_value: Decimal | None = None,
     allow_min_lot_upsize: bool | None = None,
+    remaining_portfolio_risk: Decimal | None = None,
+    min_planned_risk: Decimal | None = None,
+    allow_below_min_planned: bool = False,
 ) -> BrokerLotNormalization:
-    """risk calc → broker constraints → safe normalize → re-check $ risk.
+    """Size to the USD target, round DOWN, then step UP until planned SL > min.
 
-    Never blindly forces broker min lot. If min lot exceeds the existing
-    micro hard-max risk ceiling, block with MIN_LOT_EXCEEDS_RISK_BUDGET.
+    Min lot is used when the raw volume is below volume_min AND that min lot
+    still fits remaining portfolio risk and the micro hard-max percent. If the
+    next broker step would exceed remaining portfolio risk, reject — never
+    force an unsafe lot. Quality/safety may pass allow_below_min_planned.
     """
+    from app.domain.institutional_trading.config import (
+        MAX_TOTAL_PLANNED_RISK_USD,
+        MIN_PLANNED_RISK_USD,
+    )
+
     profile = MicroAccountProfile()
     hard = (
         hard_max_risk_pct
@@ -382,11 +404,21 @@ def normalize_lots_against_broker(
     )
     calc = calculated_lot if calculated_lot > 0 else Decimal("0")
     budget = risk_budget if risk_budget is not None else Decimal("0")
-    upsize = (
-        allow_min_lot_upsize
-        if allow_min_lot_upsize is not None
-        else (equity > 0 and equity <= MICRO_EQUITY_CAP)
+    min_floor = (
+        min_planned_risk if min_planned_risk is not None else MIN_PLANNED_RISK_USD
     )
+    hard_usd = (
+        (equity * hard / _PCT).quantize(_CENTS)
+        if equity > 0 and hard > 0
+        else Decimal("0")
+    )
+    remaining = remaining_portfolio_risk
+    if remaining is None:
+        remaining = MAX_TOTAL_PLANNED_RISK_USD
+    ceiling = remaining
+    if hard_usd > 0:
+        ceiling = min(ceiling, hard_usd) if ceiling > 0 else hard_usd
+    _ = allow_min_lot_upsize  # always upsize toward min planned when ceiling allows
 
     def _blank(
         *,
@@ -408,6 +440,31 @@ def normalize_lots_against_broker(
             block_reason=reason,
             needed_pct=needed,
             hard_max_risk_pct=hard,
+            remaining_portfolio_risk=remaining,
+            min_planned_risk=min_floor,
+        )
+
+    def _ok(
+        *,
+        lot: Decimal,
+        est: Decimal,
+        status: str,
+        needed: Decimal | None = None,
+    ) -> BrokerLotNormalization:
+        return BrokerLotNormalization(
+            calculated_lot=calc,
+            broker_min_lot=min_lot,
+            broker_lot_step=lot_step,
+            broker_max_lot=max_lot,
+            normalized_lot=lot,
+            estimated_risk_amount=est,
+            risk_budget=budget,
+            sizing_status=status,
+            block_reason=None,
+            needed_pct=needed,
+            hard_max_risk_pct=hard,
+            remaining_portfolio_risk=remaining,
+            min_planned_risk=min_floor,
         )
 
     if min_lot <= 0 or lot_step <= 0 or max_lot <= 0 or min_lot > max_lot:
@@ -431,6 +488,31 @@ def normalize_lots_against_broker(
             reason=CODE_INVALID_BROKER_SPEC,
         )
 
+    if equity <= 0 or stop_distance <= 0:
+        return _blank(
+            status=STATUS_BELOW_MIN,
+            reason=CODE_MIN_LOT_CONSTRAINT,
+        )
+
+    if ceiling <= 0:
+        return _blank(
+            status=STATUS_EXCEEDS_BUDGET,
+            reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        )
+
+    per_lot = lot_dollar_risk(
+        Decimal("1"),
+        stop_distance=stop_distance,
+        contract_size=contract_size,
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
+    if per_lot <= 0:
+        return _blank(
+            status=STATUS_INVALID_SPEC,
+            reason=CODE_INVALID_BROKER_SPEC,
+        )
+
     steps = (calc / lot_step).to_integral_value(rounding=ROUND_DOWN)
     quantized = (steps * lot_step).quantize(lot_step)
     capped_max = False
@@ -439,79 +521,67 @@ def normalize_lots_against_broker(
         quantized = (max_steps * lot_step).quantize(lot_step)
         capped_max = True
 
-    if quantized >= first_valid:
-        est = Decimal("0")
-        if stop_distance > 0:
-            est = lot_dollar_risk(
-                quantized,
-                stop_distance=stop_distance,
-                contract_size=contract_size,
-                tick_size=tick_size,
-                tick_value=tick_value,
-            )
-        return BrokerLotNormalization(
-            calculated_lot=calc,
-            broker_min_lot=min_lot,
-            broker_lot_step=lot_step,
-            broker_max_lot=max_lot,
-            normalized_lot=quantized,
-            estimated_risk_amount=est,
-            risk_budget=budget,
-            sizing_status=STATUS_CAPPED_MAX if capped_max else STATUS_OK,
-            block_reason=None,
-            needed_pct=None,
-            hard_max_risk_pct=hard,
-        )
-
-    if equity <= 0 or stop_distance <= 0:
-        return _blank(
-            status=STATUS_BELOW_MIN,
-            reason=CODE_MIN_LOT_CONSTRAINT,
-        )
-
-    min_loss = lot_dollar_risk(
-        first_valid,
-        stop_distance=stop_distance,
-        contract_size=contract_size,
-        tick_size=tick_size,
-        tick_value=tick_value,
-    )
+    min_loss = (first_valid * per_lot).quantize(_CENTS)
     needed = (min_loss / equity * _PCT).quantize(_CENTS) if equity > 0 else None
 
-    if needed is not None and needed > hard:
+    if quantized < first_valid:
+        if needed is not None and needed > hard:
+            return _blank(
+                status=STATUS_EXCEEDS_BUDGET,
+                reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                est=min_loss,
+                needed=needed,
+            )
+        if min_loss > ceiling:
+            return _blank(
+                status=STATUS_EXCEEDS_BUDGET,
+                reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                est=min_loss,
+                needed=needed,
+            )
+        quantized = first_valid
+        capped_max = False
+
+    est = (quantized * per_lot).quantize(_CENTS)
+    status = STATUS_CAPPED_MAX if capped_max else STATUS_OK
+    if quantized == first_valid and calc < first_valid:
+        status = STATUS_NORMALIZED_TO_MIN
+
+    if not allow_below_min_planned and min_floor > 0:
+        guard = 0
+        while est <= min_floor and guard < 10000:
+            guard += 1
+            next_vol = (quantized + lot_step).quantize(lot_step)
+            if next_vol > max_lot:
+                return _blank(
+                    status=STATUS_EXCEEDS_BUDGET,
+                    reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                    est=est,
+                    needed=needed,
+                    lot=Decimal("0"),
+                )
+            next_loss = (next_vol * per_lot).quantize(_CENTS)
+            if next_loss > ceiling:
+                return _blank(
+                    status=STATUS_EXCEEDS_BUDGET,
+                    reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                    est=next_loss,
+                    needed=needed,
+                    lot=Decimal("0"),
+                )
+            quantized = next_vol
+            est = next_loss
+            status = STATUS_OK
+
+    if quantized < first_valid or est > ceiling:
         return _blank(
             status=STATUS_EXCEEDS_BUDGET,
             reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
-            est=min_loss,
+            est=est,
             needed=needed,
         )
-    if budget > 0 and min_loss > budget:
-        return _blank(
-            status=STATUS_EXCEEDS_BUDGET,
-            reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
-            est=min_loss,
-            needed=needed,
-        )
-    if not upsize:
-        return _blank(
-            status=STATUS_BELOW_MIN,
-            reason=CODE_MIN_LOT_CONSTRAINT,
-            est=min_loss,
-            needed=needed,
-        )
-    return BrokerLotNormalization(
-        calculated_lot=calc,
-        broker_min_lot=min_lot,
-        broker_lot_step=lot_step,
-        broker_max_lot=max_lot,
-        normalized_lot=first_valid,
-        estimated_risk_amount=min_loss,
-        risk_budget=budget,
-        sizing_status=STATUS_NORMALIZED_TO_MIN,
-        block_reason=None,
-        needed_pct=needed,
-        hard_max_risk_pct=hard,
-    )
+    return _ok(lot=quantized, est=est, status=status, needed=needed)
+
 
 
 TRADEABLE = "TRADEABLE"

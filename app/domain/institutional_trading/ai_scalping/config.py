@@ -6,7 +6,12 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any, Literal
 
-from app.domain.institutional_trading.config import ITEConfig
+from app.domain.institutional_trading.config import (
+    ITEConfig,
+    MAX_TOTAL_PLANNED_RISK_USD,
+    MIN_PLANNED_RISK_USD,
+    TARGET_PLANNED_RISK_USD,
+)
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -209,8 +214,9 @@ class AiScalpingConfig:
 
     # Dynamic sizing - DO NOT increase risk vs prior default without evidence
     risk_per_trade_pct: Decimal = Decimal("0.50")
-    target_risk_per_trade_usd: Decimal = Decimal("6.00")
-    max_total_planned_risk_usd: Decimal = Decimal("30.00")
+    min_planned_risk_usd: Decimal = MIN_PLANNED_RISK_USD
+    target_risk_per_trade_usd: Decimal = TARGET_PLANNED_RISK_USD
+    max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     compounding_enabled: bool = False
     # Micro desk (~$180): broker min_lot on gold is ~2.3–2.9% equity risk.
     # Prior 2.00 daily / 1.00 symbol caps were BELOW one min-lot fill, so after
@@ -470,6 +476,7 @@ class AiScalpingConfig:
             },
             "max_open_trades": self.max_open_trades,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
+            "min_planned_risk_usd": str(self.min_planned_risk_usd),
             "target_risk_per_trade_usd": str(self.target_risk_per_trade_usd),
             "max_total_planned_risk_usd": str(self.max_total_planned_risk_usd),
             "risk_increase_locked": True,
@@ -554,6 +561,7 @@ def scalping_ite_config(
         min_trade_quality_score=cfg.normal_vol.quality,
         high_confidence_score=max(90, cfg.low_vol.confidence + 2),
         risk_per_trade_pct=cfg.risk_per_trade_pct,
+        min_planned_risk_usd=cfg.min_planned_risk_usd,
         target_risk_per_trade_usd=cfg.target_risk_per_trade_usd,
         max_total_planned_risk_usd=cfg.max_total_planned_risk_usd,
         max_open_trades=cfg.max_open_trades,

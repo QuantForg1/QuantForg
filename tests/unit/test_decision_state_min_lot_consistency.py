@@ -281,7 +281,7 @@ def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
     assert out["next_action"] != CandidateAction.NO_EXECUTABLE_FOCUS.value
 
 
-def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
+def test_live_min_lot_risk_math_steps_up_above_six() -> None:
     min_loss = (VOLUME_MIN * CONTRACT_SIZE * _LIVE_STOP).quantize(Decimal("0.0001"))
     needed = (min_loss / _LIVE_EQUITY * Decimal("100")).quantize(Decimal("0.01"))
     profile = MicroAccountProfile()
@@ -289,6 +289,7 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
     assert profile.hard_max_risk_pct == Decimal("80.0")
     assert needed == Decimal("5.64")
     assert needed < profile.hard_max_risk_pct
+    assert min_loss > Decimal("6.00")
 
     engine = RiskEngine()
     size = engine.size_position(
@@ -301,8 +302,9 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == Decimal("0")
-    assert size.block_reason == "MIN_LOT_EXCEEDS_RISK_BUDGET"
+    assert size.approved_lots == VOLUME_MIN
+    assert size.dollar_risk >= min_loss.quantize(Decimal("0.01"))
+    assert size.block_reason is None
 
     result = engine.evaluate(
         RiskCheckInput(
@@ -328,9 +330,8 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
         ),
         positions=[],
     )
-    assert result.decision is RiskDecision.REJECT
-    assert result.approved_lots == Decimal("0")
-    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in " ".join(result.reasons)
+    assert result.decision is not RiskDecision.REJECT
+    assert result.approved_lots == VOLUME_MIN
 
 
 def test_hard_max_and_min_lot_unchanged() -> None:
@@ -340,7 +341,7 @@ def test_hard_max_and_min_lot_unchanged() -> None:
     assert RiskEngine().config.max_risk_per_trade_pct == Decimal("1")
 
 
-def test_invalid_upward_normalization_rejected() -> None:
+def test_invalid_upward_normalization_uses_min_lot_when_remaining_allows() -> None:
     raw = Decimal("0.007")
     engine = RiskEngine()
     size = engine.size_position(
@@ -353,8 +354,8 @@ def test_invalid_upward_normalization_rejected() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == Decimal("0")
-    assert size.block_reason == "MIN_LOT_EXCEEDS_RISK_BUDGET"
+    assert size.approved_lots == VOLUME_MIN
+    assert size.block_reason is None
 
 
 def test_scalp_atr_stop_provenance_unchanged() -> None:

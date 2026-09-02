@@ -36,6 +36,8 @@ from app.domain.institutional_trading.ai_scalping.dynamic_sizing_v2 import (
 )
 from app.domain.institutional_trading.config import (
     MAX_TOTAL_PLANNED_RISK_USD,
+    MIN_PLANNED_RISK_USD,
+    TARGET_PLANNED_RISK_USD,
     TARGET_RISK_PER_TRADE_USD,
 )
 from app.domain.institutional_trading.live_trading_control import (
@@ -125,21 +127,28 @@ def _pos_mt5(
 
 
 class TestPositionSizingUsdTarget:
-    def test_eurusd_sizes_to_approximately_six_dollars(self) -> None:
+    def test_target_is_strictly_above_six(self) -> None:
+        assert TARGET_PLANNED_RISK_USD == TARGET_RISK_PER_TRADE_USD
+        assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
+        assert Decimal("6.00") == MIN_PLANNED_RISK_USD
+
+    def test_eurusd_sizes_above_six_not_universal_min_lot(self) -> None:
         stop = Decimal("0.00200")  # 20 pips
         sized = size_from_broker_specs(
             equity=Decimal("2000"),
             risk_pct=Decimal("0.50"),
             stop_distance=stop,
             spec=_fx_spec(),
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         assert sized.accepted is True
         assert sized.volume > Decimal("0.01")
-        assert sized.monetary_loss_at_sl <= TARGET_RISK_PER_TRADE_USD
-        assert sized.monetary_loss_at_sl >= Decimal("5.00")
+        assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
+        # 0.03 = $6.00 (not > $6) → step to 0.04 = $8.00
+        assert sized.volume == Decimal("0.04")
+        assert sized.monetary_loss_at_sl == Decimal("8.00")
 
-    def test_usdjpy_uses_tick_value_not_price_over_six(self) -> None:
+    def test_usdjpy_uses_tick_value(self) -> None:
         spec = _fx_spec(
             symbol="USDJPY",
             tick_size=Decimal("0.001"),
@@ -150,7 +159,7 @@ class TestPositionSizingUsdTarget:
             risk_pct=Decimal("0.50"),
             stop_distance=Decimal("0.200"),
             spec=spec,
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         per_lot = lot_dollar_risk(
             Decimal("1"),
@@ -161,20 +170,36 @@ class TestPositionSizingUsdTarget:
         )
         assert sized.accepted is True
         actual = sized.volume * per_lot
-        assert actual <= TARGET_RISK_PER_TRADE_USD + Decimal("0.05")
+        assert actual > MIN_PLANNED_RISK_USD
+        assert sized.volume != Decimal("0.01")
 
-    def test_xauusd_rejects_when_min_lot_exceeds_six(self) -> None:
+    def test_xauusd_allows_min_lot_when_it_fits_remaining_portfolio(self) -> None:
         sized = size_from_broker_specs(
             equity=Decimal("500"),
             risk_pct=Decimal("1.0"),
             stop_distance=Decimal("10.00"),
             spec=_gold_spec(),
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         min_loss = Decimal("0.01") * Decimal("100") * Decimal("10.00")
-        assert min_loss > TARGET_RISK_PER_TRADE_USD
+        assert min_loss > TARGET_PLANNED_RISK_USD
+        assert min_loss <= MAX_TOTAL_PLANNED_RISK_USD
+        assert sized.accepted is True
+        assert sized.volume == Decimal("0.01")
+        assert sized.monetary_loss_at_sl == min_loss
+
+    def test_xauusd_rejects_when_min_lot_exceeds_remaining_portfolio(self) -> None:
+        sized = size_from_broker_specs(
+            equity=Decimal("500"),
+            risk_pct=Decimal("1.0"),
+            stop_distance=Decimal("10.00"),
+            spec=_gold_spec(),
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
+            remaining_portfolio_risk=Decimal("8.00"),
+        )
         assert sized.accepted is False
         assert sized.volume == Decimal("0")
+        assert sized.monetary_loss_at_sl >= Decimal("10.00")
 
     def test_volume_step_and_max_are_respected(self) -> None:
         spec = _fx_spec(volume_step=Decimal("0.05"), volume_max=Decimal("0.10"))
@@ -183,11 +208,12 @@ class TestPositionSizingUsdTarget:
             risk_pct=Decimal("1.0"),
             stop_distance=Decimal("0.00100"),
             spec=spec,
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         assert sized.accepted is True
         assert sized.volume % Decimal("0.05") == Decimal("0")
         assert sized.volume <= Decimal("0.10")
+        assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
 
     def test_invalid_stop_rejects(self) -> None:
         sized = size_from_broker_specs(
@@ -195,7 +221,7 @@ class TestPositionSizingUsdTarget:
             risk_pct=Decimal("0.50"),
             stop_distance=Decimal("0"),
             spec=_fx_spec(),
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         assert sized.accepted is False
 
@@ -206,14 +232,14 @@ class TestPositionSizingUsdTarget:
             risk_pct=Decimal("0.50"),
             stop_distance=stop_fx,
             spec=_fx_spec(symbol="EURUSD"),
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         gbpusd = size_from_broker_specs(
             equity=Decimal("2000"),
             risk_pct=Decimal("0.50"),
             stop_distance=stop_fx,
             spec=_fx_spec(symbol="GBPUSD", tick_value=Decimal("1.25")),
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         usdjpy = size_from_broker_specs(
             equity=Decimal("2000"),
@@ -224,26 +250,44 @@ class TestPositionSizingUsdTarget:
                 tick_size=Decimal("0.001"),
                 tick_value=Decimal("0.67"),
             ),
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         assert eurusd.accepted and gbpusd.accepted and usdjpy.accepted
         assert eurusd.volume != gbpusd.volume
-        assert {eurusd.volume, gbpusd.volume, usdjpy.volume} != {Decimal("0.01")}
+        assert Decimal("0.01") not in {
+            eurusd.volume,
+            gbpusd.volume,
+            usdjpy.volume,
+        }
         for sized in (eurusd, gbpusd, usdjpy):
-            assert sized.monetary_loss_at_sl <= TARGET_RISK_PER_TRADE_USD
+            assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
 
-    def test_volume_min_is_not_forced_when_over_budget(self) -> None:
+    def test_volume_min_rejected_when_next_step_exceeds_remaining(self) -> None:
         spec = _fx_spec(volume_min=Decimal("0.10"), volume_step=Decimal("0.01"))
         sized = size_from_broker_specs(
             equity=Decimal("2000"),
             risk_pct=Decimal("0.50"),
             stop_distance=Decimal("0.00200"),
             spec=spec,
-            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
+            remaining_portfolio_risk=Decimal("10.00"),
         )
+        # 0.10 * $200/lot = $20 > remaining $10
         assert sized.accepted is False
         assert sized.volume == Decimal("0")
-        assert sized.monetary_loss_at_sl > TARGET_RISK_PER_TRADE_USD
+
+    def test_next_step_exceeding_remaining_does_not_force_trade(self) -> None:
+        sized = size_from_broker_specs(
+            equity=Decimal("2000"),
+            risk_pct=Decimal("0.50"),
+            stop_distance=Decimal("0.00200"),
+            spec=_fx_spec(),
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
+            remaining_portfolio_risk=Decimal("7.00"),
+        )
+        # 0.03 = $6 (not > $6); 0.04 = $8 > remaining $7 → no trade
+        assert sized.accepted is False
+        assert sized.volume == Decimal("0")
 
     def test_dynamic_v2_fx_not_universal_min_lot(self) -> None:
         d = calculate_dynamic_lots_v2(
@@ -265,7 +309,7 @@ class TestPositionSizingUsdTarget:
         assert d.final_lot > Decimal("0.01")
         extra = d.extras.get("actual_estimated_risk")
         assert extra is not None
-        assert Decimal(str(extra)) <= TARGET_RISK_PER_TRADE_USD
+        assert Decimal(str(extra)) > MIN_PLANNED_RISK_USD
 
 
 class TestAggregatePlannedRisk:
@@ -275,7 +319,8 @@ class TestAggregatePlannedRisk:
                 max_open_positions=10,
                 min_lot=Decimal("0.01"),
                 contract_size=Decimal("100"),
-                target_risk_per_trade_usd=TARGET_RISK_PER_TRADE_USD,
+                target_risk_per_trade_usd=TARGET_PLANNED_RISK_USD,
+                min_planned_risk_usd=MIN_PLANNED_RISK_USD,
                 max_total_planned_risk_usd=MAX_TOTAL_PLANNED_RISK_USD,
                 max_symbol_exposure_pct=Decimal("200"),
                 max_asset_class_exposure_pct=Decimal("200"),
@@ -345,7 +390,8 @@ class TestAggregatePlannedRisk:
                 max_open_positions=10,
                 min_lot=Decimal("0.01"),
                 contract_size=Decimal("100000"),
-                target_risk_per_trade_usd=TARGET_RISK_PER_TRADE_USD,
+                target_risk_per_trade_usd=TARGET_PLANNED_RISK_USD,
+                min_planned_risk_usd=MIN_PLANNED_RISK_USD,
                 max_total_planned_risk_usd=MAX_TOTAL_PLANNED_RISK_USD,
                 max_daily_loss_pct=Decimal("5.00"),
                 max_symbol_exposure_pct=Decimal("200"),

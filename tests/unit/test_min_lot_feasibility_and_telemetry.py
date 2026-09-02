@@ -136,7 +136,7 @@ def test_filter_agrees_with_risk_engine_min_lot_math() -> None:
             contract_size=_CS,
             risk_per_trade_pct=Decimal("1.0"),
         )
-        if sized.approved_lots == _MIN_LOT:
+        if sized.approved_lots >= _MIN_LOT:
             assert feas.infeasible is False
             assert feas.skip_expensive_downstream is False
         if feas.infeasible:
@@ -157,7 +157,8 @@ def test_risk_engine_remains_authoritative_on_feasible_stop() -> None:
         contract_size=_CS,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert sized.approved_lots == _MIN_LOT
+    assert sized.approved_lots >= _MIN_LOT
+    assert sized.dollar_risk > Decimal("6.00")
     # Filter does not invent lots or a tighter stop.
     assert feas.lot_changed is False
     assert feas.stop_changed is False

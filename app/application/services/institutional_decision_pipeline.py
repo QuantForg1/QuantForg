@@ -62,7 +62,8 @@ def risk_config_from_ite(
     """Map ITE defaults onto RiskEngineConfig (live broker specs when provided)."""
     from app.domain.institutional_trading.config import (
         MAX_TOTAL_PLANNED_RISK_USD,
-        TARGET_RISK_PER_TRADE_USD,
+        MIN_PLANNED_RISK_USD,
+        TARGET_PLANNED_RISK_USD,
     )
     from app.domain.trading.xauusd_specs import (
         CONTRACT_SIZE,
@@ -71,12 +72,16 @@ def risk_config_from_ite(
         VOLUME_STEP,
     )
 
-    target_usd = getattr(cfg, "target_risk_per_trade_usd", TARGET_RISK_PER_TRADE_USD)
+    target_usd = getattr(cfg, "target_risk_per_trade_usd", TARGET_PLANNED_RISK_USD)
+    min_usd = getattr(cfg, "min_planned_risk_usd", MIN_PLANNED_RISK_USD)
     agg_usd = getattr(cfg, "max_total_planned_risk_usd", MAX_TOTAL_PLANNED_RISK_USD)
     return RiskEngineConfig(
         max_risk_per_trade_pct=cfg.risk_per_trade_pct,
+        min_planned_risk_usd=(
+            min_usd if min_usd and min_usd > 0 else MIN_PLANNED_RISK_USD
+        ),
         target_risk_per_trade_usd=(
-            target_usd if target_usd and target_usd > 0 else TARGET_RISK_PER_TRADE_USD
+            target_usd if target_usd and target_usd > 0 else TARGET_PLANNED_RISK_USD
         ),
         max_total_planned_risk_usd=(
             agg_usd if agg_usd and agg_usd > 0 else MAX_TOTAL_PLANNED_RISK_USD
