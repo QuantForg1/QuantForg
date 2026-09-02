@@ -393,11 +393,12 @@ def calculate_dynamic_lots_v2(
         if max_lot is not None and max_lot > 0
         else min(cfg.broker_max_lot, VOLUME_MAX)
     )
-    cs = (
-        contract_size
-        if contract_size is not None and contract_size > 0
-        else CONTRACT_SIZE
-    )
+    if contract_size is not None and contract_size > 0:
+        cs = contract_size
+    elif contract_size is not None:
+        cs = Decimal("0")
+    else:
+        cs = CONTRACT_SIZE
     tier = interpolate_equity_tier(equity)
 
     try:

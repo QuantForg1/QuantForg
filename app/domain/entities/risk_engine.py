@@ -102,7 +102,11 @@ def contract_size_for_symbol(
     base, quote = u[:3], u[3:6]
     if len(u) >= 6 and base in _FX_CURRENCIES and quote in _FX_CURRENCIES:
         return Decimal("100000")
-    return default if default > 0 else CONTRACT_SIZE
+    # Indices / unknown: never assume gold. Callers that need a last-resort
+    # gold desk default must pass default=CONTRACT_SIZE explicitly.
+    if default > 0:
+        return default
+    return Decimal("0")
 
 
 @dataclass(frozen=True, slots=True)

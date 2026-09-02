@@ -370,11 +370,7 @@ def compute_structure_targets(
 
     if direction is TradeDirection.BUY:
         sl = entry - stop_distance
-        fixed_r = cfg.fixed_tp_r
-        if fixed_r is not None and fixed_r > 0:
-            tp = entry + stop_distance * fixed_r
-            reason_parts.append(f"TP fixed {fixed_r}R")
-        elif liq_high is not None and liq_high > entry:
+        if liq_high is not None and liq_high > entry:
             tp = liq_high
             reason_parts.append("TP liquidity high")
         elif swing_high is not None and swing_high > entry:
@@ -384,15 +380,19 @@ def compute_structure_targets(
             tp = entry + atr_d * cfg.atr_tp_mult
             reason_parts.append("TP ATR expansion")
         else:
-            tp = entry + stop_distance * Decimal("1.5")
-            reason_parts.append("TP 1.5R structure distance")
+            return StructureTargets(
+                entry,
+                sl,
+                None,
+                stop_distance,
+                None,
+                "Cannot place BUY TP without structure/liquidity/ATR",
+                stop_source=source,
+                stop_atr=atr_d,
+            )
     else:
         sl = entry + stop_distance
-        fixed_r = cfg.fixed_tp_r
-        if fixed_r is not None and fixed_r > 0:
-            tp = entry - stop_distance * fixed_r
-            reason_parts.append(f"TP fixed {fixed_r}R")
-        elif liq_low is not None and liq_low < entry:
+        if liq_low is not None and liq_low < entry:
             tp = liq_low
             reason_parts.append("TP liquidity low")
         elif swing_low is not None and swing_low < entry:
@@ -402,11 +402,38 @@ def compute_structure_targets(
             tp = entry - atr_d * cfg.atr_tp_mult
             reason_parts.append("TP ATR expansion")
         else:
-            tp = entry - stop_distance * Decimal("1.5")
-            reason_parts.append("TP 1.5R structure distance")
+            return StructureTargets(
+                entry,
+                sl,
+                None,
+                stop_distance,
+                None,
+                "Cannot place SELL TP without structure/liquidity/ATR",
+                stop_source=source,
+                stop_atr=atr_d,
+            )
 
     reward = abs(tp - entry)
     expected_rr = (reward / stop_distance).quantize(Decimal("0.01"))
+    if expected_rr <= Decimal("1"):
+        return StructureTargets(
+            entry,
+            sl,
+            None,
+            stop_distance,
+            expected_rr,
+            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+            f"planned TP reward {reward} <= SL risk {stop_distance}",
+            stop_source=source,
+            stop_atr=atr_d,
+        )
+    preferred = cfg.fixed_tp_r
+    if preferred is not None and preferred > 0 and expected_rr >= preferred:
+        reason_parts.append(f"TP structural {expected_rr}R (>= preferred {preferred}R)")
+    else:
+        reason_parts.append(
+            f"TP structural {expected_rr}R (not stretched to preferred)"
+        )
     return StructureTargets(
         entry=entry,
         stop_loss=sl,

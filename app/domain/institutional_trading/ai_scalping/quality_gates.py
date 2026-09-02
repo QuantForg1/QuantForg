@@ -201,6 +201,13 @@ def evaluate_quality_gates(
         min_rr = cfg.fixed_tp_r
     rr_ok = expected_rr is not None and expected_rr >= min_rr
     checks["min_rr"] = bool(rr_ok)
+    profit_exceeds_loss = expected_rr is not None and expected_rr > Decimal("1")
+    checks["tp_profit_exceeds_sl_loss"] = bool(profit_exceeds_loss)
+    if expected_rr is not None and expected_rr <= Decimal("1"):
+        hard_rejects.append(
+            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned TP profit must exceed "
+            f"planned SL loss (rr={expected_rr})"
+        )
     if not rr_ok:
         soft_rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
 

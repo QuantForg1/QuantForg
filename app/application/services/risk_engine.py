@@ -1168,7 +1168,7 @@ class RiskEngine:
         contract_size = (
             check.contract_size
             if check.contract_size is not None and check.contract_size > 0
-            else self.config.contract_size
+            else self._contract_size(check.symbol)
         )
         leverage = self._account_leverage(
             account, fallback=self.config.exposure_leverage

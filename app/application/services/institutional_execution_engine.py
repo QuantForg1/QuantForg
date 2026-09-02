@@ -192,6 +192,31 @@ def retcode_description(retcode: int | None) -> str | None:
         return None
 
 
+def _opt_positive_decimal(value: object) -> Decimal | None:
+    try:
+        if value is None:
+            return None
+        parsed = Decimal(str(value))
+    except (TypeError, ValueError, ArithmeticError):
+        return None
+    return parsed if parsed.is_finite() and parsed > 0 else None
+
+
+def _ticks_from_symbol_info(info: object) -> tuple[Decimal | None, Decimal | None]:
+    tick_size = _opt_positive_decimal(
+        getattr(info, "trade_tick_size", None) or getattr(info, "tick_size", None)
+    )
+    tick_value = _opt_positive_decimal(
+        getattr(info, "trade_tick_value", None) or getattr(info, "tick_value", None)
+    )
+    return tick_size, tick_value
+
+
+def _is_manage_intent(intent: OrderIntent) -> bool:
+    manage_kinds = {"sltp", "modify_sltp", "close", "partial_close"}
+    return intent.oms_kind in manage_kinds or int(intent.position or 0) > 0
+
+
 def order_attempt_execution_result(
     *,
     order_send_reached: bool,
@@ -752,7 +777,40 @@ class InstitutionalExecutionEngine:
                     balance=account.balance,
                     deals=deals,
                 )
-                assessment = self.risk_engine.evaluate(
+                from app.domain.entities.risk_engine import contract_size_for_symbol
+
+                live_constraints = self.order_validation.constraints_for(
+                    intent.symbol
+                )
+                live_cs = (
+                    live_constraints.contract_size
+                    if live_constraints.contract_size > 0
+                    else contract_size_for_symbol(
+                        intent.symbol, default=Decimal("0")
+                    )
+                )
+                live_tick_size: Decimal | None = None
+                live_tick_value: Decimal | None = None
+                try:
+                    info = self.order_validation.adapter.symbol_info(intent.symbol)
+                    live_tick_size, live_tick_value = _ticks_from_symbol_info(info)
+                    info_cs = _opt_positive_decimal(
+                        getattr(info, "contract_size", None)
+                    )
+                    if info_cs is not None:
+                        live_cs = info_cs
+                except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
+                    pass
+                live_risk = RiskEngine(
+                    config=replace(
+                        self.risk_engine.config,
+                        min_lot=live_constraints.min_volume,
+                        lot_step=live_constraints.volume_step,
+                        max_lot=live_constraints.max_volume,
+                        contract_size=live_cs,
+                    )
+                )
+                assessment = live_risk.evaluate(
                     RiskCheckInput(
                         user_id=user_id,
                         request_id=request_id,
@@ -763,6 +821,9 @@ class InstitutionalExecutionEngine:
                         sizing_method=PositionSizingMethod.FIXED_LOT,
                         entry_price=entry,
                         spread=spread_val,
+                        contract_size=live_cs,
+                        tick_size=live_tick_size,
+                        tick_value=live_tick_value,
                     ),
                     account=account,
                     positions=positions,
@@ -820,9 +881,36 @@ class InstitutionalExecutionEngine:
                         risk_reject = list(assessment.reasons) or [
                             "Risk Engine REDUCE_SIZE without approved lots"
                         ]
-                    elif approved < intent.volume.value:
-                        intent = replace(intent, volume=LotSize.of(approved))
+                    elif approved != intent.volume.value:
+                        intent = replace(intent, volume=LotSize.of(str(approved)))
                         volume = str(intent.volume.value)
+                else:
+                    approved = assessment.approved_lots
+                    if approved is None or approved <= 0:
+                        risk_reject = list(assessment.reasons) or [
+                            "Risk Engine ALLOW without approved lots"
+                        ]
+                    elif approved != intent.volume.value:
+                        intent = replace(intent, volume=LotSize.of(str(approved)))
+                        volume = str(intent.volume.value)
+                if not risk_reject and not _is_manage_intent(intent):
+                    intent, _post_notes = self.order_validation.normalize_intent(
+                        intent
+                    )
+                    volume = str(intent.volume.value)
+                    post_constraints = self.order_validation.constraints_for(
+                        intent.symbol
+                    )
+                    ok_final_vol, msg_final_vol = (
+                        self.order_validation.validate_volume(
+                            intent, post_constraints
+                        )
+                    )
+                    if not ok_final_vol:
+                        risk_reject = [
+                            "final volume invalid after Risk approval: "
+                            f"{msg_final_vol}"
+                        ]
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
 
@@ -898,7 +986,341 @@ class InstitutionalExecutionEngine:
             result.journal_entry = self._write_journal(result, intent, None, uid)
             return result, decision
 
+        if not _is_manage_intent(intent) and intent.volume.value > 0:
+            from app.domain.entities.risk_engine import contract_size_for_symbol
+            from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
+                actual_planned_sl_band_reason,
+                format_planned_sl_reject_detail,
+                lot_dollar_risk,
+            )
+
+            stop_for_band = Decimal("0")
+            entry_for_band = Decimal("0")
+            if intent.price is not None and intent.price > 0:
+                entry_for_band = intent.price
+            else:
+                try:
+                    tick = self.gateway.adapter.latest_tick(intent.symbol)
+                    entry_for_band = (
+                        Decimal(str(tick.bid))
+                        if intent.side is OrderSide.SELL
+                        else Decimal(str(tick.ask))
+                    )
+                except (OSError, RuntimeError, ValueError, TypeError):
+                    entry_for_band = Decimal("0")
+            if intent.stop_loss is not None and entry_for_band > 0:
+                stop_for_band = abs(entry_for_band - intent.stop_loss.value)
+            if stop_for_band > 0:
+                try:
+                    band_constraints = self.order_validation.constraints_for(
+                        intent.symbol
+                    )
+                    band_cs = (
+                        band_constraints.contract_size
+                        if band_constraints.contract_size > 0
+                        else contract_size_for_symbol(
+                            intent.symbol, default=Decimal("0")
+                        )
+                    )
+                    if band_cs <= 0:
+                        fail_closed = (
+                            "INVALID_BROKER_SPEC: contract_size missing "
+                            f"for {intent.symbol}"
+                        )
+                        self._observe(
+                            user_id=uid,
+                            request_id=request_id,
+                            symbol=symbol,
+                            side=side,
+                            order_type=order_type,
+                            volume=str(intent.volume.value),
+                            stage=PipelineStage.REJECTED,
+                            reason=fail_closed,
+                        )
+                        result = PipelineResult(
+                            request_id=request_id,
+                            action=action,
+                            outcome="rejected",
+                            message=fail_closed,
+                            stages=stages,
+                            rejection_reasons=[fail_closed],
+                            warnings=list(decision.warnings),
+                            checks=dict(decision.checks),
+                            calculated_risk=dict(decision.calculated_risk),
+                            decision=ExecutionDecision.REJECT.value,
+                            latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                            idempotent_replay=decision.idempotent_replay,
+                        )
+                        result.journal_entry = self._write_journal(
+                            result, intent, None, uid
+                        )
+                        return result, decision
+                    band_tick_size: Decimal | None = None
+                    band_tick_value: Decimal | None = None
+                    try:
+                        band_info = self.order_validation.adapter.symbol_info(
+                            intent.symbol
+                        )
+                        band_tick_size, band_tick_value = _ticks_from_symbol_info(
+                            band_info
+                        )
+                        info_cs = _opt_positive_decimal(
+                            getattr(band_info, "contract_size", None)
+                        )
+                        if info_cs is not None:
+                            band_cs = info_cs
+                    except (
+                        OSError,
+                        RuntimeError,
+                        ValueError,
+                        TypeError,
+                        AttributeError,
+                    ):
+                        pass
+                    actual = lot_dollar_risk(
+                        intent.volume.value,
+                        stop_distance=stop_for_band,
+                        contract_size=band_cs,
+                        tick_size=band_tick_size,
+                        tick_value=band_tick_value,
+                    )
+                    remaining_cap = None
+                    try:
+                        open_positions = list(self.gateway.adapter.list_positions())
+                        remaining_cap = (
+                            self.risk_engine.config.max_total_planned_risk_usd
+                            - self.risk_engine.aggregate_planned_sl_risk(open_positions)
+                        )
+                        if remaining_cap < 0:
+                            remaining_cap = Decimal("0")
+                    except (
+                        OSError,
+                        RuntimeError,
+                        ValueError,
+                        TypeError,
+                        AttributeError,
+                    ):
+                        remaining_cap = (
+                            self.risk_engine.config.max_total_planned_risk_usd
+                        )
+                    band_reason = actual_planned_sl_band_reason(
+                        actual,
+                        remaining_portfolio_risk=remaining_cap,
+                    )
+                    if band_reason is not None:
+                        detail = format_planned_sl_reject_detail(
+                            reason=band_reason,
+                            symbol=intent.symbol,
+                            volume=intent.volume.value,
+                            actual=actual,
+                            stop_distance=stop_for_band,
+                            min_lot=band_constraints.min_volume,
+                            lot_step=band_constraints.volume_step,
+                            max_lot=band_constraints.max_volume,
+                        )
+                        logger.info(
+                            "planned_initial_sl_risk_rejected",
+                            symbol=intent.symbol,
+                            calculated_volume=str(intent.volume.value),
+                            actual_planned_initial_sl_risk=str(actual),
+                            initial_sl_distance=str(stop_for_band),
+                            broker_volume_min=str(band_constraints.min_volume),
+                            broker_volume_step=str(band_constraints.volume_step),
+                            broker_volume_max=str(band_constraints.max_volume),
+                            rejection_reason=band_reason,
+                            stage="pre_order_send",
+                        )
+                        self._stage(
+                            stages,
+                            stage=PipelineStage.RISK_CHECK,
+                            status="failed",
+                            reason=detail,
+                            t0=t0,
+                            meta={"component": "pre_order_send_planned_sl_band"},
+                        )
+                        self._observe(
+                            user_id=uid,
+                            request_id=request_id,
+                            symbol=symbol,
+                            side=side,
+                            order_type=order_type,
+                            volume=str(intent.volume.value),
+                            stage=PipelineStage.REJECTED,
+                            reason=detail,
+                        )
+                        result = PipelineResult(
+                            request_id=request_id,
+                            action=action,
+                            outcome="rejected",
+                            message=detail,
+                            stages=stages,
+                            rejection_reasons=[detail],
+                            warnings=list(decision.warnings),
+                            checks=dict(decision.checks),
+                            calculated_risk=dict(decision.calculated_risk),
+                            decision=ExecutionDecision.REJECT.value,
+                            latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                            idempotent_replay=decision.idempotent_replay,
+                        )
+                        result.journal_entry = self._write_journal(
+                            result, intent, None, uid
+                        )
+                        return result, decision
+                    tp_for_band = (
+                        intent.take_profit.value
+                        if intent.take_profit is not None
+                        else Decimal("0")
+                    )
+                    tp_dist = (
+                        abs(tp_for_band - entry_for_band)
+                        if tp_for_band > 0 and entry_for_band > 0
+                        else Decimal("0")
+                    )
+                    if tp_dist <= stop_for_band:
+                        fail_closed = (
+                            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+                            f"tp_distance={tp_dist} sl_distance={stop_for_band}"
+                        )
+                        self._observe(
+                            user_id=uid,
+                            request_id=request_id,
+                            symbol=symbol,
+                            side=side,
+                            order_type=order_type,
+                            volume=str(intent.volume.value),
+                            stage=PipelineStage.REJECTED,
+                            reason=fail_closed,
+                        )
+                        result = PipelineResult(
+                            request_id=request_id,
+                            action=action,
+                            outcome="rejected",
+                            message=fail_closed,
+                            stages=stages,
+                            rejection_reasons=[fail_closed],
+                            warnings=list(decision.warnings),
+                            checks=dict(decision.checks),
+                            calculated_risk=dict(decision.calculated_risk),
+                            decision=ExecutionDecision.REJECT.value,
+                            latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                            idempotent_replay=decision.idempotent_replay,
+                        )
+                        result.journal_entry = self._write_journal(
+                            result, intent, None, uid
+                        )
+                        return result, decision
+                    logger.info(
+                        "pre_order_send_planned_sl_ok",
+                        symbol=intent.symbol,
+                        final_volume=str(intent.volume.value),
+                        planned_initial_sl_risk_usd=str(actual),
+                        stop_distance=str(stop_for_band),
+                        tp_distance=str(tp_dist),
+                        contract_size=str(band_cs),
+                    )
+                except Exception:
+                    logger.exception("pre_order_send_planned_sl_band_failed")
+                    fail_closed = (
+                        "pre_order_send planned SL band unavailable — fail closed"
+                    )
+                    self._observe(
+                        user_id=uid,
+                        request_id=request_id,
+                        symbol=symbol,
+                        side=side,
+                        order_type=order_type,
+                        volume=str(intent.volume.value),
+                        stage=PipelineStage.REJECTED,
+                        reason=fail_closed,
+                    )
+                    result = PipelineResult(
+                        request_id=request_id,
+                        action=action,
+                        outcome="rejected",
+                        message=fail_closed,
+                        stages=stages,
+                        rejection_reasons=[fail_closed],
+                        warnings=list(decision.warnings),
+                        checks=dict(decision.checks),
+                        calculated_risk=dict(decision.calculated_risk),
+                        decision=ExecutionDecision.REJECT.value,
+                        latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                        idempotent_replay=decision.idempotent_replay,
+                    )
+                    result.journal_entry = self._write_journal(
+                        result, intent, None, uid
+                    )
+                    return result, decision
+            else:
+                fail_closed = (
+                    "pre_order_send missing valid initial stop — fail closed"
+                )
+                self._observe(
+                    user_id=uid,
+                    request_id=request_id,
+                    symbol=symbol,
+                    side=side,
+                    order_type=order_type,
+                    volume=str(intent.volume.value),
+                    stage=PipelineStage.REJECTED,
+                    reason=fail_closed,
+                )
+                result = PipelineResult(
+                    request_id=request_id,
+                    action=action,
+                    outcome="rejected",
+                    message=fail_closed,
+                    stages=stages,
+                    rejection_reasons=[fail_closed],
+                    warnings=list(decision.warnings),
+                    checks=dict(decision.checks),
+                    calculated_risk=dict(decision.calculated_risk),
+                    decision=ExecutionDecision.REJECT.value,
+                    latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                    idempotent_replay=decision.idempotent_replay,
+                )
+                result.journal_entry = self._write_journal(
+                    result, intent, None, uid
+                )
+                return result, decision
+
         t0 = time.perf_counter()
+        send_request = self.gateway.prepare(intent)
+        if (
+            not _is_manage_intent(intent)
+            and intent.volume.value > 0
+            and send_request.volume != intent.volume.value
+        ):
+            fail_closed = (
+                "final volume mutated after Risk approval: "
+                f"approved={intent.volume.value} prepared={send_request.volume}"
+            )
+            self._observe(
+                user_id=uid,
+                request_id=request_id,
+                symbol=symbol,
+                side=side,
+                order_type=order_type,
+                volume=str(intent.volume.value),
+                stage=PipelineStage.REJECTED,
+                reason=fail_closed,
+            )
+            result = PipelineResult(
+                request_id=request_id,
+                action=action,
+                outcome="rejected",
+                message=fail_closed,
+                stages=stages,
+                rejection_reasons=[fail_closed],
+                warnings=list(decision.warnings),
+                checks=dict(decision.checks),
+                calculated_risk=dict(decision.calculated_risk),
+                decision=ExecutionDecision.REJECT.value,
+                latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                idempotent_replay=decision.idempotent_replay,
+            )
+            result.journal_entry = self._write_journal(result, intent, None, uid)
+            return result, decision
         self._observe(
             user_id=uid,
             request_id=request_id,

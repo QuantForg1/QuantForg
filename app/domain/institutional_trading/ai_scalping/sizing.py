@@ -196,11 +196,12 @@ def calculate_scalping_lots(
                 broker_min_lot=min_lot or cfg.broker_min_lot,
             )
 
-    cs = (
-        contract_size
-        if contract_size is not None and contract_size > 0
-        else Decimal("100")
-    )
+    if contract_size is not None and contract_size > 0:
+        cs = contract_size
+    elif contract_size is not None:
+        cs = Decimal("0")
+    else:
+        cs = Decimal("100")
     broker_min = min_lot if min_lot is not None and min_lot > 0 else cfg.broker_min_lot
     broker_step = (
         lot_step if lot_step is not None and lot_step > 0 else cfg.broker_lot_step

@@ -111,8 +111,19 @@ class MT5OrderValidationService:
         constraints = self.constraints_for(intent.symbol)
         raw = intent.volume.value
         aligned = _align_volume(raw, constraints.volume_step)
+        manage_kinds = {"sltp", "modify_sltp", "close", "partial_close"}
+        is_manage = intent.oms_kind in manage_kinds or int(intent.position or 0) > 0
         if aligned < constraints.min_volume:
-            aligned = constraints.min_volume
+            # New entries must never be forced to broker min when that lot
+            # would violate the planned-SL band. Manage/close may keep min.
+            if is_manage:
+                aligned = constraints.min_volume
+            else:
+                notes.append(
+                    "Lot below broker volume_min — not forced to minimum "
+                    f"(raw={raw} aligned={aligned} min={constraints.min_volume})."
+                )
+                return intent, notes
         if aligned > constraints.max_volume:
             aligned = _align_volume(constraints.max_volume, constraints.volume_step)
             if aligned > constraints.max_volume:

@@ -21,7 +21,9 @@ from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfi
 from app.domain.institutional_trading.confluence import ConfluenceEngine
 from app.domain.institutional_trading.decision_models import (
     AccountRiskState,
+    DecisionAction,
     EligibilityResult,
+    PriceZone,
     TradeDecision,
     TradeDirection,
 )
@@ -99,11 +101,7 @@ def risk_config_from_ite(
         min_lot=min_lot if min_lot is not None and min_lot > 0 else VOLUME_MIN,
         lot_step=lot_step if lot_step is not None and lot_step > 0 else VOLUME_STEP,
         max_lot=max_lot if max_lot is not None and max_lot > 0 else VOLUME_MAX,
-        contract_size=(
-            contract_size
-            if contract_size is not None and contract_size > 0
-            else CONTRACT_SIZE
-        ),
+        contract_size=contract_size if contract_size is not None else CONTRACT_SIZE,
         max_atr_pct_of_price=Decimal("3.0"),
         enforce_session=True,
         enforce_spread=True,
@@ -111,23 +109,27 @@ def risk_config_from_ite(
     )
 
 
+def _positive_spec(value: object) -> Decimal | None:
+    try:
+        if value is None or value == "":
+            return None
+        parsed = Decimal(str(value))
+    except (TypeError, ValueError, ArithmeticError):
+        return None
+    return parsed if parsed.is_finite() and parsed > 0 else None
+
+
 def _live_broker_lot_specs(
     symbol: str,
 ) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal | None, Decimal | None]:
-    """Read live volume_min / step / max / contract_size / ticks; fall back to XAU."""
-    from app.domain.trading.xauusd_specs import (
-        CONTRACT_SIZE,
-        VOLUME_MAX,
-        VOLUME_MIN,
-        VOLUME_STEP,
-    )
+    """Live volume/CS/ticks. Never fall back to gold specs for FX/index."""
+    from app.domain.entities.risk_engine import contract_size_for_symbol
 
-    min_lot, lot_step, max_lot, contract_size = (
-        VOLUME_MIN,
-        VOLUME_STEP,
-        VOLUME_MAX,
-        CONTRACT_SIZE,
-    )
+    min_lot = Decimal("0.01")
+    lot_step = Decimal("0.01")
+    max_lot = Decimal("100")
+    # Unknown instruments (AEXEUR, …) stay 0 until live CS is read.
+    contract_size = contract_size_for_symbol(symbol, default=Decimal("0"))
     tick_size: Decimal | None = None
     tick_value: Decimal | None = None
     try:
@@ -161,40 +163,161 @@ def _live_broker_lot_specs(
                 info = client.symbol_info(candidate)
                 if info is None:
                     continue
-                vmin = Decimal(str(getattr(info, "volume_min", None) or min_lot))
-                vstep = Decimal(str(getattr(info, "volume_step", None) or lot_step))
-                vmax = Decimal(str(getattr(info, "volume_max", None) or max_lot))
-                cs = Decimal(str(getattr(info, "contract_size", None) or contract_size))
-                if vmin > 0:
+                vmin = _positive_spec(getattr(info, "volume_min", None))
+                vstep = _positive_spec(getattr(info, "volume_step", None))
+                vmax = _positive_spec(getattr(info, "volume_max", None))
+                cs = _positive_spec(getattr(info, "contract_size", None))
+                if vmin is not None:
                     min_lot = vmin
-                if vstep > 0:
+                if vstep is not None:
                     lot_step = vstep
-                if vmax > 0:
+                if vmax is not None:
                     max_lot = vmax
-                if cs > 0:
-                    contract_size = cs
+                # Malformed live CS must fail closed — do not substitute gold/FX.
+                contract_size = cs if cs is not None else Decimal("0")
                 raw_ts = getattr(info, "trade_tick_size", None) or getattr(
                     info, "tick_size", None
                 )
                 raw_tv = getattr(info, "trade_tick_value", None) or getattr(
                     info, "tick_value", None
                 )
-                try:
-                    if raw_ts is not None and Decimal(str(raw_ts)) > 0:
-                        tick_size = Decimal(str(raw_ts))
-                except Exception:
-                    tick_size = None
-                try:
-                    if raw_tv is not None and Decimal(str(raw_tv)) > 0:
-                        tick_value = Decimal(str(raw_tv))
-                except Exception:
-                    tick_value = None
+                tick_size = _positive_spec(raw_ts)
+                tick_value = _positive_spec(raw_tv)
                 _ = getattr(info, "stops_level", None)
                 _ = getattr(info, "freeze_level", None)
                 break
     except Exception:
         logger.debug("live_broker_lot_specs_unavailable", symbol=symbol, exc_info=True)
     return min_lot, lot_step, max_lot, contract_size, tick_size, tick_value
+
+
+def _price_zone(level: Decimal) -> PriceZone:
+    return PriceZone(low=level, high=level, mid=level)
+
+
+def _align_decision_to_structural_targets(
+    decision: TradeDecision,
+    *,
+    ai_score: dict[str, Any] | None,
+    stop_distance: Decimal | None,
+    approved_lots: Decimal,
+    actual_sl_risk: Decimal | None,
+    live_min: Decimal,
+    live_step: Decimal,
+    live_max: Decimal,
+    live_cs: Decimal,
+    live_tick: Decimal | None,
+    live_tick_val: Decimal | None,
+) -> TradeDecision:
+    """Use the same structural SL/TP that sized the lot. Never invent 2R geometry."""
+    if (
+        decision.action not in {DecisionAction.BUY, DecisionAction.SELL}
+        or approved_lots <= 0
+    ):
+        return decision
+    score = ai_score if isinstance(ai_score, dict) else {}
+    entry = None
+    sl = None
+    tp = None
+    try:
+        if score.get("entry"):
+            entry = Decimal(str(score.get("entry")))
+        if score.get("stop_loss"):
+            sl = Decimal(str(score.get("stop_loss")))
+        if score.get("take_profit"):
+            tp = Decimal(str(score.get("take_profit")))
+    except (TypeError, ValueError, ArithmeticError):
+        entry, sl, tp = None, None, None
+    if entry is None or entry <= 0:
+        mid = getattr(decision.entry_zone, "mid", None) if decision.entry_zone else None
+        entry = mid if mid is not None and mid > 0 else None
+    if (
+        sl is None
+        and entry is not None
+        and stop_distance is not None
+        and stop_distance > 0
+    ):
+        if decision.action is DecisionAction.BUY:
+            sl = entry - stop_distance
+        else:
+            sl = entry + stop_distance
+    if entry is None or sl is None or tp is None:
+        if decision.estimated_rr is not None and decision.estimated_rr <= Decimal("1"):
+            reasons = [
+                *decision.risk_reasons,
+                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+                f"planned RR {decision.estimated_rr} does not exceed 1.0",
+            ]
+            return replace(
+                decision,
+                action=DecisionAction.NO_TRADE,
+                approved_lots=Decimal("0"),
+                risk_reasons=tuple(reasons),
+                reasons=tuple(dict.fromkeys([*decision.reasons, *reasons])),
+            )
+        return decision
+    sl_dist = abs(entry - sl)
+    tp_dist = abs(tp - entry)
+    if sl_dist <= 0 or tp_dist <= sl_dist:
+        reasons = [
+            *decision.risk_reasons,
+            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+            f"planned TP {tp_dist} <= planned SL {sl_dist}",
+        ]
+        return replace(
+            decision,
+            action=DecisionAction.NO_TRADE,
+            approved_lots=Decimal("0"),
+            risk_reasons=tuple(reasons),
+            reasons=tuple(dict.fromkeys([*decision.reasons, *reasons])),
+        )
+    rr = (tp_dist / sl_dist).quantize(Decimal("0.01"))
+    tp_profit = None
+    if actual_sl_risk is not None and actual_sl_risk > 0:
+        tp_profit = (actual_sl_risk * rr).quantize(Decimal("0.01"))
+    if isinstance(score, dict):
+        score["final_volume"] = str(approved_lots)
+        score["planned_initial_sl_risk_usd"] = (
+            str(actual_sl_risk) if actual_sl_risk is not None else None
+        )
+        score["planned_initial_tp_profit_usd"] = (
+            str(tp_profit) if tp_profit is not None else None
+        )
+        score["risk_reward_ratio"] = str(rr)
+        score["initial_stop"] = str(sl)
+        score["initial_volume"] = str(approved_lots)
+        score["execution_ticket"] = None
+        logger.info(
+            "signal_sizing_audit",
+            symbol=decision.symbol,
+            side=decision.action.value,
+            entry=str(entry),
+            initial_stop=str(sl),
+            initial_tp=str(tp),
+            stop_distance=str(sl_dist),
+            tick_size=str(live_tick) if live_tick is not None else None,
+            tick_value=str(live_tick_val) if live_tick_val is not None else None,
+            contract_size=str(live_cs),
+            volume_min=str(live_min),
+            volume_step=str(live_step),
+            volume_max=str(live_max),
+            final_volume=str(approved_lots),
+            planned_initial_sl_risk_usd=(
+                str(actual_sl_risk) if actual_sl_risk is not None else None
+            ),
+            planned_initial_tp_profit_usd=(
+                str(tp_profit) if tp_profit is not None else None
+            ),
+            risk_reward_ratio=str(rr),
+            opportunity_score=score.get("opportunity_score"),
+        )
+    return replace(
+        decision,
+        stop_zone=_price_zone(sl),
+        target_zone=_price_zone(tp),
+        estimated_rr=rr,
+        approved_lots=approved_lots,
+    )
 
 
 def _resolve_live_positions(
@@ -1225,6 +1348,7 @@ class InstitutionalDecisionPipeline:
                         risk_reasons.append("portfolio_risk_check_failed")
                         approved_lots = Decimal("0")
 
+        planned_sl_actual: Decimal | None = None
         if (
             risk_allowed
             and approved_lots > 0
@@ -1247,6 +1371,7 @@ class InstitutionalDecisionPipeline:
                 tick_size=live_tick,
                 tick_value=live_tick_val,
             )
+            planned_sl_actual = actual
             open_planned = (
                 self.risk_engine.aggregate_planned_sl_risk(pos_all)
                 if pos_all
@@ -1293,7 +1418,7 @@ class InstitutionalDecisionPipeline:
             risk_reasons=tuple(risk_reasons),
         )
 
-        return TradeDecisionEngine(config=cfg).decide(
+        decision = TradeDecisionEngine(config=cfg).decide(
             snapshot=snapshot,
             confluence=confluence,
             eligibility=eligibility,
@@ -1301,4 +1426,21 @@ class InstitutionalDecisionPipeline:
             risk_score=assessment.risk_score,
             risk_reasons=tuple(risk_reasons),
             approved_lots=approved_lots if risk_allowed else Decimal("0"),
+        )
+        return _align_decision_to_structural_targets(
+            decision,
+            ai_score=(
+                self._last_ai_score
+                if isinstance(self._last_ai_score, dict)
+                else None
+            ),
+            stop_distance=stop_distance,
+            approved_lots=approved_lots if risk_allowed else Decimal("0"),
+            actual_sl_risk=planned_sl_actual,
+            live_min=live_min,
+            live_step=live_step,
+            live_max=live_max,
+            live_cs=live_cs,
+            live_tick=live_tick,
+            live_tick_val=live_tick_val,
         )

@@ -236,7 +236,7 @@ def test_ema_rsi_pa_confluence() -> None:
 
 
 @pytest.mark.unit
-def test_fixed_tp_r_preference() -> None:
+def test_fixed_tp_r_is_preference_not_manufactured_tp() -> None:
     snap = _snap()
     cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"))
     targets = compute_structure_targets(
@@ -248,7 +248,10 @@ def test_fixed_tp_r_preference() -> None:
     )
     assert targets.take_profit is not None
     assert targets.stop_loss is not None
-    assert "fixed" in targets.reason.lower()
+    assert targets.expected_rr is not None
+    assert targets.expected_rr > Decimal("1")
+    assert "fixed" not in targets.reason.lower()
+    assert "structural" in targets.reason.lower()
 
 
 @pytest.mark.unit

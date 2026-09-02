@@ -1341,7 +1341,7 @@ class GatewayMT5Client:
                 code=str(row.get("code") or ""),
                 description=str(row.get("description") or ""),
                 digits=int(row.get("digits") or 0),
-                contract_size=Decimal(str(row.get("contract_size") or "100000")),
+                contract_size=Decimal(str(row.get("contract_size") or "0")),
                 raw={
                     "trade_mode": str(
                         row.get("trade_mode")
@@ -1496,7 +1496,7 @@ class GatewayMT5Client:
                     description=meta.description or code,
                     digits=meta.digits or 5,
                     point=Decimal("0.00001"),
-                    contract_size=meta.contract_size or Decimal("100000"),
+                    contract_size=meta.contract_size or Decimal("0"),
                     selected=True,
                     trade_mode="full",
                     currency_base="",
@@ -1532,7 +1532,7 @@ class GatewayMT5Client:
                         digits=meta.digits if meta else 5,
                         point=_dec(tick_payload.get("point"), "0.00001"),
                         contract_size=(
-                            meta.contract_size if meta else Decimal("100000")
+                            meta.contract_size if meta else Decimal("0")
                         ),
                         selected=True,
                         trade_mode="full",
@@ -1552,7 +1552,7 @@ class GatewayMT5Client:
             description=str(specs.get("description") or code),
             digits=int(specs.get("digits") or 5),
             point=_dec(specs.get("point"), "0.00001"),
-            contract_size=_dec(specs.get("contract_size"), "100000"),
+            contract_size=_dec(specs.get("contract_size"), "0"),
             selected=bool(specs.get("selected", True)),
             trade_mode=trade_mode,
             currency_base=str(specs.get("currency_base") or ""),
