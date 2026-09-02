@@ -218,14 +218,35 @@ def calculate_scalping_lots(
         )
 
     risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
-    # XAU: risk ≈ lots * contract_size * stop_distance
-    raw = risk_amount / (cs * dist)
+    from app.domain.institutional_trading.config import TARGET_RISK_PER_TRADE_USD
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
         CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
         STATUS_EXCEEDS_BUDGET,
         STATUS_NORMALIZED_TO_MIN,
+        lot_dollar_risk,
         normalize_lots_against_broker,
+        resolve_target_risk_budget_usd,
     )
+
+    usd_target = Decimal(
+        str(
+            getattr(cfg, "target_risk_per_trade_usd", TARGET_RISK_PER_TRADE_USD)
+            or TARGET_RISK_PER_TRADE_USD
+        )
+    )
+    if usd_target > 0:
+        usd_budget = resolve_target_risk_budget_usd(
+            equity=equity, target_usd=usd_target
+        )
+        if cfg.risk_per_trade_pct > 0 and base_risk < cfg.risk_per_trade_pct:
+            usd_budget = (usd_budget * base_risk / cfg.risk_per_trade_pct).quantize(
+                Decimal("0.01")
+            )
+        risk_amount = usd_budget
+    per_lot = lot_dollar_risk(
+        Decimal("1"), stop_distance=dist, contract_size=cs
+    )
+    raw = risk_amount / per_lot if per_lot > 0 else Decimal("0")
 
     broker_max = cfg.broker_max_lot
     norm = normalize_lots_against_broker(

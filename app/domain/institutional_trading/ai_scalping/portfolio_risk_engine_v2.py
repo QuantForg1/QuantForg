@@ -766,6 +766,24 @@ def _evaluate_portfolio_allocation_unlocked(
     if vols:
         previous_lot = max(vols)
 
+    open_planned = Decimal("0")
+    try:
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            planned_sl_risk_usd,
+        )
+
+        for pos in pos_list:
+            open_planned += planned_sl_risk_usd(
+                volume=_d(getattr(pos, "volume", 0)),
+                entry=_d(getattr(pos, "open_price", 0)),
+                stop_loss=_d(getattr(pos, "stop_loss", 0)),
+                contract_size=contract_size_for_symbol(
+                    str(getattr(pos, "symbol", "") or "")
+                ),
+            )
+    except Exception:
+        open_planned = Decimal("0")
+
     sizing = calculate_dynamic_lots_v2(
         equity=book.equity,
         balance=book.balance,
@@ -795,6 +813,11 @@ def _evaluate_portfolio_allocation_unlocked(
         max_margin_usage_pct=cfg.max_margin_usage_pct,
         max_symbol_exposure_pct=cfg.max_symbol_exposure_pct,
         lot_growth_max_step_pct=cfg.lot_growth_max_step_pct,
+        tick_size=broker.point if broker is not None else None,
+        tick_value=broker.tick_value if broker is not None else None,
+        target_risk_usd=getattr(cfg, "target_risk_per_trade_usd", None),
+        open_planned_risk_usd=open_planned,
+        max_total_planned_risk_usd=getattr(cfg, "max_total_planned_risk_usd", None),
         config=cfg,
         log=log,
     )

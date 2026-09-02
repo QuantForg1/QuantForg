@@ -301,8 +301,8 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == VOLUME_MIN
-    assert size.capped is False
+    assert size.approved_lots == Decimal("0")
+    assert size.block_reason == "MIN_LOT_EXCEEDS_RISK_BUDGET"
 
     result = engine.evaluate(
         RiskCheckInput(
@@ -328,9 +328,9 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
         ),
         positions=[],
     )
-    assert result.decision is RiskDecision.ALLOW or result.decision is RiskDecision.REDUCE_SIZE
-    assert result.approved_lots == VOLUME_MIN
-    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" not in " ".join(result.reasons)
+    assert result.decision is RiskDecision.REJECT
+    assert result.approved_lots == Decimal("0")
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in " ".join(result.reasons)
 
 
 def test_hard_max_and_min_lot_unchanged() -> None:
@@ -353,7 +353,8 @@ def test_invalid_upward_normalization_rejected() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == VOLUME_MIN
+    assert size.approved_lots == Decimal("0")
+    assert size.block_reason == "MIN_LOT_EXCEEDS_RISK_BUDGET"
 
 
 def test_scalp_atr_stop_provenance_unchanged() -> None:

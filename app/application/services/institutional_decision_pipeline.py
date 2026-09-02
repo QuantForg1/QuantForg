@@ -60,6 +60,10 @@ def risk_config_from_ite(
     contract_size: Decimal | None = None,
 ) -> RiskEngineConfig:
     """Map ITE defaults onto RiskEngineConfig (live broker specs when provided)."""
+    from app.domain.institutional_trading.config import (
+        MAX_TOTAL_PLANNED_RISK_USD,
+        TARGET_RISK_PER_TRADE_USD,
+    )
     from app.domain.trading.xauusd_specs import (
         CONTRACT_SIZE,
         VOLUME_MAX,
@@ -67,8 +71,16 @@ def risk_config_from_ite(
         VOLUME_STEP,
     )
 
+    target_usd = getattr(cfg, "target_risk_per_trade_usd", TARGET_RISK_PER_TRADE_USD)
+    agg_usd = getattr(cfg, "max_total_planned_risk_usd", MAX_TOTAL_PLANNED_RISK_USD)
     return RiskEngineConfig(
         max_risk_per_trade_pct=cfg.risk_per_trade_pct,
+        target_risk_per_trade_usd=(
+            target_usd if target_usd and target_usd > 0 else TARGET_RISK_PER_TRADE_USD
+        ),
+        max_total_planned_risk_usd=(
+            agg_usd if agg_usd and agg_usd > 0 else MAX_TOTAL_PLANNED_RISK_USD
+        ),
         max_daily_loss_pct=cfg.max_daily_loss_pct,
         max_weekly_loss_pct=cfg.max_weekly_drawdown_pct,
         max_open_positions=cfg.max_open_trades,
@@ -91,8 +103,8 @@ def risk_config_from_ite(
 
 def _live_broker_lot_specs(
     symbol: str,
-) -> tuple[Decimal, Decimal, Decimal, Decimal]:
-    """Read live volume_min / step / max / contract_size; fall back to XAU specs."""
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal | None, Decimal | None]:
+    """Read live volume_min / step / max / contract_size / ticks; fall back to XAU."""
     from app.domain.trading.xauusd_specs import (
         CONTRACT_SIZE,
         VOLUME_MAX,
@@ -106,6 +118,8 @@ def _live_broker_lot_specs(
         VOLUME_MAX,
         CONTRACT_SIZE,
     )
+    tick_size: Decimal | None = None
+    tick_value: Decimal | None = None
     try:
         from core.di.container import get_container
 
@@ -149,12 +163,28 @@ def _live_broker_lot_specs(
                     max_lot = vmax
                 if cs > 0:
                     contract_size = cs
+                raw_ts = getattr(info, "trade_tick_size", None) or getattr(
+                    info, "tick_size", None
+                )
+                raw_tv = getattr(info, "trade_tick_value", None) or getattr(
+                    info, "tick_value", None
+                )
+                try:
+                    if raw_ts is not None and Decimal(str(raw_ts)) > 0:
+                        tick_size = Decimal(str(raw_ts))
+                except Exception:
+                    tick_size = None
+                try:
+                    if raw_tv is not None and Decimal(str(raw_tv)) > 0:
+                        tick_value = Decimal(str(raw_tv))
+                except Exception:
+                    tick_value = None
                 _ = getattr(info, "stops_level", None)
                 _ = getattr(info, "freeze_level", None)
                 break
     except Exception:
         logger.debug("live_broker_lot_specs_unavailable", symbol=symbol, exc_info=True)
-    return min_lot, lot_step, max_lot, contract_size
+    return min_lot, lot_step, max_lot, contract_size, tick_size, tick_value
 
 
 def _resolve_live_positions(
@@ -552,11 +582,14 @@ class InstitutionalDecisionPipeline:
         pos_list = filter_quantforg_positions(
             live_book, symbol=str(getattr(snapshot, "symbol", "") or "")
         )
+        pos_all = filter_quantforg_positions(live_book)
         live_positions = pos_list
 
         assert self.risk_engine is not None
         # Keep risk engine limits in sync with adaptive / scalping + live broker specs.
-        live_min, live_step, live_max, live_cs = _live_broker_lot_specs(snapshot.symbol)
+        live_min, live_step, live_max, live_cs, live_tick, live_tick_val = (
+            _live_broker_lot_specs(snapshot.symbol)
+        )
         feasibility = self.evaluate_min_lot_feasibility_gate(
             stop_distance=stop_distance,
             equity=account.equity,
@@ -602,6 +635,9 @@ class InstitutionalDecisionPipeline:
             spread=snapshot.spread,
             session_allowed=snapshot.session.allowed,
             session_name=snapshot.session.session.value,
+            contract_size=live_cs,
+            tick_size=live_tick,
+            tick_value=live_tick_val,
         )
         risk_engine_lots_cap = Decimal("0")
         self.risk_engine = RiskEngine(
@@ -618,7 +654,7 @@ class InstitutionalDecisionPipeline:
             account=_account_snapshot(
                 equity=account.equity, free_margin=account.free_margin
             ),
-            positions=pos_list,
+            positions=pos_all,
             peak_equity=account.peak_equity or account.equity,
             daily_pnl=account.daily_pnl,
             weekly_pnl=account.weekly_pnl,
@@ -1013,6 +1049,19 @@ class InstitutionalDecisionPipeline:
                         max_margin_usage_pct=scalp_cfg.max_margin_usage_pct,
                         max_symbol_exposure_pct=scalp_cfg.max_symbol_exposure_pct,
                         lot_growth_max_step_pct=scalp_cfg.lot_growth_max_step_pct,
+                        tick_size=live_tick,
+                        tick_value=live_tick_val,
+                        target_risk_usd=getattr(
+                            scalp_cfg, "target_risk_per_trade_usd", None
+                        ),
+                        open_planned_risk_usd=self.risk_engine.aggregate_planned_sl_risk(
+                            pos_all
+                        )
+                        if pos_all
+                        else None,
+                        max_total_planned_risk_usd=getattr(
+                            scalp_cfg, "max_total_planned_risk_usd", None
+                        ),
                         config=scalp_cfg,
                     )
                     sized = sized_v2.to_lot_result()

@@ -20,7 +20,7 @@ HOLD_BREAK_EVEN_OFFSET_R = Decimal("0.30")
 HOLD_ABSOLUTE_MAX_HOLD_MINUTES = 0
 HOLD_TIME_STOP_MINUTES = 20
 
-SCALP_BREAK_EVEN_AT_R = Decimal("0.5")
+SCALP_BREAK_EVEN_AT_R = Decimal("0.80")
 # Offset must leave room for gold noise; 0.2R glued SL to entry on ticket 557892348.
 SCALP_BREAK_EVEN_OFFSET_R = Decimal("0.35")
 SCALP_ABSOLUTE_MAX_HOLD_MINUTES = 25

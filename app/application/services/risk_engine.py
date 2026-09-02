@@ -62,6 +62,10 @@ class RiskCheckInput:
     entry_price: Decimal = Decimal("1")
     # Optional operator risk % (percentage_risk); None → config.max_risk_per_trade_pct
     risk_per_trade_pct: Decimal | None = None
+    # Live broker specs for this symbol (optional; RiskEngineConfig used otherwise)
+    contract_size: Decimal | None = None
+    tick_size: Decimal | None = None
+    tick_value: Decimal | None = None
     # Institutional extensions (Phase B) — optional; ignored when None / unset
     consecutive_losses: int = 0
     cooldown_active: bool = False
@@ -91,6 +95,26 @@ class RiskEngine:
         lev = Decimal(int(account.leverage)) if account.leverage else Decimal("0")
         return lev if lev > 0 else fallback
 
+    def aggregate_planned_sl_risk(self, positions: list[MT5Position]) -> Decimal:
+        return self._aggregate_planned_sl_risk(positions)
+
+    def _aggregate_planned_sl_risk(self, positions: list[MT5Position]) -> Decimal:
+        """Sum planned SL-hit loss across the open book (per-symbol contract)."""
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            planned_sl_risk_usd,
+        )
+
+        total = Decimal("0")
+        for pos in positions:
+            cs = self._contract_size(pos.symbol)
+            total += planned_sl_risk_usd(
+                volume=pos.volume,
+                entry=pos.open_price,
+                stop_loss=pos.stop_loss,
+                contract_size=cs,
+            )
+        return total.quantize(Decimal("0.01"))
+
     # -- 1. Position sizing --------------------------------------------------
 
     def size_position(
@@ -104,7 +128,17 @@ class RiskEngine:
         entry_price: Decimal,
         contract_size: Decimal | None = None,
         risk_per_trade_pct: Decimal | None = None,
+        tick_size: Decimal | None = None,
+        tick_value: Decimal | None = None,
     ) -> PositionSizeResult:
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            STATUS_NORMALIZED_TO_MIN,
+            lot_dollar_risk,
+            normalize_lots_against_broker,
+            resolve_target_risk_budget_usd,
+        )
+        from core.logging import get_logger
+
         cfg = self.config
         cs = contract_size if contract_size is not None else cfg.contract_size
         stop = stop_distance or Decimal("0")
@@ -137,27 +171,37 @@ class RiskEngine:
             stop = distance
             dollar = risk_budget
         else:  # PERCENTAGE_RISK
-            risk_budget = equity * (risk_pct / Decimal("100"))
+            pct_budget = equity * (risk_pct / Decimal("100"))
             if stop <= 0:
                 stop = entry_price * Decimal("0.001")
-            lots = (risk_budget / (stop * cs)).quantize(
-                cfg.lot_step, rounding=ROUND_DOWN
+            usd_target = cfg.target_risk_per_trade_usd
+            if usd_target is not None and usd_target > 0:
+                dollar = resolve_target_risk_budget_usd(
+                    equity=equity, target_usd=usd_target
+                )
+            else:
+                dollar = pct_budget
+            lots = (
+                (dollar / (stop * cs)).quantize(cfg.lot_step, rounding=ROUND_DOWN)
+                if stop > 0 and cs > 0
+                else Decimal("0")
             )
-            dollar = risk_budget
             if requested_lots is not None and requested_lots > 0:
                 # Prefer smaller of calculated vs requested
                 lots = min(lots, requested_lots)
 
-        from app.domain.institutional_trading.operations.min_lot_feasibility import (
-            STATUS_NORMALIZED_TO_MIN,
-            normalize_lots_against_broker,
-        )
-        from core.logging import get_logger
-
         _log = get_logger(__name__)
         raw_lots = lots
-        if stop > 0 and cs > 0 and dollar > 0:
-            raw_lots = dollar / (stop * cs)
+        if stop > 0 and dollar > 0:
+            per_lot = lot_dollar_risk(
+                Decimal("1"),
+                stop_distance=stop,
+                contract_size=cs,
+                tick_size=tick_size,
+                tick_value=tick_value,
+            )
+            if per_lot > 0:
+                raw_lots = dollar / per_lot
         if requested_lots is not None and requested_lots > 0:
             raw_lots = min(raw_lots, requested_lots)
         norm = normalize_lots_against_broker(
@@ -169,6 +213,8 @@ class RiskEngine:
             stop_distance=stop,
             contract_size=cs,
             risk_budget=dollar.quantize(Decimal("0.01")) if dollar > 0 else None,
+            tick_size=tick_size,
+            tick_value=tick_value,
         )
         requested = (
             requested_lots
@@ -191,6 +237,7 @@ class RiskEngine:
                 normalized_lot=str(norm.normalized_lot),
                 estimated_risk_amount=str(norm.estimated_risk_amount),
                 risk_budget=str(norm.risk_budget),
+                target_risk_usd=str(cfg.target_risk_per_trade_usd),
                 needed_pct=(
                     str(norm.needed_pct) if norm.needed_pct is not None else None
                 ),
@@ -220,13 +267,12 @@ class RiskEngine:
         approved = norm.normalized_lot
         capped = False
         dollar_out = dollar.quantize(Decimal("0.01"))
-        if norm.sizing_status == STATUS_NORMALIZED_TO_MIN:
+        if norm.estimated_risk_amount > 0:
             dollar_out = norm.estimated_risk_amount
-        elif norm.sizing_status == "capped_max_lot":
-            capped = True
-            if norm.estimated_risk_amount > 0:
-                dollar_out = norm.estimated_risk_amount
-        elif requested_lots is not None and requested_lots > approved:
+        if (
+            norm.sizing_status == "capped_max_lot"
+            or (requested_lots is not None and requested_lots > approved)
+        ):
             capped = True
         return PositionSizeResult(
             method=method,
@@ -1109,7 +1155,11 @@ class RiskEngine:
         reasons: list[str] = []
         warnings: list[str] = []
         checks: dict[str, bool] = {}
-        contract_size = self._contract_size(check.symbol)
+        contract_size = (
+            check.contract_size
+            if check.contract_size is not None and check.contract_size > 0
+            else self.config.contract_size
+        )
         leverage = self._account_leverage(
             account, fallback=self.config.exposure_leverage
         )
@@ -1123,8 +1173,21 @@ class RiskEngine:
             entry_price=check.entry_price,
             contract_size=contract_size,
             risk_per_trade_pct=check.risk_per_trade_pct,
+            tick_size=check.tick_size,
+            tick_value=check.tick_value,
         )
         checks["position_sizing"] = size.approved_lots >= self.config.min_lot
+
+        open_planned = self._aggregate_planned_sl_risk(positions)
+        proposed_planned = size.dollar_risk if size.approved_lots > 0 else Decimal("0")
+        total_planned = open_planned + proposed_planned
+        cap = self.config.max_total_planned_risk_usd
+        checks["aggregate_planned_risk"] = cap <= 0 or total_planned <= cap
+        if not checks["aggregate_planned_risk"]:
+            reasons.append(
+                f"aggregate planned SL risk {total_planned} exceeds "
+                f"{cap} (open={open_planned} proposed={proposed_planned})"
+            )
 
         open_count = len(positions)
         checks["open_positions"] = open_count < self.config.max_open_positions
@@ -1213,6 +1276,7 @@ class RiskEngine:
             or not dd_ok
             or not checks["open_positions"]
             or not inst_ok
+            or not checks.get("aggregate_planned_risk", True)
         ):
             decision = RiskDecision.REJECT
             approved = Decimal("0")
@@ -1233,6 +1297,25 @@ class RiskEngine:
                         "risk reduce requested but already at broker min_lot - "
                         "keeping min_lot"
                     )
+                    from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
+                        lot_dollar_risk,
+                    )
+
+                    est_min = lot_dollar_risk(
+                        approved,
+                        stop_distance=size.stop_distance or Decimal("0"),
+                        contract_size=contract_size,
+                        tick_size=check.tick_size,
+                        tick_value=check.tick_value,
+                    )
+                    cap_usd = self.config.target_risk_per_trade_usd
+                    if cap_usd > 0 and est_min > cap_usd:
+                        decision = RiskDecision.REJECT
+                        approved = Decimal("0")
+                        reasons.append(
+                            "MIN_LOT_EXCEEDS_RISK_BUDGET: min_lot actual risk "
+                            f"{est_min} exceeds target {cap_usd}"
+                        )
                 else:
                     decision = RiskDecision.REJECT
                     approved = Decimal("0")

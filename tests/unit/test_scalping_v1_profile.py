@@ -116,9 +116,9 @@ def test_scalping_v1_multi_opportunity_not_one_best_only() -> None:
 def test_scalping_v1_pme_earlier_management() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     pme = pme_config_for_scalping(cfg)
-    assert pme.break_even_at_r == Decimal("0.50")
-    assert pme.partial_at_r == Decimal("0.70")
-    assert pme.trail_after_r == Decimal("0.70")
+    assert pme.break_even_at_r == Decimal("0.80")
+    assert pme.partial_at_r == Decimal("1.20")
+    assert pme.trail_after_r == Decimal("1.20")
     assert pme.absolute_max_hold_minutes == 12
     assert pme.time_stop_minutes == 8
     assert pme.momentum_fade_exit is True

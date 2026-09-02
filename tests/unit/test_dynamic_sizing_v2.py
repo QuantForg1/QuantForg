@@ -123,8 +123,7 @@ class TestDynamicSizingSafety:
         assert d.calculated_lot < d.broker_min_lot
 
     def test_micro_conditional_approves_when_min_lot_within_hard_max(self) -> None:
-        """~$181 equity / moderate stop → micro_conditional keeps broker min_lot."""
-        # min_loss = 0.01 * 100 * 7.26 = 7.26 → ~4.0% <= hard_max 80%
+        """Gold min-lot $7.26 exceeds $6 planned SL cap → reject."""
         d = calculate_dynamic_lots_v2(
             equity=Decimal("181.53"),
             balance=Decimal("181.53"),
@@ -139,10 +138,9 @@ class TestDynamicSizingSafety:
             quality_reject=False,
             log=False,
         )
-        assert d.valid is True
-        assert d.final_lot == Decimal("0.01")
-        assert "micro_conditional" in d.method
-        assert d.calculated_lot < d.broker_min_lot
+        assert d.valid is False
+        assert d.final_lot == Decimal("0")
+        assert d.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
 
     def test_weak_setup_rejects(self) -> None:
         d = calculate_dynamic_lots_v2(

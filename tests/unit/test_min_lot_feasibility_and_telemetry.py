@@ -144,14 +144,14 @@ def test_filter_agrees_with_risk_engine_min_lot_math() -> None:
 
 
 def test_risk_engine_remains_authoritative_on_feasible_stop() -> None:
-    feas = _feas(stop=Decimal("8.00"))
+    feas = _feas(stop=Decimal("5.00"))
     assert feas.classification == CLASS_FEASIBLE
     engine = RiskEngine()
     sized = engine.size_position(
         equity=_EQUITY,
         method=PositionSizingMethod.PERCENTAGE_RISK,
         requested_lots=None,
-        stop_distance=Decimal("8.00"),
+        stop_distance=Decimal("5.00"),
         atr=None,
         entry_price=Decimal("4600"),
         contract_size=_CS,

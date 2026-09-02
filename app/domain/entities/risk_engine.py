@@ -15,7 +15,11 @@ from app.domain.enums.risk import (
     RiskDecision,
     RiskScoreBand,
 )
-from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
+from app.domain.institutional_trading.config import (
+    MAX_DAILY_LOSS_PCT,
+    MAX_TOTAL_PLANNED_RISK_USD,
+    TARGET_RISK_PER_TRADE_USD,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +30,9 @@ class RiskEngineConfig:
     min_lot: Decimal = Decimal("0.01")
     lot_step: Decimal = Decimal("0.01")
     max_risk_per_trade_pct: Decimal = Decimal("1")  # % of equity
+    # Primary sizing budget: planned USD loss if SL is hit (not margin).
+    target_risk_per_trade_usd: Decimal = TARGET_RISK_PER_TRADE_USD
+    max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     # Authoritative ITE daily-loss cap — never a parallel 5% OMS policy.
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_loss_pct: Decimal = Decimal("10")
@@ -63,18 +70,35 @@ class RiskEngineConfig:
         require(self.max_open_positions >= 1, "max_open_positions >= 1")
 
 
+_FX_CURRENCIES = frozenset(
+    {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD", "SGD", "HKD"}
+)
+
+
 def contract_size_for_symbol(
     symbol: str, *, default: Decimal = Decimal("100")
 ) -> Decimal:
-    """Broker contract size — QuantForg is XAUUSD-only (MT5 contract_size=100)."""
+    """Broker contract size from instrument class.
+
+    Gold stays at 100 oz (never the FX 100k inflation path). Standard FX
+    majors use 100,000. Live MT5 ``contract_size`` always wins when the
+    caller passes it into Risk / sizing.
+    """
     from app.domain.trading.xauusd_specs import CONTRACT_SIZE
 
-    u = symbol.strip().upper()
-    if u.startswith("XAU") or "GOLD" in u or not u:
+    u = "".join(ch for ch in symbol.strip().upper() if ch.isalnum())
+    if not u:
         return CONTRACT_SIZE
-    # Non-gold symbols are not tradable; still return gold size to avoid FX inflation.
-    _ = default
-    return CONTRACT_SIZE
+    if u.startswith("XAU") or "GOLD" in u:
+        return CONTRACT_SIZE
+    if u.startswith("XAG") or "SILVER" in u:
+        return Decimal("5000")
+    if u.startswith("BTC") or u.startswith("ETH"):
+        return Decimal("1")
+    base, quote = u[:3], u[3:6]
+    if len(u) >= 6 and base in _FX_CURRENCIES and quote in _FX_CURRENCIES:
+        return Decimal("100000")
+    return default if default > 0 else CONTRACT_SIZE
 
 
 @dataclass(frozen=True, slots=True)

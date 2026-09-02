@@ -25,7 +25,11 @@ from app.domain.institutional_trading.ai_scalping.sizing import (
     LotSizingResult,
     _quantize_lot,
 )
-from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
+from app.domain.institutional_trading.config import (
+    MAX_DAILY_LOSS_PCT,
+    MAX_TOTAL_PLANNED_RISK_USD,
+    TARGET_RISK_PER_TRADE_USD,
+)
 from app.domain.trading.xauusd_specs import (
     CONTRACT_SIZE,
     VOLUME_MAX,
@@ -110,13 +114,18 @@ class DynamicSizingDecision:
     extras: dict[str, object] = field(default_factory=dict)
 
     def to_lot_result(self) -> LotSizingResult:
+        extra_risk = self.extras.get("actual_estimated_risk")
+        if extra_risk not in {None, ""}:
+            risk_amount = Decimal(str(extra_risk))
+        elif self.equity > 0 and self.risk_pct > 0:
+            risk_amount = (self.equity * self.risk_pct / Decimal("100")).quantize(
+                Decimal("0.01")
+            )
+        else:
+            risk_amount = Decimal("0")
         return LotSizingResult(
             lots=self.final_lot if self.valid else Decimal("0"),
-            risk_amount=(
-                (self.equity * self.risk_pct / Decimal("100")).quantize(Decimal("0.01"))
-                if self.equity > 0 and self.risk_pct > 0
-                else Decimal("0")
-            ),
+            risk_amount=risk_amount,
             stop_distance=self.stop_loss_distance,
             method=self.method,
             reason=self.rejection_reason or self.reason,
@@ -354,6 +363,11 @@ def calculate_dynamic_lots_v2(
     current_drawdown_pct: Decimal = Decimal("0"),
     consecutive_losses: int = 0,
     consecutive_wins: int = 0,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
+    target_risk_usd: Decimal | None = None,
+    open_planned_risk_usd: Decimal | None = None,
+    max_total_planned_risk_usd: Decimal | None = None,
     config: AiScalpingConfig | None = None,
     log: bool = True,
 ) -> DynamicSizingDecision:
@@ -605,8 +619,92 @@ def calculate_dynamic_lots_v2(
             dist=dist,
         )
 
-    risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
-    raw = risk_amount / (cs * dist)
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        STATUS_EXCEEDS_BUDGET,
+        STATUS_NORMALIZED_TO_MIN,
+        lot_dollar_risk,
+        normalize_lots_against_broker,
+        resolve_target_risk_budget_usd,
+    )
+
+    usd_target = (
+        target_risk_usd
+        if target_risk_usd is not None and target_risk_usd > 0
+        else Decimal(
+            str(
+                getattr(cfg, "target_risk_per_trade_usd", TARGET_RISK_PER_TRADE_USD)
+                or TARGET_RISK_PER_TRADE_USD
+            )
+        )
+    )
+    usd_budget = resolve_target_risk_budget_usd(
+        equity=equity, target_usd=usd_target
+    )
+    # Quality / session / adaptive / vol already folded into base_risk vs
+    # configured_max. Apply the same reduce-only scale to the dollar target.
+    if configured_max > 0 and base_risk < configured_max:
+        usd_budget = (usd_budget * base_risk / configured_max).quantize(
+            Decimal("0.01")
+        )
+    if usd_budget <= 0:
+        return _reject(
+            "invalid_inputs",
+            "USD risk budget is zero after protective scaling",
+            risk=base_risk,
+            dist=dist,
+        )
+
+    agg_cap = (
+        max_total_planned_risk_usd
+        if max_total_planned_risk_usd is not None
+        and max_total_planned_risk_usd > 0
+        else Decimal(
+            str(
+                getattr(
+                    cfg,
+                    "max_total_planned_risk_usd",
+                    MAX_TOTAL_PLANNED_RISK_USD,
+                )
+                or MAX_TOTAL_PLANNED_RISK_USD
+            )
+        )
+    )
+    open_usd = (
+        open_planned_risk_usd
+        if open_planned_risk_usd is not None and open_planned_risk_usd > 0
+        else Decimal("0")
+    )
+    if agg_cap > 0 and open_usd + usd_budget > agg_cap:
+        remaining = agg_cap - open_usd
+        if remaining <= 0:
+            return _reject(
+                "aggregate_planned_risk",
+                (
+                    f"Aggregate planned SL risk {open_usd} at cap {agg_cap} "
+                    f"(proposed={usd_budget})"
+                ),
+                risk=base_risk,
+                dist=dist,
+            )
+        usd_budget = remaining
+
+    per_lot = lot_dollar_risk(
+        Decimal("1"),
+        stop_distance=dist,
+        contract_size=cs,
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
+    if per_lot <= 0:
+        return _reject(
+            "invalid_inputs",
+            "loss_per_lot invalid — refusing fixed lots",
+            risk=base_risk,
+            dist=dist,
+        )
+    risk_amount = usd_budget
+    raw = risk_amount / per_lot
 
     # Equity-tier soft target: high/exceptional may approach preferred_hi,
     # but NEVER above risk-based raw and NEVER force up to preferred_lo.
@@ -688,13 +786,6 @@ def calculate_dynamic_lots_v2(
 
     final_norm = None
     try:
-        from app.domain.institutional_trading.operations.min_lot_feasibility import (
-            CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
-            STATUS_EXCEEDS_BUDGET,
-            STATUS_NORMALIZED_TO_MIN,
-            normalize_lots_against_broker,
-        )
-
         final_norm = normalize_lots_against_broker(
             calculated_lot=suggested if suggested > 0 else raw,
             min_lot=broker_min,
@@ -703,11 +794,9 @@ def calculate_dynamic_lots_v2(
             equity=equity,
             stop_distance=dist,
             contract_size=cs,
-            risk_budget=(
-                (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
-                if equity > 0 and base_risk > 0
-                else None
-            ),
+            risk_budget=risk_amount,
+            tick_size=tick_size,
+            tick_value=tick_value,
         )
         final = final_norm.normalized_lot if final_norm.approved else Decimal("0")
     except Exception:
@@ -816,6 +905,16 @@ def calculate_dynamic_lots_v2(
             "current_drawdown_pct": str(current_drawdown_pct or Decimal("0")),
             "consecutive_losses": int(consecutive_losses or 0),
             "consecutive_wins": int(consecutive_wins or 0),
+            "target_risk_usd": str(usd_target),
+            "calculated_volume": str(raw),
+            "normalized_volume": str(final),
+            "actual_estimated_risk": str(
+                final_norm.estimated_risk_amount
+                if final_norm is not None
+                else (final * per_lot).quantize(Decimal("0.01"))
+            ),
+            "aggregate_open_planned_risk": str(open_usd),
+            "aggregate_risk_cap": str(agg_cap),
         },
     )
     if log:

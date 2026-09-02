@@ -252,6 +252,50 @@ def lot_dollar_risk(
     return (lots * contract_size * stop_distance).quantize(_CENTS)
 
 
+def resolve_target_risk_budget_usd(
+    *,
+    equity: Decimal,
+    target_usd: Decimal,
+    hard_max_risk_pct: Decimal | None = None,
+) -> Decimal:
+    """USD SL-loss budget, never above the micro hard-max percent of equity."""
+    profile = MicroAccountProfile()
+    hard = (
+        hard_max_risk_pct
+        if hard_max_risk_pct is not None
+        else profile.hard_max_risk_pct
+    )
+    if equity <= 0 or target_usd <= 0:
+        return Decimal("0")
+    hard_usd = (equity * hard / _PCT).quantize(_CENTS)
+    target = target_usd.quantize(_CENTS)
+    return min(target, hard_usd) if hard_usd > 0 else target
+
+
+def planned_sl_risk_usd(
+    *,
+    volume: Decimal,
+    entry: Decimal,
+    stop_loss: Decimal,
+    contract_size: Decimal,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
+) -> Decimal:
+    """Monetary loss if the current protective SL is hit."""
+    if volume <= 0 or entry <= 0 or stop_loss <= 0:
+        return Decimal("0")
+    dist = abs(entry - stop_loss)
+    if dist <= 0:
+        return Decimal("0")
+    return lot_dollar_risk(
+        volume,
+        stop_distance=dist,
+        contract_size=contract_size,
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
+
+
 def first_valid_broker_lot(
     *,
     min_lot: Decimal,
@@ -435,6 +479,13 @@ def normalize_lots_against_broker(
     needed = (min_loss / equity * _PCT).quantize(_CENTS) if equity > 0 else None
 
     if needed is not None and needed > hard:
+        return _blank(
+            status=STATUS_EXCEEDS_BUDGET,
+            reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            est=min_loss,
+            needed=needed,
+        )
+    if budget > 0 and min_loss > budget:
         return _blank(
             status=STATUS_EXCEEDS_BUDGET,
             reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,

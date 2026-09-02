@@ -222,8 +222,8 @@ def test_unknown_class_is_explicit(pme_path: Path) -> None:
 
 def test_break_even_follows_class_policy() -> None:
     scalp = _pos(trade_class="SCALP")
-    # ~0.55R: SCALP BE at 0.5R; HOLD BE at 1.0R; UNKNOWN must not inherit SCALP
-    price = "4493.00"
+    # ~0.85R: SCALP BE at 0.8R; HOLD BE at 1.0R; UNKNOWN must not inherit SCALP
+    price = "4497.20"
     scalp_plan = plan_action(scalp, _ctx(price=price), DEFAULT_PME_CONFIG)
     assert scalp_plan.kind is ManageActionKind.BREAK_EVEN
 
@@ -242,7 +242,7 @@ def test_scalp_profit_extension_defers_be_when_momentum_intact() -> None:
     scalp = _pos(trade_class="SCALP")
     plan = plan_action(
         scalp,
-        _ctx(price="4493.00", ai_momentum=70),
+        _ctx(price="4497.20", ai_momentum=70),
         DEFAULT_PME_CONFIG,
     )
     assert plan.kind is ManageActionKind.SKIP
@@ -253,7 +253,7 @@ def test_scalp_be_fires_when_momentum_faded() -> None:
     scalp = _pos(trade_class="SCALP")
     plan = plan_action(
         scalp,
-        _ctx(price="4493.00", minutes=0, ai_momentum=20),
+        _ctx(price="4497.20", minutes=0, ai_momentum=20),
         DEFAULT_PME_CONFIG,
     )
     assert plan.kind is ManageActionKind.BREAK_EVEN
@@ -266,7 +266,7 @@ def test_tp_preserved_on_authorized_sl_modify() -> None:
     pos = _pos(trade_class="SCALP")
     engine.register(pos)
     tp = pos.current_tp
-    result = engine.evaluate(pos.ticket, _ctx(price="4495.00"))
+    result = engine.evaluate(pos.ticket, _ctx(price="4497.20"))
     assert result.action is ManageActionKind.BREAK_EVEN
     assert result.record is not None
     assert result.record.old_tp == tp

@@ -600,7 +600,8 @@ def size_from_broker_specs(
 
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.0001"))
     if max_risk_amount is not None and max_risk_amount > 0:
-        risk_budget = min(risk_budget, max_risk_amount)
+        # Explicit dollar SL-loss target is the sizing budget (not min with %).
+        risk_budget = max_risk_amount
     if risk_budget <= 0:
         return PositionSizeResult(
             False, Decimal("0"), Decimal("0"), stop_distance, "risk_budget_zero"
@@ -638,7 +639,21 @@ def size_from_broker_specs(
         quantized = min(quantized, spec.volume_max)
     actual_loss = quantized * loss_per_lot
     pct = (actual_loss / equity) * Decimal("100")
-    if pct > risk_pct:
+    from app.domain.institutional_trading.micro_account_mode import (
+        DEFAULT_MICRO_ACCOUNT_PROFILE,
+    )
+
+    if actual_loss > risk_budget:
+        return PositionSizeResult(
+            False,
+            Decimal("0"),
+            risk_budget,
+            stop_distance,
+            ACCOUNT_TOO_SMALL,
+            monetary_loss_at_sl=actual_loss,
+            percentage_account_risk=pct.quantize(Decimal("0.0001")),
+        )
+    if pct > DEFAULT_MICRO_ACCOUNT_PROFILE.hard_max_risk_pct:
         return PositionSizeResult(
             False,
             Decimal("0"),
@@ -950,11 +965,14 @@ def evaluate_live_order(
         and finite_positive(sl)
     ):
         stop_dist = abs(entry - sl)
+        from app.domain.institutional_trading.config import TARGET_RISK_PER_TRADE_USD
+
         sizing = size_from_broker_specs(
             equity=req.equity,
             risk_pct=cfg.risk_per_trade_pct,
             stop_distance=stop_dist,
             spec=req.spec,
+            max_risk_amount=TARGET_RISK_PER_TRADE_USD,
         )
         gates.append(
             _gate("position_size", sizing.accepted, sizing.reason or "sizing_failed")

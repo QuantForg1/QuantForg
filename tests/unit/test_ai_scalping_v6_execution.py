@@ -108,7 +108,7 @@ def test_pme_maps_v6_execution_knobs() -> None:
     assert pme.atr_trail_enabled is True
     assert pme.momentum_fade_threshold == DEFAULT_AI_SCALPING_CONFIG.momentum_fade_threshold
     assert pme.partial_tp_enabled is True
-    assert pme.break_even_at_r == Decimal("0.50")
+    assert pme.break_even_at_r == Decimal("0.80")
 
 
 @pytest.mark.unit

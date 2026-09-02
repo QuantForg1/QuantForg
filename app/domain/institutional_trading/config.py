@@ -16,6 +16,11 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 # It is a maximum, not a target. Boundary: pct > cap blocks; pct == cap does not.
 MAX_DAILY_LOSS_PCT = Decimal("80.0")
 
+# Planned SL-loss targets (not margin). Size from broker tick value / stop
+# distance so ~$6 is lost if SL hits. Aggregate is a ceiling, not a fill quota.
+TARGET_RISK_PER_TRADE_USD = Decimal("6.00")
+MAX_TOTAL_PLANNED_RISK_USD = Decimal("30.00")
+
 
 def coerce_max_daily_loss_pct(value: Decimal) -> Decimal:
     """Reject non-positive values and anything above the hard cap."""
@@ -48,6 +53,8 @@ class ITEConfig:
 
     # Risk (Phase B+ uses these; stored here for single source of truth)
     risk_per_trade_pct: Decimal = Decimal("1.0")
+    target_risk_per_trade_usd: Decimal = TARGET_RISK_PER_TRADE_USD
+    max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_drawdown_pct: Decimal = Decimal("8.0")
     max_open_trades: int = 1
@@ -117,6 +124,8 @@ class ITEConfig:
             "high_confidence_score": self.high_confidence_score,
             "min_trade_quality_score": self.min_trade_quality_score,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
+            "target_risk_per_trade_usd": str(self.target_risk_per_trade_usd),
+            "max_total_planned_risk_usd": str(self.max_total_planned_risk_usd),
             "max_daily_loss_pct": str(self.max_daily_loss_pct),
             "max_weekly_drawdown_pct": str(self.max_weekly_drawdown_pct),
             "max_open_trades": self.max_open_trades,

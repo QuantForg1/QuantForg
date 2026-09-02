@@ -209,6 +209,8 @@ class AiScalpingConfig:
 
     # Dynamic sizing - DO NOT increase risk vs prior default without evidence
     risk_per_trade_pct: Decimal = Decimal("0.50")
+    target_risk_per_trade_usd: Decimal = Decimal("6.00")
+    max_total_planned_risk_usd: Decimal = Decimal("30.00")
     compounding_enabled: bool = False
     # Micro desk (~$180): broker min_lot on gold is ~2.3–2.9% equity risk.
     # Prior 2.00 daily / 1.00 symbol caps were BELOW one min-lot fill, so after
@@ -468,6 +470,8 @@ class AiScalpingConfig:
             },
             "max_open_trades": self.max_open_trades,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
+            "target_risk_per_trade_usd": str(self.target_risk_per_trade_usd),
+            "max_total_planned_risk_usd": str(self.max_total_planned_risk_usd),
             "risk_increase_locked": True,
             "break_even_at_r": str(self.break_even_at_r),
             "partial_at_r": str(self.partial_at_r),
@@ -550,6 +554,8 @@ def scalping_ite_config(
         min_trade_quality_score=cfg.normal_vol.quality,
         high_confidence_score=max(90, cfg.low_vol.confidence + 2),
         risk_per_trade_pct=cfg.risk_per_trade_pct,
+        target_risk_per_trade_usd=cfg.target_risk_per_trade_usd,
+        max_total_planned_risk_usd=cfg.max_total_planned_risk_usd,
         max_open_trades=cfg.max_open_trades,
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=cfg.partial_at_r,

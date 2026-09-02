@@ -78,7 +78,7 @@ def test_xauusd_i_below_min_lot_is_legitimate_account_constraint() -> None:
 
     assert norm < _VOLUME_MIN
     assert needed < profile.hard_max_risk_pct
-    # Min-lot is allowed when needed_pct stays at or below the 80% hard max.
+    # $9.85 min-lot loss exceeds the $6 planned-SL cap → reject (do not force).
     engine = RiskEngine()
     size = engine.size_position(
         equity=_EQUITY,
@@ -90,9 +90,8 @@ def test_xauusd_i_below_min_lot_is_legitimate_account_constraint() -> None:
         contract_size=_CONTRACT,
         risk_per_trade_pct=risk_pct,
     )
-    assert size.approved_lots == _VOLUME_MIN
-    assert size.capped is False
-    assert size.dollar_risk == min_loss
+    assert size.approved_lots == Decimal("0")
+    assert size.block_reason == "MIN_LOT_EXCEEDS_RISK_BUDGET"
 
 
 @pytest.mark.unit

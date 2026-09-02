@@ -24,9 +24,7 @@ class TestXauusdSpecs:
     def test_contract_size_is_100(self) -> None:
         assert Decimal("100") == CONTRACT_SIZE
         assert contract_size_for_symbol("XAUUSD") == Decimal("100")
-        assert contract_size_for_symbol("EURUSD") == Decimal(
-            "100"
-        )  # platform gold-only
+        assert contract_size_for_symbol("EURUSD") == Decimal("100000")
 
     def test_fx_spread_ceiling_coerced(self) -> None:
         assert coerce_max_spread(Decimal("0.00050")) == MAX_SPREAD

@@ -32,7 +32,7 @@ def test_continuous_scalp_flow_knobs_locked() -> None:
     assert cfg.min_expected_rr == Decimal("1.20")
     assert cfg.fixed_tp_r == Decimal("1.20")
     assert cfg.absolute_max_hold_minutes == 12
-    assert cfg.break_even_at_r == Decimal("0.50")
+    assert cfg.break_even_at_r == Decimal("0.80")
 
 
 @pytest.mark.unit

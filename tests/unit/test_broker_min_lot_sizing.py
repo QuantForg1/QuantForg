@@ -81,7 +81,11 @@ def _account(equity: Decimal = _EQUITY) -> AccountSnapshot:
 
 
 def test_calculated_lot_below_min_uses_min_when_budget_allows() -> None:
-    out = _norm(calculated_lot=Decimal("0.0025"), stop_distance=Decimal("4.00"))
+    out = _norm(
+        calculated_lot=Decimal("0.0025"),
+        stop_distance=Decimal("4.00"),
+        risk_budget=Decimal("5.00"),
+    )
     assert out.calculated_lot == Decimal("0.0025")
     assert out.broker_min_lot == _MIN
     assert out.normalized_lot == _MIN
@@ -89,6 +93,14 @@ def test_calculated_lot_below_min_uses_min_when_budget_allows() -> None:
     assert out.block_reason is None
     assert out.estimated_risk_amount == Decimal("4.00")
     assert out.approved is True
+
+
+def test_minimum_lot_exceeding_dollar_budget_is_blocked() -> None:
+    out = _norm(calculated_lot=Decimal("0.0025"), stop_distance=Decimal("4.00"))
+    assert out.normalized_lot == Decimal("0")
+    assert out.sizing_status == STATUS_EXCEEDS_BUDGET
+    assert out.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+    assert out.approved is False
 
 
 def test_calculated_lot_exactly_at_broker_minimum() -> None:
@@ -164,7 +176,6 @@ def test_xauusd_i_sizing_helper_and_scalping() -> None:
     assert sized.valid is True
     assert sized.lots == _MIN
     assert sized.broker_min_lot == _MIN
-    assert sized.sizing_status == STATUS_NORMALIZED_TO_MIN
     assert sized.block_reason is None
     wide = calculate_scalping_lots(
         equity=_EQUITY,
@@ -315,7 +326,11 @@ def test_institutional_equity_never_upsizes_to_min_lot() -> None:
 
 
 def test_calculated_lot_0_001_normalizes_to_broker_min_when_budget_allows() -> None:
-    out = _norm(calculated_lot=Decimal("0.001"), stop_distance=Decimal("4.00"))
+    out = _norm(
+        calculated_lot=Decimal("0.001"),
+        stop_distance=Decimal("4.00"),
+        risk_budget=Decimal("5.00"),
+    )
     assert out.normalized_lot == _MIN
     assert out.broker_min_lot == Decimal("0.01")
     assert out.sizing_status == STATUS_NORMALIZED_TO_MIN

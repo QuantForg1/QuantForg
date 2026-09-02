@@ -277,9 +277,9 @@ def test_scalping_pme_knobs_locked() -> None:
     assert pme.partial_at_r == DEFAULT_AI_SCALPING_CONFIG.partial_at_r
     assert pme.trail_after_r == DEFAULT_AI_SCALPING_CONFIG.trail_after_r
     assert DEFAULT_PME_CONFIG.break_even_at_r == Decimal("1.0")
-    assert pme.break_even_at_r == Decimal("0.50")
-    assert pme.partial_at_r == Decimal("0.70")
-    assert pme.trail_after_r == Decimal("0.70")
+    assert pme.break_even_at_r == Decimal("0.80")
+    assert pme.partial_at_r == Decimal("1.20")
+    assert pme.trail_after_r == Decimal("1.20")
     assert pme.absolute_max_hold_minutes == 12
 
 
@@ -291,14 +291,14 @@ def test_pme_break_even_partial_trail_close_loop() -> None:
     pos.trade_class = "SCALP"
     svc.register(pos)
 
-    # 0.5R → BE (entry 2300, risk 10 → price 2305)
-    r1 = svc.evaluate(100, _ctx(Decimal("2305")))
+    # 0.8R → BE (entry 2300, risk 10 → price 2308)
+    r1 = svc.evaluate(100, _ctx(Decimal("2308")))
     assert r1.action is ManageActionKind.BREAK_EVEN
     assert r1.position.state is PositionLifecycleState.BE_MOVED
     assert r1.position.be_moved is True
 
-    # 1.0R → partial (price 2310)
-    r2 = svc.evaluate(100, _ctx(Decimal("2310")))
+    # 1.2R → partial (price 2312)
+    r2 = svc.evaluate(100, _ctx(Decimal("2312")))
     assert r2.action is ManageActionKind.PARTIAL_CLOSE
     assert r2.position.state is PositionLifecycleState.PARTIAL
 
@@ -382,8 +382,8 @@ def test_position_recovery_broker_be_reconstruct() -> None:
 def test_multi_asset_scan_config_present() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert hasattr(cfg, "multi_asset_scan_enabled")
-    assert cfg.break_even_at_r == Decimal("0.50")
-    assert cfg.partial_at_r == Decimal("0.70")
+    assert cfg.break_even_at_r == Decimal("0.80")
+    assert cfg.partial_at_r == Decimal("1.20")
     assert cfg.parallel_scan_enabled is True
     assert cfg.max_entries_per_cycle >= 2
     assert cfg.post_close_rescan_enabled is True
