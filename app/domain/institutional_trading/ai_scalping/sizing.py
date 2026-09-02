@@ -219,6 +219,7 @@ def calculate_scalping_lots(
 
     risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
     from app.domain.institutional_trading.config import (
+        MAX_PLANNED_SL_RISK_USD,
         MIN_PLANNED_RISK_USD,
         TARGET_PLANNED_RISK_USD,
     )
@@ -241,6 +242,12 @@ def calculate_scalping_lots(
         str(
             getattr(cfg, "min_planned_risk_usd", MIN_PLANNED_RISK_USD)
             or MIN_PLANNED_RISK_USD
+        )
+    )
+    per_trade_max = Decimal(
+        str(
+            getattr(cfg, "max_planned_sl_risk_usd", MAX_PLANNED_SL_RISK_USD)
+            or MAX_PLANNED_SL_RISK_USD
         )
     )
     if usd_target > 0:
@@ -270,6 +277,7 @@ def calculate_scalping_lots(
         contract_size=cs,
         risk_budget=risk_amount,
         min_planned_risk=min_floor,
+        max_planned_sl_risk=per_trade_max,
     )
     if not norm.approved:
         method = (

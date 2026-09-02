@@ -75,7 +75,7 @@ def test_scalping_v1_gates_are_profile_owned_not_institutional() -> None:
 def test_scalping_v1_rr_internally_consistent() -> None:
     """fixed_tp_r and min_expected_rr must never contradict."""
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.fixed_tp_r == Decimal("1.20")
+    assert cfg.fixed_tp_r == Decimal("1.50")
     assert cfg.min_expected_rr == Decimal("1.20")
     assert cfg.min_expected_rr <= cfg.fixed_tp_r
     # Regime bumps must not push RR above fixed TP

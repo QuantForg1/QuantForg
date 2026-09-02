@@ -17,6 +17,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
     AdaptiveThresholdBand,
     AiScalpingConfig,
 )
+from app.domain.institutional_trading.config import PREFERRED_REWARD_RISK
 
 PROFILE_ID = "SCALPING_V1"
 PROFILE_VERSION = "ai-scalping-v8.2.0+SCALPING_V1+UNIVERSE_GATE_FIX"
@@ -54,12 +55,12 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         require_pa_confluence=True,
         require_tight_spread=True,
         require_valid_volatility=True,
-        # RR MUST equal fixed TP — institutional min 1.3 + regime bumps → 1.4
-        # contradicted fixed_tp_r=1.20 (LIVE: Expected RR 1.20 below minimum 1.4).
+        # RR MUST not exceed preferred TP. Prefer 1.5R; min gate stays
+        # strictly above 1.0 (planned profit > planned loss).
         min_expected_rr=_SCALP_RR,
-        fixed_tp_r=_SCALP_RR,
+        fixed_tp_r=PREFERRED_REWARD_RISK,
         atr_tp_mult=Decimal("1.40"),
-        # Hold window: target 2–10m, absolute 12m
+        # Hold window: target 2-10m, absolute 12m
         typical_hold_min_minutes=2,
         typical_hold_max_minutes=10,
         max_hold_minutes_if_confident=10,

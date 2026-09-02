@@ -226,6 +226,7 @@ class RiskEngine:
             tick_value=tick_value,
             remaining_portfolio_risk=remaining_portfolio_risk,
             min_planned_risk=cfg.min_planned_risk_usd,
+            max_planned_sl_risk=cfg.max_planned_sl_risk_usd,
         )
         requested = (
             requested_lots
@@ -1225,6 +1226,18 @@ class RiskEngine:
                 f"aggregate planned SL risk {total_planned} exceeds "
                 f"{cap} (open={open_planned} proposed={proposed_planned})"
             )
+        per_trade_cap = self.config.max_planned_sl_risk_usd
+        checks["per_trade_planned_risk"] = (
+            proposed_planned <= 0
+            or per_trade_cap is None
+            or per_trade_cap <= 0
+            or proposed_planned <= per_trade_cap
+        )
+        if not checks["per_trade_planned_risk"]:
+            reasons.append(
+                f"planned SL risk {proposed_planned} exceeds per-trade "
+                f"max {per_trade_cap}"
+            )
 
         open_count = len(positions)
         checks["open_positions"] = open_count < self.config.max_open_positions
@@ -1314,6 +1327,7 @@ class RiskEngine:
             or not checks["open_positions"]
             or not inst_ok
             or not checks.get("aggregate_planned_risk", True)
+            or not checks.get("per_trade_planned_risk", True)
         ):
             decision = RiskDecision.REJECT
             approved = Decimal("0")

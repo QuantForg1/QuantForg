@@ -174,6 +174,7 @@ def test_broker_max_lot_cap() -> None:
         equity=Decimal("100000"),
         remaining_portfolio_risk=Decimal("2000"),
         min_planned_risk=Decimal("0"),
+        max_planned_sl_risk=Decimal("0"),
     )
     assert out.normalized_lot == _MAX
     assert out.broker_max_lot == _MAX

@@ -35,13 +35,18 @@ from app.domain.institutional_trading.ai_scalping.dynamic_sizing_v2 import (
     calculate_dynamic_lots_v2,
 )
 from app.domain.institutional_trading.config import (
+    MAX_PLANNED_SL_RISK_USD,
     MAX_TOTAL_PLANNED_RISK_USD,
     MIN_PLANNED_RISK_USD,
+    PREFERRED_REWARD_RISK,
     TARGET_PLANNED_RISK_USD,
     TARGET_RISK_PER_TRADE_USD,
 )
 from app.domain.institutional_trading.live_trading_control import (
     BrokerSymbolSpec,
+    LiveOrderRequest,
+    LiveTradingRiskConfig,
+    evaluate_signal_quality,
     size_from_broker_specs,
 )
 from app.domain.institutional_trading.management.models import (
@@ -131,6 +136,8 @@ class TestPositionSizingUsdTarget:
         assert TARGET_PLANNED_RISK_USD == TARGET_RISK_PER_TRADE_USD
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
         assert Decimal("6.00") == MIN_PLANNED_RISK_USD
+        assert Decimal("20.00") == MAX_PLANNED_SL_RISK_USD
+        assert Decimal("1.50") == PREFERRED_REWARD_RISK
 
     def test_eurusd_sizes_above_six_not_universal_min_lot(self) -> None:
         stop = Decimal("0.00200")  # 20 pips
@@ -147,6 +154,7 @@ class TestPositionSizingUsdTarget:
         # 0.03 = $6.00 (not > $6) → step to 0.04 = $8.00
         assert sized.volume == Decimal("0.04")
         assert sized.monetary_loss_at_sl == Decimal("8.00")
+        assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
 
     def test_usdjpy_uses_tick_value(self) -> None:
         spec = _fx_spec(
@@ -187,6 +195,20 @@ class TestPositionSizingUsdTarget:
         assert sized.accepted is True
         assert sized.volume == Decimal("0.01")
         assert sized.monetary_loss_at_sl == min_loss
+        assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
+
+    def test_xauusd_rejects_when_min_lot_exceeds_per_trade_cap(self) -> None:
+        sized = size_from_broker_specs(
+            equity=Decimal("2000"),
+            risk_pct=Decimal("1.0"),
+            stop_distance=Decimal("25.00"),
+            spec=_gold_spec(),
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
+        )
+        min_loss = Decimal("0.01") * Decimal("100") * Decimal("25.00")
+        assert min_loss > MAX_PLANNED_SL_RISK_USD
+        assert sized.accepted is False
+        assert sized.volume == Decimal("0")
 
     def test_xauusd_rejects_when_min_lot_exceeds_remaining_portfolio(self) -> None:
         sized = size_from_broker_specs(
@@ -252,15 +274,29 @@ class TestPositionSizingUsdTarget:
             ),
             max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
+        gbpjpy = size_from_broker_specs(
+            equity=Decimal("2000"),
+            risk_pct=Decimal("0.50"),
+            stop_distance=Decimal("0.250"),
+            spec=_fx_spec(
+                symbol="GBPJPY",
+                tick_size=Decimal("0.001"),
+                tick_value=Decimal("0.64"),
+            ),
+            max_risk_amount=TARGET_PLANNED_RISK_USD,
+        )
         assert eurusd.accepted and gbpusd.accepted and usdjpy.accepted
+        assert gbpjpy.accepted is True
         assert eurusd.volume != gbpusd.volume
         assert Decimal("0.01") not in {
             eurusd.volume,
             gbpusd.volume,
             usdjpy.volume,
+            gbpjpy.volume,
         }
-        for sized in (eurusd, gbpusd, usdjpy):
+        for sized in (eurusd, gbpusd, usdjpy, gbpjpy):
             assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
+            assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
 
     def test_volume_min_rejected_when_next_step_exceeds_remaining(self) -> None:
         spec = _fx_spec(volume_min=Decimal("0.10"), volume_step=Decimal("0.01"))
@@ -421,6 +457,49 @@ class TestAggregatePlannedRisk:
         assert any("daily loss" in r.lower() for r in blocked.reasons)
 
 
+def _quality_req(**overrides: object) -> LiveOrderRequest:
+    base: dict[str, object] = {
+        "symbol": "EURUSD",
+        "direction": "BUY",
+        "price": Decimal("1.10000"),
+        "entry": Decimal("1.10000"),
+        "stop_loss": Decimal("1.09800"),
+        "take_profit": Decimal("1.10300"),
+        "score": Decimal("80"),
+        "regime": "TREND",
+        "signal_status": "QUALIFIED",
+        "evidence": {"WHY_THIS_DIRECTION": "structure"},
+    }
+    base.update(overrides)
+    return LiveOrderRequest(**base)  # type: ignore[arg-type]
+
+
+def _rr_gate(req: LiveOrderRequest) -> object:
+    gates = evaluate_signal_quality(req, LiveTradingRiskConfig())
+    return next(g for g in gates if g.key == "acceptable_rr")
+
+
+class TestRewardRisk:
+    def test_tp_smaller_than_sl_rejected(self) -> None:
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.09900")))
+        assert gate.passed is False
+
+    def test_tp_equal_to_sl_rejected(self) -> None:
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10200")))
+        assert gate.passed is False
+
+    def test_tp_larger_than_sl_eligible(self) -> None:
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10250")))
+        assert gate.passed is True
+
+    def test_preferred_one_point_five_rr_eligible(self) -> None:
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10300")))
+        assert gate.passed is True
+        risk = Decimal("0.00200")
+        reward = Decimal("0.00300")
+        assert reward / risk == PREFERRED_REWARD_RISK
+
+
 class TestPmeProfitProtection:
     def _managed(self) -> ManagedPosition:
         return ManagedPosition(
@@ -464,6 +543,23 @@ class TestPmeProfitProtection:
         be = svc.evaluate(501, self._ctx(Decimal("2308")))  # 0.8R
         assert be.action is ManageActionKind.BREAK_EVEN
         assert be.position.be_moved is True
+
+    def test_small_unrealized_loss_keeps_trade_open(self) -> None:
+        svc = InstitutionalPositionManagement.create(RecordingOmsManagePort())
+        svc.engine.config = pme_config_for_scalping()
+        pos = self._managed()
+        pos.trade_class = "SCALP"
+        svc.register(pos)
+        # -0.2R after 10 minutes (past SCALPING_V1 8m time-stop window).
+        out = svc.evaluate(
+            501,
+            self._ctx(Decimal("2298"), now=OPENED + timedelta(minutes=10)),
+        )
+        assert out.action not in {
+            ManageActionKind.TIME_STOP,
+            ManageActionKind.EMERGENCY_EXIT,
+            ManageActionKind.DAILY_SHUTDOWN,
+        }
 
     def test_be_idempotent_on_second_tick(self) -> None:
         svc = InstitutionalPositionManagement.create(RecordingOmsManagePort())

@@ -571,6 +571,7 @@ def size_from_broker_specs(
     remaining portfolio / hard-max, reject — never force an unsafe lot.
     """
     from app.domain.institutional_trading.config import (
+        MAX_PLANNED_SL_RISK_USD,
         MAX_TOTAL_PLANNED_RISK_USD,
         MIN_PLANNED_RISK_USD,
         TARGET_PLANNED_RISK_USD,
@@ -659,6 +660,7 @@ def size_from_broker_specs(
         tick_value=spec.tick_value,
         remaining_portfolio_risk=remaining,
         min_planned_risk=min_floor,
+        max_planned_sl_risk=MAX_PLANNED_SL_RISK_USD,
     )
     pct = (
         (norm.estimated_risk_amount / equity * Decimal("100")).quantize(
@@ -802,18 +804,21 @@ def evaluate_signal_quality(
     evidence_ok = isinstance(req.evidence, dict) and bool(req.evidence)
     score_ok = req.score is not None and req.score >= cfg.min_score
     rr = req.reward_risk
-    if (
-        rr is None
-        and sl_ok
-        and tp_ok
-        and entry is not None
-        and sl is not None
-        and tp is not None
-    ):
-        risk = abs(entry - sl)
-        reward = abs(tp - entry)
-        rr = (reward / risk) if risk > 0 else None
-    rr_ok = rr is not None and rr >= cfg.min_rr_or_default()
+    profit_exceeds_loss = False
+    if sl_ok and tp_ok and entry is not None and sl is not None and tp is not None:
+        risk_dist = abs(entry - sl)
+        reward_dist = abs(tp - entry)
+        profit_exceeds_loss = risk_dist > 0 and reward_dist > risk_dist
+        if (
+            rr is None
+            and risk_dist > 0
+        ):
+            rr = reward_dist / risk_dist
+    rr_ok = (
+        profit_exceeds_loss
+        and rr is not None
+        and rr >= cfg.min_rr_or_default()
+    )
     regime_ok = bool(str(req.regime or "").strip())
     fresh = req.analysis_age_seconds is None or req.analysis_age_seconds <= Decimal(
         "180"
@@ -979,7 +984,11 @@ def evaluate_live_order(
         and finite_positive(sl)
     ):
         stop_dist = abs(entry - sl)
-        from app.domain.institutional_trading.config import TARGET_PLANNED_RISK_USD
+        from app.domain.institutional_trading.config import (
+            MAX_PLANNED_SL_RISK_USD,
+            MIN_PLANNED_RISK_USD,
+            TARGET_PLANNED_RISK_USD,
+        )
 
         sizing = size_from_broker_specs(
             equity=req.equity,
@@ -991,6 +1000,21 @@ def evaluate_live_order(
         gates.append(
             _gate("position_size", sizing.accepted, sizing.reason or "sizing_failed")
         )
+        if sizing.accepted:
+            planned = sizing.monetary_loss_at_sl
+            in_band = (
+                planned > MIN_PLANNED_RISK_USD
+                and planned <= MAX_PLANNED_SL_RISK_USD
+            )
+            gates.append(
+                _gate(
+                    "planned_sl_band",
+                    in_band,
+                    "planned_sl_risk_outside_band",
+                )
+            )
+        else:
+            gates.append(_gate("planned_sl_band", True))
         if (
             last_loss_volume is not None
             and sizing.accepted
@@ -1009,9 +1033,11 @@ def evaluate_live_order(
             gates.append(_gate("no_loss_recovery_sizing", True))
     elif req.spec is None:
         gates.append(_gate("position_size", False, "broker_spec_unavailable"))
+        gates.append(_gate("planned_sl_band", True))
         gates.append(_gate("no_loss_recovery_sizing", True))
     else:
         gates.append(_gate("position_size", False, "sizing_inputs_unavailable"))
+        gates.append(_gate("planned_sl_band", True))
         gates.append(_gate("no_loss_recovery_sizing", True))
 
     failed = tuple(g.reason or g.key for g in gates if not g.passed)

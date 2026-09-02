@@ -17,6 +17,7 @@ from app.domain.enums.risk import (
 )
 from app.domain.institutional_trading.config import (
     MAX_DAILY_LOSS_PCT,
+    MAX_PLANNED_SL_RISK_USD,
     MAX_TOTAL_PLANNED_RISK_USD,
     MIN_PLANNED_RISK_USD,
     TARGET_PLANNED_RISK_USD,
@@ -34,6 +35,7 @@ class RiskEngineConfig:
     # Primary sizing budget: planned USD loss if SL is hit (not margin).
     min_planned_risk_usd: Decimal = MIN_PLANNED_RISK_USD
     target_risk_per_trade_usd: Decimal = TARGET_PLANNED_RISK_USD
+    max_planned_sl_risk_usd: Decimal = MAX_PLANNED_SL_RISK_USD
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     # Authoritative ITE daily-loss cap — never a parallel 5% OMS policy.
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT

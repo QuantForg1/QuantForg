@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from app.domain.institutional_trading.config import (
     ITEConfig,
+    MAX_PLANNED_SL_RISK_USD,
     MAX_TOTAL_PLANNED_RISK_USD,
     MIN_PLANNED_RISK_USD,
     TARGET_PLANNED_RISK_USD,
@@ -216,6 +217,7 @@ class AiScalpingConfig:
     risk_per_trade_pct: Decimal = Decimal("0.50")
     min_planned_risk_usd: Decimal = MIN_PLANNED_RISK_USD
     target_risk_per_trade_usd: Decimal = TARGET_PLANNED_RISK_USD
+    max_planned_sl_risk_usd: Decimal = MAX_PLANNED_SL_RISK_USD
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     compounding_enabled: bool = False
     # Micro desk (~$180): broker min_lot on gold is ~2.3–2.9% equity risk.
@@ -478,6 +480,7 @@ class AiScalpingConfig:
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
             "min_planned_risk_usd": str(self.min_planned_risk_usd),
             "target_risk_per_trade_usd": str(self.target_risk_per_trade_usd),
+            "max_planned_sl_risk_usd": str(self.max_planned_sl_risk_usd),
             "max_total_planned_risk_usd": str(self.max_total_planned_risk_usd),
             "risk_increase_locked": True,
             "break_even_at_r": str(self.break_even_at_r),
@@ -563,6 +566,7 @@ def scalping_ite_config(
         risk_per_trade_pct=cfg.risk_per_trade_pct,
         min_planned_risk_usd=cfg.min_planned_risk_usd,
         target_risk_per_trade_usd=cfg.target_risk_per_trade_usd,
+        max_planned_sl_risk_usd=cfg.max_planned_sl_risk_usd,
         max_total_planned_risk_usd=cfg.max_total_planned_risk_usd,
         max_open_trades=cfg.max_open_trades,
         break_even_at_r=cfg.break_even_at_r,

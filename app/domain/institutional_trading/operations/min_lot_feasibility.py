@@ -331,6 +331,7 @@ class BrokerLotNormalization:
     hard_max_risk_pct: Decimal | None = None
     remaining_portfolio_risk: Decimal | None = None
     min_planned_risk: Decimal | None = None
+    max_planned_sl_risk: Decimal | None = None
 
     @property
     def approved(self) -> bool:
@@ -363,6 +364,11 @@ class BrokerLotNormalization:
                 if self.min_planned_risk is not None
                 else None
             ),
+            "max_planned_sl_risk": (
+                str(self.max_planned_sl_risk)
+                if self.max_planned_sl_risk is not None
+                else None
+            ),
         }
 
 
@@ -382,16 +388,19 @@ def normalize_lots_against_broker(
     allow_min_lot_upsize: bool | None = None,
     remaining_portfolio_risk: Decimal | None = None,
     min_planned_risk: Decimal | None = None,
+    max_planned_sl_risk: Decimal | None = None,
     allow_below_min_planned: bool = False,
 ) -> BrokerLotNormalization:
     """Size to the USD target, round DOWN, then step UP until planned SL > min.
 
     Min lot is used when the raw volume is below volume_min AND that min lot
-    still fits remaining portfolio risk and the micro hard-max percent. If the
-    next broker step would exceed remaining portfolio risk, reject — never
-    force an unsafe lot. Quality/safety may pass allow_below_min_planned.
+    still fits remaining portfolio risk, the per-trade SL cap, and the micro
+    hard-max percent. If the next broker step would exceed remaining portfolio
+    risk or the per-trade cap, reject — never force an unsafe lot.
+    Quality/safety may pass allow_below_min_planned.
     """
     from app.domain.institutional_trading.config import (
+        MAX_PLANNED_SL_RISK_USD,
         MAX_TOTAL_PLANNED_RISK_USD,
         MIN_PLANNED_RISK_USD,
     )
@@ -407,6 +416,11 @@ def normalize_lots_against_broker(
     min_floor = (
         min_planned_risk if min_planned_risk is not None else MIN_PLANNED_RISK_USD
     )
+    per_trade_max = (
+        max_planned_sl_risk
+        if max_planned_sl_risk is not None
+        else MAX_PLANNED_SL_RISK_USD
+    )
     hard_usd = (
         (equity * hard / _PCT).quantize(_CENTS)
         if equity > 0 and hard > 0
@@ -418,6 +432,8 @@ def normalize_lots_against_broker(
     ceiling = remaining
     if hard_usd > 0:
         ceiling = min(ceiling, hard_usd) if ceiling > 0 else hard_usd
+    if per_trade_max > 0:
+        ceiling = min(ceiling, per_trade_max) if ceiling > 0 else per_trade_max
     _ = allow_min_lot_upsize  # always upsize toward min planned when ceiling allows
 
     def _blank(
@@ -442,6 +458,7 @@ def normalize_lots_against_broker(
             hard_max_risk_pct=hard,
             remaining_portfolio_risk=remaining,
             min_planned_risk=min_floor,
+            max_planned_sl_risk=per_trade_max,
         )
 
     def _ok(
@@ -465,6 +482,7 @@ def normalize_lots_against_broker(
             hard_max_risk_pct=hard,
             remaining_portfolio_risk=remaining,
             min_planned_risk=min_floor,
+            max_planned_sl_risk=per_trade_max,
         )
 
     if min_lot <= 0 or lot_step <= 0 or max_lot <= 0 or min_lot > max_lot:

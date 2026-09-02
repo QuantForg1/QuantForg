@@ -17,12 +17,18 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 MAX_DAILY_LOSS_PCT = Decimal("80.0")
 
 # Planned SL-loss (not margin). Accepted normal trades must be STRICTLY above
-# MIN. TARGET is the single sizing budget. Aggregate is a hard ceiling, not a
-# fill quota — capacity is floor(ceiling / actual sized risk), not "five trades".
+# MIN and at most MAX per trade. TARGET is the single sizing budget. Aggregate
+# is a hard ceiling, not a fill quota — capacity is floor(ceiling / actual
+# sized risk), not "five trades".
 MIN_PLANNED_RISK_USD = Decimal("6.00")
 TARGET_PLANNED_RISK_USD = Decimal("7.00")
 TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
+MAX_PLANNED_SL_RISK_USD = Decimal("20.00")
 MAX_TOTAL_PLANNED_RISK_USD = Decimal("30.00")
+# Reward must exceed planned SL (TP > SL). Prefer 1.5R when structure supports
+# it; never stretch TP just to hit the preference — reject instead.
+MIN_REWARD_RISK = Decimal("1.00")
+PREFERRED_REWARD_RISK = Decimal("1.50")
 
 
 def coerce_max_daily_loss_pct(value: Decimal) -> Decimal:
@@ -58,6 +64,7 @@ class ITEConfig:
     risk_per_trade_pct: Decimal = Decimal("1.0")
     min_planned_risk_usd: Decimal = MIN_PLANNED_RISK_USD
     target_risk_per_trade_usd: Decimal = TARGET_PLANNED_RISK_USD
+    max_planned_sl_risk_usd: Decimal = MAX_PLANNED_SL_RISK_USD
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_drawdown_pct: Decimal = Decimal("8.0")
@@ -130,6 +137,7 @@ class ITEConfig:
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
             "min_planned_risk_usd": str(self.min_planned_risk_usd),
             "target_risk_per_trade_usd": str(self.target_risk_per_trade_usd),
+            "max_planned_sl_risk_usd": str(self.max_planned_sl_risk_usd),
             "max_total_planned_risk_usd": str(self.max_total_planned_risk_usd),
             "max_daily_loss_pct": str(self.max_daily_loss_pct),
             "max_weekly_drawdown_pct": str(self.max_weekly_drawdown_pct),

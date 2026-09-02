@@ -240,7 +240,9 @@ def plan_action(
         )
 
     # --- Absolute max hold — SCALP tighter, HOLD longer, UNKNOWN safe ---
-    if abs_hold > 0 and hold_minutes >= abs_hold:
+    # Do not flatten a valid trade solely because it is slightly negative.
+    # Initial SL remains the loss exit.
+    if abs_hold > 0 and hold_minutes >= abs_hold and r >= 0:
         return PlannedAction(
             ManageActionKind.TIME_STOP,
             (
@@ -253,7 +255,8 @@ def plan_action(
 
     # --- Time stop (weak R within window) ---
     if (
-        hold_minutes >= time_stop_minutes
+        r >= 0
+        and hold_minutes >= time_stop_minutes
         and position.max_favorable_r < config.time_stop_min_r
         and r < config.time_stop_min_r
     ):

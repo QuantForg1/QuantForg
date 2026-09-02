@@ -27,6 +27,7 @@ from app.domain.institutional_trading.ai_scalping.sizing import (
 )
 from app.domain.institutional_trading.config import (
     MAX_DAILY_LOSS_PCT,
+    MAX_PLANNED_SL_RISK_USD,
     MAX_TOTAL_PLANNED_RISK_USD,
     MIN_PLANNED_RISK_USD,
     TARGET_PLANNED_RISK_USD,
@@ -648,6 +649,12 @@ def calculate_dynamic_lots_v2(
             or MIN_PLANNED_RISK_USD
         )
     )
+    per_trade_max = Decimal(
+        str(
+            getattr(cfg, "max_planned_sl_risk_usd", MAX_PLANNED_SL_RISK_USD)
+            or MAX_PLANNED_SL_RISK_USD
+        )
+    )
     quality_reduced = False
     # Quality / session / adaptive / vol already folded into base_risk vs
     # configured_max. Apply the same reduce-only scale to the dollar target,
@@ -831,6 +838,7 @@ def calculate_dynamic_lots_v2(
             tick_value=tick_value,
             remaining_portfolio_risk=remaining,
             min_planned_risk=min_floor,
+            max_planned_sl_risk=per_trade_max,
             allow_below_min_planned=quality_reduced and usd_budget < min_floor,
         )
         final = final_norm.normalized_lot if final_norm.approved else Decimal("0")
@@ -958,6 +966,7 @@ def calculate_dynamic_lots_v2(
             "aggregate_open_planned_risk": str(open_usd),
             "aggregate_risk_cap": str(agg_cap),
             "remaining_portfolio_risk": str(remaining),
+            "max_planned_sl_risk_usd": str(per_trade_max),
         },
     )
     if log:
