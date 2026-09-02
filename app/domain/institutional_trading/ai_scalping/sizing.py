@@ -95,6 +95,8 @@ def calculate_scalping_lots(
     peak_equity: Decimal | None = None,
     daily_exposure_used_pct: Decimal = Decimal("0"),
     session_risk_multiplier: Decimal | None = None,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
     config: AiScalpingConfig | None = None,
 ) -> LotSizingResult:
     """Size lots from risk% — never martingale / grid / invalid broker lots."""
@@ -262,7 +264,11 @@ def calculate_scalping_lots(
                 usd_budget = min_floor
         risk_amount = usd_budget
     per_lot = lot_dollar_risk(
-        Decimal("1"), stop_distance=dist, contract_size=cs
+        Decimal("1"),
+        stop_distance=dist,
+        contract_size=cs,
+        tick_size=tick_size,
+        tick_value=tick_value,
     )
     raw = risk_amount / per_lot if per_lot > 0 else Decimal("0")
 
@@ -276,6 +282,8 @@ def calculate_scalping_lots(
         stop_distance=dist,
         contract_size=cs,
         risk_budget=risk_amount,
+        tick_size=tick_size,
+        tick_value=tick_value,
         min_planned_risk=min_floor,
         max_planned_sl_risk=per_trade_max,
     )

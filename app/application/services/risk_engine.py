@@ -1390,6 +1390,60 @@ class RiskEngine:
             )
             approved = size.approved_lots
 
+        stop_for_actual = size.stop_distance or check.stop_loss_distance or Decimal("0")
+        if approved > 0 and stop_for_actual > 0:
+            from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
+                actual_planned_sl_band_reason,
+                format_planned_sl_reject_detail,
+                lot_dollar_risk,
+            )
+
+            actual = lot_dollar_risk(
+                approved,
+                stop_distance=stop_for_actual,
+                contract_size=contract_size,
+                tick_size=check.tick_size,
+                tick_value=check.tick_value,
+            )
+            remaining_cap = remaining if remaining is not None else cap
+            band_reason = actual_planned_sl_band_reason(
+                actual,
+                min_floor=self.config.min_planned_risk_usd,
+                per_trade_max=self.config.max_planned_sl_risk_usd,
+                remaining_portfolio_risk=remaining_cap,
+            )
+            checks["planned_sl_band"] = band_reason is None
+            if band_reason is not None:
+                from core.logging import get_logger as _risk_log
+
+                _risk_log(__name__).info(
+                    "planned_initial_sl_risk_rejected",
+                    symbol=check.symbol,
+                    calculated_volume=str(approved),
+                    actual_planned_initial_sl_risk=str(actual),
+                    initial_sl_distance=str(stop_for_actual),
+                    broker_volume_min=str(self.config.min_lot),
+                    broker_volume_step=str(self.config.lot_step),
+                    broker_volume_max=str(self.config.max_lot),
+                    rejection_reason=band_reason,
+                )
+                reasons.append(
+                    format_planned_sl_reject_detail(
+                        reason=band_reason,
+                        symbol=check.symbol,
+                        volume=approved,
+                        actual=actual,
+                        stop_distance=stop_for_actual,
+                        min_lot=self.config.min_lot,
+                        lot_step=self.config.lot_step,
+                        max_lot=self.config.max_lot,
+                    )
+                )
+                decision = RiskDecision.REJECT
+                approved = Decimal("0")
+        else:
+            checks["planned_sl_band"] = True
+
         proposed_margin = (
             size.approved_lots * check.entry_price * contract_size / leverage
         ).quantize(Decimal("0.01"))

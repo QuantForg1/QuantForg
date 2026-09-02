@@ -26,6 +26,7 @@ from app.domain.institutional_trading.operations.gold_execution_contract import 
 from app.domain.institutional_trading.operations.min_lot_feasibility import (
     CODE_INVALID_BROKER_SPEC,
     CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+    CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED,
     STATUS_CAPPED_MAX,
     STATUS_EXCEEDS_BUDGET,
     STATUS_INVALID_SPEC,
@@ -104,7 +105,7 @@ def test_minimum_lot_exceeding_remaining_portfolio_is_blocked() -> None:
     )
     assert out.normalized_lot == Decimal("0")
     assert out.sizing_status == STATUS_EXCEEDS_BUDGET
-    assert out.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+    assert out.block_reason == CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED
     assert out.approved is False
 
 
@@ -146,7 +147,7 @@ def test_calculated_lot_above_minimum() -> None:
 
 
 def test_minimum_lot_exceeding_risk_budget_is_blocked() -> None:
-    # 0.01 * 100 * 150.00 = $150.00 → 92.59% of $162 > 80% hard max.
+    # 0.01 * 100 * 150.00 = $150.00 — above the $20 per-trade planned SL cap.
     out = _norm(calculated_lot=Decimal("0.002"), stop_distance=Decimal("150.00"))
     assert out.normalized_lot == Decimal("0")
     assert out.sizing_status == STATUS_EXCEEDS_BUDGET

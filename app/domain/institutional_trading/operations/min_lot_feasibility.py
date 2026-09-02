@@ -23,6 +23,10 @@ CLASS_INSUFFICIENT = "INSUFFICIENT_DATA"
 CODE_MIN_LOT_EXCEEDS_RISK_BUDGET = "MIN_LOT_EXCEEDS_RISK_BUDGET"
 CODE_MIN_LOT_CONSTRAINT = "MIN_LOT_CONSTRAINT"
 CODE_INVALID_BROKER_SPEC = "INVALID_BROKER_SPEC"
+CODE_MIN_PLANNED_RISK_NOT_REACHED = "MIN_PLANNED_RISK_NOT_REACHED"
+CODE_MIN_LOT_EXCEEDS_RISK_BAND = "MIN_LOT_EXCEEDS_RISK_BAND"
+CODE_NEXT_VOLUME_STEP_EXCEEDS_MAX_RISK = "NEXT_VOLUME_STEP_EXCEEDS_MAX_RISK"
+CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED = "REMAINING_PORTFOLIO_RISK_EXCEEDED"
 
 STATUS_OK = "ok"
 STATUS_NORMALIZED_TO_MIN = "normalized_to_min_lot"
@@ -300,6 +304,73 @@ def planned_sl_risk_usd(
     )
 
 
+def actual_planned_sl_band_reason(
+    actual: Decimal,
+    *,
+    min_floor: Decimal | None = None,
+    per_trade_max: Decimal | None = None,
+    remaining_portfolio_risk: Decimal | None = None,
+) -> str | None:
+    """Reason when actual planned initial SL dollars are outside the live band.
+
+    Exclusive $6 floor: actual <= MIN is reject. Inclusive $20 cap: actual > MAX
+    is reject. Remaining $30 capacity is inclusive.
+    """
+    from app.domain.institutional_trading.config import (
+        MAX_PLANNED_SL_RISK_USD,
+        MIN_PLANNED_RISK_USD,
+    )
+
+    floor = MIN_PLANNED_RISK_USD if min_floor is None else min_floor
+    cap = MAX_PLANNED_SL_RISK_USD if per_trade_max is None else per_trade_max
+    if actual <= floor:
+        return CODE_MIN_PLANNED_RISK_NOT_REACHED
+    if cap > 0 and actual > cap:
+        return CODE_MIN_LOT_EXCEEDS_RISK_BAND
+    if remaining_portfolio_risk is not None and actual > remaining_portfolio_risk:
+        return CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED
+    return None
+
+
+def format_planned_sl_reject_detail(
+    *,
+    reason: str,
+    symbol: str,
+    volume: Decimal,
+    actual: Decimal,
+    stop_distance: Decimal,
+    min_lot: Decimal,
+    lot_step: Decimal,
+    max_lot: Decimal,
+) -> str:
+    """Internal-only diagnostic — never publish to Telegram/Jimvio."""
+    return (
+        f"{reason}: symbol={symbol} calculated_volume={volume} "
+        f"actual_planned_initial_SL_risk={actual} "
+        f"initial_sl_distance={stop_distance} "
+        f"broker_volume_min={min_lot} broker_volume_step={lot_step} "
+        f"broker_volume_max={max_lot}"
+    )
+
+
+def _ceiling_violation_reason(
+    loss: Decimal,
+    *,
+    per_trade_max: Decimal,
+    remaining_portfolio_risk: Decimal | None,
+    next_step: bool,
+) -> str:
+    if per_trade_max > 0 and loss > per_trade_max:
+        return (
+            CODE_NEXT_VOLUME_STEP_EXCEEDS_MAX_RISK
+            if next_step
+            else CODE_MIN_LOT_EXCEEDS_RISK_BAND
+        )
+    if remaining_portfolio_risk is not None and loss > remaining_portfolio_risk:
+        return CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED
+    return CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+
+
 def first_valid_broker_lot(
     *,
     min_lot: Decimal,
@@ -517,9 +588,14 @@ def normalize_lots_against_broker(
         )
 
     if ceiling <= 0:
+        reason = (
+            CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED
+            if remaining is not None and remaining <= 0
+            else CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+        )
         return _blank(
             status=STATUS_EXCEEDS_BUDGET,
-            reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            reason=reason,
         )
 
     per_lot = lot_dollar_risk(
@@ -557,7 +633,12 @@ def normalize_lots_against_broker(
         if min_loss > ceiling:
             return _blank(
                 status=STATUS_EXCEEDS_BUDGET,
-                reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                reason=_ceiling_violation_reason(
+                    min_loss,
+                    per_trade_max=per_trade_max,
+                    remaining_portfolio_risk=remaining,
+                    next_step=False,
+                ),
                 est=min_loss,
                 needed=needed,
             )
@@ -577,7 +658,7 @@ def normalize_lots_against_broker(
             if next_vol > max_lot:
                 return _blank(
                     status=STATUS_EXCEEDS_BUDGET,
-                    reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                    reason=CODE_MIN_PLANNED_RISK_NOT_REACHED,
                     est=est,
                     needed=needed,
                     lot=Decimal("0"),
@@ -586,7 +667,12 @@ def normalize_lots_against_broker(
             if next_loss > ceiling:
                 return _blank(
                     status=STATUS_EXCEEDS_BUDGET,
-                    reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                    reason=_ceiling_violation_reason(
+                        next_loss,
+                        per_trade_max=per_trade_max,
+                        remaining_portfolio_risk=remaining,
+                        next_step=True,
+                    ),
                     est=next_loss,
                     needed=needed,
                     lot=Decimal("0"),
@@ -595,10 +681,23 @@ def normalize_lots_against_broker(
             est = next_loss
             status = STATUS_OK
 
+    if not allow_below_min_planned and min_floor > 0 and est <= min_floor:
+        return _blank(
+            status=STATUS_EXCEEDS_BUDGET,
+            reason=CODE_MIN_PLANNED_RISK_NOT_REACHED,
+            est=est,
+            needed=needed,
+        )
+
     if quantized < first_valid or est > ceiling:
         return _blank(
             status=STATUS_EXCEEDS_BUDGET,
-            reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            reason=_ceiling_violation_reason(
+                est,
+                per_trade_max=per_trade_max,
+                remaining_portfolio_risk=remaining,
+                next_step=False,
+            ),
             est=est,
             needed=needed,
         )
@@ -854,7 +953,15 @@ def classify_private_no_fill_reason(
         )
     ):
         return PRIVATE_NO_FILL_CONNECTION_ERROR
-    if "MIN_LOT" in blob or CODE_MIN_LOT_EXCEEDS_RISK_BUDGET in blob:
+    if (
+        "MIN_LOT" in blob
+        or CODE_MIN_LOT_EXCEEDS_RISK_BUDGET in blob
+        or CODE_MIN_PLANNED_RISK_NOT_REACHED in blob
+        or CODE_MIN_LOT_EXCEEDS_RISK_BAND in blob
+        or CODE_NEXT_VOLUME_STEP_EXCEEDS_MAX_RISK in blob
+        or CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED in blob
+        or "MIN_PLANNED_RISK" in blob
+    ):
         return PRIVATE_NO_FILL_MIN_LOT
     risk_hit = "RISK" in blob or any(
         token in blob
@@ -1044,7 +1151,18 @@ def classify_cycle_execution_status(
         return EXEC_EXECUTION_FAILED
     if outcome == "error" or abort in _FAIL_ABORTS:
         return EXEC_EXECUTION_FAILED
-    if abort == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET or "MIN_LOT" in abort:
+    if (
+        abort
+        in {
+            CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            CODE_MIN_PLANNED_RISK_NOT_REACHED,
+            CODE_MIN_LOT_EXCEEDS_RISK_BAND,
+            CODE_NEXT_VOLUME_STEP_EXCEEDS_MAX_RISK,
+            CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED,
+        }
+        or "MIN_LOT" in abort
+        or "MIN_PLANNED_RISK" in abort
+    ):
         return EXEC_WAITING_FOR_SETUP
     if tradeability == NOT_TRADEABLE:
         return EXEC_WAITING_FOR_SETUP

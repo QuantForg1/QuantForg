@@ -622,7 +622,6 @@ def calculate_dynamic_lots_v2(
         )
 
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
-        CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
         STATUS_EXCEEDS_BUDGET,
         STATUS_NORMALIZED_TO_MIN,
         lot_dollar_risk,
@@ -655,13 +654,11 @@ def calculate_dynamic_lots_v2(
             or MAX_PLANNED_SL_RISK_USD
         )
     )
-    quality_reduced = False
     # Quality / session / adaptive / vol already folded into base_risk vs
-    # configured_max. Apply the same reduce-only scale to the dollar target,
-    # but never silently collapse a live setup below the min planned floor.
+    # configured_max. Apply the same reduce-only scale to the dollar target.
+    # Actual min-lot / step-up still must produce planned SL risk > $6.
     if configured_max > 0 and base_risk < configured_max:
         scaled = (usd_budget * base_risk / configured_max).quantize(Decimal("0.01"))
-        quality_reduced = scaled < usd_budget
         usd_budget = scaled
         if usd_budget > 0 and min_floor > 0 and usd_budget < min_floor:
             usd_budget = min_floor
@@ -839,7 +836,7 @@ def calculate_dynamic_lots_v2(
             remaining_portfolio_risk=remaining,
             min_planned_risk=min_floor,
             max_planned_sl_risk=per_trade_max,
-            allow_below_min_planned=quality_reduced and usd_budget < min_floor,
+            allow_below_min_planned=False,
         )
         final = final_norm.normalized_lot if final_norm.approved else Decimal("0")
     except Exception:
@@ -859,16 +856,18 @@ def calculate_dynamic_lots_v2(
             f"quality_band={band} equity_tier={tier.tier_label}"
         )
         if final_norm is not None and final_norm.block_reason:
-            if final_norm.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET:
-                detail = (
-                    f"{CODE_MIN_LOT_EXCEEDS_RISK_BUDGET}: min_lot {broker_min} "
-                    f"estimated_risk_amount={final_norm.estimated_risk_amount} "
-                    f"needed_pct={final_norm.needed_pct}% "
-                    f"> hard_max={final_norm.hard_max_risk_pct}% "
-                    f"(calculated_lot={raw})"
-                )
-            else:
-                detail = f"{final_norm.block_reason}: {detail}"
+            detail = (
+                f"{final_norm.block_reason}: min_lot {broker_min} "
+                f"calculated_volume={final_norm.normalized_lot} "
+                f"actual_planned_initial_SL_risk="
+                f"{final_norm.estimated_risk_amount} "
+                f"initial_sl_distance={dist} "
+                f"broker_volume_step={broker_step} "
+                f"broker_volume_max={broker_max} "
+                f"needed_pct={final_norm.needed_pct}% "
+                f"hard_max={final_norm.hard_max_risk_pct}% "
+                f"(calculated_lot={raw})"
+            )
         method = (
             "min_lot_exceeds_risk_budget"
             if final_norm is not None

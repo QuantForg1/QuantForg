@@ -249,6 +249,24 @@ class TestPrivateReasonsAndPublicFilter:
             classify_private_no_fill_reason(abort_reason="MIN_LOT_EXCEEDS_RISK_BUDGET")
             == "MIN_LOT_EXCEEDS_RISK"
         )
+        assert (
+            classify_private_no_fill_reason(
+                abort_reason="MIN_PLANNED_RISK_NOT_REACHED"
+            )
+            == "MIN_LOT_EXCEEDS_RISK"
+        )
+        assert (
+            classify_private_no_fill_reason(
+                abort_reason="NEXT_VOLUME_STEP_EXCEEDS_MAX_RISK"
+            )
+            == "MIN_LOT_EXCEEDS_RISK"
+        )
+        assert (
+            classify_private_no_fill_reason(
+                abort_reason="REMAINING_PORTFOLIO_RISK_EXCEEDED"
+            )
+            == "MIN_LOT_EXCEEDS_RISK"
+        )
         assert classify_private_no_fill_reason(forwarded_to_oms=True) == "NO_FILL"
         assert (
             classify_private_no_fill_reason(abort_reason="OMS_DUPLICATE")

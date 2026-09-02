@@ -1096,6 +1096,8 @@ class InstitutionalDecisionPipeline:
                         lot_step=live_step,
                         session_risk_multiplier=sess_risk,
                         daily_exposure_used_pct=portfolio_exp,
+                        tick_size=live_tick,
+                        tick_value=live_tick_val,
                         config=scalp_cfg,
                     )
                     sizing_audit = sized.to_dict()
@@ -1222,6 +1224,66 @@ class InstitutionalDecisionPipeline:
                         risk_allowed = False
                         risk_reasons.append("portfolio_risk_check_failed")
                         approved_lots = Decimal("0")
+
+        if (
+            risk_allowed
+            and approved_lots > 0
+            and stop_distance is not None
+            and stop_distance > 0
+        ):
+            from app.domain.institutional_trading.config import (
+                MAX_TOTAL_PLANNED_RISK_USD,
+            )
+            from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
+                actual_planned_sl_band_reason,
+                format_planned_sl_reject_detail,
+                lot_dollar_risk,
+            )
+
+            actual = lot_dollar_risk(
+                approved_lots,
+                stop_distance=stop_distance,
+                contract_size=live_cs,
+                tick_size=live_tick,
+                tick_value=live_tick_val,
+            )
+            open_planned = (
+                self.risk_engine.aggregate_planned_sl_risk(pos_all)
+                if pos_all
+                else Decimal("0")
+            )
+            remaining_agg = MAX_TOTAL_PLANNED_RISK_USD - open_planned
+            if remaining_agg < 0:
+                remaining_agg = Decimal("0")
+            band_reason = actual_planned_sl_band_reason(
+                actual,
+                remaining_portfolio_risk=remaining_agg,
+            )
+            if band_reason is not None:
+                detail = format_planned_sl_reject_detail(
+                    reason=band_reason,
+                    symbol=str(getattr(snapshot, "symbol", "") or ""),
+                    volume=approved_lots,
+                    actual=actual,
+                    stop_distance=stop_distance,
+                    min_lot=live_min,
+                    lot_step=live_step,
+                    max_lot=live_max,
+                )
+                logger.info(
+                    "planned_initial_sl_risk_rejected",
+                    symbol=str(getattr(snapshot, "symbol", "") or ""),
+                    calculated_volume=str(approved_lots),
+                    actual_planned_initial_sl_risk=str(actual),
+                    initial_sl_distance=str(stop_distance),
+                    broker_volume_min=str(live_min),
+                    broker_volume_step=str(live_step),
+                    broker_volume_max=str(live_max),
+                    rejection_reason=band_reason,
+                )
+                risk_allowed = False
+                risk_reasons.append(detail)
+                approved_lots = Decimal("0")
 
         eligibility = PositionEligibilityEngine(config=cfg).evaluate(
             snapshot=snapshot,
