@@ -181,6 +181,87 @@ class TestStrategyDiagnostics:
         assert row["forwarded_to_oms"] is False
 
     @pytest.mark.trading_core
+    def test_oms_forward_without_ticket_is_not_executed(self) -> None:
+        snap = _snapshot(quality=80, aligned=True)
+        decision = _decision(snap, quality=80, confidence=80)
+        row = extract_cycle_diagnostics(
+            snapshot=snap,
+            decision=decision,
+            cycle_outcome="forwarded",
+            decision_action="BUY",
+            forwarded_to_oms=True,
+            mt5_ticket=None,
+            market_context_diagnostics={"opportunity_score": 88},
+        )
+        assert row["forwarded_to_oms"] is True
+        assert row["executed"] is False
+        assert row["has_real_mt5_ticket"] is False
+        assert row["mt5_ticket"] is None
+        assert row["private_no_fill_reason"] == "NO_FILL"
+
+    @pytest.mark.trading_core
+    def test_real_ticket_is_executed(self) -> None:
+        snap = _snapshot(quality=80, aligned=True)
+        decision = _decision(snap, quality=80, confidence=80)
+        row = extract_cycle_diagnostics(
+            snapshot=snap,
+            decision=decision,
+            cycle_outcome="forwarded",
+            decision_action="SELL",
+            forwarded_to_oms=True,
+            mt5_ticket=551001,
+            market_context_diagnostics={"opportunity_score": 88},
+        )
+        assert row["executed"] is True
+        assert row["has_real_mt5_ticket"] is True
+        assert row["mt5_ticket"] == 551001
+        assert row["private_no_fill_reason"] is None
+
+    @pytest.mark.trading_core
+    def test_hourly_oms_forward_without_ticket_does_not_count_fill(self) -> None:
+        from app.application.services.strategy_diagnostics import hourly_scan_rates
+
+        rates = hourly_scan_rates(
+            [
+                {
+                    "recorded_at": "2026-08-27T14:00:00+00:00",
+                    "decision_action": "BUY",
+                    "take": True,
+                    "forwarded_to_oms": True,
+                    "executed": True,
+                    "mt5_ticket": None,
+                }
+            ],
+            now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC),
+        )
+        assert rates["oms_forward"] == 1
+        assert rates["executed_count"] == 0
+        assert rates["mt5_fills"] == 0
+        assert rates["MT5_ticket_count"] == 0
+
+    @pytest.mark.trading_core
+    def test_hourly_real_ticket_counts_fill(self) -> None:
+        from app.application.services.strategy_diagnostics import hourly_scan_rates
+
+        rates = hourly_scan_rates(
+            [
+                {
+                    "recorded_at": "2026-08-27T14:00:00+00:00",
+                    "decision_action": "SELL",
+                    "take": True,
+                    "forwarded_to_oms": True,
+                    "executed": True,
+                    "mt5_ticket": 424242,
+                }
+            ],
+            now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC),
+        )
+        assert rates["oms_forward"] == 1
+        assert rates["executed_count"] == 1
+        assert rates["mt5_fills"] == 1
+        assert rates["MT5_ticket_count"] == 1
+
+    @pytest.mark.trading_core
     def test_hourly_scan_rates_separate_take_from_fill(self) -> None:
         from app.application.services.strategy_diagnostics import hourly_scan_rates
 

@@ -29,6 +29,8 @@ class MT5Position:
     magic: int = 0
     comment: str = ""
     opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    initial_stop: Decimal = Decimal("0")
+    initial_volume: Decimal | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.strip().upper())
@@ -54,6 +56,10 @@ class MT5Position:
             "magic": self.magic,
             "comment": self.comment,
             "opened_at": self.opened_at.isoformat(),
+            "initial_stop": str(self.initial_stop),
+            "initial_volume": (
+                str(self.initial_volume) if self.initial_volume is not None else None
+            ),
         }
 
 

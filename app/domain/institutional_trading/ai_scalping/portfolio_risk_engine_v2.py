@@ -769,20 +769,17 @@ def _evaluate_portfolio_allocation_unlocked(
     open_planned = Decimal("0")
     try:
         from app.domain.institutional_trading.operations.min_lot_feasibility import (
-            planned_sl_risk_usd,
+            aggregate_open_initial_planned_risk_usd,
         )
 
-        for pos in pos_list:
-            open_planned += planned_sl_risk_usd(
-                volume=_d(getattr(pos, "volume", 0)),
-                entry=_d(getattr(pos, "open_price", 0)),
-                stop_loss=_d(getattr(pos, "stop_loss", 0)),
-                contract_size=contract_size_for_symbol(
-                    str(getattr(pos, "symbol", "") or "")
-                ),
-            )
+        open_planned += aggregate_open_initial_planned_risk_usd(
+            pos_list,
+            contract_size_for=contract_size_for_symbol,
+        )
     except Exception:
-        open_planned = Decimal("0")
+        from app.domain.institutional_trading.config import MAX_TOTAL_PLANNED_RISK_USD
+
+        open_planned = MAX_TOTAL_PLANNED_RISK_USD
 
     sizing = calculate_dynamic_lots_v2(
         equity=book.equity,

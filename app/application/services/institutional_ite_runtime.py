@@ -4147,6 +4147,7 @@ class InstitutionalIteRuntime:
                 market_context_diagnostics=result.market_context_diagnostics,
                 signal_id=result.signal_id,
                 forwarded_to_oms=result.forwarded_to_oms,
+                mt5_ticket=result.mt5_ticket,
                 trace_id=result.trace_id,
             )
         except Exception:

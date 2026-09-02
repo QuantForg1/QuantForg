@@ -83,6 +83,7 @@ def test_opportunity_meter_green_on_execute():
         _cycle(
             decision_action="BUY",
             forwarded_to_oms=True,
+            mt5_ticket=424242,
             trend={"aligned": True, "score": 90, "h4": "up", "h1": "up"},
             quality={"score": 82, "required": 75, "passed": True},
             confluence={"total": 81, "required": 75, "passed": True},

@@ -281,7 +281,11 @@ def planned_sl_risk_usd(
     tick_size: Decimal | None = None,
     tick_value: Decimal | None = None,
 ) -> Decimal:
-    """Monetary loss if the current protective SL is hit."""
+    """Monetary loss if the given SL is hit.
+
+    Open-book aggregate accounting uses ``open_position_initial_planned_risk_usd``
+    so BE / trailing cannot shrink original planned exposure.
+    """
     if volume <= 0 or entry <= 0 or stop_loss <= 0:
         return Decimal("0")
     dist = abs(entry - stop_loss)
@@ -755,8 +759,267 @@ def evaluate_setup_tradeability(
     )
 
 
-def _has_broker_ticket(ticket: Any) -> bool:
+def has_broker_ticket(ticket: Any) -> bool:
+    """True only when a real broker ticket id is present. OMS forward is not a fill."""
     return ticket not in (None, "", 0, "0", "None")
+
+
+def _has_broker_ticket(ticket: Any) -> bool:
+    return has_broker_ticket(ticket)
+
+
+def cycle_mt5_ticket(cycle: dict[str, Any] | None) -> Any:
+    """Authoritative ticket from diagnostics or execution handoff."""
+    if not isinstance(cycle, dict):
+        return None
+    for key in ("mt5_ticket", "broker_ticket", "ticket"):
+        value = cycle.get(key)
+        if has_broker_ticket(value):
+            return value
+    handoff = cycle.get("execution_handoff")
+    if isinstance(handoff, dict):
+        for key in ("mt5_ticket", "ticket"):
+            value = handoff.get(key)
+            if has_broker_ticket(value):
+                return value
+    return None
+
+
+def cycle_has_real_mt5_ticket(cycle: dict[str, Any] | None) -> bool:
+    return has_broker_ticket(cycle_mt5_ticket(cycle))
+
+
+PRIVATE_NO_FILL_SAFETY_BLOCKED = "SAFETY_BLOCKED"
+PRIVATE_NO_FILL_RISK_BLOCKED = "RISK_BLOCKED"
+PRIVATE_NO_FILL_MIN_LOT = "MIN_LOT_EXCEEDS_RISK"
+PRIVATE_NO_FILL_OMS_REJECTED = "OMS_REJECTED"
+PRIVATE_NO_FILL_BROKER_REJECTED = "BROKER_REJECTED"
+PRIVATE_NO_FILL_INVALID_STOPS = "INVALID_STOPS"
+PRIVATE_NO_FILL_INVALID_VOLUME = "INVALID_VOLUME"
+PRIVATE_NO_FILL_MARKET_CLOSED = "MARKET_CLOSED"
+PRIVATE_NO_FILL_CONNECTION_ERROR = "CONNECTION_ERROR"
+PRIVATE_NO_FILL_TIMEOUT = "TIMEOUT"
+PRIVATE_NO_FILL_NO_FILL = "NO_FILL"
+PRIVATE_NO_FILL_OTHER = "OTHER"
+
+
+def classify_private_no_fill_reason(
+    *,
+    abort_reason: str | None = None,
+    cycle_outcome: str | None = None,
+    forwarded_to_oms: bool = False,
+    mt5_ticket: Any = None,
+    rejection_codes: list[str] | tuple[str, ...] = (),
+    blocking_stage: str | None = None,
+    decision_reasons: list[str] | tuple[str, ...] = (),
+) -> str | None:
+    """Internal/operator reason when P>70 did not become a real MT5 ticket.
+
+    Never a public Telegram/Jimvio event. Returns None when a ticket exists.
+    """
+    if has_broker_ticket(mt5_ticket):
+        return None
+    blob = " ".join(
+        [
+            str(abort_reason or ""),
+            str(cycle_outcome or ""),
+            str(blocking_stage or ""),
+            " ".join(str(code) for code in rejection_codes),
+            " ".join(str(reason) for reason in decision_reasons),
+        ]
+    ).upper()
+    if any(
+        token in blob
+        for token in ("KILL", "SAFETY", "AUTOTRADING", "SELF_PROTECTION")
+    ):
+        return PRIVATE_NO_FILL_SAFETY_BLOCKED
+    if any(
+        token in blob
+        for token in ("INVALID_STOP", "STOP_INVALID", "INVALID_SL", "INVALID_TP")
+    ):
+        return PRIVATE_NO_FILL_INVALID_STOPS
+    if any(token in blob for token in ("INVALID_VOLUME", "INVALID_LOT")):
+        return PRIVATE_NO_FILL_INVALID_VOLUME
+    if "MARKET_CLOSED" in blob:
+        return PRIVATE_NO_FILL_MARKET_CLOSED
+    if any(token in blob for token in ("TIMEOUT", "CYCLE_TIMEOUT")):
+        return PRIVATE_NO_FILL_TIMEOUT
+    if any(
+        token in blob
+        for token in (
+            "CONNECTION",
+            "GATEWAY_UNAVAILABLE",
+            "MT5_UNAVAILABLE",
+            "NETWORK",
+        )
+    ):
+        return PRIVATE_NO_FILL_CONNECTION_ERROR
+    if "MIN_LOT" in blob or CODE_MIN_LOT_EXCEEDS_RISK_BUDGET in blob:
+        return PRIVATE_NO_FILL_MIN_LOT
+    risk_hit = "RISK" in blob or any(
+        token in blob
+        for token in (
+            "DAILY_LOSS",
+            "DRAWDOWN",
+            "HALTED_BY_RISK",
+            "RISK_BLOCK",
+            "RISK_REJECT",
+        )
+    )
+    if risk_hit and "OMS" not in blob:
+        return PRIVATE_NO_FILL_RISK_BLOCKED
+    if any(token in blob for token in ("OMS", "DUPLICATE")):
+        return PRIVATE_NO_FILL_OMS_REJECTED
+    if any(token in blob for token in ("BROKER", "RETCODE", "TRADE_DISABLED")):
+        return PRIVATE_NO_FILL_BROKER_REJECTED
+    if forwarded_to_oms:
+        return PRIVATE_NO_FILL_NO_FILL
+    return PRIVATE_NO_FILL_OTHER
+
+
+def _positive_decimal(value: Any) -> Decimal:
+    if value in (None, "", 0, "0"):
+        return Decimal("0")
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return Decimal("0")
+    return parsed if parsed > 0 else Decimal("0")
+
+
+def load_initial_leg_facts_fail_open() -> dict[int, dict[str, Any]]:
+    """PME/recovery initial SL + volume keyed by live ticket."""
+    try:
+        from app.domain.institutional_trading.production_hardening import (
+            position_recovery,
+        )
+
+        out: dict[int, dict[str, Any]] = {}
+        for row in position_recovery.read_pme_recovery_snapshots_fail_open():
+            try:
+                ticket = int(row.get("ticket") or 0)
+            except (TypeError, ValueError):
+                ticket = 0
+            if ticket <= 0:
+                continue
+            out[ticket] = {
+                "initial_volume": row.get("initial_volume"),
+                "volume": row.get("initial_volume") or row.get("remaining_volume"),
+                "entry": row.get("entry_price"),
+                "initial_stop": row.get("initial_stop"),
+            }
+        return out
+    except Exception:
+        return {}
+
+
+def open_position_initial_planned_risk_usd(
+    pos: Any,
+    *,
+    contract_size: Decimal,
+    initial_facts: dict[int, dict[str, Any]] | None = None,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
+) -> Decimal:
+    """Initial planned SL risk of one OPEN QuantForg leg.
+
+    Uses the original planned stop (and initial volume when known) until the
+    position is closed. BE / trailing / partial protection must not shrink this
+    contribution. Manual / other-EA / no-ticket rows count as zero.
+    """
+    try:
+        ticket = int(getattr(pos, "ticket", 0) or 0)
+    except (TypeError, ValueError):
+        ticket = 0
+    if ticket <= 0:
+        return Decimal("0")
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        belongs_to_quantforg,
+    )
+
+    if not belongs_to_quantforg(pos):
+        return Decimal("0")
+    facts = (initial_facts or {}).get(ticket) or {}
+    volume = _positive_decimal(facts.get("initial_volume"))
+    if volume <= 0:
+        volume = _positive_decimal(facts.get("volume"))
+    if volume <= 0:
+        volume = _positive_decimal(getattr(pos, "initial_volume", None))
+    if volume <= 0:
+        volume = _positive_decimal(getattr(pos, "volume", None))
+    entry = _positive_decimal(facts.get("entry"))
+    if entry <= 0:
+        entry = _positive_decimal(facts.get("entry_price"))
+    if entry <= 0:
+        entry = _positive_decimal(getattr(pos, "open_price", None))
+    if entry <= 0:
+        entry = _positive_decimal(getattr(pos, "entry_price", None))
+    stop = _positive_decimal(facts.get("initial_stop"))
+    if stop <= 0:
+        stop = _positive_decimal(getattr(pos, "initial_stop", None))
+    if stop <= 0:
+        stop = _positive_decimal(getattr(pos, "stop_loss", None))
+    if stop <= 0:
+        stop = _positive_decimal(getattr(pos, "current_stop", None))
+    return planned_sl_risk_usd(
+        volume=volume,
+        entry=entry,
+        stop_loss=stop,
+        contract_size=contract_size,
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
+
+
+def aggregate_open_initial_planned_risk_usd(
+    positions: list[Any] | tuple[Any, ...] | None,
+    *,
+    contract_size_for: Any,
+    initial_facts: dict[int, dict[str, Any]] | None = None,
+) -> Decimal:
+    """Sum initial planned SL risk across OPEN QuantForg tickets only."""
+    facts = (
+        initial_facts
+        if initial_facts is not None
+        else load_initial_leg_facts_fail_open()
+    )
+    total = Decimal("0")
+    for pos in positions or ():
+        try:
+            symbol = str(getattr(pos, "symbol", "") or "")
+            contract_size = (
+                contract_size_for(symbol)
+                if callable(contract_size_for)
+                else contract_size_for
+            )
+            total += open_position_initial_planned_risk_usd(
+                pos,
+                contract_size=contract_size,
+                initial_facts=facts,
+            )
+        except Exception:
+            try:
+                symbol = str(getattr(pos, "symbol", "") or "")
+                contract_size = (
+                    contract_size_for(symbol)
+                    if callable(contract_size_for)
+                    else contract_size_for
+                )
+                total += planned_sl_risk_usd(
+                    volume=_positive_decimal(getattr(pos, "volume", None)),
+                    entry=_positive_decimal(
+                        getattr(pos, "open_price", None)
+                        or getattr(pos, "entry_price", None)
+                    ),
+                    stop_loss=_positive_decimal(
+                        getattr(pos, "initial_stop", None)
+                        or getattr(pos, "stop_loss", None)
+                    ),
+                    contract_size=contract_size,
+                )
+            except Exception:  # noqa: S112
+                continue
+    return total.quantize(_CENTS)
 
 
 def classify_cycle_execution_status(

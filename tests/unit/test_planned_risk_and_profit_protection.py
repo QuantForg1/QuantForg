@@ -116,6 +116,9 @@ def _pos_mt5(
     entry: Decimal,
     sl: Decimal,
     side: str = "buy",
+    magic: int = 260720,
+    initial_stop: Decimal | None = None,
+    initial_volume: Decimal | None = None,
 ) -> MT5Position:
     return MT5Position(
         ticket=ticket,
@@ -125,9 +128,11 @@ def _pos_mt5(
         open_price=entry,
         current_price=entry,
         stop_loss=sl,
-        take_profit=entry + (entry - sl),
+        take_profit=entry + (entry - sl if sl < entry else sl - entry),
         profit=Decimal("0"),
-        magic=260720,
+        magic=magic,
+        initial_stop=initial_stop if initial_stop is not None else Decimal("0"),
+        initial_volume=initial_volume,
     )
 
 
@@ -455,6 +460,162 @@ class TestAggregatePlannedRisk:
         )
         assert blocked.decision is RiskDecision.REJECT
         assert any("daily loss" in r.lower() for r in blocked.reasons)
+
+
+def _agg_engine() -> RiskEngine:
+    return RiskEngine(
+        config=RiskEngineConfig(
+            max_open_positions=10,
+            min_lot=Decimal("0.01"),
+            contract_size=Decimal("100"),
+            target_risk_per_trade_usd=TARGET_PLANNED_RISK_USD,
+            min_planned_risk_usd=MIN_PLANNED_RISK_USD,
+            max_total_planned_risk_usd=MAX_TOTAL_PLANNED_RISK_USD,
+            max_symbol_exposure_pct=Decimal("200"),
+            max_asset_class_exposure_pct=Decimal("200"),
+            max_total_exposure_pct=Decimal("500"),
+            max_correlated_exposure_pct=Decimal("200"),
+        )
+    )
+
+
+def _leg_initial_seven(*, ticket: int, current_sl: Decimal) -> MT5Position:
+    """0.01 XAUUSD * $7 initial stop distance = $7 planned risk."""
+    return _pos_mt5(
+        ticket=ticket,
+        symbol="XAUUSD",
+        volume=Decimal("0.01"),
+        entry=Decimal("2300"),
+        sl=current_sl,
+        initial_stop=Decimal("2293"),
+        initial_volume=Decimal("0.01"),
+    )
+
+
+class TestInitialPlannedRiskAccounting:
+    def test_initial_risk_remains_after_be(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.operations.min_lot_feasibility"
+            ".load_initial_leg_facts_fail_open",
+            lambda: {},
+        )
+        engine = _agg_engine()
+        be_legs = [
+            _leg_initial_seven(ticket=30 + i, current_sl=Decimal("2300"))
+            for i in range(4)
+        ]
+        open_risk = engine.aggregate_planned_sl_risk(be_legs)
+        assert open_risk == Decimal("28.00")
+
+    def test_initial_risk_remains_after_trailing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.operations.min_lot_feasibility"
+            ".load_initial_leg_facts_fail_open",
+            lambda: {},
+        )
+        engine = _agg_engine()
+        trailed = _leg_initial_seven(ticket=40, current_sl=Decimal("2298"))
+        assert engine.aggregate_planned_sl_risk([trailed]) == Decimal("7.00")
+
+    def test_closed_positions_leave_aggregate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.operations.min_lot_feasibility"
+            ".load_initial_leg_facts_fail_open",
+            lambda: {},
+        )
+        engine = _agg_engine()
+        open_leg = _leg_initial_seven(ticket=50, current_sl=Decimal("2293"))
+        assert engine.aggregate_planned_sl_risk([open_leg]) == Decimal("7.00")
+        assert engine.aggregate_planned_sl_risk([]) == Decimal("0.00")
+
+    def test_unlabeled_and_no_ticket_do_not_count(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.operations.min_lot_feasibility"
+            ".load_initial_leg_facts_fail_open",
+            lambda: {},
+        )
+        engine = _agg_engine()
+        manual = _pos_mt5(
+            ticket=99,
+            symbol="XAUUSD",
+            volume=Decimal("0.10"),
+            entry=Decimal("2300"),
+            sl=Decimal("2290"),
+            magic=0,
+            initial_stop=Decimal("2290"),
+        )
+        assert engine.aggregate_planned_sl_risk([manual]) == Decimal("0.00")
+
+    def test_twenty_eight_plus_seven_blocked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.operations.min_lot_feasibility"
+            ".load_initial_leg_facts_fail_open",
+            lambda: {},
+        )
+        engine = _agg_engine()
+        open_legs = [
+            _leg_initial_seven(ticket=60 + i, current_sl=Decimal("2300"))
+            for i in range(4)
+        ]
+        fifth = engine.evaluate(
+            RiskCheckInput(
+                user_id=uuid4(),
+                request_id="agg-28-plus-7",
+                symbol="XAUUSD",
+                side="buy",
+                stop_loss_distance=Decimal("7.00"),
+                sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
+                entry_price=Decimal("2300"),
+                contract_size=Decimal("100"),
+            ),
+            account=_account(),
+            positions=open_legs,
+        )
+        assert fifth.decision is RiskDecision.REJECT
+
+    def test_twenty_one_plus_seven_allowed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.operations.min_lot_feasibility"
+            ".load_initial_leg_facts_fail_open",
+            lambda: {},
+        )
+        engine = _agg_engine()
+        open_legs = [
+            _leg_initial_seven(ticket=70 + i, current_sl=Decimal("2300"))
+            for i in range(3)
+        ]
+        fourth = engine.evaluate(
+            RiskCheckInput(
+                user_id=uuid4(),
+                request_id="agg-21-plus-7",
+                symbol="XAUUSD",
+                side="buy",
+                stop_loss_distance=Decimal("7.00"),
+                sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
+                entry_price=Decimal("2300"),
+                contract_size=Decimal("100"),
+            ),
+            account=_account(),
+            positions=open_legs,
+        )
+        assert fourth.decision is not RiskDecision.REJECT
+        assert fourth.approved_lots > 0
+        open_risk = engine.aggregate_planned_sl_risk(open_legs)
+        assert open_risk == Decimal("21.00")
+        proposed = (fourth.approved_lots * Decimal("700")).quantize(Decimal("0.01"))
+        assert open_risk + proposed <= MAX_TOTAL_PLANNED_RISK_USD
 
 
 def _quality_req(**overrides: object) -> LiveOrderRequest:

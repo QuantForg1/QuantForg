@@ -61,16 +61,19 @@ def _parse_ts(value: Any) -> datetime | None:
 
 
 def _is_execute(cycle: dict[str, Any]) -> bool:
-    action = str(cycle.get("decision_action") or "").upper()
-    if action in {"BUY", "SELL"}:
-        return True
-    if bool(cycle.get("forwarded_to_oms")) or bool(cycle.get("executed")):
-        return action not in {"NO_TRADE", "WATCH"}
-    return False
+    """Opportunity is complete only when a real MT5 ticket exists."""
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        cycle_has_real_mt5_ticket,
+    )
+
+    return cycle_has_real_mt5_ticket(cycle)
 
 
 def _cycle_eligible_historical(cycle: dict[str, Any]) -> bool:
-    """Historical 'setup fired' proxy - executed or BUY/SELL only."""
+    """Historical 'setup fired' proxy for wait stats — not a fill claim."""
+    action = str(cycle.get("decision_action") or "").upper()
+    if action in {"BUY", "SELL"}:
+        return True
     return _is_execute(cycle)
 
 

@@ -99,21 +99,19 @@ class RiskEngine:
         return self._aggregate_planned_sl_risk(positions)
 
     def _aggregate_planned_sl_risk(self, positions: list[MT5Position]) -> Decimal:
-        """Sum planned SL-hit loss across the open book (per-symbol contract)."""
+        """Sum INITIAL planned SL risk of OPEN QuantForg legs until they close.
+
+        BE / trailing / tightened current stops must not shrink this total.
+        Manual, other-EA, closed, and no-ticket rows do not count.
+        """
         from app.domain.institutional_trading.operations.min_lot_feasibility import (
-            planned_sl_risk_usd,
+            aggregate_open_initial_planned_risk_usd,
         )
 
-        total = Decimal("0")
-        for pos in positions:
-            cs = self._contract_size(pos.symbol)
-            total += planned_sl_risk_usd(
-                volume=pos.volume,
-                entry=pos.open_price,
-                stop_loss=pos.stop_loss,
-                contract_size=cs,
-            )
-        return total.quantize(Decimal("0.01"))
+        return aggregate_open_initial_planned_risk_usd(
+            positions,
+            contract_size_for=self._contract_size,
+        )
 
     # -- 1. Position sizing --------------------------------------------------
 

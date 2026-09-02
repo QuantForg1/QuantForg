@@ -3,7 +3,9 @@
 Transforms existing strategy-diagnostics cycle artefacts into a single
 operator-facing decision card:
 
-- EXECUTE TRADE → list every gate PASS reason
+- TRADE EXECUTED → real MT5 ticket present; list every gate PASS reason
+- NO FILL / EXECUTION FAILED → BUY/SELL forwarded without a ticket
+- BLOCKED / REJECTED → Risk or Safety stopped the cycle
 - NO TRADE → show only the **first** blocking condition
 - Full Decision Trace → expandable stage-by-stage PASS/FAIL
 
@@ -15,6 +17,9 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.domain.institutional_trading.operations.min_lot_feasibility import (
+    cycle_has_real_mt5_ticket,
+)
 from app.domain.trading.xauusd_specs import VOLUME_MIN
 
 _STAGE_ORDER: tuple[str, ...] = (
@@ -269,12 +274,31 @@ def _evaluate_stages(cycle: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _is_execute(cycle: dict[str, Any]) -> bool:
-    action = str(cycle.get("decision_action") or "").upper()
-    if action in {"BUY", "SELL"}:
+    """True only when a real MT5 ticket exists. BUY/SELL / OMS forward are not fills."""
+    return cycle_has_real_mt5_ticket(cycle)
+
+
+def _risk_or_safety_blocked(
+    cycle: dict[str, Any],
+    stages: list[dict[str, Any]],
+) -> bool:
+    if any(
+        stage.get("key") in {"risk", "safety"} and stage.get("status") == "FAIL"
+        for stage in stages
+    ):
         return True
-    if bool(cycle.get("forwarded_to_oms")) or bool(cycle.get("executed")):
-        return action not in {"NO_TRADE", "WATCH"}
-    return False
+    abort = str(cycle.get("abort_reason") or "").upper()
+    if any(
+        token in abort
+        for token in ("RISK", "SAFETY", "KILL", "DAILY_LOSS", "MIN_LOT")
+    ):
+        return True
+    rejection = _as_dict(cycle.get("rejection"))
+    primary = str(rejection.get("primary") or "").upper()
+    return any(
+        token in primary
+        for token in ("RISK", "SAFETY", "KILL", "DAILY_LOSS", "MIN_LOT")
+    )
 
 
 def build_execution_explain(cycle: dict[str, Any]) -> dict[str, Any]:
@@ -282,16 +306,44 @@ def build_execution_explain(cycle: dict[str, Any]) -> dict[str, Any]:
     stages = _evaluate_stages(cycle)
     execute = _is_execute(cycle)
     action = str(cycle.get("decision_action") or "").upper() or "NO_TRADE"
+    take = action in {"BUY", "SELL"}
+    forwarded = bool(cycle.get("forwarded_to_oms"))
 
     first_block = next((s for s in stages if s["status"] == "FAIL"), None)
 
     if execute:
-        # On execute, surface PASS reasons (and note any unexpected FAIL).
         reasons = [s["detail"] for s in stages if s["status"] == "PASS"]
-        verdict = "EXECUTE_TRADE"
-        headline = "✅ EXECUTE TRADE"
+        verdict = "EXECUTED"
+        headline = "✅ TRADE EXECUTED"
         primary_rejection = None
         primary_rejection_detail = None
+    elif take and forwarded:
+        verdict = "EXECUTION_FAILED"
+        headline = "❌ NO FILL / EXECUTION FAILED"
+        primary_rejection = "NO_FILL"
+        primary_rejection_detail = "OMS forward without a real MT5 ticket"
+        reasons = []
+    elif take and _risk_or_safety_blocked(cycle, stages):
+        verdict = "BLOCKED"
+        headline = "❌ BLOCKED / REJECTED"
+        if first_block is not None:
+            primary_rejection = first_block["detail"]
+            primary_rejection_detail = first_block["detail"]
+        else:
+            rejection = _as_dict(cycle.get("rejection"))
+            primary_rejection = (
+                rejection.get("primary_label")
+                or rejection.get("primary")
+                or str(cycle.get("abort_reason") or "BLOCKED")
+            )
+            primary_rejection_detail = primary_rejection
+        reasons = []
+    elif take:
+        verdict = "EXECUTION_FAILED"
+        headline = "❌ NO FILL / EXECUTION FAILED"
+        primary_rejection = "NO_FILL"
+        primary_rejection_detail = "BUY/SELL without a real MT5 ticket"
+        reasons = []
     else:
         if action == "WAIT":
             verdict = "WAIT"

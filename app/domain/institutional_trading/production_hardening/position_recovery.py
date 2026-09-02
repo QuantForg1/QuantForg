@@ -69,6 +69,22 @@ def _state_path() -> Path:
     return base / DEFAULT_HARDENING_CONFIG.pme_state_filename
 
 
+def read_pme_recovery_snapshots_fail_open() -> list[dict[str, Any]]:
+    """Read-only PME snapshots for initial-risk accounting. Never mutates."""
+    try:
+        path = _state_path()
+        if not path.exists():
+            return []
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        rows = raw.get("positions") if isinstance(raw, dict) else None
+        if not isinstance(rows, list):
+            return []
+        return [row for row in rows if isinstance(row, dict)]
+    except Exception:
+        logger.exception("pme_recovery_snapshot_read_failed")
+        return []
+
+
 def _snapshot_from_position(pos: Any) -> PmeRecoverySnapshot:
     profile = resolve_class_management(getattr(pos, "trade_class", ""))
     score = getattr(pos, "opportunity_score", None)

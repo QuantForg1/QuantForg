@@ -181,6 +181,7 @@ def extract_cycle_diagnostics(
     market_context_diagnostics: dict[str, Any] | None = None,
     signal_id: str | None = None,
     forwarded_to_oms: bool = False,
+    mt5_ticket: Any = None,
     trace_id: str | None = None,
     config: ITEConfig | None = None,
     as_of: datetime | None = None,
@@ -313,7 +314,6 @@ def extract_cycle_diagnostics(
     ranked = _rank_rejection_codes(rejected_codes)
     action_u = str(decision_action or "").upper()
     take = action_u in {"BUY", "SELL"}
-    executed = bool(forwarded_to_oms)
     rejected = (not take) and (
         action_u in {"NO_TRADE", "WATCH", "WAIT", ""}
         or cycle_outcome in {"no_trade", "no_snapshot", "aborted", "shadow", "wait"}
@@ -333,6 +333,11 @@ def extract_cycle_diagnostics(
     from app.domain.institutional_trading.operations.execution_chain_log import (
         build_execution_handoff,
     )
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        classify_private_no_fill_reason,
+        cycle_mt5_ticket,
+        has_broker_ticket,
+    )
 
     blocked_ev = diag.get("execution_blocked")
     blocked_stage = (
@@ -341,13 +346,46 @@ def extract_cycle_diagnostics(
         else ""
     )
     handoff = diag.get("execution_handoff")
+    ticket_probe: dict[str, Any] = dict(diag)
+    if has_broker_ticket(mt5_ticket):
+        ticket_probe["mt5_ticket"] = mt5_ticket
+    if isinstance(handoff, dict):
+        ticket_probe["execution_handoff"] = handoff
+    ticket = cycle_mt5_ticket(ticket_probe)
     if not isinstance(handoff, dict):
         handoff = build_execution_handoff(
             take=take,
             abort_reason=abort_reason or primary,
             blocking_stage=blocked_stage or None,
             forwarded_to_oms=bool(forwarded_to_oms),
-            mt5_ticket=diag.get("mt5_ticket"),
+            mt5_ticket=ticket,
+        )
+    elif has_broker_ticket(ticket):
+        handoff = dict(handoff)
+        try:
+            handoff["mt5_ticket"] = int(ticket)
+        except (TypeError, ValueError):
+            handoff["mt5_ticket"] = ticket
+        handoff["execution_confirmed"] = True
+
+    executed = has_broker_ticket(ticket)
+    opportunity_gt_70 = False
+    try:
+        opp_raw = diag.get("opportunity_score")
+        if opp_raw is not None:
+            opportunity_gt_70 = float(opp_raw) > 70
+    except (TypeError, ValueError):
+        opportunity_gt_70 = False
+    private_no_fill_reason = None
+    if opportunity_gt_70 and not executed:
+        private_no_fill_reason = classify_private_no_fill_reason(
+            abort_reason=abort_reason or primary,
+            cycle_outcome=cycle_outcome,
+            forwarded_to_oms=bool(forwarded_to_oms),
+            mt5_ticket=ticket,
+            rejection_codes=ranked,
+            blocking_stage=blocked_stage or None,
+            decision_reasons=tuple(str(r) for r in decision_reasons),
         )
 
     return {
@@ -361,6 +399,8 @@ def extract_cycle_diagnostics(
         "forwarded_to_oms": bool(forwarded_to_oms),
         "take": take,
         "executed": executed,
+        "has_real_mt5_ticket": executed,
+        "private_no_fill_reason": private_no_fill_reason,
         "rejected": rejected,
         "trend": trend,
         "quality": {
@@ -479,7 +519,7 @@ def extract_cycle_diagnostics(
         "fvg_state": diag.get("fvg_state"),
         "bos_state": diag.get("bos_state"),
         "choch_state": diag.get("choch_state"),
-        "mt5_ticket": diag.get("mt5_ticket") or diag.get("ticket"),
+        "mt5_ticket": ticket if executed else None,
         "mt5_retcode": diag.get("mt5_retcode"),
     }
 
@@ -518,6 +558,10 @@ def hourly_scan_rates(
     risk_pass_n = safety_pass_n = oms_fwd_n = broker_n = fill_n = reject_n = 0
     edge_n = stale_n = daily_n = 0
     forming_n = incomplete_n = opp_wait_n = 0
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        cycle_has_real_mt5_ticket,
+    )
+
     for row in subset:
         action = str(row.get("decision_action") or row.get("action") or "").upper()
         if action == "BUY":
@@ -529,12 +573,9 @@ def hourly_scan_rates(
         if bool(row.get("take")) or action in {"BUY", "SELL"}:
             take_n += 1
         if bool(row.get("forwarded_to_oms")):
-            exec_n += 1
             oms_fwd_n += 1
-        if bool(row.get("executed")) or (
-            row.get("mt5_ticket") not in (None, "", 0, "0")
-            and bool(row.get("forwarded_to_oms"))
-        ):
+        if cycle_has_real_mt5_ticket(row):
+            exec_n += 1
             fill_n += 1
             broker_n += 1
         opp = row.get("opportunity_score")
@@ -672,7 +713,8 @@ def hourly_scan_rates(
         "note": (
             "Rates are from the in-memory diagnostics ring. Empty buckets mean "
             "history is not in the ring — not zero opportunity. TAKE is not an "
-            "MT5 fill; executed_count requires OMS forward."
+            "MT5 fill; executed_count / MT5_ticket_count / mt5_fills require a "
+            "real broker ticket. OMS forward alone is not a fill."
         ),
     }
 
@@ -683,11 +725,15 @@ def compute_diagnostics_statistics(
     window: int = 100,
 ) -> dict[str, Any]:
     """Aggregate last N diagnostic cycles (observation only)."""
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        cycle_has_real_mt5_ticket,
+    )
+
     rows = list(cycles)[-window:]
     n = len(rows)
     generated = sum(1 for r in rows if r.get("signal_id") or r.get("decision_action"))
     rejected = sum(1 for r in rows if r.get("rejected"))
-    executed = sum(1 for r in rows if r.get("executed"))
+    executed = sum(1 for r in rows if cycle_has_real_mt5_ticket(r))
     # Prefer counting cycles that had a decision artefact as "signals generated".
     signals_generated = sum(
         1

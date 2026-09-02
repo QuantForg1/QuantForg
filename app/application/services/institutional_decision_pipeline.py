@@ -216,6 +216,7 @@ def _resolve_live_positions(
                 out.append(p)
                 continue
             try:
+                raw_initial_vol = getattr(p, "initial_volume", None)
                 out.append(
                     MT5Position(
                         ticket=int(getattr(p, "ticket", 0) or 0),
@@ -227,6 +228,12 @@ def _resolve_live_positions(
                         profit=Decimal(str(getattr(p, "profit", 0) or 0)),
                         magic=int(getattr(p, "magic", 0) or 0),
                         comment=str(getattr(p, "comment", "") or ""),
+                        initial_stop=Decimal(str(getattr(p, "initial_stop", 0) or 0)),
+                        initial_volume=(
+                            Decimal(str(raw_initial_vol))
+                            if raw_initial_vol not in (None, "", 0, "0")
+                            else None
+                        ),
                     )
                 )
             except Exception:

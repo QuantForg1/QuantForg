@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.application.services.live_execution_explain import (
     build_execution_explain,
     explain_snapshot_from_diagnostics,
 )
+
+pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
 def _cycle(**overrides):
@@ -24,6 +28,7 @@ def _cycle(**overrides):
         "executed": False,
         "abort_reason": "",
         "cycle_outcome": "complete",
+        "mt5_ticket": None,
     }
     base.update(overrides)
     return base
@@ -33,13 +38,15 @@ def test_execute_trade_lists_pass_reasons():
     cycle = _cycle(
         decision_action="BUY",
         forwarded_to_oms=True,
+        mt5_ticket=424242,
+        executed=True,
         quality={"score": 78, "required": 75, "passed": True},
         confluence={"total": 81, "required": 75, "passed": True},
         sizing={"approved_lots": "0.01"},
     )
     card = build_execution_explain(cycle)
-    assert card["verdict"] == "EXECUTE_TRADE"
-    assert card["headline"] == "✅ EXECUTE TRADE"
+    assert card["verdict"] == "EXECUTED"
+    assert card["headline"] == "✅ TRADE EXECUTED"
     assert card["execute_trade"] is True
     assert card["primary_rejection"] is None
     reasons = card["reasons"]
@@ -49,6 +56,36 @@ def test_execute_trade_lists_pass_reasons():
     assert "Confluence 81/75 PASS" in reasons
     assert "Risk PASS (0.01 lots)" in reasons
     assert "Safety PASS" in reasons
+
+
+def test_oms_forward_without_ticket_is_no_fill():
+    cycle = _cycle(
+        decision_action="BUY",
+        forwarded_to_oms=True,
+        mt5_ticket=None,
+        quality={"score": 78, "required": 75, "passed": True},
+        confluence={"total": 81, "required": 75, "passed": True},
+        sizing={"approved_lots": "0.01"},
+    )
+    card = build_execution_explain(cycle)
+    assert card["verdict"] == "EXECUTION_FAILED"
+    assert "NO FILL" in card["headline"]
+    assert card["execute_trade"] is False
+    assert "EXECUTE TRADE" not in card["headline"]
+
+
+def test_buy_risk_rejection_is_blocked():
+    cycle = _cycle(
+        decision_action="BUY",
+        forwarded_to_oms=False,
+        abort_reason="DAILY_LOSS_BLOCK",
+        sizing={"approved_lots": "0.00"},
+        rejection={"primary": "DAILY_LOSS_BLOCK", "primary_label": "Daily loss"},
+    )
+    card = build_execution_explain(cycle)
+    assert card["verdict"] == "BLOCKED"
+    assert "BLOCKED" in card["headline"]
+    assert card["execute_trade"] is False
 
 
 def test_no_trade_first_block_is_mtf():
