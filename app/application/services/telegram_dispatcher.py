@@ -27,9 +27,12 @@ from app.application.services.telegram_events import (
 )
 from app.application.services.telegram_thread_store import (
     bind_thread,
+    lookup_lifecycle_by_message_id,
     lookup_message_id,
     mark_event_seen,
     persisted_seen_ids,
+    set_telegram_update_offset,
+    telegram_update_offset,
 )
 from core.logging import get_logger
 
@@ -158,6 +161,7 @@ class TelegramNotice:
     bind_ticket: str | None = None
     bind_signal: str | None = None
     require_thread: bool = False
+    reply_message_id: int | None = None
 
 
 class TelegramDispatcher:
@@ -185,6 +189,7 @@ class TelegramDispatcher:
         self._task: asyncio.Task[Any] | None = None
         self._running = False
         self._last_success = False
+        self._inbound_at = 0.0
         try:
             for key in persisted_seen_ids():
                 self._seen[key] = time.monotonic() + _SEEN_TTL_SECONDS
@@ -227,6 +232,7 @@ class TelegramDispatcher:
         bind_ticket: str | None = None,
         bind_signal: str | None = None,
         require_thread: bool = False,
+        reply_message_id: int | None = None,
     ) -> None:
         """Enqueue a notice. Never raises. Never awaits Telegram HTTP."""
         try:
@@ -241,6 +247,9 @@ class TelegramDispatcher:
                 bind_ticket=str(bind_ticket).strip() if bind_ticket else None,
                 bind_signal=str(bind_signal).strip() if bind_signal else None,
                 require_thread=bool(require_thread),
+                reply_message_id=(
+                    int(reply_message_id) if reply_message_id is not None else None
+                ),
             )
             with self._lock:
                 if self._already_seen(key):
@@ -341,6 +350,10 @@ class TelegramDispatcher:
                 if self._queue:
                     notice = self._queue.popleft()
             if notice is None:
+                now = time.monotonic()
+                if now - self._inbound_at >= 2.5:
+                    self._inbound_at = now
+                    await self._poll_inbound_replies()
                 await asyncio.sleep(0.05)
                 continue
             await self._deliver(notice)
@@ -367,7 +380,12 @@ class TelegramDispatcher:
             "disable_web_page_preview": True,
         }
         reply_id = None
-        if notice.reply_ticket:
+        if notice.reply_message_id is not None:
+            try:
+                reply_id = int(notice.reply_message_id)
+            except (TypeError, ValueError):
+                reply_id = None
+        elif notice.reply_ticket:
             try:
                 reply_id = lookup_message_id(
                     ticket=notice.reply_ticket,
@@ -459,6 +477,122 @@ class TelegramDispatcher:
         async with httpx.AsyncClient(timeout=timeout) as client:
             return await client.post(url, json=payload)
 
+    def _chat_matches(self, chat: dict[str, Any] | None) -> bool:
+        if not isinstance(chat, dict):
+            return False
+        want = self._chat_id.lstrip("@").strip().lower()
+        cid = str(chat.get("id") or "").strip().lower()
+        uname = str(chat.get("username") or "").lstrip("@").strip().lower()
+        return cid == self._chat_id.strip().lower() or cid == want or uname == want
+
+    async def _poll_inbound_replies(self) -> None:
+        """Fail-open getUpdates for replies to published Signals. Tests inject
+        a sendMessage stub as `_sender` and must not hit this path.
+        """
+        if self._sender is not None:
+            return
+        if not self._token or not self._chat_id:
+            return
+        try:
+            offset = telegram_update_offset()
+            url = f"{_TELEGRAM_API}/bot{self._token}/getUpdates"
+            response = await self._post(
+                url,
+                {
+                    "offset": offset,
+                    "timeout": 0,
+                    "limit": 20,
+                    "allowed_updates": ["message"],
+                },
+            )
+            data = _telegram_result_list(response)
+            max_id = offset
+            for update in data:
+                try:
+                    uid = int(update.get("update_id") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if uid >= max_id:
+                    max_id = uid + 1
+                message = update.get("message")
+                if not isinstance(message, dict):
+                    continue
+                if not self._chat_matches(message.get("chat")):
+                    continue
+                sender = message.get("from")
+                if isinstance(sender, dict) and sender.get("is_bot"):
+                    continue
+                reply_to = message.get("reply_to_message")
+                if not isinstance(reply_to, dict):
+                    continue
+                try:
+                    root_id = int(reply_to.get("message_id") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if root_id <= 0:
+                    continue
+                text = compose_inbound_reply(root_id)
+                if not text:
+                    continue
+                user_mid = message.get("message_id")
+                try:
+                    reply_to_user = int(user_mid) if user_mid is not None else None
+                except (TypeError, ValueError):
+                    reply_to_user = None
+                self.emit(
+                    "PUBLIC_REPLY",
+                    f"inbound:{uid}",
+                    text,
+                    reply_message_id=reply_to_user,
+                )
+            if max_id != offset:
+                set_telegram_update_offset(max_id)
+        except Exception:
+            logger.exception("telegram_inbound_poll_failed")
+
+
+def _telegram_result_list(response: object) -> list[dict[str, Any]]:
+    parser = getattr(response, "json", None)
+    data: Any
+    if callable(parser):
+        try:
+            data = parser()
+        except Exception:
+            data = None
+    else:
+        data = None
+    if not isinstance(data, dict):
+        return []
+    if data.get("ok") is False:
+        return []
+    result = data.get("result")
+    if not isinstance(result, list):
+        return []
+    return [row for row in result if isinstance(row, dict)]
+
+
+def compose_inbound_reply(reply_to_message_id: int) -> str | None:
+    """Build a contextual reply from persisted lifecycle truth. Never fabricates."""
+    from app.application.services.public_signal_payload import (
+        audit_public_message,
+        render_contextual_reply,
+    )
+
+    try:
+        row = lookup_lifecycle_by_message_id(int(reply_to_message_id))
+    except (TypeError, ValueError):
+        return None
+    if not row:
+        return None
+    text = render_contextual_reply(
+        state=str(row.get("state") or "") or None,
+        symbol=row.get("symbol"),
+        direction=row.get("direction"),
+    )
+    if audit_public_message(text):
+        return None
+    return text
+
 
 _dispatcher: TelegramDispatcher | None = None
 _dispatcher_lock = Lock()
@@ -498,6 +632,23 @@ def emit_telegram(
     verified public notice. Failure of one never blocks the other, Risk,
     OMS, MT5, or the ITE loop.
     """
+    if telegram or jimvio:
+        try:
+            from app.application.services.public_signal_payload import (
+                audit_public_message,
+            )
+
+            leaks = audit_public_message(text)
+            if leaks:
+                logger.warning(
+                    "public_publish_blocked_leak",
+                    telegram_event=event,
+                    event_id=event_id,
+                    leaks=leaks,
+                )
+                return
+        except Exception:
+            logger.exception("public_publish_audit_failed")
     if telegram:
         try:
             dispatcher = get_telegram_dispatcher()
@@ -520,6 +671,46 @@ def emit_telegram(
             emit_jimvio(event, event_id, text, fields=fields)
         except Exception:
             logger.exception("jimvio_fanout_failed")
+
+
+def emit_public_status(kind: str) -> None:
+    """Throttle public READY/SCANNING so worker cycles cannot spam."""
+    from app.application.services.public_signal_payload import render_status_message
+    from app.application.services.telegram_events import (
+        PUBLIC_MARKET_SCAN,
+        PUBLIC_MARKET_WATCH,
+    )
+    from app.application.services.telegram_thread_store import (
+        last_public_status,
+        mark_public_status,
+    )
+
+    wanted = str(kind or "").strip().upper()
+    last = last_public_status()
+    if wanted == "READY":
+        if last == "READY":
+            return
+        event = PUBLIC_MARKET_WATCH
+        event_id = "public:status:READY"
+    elif wanted == "SCANNING":
+        if last not in {"READY", "CLOSED"}:
+            return
+        event = PUBLIC_MARKET_SCAN
+        event_id = "public:status:SCANNING"
+    else:
+        return
+    text = render_status_message(wanted)
+    emit_telegram(event, event_id, text)
+    mark_public_status(wanted)
+
+
+def maybe_emit_market_scan(*, had_public_signal: bool) -> None:
+    if had_public_signal:
+        from app.application.services.telegram_thread_store import mark_public_status
+
+        mark_public_status("SIGNAL")
+        return
+    emit_public_status("SCANNING")
 
 
 async def start_telegram_dispatcher(settings: Any) -> TelegramDispatcher:
@@ -625,9 +816,19 @@ def _emit_verified_public_notices(classified: list[dict[str, Any]]) -> None:
     Research, risk, OMS, and operational notices stay off both public
     destinations. Qualification lives in public_channel_notices only.
     """
-    from app.application.services.telegram_events import public_channel_notices
+    from app.application.services.telegram_events import (
+        SIGNAL_CONFIRMED,
+        STOP_LOSS,
+        TAKE_PROFIT,
+        TRADE_CLOSED,
+        TRADE_OPENED,
+        public_channel_notices,
+    )
+    from app.application.services.telegram_thread_store import mark_public_status
 
-    for notice in public_channel_notices(classified):
+    public = public_channel_notices(classified)
+    events = {str(n.get("event")) for n in public}
+    for notice in public:
         fields = (
             notice.get("fields") if isinstance(notice.get("fields"), dict) else None
         )
@@ -641,6 +842,12 @@ def _emit_verified_public_notices(classified: list[dict[str, Any]]) -> None:
             bind_signal=notice.get("bind_signal"),
             require_thread=bool(notice.get("require_thread")),
         )
+    if events & {TRADE_OPENED, SIGNAL_CONFIRMED}:
+        mark_public_status("SIGNAL")
+    elif events & {TAKE_PROFIT, STOP_LOSS, TRADE_CLOSED}:
+        mark_public_status("CLOSED")
+    elif not public:
+        maybe_emit_market_scan(had_public_signal=False)
 
 
 def notify_cycle(
@@ -684,9 +891,20 @@ def notify_robot_started() -> None:
         )
 
         dispatcher = get_telegram_dispatcher()
-        if dispatcher is not None and dispatcher.enabled:
-            dispatcher.forget("robot:stopped")
-            status = "CONNECTED" if dispatcher.last_success else "ENABLED"
+        forget = (
+            getattr(dispatcher, "forget", None) if dispatcher is not None else None
+        )
+        enabled = bool(
+            getattr(dispatcher, "enabled", False) if dispatcher is not None else False
+        )
+        if callable(forget) and enabled:
+            forget("robot:stopped")
+        if enabled:
+            status = (
+                "CONNECTED"
+                if getattr(dispatcher, "last_success", False)
+                else "ENABLED"
+            )
         else:
             status = "DISABLED"
         emit_telegram(
@@ -696,6 +914,7 @@ def notify_robot_started() -> None:
             telegram=False,
             jimvio=False,
         )
+        emit_public_status("READY")
     except Exception:
         logger.exception("telegram_robot_started_failed")
 
@@ -708,8 +927,21 @@ def notify_robot_stopped(*, reason: str | None = None) -> None:
         )
 
         dispatcher = get_telegram_dispatcher()
-        if dispatcher is not None:
-            dispatcher.forget("robot:started")
+        forget = (
+            getattr(dispatcher, "forget", None) if dispatcher is not None else None
+        )
+        if callable(forget):
+            forget("robot:started")
+            forget("public:status:READY")
+            forget("public:status:SCANNING")
+        try:
+            from app.application.services.telegram_thread_store import (
+                forget_public_status,
+            )
+
+            forget_public_status()
+        except Exception:
+            logger.exception("telegram_public_status_forget_failed")
         emit_telegram(
             ROBOT_STOPPED,
             "robot:stopped",

@@ -32,6 +32,8 @@ from app.application.services.telegram_events import (
     OMS_REJECTED,
     ORDER_EXECUTION_ERROR,
     PARTIAL_CLOSE,
+    PUBLIC_MARKET_SCAN,
+    PUBLIC_MARKET_WATCH,
     RISK_BLOCKED,
     ROBOT_STARTED,
     ROBOT_STOPPED,
@@ -83,6 +85,8 @@ JIMVIO_EVENT_TYPE = {
     ORDER_EXECUTION_ERROR: "SYSTEM_ERROR",
     ROBOT_STARTED: "ROBOT_STARTED",
     ROBOT_STOPPED: "ROBOT_STOPPED",
+    PUBLIC_MARKET_WATCH: "ROBOT_STARTED",
+    PUBLIC_MARKET_SCAN: "ROBOT_STARTED",
     MT5_CONNECTED: "MT5_CONNECTED",
     MT5_DISCONNECTED: "MT5_DISCONNECTED",
     SYSTEM_ERROR: "SYSTEM_ERROR",
@@ -93,7 +97,7 @@ JIMVIO_EVENT_TYPE = {
 JIMVIO_STATUS = {
     "SIGNAL_DETECTED": "DETECTED",
     "SIGNAL_CONFIRMED": "CONFIRMED",
-    "TRADE_OPENED": "EXECUTED",
+    "TRADE_OPENED": "ACTIVE",
     "TRADE_REJECTED": "REJECTED",
     "STOP_LOSS_SET": "UPDATED",
     "TAKE_PROFIT_SET": "UPDATED",
@@ -201,17 +205,20 @@ def build_jimvio_payload(
         return None
     extra = dict(fields or {})
     ticket = extra.get("ticket") or extra.get("mt5_ticket")
-    if event_type == "TRADE_OPENED" and ticket in (None, "", 0, "0"):
+    ghost_fill = (
+        event_type == "TRADE_OPENED"
+        and ticket in (None, "", 0, "0")
+        and not str(message or "").strip()
+    )
+    if ghost_fill:
+        # Public notices omit the ticket on purpose. A ghost TRADE_OPENED
+        # with no public message is still a rejected non-fill.
         event_type = "TRADE_REJECTED"
     status = str(status_override or "").strip() or JIMVIO_STATUS.get(
         event_type, "UPDATED"
     )
-    if (
-        event_type == "SIGNAL_CONFIRMED"
-        and ticket not in (None, "", 0, "0")
-        and not str(status_override or "").strip()
-    ):
-        status = "EXECUTED"
+    if event_type == "TRADE_OPENED" and not str(status_override or "").strip():
+        status = "ACTIVE"
     payload: dict[str, Any] = {
         "event_id": key,
         "event_type": event_type,
@@ -237,13 +244,9 @@ def build_jimvio_payload(
     if text:
         payload["message"] = text
     metadata: dict[str, Any] = {"quantforg_event": str(event)}
-    if ticket not in (None, "", 0, "0"):
-        metadata["mt5_ticket"] = ticket
     for meta_key in (
         "reason",
         "test",
-        "volume",
-        "retcode",
         "opportunity",
         "confidence",
         "risk_reward",
@@ -347,6 +350,19 @@ class JimvioPublisher:
                 fields=fields,
             )
             if not body:
+                return
+            from app.application.services.public_signal_payload import (
+                audit_jimvio_payload,
+            )
+
+            leaks = audit_jimvio_payload(body)
+            if leaks:
+                logger.warning(
+                    "jimvio_publish_blocked_leak",
+                    jimvio_event=event,
+                    event_id=event_id,
+                    leaks=leaks,
+                )
                 return
             key = str(body.get("event_id") or event_id or "").strip()
             notice = JimvioNotice(event=str(event), event_id=key, payload=body)

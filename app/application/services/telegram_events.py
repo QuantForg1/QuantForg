@@ -9,7 +9,8 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-TELEGRAM_TEST = "TELEGRAM_TEST"
+PUBLIC_MARKET_WATCH = "PUBLIC_MARKET_WATCH"
+PUBLIC_MARKET_SCAN = "PUBLIC_MARKET_SCAN"
 ROBOT_STARTED = "ROBOT_STARTED"
 ROBOT_STOPPED = "ROBOT_STOPPED"
 MT5_CONNECTED = "MT5_CONNECTED"
@@ -34,6 +35,7 @@ RISK_BLOCKED = "RISK_BLOCKED"
 OMS_REJECTED = "OMS_REJECTED"
 ORDER_EXECUTION_ERROR = "ORDER_EXECUTION_ERROR"
 SYSTEM_ERROR = "SYSTEM_ERROR"
+TELEGRAM_TEST = "TELEGRAM_TEST"
 
 _FILL_RETCODES = frozenset({10008, 10009})
 _RISK_ABORT_MARKERS = (
@@ -357,32 +359,21 @@ def format_signal(
     regime: str | None = None,
     status: str | None = None,
 ) -> str:
-    if status:
-        status_line = f"Status: {status}"
-    elif confirmed:
-        status_line = "Status: READY FOR EXECUTION"
-    else:
-        status_line = "Status: SIGNAL GENERATED"
-    emoji = "🟢" if _side(direction) != "SELL" else "🔴"
-    return _join(
-        [
-            f"{emoji} QUANTFORG SIGNAL",
-            "",
-            _line("Symbol", symbol),
-            _line("Direction", _side(direction)),
-            "",
-            _line("Opportunity", _num(opportunity)),
-            _line("Confidence", _pct(confidence)),
-            "",
-            _line("Entry", _num(entry, treat_zero_missing=True)),
-            _line("Stop Loss", _num(stop_loss, treat_zero_missing=True)),
-            _line("Take Profit", _num(take_profit, treat_zero_missing=True)),
-            "",
-            _line("Risk/Reward", _rr(risk_reward)),
-            "",
-            _line("Regime", regime),
-            status_line,
-        ]
+    del confirmed, status
+    from app.application.services.public_signal_payload import render_public_signal
+
+    return render_public_signal(
+        {
+            "symbol": symbol,
+            "direction": direction,
+            "opportunity": opportunity,
+            "confidence": confidence,
+            "entry": entry,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "risk_reward": risk_reward,
+            "regime": regime,
+        }
     )
 
 
@@ -874,40 +865,61 @@ def public_channel_notices(
         if root_src is not None:
             root_fields.update(_notice_fields(root_src))
         root_id = f"signal:{signal_id}"
+        from app.application.services.public_signal_payload import (
+            public_fields_only,
+            render_public_signal,
+            render_trade_active,
+            validate_canonical_signal,
+        )
+        from app.application.services.telegram_thread_store import record_lifecycle
+
+        visible = public_fields_only(root_fields)
+        if validate_canonical_signal(visible):
+            return []
+        try:
+            signal_text = render_public_signal(visible)
+            active_text = render_trade_active(visible)
+        except ValueError:
+            return []
+        record_lifecycle(
+            ticket=str(ticket),
+            signal_id=signal_id,
+            state="ACTIVE",
+            symbol=_clean(root_fields.get("symbol")),
+            direction=_side(root_fields.get("direction")),
+        )
         out.append(
             {
                 "event": SIGNAL_CONFIRMED,
                 "event_id": root_id,
-                "text": format_signal(
-                    confirmed=True,
-                    symbol=_clean(root_fields.get("symbol")),
-                    direction=_side(root_fields.get("direction")),
-                    opportunity=root_fields.get("opportunity"),
-                    confidence=root_fields.get("confidence"),
-                    entry=root_fields.get("entry"),
-                    stop_loss=root_fields.get("stop_loss"),
-                    take_profit=root_fields.get("take_profit"),
-                    risk_reward=root_fields.get("risk_reward"),
-                    regime=_clean(root_fields.get("regime")),
-                    status="EXECUTED ✅",
-                ),
-                "fields": root_fields,
+                "text": signal_text,
+                "fields": visible,
                 "bind_ticket": str(ticket),
                 "bind_signal": signal_id,
+                "lifecycle_state": "CONFIRMED",
                 "require_thread": False,
             }
         )
         opened = next(n for n in notices if n.get("event") == TRADE_OPENED)
         opened_out = dict(opened)
+        opened_out["text"] = active_text
+        opened_out["fields"] = visible
         opened_out["reply_ticket"] = str(ticket)
         opened_out["bind_ticket"] = str(ticket)
         opened_out["bind_signal"] = signal_id
+        opened_out["lifecycle_state"] = "ACTIVE"
         opened_out["require_thread"] = False
         out.append(opened_out)
         return out
 
     if TRADE_OPENED in events:
         return []
+
+    from app.application.services.public_signal_payload import (
+        public_fields_only,
+        render_lifecycle_update,
+    )
+    from app.application.services.telegram_thread_store import record_lifecycle
 
     for notice in notices:
         event = str(notice.get("event") or "")
@@ -920,8 +932,23 @@ def public_channel_notices(
         reply = _int_ticket(fields.get("ticket")) or ticket
         if reply is None:
             continue
+        visible = public_fields_only(fields)
+        try:
+            row["text"] = render_lifecycle_update(event, {**visible, **fields})
+        except ValueError:
+            continue
+        row["fields"] = visible
         row["reply_ticket"] = str(reply)
         row["require_thread"] = True
+        closed = event in {TAKE_PROFIT, STOP_LOSS, TRADE_CLOSED}
+        row["lifecycle_state"] = "CLOSED" if closed else "ACTIVE"
+        record_lifecycle(
+            ticket=str(reply),
+            signal_id=_clean(fields.get("signal_id")),
+            state="CLOSED" if closed else "ACTIVE",
+            symbol=_clean(fields.get("symbol")),
+            direction=_side(fields.get("direction") or fields.get("side")),
+        )
         out.append(row)
     return out
 

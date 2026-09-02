@@ -196,8 +196,8 @@ class TestJimvioPayload:
             fields={"symbol": "USDJPY", "direction": "BUY", "ticket": 575000111},
         )
         assert opened is not None
-        assert opened["status"] == "EXECUTED"
-        assert opened["metadata"]["mt5_ticket"] == 575000111
+        assert opened["status"] == "ACTIVE"
+        assert "mt5_ticket" not in opened["metadata"]
         ghost = build_jimvio_payload(
             event=TRADE_OPENED,
             event_id="open:missing",
@@ -228,8 +228,8 @@ class TestJimvioPayload:
         )
         assert payload is not None
         assert payload["event_type"] == "SIGNAL_CONFIRMED"
-        assert payload["status"] == "EXECUTED"
-        assert payload["metadata"]["mt5_ticket"] == 575929789
+        assert payload["status"] == "CONFIRMED"
+        assert "mt5_ticket" not in payload["metadata"]
         assert payload["metadata"]["opportunity"] == 87
         assert payload["metadata"]["signal_id"] == "sig-eurusd-1"
 
@@ -591,15 +591,22 @@ class TestJimvioMatchesTelegramPublicFilter:
         assert "SIGNAL_DETECTED" not in types
         assert "RISK_REJECTED" not in types
         opened = next(row for row in bodies if row["event_id"] == "open:575929789")
-        assert opened["status"] == "EXECUTED"
-        assert opened["metadata"]["mt5_ticket"] == 575929789
+        assert opened["status"] == "ACTIVE"
+        assert "mt5_ticket" not in opened["metadata"]
+        assert "Volume:" not in (opened.get("message") or "")
+        assert "MT5 Ticket" not in (opened.get("message") or "")
         confirmed = next(
             row for row in bodies if row["event_id"] == "signal:sig-eurusd-1"
         )
-        assert confirmed["status"] == "EXECUTED"
+        assert confirmed["status"] == "CONFIRMED"
         assert confirmed["symbol"] == "EURUSD"
         assert confirmed["direction"] == "BUY"
         assert confirmed["metadata"]["opportunity"] == 87
+        assert confirmed["message"]
+        assert opened["message"]
+        assert "QUANTFORG SIGNAL" in confirmed["message"]
+        assert "TRADE ACTIVE" in opened["message"]
+        assert confirmed["message"] != opened["message"]
 
     @pytest.mark.asyncio
     async def test_lifecycle_success_mirrors_to_both(self) -> None:
@@ -703,11 +710,13 @@ class TestJimvioMatchesTelegramPublicFilter:
             ),
         )
         notify_pme(failed)
-        notify_robot_started()
         notify_system_error(reason="boom")
         notify_connectivity(mt5_connected=True, gateway_available=False)
         assert pub.pending == 0
         assert telegram_ids == []
+        notify_robot_started()
+        assert telegram_ids == ["public:status:READY"]
+        assert pub.pending == 1
 
     @pytest.mark.asyncio
     async def test_duplicate_fill_is_not_reposted(self) -> None:

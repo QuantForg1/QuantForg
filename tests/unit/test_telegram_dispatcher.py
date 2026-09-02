@@ -701,10 +701,13 @@ class TestPublicTelegramChannel:
         events = [row["event"] for row in public]
         assert SIGNAL_CONFIRMED in events
         assert TRADE_OPENED in events
-        assert any(
-            "READY FOR EXECUTION" in row["text"] or "EXECUTED" in row["text"]
-            for row in public
-        )
+        blob = "\n".join(row["text"] for row in public)
+        assert "QUANTFORG SIGNAL" in blob
+        assert "TRADE ACTIVE" in blob
+        assert "MT5 Ticket" not in blob
+        assert "EXECUTED" not in blob
+        assert "Volume:" not in blob
+        assert "Automated Trading System" not in blob
 
     def test_score_above_70_still_fails_invalid_setup(self) -> None:
         notices = classify_cycle_notices(
@@ -790,8 +793,10 @@ class TestPublicTelegramChannel:
         public = public_channel_notices(filled)
         opened = [row for row in public if row["event"] == TRADE_OPENED]
         assert opened
-        assert "888111" in opened[0]["text"]
-        assert "EXECUTED" in opened[0]["text"]
+        assert "888111" not in opened[0]["text"]
+        assert "EXECUTED" not in opened[0]["text"]
+        assert "TRADE ACTIVE" in opened[0]["text"]
+        assert "Volume:" not in opened[0]["text"]
 
     def test_pme_without_success_is_silent(self) -> None:
         pos = ManagedPosition(
@@ -932,8 +937,11 @@ class TestPublicTelegramChannel:
         await disp.flush()
         texts = [row["text"] for row in captured]
         assert any("QUANTFORG SIGNAL" in text for text in texts)
-        assert any("QUANTFORG TRADE OPENED" in text for text in texts)
-        assert any("575929789" in text for text in texts)
+        assert any("TRADE ACTIVE" in text for text in texts)
+        assert all("575929789" not in text for text in texts)
+        assert all("MT5 Ticket" not in text for text in texts)
+        assert all("Volume:" not in text for text in texts)
+        assert all("EXECUTED" not in text for text in texts)
         assert captured[1].get("reply_to_message_id") == 11
 
     @pytest.mark.asyncio
@@ -956,10 +964,11 @@ class TestPublicTelegramChannel:
         await disp.flush()
         notify_pme(_pme_success(action=ManageActionKind.BREAK_EVEN))
         await disp.flush()
-        be = [row for row in captured if "QUANTFORG BREAKEVEN" in row["text"]]
+        be = [row for row in captured if "TRADE UPDATE" in row["text"]]
         assert be
         assert be[0]["reply_to_message_id"] == 21
-        assert "BREAKEVEN ACTIVE" in be[0]["text"]
+        assert "Protective management is now active" in be[0]["text"]
+        assert "MT5 Ticket" not in be[0]["text"]
 
     @pytest.mark.asyncio
     async def test_lifecycle_replies_only_after_broker_success(self) -> None:
@@ -1013,9 +1022,19 @@ class TestPublicTelegramChannel:
             )
         )
         await disp.flush()
-        trail = next(row for row in captured if "TRAILING STOP" in row["text"])
-        partial = next(row for row in captured if "PARTIAL CLOSE" in row["text"])
-        tp = next(row for row in captured if "TAKE PROFIT" in row["text"])
+        trail = next(
+            row
+            for row in captured
+            if "protective stop has been advanced" in row["text"]
+        )
+        partial = next(
+            row
+            for row in captured
+            if "Part of the position has been realized" in row["text"]
+        )
+        tp = next(
+            row for row in captured if "reached its planned objective" in row["text"]
+        )
         assert trail["reply_to_message_id"] == root_id
         assert partial["reply_to_message_id"] == root_id
         assert tp["reply_to_message_id"] == root_id
@@ -1037,7 +1056,7 @@ class TestPublicTelegramChannel:
             cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
         )
         await disp.flush()
-        opened = [row for row in captured if "TRADE OPENED" in row["text"]]
+        opened = [row for row in captured if "TRADE ACTIVE" in row["text"]]
         assert len(opened) == 1
 
     @pytest.mark.asyncio
@@ -1114,6 +1133,79 @@ class TestPublicTelegramChannel:
         )
         assert notices == []
         assert public_channel_notices(notices) == []
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+class TestPublicStatusDedupAndReplies:
+    @pytest.mark.asyncio
+    async def test_ready_and_scanning_publish_once_per_state(self) -> None:
+        captured: list[dict[str, Any]] = []
+
+        async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
+            captured.append(payload)
+            return _FakeResponse(200, '{"ok":true,"result":{"message_id":70}}')
+
+        disp = _dispatcher(sender)
+        from app.application.services.telegram_dispatcher import (
+            emit_public_status,
+            maybe_emit_market_scan,
+        )
+
+        emit_public_status("READY")
+        emit_public_status("READY")
+        maybe_emit_market_scan(had_public_signal=False)
+        maybe_emit_market_scan(had_public_signal=False)
+        await disp.flush()
+        texts = [row["text"] for row in captured]
+        assert len(texts) == 2
+        assert "MARKET WATCH" in texts[0]
+        assert "MARKET SCAN" in texts[1]
+        blob = "\n".join(texts)
+        assert "Automated Trading System" not in blob
+        assert "MT5 Ticket" not in blob
+
+    def test_inbound_reply_uses_real_lifecycle(self) -> None:
+        from app.application.services.telegram_dispatcher import compose_inbound_reply
+        from app.application.services.telegram_thread_store import (
+            bind_thread,
+            record_lifecycle,
+        )
+
+        record_lifecycle(
+            ticket="577877767",
+            signal_id="sig-xau",
+            state="ACTIVE",
+            symbol="XAUUSD",
+            direction="SELL",
+        )
+        bind_thread(message_id=42, ticket="577877767", signal_id="sig-xau")
+        active = compose_inbound_reply(42)
+        assert active is not None
+        assert "still active" in active.lower()
+        assert "XAUUSD" in active
+        assert "577877767" not in active
+        record_lifecycle(
+            ticket="577877767",
+            signal_id="sig-xau",
+            state="CLOSED",
+            symbol="XAUUSD",
+            direction="SELL",
+        )
+        closed = compose_inbound_reply(42)
+        assert closed is not None
+        assert "no longer active" in closed.lower()
+        record_lifecycle(
+            ticket="577877767",
+            signal_id="sig-xau",
+            state="NOT_EXECUTED",
+            symbol="XAUUSD",
+            direction="SELL",
+        )
+        skipped = compose_inbound_reply(42)
+        assert skipped is not None
+        assert "was not activated" in skipped.lower()
+        assert compose_inbound_reply(999) is None
 
 
 def get_disp() -> TelegramDispatcher:
