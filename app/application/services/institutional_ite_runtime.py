@@ -5601,6 +5601,35 @@ class InstitutionalIteRuntime:
                     )
                 except Exception:
                     logger.exception("independent_evaluation_fallback_failed")
+            try:
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_SCALPING_UNIVERSE,
+                )
+                from app.domain.institutional_trading.auto_trading import (
+                    ensure_scalping_universe_handoff,
+                )
+                from app.domain.trading.gold_only import gold_only_enabled as _go2
+
+                if not _go2():
+                    cat = [
+                        str(s).strip().upper()
+                        for s in (
+                            (scan.get("universe") if isinstance(scan, dict) else None)
+                            or []
+                        )
+                        if str(s).strip()
+                    ]
+                    # Research merge can re-prefer oil/crosses and scan-eligible
+                    # often omits majors without a BUY/SELL row. Re-seed expected
+                    # desks from the live catalogue; unspecified commodity desks
+                    # stay fail-closed and cannot keep first focus.
+                    eligible = ensure_scalping_universe_handoff(
+                        eligible,
+                        DEFAULT_SCALPING_UNIVERSE,
+                        catalogue=cat,
+                    )
+            except Exception:
+                logger.exception("ensure_scalping_universe_handoff_failed")
             scan["eligible_symbols"] = list(eligible)
             scan["eligible_count"] = len(eligible)
             with self._lock:

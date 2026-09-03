@@ -11,13 +11,14 @@ from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_SCALPING_UNIVERSE,
     MICRO_SAFE_USD_MAJOR_DESKS,
 )
-from app.domain.institutional_trading.auto_trading import (
-    allowlist_matches,
-    prefer_allowlisted_handoff,
-)
 from app.domain.institutional_trading.ai_scalping.universe_discovery import (
     discover_from_broker_rows,
     resolve_seed_to_broker_symbol,
+)
+from app.domain.institutional_trading.auto_trading import (
+    allowlist_matches,
+    ensure_scalping_universe_handoff,
+    prefer_allowlisted_handoff,
 )
 from services.mt5_gateway.trade import build_mt5_trade_request, resolve_deal_price
 
@@ -91,10 +92,68 @@ def test_ite_handoff_seeds_scalping_universe_not_full_catalogue() -> None:
     src = inspect.getsource(InstitutionalIteRuntime._multi_asset_preferred_symbol)
     assert "prefer_allowlisted_handoff" in src
     assert "DEFAULT_SCALPING_UNIVERSE" in src
+    assert "ensure_scalping_universe_handoff" in src
     assert "len(plane_allowed) >= 2" not in src
     assert "SYMBOL_SAFETY_RELEASE" in inspect.getsource(
         InstitutionalIteRuntime.run_auto_cycle
     )
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_ensure_handoff_injects_missing_majors_and_demotes_oil() -> None:
+    """Live defect: research/scan eligible can be oil-first and omit majors."""
+    catalogue = [
+        "XBRUSD",
+        "XTIUSD",
+        "EURUSD_I",
+        "GBPUSD_I",
+        "AUDUSD_I",
+        "NZDUSD_I",
+        "USDCHF_I",
+        "USDCAD_I",
+        "USDJPY_I",
+        "XAUUSD_I",
+        "BTCUSD",
+        "ETHUSD",
+        "EURJPY",
+    ]
+    oil_first = ["XBRUSD", "XTIUSD", "EURJPY"]
+    ordered = ensure_scalping_universe_handoff(
+        oil_first, DEFAULT_SCALPING_UNIVERSE, catalogue=catalogue
+    )
+    assert ordered[0] in {"EURUSD_I", "GBPUSD_I", "AUDUSD_I"}
+    assert "EURUSD_I" in ordered
+    assert "XAUUSD_I" in ordered
+    assert ordered.index("EURUSD_I") < ordered.index("EURJPY")
+    assert "XBRUSD" not in ordered
+    assert "XTIUSD" not in ordered
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_ensure_handoff_does_not_invent_absent_catalogue_desks() -> None:
+    ordered = ensure_scalping_universe_handoff(
+        ["GBPUSD_I", "XBRUSD"],
+        DEFAULT_SCALPING_UNIVERSE,
+        catalogue=["GBPUSD_I", "XBRUSD"],
+    )
+    assert ordered[0] == "GBPUSD_I"
+    assert "EURUSD" not in ordered
+    assert "EURUSD_I" not in ordered
+    assert "XBRUSD" not in ordered
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_ensure_handoff_keeps_oil_when_only_unspecified_remain() -> None:
+    ordered = ensure_scalping_universe_handoff(
+        ["XBRUSD", "XTIUSD"],
+        DEFAULT_SCALPING_UNIVERSE,
+        catalogue=["XBRUSD", "XTIUSD"],
+    )
+    assert ordered[0] in {"XBRUSD", "XTIUSD"}
+    assert "XBRUSD" in ordered
 
 
 @pytest.mark.unit

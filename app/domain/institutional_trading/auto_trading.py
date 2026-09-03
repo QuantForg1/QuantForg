@@ -55,6 +55,49 @@ def prefer_allowlisted_handoff(
             secondary.append(sym)
     return primary + secondary
 
+
+def _handoff_has_instrument_spec(symbol: str) -> bool:
+    """True when spread Safety has a real asset-class spec (not fail-closed)."""
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        asset_class_for_symbol,
+    )
+
+    cls = asset_class_for_symbol(symbol)
+    return cls not in {"commodity", "other"}
+
+
+def ensure_scalping_universe_handoff(
+    symbols: Sequence[str] | Iterable[str],
+    seed: Sequence[str] | set[str] | frozenset[str] | None,
+    *,
+    catalogue: Sequence[str] | Iterable[str] | None = None,
+) -> list[str]:
+    """Expected scalping desks first; inject catalogue-present desks missing
+    from scan-eligible; keep unspecified oil/energy from starving them.
+
+    Does not invent symbols. Does not bypass Safety/Sniper/Risk. Commodity
+    and unknown-class desks remain fail-closed: they stay on the queue only
+    when no specified desk remains to evaluate.
+    """
+    ordered = [str(s).strip().upper() for s in symbols if str(s).strip()]
+    seed_list = [str(a).strip().upper() for a in (seed or ()) if str(a).strip()]
+    cat = [str(c).strip().upper() for c in (catalogue or ()) if str(c).strip()]
+    injected: list[str] = []
+    seen = set(ordered)
+    for desk in seed_list:
+        if any(allowlist_matches(s, {desk}) for s in ordered + injected):
+            continue
+        pick = next((c for c in cat if allowlist_matches(c, {desk})), None)
+        if pick and pick not in seen:
+            injected.append(pick)
+            seen.add(pick)
+    merged = injected + [s for s in ordered if s not in injected]
+    specified = [s for s in merged if _handoff_has_instrument_spec(s)]
+    unspecified = [s for s in merged if not _handoff_has_instrument_spec(s)]
+    executable = specified if specified else unspecified
+    return prefer_allowlisted_handoff(executable, seed_list)
+
+
 _VALID_RUN_STATES: frozenset[str] = frozenset({"off", "running", "paused", "stopped"})
 
 
