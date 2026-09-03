@@ -880,7 +880,19 @@ def evaluate_live_order(
     gates.extend(evaluate_broker_requirements(req, state))
     gates.extend(evaluate_signal_quality(req, cfg))
 
-    spread_ok = req.spread is not None and req.spread <= cfg.max_spread
+    if req.spread is None:
+        spread_ok = False
+    else:
+        from app.domain.institutional_trading.ai_scalping.asset_class import (
+            spread_reject_ceiling,
+        )
+
+        spread_limit = spread_reject_ceiling(
+            getattr(req, "symbol", None), policy_max_spread=cfg.max_spread
+        )
+        spread_ok = (
+            req.spread <= spread_limit if spread_limit > 0 else False
+        )
     gates.append(_gate("acceptable_spread", bool(spread_ok), "excessive_spread"))
 
     if req.quote_age_seconds is not None:

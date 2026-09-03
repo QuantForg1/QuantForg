@@ -786,13 +786,25 @@ class RiskEngine:
                 )
             )
         else:
+            from app.domain.institutional_trading.ai_scalping.asset_class import (
+                spread_reject_ceiling,
+            )
+
+            spread_limit = spread_reject_ceiling(
+                check.symbol, policy_max_spread=cfg.max_spread
+            )
             spread_st = (
                 "fail"
-                if cfg.enforce_spread and check.spread > cfg.max_spread
+                if cfg.enforce_spread
+                and (
+                    (spread_limit > 0 and check.spread > spread_limit)
+                    or (spread_limit <= 0 and check.spread > 0)
+                )
                 else (
                     "warn"
                     if cfg.enforce_spread
-                    and check.spread > cfg.max_spread * Decimal("0.8")
+                    and spread_limit > 0
+                    and check.spread > spread_limit * Decimal("0.8")
                     else "pass"
                 )
             )
@@ -802,7 +814,7 @@ class RiskEngine:
                     name="Spread",
                     status=spread_st,
                     current=str(check.spread),
-                    threshold=str(cfg.max_spread),
+                    threshold=str(spread_limit),
                     reason=f"live spread {check.spread}",
                     suggested_action=action_for(
                         spread_st,
@@ -1161,13 +1173,26 @@ class RiskEngine:
                 "session restricted"
                 + (f" ({check.session_name})" if check.session_name else "")
             )
-        if (
-            cfg.enforce_spread
-            and check.spread is not None
-            and cfg.max_spread > 0
-            and check.spread > cfg.max_spread
-        ):
-            reasons.append(f"spread {check.spread} exceeds max {cfg.max_spread}")
+        if cfg.enforce_spread and check.spread is not None:
+            from app.domain.institutional_trading.ai_scalping.asset_class import (
+                asset_class_for_symbol,
+                spread_reject_ceiling,
+            )
+
+            spread_limit = spread_reject_ceiling(
+                check.symbol, policy_max_spread=cfg.max_spread
+            )
+            if spread_limit > 0 and check.spread > spread_limit:
+                cls = asset_class_for_symbol(check.symbol)
+                reasons.append(
+                    f"spread {check.spread} exceeds max {spread_limit}"
+                    f" ({cls})"
+                )
+            elif spread_limit <= 0 and check.spread > 0:
+                reasons.append(
+                    f"spread {check.spread} fail-closed — no instrument "
+                    f"spread specification for {check.symbol}"
+                )
         if cfg.enforce_atr and check.atr is not None and check.entry_price > 0:
             atr = check.atr
             if cfg.min_atr > 0 and atr < cfg.min_atr:

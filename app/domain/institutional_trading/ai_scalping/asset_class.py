@@ -189,6 +189,32 @@ def classify_atr_band_thresholds(
     return gold_low, gold_high
 
 
+def spread_reject_ceiling(
+    symbol: str | None,
+    *,
+    policy_max_spread: Decimal,
+) -> Decimal:
+    """Absolute ask-bid reject ceiling for Risk / Eligibility / live gates.
+
+    Gold keeps the operator/ITE policy ceiling (never raised here).
+    FX / index / crypto use class-native limits from ``resolve_spread_limits``.
+    Commodity / unknown → 0 (fail-closed for any positive spread).
+
+    Prevents gold-oriented ``max_spread`` (e.g. 1.50) from incorrectly
+    RISK_REJECTING BTCUSD / NDXUSD / LTCUSD after Sniper TAKE + Safety PASS.
+    """
+    cls = asset_class_for_symbol(symbol)
+    if cls == "gold":
+        return policy_max_spread if policy_max_spread > 0 else Decimal("0")
+    reject, _, _, _ = resolve_spread_limits(
+        symbol,
+        max_spread_reject=policy_max_spread,
+        max_spread_for_full_score=policy_max_spread,
+        max_spread_atr_pct=Decimal("15"),
+    )
+    return reject
+
+
 def resolve_spread_limits(
     symbol: str | None,
     *,

@@ -64,9 +64,27 @@ class PositionEligibilityEngine:
             rejects.append("Market is closed")
 
         spread = snapshot.spread
-        checks["spread_acceptable"] = spread is None or spread <= cfg.max_spread_reject
-        if not checks["spread_acceptable"]:
-            rejects.append(f"Spread {spread} not acceptable")
+        if spread is None:
+            # Preserve prior None-tolerant behaviour for this gate only.
+            checks["spread_acceptable"] = True
+        else:
+            from app.domain.institutional_trading.ai_scalping.asset_class import (
+                spread_reject_ceiling,
+            )
+
+            symbol = str(getattr(snapshot, "symbol", "") or "")
+            spread_limit = spread_reject_ceiling(
+                symbol, policy_max_spread=cfg.max_spread_reject
+            )
+            if spread_limit > 0:
+                checks["spread_acceptable"] = spread <= spread_limit
+            else:
+                checks["spread_acceptable"] = False
+            if not checks["spread_acceptable"]:
+                rejects.append(
+                    f"Spread {spread} not acceptable "
+                    f"(max {spread_limit} for {symbol or 'symbol'})"
+                )
 
         if force_test_mode:
             checks["session_valid"] = True
