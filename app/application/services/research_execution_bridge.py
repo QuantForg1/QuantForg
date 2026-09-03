@@ -24,6 +24,19 @@ logger = get_logger(__name__)
 _BUY_SELL = frozenset({"BUY", "SELL"})
 _STALE = frozenset({"STALE", "EXPIRED", "DATA_STALE"})
 _MAX_FOCUS = 36
+_TAKE_LIFECYCLES = frozenset(
+    {"EXECUTION_READY", "EXECUTING", "ORDER_SENT", "FILLED"}
+)
+_WAIT_ABORTS = frozenset(
+    {
+        "NO_ELIGIBLE_SETUP",
+        "NO_EXECUTABLE_SYMBOL",
+        "NO_EXECUTABLE_FOCUS",
+        "WAITING_NEXT_CYCLE",
+        "SETUP_NOT_READY",
+    }
+)
+_TERMINAL_CARD_STATUSES = frozenset({"REJECTED", "EXPIRED", "CANCELLED"})
 
 
 def live_authorization_snapshot() -> dict[str, Any]:
@@ -146,6 +159,45 @@ def merge_research_into_execution_handoff(
     return _clamp_handoff_to_execution_policy(merged)
 
 
+def _pipeline_take_ready(pipe: dict[str, Any] | None) -> bool:
+    """True only when the authoritative pipeline already reached ITE TAKE.
+
+    Research BUY/SELL is not TAKE. LIVE_ELIGIBLE requires this.
+    """
+    if not isinstance(pipe, dict) or not pipe:
+        return False
+    lifecycle = str(pipe.get("execution_lifecycle") or "").strip().upper()
+    if lifecycle in _TAKE_LIFECYCLES:
+        return True
+    decision = str(
+        pipe.get("final_decision") or pipe.get("setup_state") or ""
+    ).strip().upper()
+    if decision != "TAKE":
+        return False
+    sniper = pipe.get("sniper")
+    if isinstance(sniper, dict):
+        sniper_action = str(
+            sniper.get("action") or sniper.get("setup_state") or ""
+        ).upper()
+        if sniper.get("passed") is True or sniper_action in {"BUY", "SELL", "TAKE"}:
+            return True
+        return str(sniper.get("setup_state") or "").upper() == "TAKE"
+    return str(sniper or "").strip().upper() in {"READY", "TAKE", "PASS"}
+
+
+def is_active_signal_card(row: dict[str, Any] | None) -> bool:
+    """Active Signals feed: hide REJECTED / EXPIRED / CANCELLED. Keep the record."""
+    if not isinstance(row, dict):
+        return False
+    card = str(row.get("card_status") or "").strip().upper()
+    if card in _TERMINAL_CARD_STATUSES:
+        return False
+    lifecycle = str(
+        row.get("signal_lifecycle") or row.get("lifecycle") or ""
+    ).strip().upper()
+    return lifecycle not in _TERMINAL_CARD_STATUSES
+
+
 def signal_execution_status(
     row: dict[str, Any] | None,
     *,
@@ -179,7 +231,9 @@ def signal_execution_status(
     abort = str(
         pipe.get("abort_reason") or row.get("abort_reason") or ""
     ).strip().upper()
-    if risk in {"REJECT", "REJECTED", "BLOCK"} or "RISK" in abort:
+    if risk in {"REJECT", "REJECTED", "BLOCK"} or (
+        "RISK" in abort and not abort.startswith("WAIT")
+    ):
         return "RISK_BLOCKED"
     if oms in {"REJECT", "REJECTED", "BLOCK"}:
         return "EXECUTION_BLOCKED"
@@ -205,6 +259,14 @@ def signal_execution_status(
         and _desk_key(sym) not in focus_keys
     ):
         return "RESEARCH_ONLY"
+    # Research BUY/SELL is not ITE TAKE. LIVE_ELIGIBLE is reserved for a
+    # sniper TAKE that already passed existing gates and may be handed to OMS.
+    if (
+        abort.startswith("WAIT")
+        or abort in _WAIT_ABORTS
+        or not _pipeline_take_ready(pipe)
+    ):
+        return "WAITING_FOR_EXECUTION"
     if not orders_ok:
         return "EXECUTION_BLOCKED"
     return "LIVE_ELIGIBLE"
@@ -310,12 +372,18 @@ def signal_card_lifecycle(
             "card_status": "WAITING",
             "reason": reason or "READY_FOR_REVIEW",
         }
+    if status == "WAITING_FOR_EXECUTION" or abort.startswith("WAIT"):
+        return {
+            "lifecycle": "WAITING",
+            "card_status": "WAITING",
+            "reason": reason or abort or "WAITING_FOR_SETUP",
+        }
     if status == "RESEARCH_ONLY" or direction not in _BUY_SELL:
         return {
-            "lifecycle": "DISCOVERED" if direction not in _BUY_SELL else "FILTERED",
-            "card_status": "WAITING" if direction not in _BUY_SELL else "REJECTED",
+            "lifecycle": "DISCOVERED" if direction not in _BUY_SELL else "WAITING",
+            "card_status": "WAITING",
             "reason": reason
-            or ("NO_DIRECTION" if direction not in _BUY_SELL else "RESEARCH_ONLY"),
+            or ("NO_DIRECTION" if direction not in _BUY_SELL else "WAITING_FOR_SETUP"),
         }
     eligible = {str(s).strip().upper() for s in (scan_eligible or ()) if str(s).strip()}
     sym = str(row.get("symbol") or row.get("broker_symbol") or "").strip().upper()

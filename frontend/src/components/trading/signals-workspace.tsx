@@ -246,7 +246,7 @@ export function SignalsWorkspace() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
   const [sort, setSort] = useState<SignalSortKey>("strongest");
-  const [statusFilter, setStatusFilter] = useState<StatusFilterId>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterId>("ACTIVE");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [feedLimit, setFeedLimit] = useState(SIGNAL_FEED_PAGE_SIZE);

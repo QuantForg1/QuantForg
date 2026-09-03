@@ -1208,7 +1208,90 @@ def _overlay_last_ite_cycle(
     pipe = dict(row.get("pipeline") or {})
     if str(pipe.get("execution_lifecycle") or "").upper() == "FILLED":
         return row
-    take = str(pipe.get("final_decision") or row.get("direction") or "").upper() in {
+    # Research BUY/SELL is not ITE TAKE. Last-cycle WAIT must not paint
+    # EXECUTION_BLOCKED over a research QUALIFIED row.
+    cycle_action = str(
+        last.get("decision_action") or last.get("action") or ""
+    ).strip().upper()
+    cycle_outcome = str(last.get("cycle_outcome") or "").strip().lower()
+    wait_action = cycle_action in {
+        "WAIT",
+        "NO_TRADE",
+        "WATCH",
+        "NONE",
+        "HOLD",
+    } or cycle_action.startswith("WAIT")
+    wait_abort = abort.startswith("WAIT") or abort in {
+        "NO_ELIGIBLE_SETUP",
+        "NO_EXECUTABLE_SYMBOL",
+        "NO_EXECUTABLE_FOCUS",
+        "WAITING_NEXT_CYCLE",
+        "SETUP_NOT_READY",
+    }
+    wait_outcome = cycle_outcome in {
+        "waiting",
+        "waiting_next_cycle",
+        "no_eligible_setup",
+        "no_snapshot",
+    } or cycle_outcome.startswith("wait")
+    hard_abort = abort in {
+        "RISK_REJECTED",
+        "SAFETY_BLOCKED",
+        "KILL_SWITCH",
+        "OMS_REJECTED",
+        "MT5_REJECTED",
+        "ORDER_SEND_ERROR",
+        "MIN_LOT_CONSTRAINT",
+        "MIN_LOT_INFEASIBLE",
+        "MIN_LOT_EXCEEDS_RISK_BUDGET",
+        "DAILY_LOSS_BLOCK",
+        "EXECUTION_REJECT_BURST",
+        "DECISION_HASH_UNVERIFIED",
+        "EXECUTION_HEALTH_DEGRADED",
+        "HEALTH_DEGRADED",
+        "MAX_POSITIONS_REACHED",
+        "OPTIMIZER_BLOCK",
+        "EXECUTION_OPTIMIZER_DEFER",
+        "SPREAD_UNACCEPTABLE",
+        "SELF_PROTECTION",
+        "EXECUTION_TIMEOUT",
+        "MT5_NOT_READY",
+    } or any(
+        tok in abort
+        for tok in (
+            "RISK_REJECT",
+            "SAFETY_BLOCK",
+            "OMS_REJECT",
+            "MT5_REJECT",
+            "BROKER_REJECT",
+            "KILL_SWITCH",
+            "MIN_LOT",
+            "DAILY_LOSS",
+            "REJECT_BURST",
+            "HASH_UNVERIFIED",
+            "HEALTH_DEGRADED",
+            "MAX_POSITION",
+            "OPTIMIZER",
+        )
+    )
+    strategy_wait = (wait_action or wait_abort or wait_outcome) and not hard_abort
+    if strategy_wait and not forwarded:
+        not_reached = "NOT_REACHED"
+        pipe["risk"] = not_reached
+        pipe["safety"] = not_reached
+        pipe["optimizer"] = not_reached
+        pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
+        if abort:
+            pipe["abort_reason"] = abort
+            row["waiting_reason"] = human or abort
+        row["pipeline"] = pipe
+        return row
+    pipe_decision = str(
+        pipe.get("final_decision") or pipe.get("setup_state") or ""
+    ).upper()
+    take = cycle_action in {"BUY", "SELL", "TAKE"} or pipe_decision in {
         "BUY",
         "SELL",
         "TAKE",
@@ -1422,6 +1505,10 @@ def _overlay_last_ite_cycle(
         symbol=str(row.get("symbol") or pipe.get("symbol") or "") or None,
     )
     row["pipeline"] = pipe
+    row["rejection_reason"] = abort
+    row["rejection_stage"] = stage
+    row["rejected_at"] = _now_iso()
+    row["rejection_timestamp"] = row["rejected_at"]
     return row
 
 
@@ -1845,6 +1932,7 @@ def list_live_signals(
     strong_only: bool = False,
     high_confidence: bool = False,
     enabled_only: bool = True,
+    active_only: bool = False,
 ) -> dict[str, Any]:
     scan = get_last_multi_asset_scan() or {}
     prefs = load_preferences()
@@ -2029,6 +2117,7 @@ def list_live_signals(
     }
     research_focus: list[str] = []
     from app.application.services.research_execution_bridge import (
+        is_active_signal_card,
         live_authorization_snapshot,
         research_live_focus_symbols,
         signal_card_lifecycle,
@@ -2074,6 +2163,51 @@ def list_live_signals(
         if card.get("reason") and not row.get("block_code"):
             row["block_code"] = card["reason"]
         row["waiting_reason"] = card.get("reason") or None
+        if str(card["card_status"]).upper() in {"REJECTED", "EXPIRED", "CANCELLED"}:
+            row["rejection_reason"] = (
+                row.get("rejection_reason") or card.get("reason") or status
+            )
+            row["rejection_stage"] = row.get("rejection_stage") or status
+            row.setdefault("rejected_at", _now_iso())
+            row["rejection_timestamp"] = row.get("rejected_at")
+        forwarded = bool(
+            (row.get("pipeline") or {}).get("forwarded_to_oms")
+            if isinstance(row.get("pipeline"), dict)
+            else False
+        )
+        ticket_n = 0
+        try:
+            raw_ticket = (row.get("pipeline") or {}).get("ticket") if isinstance(
+                row.get("pipeline"), dict
+            ) else row.get("ticket")
+            ticket_n = int(raw_ticket) if raw_ticket not in (None, "", "0", 0) else 0
+        except (TypeError, ValueError):
+            ticket_n = 0
+        row["lifecycle_trace"] = {
+            "SIGNAL_CREATED": True,
+            "SIGNAL_QUALIFIED": bool(
+                row.get("qualified_research")
+                or str(row.get("board_status") or "").upper() == "QUALIFIED"
+                or str((row.get("pipeline") or {}).get("final_decision") or "").upper()
+                == "TAKE"
+            ),
+            "EXECUTION_ELIGIBLE": status == "LIVE_ELIGIBLE",
+            "EXECUTION_HANDOFF": forwarded or status == "LIVE_ELIGIBLE",
+            "OMS_SUBMITTED": forwarded,
+            "OMS_ACCEPTED": forwarded and ticket_n <= 0 and status == "ORDER_SUBMITTED",
+            "OMS_REJECTED": str(card["lifecycle"]).upper() == "OMS_REJECTED",
+            "MT5_SUBMIT": forwarded,
+            "MT5_ACCEPTED": ticket_n > 0,
+            "MT5_REJECTED": str(card["lifecycle"]).upper()
+            in {"BROKER_REJECTED", "EXECUTION_ERROR"},
+            "TICKET_CONFIRMED": ticket_n > 0,
+            "FINAL_STATUS": card["card_status"],
+            "stage": row.get("rejection_stage") or status,
+            "reason": card.get("reason") or row.get("rejection_reason"),
+            "symbol": row.get("symbol"),
+            "signal_id": row.get("signal_id"),
+            "timestamp": row.get("rejected_at") or row.get("as_of") or _now_iso(),
+        }
         row["live_eligible"] = status == "LIVE_ELIGIBLE"
         row["kind"] = (
             "LIVE_OPPORTUNITY"
@@ -2083,6 +2217,9 @@ def list_live_signals(
         if status != "ORDER_SUBMITTED" and status != "POSITION_OPEN":
             row["would_submit_order"] = False
         row["authorizes_trade"] = False
+
+    if active_only:
+        signals = [s for s in signals if is_active_signal_card(s)]
 
     qn = (q or "").strip().upper()
     if qn:
@@ -2270,7 +2407,7 @@ def get_signal(symbol: str) -> dict[str, Any] | None:
     code = (symbol or "").strip().upper()
     if not code:
         return None
-    payload = list_live_signals(q=code, enabled_only=False)
+    payload = list_live_signals(q=code, enabled_only=False, active_only=False)
     for item in payload.get("items") or []:
         if item.get("symbol") == code:
             return item

@@ -626,6 +626,22 @@ export function signalWaitingReason(row: Record<string, unknown>): string | null
   return raw || null;
 }
 
+export function isTerminalSignalCard(row: Record<string, unknown>): boolean {
+  const card = String(row.card_status || "")
+    .trim()
+    .toUpperCase();
+  if (card === "REJECTED" || card === "EXPIRED" || card === "CANCELLED") {
+    return true;
+  }
+  const lifecycle = String(row.signal_lifecycle || row.lifecycle || "")
+    .trim()
+    .toUpperCase();
+  if (lifecycle === "REJECTED" || lifecycle === "EXPIRED" || lifecycle === "CANCELLED") {
+    return true;
+  }
+  return signalExecutionStatusLabel(row) === "REJECTED";
+}
+
 export function signalExecutionStatusLabel(row: Record<string, unknown>): string {
   const ticket = signalMt5Ticket(row);
   const card = String(row.card_status || "")
@@ -787,6 +803,7 @@ export type SignalFilterState = {
   marketState: MarketStateFilter;
   age: string;
   freshness: string;
+  includeTerminal?: boolean;
 };
 
 export const EMPTY_SIGNAL_FILTERS: SignalFilterState = {
@@ -1518,6 +1535,9 @@ export function filterSignalRows(
   filters: SignalFilterState,
 ): Record<string, unknown>[] {
   return rows.filter((row) => {
+    if (filters.includeTerminal !== true && isTerminalSignalCard(row)) {
+      return false;
+    }
     const q = (filters.q || "").trim().toUpperCase();
     if (q) {
       const hay = `${instrumentSymbol(row)} ${instrumentName(row)}`.toUpperCase();

@@ -7,9 +7,11 @@ from uuid import uuid4
 import pytest
 
 from app.application.services.research_execution_bridge import (
+    is_active_signal_card,
     merge_research_into_execution_handoff,
     overlay_cycle_matches_row,
     research_live_focus_symbols,
+    signal_card_lifecycle,
     signal_execution_status,
 )
 from app.application.services.signal_center_service import _overlay_last_ite_cycle
@@ -98,9 +100,30 @@ def test_paused_live_trading_does_not_mark_live_eligible() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
-def test_enabled_buy_in_focus_is_live_eligible_not_an_order() -> None:
+def test_enabled_buy_in_focus_is_waiting_until_ite_take() -> None:
     status = signal_execution_status(
         {"symbol": "EURUSD", "direction": "BUY"},
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["EURUSD"],
+    )
+    assert status == "WAITING_FOR_EXECUTION"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_enabled_sniper_take_in_focus_is_live_eligible_not_an_order() -> None:
+    status = signal_execution_status(
+        {
+            "symbol": "EURUSD",
+            "direction": "BUY",
+            "pipeline": {
+                "final_decision": "TAKE",
+                "setup_state": "TAKE",
+                "execution_lifecycle": "EXECUTION_READY",
+                "sniper": "READY",
+            },
+        },
         live_state="ENABLED",
         orders_ok=True,
         research_focus=["EURUSD"],
@@ -145,9 +168,29 @@ def test_risk_or_oms_block_is_execution_blocked() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
-def test_enabled_without_submit_flag_is_execution_blocked_not_unauthorized() -> None:
+def test_enabled_without_submit_flag_waits_until_take() -> None:
     status = signal_execution_status(
         {"symbol": "EURUSD", "direction": "BUY"},
+        live_state="ENABLED",
+        orders_ok=False,
+        research_focus=["EURUSD"],
+    )
+    assert status == "WAITING_FOR_EXECUTION"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_take_without_submit_flag_is_execution_blocked() -> None:
+    status = signal_execution_status(
+        {
+            "symbol": "EURUSD",
+            "direction": "BUY",
+            "pipeline": {
+                "final_decision": "TAKE",
+                "execution_lifecycle": "EXECUTION_READY",
+                "sniper": "READY",
+            },
+        },
         live_state="ENABLED",
         orders_ok=False,
         research_focus=["EURUSD"],
@@ -331,7 +374,15 @@ def test_gold_only_live_eligible_is_gold_not_research_focus(
         lambda: True,
     )
     gold = signal_execution_status(
-        {"symbol": "XAUUSD", "direction": "SELL"},
+        {
+            "symbol": "XAUUSD",
+            "direction": "SELL",
+            "pipeline": {
+                "final_decision": "TAKE",
+                "execution_lifecycle": "EXECUTION_READY",
+                "sniper": "READY",
+            },
+        },
         live_state="ENABLED",
         orders_ok=True,
         research_focus=["EURUSD", "NZDUSD"],
@@ -375,3 +426,196 @@ def test_promote_pipeline_levels_does_not_invent_values() -> None:
     empty = _promote_pipeline_trade_levels({"symbol": "XAUUSD", "pipeline": {}})
     assert empty.get("entry") is None
     assert empty.get("stop_loss") is None
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_overlay_wait_cycle_does_not_reject_research_buy() -> None:
+    row = {
+        "symbol": "GBPUSD",
+        "direction": "BUY",
+        "board_status": "QUALIFIED",
+        "pipeline": {"final_decision": "WAIT", "forwarded_to_oms": False},
+    }
+    last = {
+        "symbol": "GBPUSD",
+        "forwarded_to_oms": False,
+        "decision_action": "NO_TRADE",
+        "abort_reason": "WAIT_INSUFFICIENT_RR",
+        "cycle_outcome": "waiting_next_cycle",
+    }
+    over = _overlay_last_ite_cycle(row, last)
+    assert over.get("pipeline", {}).get("execution_lifecycle") != "EXECUTION_BLOCKED"
+    assert over.get("rejection_reason") in (None, "")
+    status = signal_execution_status(
+        over,
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["GBPUSD"],
+    )
+    assert status == "WAITING_FOR_EXECUTION"
+    card = signal_card_lifecycle(over, execution_status=status)
+    assert card["card_status"] == "WAITING"
+    assert is_active_signal_card({**over, "card_status": card["card_status"]}) is True
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_take_oms_reject_becomes_rejected_and_leaves_active_feed() -> None:
+    row = {
+        "symbol": "EURUSD",
+        "direction": "BUY",
+        "pipeline": {
+            "final_decision": "TAKE",
+            "execution_lifecycle": "EXECUTION_READY",
+            "sniper": "READY",
+        },
+    }
+    last = {
+        "symbol": "EURUSD",
+        "decision_action": "BUY",
+        "forwarded_to_oms": False,
+        "abort_reason": "OMS_REJECTED",
+        "execution_blocked": {
+            "stage": "OMS",
+            "reason_code": "OMS_REJECTED",
+            "human_reason": "duplicate guard",
+        },
+    }
+    over = _overlay_last_ite_cycle(row, last)
+    assert over["rejection_reason"] == "OMS_REJECTED"
+    assert over["rejection_stage"] == "OMS"
+    card = signal_card_lifecycle(over, execution_status="EXECUTION_BLOCKED")
+    assert card["card_status"] == "REJECTED"
+    assert is_active_signal_card({**over, "card_status": "REJECTED"}) is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_take_mt5_reject_becomes_rejected_with_reason() -> None:
+    row = {
+        "symbol": "AUDUSD",
+        "direction": "SELL",
+        "pipeline": {
+            "final_decision": "TAKE",
+            "execution_lifecycle": "EXECUTING",
+            "sniper": "READY",
+            "oms": "READY",
+        },
+    }
+    last = {
+        "symbol": "AUDUSD",
+        "decision_action": "SELL",
+        "forwarded_to_oms": True,
+        "abort_reason": "MT5_REJECTED",
+        "mt5_ticket": None,
+        "execution_blocked": {
+            "stage": "BROKER",
+            "reason_code": "MT5_REJECTED",
+            "human_reason": "order_send failed",
+        },
+    }
+    over = _overlay_last_ite_cycle(row, last)
+    assert over["rejection_reason"] == "MT5_REJECTED"
+    card = signal_card_lifecycle(over, execution_status="EXECUTION_BLOCKED")
+    assert card["card_status"] == "REJECTED"
+    assert card["lifecycle"] in {
+        "BROKER_REJECTED",
+        "OMS_REJECTED",
+        "EXECUTION_ERROR",
+        "FILTERED",
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_executed_requires_real_mt5_ticket() -> None:
+    no_ticket = signal_card_lifecycle(
+        {
+            "symbol": "EURUSD",
+            "direction": "BUY",
+            "pipeline": {"execution_lifecycle": "FILLED", "final_decision": "TAKE"},
+        },
+        execution_status="EXECUTION_BLOCKED",
+    )
+    assert no_ticket["card_status"] != "EXECUTED"
+    with_ticket = signal_card_lifecycle(
+        {
+            "symbol": "EURUSD",
+            "direction": "BUY",
+            "pipeline": {
+                "execution_lifecycle": "FILLED",
+                "ticket": 778899,
+                "final_decision": "TAKE",
+            },
+        },
+        execution_status="ORDER_SUBMITTED",
+    )
+    assert with_ticket["card_status"] == "EXECUTED"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_terminal_cards_excluded_from_active_query() -> None:
+    assert is_active_signal_card({"card_status": "WAITING"}) is True
+    assert is_active_signal_card({"card_status": "TRADEABLE"}) is True
+    assert is_active_signal_card({"card_status": "REJECTED"}) is False
+    assert is_active_signal_card({"card_status": "EXPIRED"}) is False
+    assert is_active_signal_card({"card_status": "CANCELLED"}) is False
+    assert (
+        is_active_signal_card(
+            {"signal_lifecycle": "EXPIRED", "card_status": "WAITING"}
+        )
+        is False
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_xauusd_i_overlay_matches_canonical_gold() -> None:
+    row = {
+        "symbol": "XAUUSD",
+        "direction": "SELL",
+        "pipeline": {"final_decision": "TAKE", "sniper": "READY"},
+    }
+    last = {
+        "symbol": "XAUUSD_I",
+        "decision_action": "SELL",
+        "forwarded_to_oms": False,
+        "abort_reason": "RISK_REJECTED",
+        "execution_blocked": {
+            "stage": "RISK",
+            "reason_code": "RISK_REJECTED",
+            "human_reason": "min planned risk",
+        },
+    }
+    assert overlay_cycle_matches_row(row, last) is True
+    over = _overlay_last_ite_cycle(row, last)
+    assert over["pipeline"]["execution_lifecycle"] == "EXECUTION_BLOCKED"
+    assert over["rejection_reason"] == "RISK_REJECTED"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_eligible_fx_uses_same_live_eligible_path() -> None:
+    for symbol, direction in (
+        ("EURUSD", "BUY"),
+        ("GBPUSD", "SELL"),
+        ("USDJPY", "BUY"),
+        ("XAUUSD_I", "SELL"),
+    ):
+        status = signal_execution_status(
+            {
+                "symbol": symbol,
+                "direction": direction,
+                "pipeline": {
+                    "final_decision": "TAKE",
+                    "execution_lifecycle": "EXECUTION_READY",
+                    "sniper": "READY",
+                },
+            },
+            live_state="ENABLED",
+            orders_ok=True,
+            research_focus=[symbol, "EURUSD", "GBPUSD", "USDJPY", "XAUUSD_I"],
+        )
+        assert status == "LIVE_ELIGIBLE", symbol

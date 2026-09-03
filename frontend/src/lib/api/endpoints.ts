@@ -219,6 +219,7 @@ export const signalCenterApi = {
     strong_only?: boolean;
     high_confidence?: boolean;
     enabled_only?: boolean;
+    active_only?: boolean;
   }) => {
     const search = new URLSearchParams();
     if (params?.q) search.set("q", params.q);
@@ -227,6 +228,7 @@ export const signalCenterApi = {
     if (params?.strong_only) search.set("strong_only", "true");
     if (params?.high_confidence) search.set("high_confidence", "true");
     if (params?.enabled_only === false) search.set("enabled_only", "false");
+    if (params?.active_only === false) search.set("active_only", "false");
     const qs = search.toString();
     return apiFetch<Record<string, unknown>>(`/signals${qs ? `?${qs}` : ""}`);
   },

@@ -205,7 +205,7 @@ def test_min_lot_exceeds_risk_budget_code_unchanged() -> None:
     assert CODE_MIN_LOT_EXCEEDS_RISK_BUDGET == "MIN_LOT_EXCEEDS_RISK_BUDGET"
 
 
-def test_buy_and_sell_signals_are_both_live_eligible() -> None:
+def test_buy_and_sell_signals_wait_until_ite_take() -> None:
     buy = signal_execution_status(
         {"symbol": "EURUSD", "direction": "BUY"},
         live_state="ENABLED",
@@ -214,6 +214,39 @@ def test_buy_and_sell_signals_are_both_live_eligible() -> None:
     )
     sell = signal_execution_status(
         {"symbol": "GBPUSD", "direction": "SELL"},
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["EURUSD", "GBPUSD"],
+    )
+    assert buy == "WAITING_FOR_EXECUTION"
+    assert sell == "WAITING_FOR_EXECUTION"
+
+
+def test_buy_and_sell_takes_are_both_live_eligible() -> None:
+    buy = signal_execution_status(
+        {
+            "symbol": "EURUSD",
+            "direction": "BUY",
+            "pipeline": {
+                "final_decision": "TAKE",
+                "execution_lifecycle": "EXECUTION_READY",
+                "sniper": "READY",
+            },
+        },
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["EURUSD", "GBPUSD"],
+    )
+    sell = signal_execution_status(
+        {
+            "symbol": "GBPUSD",
+            "direction": "SELL",
+            "pipeline": {
+                "final_decision": "TAKE",
+                "execution_lifecycle": "EXECUTION_READY",
+                "sniper": "READY",
+            },
+        },
         live_state="ENABLED",
         orders_ok=True,
         research_focus=["EURUSD", "GBPUSD"],

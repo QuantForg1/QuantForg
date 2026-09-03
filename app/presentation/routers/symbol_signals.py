@@ -179,8 +179,13 @@ async def get_signals(
     strong_only: bool = Query(default=False),
     high_confidence: bool = Query(default=False),
     enabled_only: bool = Query(default=True),
+    active_only: bool = Query(default=True),
 ) -> dict[str, Any]:
-    """LIVE Signal Center feed from existing AI multi-asset scan."""
+    """LIVE Signal Center feed from existing AI multi-asset scan.
+
+    Active feed excludes REJECTED / EXPIRED / CANCELLED. History remains
+    on /signals/intelligence/history and get_signal.
+    """
     _ = user
     return signal_center_service.list_live_signals(
         q=q,
@@ -189,6 +194,7 @@ async def get_signals(
         strong_only=strong_only,
         high_confidence=high_confidence,
         enabled_only=enabled_only,
+        active_only=active_only,
     )
 
 

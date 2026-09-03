@@ -26,6 +26,7 @@ import {
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
   isHighConfidence,
+  isTerminalSignalCard,
   mergeResearchSignalFields,
   presentField,
   presentLevel,
@@ -385,6 +386,25 @@ assert.equal(
   assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "NEUTRAL" }).length, 1);
   assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "WATCH" }).length, 1);
   assert.equal(isHighConfidence(rows[0]!), true);
+  const withRejected = [
+    ...rows,
+    { symbol: "USDJPY", direction: "BUY", card_status: "REJECTED", opportunity_score: 88 },
+    { symbol: "AUDUSD", direction: "SELL", card_status: "EXPIRED", opportunity_score: 71 },
+    { symbol: "NZDUSD", direction: "BUY", card_status: "CANCELLED", opportunity_score: 73 },
+    { symbol: "USDCAD", direction: "BUY", card_status: "WAITING", opportunity_score: 74 },
+  ];
+  const activeOnly = filterSignalRows(withRejected, EMPTY_SIGNAL_FILTERS);
+  assert.equal(activeOnly.some((r) => r.symbol === "USDJPY"), false);
+  assert.equal(activeOnly.some((r) => r.symbol === "AUDUSD"), false);
+  assert.equal(activeOnly.some((r) => r.symbol === "NZDUSD"), false);
+  assert.equal(activeOnly.some((r) => r.symbol === "USDCAD"), true);
+  assert.equal(isTerminalSignalCard({ card_status: "REJECTED" }), true);
+  assert.equal(isTerminalSignalCard({ card_status: "WAITING" }), false);
+  const history = filterSignalRows(withRejected, {
+    ...EMPTY_SIGNAL_FILTERS,
+    includeTerminal: true,
+  });
+  assert.equal(history.some((r) => r.symbol === "USDJPY"), true);
   const ranked = defaultSortedSignals(rows);
   assert.equal(ranked[0]?.symbol, "XAUUSD_i");
   assert.equal(sortSignalRows(rows, "strongest")[0]?.symbol, "XAUUSD_i");
@@ -880,6 +900,10 @@ assert.equal(
 }
 
 {
+  assert.equal(
+    signalExecutionStatusLabel({ execution_status: "WAITING_FOR_EXECUTION" }),
+    "WAITING",
+  );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "LIVE_ELIGIBLE" }),
     "EXECUTION_READY",
