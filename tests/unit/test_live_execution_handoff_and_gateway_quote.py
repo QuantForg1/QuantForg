@@ -82,6 +82,45 @@ def test_full_catalogue_seed_does_not_demote_oil() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
+def test_prioritize_ready_keeps_sniper_takes_ahead_of_injected_majors() -> None:
+    """Live defect: ensure/prefer buried NDX/LTC/BTC behind seed majors."""
+    from app.domain.institutional_trading.auto_trading import (
+        ensure_scalping_universe_handoff,
+        prioritize_ready_execution_handoff,
+    )
+
+    catalogue = [
+        "EURUSD",
+        "GBPUSD",
+        "AUDUSD",
+        "NZDUSD",
+        "USDCHF",
+        "USDCAD",
+        "USDJPY",
+        "XAUUSD",
+        "BTCUSD",
+        "ETHUSD",
+        "NDXUSD",
+        "LTCUSD",
+        "EURCHF",
+    ]
+    # Scanner already ranked sniper-ready desks first.
+    scan_ready = ["NDXUSD", "LTCUSD", "BTCUSD", "EURCHF"]
+    after_ensure = ensure_scalping_universe_handoff(
+        scan_ready, DEFAULT_SCALPING_UNIVERSE, catalogue=catalogue
+    )
+    # Without prioritize, injected majors steal first focus.
+    assert after_ensure[0] in set(DEFAULT_SCALPING_UNIVERSE)
+    ordered = prioritize_ready_execution_handoff(
+        after_ensure, ["NDXUSD", "LTCUSD", "BTCUSD"]
+    )
+    assert ordered[:3] == ["NDXUSD", "LTCUSD", "BTCUSD"]
+    assert ordered.index("EURUSD") > ordered.index("BTCUSD")
+    assert "EURCHF" in ordered
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
 def test_ite_handoff_seeds_scalping_universe_not_full_catalogue() -> None:
     import inspect
 
@@ -93,6 +132,7 @@ def test_ite_handoff_seeds_scalping_universe_not_full_catalogue() -> None:
     assert "prefer_allowlisted_handoff" in src
     assert "DEFAULT_SCALPING_UNIVERSE" in src
     assert "ensure_scalping_universe_handoff" in src
+    assert "prioritize_ready_execution_handoff" in src
     assert "len(plane_allowed) >= 2" not in src
     assert "SYMBOL_SAFETY_RELEASE" in inspect.getsource(
         InstitutionalIteRuntime.run_auto_cycle

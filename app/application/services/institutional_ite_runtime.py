@@ -5813,6 +5813,77 @@ class InstitutionalIteRuntime:
                     )
             except Exception:
                 logger.exception("ensure_scalping_universe_handoff_failed")
+            # Sniper TAKE / trade-queue eligible must not lose focus to injected
+            # seed majors or allowlist preference (max_entries_per_cycle is tiny).
+            try:
+                from app.domain.institutional_trading.auto_trading import (
+                    prioritize_ready_execution_handoff,
+                )
+
+                ready_syms: list[str] = []
+                seen_ready: set[str] = set()
+                for key in (
+                    "opportunity_ranked",
+                    "ranked",
+                    "rows",
+                    "noc_rows",
+                ):
+                    block = scan.get(key) if isinstance(scan, dict) else None
+                    if not isinstance(block, list):
+                        continue
+                    for row in block:
+                        if not isinstance(row, dict):
+                            continue
+                        sym = str(
+                            row.get("symbol") or row.get("broker_symbol") or ""
+                        ).strip().upper()
+                        if not sym or sym in seen_ready:
+                            continue
+                        sniper = row.get("sniper_entry")
+                        sniper_d = sniper if isinstance(sniper, dict) else {}
+                        sniper_take = bool(sniper_d.get("passed")) and (
+                            str(
+                                row.get("signal_action")
+                                or sniper_d.get("action")
+                                or row.get("direction")
+                                or ""
+                            )
+                            .strip()
+                            .upper()
+                            in {"BUY", "SELL"}
+                            or str(
+                                row.get("setup_state")
+                                or sniper_d.get("setup_state")
+                                or ""
+                            )
+                            .strip()
+                            .upper()
+                            == "TAKE"
+                        )
+                        trade_ready = bool(
+                            row.get("eligible")
+                            or row.get("opportunity_eligible")
+                        ) and not bool(row.get("reject"))
+                        if not (sniper_take or trade_ready):
+                            continue
+                        if row.get("blocking_gate") and not trade_ready:
+                            continue
+                        ready_syms.append(sym)
+                        seen_ready.add(sym)
+                tq = scan.get("trade_queue") if isinstance(scan, dict) else None
+                if isinstance(tq, dict):
+                    for cand in tq.get("candidates") or []:
+                        if not isinstance(cand, dict):
+                            continue
+                        if not cand.get("eligible") or cand.get("reject"):
+                            continue
+                        sym = str(cand.get("symbol") or "").strip().upper()
+                        if sym and sym not in seen_ready:
+                            ready_syms.append(sym)
+                            seen_ready.add(sym)
+                eligible = prioritize_ready_execution_handoff(eligible, ready_syms)
+            except Exception:
+                logger.exception("prioritize_ready_execution_handoff_failed")
             scan["eligible_symbols"] = list(eligible)
             scan["eligible_count"] = len(eligible)
             with self._lock:

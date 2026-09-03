@@ -56,6 +56,37 @@ def prefer_allowlisted_handoff(
     return primary + secondary
 
 
+def prioritize_ready_execution_handoff(
+    symbols: Sequence[str] | Iterable[str],
+    ready: Sequence[str] | Iterable[str] | None,
+) -> list[str]:
+    """Put scanner-ready Sniper TAKE desks ahead of continuity seed evaluation.
+
+    ``ensure_scalping_universe_handoff`` may inject missing majors for coverage,
+    and ``prefer_allowlisted_handoff`` may promote seed desks. Neither may bury
+    an already trade-queue-eligible TAKE (e.g. NDXUSD/LTCUSD/BTCUSD) behind
+    majors that will only burn ``max_entries_per_cycle`` on P<70 / Safety.
+
+    Does not invent symbols. Does not bypass Safety / Risk / OMS.
+    """
+    ordered = [str(s).strip().upper() for s in symbols if str(s).strip()]
+    if not ordered:
+        return []
+    ordered_set = set(ordered)
+    primary: list[str] = []
+    seen: set[str] = set()
+    for sym in ready or ():
+        u = str(sym).strip().upper()
+        if not u or u in seen or u not in ordered_set:
+            continue
+        primary.append(u)
+        seen.add(u)
+    if not primary:
+        return ordered
+    secondary = [s for s in ordered if s not in seen]
+    return primary + secondary
+
+
 def _handoff_has_instrument_spec(symbol: str) -> bool:
     """True when spread Safety has a real asset-class spec (not fail-closed)."""
     from app.domain.institutional_trading.ai_scalping.asset_class import (
