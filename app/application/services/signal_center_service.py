@@ -1505,7 +1505,9 @@ def _overlay_last_ite_cycle(
         symbol=str(row.get("symbol") or pipe.get("symbol") or "") or None,
     )
     row["pipeline"] = pipe
-    row["rejection_reason"] = abort
+    row["rejection_reason"] = (
+        human[:500] if stage == "RISK" and human else abort
+    )
     row["rejection_stage"] = stage
     row["rejected_at"] = _now_iso()
     row["rejection_timestamp"] = row["rejected_at"]

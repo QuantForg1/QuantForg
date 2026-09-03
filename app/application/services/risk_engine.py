@@ -38,6 +38,8 @@ _ASSET_CLASS: dict[str, str] = {
     "USDJPY": "fx",
     "AUDUSD": "fx",
     "NZDUSD": "fx",
+    "USDCHF": "fx",
+    "USDCAD": "fx",
     "EURJPY": "fx",
     "GBPJPY": "fx",
     "XAUUSD": "metal",
@@ -89,6 +91,15 @@ class RiskEngine:
 
     def _contract_size(self, symbol: str) -> Decimal:
         return contract_size_for_symbol(symbol, default=self.config.contract_size)
+
+    def _asset_class(self, symbol: str) -> str:
+        u = symbol.strip().upper()
+        mapped = _ASSET_CLASS.get(u)
+        if mapped:
+            return mapped
+        if contract_size_for_symbol(u, default=Decimal("0")) == Decimal("100000"):
+            return "fx"
+        return "other"
 
     @staticmethod
     def _account_leverage(account: AccountSnapshot, *, fallback: Decimal) -> Decimal:
@@ -306,6 +317,7 @@ class RiskEngine:
         proposed_lots: Decimal,
         entry_price: Decimal,
         leverage: Decimal | None = None,
+        proposed_contract_size: Decimal | None = None,
     ) -> ExposureBreakdown:
         by_symbol: dict[str, Decimal] = {}
         by_class: dict[str, Decimal] = {}
@@ -314,17 +326,24 @@ class RiskEngine:
         lev = leverage if leverage and leverage > 0 else self.config.exposure_leverage
 
         def _margin_exposure(
-            volume: Decimal, price: Decimal, *, symbol: str
+            volume: Decimal,
+            price: Decimal,
+            *,
+            symbol: str,
+            contract_size: Decimal | None = None,
         ) -> Decimal:
             # Estimate used margin at account leverage (not full notional).
-            return (volume * price * self._contract_size(symbol) / lev).quantize(
-                Decimal("0.01")
+            cs = (
+                contract_size
+                if contract_size is not None and contract_size > 0
+                else self._contract_size(symbol)
             )
+            return (volume * price * cs / lev).quantize(Decimal("0.01"))
 
         for pos in positions:
             notion = _margin_exposure(pos.volume, pos.open_price, symbol=pos.symbol)
             by_symbol[pos.symbol] = by_symbol.get(pos.symbol, Decimal("0")) + notion
-            cls = _ASSET_CLASS.get(pos.symbol, "other")
+            cls = self._asset_class(pos.symbol)
             by_class[cls] = by_class.get(cls, Decimal("0")) + notion
             if pos.side == "buy":
                 long_exp += notion
@@ -332,9 +351,14 @@ class RiskEngine:
                 short_exp += notion
 
         sym = proposed_symbol.strip().upper()
-        proposed = _margin_exposure(proposed_lots, entry_price, symbol=sym)
+        proposed = _margin_exposure(
+            proposed_lots,
+            entry_price,
+            symbol=sym,
+            contract_size=proposed_contract_size,
+        )
         by_symbol[sym] = by_symbol.get(sym, Decimal("0")) + proposed
-        cls = _ASSET_CLASS.get(sym, "other")
+        cls = self._asset_class(sym)
         by_class[cls] = by_class.get(cls, Decimal("0")) + proposed
         if proposed_side == "buy":
             long_exp += proposed
@@ -1031,6 +1055,7 @@ class RiskEngine:
         entry_price: Decimal,
         equity: Decimal,
         leverage: Decimal | None = None,
+        proposed_contract_size: Decimal | None = None,
     ) -> tuple[bool, list[str], list[str], Decimal]:
         reasons: list[str] = []
         warnings: list[str] = []
@@ -1050,9 +1075,12 @@ class RiskEngine:
                 correlated_notional += (
                     pos.volume * pos.open_price * self._contract_size(pos.symbol) / lev
                 )
-        correlated_notional += (
-            proposed_lots * entry_price * self._contract_size(sym) / lev
+        proposed_cs = (
+            proposed_contract_size
+            if proposed_contract_size is not None and proposed_contract_size > 0
+            else self._contract_size(sym)
         )
+        correlated_notional += proposed_lots * entry_price * proposed_cs / lev
         pct = (correlated_notional / equity * Decimal("100")).quantize(Decimal("0.01"))
         if pct > self.config.max_correlated_exposure_pct:
             reasons.append(
@@ -1252,6 +1280,7 @@ class RiskEngine:
             proposed_lots=size.approved_lots,
             entry_price=check.entry_price,
             leverage=leverage,
+            proposed_contract_size=contract_size,
         )
         exp_ok, exp_reasons, exp_warn, exp_metrics = self.exposure_limits_ok(
             exposure, equity=account.equity, symbol=check.symbol
@@ -1279,6 +1308,7 @@ class RiskEngine:
             entry_price=check.entry_price,
             equity=account.equity,
             leverage=leverage,
+            proposed_contract_size=contract_size,
         )
         checks["correlation"] = corr_ok
         reasons.extend(corr_reasons)

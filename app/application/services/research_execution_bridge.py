@@ -346,7 +346,7 @@ def signal_card_lifecycle(
     if status == "RISK_BLOCKED":
         return {
             "lifecycle": "RISK_REJECTED",
-            "card_status": "RISK_BLOCKED",
+            "card_status": "REJECTED",
             "reason": reason or "RISK_REJECTED",
         }
     abort = str(pipe.get("abort_reason") or row.get("abort_reason") or "").upper()
@@ -469,6 +469,12 @@ def overlay_cycle_matches_row(row: dict[str, Any], last: dict[str, Any]) -> bool
     """True when last ITE cycle should paint this signal row."""
     row_sym = str(row.get("symbol") or row.get("broker_symbol") or "").strip().upper()
     last_sym = str(last.get("symbol") or last.get("fill_symbol") or "").strip().upper()
+    if not last_sym:
+        mcd = last.get("market_context_diagnostics")
+        if isinstance(mcd, dict):
+            last_sym = str(
+                mcd.get("symbol") or mcd.get("focus_symbol") or ""
+            ).strip().upper()
     if not last_sym or not row_sym:
         return True
     if row_sym == last_sym:

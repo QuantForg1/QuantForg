@@ -11,6 +11,7 @@ import pytest
 
 from app.application.services.research_execution_bridge import (
     is_active_signal_card,
+    overlay_cycle_matches_row,
     signal_card_lifecycle,
     signal_execution_status,
 )
@@ -156,6 +157,73 @@ def test_planned_risk_floors_unchanged() -> None:
     assert Decimal("6.00") == MIN_PLANNED_RISK_USD
     assert Decimal("20.00") == MAX_PLANNED_SL_RISK_USD
     assert Decimal("30.00") == MAX_TOTAL_PLANNED_RISK_USD
+
+
+def test_risk_rejected_take_leaves_active_signals() -> None:
+    human = (
+        "MIN_PLANNED_RISK_NOT_REACHED: symbol=USDCAD calculated_volume=0.08 "
+        "actual_planned_initial_SL_risk=3.42"
+    )
+    over = _overlay_last_ite_cycle(
+        _take(symbol="USDCAD"),
+        {
+            "symbol": "USDCAD",
+            "decision_action": "NO_TRADE",
+            "forwarded_to_oms": False,
+            "abort_reason": "RISK_REJECTED",
+            "execution_blocked": {
+                "stage": "RISK",
+                "reason_code": "RISK_REJECTED",
+                "human_reason": human,
+            },
+        },
+    )
+    assert over["rejection_stage"] == "RISK"
+    assert over["rejection_reason"] == human
+    assert over.get("rejected_at")
+    card = signal_card_lifecycle(over, execution_status="RISK_BLOCKED")
+    assert card["card_status"] == "REJECTED"
+    assert card["lifecycle"] == "RISK_REJECTED"
+    assert is_active_signal_card({**over, "card_status": "REJECTED"}) is False
+
+
+def test_overlay_does_not_paint_all_cards_when_cycle_symbol_missing() -> None:
+    nzd = _take(symbol="NZDUSD")
+    last = {
+        "symbol": "USDCAD",
+        "decision_action": "NO_TRADE",
+        "forwarded_to_oms": False,
+        "abort_reason": "RISK_REJECTED",
+        "execution_blocked": {
+            "stage": "RISK",
+            "reason_code": "RISK_REJECTED",
+            "human_reason": "MIN_PLANNED_RISK_NOT_REACHED: symbol=USDCAD",
+        },
+    }
+    assert overlay_cycle_matches_row(nzd, last) is False
+    over = _overlay_last_ite_cycle(nzd, last)
+    assert over.get("pipeline", {}).get("execution_lifecycle") != "EXECUTION_BLOCKED"
+
+
+def test_overlay_uses_mcd_symbol_when_top_level_missing() -> None:
+    row = _take(symbol="USDCAD")
+    other = _take(symbol="NZDUSD")
+    last = {
+        "decision_action": "NO_TRADE",
+        "forwarded_to_oms": False,
+        "abort_reason": "RISK_REJECTED",
+        "market_context_diagnostics": {"symbol": "USDCAD"},
+        "execution_blocked": {
+            "stage": "RISK",
+            "reason_code": "RISK_REJECTED",
+            "human_reason": "MIN_PLANNED_RISK_NOT_REACHED: symbol=USDCAD",
+        },
+    }
+    assert overlay_cycle_matches_row(row, last) is True
+    assert overlay_cycle_matches_row(other, last) is False
+    over = _overlay_last_ite_cycle(row, last)
+    assert over["rejection_stage"] == "RISK"
+    assert "MIN_PLANNED_RISK_NOT_REACHED" in str(over["rejection_reason"])
 
 
 def test_gold_requalification_protection_still_imported() -> None:

@@ -47,6 +47,12 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 _GOLD = "XAUUSD_I"
 
 
+def _gold_cycle(**kwargs: object) -> dict:
+    payload: dict = {"symbol": _GOLD}
+    payload.update(kwargs)
+    return payload
+
+
 def _take_score(**overrides: object) -> dict:
     row: dict = {
         "symbol": _GOLD,
@@ -266,16 +272,16 @@ def test_15_optimizer_rejection_is_explicit() -> None:
     assert "NO_ELIGIBLE_SETUP" in HARD_BLOCK_REASONS
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": False,
-            "abort_reason": "OPTIMIZER_BLOCK",
-            "mt5_ticket": None,
-            "execution_blocked": {
+        _gold_cycle(
+            forwarded_to_oms=False,
+            abort_reason="OPTIMIZER_BLOCK",
+            mt5_ticket=None,
+            execution_blocked={
                 "stage": "OPTIMIZER",
                 "reason_code": "OPTIMIZER_BLOCK",
                 "human_reason": "spread widening",
             },
-        },
+        ),
     )
     assert over["pipeline"]["optimizer"] == "WAIT"
     assert over["pipeline"]["oms"] == "NOT_REACHED"
@@ -285,16 +291,16 @@ def test_15_optimizer_rejection_is_explicit() -> None:
 def test_16_risk_rejection_does_not_reach_safety_oms() -> None:
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": False,
-            "abort_reason": "RISK_REJECTED",
-            "mt5_ticket": None,
-            "execution_blocked": {
+        _gold_cycle(
+            forwarded_to_oms=False,
+            abort_reason="RISK_REJECTED",
+            mt5_ticket=None,
+            execution_blocked={
                 "stage": "RISK",
                 "reason_code": "RISK_REJECTED",
                 "human_reason": "margin",
             },
-        },
+        ),
     )
     assert over["pipeline"]["risk"] == "BLOCK"
     assert over["pipeline"]["safety"] == "NOT_REACHED"
@@ -304,16 +310,16 @@ def test_16_risk_rejection_does_not_reach_safety_oms() -> None:
 def test_17_safety_rejection_does_not_reach_oms() -> None:
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": False,
-            "abort_reason": "SAFETY_BLOCKED",
-            "mt5_ticket": None,
-            "execution_blocked": {
+        _gold_cycle(
+            forwarded_to_oms=False,
+            abort_reason="SAFETY_BLOCKED",
+            mt5_ticket=None,
+            execution_blocked={
                 "stage": "SAFETY",
                 "reason_code": "SAFETY_BLOCKED",
                 "human_reason": "kill switch",
             },
-        },
+        ),
     )
     assert over["pipeline"]["safety"] == "BLOCK"
     assert over["pipeline"]["oms"] == "NOT_REACHED"
@@ -322,15 +328,15 @@ def test_17_safety_rejection_does_not_reach_oms() -> None:
 def test_18_oms_rejection_is_not_mt5_execution() -> None:
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": True,
-            "abort_reason": "OMS_REJECT",
-            "mt5_ticket": None,
-            "execution_blocked": {
+        _gold_cycle(
+            forwarded_to_oms=True,
+            abort_reason="OMS_REJECT",
+            mt5_ticket=None,
+            execution_blocked={
                 "stage": "OMS",
                 "reason_code": "OMS_REJECT",
             },
-        },
+        ),
     )
     assert over["pipeline"]["oms"] == "BLOCK"
     assert over["pipeline"]["mt5"] == "NOT_REACHED"
@@ -347,11 +353,11 @@ def test_19_real_ticket_required_for_executed() -> None:
     assert handoff["execution_confirmed"] is False
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": True,
-            "mt5_ticket": "123456",
-            "abort_reason": None,
-        },
+        _gold_cycle(
+            forwarded_to_oms=True,
+            mt5_ticket="123456",
+            abort_reason=None,
+        ),
     )
     assert over["pipeline"]["mt5"] == "PENDING"
     assert over["pipeline"]["forwarded_to_oms"] is True
@@ -459,12 +465,12 @@ def test_current_scan_exposes_failed_predicates() -> None:
 def test_no_eligible_setup_overlay_does_not_infer_risk_ready() -> None:
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": False,
-            "abort_reason": "NO_ELIGIBLE_SETUP",
-            "cycle_outcome": "waiting_next_cycle",
-            "mt5_ticket": None,
-        },
+        _gold_cycle(
+            forwarded_to_oms=False,
+            abort_reason="NO_ELIGIBLE_SETUP",
+            cycle_outcome="waiting_next_cycle",
+            mt5_ticket=None,
+        ),
     )
     assert over["pipeline"]["oms"] == "NOT_REACHED"
     assert over["pipeline"]["risk"] == "NOT_REACHED"
@@ -605,16 +611,16 @@ def test_live_like_take_not_scanner_extra_rejected_on_fresh_health_latch() -> No
 def test_execution_health_overlay_is_not_oms_and_not_ticket() -> None:
     over = _overlay_last_ite_cycle(
         _row_from_score(_take_score()),
-        {
-            "forwarded_to_oms": False,
-            "abort_reason": "EXECUTION_HEALTH_DEGRADED",
-            "execution_blocked": {
+        _gold_cycle(
+            forwarded_to_oms=False,
+            abort_reason="EXECUTION_HEALTH_DEGRADED",
+            execution_blocked={
                 "reason_code": "EXECUTION_HEALTH_DEGRADED",
                 "human_reason": "New entries paused: critical:gateway",
                 "stage": "EXECUTION_HEALTH",
             },
-            "mt5_ticket": None,
-        },
+            mt5_ticket=None,
+        ),
     )
     pipe = over["pipeline"]
     assert pipe["first_blocker"] == "EXECUTION_HEALTH_DEGRADED"

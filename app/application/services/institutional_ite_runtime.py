@@ -203,6 +203,11 @@ class ShadowCycleResult:
             "tradeability": diag.get("tradeability"),
             "tradeability_reason": diag.get("tradeability_reason"),
             "execution_status": execution_status,
+            "symbol": (
+                str(diag.get("symbol") or "").strip()
+                or str(diag.get("focus_symbol") or "").strip()
+                or None
+            ),
             "strategy_signal": self.decision_action,
             "estimated_risk_at_min_lot": diag.get("estimated_risk_at_min_lot"),
             "maximum_tradeable_stop_distance": diag.get(

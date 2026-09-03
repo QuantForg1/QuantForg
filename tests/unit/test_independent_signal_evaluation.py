@@ -175,7 +175,8 @@ def test_risk_and_waiting_card_status() -> None:
         {"symbol": "EURJPY", "direction": "BUY", "pipeline": {"risk": "BLOCK"}},
         execution_status="RISK_BLOCKED",
     )
-    assert risk["card_status"] == "RISK_BLOCKED"
+    assert risk["card_status"] == "REJECTED"
+    assert risk["lifecycle"] == "RISK_REJECTED"
     waiting = signal_card_lifecycle(
         {
             "symbol": "USDCHF",

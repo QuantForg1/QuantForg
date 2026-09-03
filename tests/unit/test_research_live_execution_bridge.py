@@ -592,7 +592,8 @@ def test_xauusd_i_overlay_matches_canonical_gold() -> None:
     assert overlay_cycle_matches_row(row, last) is True
     over = _overlay_last_ite_cycle(row, last)
     assert over["pipeline"]["execution_lifecycle"] == "EXECUTION_BLOCKED"
-    assert over["rejection_reason"] == "RISK_REJECTED"
+    assert over["rejection_reason"] == "min planned risk"
+    assert over["rejection_stage"] == "RISK"
 
 
 @pytest.mark.unit

@@ -368,10 +368,28 @@ def _resolve_live_positions(
         return []
 
 
+def _account_leverage_int(leverage: object) -> int | None:
+    """Live MT5 leverage only. Never invent 1:100 gold retail leverage."""
+    try:
+        if leverage is None or leverage == "":
+            return None
+        parsed = int(Decimal(str(leverage)))
+    except (TypeError, ValueError, ArithmeticError):
+        return None
+    return parsed if parsed >= 1 else None
+
+
 def _account_snapshot(
-    *, equity: Decimal, free_margin: Decimal | None
+    *,
+    equity: Decimal,
+    free_margin: Decimal | None,
+    leverage: object = None,
 ) -> AccountSnapshot:
     fm = free_margin if free_margin is not None else equity
+    live = _account_leverage_int(leverage)
+    # Missing account leverage: RiskEngineConfig.exposure_leverage (1000).
+    # Never the previous hardcoded 100 that treated FX notional as 20x too large.
+    lev = live if live is not None else int(RiskEngineConfig().exposure_leverage)
     return AccountSnapshot(
         login=1,
         balance=equity,
@@ -380,7 +398,7 @@ def _account_snapshot(
         free_margin=fm,
         margin_level=Decimal("0"),
         profit=Decimal("0"),
-        leverage=100,
+        leverage=lev,
         currency="USD",
         server="ite",
     )
@@ -792,7 +810,9 @@ class InstitutionalDecisionPipeline:
         assessment = self.risk_engine.evaluate(
             check,
             account=_account_snapshot(
-                equity=account.equity, free_margin=account.free_margin
+                equity=account.equity,
+                free_margin=account.free_margin,
+                leverage=account.leverage,
             ),
             positions=pos_all,
             peak_equity=account.peak_equity or account.equity,
