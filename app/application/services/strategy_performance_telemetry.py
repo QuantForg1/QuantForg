@@ -308,6 +308,15 @@ class StrategyPerformanceTelemetry:
         realized_r: Any = None,
         exit_reason: Any = None,
         hold_seconds: Any = None,
+        planned_risk_usd: Any = None,
+        planned_reward_usd: Any = None,
+        be_reached: Any = None,
+        trailing_activated: Any = None,
+        intelligence_alignment: Any = None,
+        opportunity_score: Any = None,
+        setup_family: Any = None,
+        max_favorable_r: Any = None,
+        consecutive_losses_at_close: Any = None,
     ) -> dict[str, Any] | None:
         tid = str(ticket or "").strip()
         if not tid:
@@ -330,6 +339,35 @@ class StrategyPerformanceTelemetry:
                 "hold_seconds": hold,
                 "won": pnl > 0,
                 "closed_at": datetime.now(UTC).isoformat(),
+                "planned_risk_usd": _f(planned_risk_usd),
+                "planned_reward_usd": _f(planned_reward_usd),
+                "be_reached": (
+                    bool(be_reached) if be_reached is not None else None
+                ),
+                "trailing_activated": (
+                    bool(trailing_activated)
+                    if trailing_activated is not None
+                    else None
+                ),
+                "intelligence_alignment": (
+                    str(intelligence_alignment)
+                    if intelligence_alignment not in (None, "")
+                    else None
+                ),
+                "opportunity_score": (
+                    int(opportunity_score)
+                    if opportunity_score is not None
+                    else None
+                ),
+                "setup_family": (
+                    str(setup_family) if setup_family not in (None, "") else None
+                ),
+                "max_favorable_r": _f(max_favorable_r),
+                "consecutive_losses_at_close": (
+                    int(consecutive_losses_at_close)
+                    if consecutive_losses_at_close is not None
+                    else None
+                ),
             }
             self._closed.append(trace)
             if kind == "TP":

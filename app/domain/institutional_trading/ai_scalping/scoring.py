@@ -522,13 +522,20 @@ def score_scalping_setup(
         atr=stop_atr,
         config=cfg,
     )
-    # Profile-aware RR fallback — never hardcode institutional 1.4.
-    _rr_fallback = cfg.fixed_tp_r if cfg.fixed_tp_r is not None else cfg.min_expected_rr
-    expected_rr = (
-        targets.expected_rr if targets.expected_rr is not None else _rr_fallback
+    # Never invent fantasy RR from fixed_tp_r when geometry cannot place a TP.
+    expected_rr = targets.expected_rr
+    no_valid_tp_room = (
+        targets.take_profit is None
+        or expected_rr is None
+        or expected_rr <= Decimal("1")
     )
     if targets.reason:
         reasons.append(targets.reason)
+    if no_valid_tp_room:
+        reasons.append(
+            "WAIT_NO_VALID_TP_ROOM: no market-plausible TP "
+            "(do not manufacture RR from fixed_tp_r)"
+        )
 
     effective_min_rr = max(cfg.min_expected_rr, exec_profile.min_expected_rr)
     # Consistency: regime bumps must not exceed fixed TP target.
@@ -567,6 +574,8 @@ def score_scalping_setup(
     )
 
     reject_list: list[str] = list(gates.rejects)
+    if no_valid_tp_room:
+        reject_list.append("WAIT_NO_VALID_TP_ROOM")
     for soft in gates.soft_rejects:
         reasons.append(f"EVIDENCE: {soft}")
     # Setup scan ranks opportunities — absence does not poison global quality gates.

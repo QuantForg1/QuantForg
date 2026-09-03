@@ -472,6 +472,19 @@ def compute_structure_targets(
                 stop_source=source,
                 stop_atr=atr_d,
             )
+        if expected_rr < min_rr:
+            return StructureTargets(
+                entry,
+                sl,
+                None,
+                stop_distance,
+                expected_rr,
+                "TP_INSUFFICIENT_ASYMMETRY: "
+                f"expected_rr {expected_rr} < min_expected_rr {min_rr} "
+                "(do not stretch TP; WAIT)",
+                stop_source=source,
+                stop_atr=atr_d,
+            )
     preferred = cfg.fixed_tp_r
     if preferred is not None and preferred > 0 and expected_rr >= preferred:
         reason_parts.append(f"TP structural {expected_rr}R (>= preferred {preferred}R)")

@@ -41,6 +41,20 @@ class ClosedTradeRecord:
     exit_reason: str
     won: bool
     closed_at: str
+    # Optional close telemetry — omit/None when unknown (never fabricate).
+    planned_risk_usd: float | None = None
+    planned_reward_usd: float | None = None
+    be_reached: bool | None = None
+    trailing_activated: bool | None = None
+    intelligence_alignment: str | None = None
+    opportunity_score: int | None = None
+    setup_family: str | None = None
+    consecutive_losses_at_close: int | None = None
+    max_favorable_r: float | None = None
+    direction: str | None = None
+    initial_sl: float | None = None
+    initial_tp: float | None = None
+    entry: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

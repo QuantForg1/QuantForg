@@ -2033,6 +2033,70 @@ class InstitutionalIteRuntime:
                                     hold_m = float(
                                         getattr(pos, "holding_time_minutes", None) or 0.0
                                     )
+                                    planned_r = 0.0
+                                    try:
+                                        risk_d = Decimal(
+                                            str(getattr(pos, "risk_distance", 0) or 0)
+                                        )
+                                        entry_px = Decimal(
+                                            str(getattr(pos, "entry_price", 0) or 0)
+                                        )
+                                        tp_px = Decimal(
+                                            str(
+                                                getattr(pos, "current_tp", 0)
+                                                or getattr(pos, "initial_tp", 0)
+                                                or 0
+                                            )
+                                        )
+                                        if risk_d > 0 and entry_px > 0 and tp_px > 0:
+                                            planned_r = float(
+                                                (abs(tp_px - entry_px) / risk_d).quantize(
+                                                    Decimal("0.01")
+                                                )
+                                            )
+                                    except Exception:
+                                        planned_r = 0.0
+                                    gmi_state = None
+                                    try:
+                                        gmi_raw = _ai_d.get(
+                                            "global_market_intelligence"
+                                        )
+                                        if isinstance(gmi_raw, dict):
+                                            gmi_state = gmi_raw.get(
+                                                "intelligence_alignment"
+                                            )
+                                    except Exception:
+                                        gmi_state = None
+                                    streak_at_close = None
+                                    try:
+                                        from app.domain.institutional_trading.live_trading_control import (  # noqa: E501
+                                            get_live_trading_controller,
+                                        )
+
+                                        streak_at_close = int(
+                                            get_live_trading_controller().consecutive_losses
+                                            or 0
+                                        )
+                                    except Exception:
+                                        streak_at_close = None
+                                    planned_risk_usd = None
+                                    try:
+                                        raw_risk = _ai_d.get(
+                                            "planned_initial_sl_risk_usd"
+                                        )
+                                        if raw_risk not in (None, ""):
+                                            planned_risk_usd = float(raw_risk)
+                                    except Exception:
+                                        planned_risk_usd = None
+                                    planned_reward_usd = None
+                                    try:
+                                        raw_rew = _ai_d.get(
+                                            "planned_initial_tp_profit_usd"
+                                        )
+                                        if raw_rew not in (None, ""):
+                                            planned_reward_usd = float(raw_rew)
+                                    except Exception:
+                                        planned_reward_usd = None
                                     get_daily_opportunity_tracker(
                                         target_trades_per_day=int(
                                             getattr(
@@ -2061,13 +2125,74 @@ class InstitutionalIteRuntime:
                                             risk_pct_at_entry=0.0,
                                             equity_at_exit=0.0,
                                             realized_r=r_mult,
-                                            expected_r=0.0,
+                                            expected_r=planned_r,
                                             holding_seconds=hold_m * 60.0,
                                             exit_reason=str(
                                                 _close_reason or reason or "closed"
                                             ),
                                             won=pnl > 0,
                                             closed_at=datetime.now(UTC).isoformat(),
+                                            planned_risk_usd=planned_risk_usd,
+                                            planned_reward_usd=planned_reward_usd,
+                                            be_reached=bool(
+                                                getattr(pos, "be_moved", False)
+                                            ),
+                                            trailing_activated=bool(
+                                                getattr(pos, "trailing_active", False)
+                                            ),
+                                            intelligence_alignment=(
+                                                str(gmi_state)
+                                                if gmi_state
+                                                else None
+                                            ),
+                                            opportunity_score=(
+                                                int(pos.opportunity_score)
+                                                if getattr(
+                                                    pos, "opportunity_score", None
+                                                )
+                                                is not None
+                                                else (
+                                                    int(_ai_d["opportunity_score"])
+                                                    if _ai_d.get("opportunity_score")
+                                                    is not None
+                                                    else None
+                                                )
+                                            ),
+                                            setup_family=(
+                                                str(_ai_d.get("setup_family") or "")
+                                                or None
+                                            ),
+                                            consecutive_losses_at_close=streak_at_close,
+                                            max_favorable_r=(
+                                                float(pos.max_favorable_r)
+                                                if getattr(
+                                                    pos, "max_favorable_r", None
+                                                )
+                                                is not None
+                                                else None
+                                            ),
+                                            direction=str(
+                                                getattr(pos, "side", None) or ""
+                                            )
+                                            or None,
+                                            initial_sl=(
+                                                float(pos.initial_stop)
+                                                if getattr(pos, "initial_stop", None)
+                                                is not None
+                                                else None
+                                            ),
+                                            initial_tp=(
+                                                float(pos.current_tp)
+                                                if getattr(pos, "current_tp", None)
+                                                not in (None, 0, Decimal("0"))
+                                                else None
+                                            ),
+                                            entry=(
+                                                float(pos.entry_price)
+                                                if getattr(pos, "entry_price", None)
+                                                is not None
+                                                else None
+                                            ),
                                         )
                                     )
                                     try:
@@ -2085,6 +2210,23 @@ class InstitutionalIteRuntime:
                                                 _close_reason or reason or "closed"
                                             ),
                                             hold_seconds=hold_m * 60.0,
+                                            planned_risk_usd=planned_risk_usd,
+                                            planned_reward_usd=planned_reward_usd,
+                                            be_reached=bool(
+                                                getattr(pos, "be_moved", False)
+                                            ),
+                                            trailing_activated=bool(
+                                                getattr(pos, "trailing_active", False)
+                                            ),
+                                            intelligence_alignment=gmi_state,
+                                            opportunity_score=getattr(
+                                                pos, "opportunity_score", None
+                                            ),
+                                            setup_family=_ai_d.get("setup_family"),
+                                            max_favorable_r=getattr(
+                                                pos, "max_favorable_r", None
+                                            ),
+                                            consecutive_losses_at_close=streak_at_close,
                                         )
                                     except Exception:
                                         logger.exception(

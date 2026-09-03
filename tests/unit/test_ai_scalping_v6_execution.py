@@ -237,6 +237,42 @@ def test_ema_rsi_pa_confluence() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
+def test_structure_tp_below_min_rr_after_atr_still_nulls_when_insufficient() -> None:
+    """If neither structure nor ATR clears min RR, null TP — do not stretch."""
+    from types import SimpleNamespace
+
+    snap = _snap()
+    # ATR RR ~1.05 (>1) but below min_expected_rr=1.20 → WAIT, no stretch.
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=Decimal("1908.9"),
+        last_swing_high=Decimal("1910.5"),
+        swings=(),
+    )
+    snap.liquidity = SimpleNamespace(pools=(), sweeps=())
+    snap.fair_value_gaps = None
+    snap.order_blocks = None
+    cfg = AiScalpingConfig(
+        fixed_tp_r=Decimal("1.5"),
+        stop_atr_mult=Decimal("1.10"),
+        atr_tp_mult=Decimal("1.15"),
+        min_expected_rr=Decimal("1.20"),
+    )
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.BUY,
+        entry=Decimal("1910"),
+        atr=Decimal("1"),
+        config=cfg,
+    )
+    assert targets.take_profit is None
+    assert targets.expected_rr is not None
+    assert targets.expected_rr > Decimal("1")
+    assert targets.expected_rr < cfg.min_expected_rr
+    assert "INSUFFICIENT_ASYMMETRY" in (targets.reason or "")
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
 def test_structure_tp_below_min_rr_prefers_atr_expansion() -> None:
     """Nearby swing with RR in (1, min_expected_rr) is poor asymmetry.
 

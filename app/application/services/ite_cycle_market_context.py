@@ -1300,13 +1300,14 @@ async def build_ite_cycle_market_context(
     )
 
     # Sizing diagnostics (observational) — live broker volume_min/step when available.
+    # Never seed FX/crypto/index diagnostics with gold contract_size=100.
+    from app.domain.entities.risk_engine import contract_size_for_symbol
     from app.domain.institutional_trading.ai_scalping.config import (
         DEFAULT_AI_SCALPING_CONFIG,
     )
     from app.domain.institutional_trading.atr import stop_distance_from_atr
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
     from app.domain.trading.xauusd_specs import (
-        CONTRACT_SIZE,
         VOLUME_MAX,
         VOLUME_MIN,
         VOLUME_STEP,
@@ -1317,20 +1318,30 @@ async def build_ite_cycle_market_context(
     )
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
-    contract_size = CONTRACT_SIZE
+    sizing_symbol = str(canonical_symbol or logical_symbol or symbol or "")
+    contract_size = contract_size_for_symbol(
+        sizing_symbol, default=Decimal("0")
+    )
     lot_step = VOLUME_STEP
     min_lot = VOLUME_MIN
     max_lot = VOLUME_MAX
     tick_size = None
     tick_value = None
-    specs_source = "xauusd_specs_fallback"
+    specs_source = (
+        "symbol_class_fallback" if contract_size > 0 else "specs_unavailable"
+    )
     try:
         spec = None if isinstance(pre_specs, Exception) else pre_specs
         if spec is not None:
             vmin = Decimal(str(getattr(spec, "volume_min", None) or VOLUME_MIN))
             vstep = Decimal(str(getattr(spec, "volume_step", None) or VOLUME_STEP))
             vmax = Decimal(str(getattr(spec, "volume_max", None) or VOLUME_MAX))
-            cs = Decimal(str(getattr(spec, "contract_size", None) or CONTRACT_SIZE))
+            live_cs = getattr(spec, "contract_size", None)
+            cs = (
+                Decimal(str(live_cs))
+                if live_cs not in (None, 0, "0", "")
+                else contract_size
+            )
             if vmin > 0:
                 min_lot = vmin
             if vstep > 0:
