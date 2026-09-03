@@ -521,7 +521,7 @@ def test_size_uses_broker_specs_not_generic_lot() -> None:
         ({"take_profit": None}, "take_profit"),
         ({"spread": Decimal("9")}, "spread"),
         ({"daily_loss_pct": Decimal("10")}, "daily_loss"),
-        ({"consecutive_losses": 5}, "consecutive"),
+        ({"loss_streak_cooldown_active": True}, "cooldown"),
         ({"open_exposure_pct": Decimal("90")}, "exposure"),
         ({"used_margin": Decimal("20"), "equity": Decimal("33")}, "margin"),
         ({"signal_id": "dup"}, "duplicate_signal"),

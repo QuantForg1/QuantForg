@@ -883,10 +883,16 @@ class RiskEngine:
 
         streak_st = (
             "fail"
-            if check.consecutive_losses >= cfg.max_consecutive_losses > 0
+            if check.cooldown_active
             else (
                 "warn"
-                if check.consecutive_losses >= max(1, cfg.max_consecutive_losses - 1)
+                if check.consecutive_losses
+                >= max(
+                    1,
+                    (cfg.max_consecutive_losses - 1)
+                    if cfg.max_consecutive_losses
+                    else 1,
+                )
                 else "pass"
             )
         )
@@ -896,12 +902,12 @@ class RiskEngine:
                 name="Consecutive Losses",
                 status=streak_st,
                 current=str(check.consecutive_losses),
-                threshold=f"< {cfg.max_consecutive_losses}",
-                reason="Loss streak gate",
+                threshold="time-boxed cooldown; never permanent disable",
+                reason="Streak informs DEFENSIVE selection; cooldown pauses entries",
                 suggested_action=action_for(
                     streak_st,
-                    "Reduce size after consecutive losses",
-                    "Reject — loss streak at policy max",
+                    "Tighten selection / reduce size after consecutive losses",
+                    "Reject — loss-streak cooldown active",
                 ),
             )
         )
@@ -1134,17 +1140,19 @@ class RiskEngine:
         cfg = self.config
         reasons: list[str] = []
 
-        if check.consecutive_losses >= cfg.max_consecutive_losses > 0:
-            reasons.append(
-                f"consecutive losses {check.consecutive_losses} "
-                f"at/above max {cfg.max_consecutive_losses}"
-            )
+        # Loss streak alone must not permanently disable trading. New entries
+        # pause only while the time-boxed loss-streak cooldown is active.
         if check.cooldown_active:
             reasons.append(
-                "cooldown active"
+                "loss-streak cooldown active"
                 + (
                     f" ({check.cooldown_remaining_minutes}m remaining)"
                     if check.cooldown_remaining_minutes > 0
+                    else ""
+                )
+                + (
+                    f"; consecutive_losses={check.consecutive_losses}"
+                    if check.consecutive_losses > 0
                     else ""
                 )
             )

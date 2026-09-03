@@ -2000,6 +2000,26 @@ class InstitutionalIteRuntime:
                                         pnl=pnl_close,
                                         fingerprint=fp,
                                     )
+                                    try:
+                                        from app.domain.institutional_trading.live_trading_control import (  # noqa: E501
+                                            get_live_trading_controller,
+                                        )
+
+                                        vol_close = getattr(
+                                            pos, "remaining_volume", None
+                                        ) or getattr(pos, "initial_volume", None)
+                                        get_live_trading_controller().note_closed_trade(
+                                            loss=bool(pnl_close < 0),
+                                            volume=(
+                                                Decimal(str(vol_close))
+                                                if vol_close is not None
+                                                else None
+                                            ),
+                                        )
+                                    except Exception:
+                                        logger.exception(
+                                            "live_trading_loss_streak_note_failed"
+                                        )
                                 # Opportunity target: close stats (observe only).
                                 try:
                                     pnl = float(

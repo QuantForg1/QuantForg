@@ -720,6 +720,7 @@ class LiveOrderRequest:
     correlated_exposure_pct: Decimal | None = None
     daily_loss_pct: Decimal | None = None
     consecutive_losses: int = 0
+    loss_streak_cooldown_active: bool = False
     slippage: Decimal | None = None
     gateway_online: bool = False
     mt5_connected: bool = False
@@ -900,12 +901,13 @@ def evaluate_live_order(
     else:
         gates.append(_gate("max_positions", True))
 
-    if req.consecutive_losses >= cfg.max_consecutive_losses:
+    # Time-boxed loss-streak cooldown only — streak alone must not permanent-block.
+    if req.loss_streak_cooldown_active:
         gates.append(
             _gate(
                 "consecutive_losses",
                 False,
-                f"max_consecutive_losses_{cfg.max_consecutive_losses}",
+                f"loss_streak_cooldown_active_{cfg.max_consecutive_losses}",
             )
         )
     else:
@@ -1154,6 +1156,7 @@ class LiveTradingController:
     recent_order_keys: dict[str, datetime] = field(default_factory=dict)
     consecutive_losses: int = 0
     last_loss_volume: Decimal | None = None
+    loss_streak_cooldown_until: datetime | None = None
     last_rejection_reason: str = ""
     last_execution_at: str | None = None
     armed_at: str | None = None
@@ -1183,6 +1186,11 @@ class LiveTradingController:
                     "live_trading_kill_reason": self.kill_reason,
                     "live_trading_emergency_latched": self.emergency_latched,
                     "live_trading_consecutive_losses": self.consecutive_losses,
+                    "live_trading_loss_streak_cooldown_until": (
+                        self.loss_streak_cooldown_until.isoformat()
+                        if self.loss_streak_cooldown_until is not None
+                        else None
+                    ),
                     "live_trading_paused_symbols": sorted(self.paused_symbols),
                     "live_trading_audit": [e.to_dict() for e in self.audit[-50:]],
                 }
@@ -1233,6 +1241,17 @@ class LiveTradingController:
                 )
             except (TypeError, ValueError):
                 self.consecutive_losses = 0
+            raw_until = data.get("live_trading_loss_streak_cooldown_until")
+            self.loss_streak_cooldown_until = None
+            if raw_until:
+                try:
+                    raw = str(raw_until).replace("Z", "+00:00")
+                    parsed = datetime.fromisoformat(raw)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=UTC)
+                    self.loss_streak_cooldown_until = parsed
+                except (TypeError, ValueError):
+                    self.loss_streak_cooldown_until = None
             paused = data.get("live_trading_paused_symbols") or []
             if isinstance(paused, list):
                 self.paused_symbols = {str(s).upper() for s in paused if str(s).strip()}
@@ -1451,14 +1470,70 @@ class LiveTradingController:
                 if record.signal_id:
                     self.remember_signal(record.signal_id)
 
+    def loss_streak_cooldown_active(self, *, now: datetime | None = None) -> bool:
+        with self._lock:
+            until = self.loss_streak_cooldown_until
+            if until is None:
+                return False
+            clock = now or datetime.now(UTC)
+            if clock.tzinfo is None:
+                clock = clock.replace(tzinfo=UTC)
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=UTC)
+            if clock >= until:
+                self.loss_streak_cooldown_until = None
+                return False
+            return True
+
+    def loss_streak_snapshot(self) -> dict[str, Any]:
+        from app.domain.entities.risk_engine import RiskEngineConfig
+        from app.domain.institutional_trading.ai_scalping import (
+            loss_streak_adaptation as streak_mod,
+        )
+
+        with self._lock:
+            losses = int(self.consecutive_losses or 0)
+            until = self.loss_streak_cooldown_until
+        active = self.loss_streak_cooldown_active()
+        adaptation = streak_mod.resolve_loss_streak_adaptation(
+            consecutive_losses=losses,
+            cooldown_until=until if active else None,
+            base_min_rr=1.20,
+        )
+        cfg = RiskEngineConfig()
+        return {
+            "consecutive_losses": losses,
+            "cooldown_active": adaptation.cooldown_active,
+            "cooldown_remaining_minutes": adaptation.cooldown_remaining_minutes,
+            "max_consecutive_losses": int(cfg.max_consecutive_losses),
+            "adaptation": adaptation.to_dict(),
+        }
+
     def note_closed_trade(self, *, loss: bool, volume: Decimal | None) -> None:
+        from app.domain.entities.risk_engine import RiskEngineConfig
+        from app.domain.institutional_trading.ai_scalping import (
+            loss_streak_adaptation as streak_mod,
+        )
+
+        cfg = RiskEngineConfig()
         with self._lock:
             if loss:
                 self.consecutive_losses += 1
                 self.last_loss_volume = volume
+                until = streak_mod.cooldown_until_after_streak(
+                    consecutive_losses=self.consecutive_losses,
+                    max_consecutive_losses=int(cfg.max_consecutive_losses or 3),
+                    cooldown_minutes=int(
+                        cfg.cooldown_minutes_after_loss_streak or 60
+                    ),
+                )
+                if until is not None:
+                    # Refresh cooldown when streak is at/above max.
+                    self.loss_streak_cooldown_until = until
             else:
                 self.consecutive_losses = 0
                 self.last_loss_volume = None
+                self.loss_streak_cooldown_until = None
 
     def evaluate(
         self, req: LiveOrderRequest, *, apply_side_effects: bool = True

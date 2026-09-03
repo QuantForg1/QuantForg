@@ -1253,6 +1253,22 @@ async def build_ite_cycle_market_context(
         open_entries = []
         diag["book_facts_incomplete"] = True
 
+    consecutive_losses = 0
+    cooldown_active = False
+    cooldown_remaining_minutes = 0
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+        )
+
+        streak = get_live_trading_controller().loss_streak_snapshot()
+        consecutive_losses = int(streak.get("consecutive_losses") or 0)
+        cooldown_active = bool(streak.get("cooldown_active"))
+        cooldown_remaining_minutes = int(streak.get("cooldown_remaining_minutes") or 0)
+        diag["loss_streak"] = streak
+    except Exception:
+        diag["loss_streak_read_failed"] = True
+
     account = AccountRiskState(
         equity=equity,
         peak_equity=peak_equity if peak_equity > 0 else equity,
@@ -1261,9 +1277,9 @@ async def build_ite_cycle_market_context(
         open_positions=open_n,
         already_in_trade=open_n > 0,
         account_open_positions=int(diag.get("account_positions") or open_n),
-        consecutive_losses=0,
-        cooldown_active=False,
-        cooldown_remaining_minutes=0,
+        consecutive_losses=consecutive_losses,
+        cooldown_active=cooldown_active,
+        cooldown_remaining_minutes=cooldown_remaining_minutes,
         market_open=market_data_live,
         atr=atr_dec,
         mid_price=mid,

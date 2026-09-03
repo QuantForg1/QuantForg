@@ -213,7 +213,8 @@ class TestExtendedRiskEngine:
             leverage=100,
         )
 
-    def test_consecutive_losses_reject(self) -> None:
+    def test_consecutive_losses_alone_do_not_permanent_block(self) -> None:
+        """Phase 11: streak alone must not stop trading forever."""
         engine = RiskEngine(
             config=RiskEngineConfig(max_consecutive_losses=3, max_open_positions=5)
         )
@@ -225,11 +226,34 @@ class TestExtendedRiskEngine:
             entry_price=Decimal("2300"),
             stop_loss_distance=Decimal("5"),
             consecutive_losses=3,
+            cooldown_active=False,
+            sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
+        )
+        result = engine.evaluate(check, account=self._acct(), positions=[])
+        assert result.decision is not RiskDecision.REJECT or not any(
+            "consecutive losses" in r for r in result.reasons
+        )
+        assert not any("loss-streak cooldown" in r for r in result.reasons)
+
+    def test_loss_streak_cooldown_rejects(self) -> None:
+        engine = RiskEngine(
+            config=RiskEngineConfig(max_consecutive_losses=3, max_open_positions=5)
+        )
+        check = RiskCheckInput(
+            user_id=uuid4(),
+            request_id="r1b",
+            symbol="XAUUSD",
+            side="buy",
+            entry_price=Decimal("2300"),
+            stop_loss_distance=Decimal("5"),
+            consecutive_losses=3,
+            cooldown_active=True,
+            cooldown_remaining_minutes=45,
             sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
         )
         result = engine.evaluate(check, account=self._acct(), positions=[])
         assert result.decision is RiskDecision.REJECT
-        assert any("consecutive losses" in r for r in result.reasons)
+        assert any("cooldown" in r for r in result.reasons)
 
     def test_cooldown_reject(self) -> None:
         engine = RiskEngine(config=RiskEngineConfig(max_open_positions=5))

@@ -117,6 +117,8 @@ class AiScalpingScore:
     signal_action: str = "WAIT"
     why_buy: tuple[str, ...] = ()
     why_sell: tuple[str, ...] = ()
+    global_market_intelligence: dict[str, object] | None = None
+    loss_streak_adaptation: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -194,6 +196,8 @@ class AiScalpingScore:
             "sniper_entry": dict(self.sniper_entry or {}),
             "why_buy": list(self.why_buy),
             "why_sell": list(self.why_sell),
+            "global_market_intelligence": dict(self.global_market_intelligence or {}),
+            "loss_streak_adaptation": dict(self.loss_streak_adaptation or {}),
             "buy_components": dict(
                 (self.sniper_entry or {}).get("buy_components")
                 or (self.factors or {}).get("buy_components")
@@ -674,6 +678,76 @@ def score_scalping_setup(
         reject_list.append(wait_code)
         reasons.append(f"WAIT: {wait_code}")
 
+    news_blocked = False
+    news_reason = None
+    try:
+        news_status = getattr(snapshot, "news", None)
+        news_blocked = bool(getattr(news_status, "blocked", False))
+        news_reason = getattr(news_status, "reason", None)
+    except Exception:
+        news_blocked = False
+
+    from app.domain.institutional_trading.ai_scalping import (
+        global_market_intelligence as gmi_mod,
+        loss_streak_adaptation as streak_mod,
+    )
+
+    rr_float = float(expected_rr) if expected_rr is not None else None
+    min_rr = float(cfg.min_expected_rr or 1)
+    gmi = gmi_mod.assess_global_market_intelligence(
+        direction=direction_dec.direction.value,
+        structure_score=int(direction_dec.structure_score or 0),
+        momentum=int(factors.get("momentum") or 0),
+        liquidity=int(liquidity_score),
+        expected_rr=rr_float,
+        min_expected_rr=min_rr,
+        market_regime=regime.regime,
+        atr_band=resolved.band,
+        news_blocked=news_blocked,
+        news_reason=str(news_reason) if news_reason else None,
+        mtf_alignment=int(trend.alignment_score or 0),
+        execution_quality_ok=bool(execution_quality_ok),
+        portfolio_ok=True,
+    )
+    if gmi.wait_recommended and gmi.wait_code:
+        reject_list.append(gmi.wait_code)
+        reasons.append(f"WAIT: {gmi.wait_code} ({gmi.reason})")
+
+    streak_losses = 0
+    cooldown_until = None
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+        )
+
+        ctrl = get_live_trading_controller()
+        streak_losses = int(ctrl.consecutive_losses or 0)
+        cooldown_until = ctrl.loss_streak_cooldown_until
+    except Exception:
+        streak_losses = 0
+    adaptation = streak_mod.resolve_loss_streak_adaptation(
+        consecutive_losses=streak_losses,
+        cooldown_until=cooldown_until,
+        base_min_rr=min_rr,
+    )
+    if adaptation.cooldown_active:
+        reject_list.append("WAIT_LOSS_STREAK_COOLDOWN")
+        reasons.append(
+            f"WAIT: WAIT_LOSS_STREAK_COOLDOWN "
+            f"({adaptation.cooldown_remaining_minutes}m; {adaptation.reason})"
+        )
+    elif (
+        adaptation.require_stronger_selection
+        and rr_float is not None
+        and rr_float < adaptation.min_expected_rr_soft
+    ):
+        reject_list.append("WAIT_LOSS_STREAK_DEFENSIVE")
+        reasons.append(
+            f"WAIT: WAIT_LOSS_STREAK_DEFENSIVE "
+            f"(rr={rr_float} < soft {adaptation.min_expected_rr_soft}; "
+            f"{adaptation.mode})"
+        )
+
     reject_list = list(dict.fromkeys(reject_list))
     reject = bool(reject_list)
     reject_reason = "; ".join(reject_list) if reject_list else None
@@ -697,7 +771,8 @@ def score_scalping_setup(
         entry_reason = (
             f"TAKE {direction_dec.direction.value}: "
             f"opportunity_score={verdict.opportunity_score} "
-            f"PA={pa.score} conf={confidence} regime={regime.regime}{fam}"
+            f"intel={gmi.intelligence_alignment} streak={adaptation.mode}"
+            f"{fam}"
         )
         reasons.append(
             f"TAKE {direction_dec.direction.value}: Probability Center candidate "
@@ -863,4 +938,6 @@ def score_scalping_setup(
                 )
             )
         ),
+        global_market_intelligence=gmi.to_dict(),
+        loss_streak_adaptation=adaptation.to_dict(),
     )
