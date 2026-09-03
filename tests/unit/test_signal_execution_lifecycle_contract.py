@@ -44,6 +44,28 @@ def _take(*, symbol: str = "EURUSD", direction: str = "BUY") -> dict:
     }
 
 
+def test_opportunity_below_threshold_is_not_live_eligible() -> None:
+    status = signal_execution_status(
+        {
+            "symbol": "NZDUSD",
+            "direction": "SELL",
+            "board_status": "QUALIFIED",
+            "pipeline": {
+                "final_decision": "TAKE",
+                "execution_lifecycle": "EXECUTION_READY",
+                "sniper": "READY",
+                "first_blocker": "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
+                "opportunity_gate": "WAIT",
+            },
+        },
+        live_state="ENABLED",
+        orders_ok=True,
+        research_focus=["NZDUSD"],
+    )
+    assert status == "WAITING_FOR_EXECUTION"
+    assert status != "LIVE_ELIGIBLE"
+
+
 def test_qualified_research_is_not_execution_handoff() -> None:
     status = signal_execution_status(
         {

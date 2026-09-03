@@ -166,6 +166,18 @@ def _pipeline_take_ready(pipe: dict[str, Any] | None) -> bool:
     """
     if not isinstance(pipe, dict) or not pipe:
         return False
+    blocker = str(
+        pipe.get("first_blocker") or pipe.get("abort_reason") or ""
+    ).strip().upper()
+    if (
+        blocker.startswith("WAIT")
+        or blocker in _WAIT_ABORTS
+        or "OPPORTUNITY_SCORE_BELOW" in blocker
+    ):
+        return False
+    gate = str(pipe.get("opportunity_gate") or "").strip().upper()
+    if gate in {"WAIT", "FAIL"}:
+        return False
     lifecycle = str(pipe.get("execution_lifecycle") or "").strip().upper()
     if lifecycle in _TAKE_LIFECYCLES:
         return True
@@ -229,7 +241,12 @@ def signal_execution_status(
     oms = str(pipe.get("oms") or row.get("oms") or "").strip().upper()
     risk = str(pipe.get("risk") or row.get("risk") or "").strip().upper()
     abort = str(
-        pipe.get("abort_reason") or row.get("abort_reason") or ""
+        pipe.get("abort_reason")
+        or row.get("abort_reason")
+        or pipe.get("first_blocker")
+        or row.get("first_blocker")
+        or row.get("reject_reason")
+        or ""
     ).strip().upper()
     if risk in {"REJECT", "REJECTED", "BLOCK"} or (
         "RISK" in abort and not abort.startswith("WAIT")
@@ -264,6 +281,7 @@ def signal_execution_status(
     if (
         abort.startswith("WAIT")
         or abort in _WAIT_ABORTS
+        or "OPPORTUNITY_SCORE_BELOW" in abort
         or not _pipeline_take_ready(pipe)
     ):
         return "WAITING_FOR_EXECUTION"
