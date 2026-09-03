@@ -312,6 +312,28 @@ class TestAutoTradeSafetyGate:
         assert safety_failure_scope(result) == "symbol"
         assert safety_blocks_decision(result) is False
 
+    def test_oil_spread_is_not_fx_ceiling_fail_closed_that_desk(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="XBRUSD", spread=Decimal("0.162")),
+        )
+        assert result.allowed is False
+        assert safety_failure_scope(result) == "symbol"
+        assert safety_blocks_decision(result) is False
+        assert result.spread_diagnostics.get("asset_class") == "commodity"
+        assert "0.00100" not in " ".join(result.failed_reasons)
+        fx = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="EURUSD", spread=Decimal("0.00026")),
+        )
+        assert fx.allowed is True
+
     def test_index_spread_is_not_gold_ceiling(self) -> None:
         from app.domain.institutional_trading.auto_trading import (
             safety_blocks_decision,

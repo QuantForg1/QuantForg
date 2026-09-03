@@ -79,8 +79,21 @@ def assess_spread(
             reason="Spread unavailable - neutral",
         )
     from app.domain.institutional_trading.ai_scalping.asset_class import (
+        asset_class_for_symbol,
         resolve_spread_limits,
     )
+
+    cls = asset_class_for_symbol(symbol)
+    if symbol and cls in {"other", "commodity"}:
+        return SpreadAssessment(
+            score=0,
+            confidence_penalty=cfg.spread_soft_penalty_max,
+            reject=True,
+            reason=(
+                f"Spread fail-closed — no instrument specification for "
+                f"{(symbol or '').strip().upper() or '—'}"
+            ),
+        )
 
     max_reject, max_full, atr_pct_limit, atr_cap_floor = resolve_spread_limits(
         symbol,

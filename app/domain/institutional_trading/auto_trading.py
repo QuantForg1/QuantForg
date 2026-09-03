@@ -305,7 +305,7 @@ def evaluate_instrument_spread(
             "Spread unavailable — fail-closed",
             diag,
         )
-    if asset_class == "other" or not symbol_u:
+    if asset_class in {"other", "commodity"} or not symbol_u:
         diag["spread_limit"] = None
         return (
             False,

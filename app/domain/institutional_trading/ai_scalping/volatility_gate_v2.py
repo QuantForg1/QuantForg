@@ -97,7 +97,7 @@ def resolve_atr_floors_for_symbol(
     )
 
     cls = asset_class_for_symbol(symbol)
-    if cls in {"gold", "other"}:
+    if cls in {"gold", "other", "commodity"}:
         return hard, exc, std
     if cls == "crypto":
         return (

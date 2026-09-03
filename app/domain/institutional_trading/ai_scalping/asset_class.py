@@ -9,7 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal
 
-AssetClass = Literal["gold", "fx", "index", "crypto", "other"]
+AssetClass = Literal["gold", "fx", "index", "crypto", "commodity", "other"]
 
 # Broker / terminal aliases → canonical desk symbols (and reverse candidates).
 BROKER_SYMBOL_CANDIDATES: dict[str, tuple[str, ...]] = {
@@ -50,6 +50,19 @@ _INDEX_TOKENS: frozenset[str] = frozenset(
         "IT4EUR",
     }
 )
+
+# Energy CFDs — never treat as FX majors just because the code is 6 letters / USD.
+_COMMODITY_TOKENS: frozenset[str] = frozenset(
+    {
+        "XTIUSD",
+        "XBRUSD",
+        "USOIL",
+        "UKOIL",
+        "WTIUSD",
+        "BRENT",
+    }
+)
+
 
 _INDEX_MARKERS: tuple[str, ...] = (
     "NDX",
@@ -101,6 +114,8 @@ def asset_class_for_symbol(symbol: str | None) -> AssetClass:
         or desk.startswith(("BTC", "ETH", "LTC"))
     ):
         return "crypto"
+    if desk in _COMMODITY_TOKENS or code in _COMMODITY_TOKENS:
+        return "commodity"
     if (
         desk in _INDEX_TOKENS
         or code in _INDEX_TOKENS
@@ -204,6 +219,14 @@ def resolve_spread_limits(
             return Decimal("0.350"), Decimal("0.020"), Decimal("100"), Decimal("0.015")
         # 5-digit majors: pip ≈ 0.0001 — allow typical 1–3 pip spreads
         return Decimal("0.00100"), Decimal("0.00030"), Decimal("100"), Decimal("0.00040")
+    if cls == "commodity":
+        # No invented oil/energy ceiling. Callers must fail-closed this desk.
+        return (
+            Decimal("0"),
+            Decimal("0"),
+            Decimal("0"),
+            Decimal("0"),
+        )
     return (
         max_spread_reject,
         max_spread_for_full_score,

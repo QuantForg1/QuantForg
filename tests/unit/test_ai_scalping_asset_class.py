@@ -33,6 +33,8 @@ def test_asset_classes() -> None:
     assert asset_class_for_symbol("DJIUSD") == "index"
     assert asset_class_for_symbol("BTCUSD") == "crypto"
     assert asset_class_for_symbol("LTCUSD") == "crypto"
+    assert asset_class_for_symbol("XTIUSD") == "commodity"
+    assert asset_class_for_symbol("XBRUSD") == "commodity"
 
 
 @pytest.mark.unit
@@ -130,3 +132,16 @@ def test_spread_limits_fx() -> None:
     )
     assert low < Decimal("0.10")
     assert high < Decimal("0.50")
+
+
+@pytest.mark.unit
+def test_oil_is_not_fx_spread_ceiling() -> None:
+    """XTIUSD/XBRUSD are energy CFDs — never compare against FX 0.00100."""
+    assert asset_class_for_symbol("XTIUSD") == "commodity"
+    assert asset_class_for_symbol("XBRUSD") == "commodity"
+    d = assess_spread(Decimal("0.162"), symbol="XBRUSD")
+    assert d.reject is True
+    assert "0.00100" not in (d.reason or "")
+    assert "specification" in (d.reason or "").lower()
+    fx = assess_spread(Decimal("0.00026"), symbol="EURUSD")
+    assert fx.reject is False
