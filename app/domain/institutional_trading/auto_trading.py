@@ -164,6 +164,7 @@ class AutoTradeLiveFacts:
     risk_engine_evaluated: bool = True
     account_trading_enabled: bool = False
     mt5_autotrading_enabled: bool = False
+    mt5_autotrading_known: bool = True
     account_flags_evaluated: bool = True
     symbol: str = "XAUUSD"
     symbol_tradable: bool = False
@@ -485,24 +486,23 @@ def evaluate_auto_trade_safety(
         if (facts.status_snapshot and not facts.account_flags_evaluated)
         else facts.mt5_autotrading_enabled
     )
+    if facts.status_snapshot and not facts.account_flags_evaluated:
+        mt5_at_detail = (
+            "MT5 AutoTrading flag not reported by gateway — not blocking status"
+        )
+    elif not mt5_at_ok and not facts.mt5_autotrading_known:
+        mt5_at_detail = (
+            "MT5 AutoTrading flag unknown — fail-closed (order_send blocked)"
+        )
+    elif not mt5_at_ok:
+        mt5_at_detail = "AutoTrading is disabled in MetaTrader 5"
+    else:
+        mt5_at_detail = ""
     add(
         "mt5_autotrading",
         "AutoTrading enabled in MT5 terminal",
         mt5_at_ok,
-        (
-            (
-                "MT5 AutoTrading flag not reported by gateway — not blocking status"
-                if facts.status_snapshot and not facts.account_flags_evaluated
-                else (
-                    "AutoTrading is disabled in MetaTrader 5"
-                    if not facts.mt5_autotrading_enabled
-                    else ""
-                )
-            )
-            if not mt5_at_ok
-            or (facts.status_snapshot and not facts.account_flags_evaluated)
-            else ""
-        ),
+        mt5_at_detail,
     )
     symbol_u = (facts.symbol or "").strip().upper()
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}

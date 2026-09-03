@@ -28,6 +28,19 @@ logger = get_logger(__name__)
 _CYCLE_LOCK = threading.Lock()
 _CYCLE_ACTIVE = False
 _CYCLE_CTX: dict[str, IteCycleMarketContext] = {}
+_PERMISSION_LOCK = threading.Lock()
+_PERMISSION_UNSET: object = object()
+_LAST_TERMINAL_TRADE_ALLOWED: Any = _PERMISSION_UNSET
+_LAST_PERMISSION_CHANGE_AT: str | None = None
+
+# Gateway /health ``mt5.trade_allowed`` is account_info.trade_allowed, not the
+# AutoTrading toolbar. Only terminal_info-backed keys count as AutoTrading.
+_TERMINAL_AUTOTRADING_KEYS = (
+    "mt5_autotrading_enabled",
+    "terminal_trade_allowed",
+    "autotrading_enabled",
+    "autotrading",
+)
 
 
 def begin_cycle_market_snapshot() -> None:
@@ -200,6 +213,7 @@ class IteCycleMarketContext:
     market_data_live: bool = False
     account_trading_enabled: bool = False
     mt5_autotrading_enabled: bool = False
+    mt5_autotrading_known: bool = True
     symbol_tradable: bool = False
     no_broker_restrictions: bool = False
     spread: Decimal | None = None
@@ -216,6 +230,7 @@ class IteCycleMarketContext:
             "market_data_live": self.market_data_live,
             "account_trading_enabled": self.account_trading_enabled,
             "mt5_autotrading_enabled": self.mt5_autotrading_enabled,
+            "mt5_autotrading_known": self.mt5_autotrading_known,
             "symbol_tradable": self.symbol_tradable,
             "no_broker_restrictions": self.no_broker_restrictions,
             "spread": str(self.spread) if self.spread is not None else None,
@@ -292,13 +307,39 @@ def _client_of(mt5_adapter: Any) -> Any:
     return getattr(mt5_adapter, "client", None) or getattr(mt5_adapter, "_client", None)
 
 
+def _note_terminal_permission_change(
+    value: bool | None, *, source: str, diag: dict[str, Any]
+) -> None:
+    """Log AutoTrading transitions. Never invent a value."""
+    global _LAST_TERMINAL_TRADE_ALLOWED, _LAST_PERMISSION_CHANGE_AT
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    with _PERMISSION_LOCK:
+        prev = _LAST_TERMINAL_TRADE_ALLOWED
+        if prev is not value:
+            logger.warning(
+                "MT5_PERMISSION_CHANGED",
+                old=None if prev is _PERMISSION_UNSET else prev,
+                new=value,
+                reason=source,
+                timestamp=now,
+                source=source,
+            )
+            _LAST_TERMINAL_TRADE_ALLOWED = value
+            _LAST_PERMISSION_CHANGE_AT = now
+        if _LAST_PERMISSION_CHANGE_AT:
+            diag["mt5_last_permission_change"] = _LAST_PERMISSION_CHANGE_AT
+    diag["mt5_permission_failure_reason"] = (
+        None if value is True else source
+    )
+
+
 def _read_mt5_autotrading_enabled(
     mt5_adapter: Any, diag: dict[str, Any]
 ) -> bool | None:
     """Read terminal AutoTrading from gateway /health — never invent True.
 
-    Returns None when unknown (caller may fail-closed). Live gateway exposes
-    ``mt5.mt5_autotrading_enabled`` / ``mt5.terminal_trade_allowed``.
+    Returns None when unknown (caller fail-closes new entries). Does not treat
+    account ``trade_allowed`` as the AutoTrading toolbar.
     """
     client = _client_of(mt5_adapter)
     payload: dict[str, Any] | None = None
@@ -326,30 +367,43 @@ def _read_mt5_autotrading_enabled(
         except Exception as exc:
             diag["autotrading_public_health_error"] = str(exc)
     if payload is None:
+        _note_terminal_permission_change(None, source="health_unavailable", diag=diag)
         return None
     mt5_raw = payload.get("mt5")
     mt5 = mt5_raw if isinstance(mt5_raw, dict) else {}
-    for key in (
-        "mt5_autotrading_enabled",
-        "terminal_trade_allowed",
-        "autotrading_enabled",
-        "autotrading",
-    ):
+    if "connected" in mt5:
+        diag["mt5_connected"] = mt5.get("connected")
+    if "terminal_trade_allowed" in mt5:
+        diag["mt5_terminal_trade_allowed"] = mt5.get("terminal_trade_allowed")
+    if "account_trade_allowed" in mt5:
+        diag["mt5_account_trade_allowed"] = mt5.get("account_trade_allowed")
+    elif "trade_allowed" in mt5:
+        # Observability only — account_info.trade_allowed, not AutoTrading.
+        diag["mt5_account_trade_allowed"] = mt5.get("trade_allowed")
+    for key in _TERMINAL_AUTOTRADING_KEYS:
         if key in mt5 and mt5.get(key) is not None:
             val = bool(mt5.get(key))
             diag["mt5_autotrading_enabled"] = val
+            diag["mt5_trade_allowed"] = val
+            diag["mt5_autotrading_known"] = True
             diag["mt5_autotrading_source"] = f"mt5.{key}"
+            _note_terminal_permission_change(
+                val, source=diag["mt5_autotrading_source"], diag=diag
+            )
             return val
         if key in payload and payload.get(key) is not None:
             val = bool(payload.get(key))
             diag["mt5_autotrading_enabled"] = val
+            diag["mt5_trade_allowed"] = val
+            diag["mt5_autotrading_known"] = True
             diag["mt5_autotrading_source"] = key
+            _note_terminal_permission_change(val, source=key, diag=diag)
             return val
-    if mt5.get("trade_allowed") is not None:
-        val = bool(mt5.get("trade_allowed"))
-        diag["mt5_autotrading_enabled"] = val
-        diag["mt5_autotrading_source"] = "mt5.trade_allowed"
-        return val
+    diag["mt5_autotrading_known"] = False
+    diag["mt5_trade_allowed"] = None
+    _note_terminal_permission_change(
+        None, source="terminal_autotrading_unknown", diag=diag
+    )
     return None
 
 
@@ -448,6 +502,7 @@ async def build_ite_cycle_market_context(
                 market_data_live=cached.market_data_live,
                 account_trading_enabled=cached.account_trading_enabled,
                 mt5_autotrading_enabled=cached.mt5_autotrading_enabled,
+                mt5_autotrading_known=cached.mt5_autotrading_known,
                 symbol_tradable=cached.symbol_tradable,
                 no_broker_restrictions=cached.no_broker_restrictions,
                 spread=cached.spread,
@@ -1410,10 +1465,21 @@ async def build_ite_cycle_market_context(
     else:
         mt5_at = pre_health
     if mt5_at is None:
-        # Unknown → fail-closed for safety gate (same as orchestrator).
+        # Unknown → fail-closed for new entries. Do not claim the toolbar is off.
         diag["mt5_autotrading_enabled"] = False
-        diag["mt5_autotrading_source"] = "unknown_fail_closed"
+        diag["mt5_autotrading_known"] = False
+        diag["mt5_trade_allowed"] = None
+        if not diag.get("mt5_autotrading_source"):
+            diag["mt5_autotrading_source"] = "unknown_fail_closed"
         mt5_at = False
+        known_at = False
+    else:
+        known_at = True
+        diag["mt5_autotrading_known"] = True
+    if diag.get("symbol_trade_allowed") is not None:
+        diag["mt5_symbol_trade_allowed"] = diag.get("symbol_trade_allowed")
+    else:
+        diag.setdefault("mt5_symbol_trade_allowed", None)
     built_at = datetime.now(UTC).isoformat()
     ctx = IteCycleMarketContext(
         ok=True,
@@ -1423,6 +1489,7 @@ async def build_ite_cycle_market_context(
         market_data_live=market_data_live,
         account_trading_enabled=account_trading_enabled,
         mt5_autotrading_enabled=bool(mt5_at),
+        mt5_autotrading_known=known_at,
         symbol_tradable=market_data_live,
         # Known account + trading enabled ⇒ no restriction evidence; else fail closed
         no_broker_restrictions=bool(account_trading_enabled),

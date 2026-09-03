@@ -1024,6 +1024,7 @@ class MT5GatewayRuntime:
             "trade_mode": account_mode,
             "trade_mode_raw": trade_mode_raw,
             "trade_allowed": trade_allowed,
+            "account_trade_allowed": trade_allowed,
             **caps,
         }
 

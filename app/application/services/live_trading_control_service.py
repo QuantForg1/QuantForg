@@ -246,6 +246,47 @@ def _fill_from_adapter_account(out: dict[str, Any]) -> None:
             out["probe_source"] = f"{prior}+account_info"
 
 
+def _overlay_mt5_open_position_count(out: dict[str, Any], adapter: Any) -> None:
+    """Operator status: MT5 list_positions is truth. Not an ITE submit cap."""
+    list_fn = getattr(adapter, "list_positions", None)
+    if not callable(list_fn):
+        return
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        rows = pool.submit(list_fn).result(timeout=5)
+    except (
+        FuturesTimeout,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        AttributeError,
+    ):
+        logger.info("live_trading_list_positions_unavailable")
+        return
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    if rows is None:
+        return
+    n = 0
+    for row in rows:
+        vol = None
+        if isinstance(row, dict):
+            vol = row.get("volume") or row.get("volume_current")
+        else:
+            vol = getattr(row, "volume", None)
+            if vol is None:
+                vol = getattr(row, "volume_current", None)
+        try:
+            if vol is not None and Decimal(str(vol)) <= 0:
+                continue
+        except (TypeError, ValueError, ArithmeticError):
+            continue
+        n += 1
+    out["open_positions"] = n
+    out["open_positions_source"] = "mt5_list_positions"
+
+
 def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
     """Best-effort live facts. Missing values stay false/None — never invented."""
     out: dict[str, Any] = {
@@ -675,6 +716,15 @@ def _safety_gates(facts: dict[str, Any]) -> list[dict[str, Any]]:
 def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, Any]:
     ctrl = get_live_trading_controller()
     facts = _live_probe_facts(enrich_account=False)
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        adapter = getattr(getattr(runtime, "probes", None), "mt5_adapter", None)
+        if adapter is not None:
+            _overlay_mt5_open_position_count(facts, adapter)
+    except Exception:
+        logger.info("live_trading_open_positions_overlay_skipped")
     counts = ctrl.counts_today()
     remaining_daily = None
     equity = facts.get("equity")

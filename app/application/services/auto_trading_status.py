@@ -129,12 +129,8 @@ def _apply_health_payload_flags(out: dict[str, Any], payload: dict[str, Any]) ->
         and account.get("trade_allowed") is not None
     ):
         out["account_trading_enabled"] = bool(account.get("trade_allowed"))
-    if (
-        out["mt5_autotrading_enabled"] is None
-        and isinstance(mt5, dict)
-        and mt5.get("trade_allowed") is not None
-    ):
-        out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
+    # Never map mt5.trade_allowed (account_info) onto AutoTrading. Terminal
+    # toolbar is mt5_autotrading_enabled / terminal_trade_allowed only.
 
     support_raw = mt5.get("capability_support")
     support = (

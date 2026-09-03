@@ -279,6 +279,26 @@ class TestAutoTradeSafetyGate:
         assert safety_blocks_decision(result) is True
         assert any("AutoTrading is disabled" in r for r in result.failed_reasons)
 
+    def test_unknown_autotrading_fail_closed_does_not_claim_disabled(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(
+                mt5_autotrading_enabled=False,
+                mt5_autotrading_known=False,
+            ),
+        )
+        assert result.allowed is False
+        assert safety_failure_scope(result) == "global"
+        assert safety_blocks_decision(result) is True
+        assert any("unknown" in r.lower() for r in result.failed_reasons)
+        assert not any("AutoTrading is disabled" in r for r in result.failed_reasons)
+
     def test_mixed_global_and_spread_stays_global(self) -> None:
         from app.domain.institutional_trading.auto_trading import (
             safety_blocks_decision,

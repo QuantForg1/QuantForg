@@ -793,6 +793,7 @@ class OperationsControlPlane:
                 risk_engine_evaluated=facts.risk_engine_evaluated,
                 account_trading_enabled=facts.account_trading_enabled,
                 mt5_autotrading_enabled=facts.mt5_autotrading_enabled,
+                mt5_autotrading_known=facts.mt5_autotrading_known,
                 account_flags_evaluated=facts.account_flags_evaluated,
                 symbol=facts.symbol,
                 symbol_tradable=facts.symbol_tradable,

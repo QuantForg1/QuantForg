@@ -636,6 +636,9 @@ class InstitutionalIteRuntime:
         market_context_diagnostics: dict[str, Any] | None = None,
     ) -> ShadowCycleResult:
         """CANARY/LIVE auto-trade cycle — submits only when safety gate passes."""
+        at_known = bool(
+            (market_context_diagnostics or {}).get("mt5_autotrading_known", True)
+        )
         # Production Validation Mode — observe only (never changes decisions).
         _pvm_vid: str | None = None
         _pvm_token = None
@@ -726,6 +729,7 @@ class InstitutionalIteRuntime:
                     risk_engine_reasons=risk_reasons,
                     account_trading_enabled=account_trading_enabled,
                     mt5_autotrading_enabled=mt5_autotrading_enabled,
+                    mt5_autotrading_known=at_known,
                     symbol_tradable=symbol_tradable,
                     margin_available=False,
                     no_broker_restrictions=no_broker_restrictions,
@@ -880,6 +884,7 @@ class InstitutionalIteRuntime:
                 risk_engine_reasons=risk_reasons,
                 account_trading_enabled=account_trading_enabled,
                 mt5_autotrading_enabled=mt5_autotrading_enabled,
+                mt5_autotrading_known=at_known,
                 symbol=safety_evaluation_symbol(getattr(snapshot, "symbol", None)),
                 symbol_tradable=symbol_tradable,
                 margin_available=margin_ok,
@@ -937,6 +942,7 @@ class InstitutionalIteRuntime:
                             risk_engine_reasons=risk_reasons,
                             account_trading_enabled=account_trading_enabled,
                             mt5_autotrading_enabled=mt5_autotrading_enabled,
+                            mt5_autotrading_known=at_known,
                             symbol=safety_evaluation_symbol(
                                 getattr(snapshot, "symbol", None)
                             ),

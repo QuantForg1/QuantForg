@@ -165,10 +165,13 @@ function Get-Mt5SessionClassification {
       }
     } catch {}
     try {
-      $ta = $mt5.trade_allowed
-      $at = $mt5.mt5_autotrading_enabled
-      if ($ta -eq $true -or $at -eq $true) { $auto = "AUTOTRADING_ENABLED" }
-      elseif ($ta -eq $false -or $at -eq $false) { $auto = "AUTOTRADING_DISABLED" }
+      $at = $null
+      $tt = $null
+      try { $at = $mt5.mt5_autotrading_enabled } catch {}
+      try { $tt = $mt5.terminal_trade_allowed } catch {}
+      # Account trade_allowed is NOT the AutoTrading toolbar.
+      if ($at -eq $true -or $tt -eq $true) { $auto = "AUTOTRADING_ENABLED" }
+      elseif ($at -eq $false -or $tt -eq $false) { $auto = "AUTOTRADING_DISABLED" }
     } catch {}
     try {
       $hb = [string]$mt5.last_heartbeat_at
