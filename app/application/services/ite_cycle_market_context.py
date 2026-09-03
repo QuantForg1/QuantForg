@@ -425,7 +425,15 @@ async def build_ite_cycle_market_context(
 
     if reuse_cycle and not research_mode:
         cached = peek_cycle_market_context(symbol)
-        if cached is not None and cached.ok:
+        cached_purpose = str(
+            ((cached.diagnostics or {}).get("context_purpose") if cached else "")
+            or ""
+        ).strip().lower()
+        want_purpose = str(purpose or "execution").strip().lower()
+        # Scan context skips position/history sync. Execution must not reuse it
+        # or Risk can see an empty book and allow a same-symbol duplicate.
+        scan_reuse_blocked = want_purpose != "scan" and cached_purpose == "scan"
+        if cached is not None and cached.ok and not scan_reuse_blocked:
             logger.warning(
                 "ite_cycle_market_context_reused",
                 symbol=symbol,
@@ -594,7 +602,14 @@ async def build_ite_cycle_market_context(
 
     plan = list(required_tfs) + list(optional_tfs)
     required_set = {tf for tf, _ in required_tfs}
-    loaded = await asyncio.gather(*[_one_tf(tf, n) for tf, n in plan])
+    if str(purpose or "execution").strip().lower() == "scan":
+        # One TF at a time so a slow gold desk cannot saturate the ITE I/O
+        # pool and starve the rest of the scan universe.
+        loaded = []
+        for tf, n in plan:
+            loaded.append(await _one_tf(tf, n))
+    else:
+        loaded = await asyncio.gather(*[_one_tf(tf, n) for tf, n in plan])
     for tf, candles, exc in loaded:
         bars_loaded[tf.value] = len(candles)
         diag["bars"][tf.value] = {
@@ -787,7 +802,7 @@ async def build_ite_cycle_market_context(
             else _io(
                 force_sync_positions,
                 mt5_adapter,
-                symbol=symbol,
+                symbol=canonical_symbol or symbol,
                 position_engine=position_engine,
                 fresh=True,
             )
@@ -959,7 +974,8 @@ async def build_ite_cycle_market_context(
         )
 
         rows = book_rows
-        owned = filter_quantforg_positions(rows or [], symbol=symbol)
+        book_symbol = canonical_symbol or logical_symbol or symbol
+        owned = filter_quantforg_positions(rows or [], symbol=book_symbol)
         dirs, entries = book_facts_from_positions(owned)
         open_directions = list(dirs)
         open_entries = list(entries)
@@ -969,8 +985,18 @@ async def build_ite_cycle_market_context(
             live_capacity_tickets,
         )
 
-        live_tix = live_capacity_tickets(owned, symbol=symbol)
-        open_positions = len(live_tix)
+        live_tix = live_capacity_tickets(owned, symbol=book_symbol)
+        if live_tix:
+            open_positions = len(live_tix)
+            diag["position_tickets"] = list(live_tix)
+        elif open_positions > 0:
+            # Position truth reported opens but rows were missing. Never flatten
+            # the book to zero — Risk would treat it as flat and allow a duplicate.
+            diag["book_facts_rows_missing"] = True
+            diag["position_tickets"] = list(diag.get("position_tickets") or [])
+        else:
+            open_positions = 0
+            diag["position_tickets"] = []
         diag["positions"] = open_positions
         diag["quantforg_positions"] = open_positions
         cap_max = int(diag.get("capacity_max") or 2)
@@ -985,7 +1011,6 @@ async def build_ite_cycle_market_context(
                 else f"{max(0, cap_max - open_positions)} SLOTS"
             )
         )
-        diag["position_tickets"] = list(live_tix)
         profits = []
         for row in owned:
             try:

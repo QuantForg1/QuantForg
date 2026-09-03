@@ -37,6 +37,13 @@ logger = get_logger(__name__)
 _LOCK = threading.RLock()
 _LAST_SCAN: dict[str, Any] | None = None
 _SCAN_GATE = asyncio.Lock()
+_SCAN_ROTATION = 0
+
+
+def reset_scan_rotation_for_tests() -> None:
+    """Tests only — keep the first budgeted scan in seed order."""
+    global _SCAN_ROTATION
+    _SCAN_ROTATION = 0
 
 
 def _isolated_symbol_failure(symbol: str, reason: str) -> dict[str, Any]:
@@ -161,11 +168,15 @@ def independent_evaluation_symbols(
     Does not authorize orders. Sniper TAKE / Risk / OMS still apply downstream.
     Skips hard routing failures so one dead symbol cannot fill the queue.
     """
+    from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+        scalp_desk_code,
+    )
     from app.domain.institutional_trading.operations.quantforg_position_cap import (
         is_quantforg_same_symbol_open,
     )
 
     seen = {str(s).strip().upper() for s in existing if str(s).strip()}
+    seen_desk = {scalp_desk_code(s) for s in seen if scalp_desk_code(s)}
     open_set = {str(s).strip().upper() for s in open_symbols if str(s).strip()}
     out = [str(s).strip().upper() for s in existing if str(s).strip()]
     limit = max(1, int(cap or 36))
@@ -181,9 +192,14 @@ def independent_evaluation_symbols(
         sym = str(row.get("symbol") or row.get("broker_symbol") or "").strip().upper()
         if not sym or sym in seen:
             continue
+        desk = scalp_desk_code(sym)
+        if desk and desk in seen_desk:
+            continue
         if is_quantforg_same_symbol_open(sym, open_set):
             continue
         seen.add(sym)
+        if desk:
+            seen_desk.add(desk)
         out.append(sym)
         if len(out) >= limit:
             break
@@ -439,8 +455,12 @@ def focus_broker_discovered_scan_universe(
         upper = code.upper()
         exact.setdefault(upper, code)
         desk = desk_code_for_execution(code)
-        if desk:
-            by_desk.setdefault(desk, code)
+        if not desk:
+            continue
+        current = by_desk.get(desk)
+        inst = f"{desk}_I"
+        if current is None or (upper == inst and current.upper() != inst):
+            by_desk[desk] = code
 
     wanted: list[str] = []
     seen_wanted: set[str] = set()
@@ -463,9 +483,8 @@ def focus_broker_discovered_scan_universe(
     seen_live: set[str] = set()
     limit = max(1, int(cap or 36))
     for token in wanted:
-        mapped = exact.get(token) or by_desk.get(
-            desk_code_for_execution(token) or token
-        )
+        desk_token = desk_code_for_execution(token) or token
+        mapped = by_desk.get(desk_token) or exact.get(token)
         if mapped is None:
             continue
         key = mapped.upper()
@@ -509,16 +528,19 @@ def expand_live_liquid_scan_universe(
         live_u.add(upper)
         exact.setdefault(upper, code)
         desk = desk_code_for_execution(code)
-        if desk:
-            by_desk.setdefault(desk, code)
+        if not desk:
+            continue
+        current = by_desk.get(desk)
+        inst = f"{desk}_I"
+        if current is None or (upper == inst and current.upper() != inst):
+            by_desk[desk] = code
 
     def _map_live(token: str) -> str | None:
         raw = str(token or "").strip()
         if not raw:
             return None
-        mapped = exact.get(raw.upper()) or by_desk.get(
-            desk_code_for_execution(raw) or raw.upper()
-        )
+        desk_token = desk_code_for_execution(raw) or raw.upper()
+        mapped = by_desk.get(desk_token) or exact.get(raw.upper())
         if mapped is None or mapped.upper() not in live_u:
             return None
         return mapped
@@ -633,6 +655,13 @@ async def score_universe_with_budget(
     )
 
     symbols = [str(s).strip() for s in universe if str(s).strip()]
+    global _SCAN_ROTATION
+    if len(symbols) > 1:
+        # Rotate so a persistent gold/head-of-list timeout cannot starve the tail.
+        offset = _SCAN_ROTATION % len(symbols)
+        _SCAN_ROTATION += 1
+        if offset:
+            symbols = symbols[offset:] + symbols[:offset]
     stats: dict[str, Any] = {
         "symbols_queued": len(symbols),
         "symbols_evaluated": 0,

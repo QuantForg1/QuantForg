@@ -104,6 +104,7 @@ def test_resolve_scan_universe_expands_with_broker_rows() -> None:
 
     rows = [
         {"code": "EURUSD", "trade_mode": 4, "digits": 5},
+        {"code": "NZDUSD", "trade_mode": 4, "digits": 5},
         {"code": "EURJPY", "trade_mode": 4, "digits": 3},
         {"code": "XAGUSD", "trade_mode": 4, "digits": 3},
         {"code": "EURRUB", "trade_mode": 3, "digits": 5},
@@ -256,7 +257,8 @@ def test_dynamic_universe_not_shrunk_by_static_plane_allowlist() -> None:
     assert "EURJPY" in uni
     assert "XAGUSD" in uni
     assert "GBPJPY" in uni
-    assert len(uni) > len(DEFAULT_SCALPING_UNIVERSE)
+    assert "GBPUSD" not in uni  # seed absent from catalogue stays out
+    assert len(uni) == 4
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.normal_vol.quality == 74
     assert cfg.normal_vol.confidence == 71

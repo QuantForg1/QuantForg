@@ -370,8 +370,15 @@ def extract_cycle_diagnostics(
 
     executed = has_broker_ticket(ticket)
     opportunity_gt_70 = False
+    opp_raw = diag.get("opportunity_score")
+    if opp_raw is None:
+        contract_opp = diag.get("execution_contract")
+        if isinstance(contract_opp, dict):
+            opp_raw = contract_opp.get("opportunity_score")
+        ai_blob = diag.get("ai_payload") or diag.get("last_ai_score")
+        if opp_raw is None and isinstance(ai_blob, dict):
+            opp_raw = ai_blob.get("opportunity_score")
     try:
-        opp_raw = diag.get("opportunity_score")
         if opp_raw is not None:
             opportunity_gt_70 = float(opp_raw) > 70
     except (TypeError, ValueError):
@@ -461,9 +468,13 @@ def extract_cycle_diagnostics(
         "stop_distance": diag.get("stop_distance"),
         "risk_budget": diag.get("risk_budget"),
         "calculated_lots": diag.get("calculated_lots"),
-        "opportunity_score": diag.get("opportunity_score"),
+        "opportunity_score": opp_raw,
         "opportunity_threshold": diag.get("opportunity_threshold") or 70,
+        "opportunity_score_source": diag.get("opportunity_score_source"),
         "setup_state": diag.get("setup_state"),
+        "entry": diag.get("entry"),
+        "stop_loss": diag.get("stop_loss"),
+        "take_profit": diag.get("take_profit"),
         "sniper_state": diag.get("sniper_state") or diag.get("sniper"),
         "execution_handoff": dict(handoff),
         "advisory_only": True,
@@ -935,6 +946,7 @@ class StrategyDiagnosticsStore:
                 sizing=sizing,
                 extra={
                     "opportunity_score": cycle.get("opportunity_score"),
+                    "opportunity_score_source": cycle.get("opportunity_score_source"),
                     "directional_edge": cycle.get("directional_edge"),
                     "buy_score": cycle.get("buy_score"),
                     "sell_score": cycle.get("sell_score"),
@@ -947,6 +959,13 @@ class StrategyDiagnosticsStore:
                     "blocker_source": cycle.get("blocker_source"),
                     "opportunity_audit": cycle.get("opportunity_audit"),
                     "sniper_entry": cycle.get("sniper_entry"),
+                    "entry": cycle.get("entry"),
+                    "stop_loss": cycle.get("stop_loss"),
+                    "take_profit": cycle.get("take_profit"),
+                    "expected_rr": cycle.get("rr") or cycle.get("expected_rr"),
+                    "structure_score": cycle.get("structure_score"),
+                    "market_regime": cycle.get("market_regime"),
+                    "symbol": cycle.get("symbol"),
                 },
             )
         except Exception:  # noqa: S110  # best-effort evidence path

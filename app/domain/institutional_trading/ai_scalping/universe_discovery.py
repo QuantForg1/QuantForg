@@ -255,8 +255,10 @@ def resolve_seed_to_broker_symbol(
 ) -> str:
     """Map desk seed (XAUUSD) → catalogue broker code (XAUUSD_I).
 
-    Prefers exact desk match, then ``_I`` suffix, then first catalogue form.
-    Never invents symbols absent from the catalogue when rows are provided.
+    Prefers the tradable institutional ``_I`` form, then any FULL-mode liquid
+    catalogue code for the desk. Never invents symbols absent from the
+    catalogue when rows are provided. Bare close-only aliases must not win
+    over ``XAUUSD_I`` / ``EURUSD_I`` when both exist.
     """
     s = (seed_code or "").strip().upper()
     if not s:
@@ -269,17 +271,35 @@ def resolve_seed_to_broker_symbol(
     else:
         return s
     by_desk: dict[str, list[str]] = {}
+    full_liquid: set[str] = set()
     for d in rows_discovered:
-        by_desk.setdefault(scalp_desk_code(d.code), []).append(d.code.upper())
+        code = d.code.upper()
+        by_desk.setdefault(scalp_desk_code(d.code), []).append(code)
+        if d.liquid_scalp and int(d.trade_mode) == _TRADE_MODE_FULL:
+            full_liquid.add(code)
     desk = scalp_desk_code(s)
     opts = by_desk.get(desk) or []
     if not opts:
         return s
+    inst = f"{desk}_I"
+    if inst in opts and (not full_liquid or inst in full_liquid):
+        return inst
+    if s in full_liquid:
+        return s
+    if desk in full_liquid:
+        return desk
+    full_opts = [o for o in opts if o in full_liquid]
+    if full_opts:
+        for o in full_opts:
+            if o.endswith("_I"):
+                return o
+        return full_opts[0]
+    if inst in opts:
+        return inst
     if desk in opts:
         return desk
-    for o in opts:
-        if o.endswith("_I"):
-            return o
+    if s in opts:
+        return s
     return opts[0]
 
 
@@ -388,7 +408,7 @@ def build_dynamic_scalping_universe(
         if c in dem and not (allow_recovery and c in recover):
             return False
         # One broker form per desk symbol (prefer first added — seed resolver
-        # already prefers catalogue `_I` when present).
+        # prefers catalogue ``_I`` when that form is tradable).
         if desk in seen_desk:
             return False
         if len(ordered) >= max_symbols:
@@ -408,8 +428,9 @@ def build_dynamic_scalping_universe(
     }
     for s in seed:
         resolved = resolve_seed_to_broker_symbol(s, discovered=discovered)
-        if resolved in liquid_by_code:
-            recover.add(resolved)
+        if resolved not in liquid_by_code:
+            continue
+        recover.add(resolved)
         _add(resolved, allow_recovery=True)
 
     buckets: dict[str, list[str]] = {

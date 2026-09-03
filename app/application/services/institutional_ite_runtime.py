@@ -263,6 +263,15 @@ class InstitutionalIteRuntime:
         with self._lock:
             self._last_bridge_result = None
 
+    def _release_non_entry_slot(self) -> None:
+        """WAIT / missing snapshot is not a filled entry — keep the handoff queue.
+
+        ``max_entries_per_cycle`` counts OMS-bound entries, not data failures.
+        """
+        with self._lock:
+            if self._entries_this_scan > 0:
+                self._entries_this_scan -= 1
+
     def _emit_telegram_cycle(self, result: ShadowCycleResult) -> None:
         """Post-cycle observability only. Never raises into the trading path."""
         try:
@@ -2404,6 +2413,38 @@ class InstitutionalIteRuntime:
             snapshot, account, positions=live_positions or None
         )
         try:
+            ai_score = getattr(self.decision_pipeline, "_last_ai_score", None)
+            if isinstance(ai_score, dict) and isinstance(
+                market_context_diagnostics, dict
+            ):
+                if ai_score.get("opportunity_score") is not None:
+                    market_context_diagnostics["opportunity_score"] = int(
+                        ai_score["opportunity_score"]
+                    )
+                    market_context_diagnostics["opportunity_score_source"] = (
+                        "ai_payload"
+                    )
+                if ai_score.get("opportunity_threshold") is not None:
+                    market_context_diagnostics["opportunity_threshold"] = ai_score.get(
+                        "opportunity_threshold"
+                    )
+                for key in (
+                    "entry",
+                    "stop_loss",
+                    "take_profit",
+                    "expected_rr",
+                    "setup_family",
+                    "market_regime",
+                    "structure_score",
+                    "sniper_entry",
+                    "signal_action",
+                    "direction",
+                ):
+                    if key in ai_score and market_context_diagnostics.get(key) is None:
+                        market_context_diagnostics[key] = ai_score.get(key)
+        except Exception:
+            logger.exception("canonical_opportunity_score_attach_failed")
+        try:
             from app.domain.institutional_trading.production_validation_mode import (
                 ValidationStage,
                 capture_signal as pvm_capture,
@@ -2681,6 +2722,8 @@ class InstitutionalIteRuntime:
             )
             action = str(getattr(decision.action, "value", decision.action))
             traded_intent = action in {"BUY", "SELL"}
+            _ai_opp_lab = getattr(self.decision_pipeline, "_last_ai_score", None)
+            _ai_opp_lab = _ai_opp_lab if isinstance(_ai_opp_lab, dict) else {}
             get_opportunity_outcome_store().record_evaluation(
                 symbol=str(
                     getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")
@@ -2688,7 +2731,8 @@ class InstitutionalIteRuntime:
                 ai_confidence=int(getattr(decision, "confidence", 0) or 0),
                 opportunity_score=int(
                     (duel.champion.get("opportunity_score") if duel else None)
-                    or getattr(decision, "confidence", 0)
+                    or _ai_opp_lab.get("opportunity_score")
+                    or getattr(decision, "opportunity_score", None)
                     or 0
                 ),
                 traded=False,  # filled true after OMS success below
@@ -2754,6 +2798,8 @@ class InstitutionalIteRuntime:
             prot = evaluate_capital_protection(
                 st, candidate_symbol=str(getattr(decision, "symbol", "") or "")
             )
+            _ai_opp_q = getattr(self.decision_pipeline, "_last_ai_score", None)
+            _ai_opp_q = _ai_opp_q if isinstance(_ai_opp_q, dict) else {}
             get_opportunity_queue().rebuild(
                 [
                     {
@@ -2762,7 +2808,9 @@ class InstitutionalIteRuntime:
                             getattr(getattr(decision, "direction", None), "value", "")
                         ),
                         "opportunity_score": int(
-                            getattr(decision, "confidence", 0) or 0
+                            _ai_opp_q.get("opportunity_score")
+                            or getattr(decision, "opportunity_score", None)
+                            or 0
                         ),
                         "ai_confidence": int(getattr(decision, "confidence", 0) or 0),
                         "expected_rr": float(getattr(decision, "estimated_rr", 0) or 0),
@@ -3772,10 +3820,16 @@ class InstitutionalIteRuntime:
                         )
                     except Exception:
                         logger.exception("execution_quality_analytics_record_failed")
+                    _ai_opp = getattr(self.decision_pipeline, "_last_ai_score", None)
+                    _ai_opp = _ai_opp if isinstance(_ai_opp, dict) else {}
                     get_opportunity_outcome_store().record_evaluation(
                         symbol=str(getattr(decision, "symbol", "") or ""),
                         ai_confidence=int(getattr(decision, "confidence", 0) or 0),
-                        opportunity_score=int(getattr(decision, "confidence", 0) or 0),
+                        opportunity_score=int(
+                            _ai_opp.get("opportunity_score")
+                            or getattr(decision, "opportunity_score", None)
+                            or 0
+                        ),
                         traded=True,
                         outcome=None,
                         session=None,
@@ -6435,10 +6489,29 @@ class InstitutionalIteRuntime:
                     logger.exception("pre_scan_position_protect_failed")
 
                 t_pick = time.perf_counter()
-                symbol = await self._await_cycle_budget(
-                    self._pick_executable_symbol_async(),
-                    what="pick_executable_symbol",
+                # Dedicated scan window — never leftover cycle remainder.
+                # Wrapping pick in remaining hard time aborted the universe as
+                # cycle_budget_exhausted:pick_executable_symbol when PME already
+                # consumed the budget. Inner scan still isolates per-symbol
+                # timeouts; this outer bound only prevents a hung pick.
+                from app.domain.institutional_trading.operations.worker_runtime_state import (
+                    cycle_hard_timeout_seconds as _hard_to,
+                    cycle_scan_budget_seconds as _scan_to,
                 )
+
+                pick_timeout = min(
+                    _scan_to(self.interval_seconds),
+                    _hard_to(self.interval_seconds),
+                )
+                try:
+                    symbol = await asyncio.wait_for(
+                        self._pick_executable_symbol_async(),
+                        timeout=max(0.05, float(pick_timeout)),
+                    )
+                except TimeoutError:
+                    raise TimeoutError(
+                        "cycle_budget_exhausted:pick_executable_symbol"
+                    ) from None
                 pick_ms = round((time.perf_counter() - t_pick) * 1000.0, 1)
                 manage_only = False
                 if not symbol:
@@ -6696,6 +6769,8 @@ class InstitutionalIteRuntime:
                     with self._lock:
                         self._last_cycle = result
                         self._cycles += 1
+                    if not manage_only:
+                        self._release_non_entry_slot()
                     self._clear_ephemeral_cycle_state()
                     try:
                         from app.application.services.strategy_diagnostics import (
@@ -6883,6 +6958,8 @@ class InstitutionalIteRuntime:
                         abort=getattr(last, "abort_reason", None),
                         forwarded_to_oms=getattr(last, "forwarded_to_oms", False),
                     )
+                    if not last_fwd:
+                        self._release_non_entry_slot()
             except TimeoutError as exc:
                 from datetime import timedelta
 
@@ -6966,6 +7043,7 @@ class InstitutionalIteRuntime:
                     )
                     self._cycles += 1
                     self._last_failure = "CYCLE_TIMEOUT"
+                self._release_non_entry_slot()
                 self._clear_ephemeral_cycle_state()
                 try:
                     from app.application.services.cycle_evidence import (
