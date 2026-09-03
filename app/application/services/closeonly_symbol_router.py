@@ -98,6 +98,24 @@ def build_opportunity_candidates(
         return [canonical_gold_execution_symbol(preferred)]
 
     _add(preferred)
+    # When the multi-asset handoff already chose a preferred desk, do NOT
+    # expand into the full broker catalogue / alpha universe. Fallthrough
+    # previously stole focus to wide-spread FX (EURCAD/EURCHF) after a
+    # sniper-ready NDXUSD/LTCUSD/BTCUSD selection — Safety-blocked those
+    # desks while the handoff queue still had ready TAKEs waiting.
+    # Continuity is the next cycle's ``_take_next_handoff_symbol``.
+    if preferred and str(preferred).strip():
+        try:
+            from app.domain.institutional_trading.ai_scalping.asset_class import (
+                broker_symbol_candidates,
+            )
+
+            for cand in broker_symbol_candidates(str(preferred)):
+                _add(cand)
+        except Exception:
+            logger.exception("preferred_broker_candidates_failed")
+        return ordered
+
     for row in alpha_ranking or []:
         if isinstance(row, dict):
             _add(str(row.get("symbol") or ""))

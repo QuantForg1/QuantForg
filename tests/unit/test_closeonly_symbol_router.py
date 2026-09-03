@@ -37,14 +37,34 @@ def test_skips_closeonly_and_picks_next_full() -> None:
 
 @pytest.mark.unit
 def test_resolve_prefers_ranked_full_mode() -> None:
+    """Without a preferred desk, alpha ranking may supply the next full-mode symbol."""
     adapter = _Adapter({"XAUUSD": "closeonly", "EURUSD": "full"})
     selected, skipped = resolve_executable_symbol(
         adapter,
-        preferred="XAUUSD",
-        alpha_ranking=[{"symbol": "EURUSD", "opportunity_score": 90}],
+        preferred=None,
+        alpha_ranking=[
+            {"symbol": "XAUUSD", "opportunity_score": 95},
+            {"symbol": "EURUSD", "opportunity_score": 90},
+        ],
     )
     assert "XAUUSD" in skipped
     assert selected == "EURUSD"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_preferred_does_not_fall_through_broker_catalogue() -> None:
+    """Live defect: preferred NDXUSD skipped → EURCAD catalogue steal."""
+    rows = build_opportunity_candidates(
+        preferred="NDXUSD",
+        plane=SimpleNamespace(allowed_symbols=("EURCAD", "EURCHF", "NAS100")),
+        alpha_ranking=[{"symbol": "EURUSD", "opportunity_score": 90}],
+    )
+    assert rows[0] == "NDXUSD"
+    assert "EURCAD" not in rows
+    assert "EURCHF" not in rows
+    assert "EURUSD" not in rows
+    assert "NAS100" not in rows
 
 
 @pytest.mark.unit
@@ -54,11 +74,27 @@ def test_read_trade_mode_closeonly() -> None:
 
 
 @pytest.mark.unit
-def test_candidates_include_universe() -> None:
+def test_candidates_without_preferred_include_universe() -> None:
     rows = build_opportunity_candidates(
-        preferred="XAUUSD",
+        preferred=None,
         plane=SimpleNamespace(allowed_symbols=("NAS100",)),
     )
-    assert rows[0] == "XAUUSD"
     assert "NAS100" in rows
     assert "EURUSD" in rows
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_preferred_closeonly_does_not_steal_fx_from_catalogue() -> None:
+    adapter = _Adapter(
+        {"NDXUSD": "closeonly", "NDXUSD_I": "closeonly", "EURCAD": "full"}
+    )
+    selected, skipped = resolve_executable_symbol(
+        adapter,
+        preferred="NDXUSD",
+        plane=SimpleNamespace(allowed_symbols=("EURCAD", "EURCHF")),
+        alpha_ranking=[{"symbol": "EURUSD"}],
+    )
+    assert "NDXUSD" in skipped
+    assert selected is None
+    assert "EURCAD" not in skipped
