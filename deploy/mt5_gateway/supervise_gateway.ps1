@@ -297,11 +297,23 @@ function Repair-CloudflaredIfStopped {
 }
 
 if (Test-Path $PidFile) {
-  $staleLine = @(Get-Content $PidFile -ErrorAction SilentlyContinue | Where-Object { $_ -match "^(listener|tree_root)=" } | Select-Object -First 1)
+  # Parse listener/tree_root PIDs without leaving $Matches contaminated by the
+  # filter regex's (listener|tree_root) capture group (that previously coerced
+  # [int]"listener" and crashed the supervisor under $ErrorActionPreference Stop).
   $stale = 0
-  if ($staleLine -match "=(\d+)\s*$") { $stale = [int]$Matches[1] }
-  if ($stale -le 0) {
-    try { $stale = [int]((Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)) } catch { $stale = 0 }
+  $rawPidLines = @(Get-Content $PidFile -ErrorAction SilentlyContinue)
+  foreach ($pidLine in $rawPidLines) {
+    if ($null -eq $pidLine) { continue }
+    if ($pidLine -match '^(?:listener|tree_root)=(\d+)\s*$') {
+      $stale = [int]$Matches[1]
+      break
+    }
+  }
+  if ($stale -le 0 -and $rawPidLines.Count -gt 0) {
+    $firstPidLine = [string]$rawPidLines[0]
+    if ($firstPidLine -match '^\d+\s*$') {
+      try { $stale = [int]$firstPidLine.Trim() } catch { $stale = 0 }
+    }
   }
   if ($stale -gt 0) {
     $alive = Get-Process -Id $stale -ErrorAction SilentlyContinue

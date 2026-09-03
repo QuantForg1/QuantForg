@@ -183,6 +183,16 @@ def test_two_independent_listeners_are_fail() -> None:
     assert "independent Gateway trees" in text
 
 
+def test_supervisor_pid_file_parse_does_not_capture_listener_label() -> None:
+    """Regression: filter regex must not leave $Matches[1]='listener' for [int]."""
+    text = _read("supervise_gateway.ps1")
+    assert "rawPidLines" in text
+    assert "foreach ($pidLine in $rawPidLines)" in text
+    assert "^(?:listener|tree_root)=(\\d+)" in text
+    # Must not use a capturing group on the label token before the PID.
+    assert '$_ -match "^(listener|tree_root)="' not in text
+
+
 def test_supervisor_adopts_healthy_listener() -> None:
     text = _read("supervise_gateway.ps1")
     assert "Ensure-SingleHealthyInstance" in text

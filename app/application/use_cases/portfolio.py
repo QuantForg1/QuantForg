@@ -47,7 +47,12 @@ class GetPortfolioUseCase:
             await uow.commit()
 
         def _fresh_snapshot() -> tuple[Any, ...]:
-            # Positions must bypass cycle/TTL pin — deals are always live.
+            # Same order as PortfolioSyncService.synchronize: deals/orders
+            # first, then force-refresh open book so a close that lands during
+            # the read cannot leave OPEN + entry_out in one API response.
+            pending = self.sync_service.list_orders()
+            hist_orders = self.sync_service.history_orders()
+            hist_deals = self.sync_service.history_deals()
             adapter = self.sync_service.adapter
             refresh = getattr(adapter, "force_refresh_positions", None)
             positions = (
@@ -57,9 +62,9 @@ class GetPortfolioUseCase:
             )
             return (
                 positions,
-                self.sync_service.list_orders(),
-                self.sync_service.history_orders(),
-                self.sync_service.history_deals(),
+                pending,
+                hist_orders,
+                hist_deals,
                 self.sync_service.account_snapshot(),
             )
 

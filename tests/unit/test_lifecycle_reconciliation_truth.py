@@ -197,6 +197,25 @@ def test_fresh_open_without_entry_out_stays_open() -> None:
     ) == []
 
 
+def test_get_portfolio_fresh_snapshot_orders_deals_before_positions() -> None:
+    """GetPortfolioUseCase must not invert synchronize's deals→positions order."""
+    import inspect
+
+    from app.application.use_cases.portfolio import GetPortfolioUseCase
+
+    src = inspect.getsource(GetPortfolioUseCase.execute)
+    deals_idx = src.find("history_deals")
+    refresh_idx = src.find("force_refresh_positions")
+    assert deals_idx > 0 and refresh_idx > 0
+    # Within _fresh_snapshot, deals read precedes the force-refresh call site
+    # that populates positions for the returned DTO.
+    snap_start = src.find("def _fresh_snapshot")
+    assert snap_start > 0
+    snap = src[snap_start:]
+    assert snap.find("history_deals") < snap.find("force_refresh_positions") or (
+        snap.find("hist_deals") < snap.find("force_refresh_positions")
+    )
+
 def test_pair_entry_exit_full_close_identity() -> None:
     t0 = datetime(2026, 9, 4, 1, 49, 28, tzinfo=UTC)
     deals = [

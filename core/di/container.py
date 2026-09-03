@@ -398,14 +398,64 @@ class Container:
                         for attempt in range(1, 6):
                             try:
                                 from functools import partial
+                                from importlib import import_module
 
-                                recovery = await asyncio.to_thread(
-                                    partial(
-                                        recover_positions_from_mt5,
-                                        mt5_adapter=adapter,
-                                        engine=engine,
-                                    )
+                                qf_cap = import_module(
+                                    "app.domain.institutional_trading"
+                                    ".operations.quantforg_position_cap"
                                 )
+                                from app.domain.trading.gold_only import GOLD_SYMBOL
+
+                                # Multi-symbol cold start: restore every QuantForg
+                                # magic desk present on the broker book (not gold-only).
+                                live_rows: list[Any] = []
+                                try:
+                                    live_rows = list(
+                                        adapter.list_positions() or []
+                                    )
+                                except Exception:
+                                    live_rows = []
+                                recover_syms: list[str] = []
+                                seen: set[str] = set()
+                                for row in live_rows:
+                                    if not qf_cap.belongs_to_quantforg(row):
+                                        continue
+                                    key = qf_cap.position_symbol(row).strip().upper()
+                                    if not key or key in seen:
+                                        continue
+                                    seen.add(key)
+                                    recover_syms.append(
+                                        qf_cap.position_symbol(row).strip()
+                                    )
+                                if not recover_syms:
+                                    recover_syms = [GOLD_SYMBOL]
+
+                                recovery: dict[str, Any] = {
+                                    "ok": True,
+                                    "symbols": recover_syms,
+                                    "registered": 0,
+                                    "restored": 0,
+                                }
+                                for sym in recover_syms:
+                                    part = await asyncio.to_thread(
+                                        partial(
+                                            recover_positions_from_mt5,
+                                            mt5_adapter=adapter,
+                                            engine=engine,
+                                            symbol=sym,
+                                        )
+                                    )
+                                    if not part.get("ok"):
+                                        recovery["ok"] = False
+                                        last_err = str(
+                                            part.get("error") or "not_ok"
+                                        )
+                                    recovery["registered"] = int(
+                                        recovery.get("registered") or 0
+                                    ) + int(part.get("registered") or 0)
+                                    recovery["restored"] = int(
+                                        recovery.get("restored") or 0
+                                    ) + int(part.get("restored") or 0)
                                 if recovery.get("ok"):
                                     logger.info(
                                         "position_recovery_on_startup",
@@ -418,7 +468,7 @@ class Container:
                                         ok=True,
                                     )
                                     return
-                                last_err = str(recovery.get("error") or "not_ok")
+                                last_err = last_err or "not_ok"
                             except Exception as rec_exc:
                                 last_err = str(rec_exc)
                                 logger.warning(
