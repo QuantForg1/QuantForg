@@ -199,8 +199,34 @@ def _extract_volume(oms_payload: dict[str, Any], broker: dict[str, Any]) -> str 
 def _extract_sl_tp(
     oms_payload: dict[str, Any], broker: dict[str, Any]
 ) -> tuple[str | None, str | None]:
-    sl = oms_payload.get("sl") or oms_payload.get("stop_loss") or broker.get("sl")
-    tp = oms_payload.get("tp") or oms_payload.get("take_profit") or broker.get("tp")
+    """Pull SL/TP from OMS/broker payloads without inventing levels.
+
+    Nested ``request`` / ``order`` dicts are checked because live submit
+    packages often nest stops there — top-level null previously dropped
+    evidence SL/TP even when the fill carried them.
+    """
+    sources: list[dict[str, Any]] = [oms_payload, broker]
+    for nest_key in ("request", "order", "payload", "trade_request"):
+        nested = oms_payload.get(nest_key)
+        if isinstance(nested, dict):
+            sources.append(nested)
+        nested_b = broker.get(nest_key)
+        if isinstance(nested_b, dict):
+            sources.append(nested_b)
+    sl = tp = None
+    for src in sources:
+        if sl is None:
+            for key in ("sl", "stop_loss", "stopLoss", "StopLoss"):
+                if src.get(key) not in (None, "", 0, "0"):
+                    sl = src.get(key)
+                    break
+        if tp is None:
+            for key in ("tp", "take_profit", "takeProfit", "TakeProfit"):
+                if src.get(key) not in (None, "", 0, "0"):
+                    tp = src.get(key)
+                    break
+        if sl is not None and tp is not None:
+            break
     return (
         str(sl) if sl is not None else None,
         str(tp) if tp is not None else None,

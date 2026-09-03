@@ -454,13 +454,69 @@ def _positions_read_only() -> list[dict[str, Any]]:
 
 
 def _closed_trades_read_only(*, limit: int = 20) -> list[dict[str, Any]]:
-    """Recent closed trades from journal when available."""
+    """Recent closed trades — broker deal pairing first, journal fallback.
+
+    Bridge journal often records opens only (fills), so ``closed_trades`` was
+    empty even when MT5 ``history_deals`` already had ``entry_out``. Pairing is
+    read-only and never invents closes without both in+out deals.
+    """
     rows: list[dict[str, Any]] = []
     try:
-        # Prefer bridge journal on runtime if present
         from app.application.services.institutional_ite_runtime import get_ite_runtime
+        from app.application.services.signal_intelligence_service import (
+            pair_all_symbol_closed_trades,
+        )
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            QUANTFORG_MAGIC,
+        )
 
         runtime = get_ite_runtime()
+        adapter = getattr(runtime, "mt5_adapter", None) if runtime is not None else None
+        if adapter is not None and hasattr(adapter, "history_deals"):
+            try:
+                deals_raw = list(adapter.history_deals() or [])
+                deals: list[dict[str, Any]] = []
+                for d in deals_raw:
+                    if hasattr(d, "to_dict"):
+                        deals.append(d.to_dict())
+                    elif isinstance(d, dict):
+                        deals.append(d)
+                # QuantForg ledger only — exclude manual / foreign magic.
+                qf_magic = int(QUANTFORG_MAGIC)
+                deals = [d for d in deals if int(d.get("magic") or 0) == qf_magic]
+                for t in pair_all_symbol_closed_trades(deals)[:limit]:
+                    pl = t.get("profit_loss")
+                    wl: str | None = None
+                    if pl is not None:
+                        try:
+                            fpl = float(pl)
+                            wl = "win" if fpl > 0 else ("loss" if fpl < 0 else "flat")
+                        except (TypeError, ValueError):
+                            wl = None
+                    rows.append(
+                        {
+                            "ticket": t.get("position_id") or t.get("entry_ticket"),
+                            "entry": t.get("entry"),
+                            "exit": t.get("exit"),
+                            "net_profit": pl,
+                            "win_loss": wl,
+                            "execution_latency_ms": None,
+                            "slippage": None,
+                            "reason_closed": t.get("comment") or None,
+                            "timestamp": t.get("exit_time"),
+                            "symbol": t.get("symbol"),
+                            "action": t.get("side"),
+                            "entry_time": t.get("entry_time"),
+                            "exit_time": t.get("exit_time"),
+                            "volume": t.get("volume"),
+                            "source": "mt5_history_deals",
+                        }
+                    )
+                if rows:
+                    return rows[:limit]
+            except Exception:
+                logger.exception("noc_closed_trades_mt5_pair_failed")
+
         journal = None
         if runtime is not None:
             journal = getattr(getattr(runtime, "execution", None), "bridge", None)
@@ -480,20 +536,12 @@ def _closed_trades_read_only(*, limit: int = 20) -> list[dict[str, Any]]:
             )
             if not d:
                 continue
-            status = str(d.get("status") or d.get("execution_result") or "").lower()
-            if (
-                "close" not in status
-                and "exit" not in status
-                and d.get("mt5_ticket") is None
-            ):
-                # Still surface filled attempts as execution history when close unknown
-                pass
             rows.append(
                 {
                     "ticket": d.get("mt5_ticket") or d.get("ticket"),
                     "entry": d.get("comment") or d.get("execution_result") or "—",
                     "exit": d.get("status") or "—",
-                    "net_profit": None,  # unknown unless journal carries it
+                    "net_profit": None,
                     "win_loss": None,
                     "execution_latency_ms": d.get("latency_ms"),
                     "slippage": None,
@@ -501,6 +549,7 @@ def _closed_trades_read_only(*, limit: int = 20) -> list[dict[str, Any]]:
                     "timestamp": d.get("timestamp"),
                     "symbol": d.get("symbol"),
                     "action": d.get("decision_action"),
+                    "source": "execution_journal",
                 }
             )
     except Exception:
@@ -932,7 +981,8 @@ def _execution_trace_panel(
                 "ai_confidence": last.get("ai_confidence"),
                 "reject": str(last.get("ai_action") or "").upper()
                 in {"", "NONE", "NO_TRADE"},
-                "reject_reason": last.get("first_blocker") or pvm.get("current_blocker"),
+                "reject_reason": last.get("first_blocker")
+                or pvm.get("current_blocker"),
                 "direction": last.get("ai_action"),
                 "liquidity": last.get("liquidity"),
                 "mtf_alignment": last.get("mtf_alignment"),

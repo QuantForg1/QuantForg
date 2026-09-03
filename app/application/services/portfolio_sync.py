@@ -86,12 +86,21 @@ class PortfolioSyncService:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> PortfolioSyncRecord:
-        """Pull positions, pending orders, account, and history (read-only)."""
-        positions = self.list_positions()
+        """Pull positions, pending orders, account, and history (read-only).
+
+        Positions are refreshed *after* history deals so a close that lands
+        between the first open-book read and deal history cannot leave the
+        sync recording an OPEN ticket alongside its entry_out deal.
+        """
         pending = self.list_orders()
         account = self.account_snapshot()
         hist_orders = self.history_orders(date_from=date_from, date_to=date_to)
         hist_deals = self.history_deals(date_from=date_from, date_to=date_to)
+        # Authoritative open book: bypass cycle/TTL position pin after deals.
+        refresh = getattr(self.adapter, "force_refresh_positions", None)
+        positions = (
+            refresh() if callable(refresh) else self.list_positions()
+        )
 
         state = PortfolioState(
             account=account,

@@ -46,9 +46,17 @@ class GetPortfolioUseCase:
             await uow.syncs.add(record)
             await uow.commit()
 
-        def _cached_snapshot() -> tuple[Any, ...]:
+        def _fresh_snapshot() -> tuple[Any, ...]:
+            # Positions must bypass cycle/TTL pin — deals are always live.
+            adapter = self.sync_service.adapter
+            refresh = getattr(adapter, "force_refresh_positions", None)
+            positions = (
+                refresh()
+                if callable(refresh)
+                else self.sync_service.list_positions()
+            )
             return (
-                self.sync_service.list_positions(),
+                positions,
                 self.sync_service.list_orders(),
                 self.sync_service.history_orders(),
                 self.sync_service.history_deals(),
@@ -56,7 +64,7 @@ class GetPortfolioUseCase:
             )
 
         positions_raw, pending_raw, hist_orders_raw, hist_deals_raw, account_raw = (
-            await asyncio.to_thread(_cached_snapshot)
+            await asyncio.to_thread(_fresh_snapshot)
         )
         positions = [PositionDTO.from_entity(p) for p in positions_raw]
         pending = [PendingOrderDTO.from_entity(o) for o in pending_raw]
@@ -86,12 +94,19 @@ class ListPositionsUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
+        adapter = self.sync_service.adapter
         if symbol:
+            refresh = getattr(adapter, "force_refresh_positions", None)
+            if callable(refresh):
+                await asyncio.to_thread(refresh)
             rows = await asyncio.to_thread(
                 self.sync_service.position_by_symbol, symbol
             )
         else:
-            rows = await asyncio.to_thread(self.sync_service.list_positions)
+            refresh = getattr(adapter, "force_refresh_positions", None)
+            rows = await asyncio.to_thread(
+                refresh if callable(refresh) else self.sync_service.list_positions
+            )
         return [PositionDTO.from_entity(p) for p in rows]
 
 
@@ -104,6 +119,10 @@ class GetPositionByTicketUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
+        adapter = self.sync_service.adapter
+        refresh = getattr(adapter, "force_refresh_positions", None)
+        if callable(refresh):
+            await asyncio.to_thread(refresh)
         pos = await asyncio.to_thread(self.sync_service.position_by_ticket, ticket)
         if pos is None:
             raise NotFoundError(f"Position ticket {ticket} not found")
