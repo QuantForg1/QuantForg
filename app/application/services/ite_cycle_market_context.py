@@ -1018,42 +1018,42 @@ async def build_ite_cycle_market_context(
         account_positions = open_positions
         diag["account_positions"] = account_positions
 
-    # Book facts for duplicate / add-on guards — QuantForg gold identity only.
+    # Book facts for duplicate / add-on guards — same-symbol QuantForg identity.
     open_directions: list[str] = []
     open_entries: list[Decimal] = []
     book_facts_ok = False
     try:
         from app.domain.institutional_trading.operations.quantforg_position_cap import (
-            book_facts_from_positions,
-            filter_quantforg_positions,
+            resolve_same_symbol_addon_book,
         )
 
-        rows = book_rows
         book_symbol = canonical_symbol or logical_symbol or symbol
-        owned = filter_quantforg_positions(rows or [], symbol=book_symbol)
-        dirs, entries = book_facts_from_positions(owned)
-        open_directions = list(dirs)
-        open_entries = list(entries)
+        prior_global_qf = int(open_positions or 0)
+        prior_tickets = list(diag.get("position_tickets") or [])
+        resolved = resolve_same_symbol_addon_book(
+            book_rows,
+            candidate_symbol=book_symbol,
+            global_quantforg_positions=prior_global_qf,
+            global_tickets=prior_tickets,
+        )
+        owned = list(resolved.get("owned_rows") or [])
+        open_directions = list(resolved.get("open_directions") or ())
+        open_entries = list(resolved.get("open_entries") or ())
+        open_positions = int(resolved.get("open_positions") or 0)
         diag["open_directions"] = list(open_directions)
         diag["open_entries"] = [str(e) for e in open_entries]
-        from app.domain.institutional_trading.operations.quantforg_position_cap import (
-            live_capacity_tickets,
-        )
-
-        live_tix = live_capacity_tickets(owned, symbol=book_symbol)
-        if live_tix:
-            open_positions = len(live_tix)
-            diag["position_tickets"] = list(live_tix)
-        elif open_positions > 0:
+        diag["position_tickets"] = list(resolved.get("position_tickets") or [])
+        diag["addon_scope"] = resolved.get("addon_scope")
+        if resolved.get("cross_symbol_quantforg_open"):
+            diag["cross_symbol_quantforg_open"] = True
+        if resolved.get("book_facts_rows_missing"):
             # Position truth reported opens but rows were missing. Never flatten
             # the book to zero — Risk would treat it as flat and allow a duplicate.
             diag["book_facts_rows_missing"] = True
-            diag["position_tickets"] = list(diag.get("position_tickets") or [])
-        else:
-            open_positions = 0
-            diag["position_tickets"] = []
         diag["positions"] = open_positions
         diag["quantforg_positions"] = open_positions
+        # Keep account-level observability separate from same-symbol add-on scope.
+        diag["account_quantforg_positions"] = prior_global_qf
         cap_max = int(diag.get("capacity_max") or 2)
         diag["capacity_used"] = open_positions
         diag["capacity_available"] = max(0, cap_max - open_positions)
@@ -1087,10 +1087,8 @@ async def build_ite_cycle_market_context(
             diag["scale_in_block_reason"] = "LOSING_POSITION_NO_SCALE_IN"
         else:
             diag["scale_in_block_reason"] = None
-        book_facts_ok = True
-        # Open book reported but no parseable sides/entries → treat as incomplete
-        if open_positions > 0 and not open_directions and not open_entries:
-            book_facts_ok = False
+        book_facts_ok = bool(resolved.get("book_facts_ok"))
+        if resolved.get("book_facts_incomplete"):
             diag["book_facts_incomplete"] = True
     except Exception as exc:
         logger.warning("ite_cycle_position_book_facts_failed", error=str(exc))

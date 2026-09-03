@@ -411,6 +411,76 @@ def book_facts_from_positions(
     return tuple(directions), tuple(entries)
 
 
+def resolve_same_symbol_addon_book(
+    rows: list[Any] | tuple[Any, ...] | None,
+    *,
+    candidate_symbol: str | None,
+    global_quantforg_positions: int,
+    global_tickets: list[int] | tuple[int, ...] | None = None,
+    magic: int = QUANTFORG_MAGIC,
+) -> dict[str, Any]:
+    """Scope open-book facts to the *candidate* symbol for add-on guards.
+
+    Pipeline ``open_book_facts_incomplete — blocking add-on`` must apply only when
+    this desk already has QuantForg exposure (or the relationship is unknown).
+    Global QuantForg opens on other symbols must not inflate same-symbol
+    ``open_positions`` or falsely classify an independent entry as an add-on.
+
+    Empty ``rows`` with ``global_quantforg_positions > 0`` remains fail-closed
+    (unknown which symbols are open).
+    """
+    owned = filter_quantforg_positions(
+        rows or [], symbol=candidate_symbol, magic=magic
+    )
+    directions, entries = book_facts_from_positions(owned)
+    live_tix = live_capacity_tickets(
+        owned, symbol=candidate_symbol, execution_identity=magic
+    )
+    global_n = int(global_quantforg_positions or 0)
+    book_rows = list(rows or [])
+    rows_missing = False
+    if live_tix:
+        open_positions = len(live_tix)
+        tickets: list[int] = list(live_tix)
+        addon_scope = "same_symbol"
+    elif global_n > 0 and book_rows:
+        # Rows present; none are QuantForg same-symbol → independent desk.
+        open_positions = 0
+        tickets = []
+        addon_scope = "independent_new_symbol"
+    elif global_n > 0:
+        # Truth reported opens but rows missing — never flatten (duplicate risk).
+        open_positions = global_n
+        tickets = list(global_tickets or [])
+        rows_missing = True
+        addon_scope = "incomplete_book"
+    else:
+        open_positions = 0
+        tickets = []
+        addon_scope = "flat"
+
+    book_facts_ok = True
+    book_facts_incomplete = False
+    if open_positions > 0 and not directions and not entries:
+        book_facts_ok = False
+        book_facts_incomplete = True
+
+    return {
+        "open_positions": open_positions,
+        "open_directions": directions,
+        "open_entries": entries,
+        "position_tickets": tickets,
+        "owned_rows": owned,
+        "book_facts_ok": book_facts_ok,
+        "book_facts_incomplete": book_facts_incomplete,
+        "book_facts_rows_missing": rows_missing,
+        "addon_scope": addon_scope,
+        "cross_symbol_quantforg_open": bool(
+            addon_scope == "independent_new_symbol" and global_n > 0
+        ),
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class QuantForgPositionSnapshot:
     """Same-cycle position facts for the strategy cap vs account observability."""
