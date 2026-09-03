@@ -221,7 +221,16 @@ def explain_scalp_handoff(
     take = sniper_is_take(score)
     opp_pass = opp >= int(threshold)
     gold_ok = bool(symbol) and is_gold_symbol(symbol)
+    gold_only = False
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled
+
+        gold_only = bool(gold_only_enabled())
+    except Exception:
+        gold_only = False
+    gold_required_ok = gold_ok if gold_only else True
     universe_ok = symbol_in_scan_universe(symbol, universe)
+    membership_ok = gold_ok if gold_only else (universe_ok or gold_ok)
     mode = _text(ite_trading_mode).lower() or SCALPING_PROFILE.lower()
     scalp_config = mode in {"scalping", "alpha"} or True
     config_profile = SCALPING_PROFILE if scalp_config else SWING_PROFILE
@@ -243,19 +252,23 @@ def explain_scalp_handoff(
     predicates = [
         _predicate(
             name="symbol_xauusd_i",
-            passed=gold_ok,
+            passed=gold_required_ok,
             actual=symbol or "NONE",
-            required=CANONICAL_GOLD_BROKER_DISPLAY,
+            required=(
+                CANONICAL_GOLD_BROKER_DISPLAY
+                if gold_only
+                else "scan universe (gold-only off)"
+            ),
             source="gold_only.autonomous_execution_symbols",
             timeframe=None,
             hard=True,
             authoritative=True,
             config=SCALPING_PROFILE,
-            can_incorrectly_reject_valid_take=not gold_ok,
+            can_incorrectly_reject_valid_take=gold_only and not gold_ok,
         ),
         _predicate(
             name="universe_membership",
-            passed=universe_ok or gold_ok,
+            passed=membership_ok,
             actual=symbol or "NONE",
             required="scan universe (gold identity allowed)",
             source="resolve_scan_universe",
@@ -263,7 +276,7 @@ def explain_scalp_handoff(
             hard=True,
             authoritative=True,
             config=SCALPING_PROFILE,
-            can_incorrectly_reject_valid_take=not universe_ok and gold_ok,
+            can_incorrectly_reject_valid_take=not membership_ok,
         ),
         _predicate(
             name="opportunity_pass",
@@ -375,7 +388,7 @@ def explain_scalp_handoff(
                 and not extra_reason
                 and not blocked_by_portfolio
                 and direction in {"BUY", "SELL"}
-                and (universe_ok or gold_ok)
+                and membership_ok
             ),
             actual="in_ranked" if in_portfolio_eligible else "missing_from_ranked",
             required="portfolio ranked OR gold-identity scalp PASS",
@@ -401,7 +414,7 @@ def explain_scalp_handoff(
         )
     elif blocked_by_portfolio:
         first_code = "CAPACITY_REJECTED"
-    elif not gold_ok:
+    elif not membership_ok:
         first_code = "SYMBOL_UNIVERSE_MISMATCH"
     elif not opp_pass:
         first_code = "OPPORTUNITY_SCORE_BELOW_THRESHOLD"

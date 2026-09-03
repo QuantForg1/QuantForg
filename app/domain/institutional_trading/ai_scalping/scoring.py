@@ -54,6 +54,7 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     assess_spread,
 )
 from app.domain.institutional_trading.ai_scalping.structure_targets import (
+    atr_scalp_geometry_rr,
     compute_structure_targets,
 )
 from app.domain.institutional_trading.ai_scalping.symbol_state import (
@@ -529,6 +530,9 @@ def score_scalping_setup(
     # Consistency: regime bumps must not exceed fixed TP target.
     if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0:
         effective_min_rr = min(effective_min_rr, cfg.fixed_tp_r)
+    geom_rr = atr_scalp_geometry_rr(cfg)
+    if geom_rr is not None and geom_rr > 0:
+        effective_min_rr = min(effective_min_rr, geom_rr)
 
     gates = evaluate_quality_gates(
         direction=direction_dec,

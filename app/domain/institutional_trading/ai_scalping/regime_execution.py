@@ -17,6 +17,9 @@ from app.domain.institutional_trading.ai_scalping.config import (
     MarketRegimeLabel,
 )
 from app.domain.institutional_trading.ai_scalping.regime import RegimeAssessment
+from app.domain.institutional_trading.ai_scalping.structure_targets import (
+    atr_scalp_geometry_rr,
+)
 
 VolatilityBand = Literal["high", "normal", "low"]
 
@@ -164,6 +167,15 @@ def build_regime_execution_profile(
                 f"(was {min_rr} after regime/vol bumps)"
             )
             min_rr = cfg.fixed_tp_r
+    # Structure targets do not stretch to preferred R. ATR TP / ATR-capped SL
+    # is the achievable geometry; do not demand more than that.
+    geom_rr = atr_scalp_geometry_rr(cfg)
+    if geom_rr is not None and min_rr > geom_rr:
+        reasons.append(
+            f"RR floor capped to ATR geometry {geom_rr} "
+            f"(atr_tp_mult/stop_atr_mult; was {min_rr})"
+        )
+        min_rr = geom_rr
     if abs_hold > cfg.absolute_max_hold_minutes:
         abs_hold = cfg.absolute_max_hold_minutes
     if abs_hold < cfg.typical_hold_min_minutes:

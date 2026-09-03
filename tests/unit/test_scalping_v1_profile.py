@@ -93,6 +93,29 @@ def test_scalping_v1_rr_internally_consistent() -> None:
 
 
 @pytest.mark.unit
+def test_high_vol_rr_floor_not_above_atr_geometry() -> None:
+    """High-vol +0.2 demanded 1.40R while ATR TP/SL cap only delivers ~1.27R."""
+    from app.domain.institutional_trading.ai_scalping.structure_targets import (
+        atr_scalp_geometry_rr,
+    )
+
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    geom = atr_scalp_geometry_rr(cfg)
+    assert geom is not None
+    assessment = RegimeAssessment(
+        regime="expansion",
+        confidence=70,
+        reasons=("test-high-vol",),
+    )
+    profile = build_regime_execution_profile(
+        assessment, atr_pct=Decimal("2.00"), config=cfg
+    )
+    assert profile.min_expected_rr <= geom
+    assert profile.min_expected_rr > Decimal("1")
+    assert profile.min_expected_rr >= cfg.min_expected_rr
+
+
+@pytest.mark.unit
 def test_config_post_init_clamps_rr_to_fixed_tp() -> None:
     """Even a misconfigured profile cannot demand RR above fixed TP."""
     broken = AiScalpingConfig(

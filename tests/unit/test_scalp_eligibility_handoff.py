@@ -113,6 +113,42 @@ def test_3_quality_80_confluence_80_not_reapplied() -> None:
     assert "no_swing_confluence_80" not in failed_names
 
 
+def test_fx_take_hands_off_when_gold_only_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production AUDUSD sniper TAKE was labeled SYMBOL_UNIVERSE_MISMATCH."""
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
+    row = _take_score(symbol="AUDUSD", direction="SELL", signal_action="SELL")
+    trace = explain_scalp_handoff(
+        row,
+        universe=("EURUSD", "AUDUSD", "XAUUSD"),
+        in_portfolio_eligible=True,
+    )
+    assert trace.should_hand_off is True
+    assert trace.first_failed_code is None
+    assert trace.eligibility_reason == "SCALP_ELIGIBLE"
+
+
+def test_fx_take_blocked_when_gold_only_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: True,
+    )
+    row = _take_score(symbol="AUDUSD", direction="SELL", signal_action="SELL")
+    trace = explain_scalp_handoff(
+        row,
+        universe=("EURUSD", "AUDUSD", "XAUUSD"),
+        in_portfolio_eligible=True,
+    )
+    assert trace.should_hand_off is False
+    assert trace.first_failed_code == "SYMBOL_UNIVERSE_MISMATCH"
+
+
 def test_4_xauusd_i_symbol_accepted() -> None:
     assert same_gold_identity("XAUUSD_i", "XAUUSD_I") is True
     assert symbol_in_scan_universe("XAUUSD_I", ("XAUUSD",)) is True

@@ -236,6 +236,53 @@ def test_ema_rsi_pa_confluence() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.trading_core
+def test_structure_nearby_swing_inside_stop_falls_back_to_atr_tp() -> None:
+    """LIVE P>70 WAIT: nearest swing TP closer than SL was nulled (RR 0.3–0.9).
+
+    ATR expansion is already the no-structure TP. Using it when the nearby
+    swing cannot pay for the stop is geometry repair, not a manufactured R.
+    SL stays structure/ATR-capped. RR must still be genuinely > 1.
+    """
+    from types import SimpleNamespace
+
+    snap = _snap()
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=Decimal("1909.5"),
+        last_swing_high=Decimal("1910.4"),
+        swings=(),
+    )
+    snap.liquidity = SimpleNamespace(pools=(), sweeps=())
+    snap.fair_value_gaps = None
+    snap.order_blocks = None
+    cfg = AiScalpingConfig(
+        fixed_tp_r=Decimal("1.5"),
+        stop_atr_mult=Decimal("1.10"),
+        atr_tp_mult=Decimal("1.40"),
+        min_expected_rr=Decimal("1.20"),
+    )
+    entry = Decimal("1910")
+    atr = Decimal("1")
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.SELL,
+        entry=entry,
+        atr=atr,
+        config=cfg,
+    )
+    assert targets.stop_loss is not None
+    assert targets.take_profit is not None
+    assert targets.stop_distance is not None
+    assert targets.expected_rr is not None
+    assert targets.expected_rr > Decimal("1")
+    assert targets.take_profit == entry - atr * cfg.atr_tp_mult
+    assert "ATR expansion" in targets.reason
+    assert "stretched" not in targets.reason.lower()
+    raw_structure = (Decimal("1910.4") + atr * Decimal("0.15")) - entry
+    assert targets.stop_distance <= raw_structure or targets.stop_source == "atr_cap"
+
+
+@pytest.mark.unit
 def test_fixed_tp_r_is_preference_not_manufactured_tp() -> None:
     snap = _snap()
     cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"))

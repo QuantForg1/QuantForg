@@ -46,6 +46,32 @@ def reset_scan_rotation_for_tests() -> None:
     _SCAN_ROTATION = 0
 
 
+def _pin_scalping_seed(symbols: Sequence[str]) -> tuple[list[str], list[str]]:
+    """Keep DEFAULT_SCALPING_UNIVERSE desks first; extras may rotate.
+
+    Index/oil/cross catalogue symbols must not starve EURUSD/GBPUSD/…/XAUUSD
+    when the scan budget truncates. Does not change quality/RR/Risk/Safety.
+    """
+    from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+        scalp_desk_code,
+    )
+
+    seed_desks = {scalp_desk_code(s) for s in DEFAULT_SCALPING_UNIVERSE}
+    seed_desks.update(str(s).strip().upper() for s in DEFAULT_SCALPING_UNIVERSE)
+    priority: list[str] = []
+    rest: list[str] = []
+    for raw in symbols:
+        code = str(raw).strip().upper()
+        if not code:
+            continue
+        desk = scalp_desk_code(code)
+        if desk in seed_desks or code in seed_desks:
+            priority.append(code)
+        else:
+            rest.append(code)
+    return priority, rest
+
+
 def _isolated_symbol_failure(symbol: str, reason: str) -> dict[str, Any]:
     """Record one desk failure without aborting the remaining universe."""
     code = str(symbol or "").strip().upper()
@@ -654,14 +680,24 @@ async def score_universe_with_budget(
         SCAN_SYMBOL_TIMEOUT_SECONDS,
     )
 
-    symbols = [str(s).strip() for s in universe if str(s).strip()]
+    symbols = [str(s).strip().upper() for s in universe if str(s).strip()]
     global _SCAN_ROTATION
-    if len(symbols) > 1:
-        # Rotate so a persistent gold/head-of-list timeout cannot starve the tail.
-        offset = _SCAN_ROTATION % len(symbols)
+    priority, rest = _pin_scalping_seed(symbols)
+    if len(rest) > 1:
+        # Rotate extras only. Seed majors/gold/crypto stay first so DJIUSD /
+        # XTIUSD cannot consume the budget before EURUSD is scored.
+        offset = _SCAN_ROTATION % len(rest)
         _SCAN_ROTATION += 1
         if offset:
-            symbols = symbols[offset:] + symbols[:offset]
+            rest = rest[offset:] + rest[:offset]
+    elif len(priority) > 1 and not rest:
+        # Seed-only universe: keep rotation so a hung gold desk cannot starve
+        # the remaining majors (existing timeout isolation).
+        offset = _SCAN_ROTATION % len(priority)
+        _SCAN_ROTATION += 1
+        if offset:
+            priority = priority[offset:] + priority[:offset]
+    symbols = priority + rest
     stats: dict[str, Any] = {
         "symbols_queued": len(symbols),
         "symbols_evaluated": 0,

@@ -12,6 +12,7 @@ import pytest
 
 from app.application.services.institutional_ite_runtime import InstitutionalIteRuntime
 from app.application.services.institutional_multi_asset_scanner import (
+    _pin_scalping_seed,
     focus_broker_discovered_scan_universe,
     independent_evaluation_symbols,
     reset_scan_rotation_for_tests,
@@ -328,6 +329,31 @@ def test_sniper_still_requires_structure_confirmation() -> None:
     )
     assert verdict.passed is False
     assert verdict.primary_reason == "WAIT_NO_SNIPER_TRIGGER"
+
+
+def test_scan_budget_scores_seed_desks_before_rotated_extras() -> None:
+    priority, rest = _pin_scalping_seed(
+        (
+            "DJIUSD",
+            "XTIUSD",
+            "GEREUR",
+            "XBRUSD",
+            "EURUSD_I",
+            "GBPUSD_I",
+            "AUDUSD",
+            "XAUUSD_I",
+            "BTCUSD",
+        )
+    )
+    assert priority[0] == "EURUSD_I"
+    assert "GBPUSD_I" in priority
+    assert "AUDUSD" in priority
+    assert "XAUUSD_I" in priority
+    assert "BTCUSD" in priority
+    assert "DJIUSD" in rest
+    assert "XTIUSD" in rest
+    assert "GEREUR" in rest
+    assert "XBRUSD" in rest
 
 
 def test_no_direct_order_send_on_runtime_or_scanner() -> None:

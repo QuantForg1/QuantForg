@@ -17,6 +17,20 @@ from app.domain.market_data.timeframe import Timeframe
 _NOISE_ATR_MULT = Decimal("0.35")
 
 
+def atr_scalp_geometry_rr(config: AiScalpingConfig | None = None) -> Decimal | None:
+    """Natural ATR-target RR (atr_tp_mult / stop_atr_mult). Never a manufactured TP.
+
+    Regime / sniper floors must not demand more than this when TP is the
+    profile ATR expansion. Does not change Risk, Safety, or the RR > 1 gate.
+    """
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    stop_mult = cfg.stop_atr_mult
+    tp_mult = cfg.atr_tp_mult
+    if stop_mult is None or stop_mult <= 0 or tp_mult is None or tp_mult <= 0:
+        return None
+    return (tp_mult / stop_mult).quantize(Decimal("0.01"))
+
+
 @dataclass(frozen=True, slots=True)
 class StructureTargets:
     entry: Decimal | None
@@ -416,17 +430,49 @@ def compute_structure_targets(
     reward = abs(tp - entry)
     expected_rr = (reward / stop_distance).quantize(Decimal("0.01"))
     if expected_rr <= Decimal("1"):
-        return StructureTargets(
-            entry,
-            sl,
-            None,
-            stop_distance,
-            expected_rr,
-            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-            f"planned TP reward {reward} <= SL risk {stop_distance}",
-            stop_source=source,
-            stop_atr=atr_d,
-        )
+        # Nearby swing/liquidity inside the stop is not a valid scalp TP.
+        # Fall back to the profile ATR expansion (already the no-structure
+        # path). Do not shrink SL. Do not stretch to preferred fixed_tp_r.
+        if atr_d is not None and atr_d > 0:
+            atr_tp = (
+                entry + atr_d * cfg.atr_tp_mult
+                if direction is TradeDirection.BUY
+                else entry - atr_d * cfg.atr_tp_mult
+            )
+            atr_reward = abs(atr_tp - entry)
+            atr_rr = (atr_reward / stop_distance).quantize(Decimal("0.01"))
+            if atr_rr > Decimal("1"):
+                tp = atr_tp
+                reward = atr_reward
+                expected_rr = atr_rr
+                reason_parts.append(
+                    "TP ATR expansion "
+                    "(structure/liquidity target did not exceed SL risk)"
+                )
+            else:
+                return StructureTargets(
+                    entry,
+                    sl,
+                    None,
+                    stop_distance,
+                    expected_rr,
+                    "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+                    f"planned TP reward {reward} <= SL risk {stop_distance}",
+                    stop_source=source,
+                    stop_atr=atr_d,
+                )
+        else:
+            return StructureTargets(
+                entry,
+                sl,
+                None,
+                stop_distance,
+                expected_rr,
+                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+                f"planned TP reward {reward} <= SL risk {stop_distance}",
+                stop_source=source,
+                stop_atr=atr_d,
+            )
     preferred = cfg.fixed_tp_r
     if preferred is not None and preferred > 0 and expected_rr >= preferred:
         reason_parts.append(f"TP structural {expected_rr}R (>= preferred {preferred}R)")
