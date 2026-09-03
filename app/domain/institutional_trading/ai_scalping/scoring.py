@@ -37,6 +37,10 @@ from app.domain.institutional_trading.ai_scalping.regime import (
 from app.domain.institutional_trading.ai_scalping.regime_execution import (
     build_regime_execution_profile,
 )
+from app.domain.institutional_trading.ai_scalping.same_symbol_requalification import (
+    REQUALIFY_REJECT,
+    fingerprint_from_snapshot,
+)
 from app.domain.institutional_trading.ai_scalping.session_intelligence import (
     assess_session,
 )
@@ -646,6 +650,21 @@ def score_scalping_setup(
         f"opportunity_score={verdict.opportunity_score} "
         f"threshold={verdict.threshold} band={verdict.score_band}"
     )
+    live_fp = fingerprint_from_snapshot(
+        snapshot,
+        direction=direction_dec.direction.value,
+        setup_family=setup_family,
+        opportunity_score=verdict.opportunity_score,
+        regime=regime.regime,
+    )
+    if sym_key:
+        get_symbol_state_book().observe_setup(sym_key, live_fp)
+        fresh_ok, fresh_why = get_symbol_state_book().evaluate_requalification(
+            sym_key, live_fp
+        )
+        if not fresh_ok:
+            reject_list.append(REQUALIFY_REJECT)
+            reasons.append(f"WAIT: {REQUALIFY_REJECT} ({fresh_why})")
     if not sniper.passed:
         wait_code = sniper.primary_reason or "WAIT_SNIPER"
         reject_list.append(wait_code)

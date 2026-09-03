@@ -1933,31 +1933,60 @@ class InstitutionalIteRuntime:
                                 DEFAULT_AI_SCALPING_CONFIG
                             ).request_rescan_after_close()
                             try:
-                                from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (  # noqa: E501
-                                    get_adaptive_cooldown_gate,
-                                )
                                 from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (  # noqa: E501
                                     ClosedTradeRecord,
                                     get_daily_opportunity_tracker,
+                                )
+                                from app.domain.institutional_trading.ai_scalping.same_symbol_requalification import (  # noqa: E501
+                                    fingerprint_from_snapshot,
                                 )
                                 from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
                                     get_symbol_state_book,
                                 )
 
-                                get_adaptive_cooldown_gate().clear_for_post_close_rescan()
+                                _ai = getattr(
+                                    self.decision_pipeline, "_last_ai_score", None
+                                )
+                                _ai_d = _ai if isinstance(_ai, dict) else {}
                                 closed_sym = str(
                                     getattr(pos, "symbol", "")
                                     or getattr(snapshot, "symbol", "")
                                     or ""
                                 ).upper()
                                 if closed_sym:
-                                    get_symbol_state_book().reset(closed_sym)
-                                # Opportunity target — record close stats (observe only).
-                                try:
-                                    _ai = getattr(
-                                        self.decision_pipeline, "_last_ai_score", None
+                                    fp = fingerprint_from_snapshot(
+                                        snapshot,
+                                        direction=str(
+                                            getattr(pos, "side", None)
+                                            or getattr(pos, "direction", None)
+                                            or ""
+                                        ),
+                                        setup_family=(
+                                            str(_ai_d.get("setup_family") or "")
+                                            or None
+                                        ),
+                                        opportunity_score=_ai_d.get(
+                                            "opportunity_score"
+                                        ),
+                                        regime=str(
+                                            _ai_d.get("market_regime")
+                                            or _ai_d.get("regime")
+                                            or ""
+                                        )
+                                        or None,
                                     )
-                                    _ai_d = _ai if isinstance(_ai, dict) else {}
+                                    pnl_close = float(
+                                        getattr(pos, "realized_pnl", None)
+                                        or getattr(pos, "profit", None)
+                                        or 0.0
+                                    )
+                                    get_symbol_state_book().note_closed(
+                                        closed_sym,
+                                        pnl=pnl_close,
+                                        fingerprint=fp,
+                                    )
+                                # Opportunity target: close stats (observe only).
+                                try:
                                     pnl = float(
                                         getattr(pos, "realized_pnl", None)
                                         or getattr(pos, "profit", None)
@@ -2605,16 +2634,11 @@ class InstitutionalIteRuntime:
                         )
                 except Exception:
                     logger.exception("opportunity_review_tick_failed")
-                # After close: clear entry spacing so a NEW valid setup can scan
-                if _scalp_cfg.post_close_rescan_enabled and ctrl.consume_rescan():
-                    try:
-                        from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (  # noqa: E501
-                            get_adaptive_cooldown_gate,
-                        )
-
-                        get_adaptive_cooldown_gate().clear_for_post_close_rescan()
-                    except Exception:
-                        logger.exception("post_close_cooldown_clear_failed")
+                # After close: scan for a NEW valid setup. Same-symbol re-entry
+                # requires fresh structure (per-symbol requalification), not a
+                # wiped cooldown.
+                if _scalp_cfg.post_close_rescan_enabled:
+                    ctrl.consume_rescan()
                 co = getattr(self, "_last_continuous_op", None)
                 pause = (co or {}).get("pause") if isinstance(co, dict) else None
                 if not isinstance(pause, dict):

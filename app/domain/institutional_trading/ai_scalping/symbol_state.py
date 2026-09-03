@@ -14,6 +14,10 @@ from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
     AdaptiveCooldownDecision,
     AdaptiveCooldownGate,
 )
+from app.domain.institutional_trading.ai_scalping.same_symbol_requalification import (
+    SetupFingerprint,
+    fresh_setup_evidence,
+)
 
 
 @dataclass
@@ -29,6 +33,10 @@ class SymbolExecutionState:
     execution_health_ok: bool = True
     recent_rejects: int = 0
     last_updated: str | None = None
+    last_observed: SetupFingerprint | None = None
+    last_closed: SetupFingerprint | None = None
+    last_closed_pnl: float | None = None
+    require_requalify: bool = False
     _cooldown: AdaptiveCooldownGate = field(
         default_factory=AdaptiveCooldownGate, repr=False
     )
@@ -44,6 +52,11 @@ class SymbolExecutionState:
             "execution_health_ok": self.execution_health_ok,
             "recent_rejects": self.recent_rejects,
             "last_updated": self.last_updated,
+            "require_requalify": self.require_requalify,
+            "last_closed_pnl": self.last_closed_pnl,
+            "last_closed": (
+                self.last_closed.to_dict() if self.last_closed is not None else None
+            ),
         }
 
 
@@ -115,6 +128,40 @@ class SymbolStateBook:
         self, symbol: str, decision: AdaptiveCooldownDecision
     ) -> AdaptiveCooldownDecision:
         return self.get(symbol)._cooldown.evaluate(decision)
+
+    def observe_setup(self, symbol: str, fingerprint: SetupFingerprint) -> None:
+        state = self.get(symbol)
+        with self._lock:
+            state.last_observed = fingerprint
+
+    def note_closed(
+        self,
+        symbol: str,
+        *,
+        pnl: float | None = None,
+        fingerprint: SetupFingerprint | None = None,
+    ) -> None:
+        """Keep desk state after a close. Do not wipe cooldown or fingerprints."""
+        state = self.get(symbol)
+        with self._lock:
+            state.last_closed = fingerprint or state.last_observed
+            if pnl is not None:
+                try:
+                    state.last_closed_pnl = float(pnl)
+                except (TypeError, ValueError):
+                    state.last_closed_pnl = None
+            state.require_requalify = state.last_closed is not None
+
+    def evaluate_requalification(
+        self, symbol: str, current: SetupFingerprint
+    ) -> tuple[bool, str]:
+        """Allow only when the new scan is a proven different setup."""
+        state = self.get(symbol)
+        with self._lock:
+            if not state.require_requalify:
+                return True, "requalify_not_required"
+            ok, why = fresh_setup_evidence(state.last_closed, current)
+            return ok, why
 
     def snapshot(
         self, symbols: tuple[str, ...] | list[str] | None = None
