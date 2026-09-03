@@ -43,9 +43,9 @@ def rank_scalping_opportunities(
 
     eligible.sort(
         key=lambda r: (
-            -int(r.get("ai_confidence") or r.get("confidence") or 0),
             -float(r.get("expected_rr") or 0),
             -int(r.get("trade_quality") or 0),
+            -int(r.get("ai_confidence") or r.get("confidence") or 0),
             # Ascending symbol tie-break — identical inputs ⇒ identical order
             str(r.get("symbol") or "").upper(),
         ),

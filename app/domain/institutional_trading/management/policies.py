@@ -242,16 +242,21 @@ def plan_action(
     # --- Absolute max hold — SCALP tighter, HOLD longer, UNKNOWN safe ---
     # Do not flatten a valid trade solely because it is slightly negative.
     # Initial SL remains the loss exit.
+    # Do not flatten a developing winner: that converts +R into a time-stop
+    # scratch while losers still run to full SL.
     if abs_hold > 0 and hold_minutes >= abs_hold and r >= 0:
-        return PlannedAction(
-            ManageActionKind.TIME_STOP,
-            (
-                f"Absolute max hold {abs_hold}m reached "
-                f"(held {hold_minutes:.1f}m) — flatten {trade_class}"
-            ),
-            volume=position.remaining_volume,
-            target_state=PositionLifecycleState.EXITED,
-        )
+        be_floor = profile.break_even_at_r
+        meaningful = r >= be_floor or position.max_favorable_r >= be_floor
+        if not meaningful:
+            return PlannedAction(
+                ManageActionKind.TIME_STOP,
+                (
+                    f"Absolute max hold {abs_hold}m reached "
+                    f"(held {hold_minutes:.1f}m, R={r} scratch) — flatten {trade_class}"
+                ),
+                volume=position.remaining_volume,
+                target_state=PositionLifecycleState.EXITED,
+            )
 
     # --- Time stop (weak R within window) ---
     if (

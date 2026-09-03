@@ -429,39 +429,38 @@ def compute_structure_targets(
 
     reward = abs(tp - entry)
     expected_rr = (reward / stop_distance).quantize(Decimal("0.01"))
-    if expected_rr <= Decimal("1"):
-        # Nearby swing/liquidity inside the stop is not a valid scalp TP.
-        # Fall back to the profile ATR expansion (already the no-structure
-        # path). Do not shrink SL. Do not stretch to preferred fixed_tp_r.
-        if atr_d is not None and atr_d > 0:
-            atr_tp = (
-                entry + atr_d * cfg.atr_tp_mult
-                if direction is TradeDirection.BUY
-                else entry - atr_d * cfg.atr_tp_mult
+    min_rr = cfg.min_expected_rr if cfg.min_expected_rr is not None else Decimal("1")
+    if min_rr < Decimal("1"):
+        min_rr = Decimal("1")
+    atr_tp = None
+    atr_rr = None
+    if atr_d is not None and atr_d > 0:
+        atr_tp = (
+            entry + atr_d * cfg.atr_tp_mult
+            if direction is TradeDirection.BUY
+            else entry - atr_d * cfg.atr_tp_mult
+        )
+        atr_reward = abs(atr_tp - entry)
+        atr_rr = (atr_reward / stop_distance).quantize(Decimal("0.01"))
+    # Nearby swing/liquidity inside the stop (RR<=1) is never a valid scalp TP.
+    # Structural TP below the profile min RR is poor asymmetry — prefer ATR
+    # when it is market-plausible (RR>1). Do not stretch to preferred fixed_tp_r.
+    if expected_rr <= Decimal("1") or expected_rr < min_rr:
+        if (
+            atr_tp is not None
+            and atr_rr is not None
+            and atr_rr > Decimal("1")
+            and atr_rr > expected_rr
+        ):
+            tp = atr_tp
+            reward = abs(tp - entry)
+            expected_rr = atr_rr
+            reason_parts.append(
+                "TP ATR expansion "
+                "(structure/liquidity target did not exceed SL risk "
+                "or profile min RR)"
             )
-            atr_reward = abs(atr_tp - entry)
-            atr_rr = (atr_reward / stop_distance).quantize(Decimal("0.01"))
-            if atr_rr > Decimal("1"):
-                tp = atr_tp
-                reward = atr_reward
-                expected_rr = atr_rr
-                reason_parts.append(
-                    "TP ATR expansion "
-                    "(structure/liquidity target did not exceed SL risk)"
-                )
-            else:
-                return StructureTargets(
-                    entry,
-                    sl,
-                    None,
-                    stop_distance,
-                    expected_rr,
-                    "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-                    f"planned TP reward {reward} <= SL risk {stop_distance}",
-                    stop_source=source,
-                    stop_atr=atr_d,
-                )
-        else:
+        if expected_rr <= Decimal("1"):
             return StructureTargets(
                 entry,
                 sl,

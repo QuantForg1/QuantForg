@@ -237,6 +237,48 @@ def test_ema_rsi_pa_confluence() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
+def test_structure_tp_below_min_rr_prefers_atr_expansion() -> None:
+    """Nearby swing with RR in (1, min_expected_rr) is poor asymmetry.
+
+    Prefer ATR expansion when it is market-plausible (RR>1) rather than
+    taking a thin structural target that cannot support avg win > avg loss.
+    """
+    from types import SimpleNamespace
+
+    snap = _snap()
+    # BUY: SL behind 1908.9; nearby swing high only ~1.05R vs ATR ~1.27R
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=Decimal("1908.9"),
+        last_swing_high=Decimal("1911.15"),
+        swings=(),
+    )
+    snap.liquidity = SimpleNamespace(pools=(), sweeps=())
+    snap.fair_value_gaps = None
+    snap.order_blocks = None
+    cfg = AiScalpingConfig(
+        fixed_tp_r=Decimal("1.5"),
+        stop_atr_mult=Decimal("1.10"),
+        atr_tp_mult=Decimal("1.40"),
+        min_expected_rr=Decimal("1.20"),
+    )
+    entry = Decimal("1910")
+    atr = Decimal("1")
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.BUY,
+        entry=entry,
+        atr=atr,
+        config=cfg,
+    )
+    assert targets.take_profit is not None
+    assert targets.expected_rr is not None
+    assert targets.expected_rr >= cfg.min_expected_rr
+    assert targets.take_profit == entry + atr * cfg.atr_tp_mult
+    assert "min RR" in targets.reason or "ATR expansion" in targets.reason
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
 def test_structure_nearby_swing_inside_stop_falls_back_to_atr_tp() -> None:
     """LIVE P>70 WAIT: nearest swing TP closer than SL was nulled (RR 0.3–0.9).
 

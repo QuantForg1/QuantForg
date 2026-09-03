@@ -140,6 +140,32 @@ def test_rank_best_opportunity_only() -> None:
 
 
 @pytest.mark.unit
+def test_rank_prefers_projected_reward_over_confidence() -> None:
+    """Asymmetric payoff ranking: higher RR beats higher confidence alone."""
+    ranked = rank_scalping_opportunities(
+        [
+            {
+                "symbol": "XAUUSD",
+                "reject": False,
+                "direction": "BUY",
+                "ai_confidence": 95,
+                "expected_rr": 1.15,
+                "trade_quality": 90,
+            },
+            {
+                "symbol": "EURUSD",
+                "reject": False,
+                "direction": "BUY",
+                "ai_confidence": 72,
+                "expected_rr": 1.80,
+                "trade_quality": 82,
+            },
+        ]
+    )
+    assert ranked["best"]["symbol"] == "EURUSD"
+
+
+@pytest.mark.unit
 def test_validation_requires_measurable_improvement() -> None:
     ok = compare_backtest_vs_live(
         backtest={

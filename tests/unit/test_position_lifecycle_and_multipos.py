@@ -283,6 +283,21 @@ def test_close_reason_is_explicit() -> None:
     plan = plan_action(pos, _ctx(price="4485.200", minutes=30), DEFAULT_PME_CONFIG)
     assert plan.kind is ManageActionKind.TIME_STOP
     assert "Absolute max hold" in plan.reason or "Time stop" in plan.reason
+    assert "scratch" in plan.reason.lower()
+
+
+def test_abs_hold_does_not_flatten_meaningful_winner() -> None:
+    """Winners past BE floor must not be time-stopped while losers run to SL."""
+    pos = _pos(trade_class="SCALP")
+    # ~0.85R favorable — past SCALP BE floor (0.80R)
+    plan = plan_action(pos, _ctx(price="4497.20", minutes=30), DEFAULT_PME_CONFIG)
+    assert plan.kind is not ManageActionKind.TIME_STOP
+    assert plan.kind in {
+        ManageActionKind.BREAK_EVEN,
+        ManageActionKind.SKIP,
+        ManageActionKind.TRAIL,
+        ManageActionKind.PARTIAL_CLOSE,
+    }
 
 
 def test_broker_flat_releases_quantforg_capacity() -> None:
