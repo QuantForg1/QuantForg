@@ -460,6 +460,7 @@ def test_symbol_spread_skip_does_not_abort_universe() -> None:
     src = inspect.getsource(InstitutionalIteRuntime.run_auto_cycle)
     assert "symbol_skip" in src
     assert "safety_failure_scope" in src
+    assert "safety_evaluation_symbol(getattr(snapshot, \"symbol\", None))" in src
 
 
 def test_data_failure_on_one_desk_still_rotates_handoff() -> None:
@@ -507,3 +508,15 @@ def test_canonical_gold_desk_still_one_identity() -> None:
     assert resolve_seed_to_broker_symbol("XAUUSD", discovered=discovered) == (
         resolve_seed_to_broker_symbol("XAUUSD_I", discovered=discovered)
     )
+
+
+def test_safety_evaluation_symbol_keeps_non_gold_desks() -> None:
+    from app.domain.institutional_trading.auto_trading import safety_evaluation_symbol
+    from app.domain.trading.gold_only import canonical_gold_execution_symbol
+
+    assert safety_evaluation_symbol("STXEUR") == "STXEUR"
+    assert safety_evaluation_symbol("EURUSD_I") == "EURUSD_I"
+    assert safety_evaluation_symbol("BTCUSD") == "BTCUSD"
+    assert "XAUUSD" in safety_evaluation_symbol("XAUUSD").upper()
+    assert "XAUUSD" in safety_evaluation_symbol("XAUUSD_I").upper()
+    assert canonical_gold_execution_symbol("STXEUR") != "STXEUR"

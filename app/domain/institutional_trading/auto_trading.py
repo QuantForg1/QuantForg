@@ -235,6 +235,26 @@ class AutoTradeSafetyResult:
         }
 
 
+def safety_evaluation_symbol(symbol: str | None) -> str:
+    """Desk identity for Safety. Gold keeps the canonical broker form.
+
+    Never rewrite a non-gold snapshot to XAUUSD / XAUUSD_i. That applied
+    Gold's MAX_SPREAD=2.00 USD ceiling to FX, index, and crypto ticks and
+    aborted those desks for the wrong instrument class.
+    """
+    raw = (symbol or "").strip()
+    if not raw:
+        return ""
+    from app.domain.trading.gold_only import (
+        canonical_gold_execution_symbol,
+        is_gold_symbol,
+    )
+
+    if is_gold_symbol(raw):
+        return canonical_gold_execution_symbol(raw)
+    return raw
+
+
 def coerce_spread_value(spread: object) -> Decimal | None:
     """Ask-bid price distance. Never fabricates a quote."""
     if spread is None or spread == "":

@@ -312,6 +312,39 @@ class TestAutoTradeSafetyGate:
         assert safety_failure_scope(result) == "symbol"
         assert safety_blocks_decision(result) is False
 
+    def test_index_spread_is_not_gold_ceiling(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_evaluation_symbol,
+            safety_failure_scope,
+        )
+        from app.domain.trading.gold_only import canonical_gold_execution_symbol
+
+        # Trap: gold canonicalizer rewrites non-gold desks to XAUUSD_i.
+        assert canonical_gold_execution_symbol("STXEUR") != "STXEUR"
+        assert safety_evaluation_symbol("STXEUR") == "STXEUR"
+        assert safety_evaluation_symbol("EURUSD_I") == "EURUSD_I"
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        # 3.76 index points fails Gold 2.00 but is inside the index 8.0 ceiling.
+        index_ok = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="STXEUR", spread=Decimal("3.76")),
+        )
+        assert index_ok.allowed is True
+        assert index_ok.spread_diagnostics.get("asset_class") == "index"
+        mislabeled = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(
+                symbol=canonical_gold_execution_symbol("STXEUR"),
+                spread=Decimal("3.76"),
+            ),
+        )
+        assert mislabeled.allowed is False
+        assert safety_failure_scope(mislabeled) == "symbol"
+        assert safety_blocks_decision(mislabeled) is False
+        assert mislabeled.spread_diagnostics.get("asset_class") == "gold"
+
 
 @pytest.mark.unit
 class TestAutoTradeOpsControls:

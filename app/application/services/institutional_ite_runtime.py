@@ -35,6 +35,7 @@ from app.application.services.institutional_position_management import (
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
     coerce_spread_value,
+    safety_evaluation_symbol,
 )
 from app.domain.institutional_trading.decision_models import AccountRiskState
 from app.domain.institutional_trading.execution.models import (
@@ -305,9 +306,7 @@ class InstitutionalIteRuntime:
         """Attach symbol + spread facts to Safety diagnostics. Never fabricates."""
         from app.domain.institutional_trading.auto_trading import coerce_spread_value
 
-        symbol = str(getattr(snapshot, "symbol", "") or "") or self._gold_exec_symbol(
-            snapshot
-        )
+        symbol = safety_evaluation_symbol(getattr(snapshot, "symbol", None))
         raw_spread = coerce_spread_value(getattr(snapshot, "spread", None))
         diag: dict[str, Any] = {
             "symbol": symbol or None,
@@ -881,7 +880,7 @@ class InstitutionalIteRuntime:
                 risk_engine_reasons=risk_reasons,
                 account_trading_enabled=account_trading_enabled,
                 mt5_autotrading_enabled=mt5_autotrading_enabled,
-                symbol=self._gold_exec_symbol(snapshot),
+                symbol=safety_evaluation_symbol(getattr(snapshot, "symbol", None)),
                 symbol_tradable=symbol_tradable,
                 margin_available=margin_ok,
                 no_broker_restrictions=no_broker_restrictions,
@@ -938,7 +937,9 @@ class InstitutionalIteRuntime:
                             risk_engine_reasons=risk_reasons,
                             account_trading_enabled=account_trading_enabled,
                             mt5_autotrading_enabled=mt5_autotrading_enabled,
-                            symbol=self._gold_exec_symbol(snapshot),
+                            symbol=safety_evaluation_symbol(
+                                getattr(snapshot, "symbol", None)
+                            ),
                             symbol_tradable=symbol_tradable,
                             margin_available=margin_ok,
                             no_broker_restrictions=no_broker_restrictions,
