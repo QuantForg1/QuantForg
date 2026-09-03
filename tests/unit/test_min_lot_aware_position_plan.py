@@ -370,3 +370,41 @@ def test_no_live_order_in_min_lot_suite() -> None:
         aggregate_lots=Decimal("0.01"), count=4, min_lot=MIN, lot_step=STEP
     )
     assert (n, per) == (1, MIN)
+
+
+def test_burst_does_not_emit_sub_six_dollar_legs() -> None:
+    """EURCAD production reject: 4 x 0.03 = $1.97 each; aggregate $7.87 > $6."""
+    from app.domain.institutional_trading.config import MIN_PLANNED_RISK_USD
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        lot_dollar_risk,
+    )
+
+    stop = Decimal("0.000655429")
+    cs = Decimal("100000")
+    plan = build_position_plan(
+        cycle_id="cycle-eurcad-floor",
+        snapshot_id="snap-eurcad-floor",
+        symbol="EURCAD",
+        direction="SELL",
+        trade_class=TradeClass.SCALP,
+        opportunity_score=92,
+        confidence=92,
+        aggregate_lots=Decimal("0.12"),
+        current_quantforg_count=0,
+        ite_config=ITEConfig(max_open_trades=10),
+        min_lot=MIN,
+        lot_step=STEP,
+        max_lot=MAX,
+        stop_distance=stop,
+        contract_size=cs,
+        base_input_hash="eurcad-floor",
+    )
+    assert plan.effective_count >= 1
+    assert plan.per_position_lots * plan.effective_count <= Decimal("0.12")
+    per_risk = lot_dollar_risk(
+        plan.per_position_lots,
+        stop_distance=stop,
+        contract_size=cs,
+    )
+    assert per_risk > MIN_PLANNED_RISK_USD
+    assert Decimal("6.00") == MIN_PLANNED_RISK_USD

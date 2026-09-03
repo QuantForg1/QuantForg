@@ -2300,6 +2300,18 @@ class InstitutionalIteRuntime:
                 return None
 
         margin_per_lot = _diag_dec("margin_per_lot", _Dec("0"))
+        stop_distance = _diag_dec("stop_distance", _Dec("0"))
+        if stop_distance <= 0:
+            try:
+                entry_mid = getattr(decision.entry_zone, "mid", None)
+                stop_mid = getattr(decision.stop_zone, "mid", None)
+                if entry_mid is not None and stop_mid is not None:
+                    stop_distance = abs(_Dec(str(entry_mid)) - _Dec(str(stop_mid)))
+            except Exception:
+                stop_distance = _Dec("0")
+        contract_size = _diag_dec("contract_size", _Dec("0"))
+        tick_size = _diag_dec("tick_size", _Dec("0"))
+        tick_value = _diag_dec("tick_value", _Dec("0"))
         plan = build_position_plan(
             cycle_id=snap.cycle_id,
             snapshot_id=snap.snapshot_id,
@@ -2322,6 +2334,10 @@ class InstitutionalIteRuntime:
             min_lot=min_lot,
             lot_step=lot_step,
             max_lot=max_lot,
+            stop_distance=stop_distance if stop_distance > 0 else None,
+            contract_size=contract_size if contract_size > 0 else None,
+            tick_size=tick_size if tick_size > 0 else None,
+            tick_value=tick_value if tick_value > 0 else None,
         )
         note_opportunity_change(
             score=score,

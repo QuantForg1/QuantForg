@@ -301,6 +301,10 @@ def build_position_plan(
     tp: str | None = None,
     base_input_hash: str = "",
     entry_policy: str = "same_thesis_market",
+    stop_distance: Decimal | None = None,
+    contract_size: Decimal | None = None,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
 ) -> PositionPlan:
     cls = _coerce_trade_class(trade_class)
     target = strategy_target_count(
@@ -386,6 +390,38 @@ def build_position_plan(
             lot_step=lot_step,
             max_lot=ceiling,
         )
+    # Burst must not emit legs at or below the exclusive $6 planned-SL floor.
+    # Collapse N so each send keeps the Risk-approved aggregate economics.
+    # Never upsize past aggregate_lots.
+    dist = _dec(stop_distance)
+    cs = _dec(contract_size)
+    if n > 1 and per > 0 and dist > 0 and cs > 0:
+        from app.domain.institutional_trading.config import MIN_PLANNED_RISK_USD
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            lot_dollar_risk,
+        )
+
+        while n > 1:
+            per_risk = lot_dollar_risk(
+                per,
+                stop_distance=dist,
+                contract_size=cs,
+                tick_size=tick_size,
+                tick_value=tick_value,
+            )
+            if per_risk > MIN_PLANNED_RISK_USD:
+                break
+            n -= 1
+            n, per = split_aggregate_lots(
+                aggregate_lots=aggregate,
+                count=n,
+                min_lot=floor,
+                lot_step=lot_step,
+                max_lot=ceiling,
+            )
+            reductions.append("per_leg_below_min_planned_risk")
+            if n <= 0:
+                break
 
     min_lot_reason: str | None = None
     skip_min_lot = (
