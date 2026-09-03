@@ -287,18 +287,25 @@ def assess_global_market_intelligence(
             "no confirmed directional macro bias without live event payload"
         )
 
+    # MTF alignment is a confirmation scalar, not an opposing-bias signal.
+    # Missing/zero/weak alignment → UNKNOWN (never confirmation, never hard conflict).
+    # Inventing "conflicts with BUY/SELL" from low alignment was a production defect
+    # that emitted WAIT_INTELLIGENCE_CONFLICT for otherwise valid P>70 setups.
     cross = 50
     cross_state: bool | None = None
-    if mtf_alignment is None:
-        cross_reason = "Cross-asset/MTF confirmation UNKNOWN"
+    if mtf_alignment is None or int(mtf_alignment) <= 0:
+        cross_reason = "MTF alignment unavailable/unknown — not a contradiction"
     elif mtf_alignment >= 70 and side in {"BUY", "SELL"}:
         cross = 75
         cross_state = True
         cross_reason = f"MTF alignment {mtf_alignment} supports {side}"
     elif mtf_alignment < 40 and side in {"BUY", "SELL"}:
-        cross = 30
-        cross_state = False
-        cross_reason = f"MTF alignment {mtf_alignment} conflicts with {side}"
+        cross = 40
+        cross_state = None
+        cross_reason = (
+            f"MTF alignment {mtf_alignment} weak/UNKNOWN "
+            f"(lack of confirmation ≠ directional conflict with {side})"
+        )
     else:
         cross_reason = f"MTF alignment {mtf_alignment} neutral/unknown"
 
@@ -315,31 +322,21 @@ def assess_global_market_intelligence(
     layers = (
         _layer(
             "structure",
-            confirmation=(
-                True
-                if structure >= 70
-                else (False if structure > 0 and structure < 40 else None)
-            ),
+            # Weak structure is lack of confirmation — Sniper already gates quality.
+            # Do not relabel weak scores as hard CONTRADICTION.
+            confirmation=(True if structure >= 70 else None),
             score=structure,
             reason=f"structure_score={structure}",
         ),
         _layer(
             "liquidity",
-            confirmation=(
-                True
-                if liquidity >= 70
-                else (False if liquidity > 0 and liquidity < 40 else None)
-            ),
+            confirmation=(True if liquidity >= 70 else None),
             score=_clamp(liquidity),
             reason=f"liquidity={liquidity}",
         ),
         _layer(
             "momentum",
-            confirmation=(
-                True
-                if momentum >= 70
-                else (False if momentum > 0 and momentum < 40 else None)
-            ),
+            confirmation=(True if momentum >= 70 else None),
             score=_clamp(momentum),
             reason=f"momentum={momentum}",
         ),
@@ -400,12 +397,11 @@ def assess_global_market_intelligence(
 
     wait_code: str | None = None
     wait_recommended = False
+    # Hard WAIT only on affirmative opposing/degraded evidence — never on UNKNOWN.
     hard_names = {
-        "structure",
-        "momentum",
-        "cross_asset",
         "execution_quality",
         "portfolio_exposure",
+        "market_regime",
     }
     if news_blocked or global_regime == "EVENT_RISK":
         alignment = "HIGH_RISK"
@@ -413,16 +409,13 @@ def assess_global_market_intelligence(
         wait_code = "WAIT_EVENT_RISK"
         reason = macro_reason
     elif any(
-        layer.name in {"structure", "momentum", "cross_asset"}
-        and layer.state == "CONTRADICTION"
+        layer.name in hard_names and layer.state == "CONTRADICTION"
         for layer in contradictions
     ):
         alignment = "CONFLICTED"
-        # Strong technical/MTF contradiction → WAIT; macro UNKNOWN alone does not.
         hard = [layer for layer in contradictions if layer.name in hard_names]
-        if hard:
-            wait_recommended = True
-            wait_code = "WAIT_INTELLIGENCE_CONFLICT"
+        wait_recommended = True
+        wait_code = "WAIT_INTELLIGENCE_CONFLICT"
         reason = "; ".join(layer.reason for layer in hard) or "Intelligence conflict"
     elif len(confirmations) >= 5 and not contradictions:
         alignment = "STRONGLY_ALIGNED"

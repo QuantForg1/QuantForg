@@ -714,7 +714,12 @@ def score_scalping_setup(
         atr_band=resolved.band,
         news_blocked=news_blocked,
         news_reason=str(news_reason) if news_reason else None,
-        mtf_alignment=int(trend.alignment_score or 0),
+        # Pass through real MTF score; 0/missing must not become a synthetic conflict.
+        mtf_alignment=(
+            int(trend.alignment_score)
+            if getattr(trend, "alignment_score", None) is not None
+            else None
+        ),
         execution_quality_ok=bool(execution_quality_ok),
         portfolio_ok=True,
     )

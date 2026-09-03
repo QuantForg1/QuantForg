@@ -65,7 +65,47 @@ def test_intelligence_event_risk_waits() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
-def test_intelligence_conflict_waits_on_hard_contradiction() -> None:
+def test_intelligence_conflict_waits_on_execution_degradation() -> None:
+    """Hard WAIT only on affirmative degraded evidence — not weak MTF/structure."""
+    gmi = assess_global_market_intelligence(
+        direction="BUY",
+        structure_score=85,
+        momentum=80,
+        liquidity=80,
+        expected_rr=1.4,
+        mtf_alignment=80,
+        news_blocked=False,
+        execution_quality_ok=False,
+    )
+    assert gmi.intelligence_alignment == "CONFLICTED"
+    assert gmi.wait_recommended is True
+    assert gmi.wait_code == "WAIT_INTELLIGENCE_CONFLICT"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_mtf_zero_is_unknown_not_conflict() -> None:
+    """MTF alignment 0 must be UNKNOWN, not WAIT_INTELLIGENCE_CONFLICT."""
+    gmi = assess_global_market_intelligence(
+        direction="SELL",
+        structure_score=85,
+        momentum=0,
+        liquidity=70,
+        expected_rr=1.82,
+        mtf_alignment=0,
+        news_blocked=False,
+        execution_quality_ok=True,
+    )
+    cross = next(layer for layer in gmi.layers if layer.name == "cross_asset")
+    assert cross.state == "UNKNOWN"
+    assert gmi.wait_recommended is False
+    assert gmi.wait_code is None
+    assert "conflicts with" not in cross.reason.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_weak_mtf_is_not_directional_conflict() -> None:
     gmi = assess_global_market_intelligence(
         direction="BUY",
         structure_score=20,
@@ -75,9 +115,9 @@ def test_intelligence_conflict_waits_on_hard_contradiction() -> None:
         mtf_alignment=20,
         news_blocked=False,
     )
-    assert gmi.intelligence_alignment == "CONFLICTED"
-    assert gmi.wait_recommended is True
-    assert gmi.wait_code == "WAIT_INTELLIGENCE_CONFLICT"
+    cross = next(layer for layer in gmi.layers if layer.name == "cross_asset")
+    assert cross.state == "UNKNOWN"
+    assert gmi.wait_recommended is False
 
 
 @pytest.mark.unit
