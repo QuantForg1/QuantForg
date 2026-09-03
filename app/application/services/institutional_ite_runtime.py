@@ -1186,6 +1186,16 @@ class InstitutionalIteRuntime:
                             logger.exception("pvm_unbind_safety_blocked_failed")
                     if symbol_skip:
                         self._release_non_entry_slot()
+                        try:
+                            from app.domain.institutional_trading.operations.fast_decision_path import (  # noqa: E501
+                                set_focus,
+                            )
+
+                            # Symbol-scoped Safety miss must not keep hysteresis
+                            # focus. Next cycle may take the next eligible desk.
+                            set_focus(None, reason="SYMBOL_SAFETY_RELEASE")
+                        except Exception:
+                            logger.exception("symbol_safety_focus_release_failed")
                     return result
             logger.warning(
                 "FORCE_FIRST_TRADE proceeding despite safety blockers: %s",
@@ -5496,15 +5506,15 @@ class InstitutionalIteRuntime:
                 from app.domain.trading.gold_only import gold_only_enabled
 
                 if not gold_only_enabled():
-                    plane_allowed = tuple(
-                        getattr(self.plane, "allowed_symbols", ()) or ()
+                    # BROKER_DISCOVERED catalogue membership is not execution
+                    # priority. Using the full catalogue as the seed made
+                    # prefer_allowlisted_handoff a no-op, so oil/index desks
+                    # without specs kept first focus. Seed the expected
+                    # scalping desks; other liquid catalogue symbols stay in
+                    # the queue after them. Gates are unchanged.
+                    eligible = prefer_allowlisted_handoff(
+                        eligible, DEFAULT_SCALPING_UNIVERSE
                     )
-                    allow_seed = (
-                        plane_allowed
-                        if plane_allowed and len(plane_allowed) >= 2
-                        else DEFAULT_SCALPING_UNIVERSE
-                    )
-                    eligible = prefer_allowlisted_handoff(eligible, allow_seed)
             except Exception:
                 logger.exception("prefer_allowlisted_handoff_failed")
             try:

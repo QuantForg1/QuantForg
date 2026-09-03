@@ -66,6 +66,38 @@ def test_prefer_allowlisted_handoff_puts_usd_majors_before_crosses() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.trading_core
+def test_full_catalogue_seed_does_not_demote_oil() -> None:
+    """BROKER_DISCOVERED catalogue-as-seed is a no-op — the live defect."""
+    eligible = ["XBRUSD", "XTIUSD", "EURUSD_I", "GBPUSD_I", "XAUUSD_I"]
+    catalogue = (*eligible, "AUDUSD_I", "NZDUSD_I", "CADCHF_I")
+    as_catalogue = prefer_allowlisted_handoff(eligible, catalogue)
+    assert as_catalogue[0] == "XBRUSD"
+    as_desks = prefer_allowlisted_handoff(eligible, DEFAULT_SCALPING_UNIVERSE)
+    assert as_desks[0] in {"EURUSD_I", "GBPUSD_I", "XAUUSD_I"}
+    assert as_desks.index("EURUSD_I") < as_desks.index("XBRUSD")
+    assert "XBRUSD" in as_desks
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_ite_handoff_seeds_scalping_universe_not_full_catalogue() -> None:
+    import inspect
+
+    from app.application.services.institutional_ite_runtime import (
+        InstitutionalIteRuntime,
+    )
+
+    src = inspect.getsource(InstitutionalIteRuntime._multi_asset_preferred_symbol)
+    assert "prefer_allowlisted_handoff" in src
+    assert "DEFAULT_SCALPING_UNIVERSE" in src
+    assert "len(plane_allowed) >= 2" not in src
+    assert "SYMBOL_SAFETY_RELEASE" in inspect.getsource(
+        InstitutionalIteRuntime.run_auto_cycle
+    )
+
+
+@pytest.mark.unit
 def test_build_trade_request_preserves_catalogue_exact_symbol() -> None:
     """Must not force .upper() on catalogue-exact names (Weltrade IPC)."""
     tick = SimpleNamespace(bid=4396.0, ask=4396.2)
