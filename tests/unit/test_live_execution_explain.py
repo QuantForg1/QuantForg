@@ -140,6 +140,30 @@ def test_full_trace_includes_all_stages():
     assert card["mutates_engines"] is False
 
 
+def test_safety_blocked_outcome_is_authoritative_over_mtf():
+    cycle = _cycle(
+        cycle_outcome="safety_blocked",
+        abort_reason="",
+        decision_action="NO_TRADE",
+        trend={"aligned": False, "score": 40},
+        quality={"score": 53, "required": 80, "passed": False},
+        rejection={
+            "primary": "SAFETY_BLOCKED",
+            "primary_label": "Auto-trade safety gate blocked",
+            "all_codes": ["SAFETY_BLOCKED"],
+            "decision_reasons": ["Spread 9.04 exceeds max 2.00 (gold usd_price)"],
+        },
+    )
+    card = build_execution_explain(cycle)
+    assert card["verdict"] == "NO_TRADE"
+    safety = next(s for s in card["stages"] if s["key"] == "safety")
+    mtf = next(s for s in card["stages"] if s["key"] == "mtf")
+    assert safety["status"] == "FAIL"
+    assert mtf["status"] == "SKIP"
+    assert "Spread 9.04" in str(card["primary_rejection_detail"])
+    assert card["primary_rejection"] != "MTF Alignment FAILED"
+
+
 def test_explain_snapshot_payload_shape():
     diagnostics = {
         "cycles": [_cycle(decision_action="NO_TRADE")],

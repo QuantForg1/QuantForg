@@ -228,31 +228,72 @@ def _evaluate_stages(cycle: dict[str, Any]) -> list[dict[str, Any]]:
             detail="Risk not evaluated / no lot facts",
         )
 
-    # Safety — observational only from cycle/abort/news codes
+    # Safety — authoritative cycle outcome wins over leftover MTF/quality scores.
     abort = str(cycle.get("abort_reason") or "")
     outcome = str(cycle.get("cycle_outcome") or "").lower()
+    rejection = _as_dict(cycle.get("rejection"))
+    primary_code = str(rejection.get("primary") or "").upper()
+    all_codes = {
+        str(c).upper()
+        for c in (rejection.get("all_codes") or cycle.get("rejected_codes") or [])
+    }
     safety_fail_codes = {
-        "news_blackout",
+        "NEWS_BLACKOUT",
         "AUTO_TRADING_BLOCKED",
         "KILL_SWITCH",
         "EXECUTION_DISABLED",
         "SAFETY_BLOCKED",
     }
     safety_blocked = (
-        any(c in all_codes for c in ("news_blackout",))
+        outcome in {"safety_blocked"}
+        or primary_code in safety_fail_codes
+        or bool(safety_fail_codes & all_codes)
         or any(token.lower() in abort.lower() for token in safety_fail_codes if abort)
-        or (outcome in {"aborted"} and "safety" in abort.lower())
+        or any(c in {str(x).lower() for x in all_codes} for c in ("news_blackout",))
     )
     if safety_blocked:
-        detail = abort or "Safety FAILED"
-        if "news_blackout" in all_codes:
+        reasons = rejection.get("decision_reasons") or cycle.get(
+            "safety_failed_reasons"
+        )
+        if isinstance(reasons, (list, tuple)) and reasons:
+            detail = "; ".join(str(r) for r in reasons if str(r).strip())
+        else:
+            detail = abort or "Safety FAILED"
+        if "NEWS_BLACKOUT" in all_codes or "news_blackout" in {
+            str(c).lower() for c in (rejection.get("all_codes") or [])
+        }:
             detail = "Safety FAILED (news blackout)"
         safety_stage = _stage(
             key="safety",
             label="Safety",
             status="FAIL",
-            detail=detail,
+            detail=detail or "Safety FAILED",
             blocking=True,
+        )
+        # Decision stages were not the aborting gate.
+        mtf_stage = _stage(
+            key="mtf",
+            label="MTF Alignment",
+            status="SKIP",
+            detail="MTF not evaluated — Safety blocked first",
+        )
+        quality_stage = _stage(
+            key="quality",
+            label="Quality",
+            status="SKIP",
+            detail="Quality not evaluated — Safety blocked first",
+        )
+        confluence_stage = _stage(
+            key="confluence",
+            label="Confluence",
+            status="SKIP",
+            detail="Confluence not evaluated — Safety blocked first",
+        )
+        risk_stage = _stage(
+            key="risk",
+            label="Risk",
+            status="SKIP",
+            detail="Risk not evaluated — Safety blocked first",
         )
     else:
         safety_stage = _stage(

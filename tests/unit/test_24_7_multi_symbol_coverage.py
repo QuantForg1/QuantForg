@@ -404,3 +404,106 @@ def test_final_volume_must_be_risk_revalidated() -> None:
     assert "order_send(" not in inspect.getsource(
         InstitutionalIteRuntime._pick_executable_symbol_async
     )
+
+
+def test_symbol_spread_skip_does_not_abort_universe() -> None:
+    from app.domain.institutional_trading.auto_trading import (
+        AutoTradeLiveFacts,
+        AutoTradePolicy,
+        evaluate_auto_trade_safety,
+        safety_blocks_decision,
+        safety_failure_scope,
+    )
+
+    policy = AutoTradePolicy(enabled=True, run_state="running")
+    gold = evaluate_auto_trade_safety(
+        policy,
+        AutoTradeLiveFacts(
+            gateway_connected=True,
+            broker_connected=True,
+            market_data_live=True,
+            risk_engine_pass=True,
+            account_trading_enabled=True,
+            mt5_autotrading_enabled=True,
+            symbol="XAUUSD",
+            symbol_tradable=True,
+            margin_available=True,
+            no_broker_restrictions=True,
+            session="london",
+            spread=Decimal("9.04"),
+            ops_mode="LIVE",
+            execution_enabled=True,
+        ),
+    )
+    eurusd = evaluate_auto_trade_safety(
+        policy,
+        AutoTradeLiveFacts(
+            gateway_connected=True,
+            broker_connected=True,
+            market_data_live=True,
+            risk_engine_pass=True,
+            account_trading_enabled=True,
+            mt5_autotrading_enabled=True,
+            symbol="EURUSD",
+            symbol_tradable=True,
+            margin_available=True,
+            no_broker_restrictions=True,
+            session="london",
+            spread=Decimal("0.00012"),
+            ops_mode="LIVE",
+            execution_enabled=True,
+        ),
+    )
+    assert safety_failure_scope(gold) == "symbol"
+    assert safety_blocks_decision(gold) is False
+    assert eurusd.allowed is True
+    src = inspect.getsource(InstitutionalIteRuntime.run_auto_cycle)
+    assert "symbol_skip" in src
+    assert "safety_failure_scope" in src
+
+
+def test_data_failure_on_one_desk_still_rotates_handoff() -> None:
+    rt = _runtime()
+    rt._eligible_handoff_queue = ["XAUUSD_I", "EURUSD_I", "GBPUSD_I"]
+    rt._eligible_consumed = {"XAUUSD_I"}
+    rt._entries_this_scan = 3
+    rt._release_non_entry_slot()
+    assert rt._take_next_handoff_symbol() == "EURUSD_I"
+
+
+def test_safety_diagnostics_include_symbol() -> None:
+    cycle = extract_cycle_diagnostics(
+        snapshot=None,
+        decision=None,
+        cycle_outcome="safety_blocked",
+        decision_action="NO_TRADE",
+        abort_reason="SAFETY_BLOCKED",
+        decision_reasons=("Spread 9.04 exceeds max 2.00 (gold usd_price)",),
+        market_context_diagnostics={
+            "symbol": "XAUUSD_I",
+            "safety_scope": "symbol",
+            "spread_raw": "9.04",
+            "spread_normalized": "9.04",
+            "spread_limit": "2.00",
+            "spread_unit": "usd_price",
+            "spread_asset_class": "gold",
+            "safety_failed_reasons": [
+                "Spread 9.04 exceeds max 2.00 (gold usd_price)"
+            ],
+        },
+    )
+    assert cycle["symbol"] == "XAUUSD_I"
+    assert cycle["abort_reason"] == "SAFETY_BLOCKED"
+    assert cycle["safety_scope"] == "symbol"
+    assert cycle["spread_limit"] == "2.00"
+    assert cycle["cycle_outcome"] == "safety_blocked"
+
+
+def test_canonical_gold_desk_still_one_identity() -> None:
+    discovered = discover_from_broker_rows(_WELTRADE_LIVE)
+    uni = build_dynamic_scalping_universe(discovered, seed=("XAUUSD",))
+    gold = [s for s in uni if "XAUUSD" in str(s).upper()]
+    assert len(gold) <= 1
+    assert resolve_seed_to_broker_symbol("XAUUSD", discovered=discovered) == (
+        resolve_seed_to_broker_symbol("XAUUSD_I", discovered=discovered)
+    )

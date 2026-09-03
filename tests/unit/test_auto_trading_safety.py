@@ -46,7 +46,7 @@ def _all_pass_facts(**overrides: object) -> AutoTradeLiveFacts:
         "no_broker_restrictions": True,
         "open_positions": 0,
         "session": "london",
-        "spread": Decimal("0.40"),
+        "spread": Decimal("0.00010"),
         "news_blocked": False,
         "daily_loss_exceeded": False,
         "emergency_stop": False,
@@ -58,6 +58,7 @@ def _all_pass_facts(**overrides: object) -> AutoTradeLiveFacts:
 
 
 @pytest.mark.unit
+@pytest.mark.trading_core
 class TestAutoTradeSafetyGate:
     def test_enabled_when_all_conditions_pass(self) -> None:
         policy = AutoTradePolicy(enabled=True)
@@ -213,6 +214,103 @@ class TestAutoTradeSafetyGate:
         )
         assert result.allowed is False
         assert any("not in allowed list" in r for r in result.failed_reasons)
+
+    def test_gold_spread_above_two_usd_rejects_gold_only(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+        from app.domain.trading.xauusd_specs import MAX_SPREAD
+
+        assert Decimal("2.00") == MAX_SPREAD
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        blocked = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="XAUUSD", spread=Decimal("2.01")),
+        )
+        assert blocked.allowed is False
+        assert safety_failure_scope(blocked) == "symbol"
+        assert safety_blocks_decision(blocked) is False
+        assert blocked.spread_diagnostics.get("spread_limit") == "2.00"
+        assert blocked.spread_diagnostics.get("asset_class") == "gold"
+        ok = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="XAUUSD", spread=Decimal("2.00")),
+        )
+        assert ok.allowed is True
+
+    def test_fx_decimal_spread_is_not_gold_ceiling(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        # 3.1 pips on a 5-digit major — would incorrectly PASS Gold's 2.00 USD.
+        tight = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="EURUSD", spread=Decimal("0.00031")),
+        )
+        assert tight.allowed is True
+        wide = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="EURUSD", spread=Decimal("0.00200")),
+        )
+        assert wide.allowed is False
+        assert safety_failure_scope(wide) == "symbol"
+        assert safety_blocks_decision(wide) is False
+        assert "gold" not in str(wide.spread_diagnostics.get("asset_class"))
+        limit = Decimal(str(wide.spread_diagnostics.get("spread_limit")))
+        assert limit < Decimal("2.00")
+
+    def test_global_autotrading_false_still_blocks_universe(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(mt5_autotrading_enabled=False),
+        )
+        assert result.allowed is False
+        assert safety_failure_scope(result) == "global"
+        assert safety_blocks_decision(result) is True
+        assert any("AutoTrading is disabled" in r for r in result.failed_reasons)
+
+    def test_mixed_global_and_spread_stays_global(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(
+                mt5_autotrading_enabled=False,
+                symbol="XAUUSD",
+                spread=Decimal("9.04"),
+            ),
+        )
+        assert safety_failure_scope(result) == "global"
+        assert safety_blocks_decision(result) is True
+
+    def test_unknown_instrument_spread_fails_that_symbol_only(self) -> None:
+        from app.domain.institutional_trading.auto_trading import (
+            safety_blocks_decision,
+            safety_failure_scope,
+        )
+
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="FOO", spread=Decimal("0.10")),
+        )
+        assert result.allowed is False
+        assert safety_failure_scope(result) == "symbol"
+        assert safety_blocks_decision(result) is False
 
 
 @pytest.mark.unit

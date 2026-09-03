@@ -32,7 +32,10 @@ from app.application.services.institutional_ops_guards import (
 from app.application.services.institutional_position_management import (
     InstitutionalPositionManagement,
 )
-from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
+from app.domain.institutional_trading.auto_trading import (
+    AutoTradeLiveFacts,
+    coerce_spread_value,
+)
 from app.domain.institutional_trading.decision_models import AccountRiskState
 from app.domain.institutional_trading.execution.models import (
     ExecutionBridgeContext,
@@ -291,6 +294,42 @@ class InstitutionalIteRuntime:
 
         raw = str(getattr(snapshot, "symbol", "") or "")
         return canonical_gold_execution_symbol(raw or None)
+
+    def _safety_cycle_diagnostics(
+        self,
+        *,
+        snapshot: Any,
+        safety: Any,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Attach symbol + spread facts to Safety diagnostics. Never fabricates."""
+        from app.domain.institutional_trading.auto_trading import coerce_spread_value
+
+        symbol = str(getattr(snapshot, "symbol", "") or "") or self._gold_exec_symbol(
+            snapshot
+        )
+        raw_spread = coerce_spread_value(getattr(snapshot, "spread", None))
+        diag: dict[str, Any] = {
+            "symbol": symbol or None,
+            "safety_scope": getattr(safety, "failure_scope", None),
+            "safety_failed_reasons": list(getattr(safety, "failed_reasons", ()) or ()),
+            "spread": str(raw_spread) if raw_spread is not None else None,
+        }
+        spread_d = getattr(safety, "spread_diagnostics", None)
+        if isinstance(spread_d, dict):
+            diag["spread_raw"] = spread_d.get("spread_raw")
+            diag["spread_normalized"] = spread_d.get("spread_normalized")
+            diag["spread_limit"] = spread_d.get("spread_limit")
+            diag["spread_unit"] = spread_d.get("spread_unit")
+            diag["spread_asset_class"] = spread_d.get("asset_class")
+            diag["spread_scope"] = spread_d.get("spread_scope") or "symbol"
+            if diag.get("spread") is None and spread_d.get("spread_raw"):
+                diag["spread"] = spread_d.get("spread_raw")
+            if not diag.get("symbol") and spread_d.get("symbol"):
+                diag["symbol"] = spread_d.get("symbol")
+        if extra:
+            diag.update(extra)
+        return diag
 
     def mark_cycle_finished(self, *, successful: bool) -> None:
         """A finished tick (including WAITING_SESSION manage-only) is not a stall."""
@@ -850,7 +889,9 @@ class InstitutionalIteRuntime:
                 session=session_val,
                 broker_session_open=session_obs.broker_session_open,
                 session_source=session_obs.session_source,
-                spread=getattr(snapshot, "spread", None),
+                spread=coerce_spread_value(
+                    getattr(snapshot, "spread", None)
+                ),
                 news_blocked=bool(news.blocked),
                 news_reason=str(news.reason or ""),
                 daily_loss_exceeded=cycle_daily_loss,
@@ -905,7 +946,9 @@ class InstitutionalIteRuntime:
                             session=session_val,
                             broker_session_open=session_obs.broker_session_open,
                             session_source=session_obs.session_source,
-                            spread=getattr(snapshot, "spread", None),
+                            spread=coerce_spread_value(
+                        getattr(snapshot, "spread", None)
+                    ),
                             news_blocked=bool(news.blocked),
                             news_reason=str(news.reason or ""),
                             daily_loss_exceeded=cycle_daily_loss,
@@ -976,15 +1019,22 @@ class InstitutionalIteRuntime:
                     logger.exception("safety_blocked_manage_failed")
                 from app.domain.institutional_trading.auto_trading import (
                     safety_blocks_decision,
+                    safety_failure_scope,
                 )
 
-                if not safety_blocks_decision(safety):
+                scope = safety_failure_scope(safety)
+                if scope == "scan_continue":
                     logger.warning(
                         "risk_lock_scan_continues",
                         reasons=list(safety.failed_reasons),
                         daily_loss=bool(self.plane.daily_loss_exceeded),
                     )
-                else:
+                elif scope == "symbol" or safety_blocks_decision(safety):
+                    symbol_skip = scope == "symbol"
+                    safety_diag = self._safety_cycle_diagnostics(
+                        snapshot=snapshot,
+                        safety=safety,
+                    )
                     result = ShadowCycleResult(
                         ok=True,
                         trace_id=None,
@@ -998,6 +1048,7 @@ class InstitutionalIteRuntime:
                         abort_reason="SAFETY_BLOCKED",
                         safety_failed_reasons=tuple(safety.failed_reasons),
                         snapshot_present=True,
+                        market_context_diagnostics=safety_diag,
                     )
                     with self._lock:
                         self._last_cycle = result
@@ -1025,7 +1076,9 @@ class InstitutionalIteRuntime:
                         "execution_first_blocking_gate",
                         gate="SAFETY",
                         reason=primary,
-                        symbol=getattr(account, "symbol", None)
+                        safety_scope=scope,
+                        symbol=safety_diag.get("symbol")
+                        or getattr(account, "symbol", None)
                         or getattr(snapshot, "symbol", None),
                         forwarded_to_oms=False,
                     )
@@ -1039,7 +1092,8 @@ class InstitutionalIteRuntime:
                             status="failed",
                             detail=f"SAFETY: {primary}",
                             symbol=str(
-                                getattr(account, "symbol", None)
+                                safety_diag.get("symbol")
+                                or getattr(account, "symbol", None)
                                 or getattr(snapshot, "symbol", None)
                                 or ""
                             )
@@ -1071,7 +1125,7 @@ class InstitutionalIteRuntime:
                             decision_action="NO_TRADE",
                             abort_reason="SAFETY_BLOCKED",
                             decision_reasons=tuple(safety.failed_reasons),
-                            market_context_diagnostics=None,
+                            market_context_diagnostics=safety_diag,
                             signal_id=None,
                             forwarded_to_oms=False,
                             trace_id=None,
@@ -1123,6 +1177,8 @@ class InstitutionalIteRuntime:
                                 _pvm_rec3().unbind_context(_pvm_token)
                         except Exception:
                             logger.exception("pvm_unbind_safety_blocked_failed")
+                    if symbol_skip:
+                        self._release_non_entry_slot()
                     return result
             logger.warning(
                 "FORCE_FIRST_TRADE proceeding despite safety blockers: %s",
@@ -1388,7 +1444,9 @@ class InstitutionalIteRuntime:
                 current_price=current_px,
                 atr=account.atr or Decimal("1"),
                 mid_price=current_px,
-                spread=getattr(snapshot, "spread", None),
+                spread=coerce_spread_value(
+                    getattr(snapshot, "spread", None)
+                ),
                 market_open=True,
                 position_still_open=pos_still_open,
                 book_volume=book_vol,
@@ -3211,7 +3269,9 @@ class InstitutionalIteRuntime:
                 sor_payload = estimate_smart_routing(
                     symbol=str(getattr(decision, "symbol", "") or ""),
                     side=action_for_exec,
-                    spread=getattr(snapshot, "spread", None),
+                    spread=coerce_spread_value(
+                        getattr(snapshot, "spread", None)
+                    ),
                     optimizer=optimizer_payload,
                 )
                 rec = str(optimizer_payload.get("recommendation") or "")

@@ -316,7 +316,15 @@ def extract_cycle_diagnostics(
     take = action_u in {"BUY", "SELL"}
     rejected = (not take) and (
         action_u in {"NO_TRADE", "WATCH", "WAIT", ""}
-        or cycle_outcome in {"no_trade", "no_snapshot", "aborted", "shadow", "wait"}
+        or cycle_outcome
+        in {
+            "no_trade",
+            "no_snapshot",
+            "aborted",
+            "shadow",
+            "wait",
+            "safety_blocked",
+        }
     )
 
     primary = ranked[0] if ranked else None
@@ -478,7 +486,15 @@ def extract_cycle_diagnostics(
         "sniper_state": diag.get("sniper_state") or diag.get("sniper"),
         "execution_handoff": dict(handoff),
         "advisory_only": True,
-        "symbol": diag.get("symbol"),
+        "symbol": (
+            str(diag.get("symbol") or "").strip()
+            or (
+                str(getattr(snapshot, "symbol", "") or "").strip()
+                if snapshot is not None
+                else ""
+            )
+            or None
+        ),
         "scan_as_of": diag.get("as_of") or diag.get("scan_as_of"),
         "data": diag.get("data"),
         "market_data_valid": diag.get("market_data_valid"),
@@ -532,6 +548,15 @@ def extract_cycle_diagnostics(
         "choch_state": diag.get("choch_state"),
         "mt5_ticket": ticket if executed else None,
         "mt5_retcode": diag.get("mt5_retcode"),
+        "abort_reason": abort_reason,
+        "safety_scope": diag.get("safety_scope"),
+        "spread": diag.get("spread") or diag.get("spread_raw"),
+        "spread_raw": diag.get("spread_raw"),
+        "spread_normalized": diag.get("spread_normalized"),
+        "spread_limit": diag.get("spread_limit"),
+        "spread_unit": diag.get("spread_unit"),
+        "spread_asset_class": diag.get("spread_asset_class"),
+        "safety_failed_reasons": diag.get("safety_failed_reasons"),
     }
 
 

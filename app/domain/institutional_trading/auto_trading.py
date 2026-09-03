@@ -219,6 +219,9 @@ class AutoTradeSafetyResult:
     conditions: tuple[AutoTradeCondition, ...] = ()
     failed_reasons: tuple[str, ...] = ()
     policy: AutoTradePolicy = field(default_factory=AutoTradePolicy)
+    # allowed | global | symbol | scan_continue — see safety_failure_scope.
+    failure_scope: str = "allowed"
+    spread_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -227,7 +230,94 @@ class AutoTradeSafetyResult:
             "failed_reasons": list(self.failed_reasons),
             "conditions": [c.to_dict() for c in self.conditions],
             "policy": self.policy.to_dict(),
+            "failure_scope": self.failure_scope,
+            "spread_diagnostics": dict(self.spread_diagnostics or {}),
         }
+
+
+def coerce_spread_value(spread: object) -> Decimal | None:
+    """Ask-bid price distance. Never fabricates a quote."""
+    if spread is None or spread == "":
+        return None
+    raw = getattr(spread, "value", spread)
+    try:
+        value = Decimal(str(raw))
+    except (TypeError, ValueError, ArithmeticError):
+        return None
+    if not value.is_finite() or value < 0:
+        return None
+    return value
+
+
+def evaluate_instrument_spread(
+    symbol: str,
+    raw_spread: Decimal | None,
+    policy_max_spread: Decimal,
+) -> tuple[bool, str, dict[str, Any]]:
+    """Compare ask-bid price distance to the instrument-native ceiling.
+
+    XAUUSD keeps ``xauusd_specs.MAX_SPREAD`` (2.00 USD). FX/index/crypto use
+    ``resolve_spread_limits`` — never Gold's 2.00. Unknown class fails this
+    desk only.
+    """
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        asset_class_for_symbol,
+        resolve_spread_limits,
+    )
+    from app.domain.trading.xauusd_specs import coerce_max_spread
+
+    symbol_u = (symbol or "").strip().upper()
+    asset_class = asset_class_for_symbol(symbol_u)
+    gold_ceiling = coerce_max_spread(policy_max_spread)
+    diag: dict[str, Any] = {
+        "symbol": symbol_u or None,
+        "asset_class": asset_class,
+        "spread_raw": str(raw_spread) if raw_spread is not None else None,
+        "spread_normalized": str(raw_spread) if raw_spread is not None else None,
+        "spread_unit": "price_distance",
+        "spread_limit": None,
+        "spread_scope": "symbol",
+    }
+    if raw_spread is None:
+        diag["spread_limit"] = str(gold_ceiling) if asset_class == "gold" else None
+        return (
+            False,
+            "Spread unavailable — fail-closed",
+            diag,
+        )
+    if asset_class == "other" or not symbol_u:
+        diag["spread_limit"] = None
+        return (
+            False,
+            (
+                f"Spread fail-closed — no instrument specification for "
+                f"{symbol_u or '—'}"
+            ),
+            diag,
+        )
+    reject, _, _, _ = resolve_spread_limits(
+        symbol_u,
+        max_spread_reject=gold_ceiling,
+        max_spread_for_full_score=gold_ceiling,
+        max_spread_atr_pct=Decimal("15"),
+    )
+    if asset_class == "gold":
+        # Preserve the Gold USD ceiling. Never raise MAX_SPREAD.
+        limit = gold_ceiling
+        diag["spread_unit"] = "usd_price"
+    else:
+        limit = reject
+    diag["spread_limit"] = str(limit)
+    ok = raw_spread <= limit
+    detail = (
+        ""
+        if ok
+        else (
+            f"Spread {raw_spread} exceeds max {limit} "
+            f"({asset_class} {diag['spread_unit']})"
+        )
+    )
+    return ok, detail, diag
 
 
 def evaluate_auto_trade_safety(
@@ -546,19 +636,15 @@ def evaluate_auto_trade_safety(
         session_ok,
         session_detail,
     )
+    spread_diag: dict[str, Any] = {}
     if facts.status_snapshot and not facts.spread_evaluated:
         spread_ok = True
         spread_detail = "Spread not sampled — not blocking status"
     else:
-        spread_ok = facts.spread is not None and facts.spread <= policy.max_spread
-        spread_detail = (
-            "Spread unavailable — fail-closed"
-            if facts.spread is None
-            else (
-                f"Spread {facts.spread} exceeds max {policy.max_spread}"
-                if not spread_ok
-                else ""
-            )
+        spread_ok, spread_detail, spread_diag = evaluate_instrument_spread(
+            symbol_u,
+            coerce_spread_value(facts.spread),
+            policy.max_spread,
         )
     add(
         "max_spread",
@@ -604,17 +690,66 @@ def evaluate_auto_trade_safety(
         )
     )
     allowed = all(c.passed for c in conditions)
-    return AutoTradeSafetyResult(
+    provisional = AutoTradeSafetyResult(
         allowed=allowed,
         status="Enabled" if allowed else "Disabled",
         conditions=tuple(conditions),
         failed_reasons=failed_reasons,
         policy=policy,
+        spread_diagnostics=dict(spread_diag),
+    )
+    return AutoTradeSafetyResult(
+        allowed=provisional.allowed,
+        status=provisional.status,
+        conditions=provisional.conditions,
+        failed_reasons=provisional.failed_reasons,
+        policy=provisional.policy,
+        failure_scope=safety_failure_scope(provisional),
+        spread_diagnostics=provisional.spread_diagnostics,
     )
 
 
-# Risk-category conditions must not abort BUY/SELL/sniper/TAKE recording.
-# They still block OMS. Kill switch, MT5 AutoTrading, connectivity remain Safety.
+# ---------------------------------------------------------------------------
+# Safety failure classification (do not dump every key into scan-continue).
+#
+# A. GLOBAL SYSTEM SAFETY — abort the entire multi-symbol cycle.
+#    Kill switch, operator auto-trade off, EXECUTION_ENABLED, gateway/broker
+#    down, account trading disabled, MT5 AutoTrading (terminal-wide — never
+#    convert false→true), broker restrictions, unverified daily P/L, ops mode.
+#
+# B. SYMBOL-SPECIFIC SAFETY — skip this desk, continue the universe.
+#    Instrument-native spread, allowlist, tradable flag, broker session for
+#    this symbol, news filter on this snapshot, market_data_live from this
+#    symbol's context (stale tick / missing book for one desk).
+#
+# C. SCAN-CONTINUE — Decision may still record TAKE; OMS stays blocked.
+#    Daily loss, max open, risk engine, margin, live_trading_state overlay.
+# ---------------------------------------------------------------------------
+GLOBAL_SAFETY_CONDITION_KEYS = frozenset(
+    {
+        "auto_trading_toggle",
+        "auto_trading_run_state",
+        "emergency_stop",
+        "ops_mode",
+        "execution_enabled",
+        "gateway_connected",
+        "broker_connected",
+        "account_trading",
+        "mt5_autotrading",
+        "broker_restrictions",
+        "daily_pnl_verified",
+    }
+)
+SYMBOL_SPECIFIC_SAFETY_CONDITION_KEYS = frozenset(
+    {
+        "symbol_allowed",
+        "symbol_tradable",
+        "max_spread",
+        "trading_session",
+        "news_filter",
+        "market_data_live",
+    }
+)
 _SCAN_CONTINUE_CONDITION_KEYS = frozenset(
     {
         "daily_loss",
@@ -626,18 +761,29 @@ _SCAN_CONTINUE_CONDITION_KEYS = frozenset(
 )
 
 
-def safety_blocks_decision(result: AutoTradeSafetyResult) -> bool:
-    """True when Safety/operator/connectivity should abort before Decision.
-
-    Daily-loss / max-positions / risk-engine failures keep scanning and can
-    still produce TAKE; OMS remains blocked at Risk.
-    """
+def safety_failure_scope(result: AutoTradeSafetyResult) -> str:
+    """Classify a Safety miss as allowed / global / symbol / scan_continue."""
     if result.allowed:
-        return False
+        return "allowed"
     failed = [c for c in result.conditions if not c.passed]
     if not failed:
-        return True
-    return any(c.key not in _SCAN_CONTINUE_CONDITION_KEYS for c in failed)
+        return "global"
+    keys = {c.key for c in failed}
+    if keys & GLOBAL_SAFETY_CONDITION_KEYS:
+        return "global"
+    if keys & SYMBOL_SPECIFIC_SAFETY_CONDITION_KEYS:
+        return "symbol"
+    return "scan_continue"
+
+
+def safety_blocks_decision(result: AutoTradeSafetyResult) -> bool:
+    """True when a GLOBAL Safety miss must abort the universe before Decision.
+
+    Symbol-specific misses skip that desk only (ITE must not call Decision on
+    the failed snapshot). Daily-loss / max-positions / risk-engine keep
+    scanning; OMS remains blocked at Risk.
+    """
+    return safety_failure_scope(result) == "global"
 
 
 def daily_loss_is_blocking(result: AutoTradeSafetyResult) -> bool:
