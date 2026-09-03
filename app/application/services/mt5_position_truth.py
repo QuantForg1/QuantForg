@@ -268,16 +268,56 @@ def force_sync_positions(
     )
 
 
+def candidate_position_truth_symbol(symbol: str | None) -> str:
+    """Resolve symbol scope for candidate add-on / position-truth sync.
+
+    Gold → canonical broker gold (``XAUUSD_i``). Non-gold → candidate spelling
+    via existing display helper — never coerce FX/crypto/index to gold.
+    """
+    from app.domain.trading.gold_only import (
+        CANONICAL_GOLD_BROKER_DISPLAY,
+        canonical_gold_execution_symbol,
+        display_autonomous_symbol,
+        is_gold_symbol,
+    )
+
+    raw = (symbol or "").strip()
+    if not raw:
+        return CANONICAL_GOLD_BROKER_DISPLAY
+    if is_gold_symbol(raw):
+        return canonical_gold_execution_symbol(raw)
+    return display_autonomous_symbol(raw)
+
+
 def apply_mt5_position_truth(
     account: AccountRiskState,
     sync: PositionTruthSync,
 ) -> AccountRiskState:
-    """Rewrite strategy cap from QuantForg identity — not the account book."""
+    """Rewrite same-symbol QuantForg open count from sync — not the account book.
+
+    Always refreshes ``open_directions`` / ``open_entries`` from ``sync.rows``
+    filtered to ``sync.symbol`` so a Gold (or other-desk) QF count cannot leave
+    ``open_positions > 0`` with empty book facts on an independent candidate.
+    Global ``account_open_positions`` remains the full MT5 book count.
+    """
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        book_facts_from_positions,
+        filter_quantforg_positions,
+    )
+
     qf_n = int(getattr(sync, "quantforg_positions", 0) or 0)
     acct_n = int(getattr(sync, "mt5_positions", 0) or 0)
+    sym = str(getattr(sync, "symbol", "") or "")
+    rows = list(getattr(sync, "rows", ()) or ())
+    owned = filter_quantforg_positions(rows, symbol=sym or None)
+    dirs, entries = book_facts_from_positions(owned)
+    if qf_n <= 0:
+        dirs, entries = (), ()
     return replace(
         account,
         open_positions=qf_n,
         already_in_trade=bool(qf_n > 0),
         account_open_positions=acct_n,
+        open_directions=tuple(dirs),
+        open_entries=tuple(entries),
     )

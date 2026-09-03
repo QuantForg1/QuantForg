@@ -301,6 +301,19 @@ class InstitutionalIteRuntime:
         raw = str(getattr(snapshot, "symbol", "") or "")
         return canonical_gold_execution_symbol(raw or None)
 
+    def _candidate_position_truth_symbol(self, snapshot: Any) -> str:
+        """Candidate-scoped symbol for force_sync before Safety/Risk add-on gates.
+
+        Must not use ``_gold_exec_symbol`` for non-gold desks — that replaces
+        independent-candidate book facts with Gold QF counts and falsely trips
+        ``open_book_facts_incomplete``.
+        """
+        from app.application.services.mt5_position_truth import (
+            candidate_position_truth_symbol,
+        )
+
+        return candidate_position_truth_symbol(getattr(snapshot, "symbol", None))
+
     def _safety_cycle_diagnostics(
         self,
         *,
@@ -859,7 +872,7 @@ class InstitutionalIteRuntime:
             prior_internal = int(account.open_positions)
             sync = force_sync_positions(
                 self.mt5_adapter,
-                symbol=self._gold_exec_symbol(snapshot),
+                symbol=self._candidate_position_truth_symbol(snapshot),
                 internal_positions=prior_internal,
                 position_engine=self.position_management.engine,
                 fresh=False,
@@ -869,6 +882,8 @@ class InstitutionalIteRuntime:
                 logger.warning(
                     "force_sync_before_safety",
                     mt5_positions=sync.mt5_positions,
+                    quantforg_positions=sync.quantforg_positions,
+                    sync_symbol=sync.symbol,
                     internal_positions=prior_internal,
                     repaired=sync.repaired,
                 )
@@ -927,7 +942,7 @@ class InstitutionalIteRuntime:
                     prior_internal = int(account.open_positions)
                     sync = force_sync_positions(
                         self.mt5_adapter,
-                        symbol=self._gold_exec_symbol(snapshot),
+                        symbol=self._candidate_position_truth_symbol(snapshot),
                         internal_positions=prior_internal,
                         position_engine=self.position_management.engine,
                     )
@@ -935,6 +950,8 @@ class InstitutionalIteRuntime:
                     logger.warning(
                         "force_sync_before_max_open_reject",
                         mt5_positions=sync.mt5_positions,
+                        quantforg_positions=sync.quantforg_positions,
+                        sync_symbol=sync.symbol,
                         internal_positions=prior_internal,
                         repaired=sync.repaired,
                     )
@@ -2359,7 +2376,8 @@ class InstitutionalIteRuntime:
 
                 sync = force_sync_positions(
                     self.mt5_adapter,
-                    symbol=str(getattr(snapshot, "symbol", "") or GOLD_SYMBOL),
+                    symbol=self._candidate_position_truth_symbol(snapshot)
+                    or str(getattr(snapshot, "symbol", "") or GOLD_SYMBOL),
                     position_engine=engine,
                 )
                 account = apply_mt5_position_truth(account, sync)
