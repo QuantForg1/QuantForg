@@ -133,6 +133,8 @@ def test_ite_handoff_seeds_scalping_universe_not_full_catalogue() -> None:
     assert "DEFAULT_SCALPING_UNIVERSE" in src
     assert "ensure_scalping_universe_handoff" in src
     assert "prioritize_ready_execution_handoff" in src
+    assert "collect_scan_ready_symbols" in src
+    assert "build_live_execution_queue" in src
     assert "len(plane_allowed) >= 2" not in src
     assert "SYMBOL_SAFETY_RELEASE" in inspect.getsource(
         InstitutionalIteRuntime.run_auto_cycle
@@ -259,3 +261,214 @@ def test_non_allowlisted_still_blocked_by_allowlist_match() -> None:
     assert allowlist_matches("CADCHF_I", allowed) is False
     assert allowlist_matches("AEXEUR", allowed) is False
     assert allowlist_matches("EURUSD_I", allowed) is True
+
+
+def _take_row(
+    symbol: str,
+    *,
+    direction: str = "BUY",
+    score: int = 84,
+) -> dict:
+    return {
+        "symbol": symbol,
+        "direction": direction,
+        "signal_action": direction,
+        "setup_state": "TAKE",
+        "reject": False,
+        "opportunity_eligible": True,
+        "opportunity_score": score,
+        "sniper_entry": {"passed": True, "action": direction, "setup_state": "TAKE"},
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_prioritize_unions_takes_missing_from_eligible_set() -> None:
+    """Live defect: TAKEs dropped when not already in ordered_set."""
+    from app.domain.institutional_trading.auto_trading import (
+        prioritize_ready_execution_handoff,
+    )
+
+    ordered = prioritize_ready_execution_handoff(
+        ["EURUSD", "DJIUSD", "AEXEUR"],
+        ["LTCUSD", "BTCUSD"],
+    )
+    assert ordered[:2] == ["LTCUSD", "BTCUSD"]
+    assert ordered.index("LTCUSD") < ordered.index("DJIUSD")
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_prioritize_empty_eligible_still_keeps_takes() -> None:
+    from app.domain.institutional_trading.auto_trading import (
+        prioritize_ready_execution_handoff,
+    )
+
+    assert prioritize_ready_execution_handoff([], ["NDXUSD", "XAUUSD"]) == [
+        "NDXUSD",
+        "XAUUSD",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_live_queue_is_takes_only_not_catalogue_tail() -> None:
+    from app.domain.institutional_trading.auto_trading import (
+        build_live_execution_queue,
+        collect_scan_ready_symbols,
+    )
+
+    scan = {
+        "opportunity_ranked": [
+            _take_row("LTCUSD"),
+            _take_row("BTCUSD", direction="SELL", score=78),
+            {
+                "symbol": "DJIUSD",
+                "direction": "BUY",
+                "signal_action": "BUY",
+                "eligible": True,
+                "reject": False,
+                "opportunity_eligible": False,
+                "opportunity_score": 55,
+                "sniper_entry": {"passed": False},
+            },
+            {
+                "symbol": "AEXEUR",
+                "direction": "BUY",
+                "signal_action": "WAIT",
+                "eligible": True,
+                "reject": False,
+                "opportunity_score": 48,
+            },
+            {
+                "symbol": "EURCAD",
+                "direction": "SELL",
+                "eligible": True,
+                "reject": False,
+                "opportunity_eligible": False,
+                "blocking_gate": "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
+            },
+        ]
+    }
+    ready = collect_scan_ready_symbols(scan)
+    assert ready == ["LTCUSD", "BTCUSD"]
+    queue = build_live_execution_queue(
+        ready=ready,
+        seed=DEFAULT_SCALPING_UNIVERSE,
+        catalogue=[
+            "EURUSD",
+            "XAUUSD",
+            "DJIUSD",
+            "AEXEUR",
+            "F40EUR",
+            "EURCAD",
+            "LTCUSD",
+            "BTCUSD",
+        ],
+    )
+    assert queue == ["LTCUSD", "BTCUSD"]
+    assert "DJIUSD" not in queue
+    assert "AEXEUR" not in queue
+    assert "EURCAD" not in queue
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_live_queue_without_take_uses_seed_not_index_crosses() -> None:
+    from app.domain.institutional_trading.auto_trading import build_live_execution_queue
+
+    catalogue = [
+        "DJIUSD",
+        "AEXEUR",
+        "F40EUR",
+        "EURCAD",
+        "GBPAUD",
+        "EURUSD",
+        "GBPUSD",
+        "XAUUSD",
+        "BTCUSD",
+        "ETHUSD",
+        "AUDUSD",
+        "NZDUSD",
+        "USDCHF",
+        "USDCAD",
+        "USDJPY",
+        "LTCUSD",
+    ]
+    queue = build_live_execution_queue(
+        ready=(),
+        seed=DEFAULT_SCALPING_UNIVERSE,
+        catalogue=catalogue,
+    )
+    assert queue
+    assert queue[0] in set(DEFAULT_SCALPING_UNIVERSE)
+    assert "DJIUSD" not in queue
+    assert "AEXEUR" not in queue
+    assert "F40EUR" not in queue
+    assert "EURCAD" not in queue
+    assert "GBPAUD" not in queue
+    assert "XAUUSD" in queue
+    assert "EURUSD" in queue
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_quarantined_ltcusd_is_not_ready_gold_take_still_queued() -> None:
+    from app.domain.institutional_trading.auto_trading import (
+        build_live_execution_queue,
+        collect_scan_ready_symbols,
+    )
+
+    scan = {
+        "opportunity_ranked": [
+            {
+                "symbol": "LTCUSD",
+                "direction": "BUY",
+                "signal_action": "BUY",
+                "setup_state": "TAKE",
+                "reject": True,
+                "reject_reason": "WAIT_SYMBOL_QUARANTINED",
+                "opportunity_eligible": True,
+                "symbol_state": "QUARANTINED",
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
+            },
+            _take_row("XAUUSD", direction="SELL", score=86),
+            _take_row("EURUSD", score=76),
+        ]
+    }
+    ready = collect_scan_ready_symbols(scan)
+    assert "LTCUSD" not in ready
+    assert ready[0] == "XAUUSD"
+    queue = build_live_execution_queue(
+        ready=ready,
+        seed=DEFAULT_SCALPING_UNIVERSE,
+        catalogue=["LTCUSD", "XAUUSD", "EURUSD", "DJIUSD"],
+    )
+    assert queue[0] == "XAUUSD"
+    assert "LTCUSD" not in queue
+    assert "DJIUSD" not in queue
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_loose_eligible_without_opportunity_is_not_a_take() -> None:
+    from app.domain.institutional_trading.auto_trading import collect_scan_ready_symbols
+
+    scan = {
+        "rows": [
+            {
+                "symbol": "AUDCHF",
+                "direction": "BUY",
+                "signal_action": "BUY",
+                "eligible": True,
+                "reject": False,
+                "opportunity_score": 55,
+                "sniper_entry": {"passed": False},
+            }
+        ]
+    }
+    assert collect_scan_ready_symbols(scan) == []

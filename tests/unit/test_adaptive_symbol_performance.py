@@ -15,6 +15,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.ai_scalping.global_market_intelligence import (
     assess_global_market_intelligence,
+    provider_failure_unknown_intelligence,
 )
 from app.domain.institutional_trading.ai_scalping.multi_symbol import (
     rank_scalping_opportunities,
@@ -375,3 +376,12 @@ def test_global_controller_streak_still_time_boxed() -> None:
     assert ctrl.loss_streak_cooldown_active() is False
     ctrl.note_closed_trade(loss=False, volume=Decimal("0.04"))
     assert ctrl.consecutive_losses == 0
+
+
+def test_gmi_provider_failure_does_not_block_or_confirm() -> None:
+    gmi = provider_failure_unknown_intelligence(direction="BUY")
+    assert gmi.intelligence_alignment == "UNKNOWN"
+    assert gmi.global_regime == "UNKNOWN"
+    assert gmi.wait_recommended is False
+    assert gmi.wait_code is None
+    assert "not confirmation" in gmi.reason.lower()

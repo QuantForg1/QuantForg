@@ -710,27 +710,35 @@ def score_scalping_setup(
 
     rr_float = float(expected_rr) if expected_rr is not None else None
     min_rr = float(cfg.min_expected_rr or 1)
-    gmi = gmi_mod.assess_global_market_intelligence(
-        direction=direction_dec.direction.value,
-        structure_score=int(direction_dec.structure_score or 0),
-        momentum=int(factors.get("momentum") or 0),
-        liquidity=int(liquidity_score),
-        expected_rr=rr_float,
-        min_expected_rr=min_rr,
-        market_regime=regime.regime,
-        atr_band=resolved.band,
-        news_blocked=news_blocked,
-        news_reason=str(news_reason) if news_reason else None,
-        # Pass through real MTF score; 0/missing must not become a synthetic conflict.
-        mtf_alignment=(
-            int(trend.alignment_score)
-            if getattr(trend, "alignment_score", None) is not None
-            else None
-        ),
-        execution_quality_ok=bool(execution_quality_ok),
-        portfolio_ok=True,
-        symbol=sym_key or None,
-    )
+    try:
+        gmi = gmi_mod.assess_global_market_intelligence(
+            direction=direction_dec.direction.value,
+            structure_score=int(direction_dec.structure_score or 0),
+            momentum=int(factors.get("momentum") or 0),
+            liquidity=int(liquidity_score),
+            expected_rr=rr_float,
+            min_expected_rr=min_rr,
+            market_regime=regime.regime,
+            atr_band=resolved.band,
+            news_blocked=news_blocked,
+            news_reason=str(news_reason) if news_reason else None,
+            # Pass through real MTF score; 0/missing must not become a synthetic conflict.
+            mtf_alignment=(
+                int(trend.alignment_score)
+                if getattr(trend, "alignment_score", None) is not None
+                else None
+            ),
+            execution_quality_ok=bool(execution_quality_ok),
+            portfolio_ok=True,
+            symbol=sym_key or None,
+        )
+    except Exception:
+        from core.logging import get_logger
+
+        get_logger(__name__).exception("global_market_intelligence_assess_failed")
+        gmi = gmi_mod.provider_failure_unknown_intelligence(
+            direction=direction_dec.direction.value,
+        )
     if gmi.wait_recommended and gmi.wait_code:
         reject_list.append(gmi.wait_code)
         reasons.append(f"WAIT: {gmi.wait_code} ({gmi.reason})")

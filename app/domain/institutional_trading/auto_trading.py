@@ -56,6 +56,18 @@ def prefer_allowlisted_handoff(
     return primary + secondary
 
 
+def _unique_upper_symbols(symbols: Sequence[str] | Iterable[str] | None) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in symbols or ():
+        u = str(raw).strip().upper()
+        if not u or u in seen:
+            continue
+        ordered.append(u)
+        seen.add(u)
+    return ordered
+
+
 def prioritize_ready_execution_handoff(
     symbols: Sequence[str] | Iterable[str],
     ready: Sequence[str] | Iterable[str] | None,
@@ -67,24 +79,132 @@ def prioritize_ready_execution_handoff(
     an already trade-queue-eligible TAKE (e.g. NDXUSD/LTCUSD/BTCUSD) behind
     majors that will only burn ``max_entries_per_cycle`` on P<70 / Safety.
 
+    Ready TAKEs are unioned even when missing from ``symbols`` — dropping them
+    previously starved execution while the catalogue tail was evaluated.
+
     Does not invent symbols. Does not bypass Safety / Risk / OMS.
     """
-    ordered = [str(s).strip().upper() for s in symbols if str(s).strip()]
-    if not ordered:
-        return []
-    ordered_set = set(ordered)
-    primary: list[str] = []
-    seen: set[str] = set()
-    for sym in ready or ():
-        u = str(sym).strip().upper()
-        if not u or u in seen or u not in ordered_set:
-            continue
-        primary.append(u)
-        seen.add(u)
+    ordered = _unique_upper_symbols(symbols)
+    primary = _unique_upper_symbols(ready)
     if not primary:
         return ordered
+    seen = set(primary)
     secondary = [s for s in ordered if s not in seen]
     return primary + secondary
+
+
+_QUARANTINE_WAIT_MARKERS = frozenset(
+    {
+        "WAIT_SYMBOL_QUARANTINED",
+        "SYMBOL_QUARANTINED",
+    }
+)
+
+
+def _scan_row_is_execution_ready(row: dict[str, Any]) -> bool:
+    """True only for a concrete scanner TAKE — not research/WAIT/P<70.
+
+    Loose ``eligible`` (BUY/SELL and not reject) is not enough: that flag is
+    set before opportunity_score / sniper TAKE, and was walking DJIUSD/AEXEUR
+    into the OMS cycle.
+    """
+    if not isinstance(row, dict) or row.get("reject"):
+        return False
+    state = str(row.get("symbol_state") or "").strip().upper()
+    if state == "QUARANTINED":
+        return False
+    reasons: list[str] = []
+    for key in ("reject_reason", "wait_code", "blocking_gate", "next_eligible_reason"):
+        val = row.get(key)
+        if val:
+            reasons.append(str(val).upper())
+    extra = row.get("reject_reasons")
+    if isinstance(extra, (list, tuple)):
+        reasons.extend(str(x).upper() for x in extra if x)
+    hay = " ".join(reasons)
+    if any(marker in hay for marker in _QUARANTINE_WAIT_MARKERS):
+        return False
+    if str(row.get("opportunity_eligible")).strip().lower() == "false":
+        return False
+
+    sniper = row.get("sniper_entry")
+    sniper_d = sniper if isinstance(sniper, dict) else {}
+    action = str(row.get("signal_action") or "").strip().upper()
+    sniper_action = str(sniper_d.get("action") or "").strip().upper()
+    direction = str(row.get("direction") or "").strip().upper()
+    setup = str(
+        row.get("setup_state") or sniper_d.get("setup_state") or ""
+    ).strip().upper()
+    side = (
+        action
+        if action in {"BUY", "SELL"}
+        else (sniper_action if sniper_action in {"BUY", "SELL"} else direction)
+    )
+    sniper_take = bool(sniper_d.get("passed")) and (
+        side in {"BUY", "SELL"} or setup == "TAKE"
+    )
+    opportunity_ok = row.get("opportunity_eligible") is True
+    if opportunity_ok and side in {"BUY", "SELL"}:
+        return True
+    if sniper_take and side in {"BUY", "SELL"}:
+        return True
+    return bool(
+        setup == "TAKE"
+        and side in {"BUY", "SELL"}
+        and row.get("opportunity_eligible") is not False
+    )
+
+
+def collect_scan_ready_symbols(scan: dict[str, Any] | None) -> list[str]:
+    """Scanner TAKEs in rank order. Quarantined / P<70 / research WAIT omitted."""
+    if not isinstance(scan, dict):
+        return []
+    ready: list[str] = []
+    seen: set[str] = set()
+    for key in ("opportunity_ranked", "ranked", "rows", "noc_rows"):
+        block = scan.get(key)
+        if not isinstance(block, list):
+            continue
+        for row in block:
+            if not _scan_row_is_execution_ready(row if isinstance(row, dict) else {}):
+                continue
+            sym = str(
+                (row or {}).get("symbol") or (row or {}).get("broker_symbol") or ""
+            ).strip().upper()
+            if not sym or sym in seen:
+                continue
+            ready.append(sym)
+            seen.add(sym)
+    tq = scan.get("trade_queue")
+    if isinstance(tq, dict):
+        for cand in tq.get("candidates") or []:
+            if not isinstance(cand, dict):
+                continue
+            if not _scan_row_is_execution_ready(cand):
+                continue
+            sym = str(cand.get("symbol") or "").strip().upper()
+            if sym and sym not in seen:
+                ready.append(sym)
+                seen.add(sym)
+    return ready
+
+
+def build_live_execution_queue(
+    *,
+    ready: Sequence[str] | Iterable[str] | None,
+    seed: Sequence[str] | set[str] | frozenset[str] | None,
+    catalogue: Sequence[str] | Iterable[str] | None = None,
+) -> list[str]:
+    """OMS handoff: scanner TAKEs only when any exist; otherwise seed desks.
+
+    Does not walk the broker catalogue tail (DJIUSD / AEXEUR / F40EUR / crosses)
+    on a stale 21s scan. Does not force orders. Does not lower P>70 / Sniper /
+    RR>1. Safety / Risk / OMS still decide TAKE vs WAIT on the live snapshot.
+    """
+    ready_u = _unique_upper_symbols(ready)
+    if ready_u:
+        return ready_u
+    return ensure_scalping_universe_handoff((), seed, catalogue=catalogue or ())
 
 
 def _handoff_has_instrument_spec(symbol: str) -> bool:

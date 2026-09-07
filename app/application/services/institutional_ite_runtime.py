@@ -5858,77 +5858,59 @@ class InstitutionalIteRuntime:
                     )
             except Exception:
                 logger.exception("ensure_scalping_universe_handoff_failed")
-            # Sniper TAKE / trade-queue eligible must not lose focus to injected
-            # seed majors or allowlist preference (max_entries_per_cycle is tiny).
+            # Scanner TAKEs own the OMS queue. Catalogue-tail desks (DJIUSD /
+            # AEXEUR / F40EUR / P<70 crosses) must not consume the cycle while
+            # a Sniper TAKE waits. When no TAKE exists, evaluate seed desks
+            # only — never the full broker book. Gates are unchanged.
             try:
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_SCALPING_UNIVERSE,
+                )
                 from app.domain.institutional_trading.auto_trading import (
+                    build_live_execution_queue,
+                    collect_scan_ready_symbols,
                     prioritize_ready_execution_handoff,
                 )
 
-                ready_syms: list[str] = []
-                seen_ready: set[str] = set()
-                for key in (
-                    "opportunity_ranked",
-                    "ranked",
-                    "rows",
-                    "noc_rows",
-                ):
-                    block = scan.get(key) if isinstance(scan, dict) else None
-                    if not isinstance(block, list):
-                        continue
-                    for row in block:
-                        if not isinstance(row, dict):
-                            continue
-                        sym = str(
-                            row.get("symbol") or row.get("broker_symbol") or ""
-                        ).strip().upper()
-                        if not sym or sym in seen_ready:
-                            continue
-                        sniper = row.get("sniper_entry")
-                        sniper_d = sniper if isinstance(sniper, dict) else {}
-                        sniper_take = bool(sniper_d.get("passed")) and (
-                            str(
-                                row.get("signal_action")
-                                or sniper_d.get("action")
-                                or row.get("direction")
-                                or ""
-                            )
-                            .strip()
-                            .upper()
-                            in {"BUY", "SELL"}
-                            or str(
-                                row.get("setup_state")
-                                or sniper_d.get("setup_state")
-                                or ""
-                            )
-                            .strip()
-                            .upper()
-                            == "TAKE"
-                        )
-                        trade_ready = bool(
-                            row.get("eligible")
-                            or row.get("opportunity_eligible")
-                        ) and not bool(row.get("reject"))
-                        if not (sniper_take or trade_ready):
-                            continue
-                        if row.get("blocking_gate") and not trade_ready:
-                            continue
-                        ready_syms.append(sym)
-                        seen_ready.add(sym)
-                tq = scan.get("trade_queue") if isinstance(scan, dict) else None
-                if isinstance(tq, dict):
-                    for cand in tq.get("candidates") or []:
-                        if not isinstance(cand, dict):
-                            continue
-                        if not cand.get("eligible") or cand.get("reject"):
-                            continue
-                        sym = str(cand.get("symbol") or "").strip().upper()
-                        if sym and sym not in seen_ready:
-                            ready_syms.append(sym)
-                            seen_ready.add(sym)
-                eligible = prioritize_ready_execution_handoff(eligible, ready_syms)
+                collected = collect_scan_ready_symbols(
+                    scan if isinstance(scan, dict) else None
+                )
+                cat = [
+                    str(s).strip().upper()
+                    for s in (
+                        (scan.get("universe") if isinstance(scan, dict) else None)
+                        or []
+                    )
+                    if str(s).strip()
+                ]
+                # Keep prioritize in the path (union TAKEs missing from
+                # eligible) but NEVER pass the catalogue tail as ready.
+                unioned = prioritize_ready_execution_handoff(eligible, collected)
+                eligible = build_live_execution_queue(
+                    ready=collected,
+                    seed=DEFAULT_SCALPING_UNIVERSE,
+                    catalogue=cat,
+                )
+                logger.warning(
+                    "live_execution_queue_built",
+                    ready_count=len(collected),
+                    ready_symbols=collected[:8],
+                    queue_count=len(eligible),
+                    queue_symbols=eligible[:8],
+                    prior_eligible_count=len(unioned),
+                )
             except Exception:
-                logger.exception("prioritize_ready_execution_handoff_failed")
+                logger.exception("live_execution_queue_build_failed")
+            try:
+                from app.domain.trading.gold_only import (
+                    filter_autonomous_symbols,
+                    gold_only_enabled,
+                )
+
+                if gold_only_enabled():
+                    eligible = list(filter_autonomous_symbols(eligible))
+            except Exception:
+                logger.exception("gold_only_live_queue_filter_failed")
             scan["eligible_symbols"] = list(eligible)
             scan["eligible_count"] = len(eligible)
             with self._lock:

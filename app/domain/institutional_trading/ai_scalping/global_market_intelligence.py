@@ -465,3 +465,31 @@ def assess_global_market_intelligence(
         wait_code=wait_code,
         reason=reason,
     )
+
+
+def provider_failure_unknown_intelligence(
+    *,
+    direction: str | None = None,
+) -> GlobalMarketIntelligence:
+    """Fail open to UNKNOWN — never fabricate confirmation, never stop the desk."""
+    _ = direction
+    return GlobalMarketIntelligence(
+        global_regime="UNKNOWN",
+        intelligence_alignment="UNKNOWN",
+        layers=(),
+        sources=(_unavailable("intelligence_provider", "provider_failure"),),
+        technical_score=0,
+        structure_score=0,
+        market_regime_score=50,
+        macro_alignment_score=50,
+        news_risk_score=50,
+        cross_asset_score=50,
+        execution_quality_score=50,
+        expected_reward_score=50,
+        wait_recommended=False,
+        wait_code=None,
+        reason=(
+            "Intelligence provider failure — UNKNOWN is not confirmation "
+            "and does not block other symbols"
+        ),
+    )
