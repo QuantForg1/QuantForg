@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from core.config.environments import testing_settings
 from core.config.settings import AppEnvironment, Settings
 
@@ -105,3 +107,25 @@ def test_non_testing_durable_true_selects_postgres() -> None:
     assert isinstance(
         factories["platform_uow_factory"], PostgresPlatformUnitOfWorkFactory
     )
+    assert factories["uow_factory"] is factories["platform_uow_factory"]
+
+
+@pytest.mark.trading_core
+def test_identity_uow_prefers_postgres_over_postgrest() -> None:
+    from app.infrastructure.persistence.factory import build_persistence_factories
+    from app.infrastructure.persistence.postgres_platform import (
+        PostgresPlatformUnitOfWorkFactory,
+    )
+    from app.infrastructure.persistence.supabase_identity import (
+        SupabaseIdentityUnitOfWorkFactory,
+    )
+
+    settings = Settings(
+        app_env=AppEnvironment.DEVELOPMENT,
+        durable_persistence=True,
+        supabase_url="https://example.supabase.co",
+        _env_file=None,
+    )
+    factories = build_persistence_factories(settings, MagicMock(), supabase=MagicMock())
+    assert isinstance(factories["uow_factory"], PostgresPlatformUnitOfWorkFactory)
+    assert not isinstance(factories["uow_factory"], SupabaseIdentityUnitOfWorkFactory)

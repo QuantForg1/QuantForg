@@ -7,8 +7,11 @@ KPIs. Never fabricates statistics. Never mutates execution paths.
 
 from __future__ import annotations
 
+import json
+import time
 from collections import defaultdict
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Any
 from uuid import uuid4
 
@@ -17,7 +20,10 @@ import httpx
 from app.application.services.institutional_multi_asset_scanner import (
     get_last_multi_asset_scan,
 )
-from app.application.services.ops_state_persistence import load_ops_state, save_ops_state
+from app.application.services.ops_state_persistence import (
+    load_ops_state,
+    save_ops_state,
+)
 from app.application.services.signal_center_service import (
     _row_from_score,
     _scores_from_scan,
@@ -36,6 +42,29 @@ logger = get_logger(__name__)
 
 _TABLE = "signal_history"
 _JOIN_WINDOW_SEC = 900
+_HISTORY_SQL_BY_SYMBOL = """
+SELECT id, observed_at, scan_as_of, symbol, direction, badge, quality,
+       confidence, probability, momentum, structure, strategy_id, session,
+       reject, blocking_gate, rr, expected_hold, factors, raw_score, source
+FROM signal_history
+WHERE symbol = $1
+ORDER BY observed_at DESC
+LIMIT $2
+"""
+_HISTORY_SQL_ALL = """
+SELECT id, observed_at, scan_as_of, symbol, direction, badge, quality,
+       confidence, probability, momentum, structure, strategy_id, session,
+       reject, blocking_gate, rr, expected_hold, factors, raw_score, source
+FROM signal_history
+ORDER BY observed_at DESC
+LIMIT $1
+"""
+_HISTORY_LIMIT_MAX = 200
+_FALLBACK_CAP = 200
+_OBSERVE_DEBOUNCE_S = 15.0
+_observe_lock = Lock()
+_last_observe_mono = 0.0
+_last_observe_as_of = ""
 
 
 def _now_iso() -> str:
@@ -117,7 +146,7 @@ def _kpis_from_closed(trades: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     n = len(wins) + len(losses)
     wr = round(100.0 * len(wins) / n, 2) if n else None
-    pf = round(gp / gl, 3) if gl > 0 else (None if gp <= 0 else None)
+    pf = round(gp / gl, 3) if gl > 0 else None
     # Infinite PF represented as null with flag — never invent a number.
     pf_infinite = bool(gp > 0 and gl == 0)
     avg_hold_sec = round(sum(holds) / len(holds), 1) if holds else None
@@ -180,7 +209,100 @@ def _score_to_history_row(score: dict[str, Any], *, scan_as_of: str) -> dict[str
     }
 
 
+def _upsert_history_direct(rows: list[dict[str, Any]]) -> int:
+    from app.infrastructure.persistence.direct_postgres import (
+        direct_postgres_available,
+        executemany,
+    )
+
+    if not direct_postgres_available() or not rows:
+        return 0
+    args: list[tuple[Any, ...]] = []
+    for r in rows[:80]:
+        factors = r.get("factors") or {}
+        raw = r.get("raw_score") or {}
+        args.append(
+            (
+                str(r.get("id") or uuid4()),
+                r.get("observed_at") or _now_iso(),
+                str(r["scan_as_of"]),
+                str(r["symbol"]).upper(),
+                str(r.get("direction") or "NONE"),
+                r.get("badge"),
+                r.get("quality"),
+                r.get("confidence"),
+                r.get("probability"),
+                r.get("momentum"),
+                r.get("structure"),
+                r.get("strategy_id"),
+                r.get("session"),
+                bool(r.get("reject")),
+                r.get("blocking_gate"),
+                r.get("rr"),
+                str(r["expected_hold"]) if r.get("expected_hold") is not None else None,
+                json.dumps(factors, default=str),
+                json.dumps(raw, default=str),
+                str(r.get("source") or "live_multi_asset_scan"),
+            )
+        )
+    return executemany(
+        """
+        INSERT INTO signal_history (
+            id, observed_at, scan_as_of, symbol, direction, badge, quality,
+            confidence, probability, momentum, structure, strategy_id, session,
+            reject, blocking_gate, rr, expected_hold, factors, raw_score, source
+        ) VALUES (
+            $1::uuid, $2::timestamptz, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+            $13, $14, $15, $16, $17, $18::jsonb, $19::jsonb, $20
+        )
+        ON CONFLICT (scan_as_of, symbol) DO UPDATE SET
+            observed_at = EXCLUDED.observed_at,
+            direction = EXCLUDED.direction,
+            badge = EXCLUDED.badge,
+            quality = EXCLUDED.quality,
+            confidence = EXCLUDED.confidence,
+            probability = EXCLUDED.probability,
+            momentum = EXCLUDED.momentum,
+            structure = EXCLUDED.structure,
+            strategy_id = EXCLUDED.strategy_id,
+            session = EXCLUDED.session,
+            reject = EXCLUDED.reject,
+            blocking_gate = EXCLUDED.blocking_gate,
+            rr = EXCLUDED.rr,
+            expected_hold = EXCLUDED.expected_hold,
+            factors = EXCLUDED.factors,
+            raw_score = EXCLUDED.raw_score,
+            source = EXCLUDED.source
+        """,
+        args,
+    )
+
+
+def _load_history_direct(
+    *,
+    symbol: str | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    from app.infrastructure.persistence.direct_postgres import (
+        direct_postgres_available,
+        fetch,
+    )
+
+    if not direct_postgres_available():
+        return []
+    cap = max(1, min(limit, _HISTORY_LIMIT_MAX))
+    if symbol:
+        rows = fetch(_HISTORY_SQL_BY_SYMBOL, symbol.upper(), cap)
+    else:
+        rows = fetch(_HISTORY_SQL_ALL, cap)
+    return rows
+
+
 def _upsert_history_postgres(rows: list[dict[str, Any]]) -> int:
+    from app.infrastructure.persistence.direct_postgres import direct_postgres_available
+
+    if direct_postgres_available():
+        return 0
     cfg = _supabase_rest_config()
     if cfg is None or not rows:
         return 0
@@ -255,7 +377,7 @@ def _save_history_ops_fallback(rows: list[dict[str, Any]]) -> None:
         by_key.values(),
         key=lambda x: str(x.get("observed_at") or ""),
         reverse=True,
-    )[:2000]
+    )[:_FALLBACK_CAP]
     save_ops_state(
         {
             "signal_history": {
@@ -292,6 +414,10 @@ def _load_history_postgres(
     symbol: str | None = None,
     limit: int = 200,
 ) -> list[dict[str, Any]]:
+    from app.infrastructure.persistence.direct_postgres import direct_postgres_available
+
+    if direct_postgres_available():
+        return []
     cfg = _supabase_rest_config()
     if cfg is None:
         return []
@@ -302,9 +428,13 @@ def _load_history_postgres(
         "Accept": "application/json",
     }
     params: dict[str, str] = {
-        "select": "*",
+        "select": (
+            "id,observed_at,scan_as_of,symbol,direction,badge,quality,"
+            "confidence,probability,momentum,structure,strategy_id,session,"
+            "reject,blocking_gate,rr,expected_hold,factors,raw_score,source"
+        ),
         "order": "observed_at.desc",
-        "limit": str(max(1, min(limit, 1000))),
+        "limit": str(max(1, min(limit, _HISTORY_LIMIT_MAX))),
     }
     if symbol:
         params["symbol"] = f"eq.{symbol.upper()}"
@@ -314,7 +444,9 @@ def _load_history_postgres(
             if resp.status_code >= 400:
                 return []
             rows = resp.json()
-            return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+            return [
+                r for r in rows if isinstance(r, dict)
+            ] if isinstance(rows, list) else []
     except Exception as exc:
         logger.warning("signal_history_load_failed", error=str(exc))
         return []
@@ -322,16 +454,49 @@ def _load_history_postgres(
 
 def observe_live_scan() -> dict[str, Any]:
     """Persist current LIVE multi-asset scan rows into signal_history."""
+    global _last_observe_mono, _last_observe_as_of
     scan = get_last_multi_asset_scan() or {}
     as_of = str(scan.get("as_of") or _now_iso())
+    with _observe_lock:
+        now = time.monotonic()
+        if (
+            as_of == _last_observe_as_of
+            and (now - _last_observe_mono) < _OBSERVE_DEBOUNCE_S
+        ):
+            return {
+                "ok": True,
+                "fabricated": False,
+                "scan_as_of": as_of,
+                "observed": 0,
+                "postgres_written": 0,
+                "debounced": True,
+                "source": "live_multi_asset_scan",
+            }
+        _last_observe_mono = now
+        _last_observe_as_of = as_of
     scores = _scores_from_scan(scan)
     rows = [
         _score_to_history_row(s, scan_as_of=as_of)
         for s in scores
         if str(s.get("symbol") or "").strip()
     ]
-    written = _upsert_history_postgres(rows)
-    _save_history_ops_fallback(rows)
+    written = 0
+    try:
+        written = _upsert_history_direct(rows)
+    except Exception as exc:
+        logger.warning("signal_history_direct_upsert_failed", error=str(exc))
+        written = 0
+    if written <= 0:
+        try:
+            written = _upsert_history_postgres(rows)
+        except Exception as exc:
+            logger.warning("signal_history_rest_upsert_failed", error=str(exc))
+            written = 0
+    if written <= 0:
+        try:
+            _save_history_ops_fallback(rows)
+        except Exception as exc:
+            logger.warning("signal_history_fallback_save_failed", error=str(exc))
     return {
         "ok": True,
         "fabricated": False,
@@ -354,9 +519,17 @@ def list_signal_history(
             observe_live_scan()
         except Exception:
             logger.exception("signal_history_observe_failed")
-    rows = _load_history_postgres(symbol=symbol, limit=limit)
+    cap = max(1, min(limit, _HISTORY_LIMIT_MAX))
+    rows: list[dict[str, Any]] = []
+    try:
+        rows = _load_history_direct(symbol=symbol, limit=cap)
+    except Exception as exc:
+        logger.warning("signal_history_direct_load_failed", error=str(exc))
+        rows = []
     if not rows:
-        rows = _load_history_ops_fallback(symbol=symbol, limit=limit)
+        rows = _load_history_postgres(symbol=symbol, limit=cap)
+    if not rows:
+        rows = _load_history_ops_fallback(symbol=symbol, limit=cap)
     if direction:
         d = direction.strip().upper()
         rows = [r for r in rows if str(r.get("direction") or "").upper() == d]
@@ -364,7 +537,7 @@ def list_signal_history(
         "fabricated": False,
         "source": "signal_history",
         "count": len(rows),
-        "items": rows,
+        "items": rows[:cap],
     }
 
 

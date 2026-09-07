@@ -94,7 +94,10 @@ class SupabaseUserRepository:
     async def get_by_id(self, user_id: UUID) -> User | None:
         result = (
             self._client.table("users")
-            .select("*")
+            .select(
+                "id,auth_user_id,email,display_name,role,status,"
+                "password_hash,last_login_at,deactivated_at,created_at,updated_at"
+            )
             .eq("id", str(user_id))
             .limit(1)
             .execute()
@@ -105,7 +108,10 @@ class SupabaseUserRepository:
     async def get_by_email(self, email: EmailAddress) -> User | None:
         result = (
             self._client.table("users")
-            .select("*")
+            .select(
+                "id,auth_user_id,email,display_name,role,status,"
+                "password_hash,last_login_at,deactivated_at,created_at,updated_at"
+            )
             .ilike("email", email.value)
             .limit(1)
             .execute()
@@ -116,7 +122,10 @@ class SupabaseUserRepository:
     async def get_by_auth_user_id(self, auth_user_id: UUID) -> User | None:
         result = (
             self._client.table("users")
-            .select("*")
+            .select(
+                "id,auth_user_id,email,display_name,role,status,"
+                "password_hash,last_login_at,deactivated_at,created_at,updated_at"
+            )
             .eq("auth_user_id", str(auth_user_id))
             .limit(1)
             .execute()

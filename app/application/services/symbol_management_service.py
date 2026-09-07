@@ -78,6 +78,43 @@ def _default_pref(symbol: str, *, asset_class: str | None = None) -> dict[str, A
 
 
 def _load_postgres_rows() -> dict[str, dict[str, Any]]:
+    from app.infrastructure.persistence.direct_postgres import direct_postgres_available
+
+    if direct_postgres_available():
+        try:
+            from app.infrastructure.persistence.direct_postgres import fetch
+
+            rows = fetch(
+                """
+                SELECT symbol, enabled, favorite, priority, asset_class, notes,
+                       updated_at, updated_by
+                FROM symbol_management
+                LIMIT 500
+                """
+            )
+            out: dict[str, dict[str, Any]] = {}
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                sym = _normalize_symbol(str(row.get("symbol") or ""))
+                if not sym:
+                    continue
+                out[sym] = {
+                    "symbol": sym,
+                    "enabled": bool(row.get("enabled", True)),
+                    "favorite": bool(row.get("favorite", False)),
+                    "priority": int(row.get("priority") or 1000),
+                    "asset_class": str(row.get("asset_class") or "other"),
+                    "notes": row.get("notes"),
+                    "updated_at": str(row.get("updated_at") or _now_iso()),
+                    "updated_by": (
+                        str(row["updated_by"]) if row.get("updated_by") else None
+                    ),
+                }
+            return out
+        except Exception as exc:
+            logger.warning("symbol_management_direct_load_failed", error=str(exc))
+            return {}
     cfg = _supabase_rest_config()
     if cfg is None:
         return {}
@@ -91,7 +128,12 @@ def _load_postgres_rows() -> dict[str, dict[str, Any]]:
         with httpx.Client(timeout=8.0) as client:
             resp = client.get(
                 f"{base}/{_TABLE}",
-                params={"select": "*"},
+                params={
+                    "select": (
+                        "symbol,enabled,favorite,priority,asset_class,"
+                        "notes,updated_at,updated_by"
+                    )
+                },
                 headers=headers,
             )
             if resp.status_code == 404:
@@ -124,6 +166,46 @@ def _load_postgres_rows() -> dict[str, dict[str, Any]]:
 
 
 def _upsert_postgres_rows(rows: list[dict[str, Any]]) -> bool:
+    from app.infrastructure.persistence.direct_postgres import direct_postgres_available
+
+    if direct_postgres_available():
+        try:
+            from app.infrastructure.persistence.direct_postgres import executemany
+
+            args = [
+                (
+                    str(r["symbol"]).upper(),
+                    bool(r.get("enabled", True)),
+                    bool(r.get("favorite", False)),
+                    int(r.get("priority") or 1000),
+                    str(r.get("asset_class") or "other"),
+                    r.get("notes"),
+                    r.get("updated_at") or _now_iso(),
+                    r.get("updated_by"),
+                )
+                for r in rows
+            ]
+            executemany(
+                """
+                INSERT INTO symbol_management (
+                    symbol, enabled, favorite, priority, asset_class, notes,
+                    updated_at, updated_by
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8)
+                ON CONFLICT (symbol) DO UPDATE SET
+                    enabled = EXCLUDED.enabled,
+                    favorite = EXCLUDED.favorite,
+                    priority = EXCLUDED.priority,
+                    asset_class = EXCLUDED.asset_class,
+                    notes = EXCLUDED.notes,
+                    updated_at = EXCLUDED.updated_at,
+                    updated_by = EXCLUDED.updated_by
+                """,
+                args,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("symbol_management_direct_upsert_failed", error=str(exc))
+            return False
     cfg = _supabase_rest_config()
     if cfg is None or not rows:
         return False
@@ -235,7 +317,9 @@ def _persist(prefs: dict[str, dict[str, Any]]) -> None:
         logger.info("symbol_management_persisted_ops_fallback_only")
 
 
-def enabled_symbols_ordered(prefs: dict[str, dict[str, Any]] | None = None) -> list[str]:
+def enabled_symbols_ordered(
+    prefs: dict[str, dict[str, Any]] | None = None,
+) -> list[str]:
     data = prefs if prefs is not None else load_preferences()
     enabled = [r for r in data.values() if bool(r.get("enabled", True))]
     enabled.sort(
@@ -356,7 +440,7 @@ def list_managed_symbols(
                 code = _normalize_symbol(str(sym))
                 if code:
                     rows.append({"name": code, "symbol": code, "trade_mode": 4})
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     seen: set[str] = set()

@@ -65,7 +65,7 @@ def get_uow_factory() -> UnitOfWorkFactory:
     container = get_container()
     factory = container.uow_factory
     if factory is None:
-        msg = "Unit of Work factory is not available (Supabase not configured)"
+        msg = "Identity unit of work is not available"
         raise RuntimeError(msg)
     return factory  # type: ignore[no-any-return]
 

@@ -21,7 +21,10 @@ class GetCurrentUserUseCase:
     async def execute(self, *, access_token: str) -> AuthUserDTO:
         identity = await self.auth.get_user(access_token=access_token)
         async with self.uow_factory() as uow:
-            user = await sync_profile_from_identity(uow, identity)
+            user, dirty = await sync_profile_from_identity(
+                uow, identity, return_dirty=True
+            )
             ensure_user_may_authenticate(user)
-            await uow.commit()
+            if dirty:
+                await uow.commit()
         return AuthUserDTO.from_entity(user)

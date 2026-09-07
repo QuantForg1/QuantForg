@@ -111,8 +111,18 @@ def build_persistence_factories(
             "ops_uow_factory": PostgresOpsUnitOfWorkFactory(database),
             "uow_factory": None,
         }
+        # Identity (public.users + audit_logs) uses the same direct Postgres
+        # session as the rest of the platform. PostgREST is an extra egress
+        # hop and is not required for role/authorization when DATABASE_URL
+        # is healthy. GoTrue (sign-in / JWT) remains the IdP.
+        factories["uow_factory"] = factories["platform_uow_factory"]
 
-    if supabase is not None and bool(settings.supabase_configured):
+    # PostgREST identity is last-resort only: no durable Postgres session.
+    if (
+        factories.get("uow_factory") is None
+        and supabase is not None
+        and bool(getattr(settings, "supabase_configured", False))
+    ):
         factories["uow_factory"] = SupabaseIdentityUnitOfWorkFactory(supabase=supabase)
 
     return factories

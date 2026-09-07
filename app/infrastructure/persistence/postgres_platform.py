@@ -49,6 +49,22 @@ from app.infrastructure.persistence.postgres_common import (
 )
 from core.database.session import DatabaseManager
 
+_USER_BY_ID = text(
+    "SELECT id, auth_user_id, email, display_name, role, status, "
+    "password_hash, last_login_at, deactivated_at, created_at, updated_at "
+    "FROM users WHERE id = :id"
+)
+_USER_BY_EMAIL = text(
+    "SELECT id, auth_user_id, email, display_name, role, status, "
+    "password_hash, last_login_at, deactivated_at, created_at, updated_at "
+    "FROM users WHERE lower(email) = lower(:email)"
+)
+_USER_BY_AUTH_ID = text(
+    "SELECT id, auth_user_id, email, display_name, role, status, "
+    "password_hash, last_login_at, deactivated_at, created_at, updated_at "
+    "FROM users WHERE auth_user_id = :auth_user_id"
+)
+
 
 def _audit_from_row(row: Any) -> AuditLog:
     return AuditLog(
@@ -311,7 +327,7 @@ class PostgresUserRepository:
     async def get_by_id(self, user_id: UUID) -> User | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("SELECT * FROM users WHERE id = :id"),
+            _USER_BY_ID,
             {"id": str(user_id)},
         )
         row = result.mappings().first()
@@ -320,7 +336,7 @@ class PostgresUserRepository:
     async def get_by_email(self, email: EmailAddress) -> User | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("SELECT * FROM users WHERE lower(email) = lower(:email)"),
+            _USER_BY_EMAIL,
             {"email": str(email)},
         )
         row = result.mappings().first()
@@ -329,7 +345,7 @@ class PostgresUserRepository:
     async def get_by_auth_user_id(self, auth_user_id: UUID) -> User | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("SELECT * FROM users WHERE auth_user_id = :auth_user_id"),
+            _USER_BY_AUTH_ID,
             {"auth_user_id": str(auth_user_id)},
         )
         row = result.mappings().first()

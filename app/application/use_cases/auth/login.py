@@ -17,8 +17,10 @@ from app.domain.enums.user import UserStatus
 from app.domain.exceptions.auth import AuthenticationError
 from app.domain.interfaces.auth import AuthProviderPort
 from app.domain.interfaces.unit_of_work import UnitOfWorkFactory
+from core.logging import get_logger
 
 _LOGIN_SIGN_IN_TIMEOUT_S = 15.0
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +28,13 @@ class LoginUseCase:
     auth: AuthProviderPort
     uow_factory: UnitOfWorkFactory
     audit: RecordAuditEventUseCase
+
+    async def _audit(self, command: RecordAuditEventCommand) -> None:
+        """Best-effort audit. Must not turn a mapped auth error into HTTP 500."""
+        try:
+            await self.audit.execute(command)
+        except Exception:
+            logger.exception("login_audit_failed")
 
     async def execute(self, command: LoginCommand) -> AuthSessionDTO:
         try:
@@ -36,13 +45,13 @@ class LoginUseCase:
                     ),
                     timeout=_LOGIN_SIGN_IN_TIMEOUT_S,
                 )
-            except TimeoutError as exc:
+            except TimeoutError as extra:
                 raise AuthenticationError(
                     "Sign-in timed out. Please retry.",
                     code="login_timeout",
-                ) from exc
+                ) from extra
         except AuthenticationError:
-            await self.audit.execute(
+            await self._audit(
                 RecordAuditEventCommand(
                     action=AuditAction.LOGIN,
                     outcome=AuditOutcome.FAILURE,
@@ -71,7 +80,7 @@ class LoginUseCase:
             await uow.users.update(user)
             await uow.commit()
 
-        await self.audit.execute(
+        await self._audit(
             RecordAuditEventCommand(
                 action=AuditAction.LOGIN,
                 outcome=AuditOutcome.SUCCESS,

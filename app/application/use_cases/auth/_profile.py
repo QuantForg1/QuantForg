@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
+from typing import Literal, overload
+
 from app.domain.entities.user import User
 from app.domain.enums.user import UserRole, UserStatus
 from app.domain.exceptions.auth import AuthenticationError, AuthorizationError
 from app.domain.interfaces.auth import AuthUserIdentity
 from app.domain.interfaces.unit_of_work import UnitOfWorkPort
 from app.domain.value_objects.email import EmailAddress
+
+
+@overload
+async def sync_profile_from_identity(
+    uow: UnitOfWorkPort,
+    identity: AuthUserIdentity,
+    *,
+    display_name_fallback: str = "",
+    role: UserRole = UserRole.TRADER,
+    activate_if_confirmed: bool = True,
+    return_dirty: Literal[True],
+) -> tuple[User, bool]: ...
+
+
+@overload
+async def sync_profile_from_identity(
+    uow: UnitOfWorkPort,
+    identity: AuthUserIdentity,
+    *,
+    display_name_fallback: str = "",
+    role: UserRole = UserRole.TRADER,
+    activate_if_confirmed: bool = True,
+    return_dirty: Literal[False] = False,
+) -> User: ...
 
 
 async def sync_profile_from_identity(
@@ -17,7 +43,8 @@ async def sync_profile_from_identity(
     display_name_fallback: str = "",
     role: UserRole = UserRole.TRADER,
     activate_if_confirmed: bool = True,
-) -> User:
+    return_dirty: bool = False,
+) -> User | tuple[User, bool]:
     """Upsert ``public.users`` from an Auth identity (no duplicate auth tables).
 
     Read path is cheap: only persist when the profile actually changed.
@@ -70,6 +97,8 @@ async def sync_profile_from_identity(
 
     if dirty:
         await uow.users.update(existing)
+    if return_dirty:
+        return existing, dirty
     return existing
 
 

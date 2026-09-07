@@ -12,6 +12,7 @@ Saves write to both when available.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -30,7 +31,18 @@ logger = get_logger(__name__)
 _LOCK = Lock()
 _TABLE = "ite_ops_runtime_state"
 _PG_CACHE_TTL_S = 15.0
+_PG_SAVE_DEBOUNCE_S = 5.0
 _pg_state_cache: tuple[float, dict[str, Any]] | None = None
+_last_pg_save_mono = 0.0
+_last_pg_save_digest = ""
+# Observation blobs must not ride the singleton ops payload (egress + size).
+_NON_AUTHORITATIVE_KEYS = frozenset(
+    {
+        "_hydrate_source",
+        "signal_history",
+        "symbol_management",
+    }
+)
 
 _VALID_TRADING_MODES = frozenset({"swing", "scalping", "alpha"})
 # Unlabeled persisted "swing" is the pre-scalping code default that Start/Pause
@@ -49,8 +61,69 @@ def _trading_mode_explicit(value: Any) -> bool:
 
 def reset_postgres_state_cache() -> None:
     """Test helper — drop the short Postgres ops-state GET cache."""
-    global _pg_state_cache
+    global _pg_state_cache, _last_pg_save_digest
     _pg_state_cache = None
+    _last_pg_save_digest = ""
+
+
+def _durable_payload(state: Mapping[str, Any]) -> dict[str, Any]:
+    """Strip observation blobs that must not be re-uploaded every cycle."""
+    return {
+        k: v
+        for k, v in state.items()
+        if k not in _NON_AUTHORITATIVE_KEYS and v is not None
+    }
+
+
+def _payload_digest(state: Mapping[str, Any]) -> str:
+    blob = json.dumps(_durable_payload(state), sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _direct_load_payload() -> tuple[bool, dict[str, Any]]:
+    """Load singleton payload via DATABASE_URL. (configured, payload)."""
+    from app.infrastructure.persistence.direct_postgres import (
+        direct_postgres_available,
+        fetch,
+    )
+
+    if not direct_postgres_available():
+        return False, {}
+    rows = fetch(
+        "SELECT payload FROM ite_ops_runtime_state WHERE singleton IS TRUE LIMIT 1"
+    )
+    if not rows:
+        return True, {}
+    payload = rows[0].get("payload")
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            payload = {}
+    return True, dict(payload) if isinstance(payload, dict) else {}
+
+
+def _direct_save_payload(state: dict[str, Any]) -> bool:
+    from app.infrastructure.persistence.direct_postgres import (
+        direct_postgres_available,
+        execute,
+    )
+
+    if not direct_postgres_available():
+        return False
+    payload = json.dumps(_durable_payload(state), default=str)
+    execute(
+        """
+        INSERT INTO ite_ops_runtime_state (singleton, payload, updated_at)
+        VALUES (TRUE, $1::jsonb, NOW())
+        ON CONFLICT (singleton) DO UPDATE SET
+            payload = EXCLUDED.payload,
+            updated_at = NOW()
+        """,
+        payload,
+    )
+    return True
+
 
 
 def resolve_persisted_trading_mode(
@@ -103,9 +176,16 @@ def load_postgres_state_strict() -> tuple[bool, bool, dict[str, Any], str | None
     Returns ``(configured, ok, payload, error)``.
     ``ok=False`` means durable state could not be verified — callers must
     fail closed rather than interpret missing history as "never happened".
-    Does not change ``_load_postgres_state`` swallow-to-empty semantics used
-    by ops-mode restore.
+    Prefers direct Postgres; PostgREST is unused when DATABASE_URL works.
     """
+    try:
+        configured, payload = _direct_load_payload()
+        if configured:
+            return True, True, payload, None
+    except Exception as exc:
+        logger.warning("ops_state_direct_strict_load_failed", error=str(exc))
+        return True, False, {}, type(exc).__name__
+
     cfg = _supabase_rest_config()
     if cfg is None:
         return False, True, {}, None
@@ -165,6 +245,15 @@ def _load_postgres_state() -> dict[str, Any]:
     cached = _pg_state_cache
     if cached is not None and (now - cached[0]) <= _PG_CACHE_TTL_S:
         return dict(cached[1])
+    try:
+        configured, result = _direct_load_payload()
+        if configured:
+            _pg_state_cache = (now, dict(result))
+            return result
+    except Exception as exc:
+        logger.warning("ops_state_direct_load_failed", error=str(exc))
+        return {}
+
     cfg = _supabase_rest_config()
     if cfg is None:
         return {}
@@ -199,6 +288,29 @@ def _load_postgres_state() -> dict[str, Any]:
 
 
 def _save_postgres_state(state: dict[str, Any]) -> bool:
+    global _last_pg_save_mono, _last_pg_save_digest
+    digest = _payload_digest(state)
+    now = time.monotonic()
+    if (
+        digest == _last_pg_save_digest
+        and (now - _last_pg_save_mono) < _PG_SAVE_DEBOUNCE_S
+    ):
+        return True
+    try:
+        from app.infrastructure.persistence.direct_postgres import (
+            direct_postgres_available,
+        )
+
+        if direct_postgres_available():
+            ok = _direct_save_payload(state)
+            if ok:
+                _last_pg_save_mono = now
+                _last_pg_save_digest = digest
+            return ok
+    except Exception as exc:
+        logger.warning("ops_state_direct_save_failed", error=str(exc))
+        return False
+
     cfg = _supabase_rest_config()
     if cfg is None:
         return False
@@ -209,7 +321,7 @@ def _save_postgres_state(state: dict[str, Any]) -> bool:
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates,return=minimal",
     }
-    body = {"singleton": True, "payload": state}
+    body = {"singleton": True, "payload": _durable_payload(state)}
     try:
         with httpx.Client(timeout=8.0) as client:
             resp = client.post(
@@ -219,6 +331,8 @@ def _save_postgres_state(state: dict[str, Any]) -> bool:
                 json=body,
             )
             if resp.status_code in {200, 201, 204}:
+                _last_pg_save_mono = now
+                _last_pg_save_digest = digest
                 return True
             # Some PostgREST setups prefer PATCH upsert
             if resp.status_code in {409, 400}:
@@ -229,9 +343,11 @@ def _save_postgres_state(state: dict[str, Any]) -> bool:
                         **headers,
                         "Prefer": "return=minimal",
                     },
-                    json={"payload": state},
+                    json={"payload": _durable_payload(state)},
                 )
                 if patch.status_code in {200, 204}:
+                    _last_pg_save_mono = now
+                    _last_pg_save_digest = digest
                     return True
                 logger.warning(
                     "ops_state_postgres_patch_failed",
@@ -257,6 +373,32 @@ def _record_mode_transition(
     reason: str,
 ) -> None:
     """Best-effort append to existing ite_ops_mode_transitions (audit)."""
+    if not to_mode:
+        return
+    try:
+        from app.infrastructure.persistence.direct_postgres import (
+            direct_postgres_available,
+            execute,
+        )
+
+        if direct_postgres_available():
+            execute(
+                """
+                INSERT INTO ite_ops_mode_transitions
+                    (id, from_mode, to_mode, operator, reason)
+                VALUES ($1, $2, $3, $4, $5)
+                """,
+                str(uuid4()),
+                (from_mode or "UNKNOWN").upper(),
+                to_mode.upper(),
+                "ops_state_persistence",
+                reason or "persisted",
+            )
+            return
+    except Exception as exc:
+        logger.debug("ops_mode_transition_direct_failed", error=str(exc))
+        return
+
     cfg = _supabase_rest_config()
     if cfg is None or not to_mode:
         return
@@ -347,6 +489,14 @@ def ops_state_diagnostics() -> dict[str, Any]:
     path = ops_state_path()
     state = load_ops_state()
     pg_cfg = _supabase_rest_config() is not None
+    try:
+        from app.infrastructure.persistence.direct_postgres import (
+            direct_postgres_available,
+        )
+
+        pg_cfg = pg_cfg or direct_postgres_available()
+    except Exception as exc:
+        logger.debug("ops_state_direct_available_check_failed", error=str(exc))
     postgres_has_state = state.get("_hydrate_source") == "postgres"
     durable = postgres_has_state or is_volume_backed()
     resolved_mode, resolved_source = resolve_persisted_trading_mode(state)
