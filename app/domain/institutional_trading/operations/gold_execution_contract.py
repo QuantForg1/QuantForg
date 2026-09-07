@@ -592,7 +592,11 @@ def evaluate_gold_execution_contract(
                 )
             ),
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.WAIT_SAME_FOCUS.value,
+            next_action=(
+                CandidateAction.WAIT_SAME_FOCUS.value
+                if gold_only or is_gold_symbol(symbol)
+                else CandidateAction.ROTATE_FOCUS.value
+            ),
         )
         mark("RISK", StageStatus.BLOCK.value)
         mark("SIZING", StageStatus.BLOCK.value)

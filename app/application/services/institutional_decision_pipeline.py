@@ -433,6 +433,8 @@ class InstitutionalDecisionPipeline:
         contract_size: Any,
         lot_step: Any = None,
         max_lot: Any = None,
+        tick_size: Any = None,
+        tick_value: Any = None,
     ) -> Any:
         """Audit-only pre-Risk gate. Does not change stop / lot / 5% cap."""
         from app.domain.institutional_trading.operations.min_lot_feasibility import (
@@ -446,6 +448,8 @@ class InstitutionalDecisionPipeline:
             lot_step=lot_step,
             max_lot=max_lot,
             contract_size=contract_size,
+            tick_size=tick_size,
+            tick_value=tick_value,
         )
         result = trade.feasibility
         payload = result.to_dict()
@@ -755,6 +759,8 @@ class InstitutionalDecisionPipeline:
             lot_step=live_step,
             max_lot=live_max,
             contract_size=live_cs,
+            tick_size=live_tick,
+            tick_value=live_tick_val,
         )
         if feasibility.skip_expensive_downstream:
             # Early reject only — stop / lot / 5% cap unchanged. Risk would

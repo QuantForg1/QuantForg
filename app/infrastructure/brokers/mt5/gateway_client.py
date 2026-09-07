@@ -80,6 +80,14 @@ def _dec(value: Any, default: str = "0") -> Decimal:
     return Decimal(str(value))
 
 
+def _positive_tick(value: Any) -> Decimal | None:
+    """Parse live tick_size / tick_value. Zero and missing stay None."""
+    if value in (None, "", 0, "0"):
+        return None
+    parsed = _dec(value, "0")
+    return parsed if parsed > 0 else None
+
+
 # MT5 DEAL_TYPE_BALANCE=2, DEAL_TYPE_CREDIT=3 (cash/credit ops, volume 0).
 _MT5_DEAL_TYPE_BALANCE = 2
 _MT5_DEAL_TYPE_CREDIT = 3
@@ -1570,6 +1578,12 @@ class GatewayMT5Client:
             visible=bool(specs.get("visible", True)),
             market_open=market_open,
             trade_allowed=trade_allowed,
+            tick_size=_positive_tick(
+                specs.get("tick_size") or specs.get("trade_tick_size")
+            ),
+            tick_value=_positive_tick(
+                specs.get("tick_value") or specs.get("trade_tick_value")
+            ),
         )
         self._symbol_info_cache[code] = info
         return info

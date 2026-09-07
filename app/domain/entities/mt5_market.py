@@ -107,11 +107,24 @@ class MT5SymbolInfo:
     visible: bool = True
     market_open: bool = True
     trade_allowed: bool = True
+    # Live MT5 tick geometry (account-currency). Never invent when absent.
+    tick_size: Decimal | None = None
+    tick_value: Decimal | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", self.code.strip().upper())
         require(len(self.code) > 0, "code is required")
         require(self.digits >= 0, "digits must be >= 0")
+
+    @property
+    def trade_tick_size(self) -> Decimal | None:
+        """Alias used by Risk / min-lot readers."""
+        return self.tick_size
+
+    @property
+    def trade_tick_value(self) -> Decimal | None:
+        """Alias used by Risk / min-lot readers."""
+        return self.tick_value
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -137,4 +150,8 @@ class MT5SymbolInfo:
             "visible": self.visible,
             "market_open": self.market_open,
             "trade_allowed": self.trade_allowed,
+            "tick_size": str(self.tick_size) if self.tick_size is not None else None,
+            "tick_value": (
+                str(self.tick_value) if self.tick_value is not None else None
+            ),
         }

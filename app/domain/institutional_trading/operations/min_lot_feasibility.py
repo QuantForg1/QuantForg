@@ -58,18 +58,31 @@ def max_allowed_stop_at_min_lot(
     hard_max_risk_pct: Decimal,
     min_lot: Decimal,
     contract_size: Decimal,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
 ) -> Decimal:
-    """Largest strategy stop at which 0.01 (min lot) still stays <= hard max.
+    """Largest strategy stop at which min lot still stays <= hard max.
 
-    max_allowed_stop = equity * (hard_max_risk_pct / 100)
-                       / (min_lot * contract_size)
+    Gold identity: max_loss / (min_lot * contract_size).
+    Tick path: max_loss * tick_size / (min_lot * tick_value) so JPY stops are
+    compared in account currency, not raw quote points.
 
     ``hard_max_risk_pct`` is the percent figure used by MicroAccountProfile
     (80.0 means 80%), not a 0.80 fraction.
     """
-    if equity <= 0 or min_lot <= 0 or contract_size <= 0 or hard_max_risk_pct <= 0:
+    if equity <= 0 or min_lot <= 0 or hard_max_risk_pct <= 0:
         return Decimal("0")
-    return (equity * hard_max_risk_pct / _PCT) / (min_lot * contract_size)
+    max_loss = equity * hard_max_risk_pct / _PCT
+    if (
+        tick_size is not None
+        and tick_size > 0
+        and tick_value is not None
+        and tick_value > 0
+    ):
+        return max_loss * tick_size / (min_lot * tick_value)
+    if contract_size <= 0:
+        return Decimal("0")
+    return max_loss / (min_lot * contract_size)
 
 
 def min_lot_needed_pct(
@@ -78,13 +91,20 @@ def min_lot_needed_pct(
     equity: Decimal,
     min_lot: Decimal,
     contract_size: Decimal,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
 ) -> Decimal:
-    """Risk-identical min-lot open risk percent (2 d.p.).
+    """Min-lot open risk percent (2 d.p.) in account currency.
 
-    min_loss = (min_lot * contract_size * stop).quantize(0.01)
-    needed_pct = (min_loss / equity * 100).quantize(0.01)
+    Prefer tick-value PnL. Gold identity remains lots * CS * stop.
     """
-    min_loss = (min_lot * contract_size * stop_distance).quantize(_CENTS)
+    min_loss = lot_dollar_risk(
+        min_lot,
+        stop_distance=stop_distance,
+        contract_size=contract_size,
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
     return (min_loss / equity * _PCT).quantize(_CENTS)
 
 
@@ -141,12 +161,16 @@ def evaluate_min_lot_feasibility(
     min_lot: Any = None,
     contract_size: Any = None,
     hard_max_risk_pct: Any = None,
+    tick_size: Any = None,
+    tick_value: Any = None,
 ) -> MinLotFeasibilityResult:
     """Classify whether the existing strategy stop can fit min lot under 5%.
 
     Infeasible → early MIN_LOT_INFEASIBLE (skip Risk overlay / OMS work).
     Feasible / insufficient data → continue; Risk remains authoritative.
     Never mutates stop, lot, or the hard ceiling.
+    Uses tick-value PnL when broker ticks are present so JPY/quote-ccy desks
+    are not scored with the gold lots*CS*stop identity.
     """
     profile = MicroAccountProfile()
     hard = _dec(hard_max_risk_pct) or profile.hard_max_risk_pct
@@ -154,6 +178,12 @@ def evaluate_min_lot_feasibility(
     cs = _dec(contract_size) or CONTRACT_SIZE
     stop = _dec(stop_distance)
     eq = _dec(equity)
+    ts = _dec(tick_size)
+    tv = _dec(tick_value)
+    if ts is not None and ts <= 0:
+        ts = None
+    if tv is not None and tv <= 0:
+        tv = None
 
     if stop is None or stop <= 0 or eq is None or eq <= 0 or lot <= 0 or cs <= 0:
         return MinLotFeasibilityResult(
@@ -176,12 +206,16 @@ def evaluate_min_lot_feasibility(
         hard_max_risk_pct=hard,
         min_lot=lot,
         contract_size=cs,
+        tick_size=ts,
+        tick_value=tv,
     )
     needed = min_lot_needed_pct(
         stop_distance=stop,
         equity=eq,
         min_lot=lot,
         contract_size=cs,
+        tick_size=ts,
+        tick_value=tv,
     )
     # Match RiskEngine: reject only when quantized needed_pct > hard max.
     # A stop slightly above the raw formula can still round to <= 80.00%.
@@ -809,6 +843,8 @@ def evaluate_setup_tradeability(
         min_lot=min_lot,
         contract_size=contract_size,
         hard_max_risk_pct=hard_max_risk_pct,
+        tick_size=tick_size,
+        tick_value=tick_value,
     )
     lot = feas.min_lot
     step = _dec(lot_step)
