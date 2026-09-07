@@ -230,6 +230,7 @@ def assess_global_market_intelligence(
     execution_quality_ok: bool = True,
     portfolio_ok: bool = True,
     extras: Mapping[str, Any] | None = None,
+    symbol: str | None = None,
 ) -> GlobalMarketIntelligence:
     """Build intelligence alignment from live artefacts + configured source status."""
     _ = extras
@@ -391,6 +392,23 @@ def assess_global_market_intelligence(
             reason="portfolio_ok" if portfolio_ok else "portfolio_blocked",
         ),
     )
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        asset_class_for_symbol,
+    )
+
+    if asset_class_for_symbol(symbol) == "crypto":
+        layers = (
+            *layers,
+            _layer(
+                "crypto_regime",
+                confirmation=None,
+                score=50,
+                reason=(
+                    "crypto_regime_UNKNOWN — FX/gold rules not assumed; "
+                    "no fabricated crypto confirmation"
+                ),
+            ),
+        )
 
     contradictions = [layer for layer in layers if layer.state == "CONTRADICTION"]
     confirmations = [layer for layer in layers if layer.state == "CONFIRMATION"]

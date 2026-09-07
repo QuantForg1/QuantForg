@@ -2018,6 +2018,33 @@ class InstitutionalIteRuntime:
                                         fingerprint=fp,
                                     )
                                     try:
+                                        from app.domain.institutional_trading.ai_scalping.symbol_performance import (  # noqa: E501
+                                            get_symbol_performance_book,
+                                        )
+                                        from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (  # noqa: E501
+                                            get_symbol_stats_book,
+                                        )
+
+                                        close_why = str(
+                                            getattr(pos, "close_reason", None)
+                                            or getattr(pos, "exit_reason", None)
+                                            or ""
+                                        ) or None
+                                        get_symbol_performance_book().record_closed(
+                                            closed_sym,
+                                            pnl=pnl_close,
+                                            close_reason=close_why,
+                                        )
+                                        get_symbol_stats_book().record_closed_trade(
+                                            closed_sym,
+                                            win=bool(pnl_close > 0),
+                                            pnl=pnl_close,
+                                        )
+                                    except Exception:
+                                        logger.exception(
+                                            "symbol_performance_note_closed_failed"
+                                        )
+                                    try:
                                         from app.domain.institutional_trading.live_trading_control import (  # noqa: E501
                                             get_live_trading_controller,
                                         )

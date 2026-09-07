@@ -41,8 +41,25 @@ def rank_scalping_opportunities(
             continue
         eligible.append(row)
 
+    _state_rank = {
+        "STRONG": 0,
+        "NORMAL": 1,
+        "OBSERVE": 2,
+        "CAUTIOUS": 3,
+    }
+
+    def _measured_state_rank(row: dict[str, Any]) -> int:
+        payload = row.get("symbol_performance")
+        if not isinstance(payload, dict):
+            payload = {}
+        state = str(
+            payload.get("symbol_state") or row.get("symbol_state") or "NORMAL"
+        ).upper()
+        return int(_state_rank.get(state, 1))
+
     eligible.sort(
         key=lambda r: (
+            _measured_state_rank(r),
             -float(r.get("expected_rr") or 0),
             -int(r.get("trade_quality") or 0),
             -int(r.get("ai_confidence") or r.get("confidence") or 0),

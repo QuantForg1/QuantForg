@@ -97,8 +97,16 @@ def contract_size_for_symbol(
         return CONTRACT_SIZE
     if u.startswith("XAG") or "SILVER" in u:
         return Decimal("5000")
-    if u.startswith("BTC") or u.startswith("ETH"):
-        return Decimal("1")
+    try:
+        from app.domain.institutional_trading.ai_scalping.asset_class import (
+            asset_class_for_symbol,
+        )
+
+        if asset_class_for_symbol(symbol) == "crypto":
+            return Decimal("1")
+    except Exception:
+        if u.startswith(("BTC", "ETH", "LTC")):
+            return Decimal("1")
     base, quote = u[:3], u[3:6]
     if len(u) >= 6 and base in _FX_CURRENCIES and quote in _FX_CURRENCIES:
         return Decimal("100000")

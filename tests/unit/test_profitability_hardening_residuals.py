@@ -26,6 +26,7 @@ def test_contract_size_never_inherits_gold_into_fx() -> None:
     )
     assert contract_size_for_symbol("XAUUSD", default=Decimal("0")) == Decimal("100")
     assert contract_size_for_symbol("BTCUSD", default=Decimal("0")) == Decimal("1")
+    assert contract_size_for_symbol("LTCUSD", default=Decimal("0")) == Decimal("1")
     # Unknown index: do not invent gold
     assert contract_size_for_symbol("US500", default=Decimal("0")) == Decimal("0")
 

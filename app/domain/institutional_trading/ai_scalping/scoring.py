@@ -119,6 +119,7 @@ class AiScalpingScore:
     why_sell: tuple[str, ...] = ()
     global_market_intelligence: dict[str, object] | None = None
     loss_streak_adaptation: dict[str, object] | None = None
+    symbol_performance: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -198,6 +199,12 @@ class AiScalpingScore:
             "why_sell": list(self.why_sell),
             "global_market_intelligence": dict(self.global_market_intelligence or {}),
             "loss_streak_adaptation": dict(self.loss_streak_adaptation or {}),
+            "symbol_performance": dict(self.symbol_performance or {}),
+            "symbol_state": (
+                (self.symbol_performance or {}).get("symbol_state")
+                if isinstance(self.symbol_performance, dict)
+                else None
+            ),
             "buy_components": dict(
                 (self.sniper_entry or {}).get("buy_components")
                 or (self.factors or {}).get("buy_components")
@@ -722,45 +729,50 @@ def score_scalping_setup(
         ),
         execution_quality_ok=bool(execution_quality_ok),
         portfolio_ok=True,
+        symbol=sym_key or None,
     )
     if gmi.wait_recommended and gmi.wait_code:
         reject_list.append(gmi.wait_code)
         reasons.append(f"WAIT: {gmi.wait_code} ({gmi.reason})")
 
+    from app.domain.institutional_trading.ai_scalping.symbol_performance import (
+        apply_symbol_performance_gate,
+        get_symbol_performance_book,
+    )
+
+    perf_snap = get_symbol_performance_book().evaluate(
+        sym_key,
+        market_regime=regime.regime,
+        intelligence_alignment=gmi.intelligence_alignment,
+        spread_reject=bool(spread_a.reject),
+        execution_quality_ok=bool(execution_quality_ok),
+    )
+    # Operator wait codes: WAIT_SYMBOL_QUARANTINED / WAIT_WEAK_EXPECTANCY
+    # One symbol's streak must not freeze the rest of the universe.
+    perf_wait, perf_why = apply_symbol_performance_gate(
+        perf_snap,
+        expected_rr=rr_float,
+        base_min_rr=min_rr,
+    )
+    if perf_wait:
+        reject_list.append(perf_wait)
+        reasons.append(f"WAIT: {perf_wait} ({perf_why})")
+
+    # Account-level streak is observe-only. One symbol must never freeze the desk.
     streak_losses = 0
-    cooldown_until = None
     try:
         from app.domain.institutional_trading.live_trading_control import (
             get_live_trading_controller,
         )
 
-        ctrl = get_live_trading_controller()
-        streak_losses = int(ctrl.consecutive_losses or 0)
-        cooldown_until = ctrl.loss_streak_cooldown_until
+        streak_losses = int(get_live_trading_controller().consecutive_losses or 0)
     except Exception:
         streak_losses = 0
     adaptation = streak_mod.resolve_loss_streak_adaptation(
         consecutive_losses=streak_losses,
-        cooldown_until=cooldown_until,
+        cooldown_until=None,
         base_min_rr=min_rr,
     )
-    if adaptation.cooldown_active:
-        reject_list.append("WAIT_LOSS_STREAK_COOLDOWN")
-        reasons.append(
-            f"WAIT: WAIT_LOSS_STREAK_COOLDOWN "
-            f"({adaptation.cooldown_remaining_minutes}m; {adaptation.reason})"
-        )
-    elif (
-        adaptation.require_stronger_selection
-        and rr_float is not None
-        and rr_float < adaptation.min_expected_rr_soft
-    ):
-        reject_list.append("WAIT_LOSS_STREAK_DEFENSIVE")
-        reasons.append(
-            f"WAIT: WAIT_LOSS_STREAK_DEFENSIVE "
-            f"(rr={rr_float} < soft {adaptation.min_expected_rr_soft}; "
-            f"{adaptation.mode})"
-        )
 
     reject_list = list(dict.fromkeys(reject_list))
     reject = bool(reject_list)
@@ -954,4 +966,5 @@ def score_scalping_setup(
         ),
         global_market_intelligence=gmi.to_dict(),
         loss_streak_adaptation=adaptation.to_dict(),
+        symbol_performance=perf_snap.to_dict(),
     )

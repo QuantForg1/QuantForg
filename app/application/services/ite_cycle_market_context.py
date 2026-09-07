@@ -1261,11 +1261,24 @@ async def build_ite_cycle_market_context(
 
         streak = get_live_trading_controller().loss_streak_snapshot()
         consecutive_losses = int(streak.get("consecutive_losses") or 0)
-        cooldown_active = bool(streak.get("cooldown_active"))
-        cooldown_remaining_minutes = int(streak.get("cooldown_remaining_minutes") or 0)
         diag["loss_streak"] = streak
     except Exception:
         diag["loss_streak_read_failed"] = True
+    # Per-symbol quarantine only — a losing pair must not freeze the desk.
+    try:
+        from app.domain.institutional_trading.ai_scalping.symbol_performance import (
+            STATE_QUARANTINED,
+            get_symbol_performance_book,
+        )
+
+        snap_sym = str(getattr(snapshot, "symbol", "") or "")
+        perf = get_symbol_performance_book().evaluate(snap_sym)
+        diag["symbol_performance"] = perf.to_dict()
+        if perf.symbol_state == STATE_QUARANTINED:
+            cooldown_active = True
+            cooldown_remaining_minutes = int(perf.quarantine_remaining_minutes or 0)
+    except Exception:
+        diag["symbol_performance_read_failed"] = True
 
     account = AccountRiskState(
         equity=equity,
