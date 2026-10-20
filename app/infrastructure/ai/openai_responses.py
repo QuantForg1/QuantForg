@@ -6,6 +6,7 @@ full prompts that may contain account secrets. No Gemini / Google paths.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -132,6 +133,27 @@ class OpenAIResponsesClient:
                         "OpenAI authentication failed",
                     )
                 if response.status_code == 429:
+                    err_code = ""
+                    err_type = ""
+                    with contextlib.suppress(Exception):
+                        err_body = response.json()
+                        if isinstance(err_body, dict):
+                            err = err_body.get("error") or {}
+                            if isinstance(err, dict):
+                                err_code = str(err.get("code") or "")
+                                err_type = str(err.get("type") or "")
+                    if err_code in {
+                        "insufficient_quota",
+                        "credit_balance_exhausted",
+                        "billing_not_active",
+                    } or err_type in {
+                        "insufficient_quota",
+                        "billing_not_active",
+                    }:
+                        raise OpenAIProviderError(
+                            "insufficient_quota",
+                            "OpenAI account has no remaining API credits",
+                        )
                     last_exc = OpenAIProviderError(
                         "rate_limited",
                         "OpenAI rate limit exceeded",
@@ -140,6 +162,8 @@ class OpenAIResponsesClient:
                         "openai_rate_limited",
                         attempt=attempt + 1,
                         model=self.model,
+                        error_code=err_code or None,
+                        error_type=err_type or None,
                     )
                     continue
                 if response.status_code >= 500:

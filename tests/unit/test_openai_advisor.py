@@ -163,6 +163,31 @@ async def test_client_rate_limit_then_success() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_client_insufficient_quota() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            json={
+                "error": {
+                    "type": "insufficient_quota",
+                    "code": "credit_balance_exhausted",
+                    "message": "You have no credits remaining.",
+                }
+            },
+        )
+
+    client = OpenAIResponsesClient(
+        api_key="sk-test",
+        max_retries=1,
+        transport=_FakeTransport(handler),
+    )
+    with pytest.raises(OpenAIProviderError) as exc:
+        await client.create_response(input_text="hi", instructions="sys")
+    assert exc.value.code == "insufficient_quota"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_client_timeout() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.TimeoutException("slow")
