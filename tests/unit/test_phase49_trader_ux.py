@@ -67,6 +67,21 @@ def test_trader_connect_errors_never_echo_gateway_text() -> None:
 
 
 @pytest.mark.unit
+def test_cloudflare_530_is_origin_unreachable_not_auth() -> None:
+    from app.presentation.broker_trader_errors import CLOUDFLARE_ORIGIN_UNREACHABLE
+
+    cls, code, message = classify_broker_connect_error(
+        RuntimeError("CLOUDFLARE_ORIGIN_UNREACHABLE status_code=530 error code: 1033")
+    )
+    assert cls is ServiceUnavailableError
+    assert code == CLOUDFLARE_ORIGIN_UNREACHABLE
+    assert "authentication" in message.lower() or "not an authentication" in message.lower()
+    assert "token" not in message.lower()
+    assert "password" not in message.lower()
+    assert message == TRADER_BROKER_MESSAGES[CLOUDFLARE_ORIGIN_UNREACHABLE]
+
+
+@pytest.mark.unit
 def test_invalid_credentials_are_explicit() -> None:
     cls, code, message = classify_broker_connect_error(
         ValueError("Invalid login / wrong password from MT5")

@@ -25,13 +25,16 @@ The QuantForg Railway/API process does **not** hold broker passwords. Existing Q
 
 ## Cloudflare HTTP 530 (origin unreachable)
 
-`530` means the Cloudflare edge could not reach this Windows origin. It is **not** the same as a Gateway `503` (request reached `:8765`, symbol/MT5 data unavailable).
+`530` means the Cloudflare edge could not reach this Windows origin. It is **not** the same as a Gateway `503` (request reached `:8765`, symbol/MT5 data unavailable), and it is **not** an authentication / token failure. Repo client maps this to `CLOUDFLARE_ORIGIN_UNREACHABLE`.
+
+Observed body on a missing connector: plain text `error code: 1033` (Cloudflare Tunnel error — connector not connected to the edge).
 
 If health is OK on `http://127.0.0.1:8765/health` but `https://gateway.quantforg.com/health` returns **530**:
 
-1. Restart only the **Cloudflared** Windows service (Automatic, `C:\cloudflared\cloudflared.exe tunnel run --token-file …`).
-2. Do **not** restart MT5 trading, OMS, the Gateway trading engine, or `order_send`.
-3. Do **not** add an unattended restart loop.
+1. Confirm a **Cloudflared** Windows service exists (`Get-Service Cloudflared`) and that `cloudflared.exe` is running. Repo scripts expect service name `Cloudflared` (`deploy/mt5_gateway/_host_recovery.ps1`). Binary may live under `C:\Program Files (x86)\cloudflared\` or `C:\cloudflared\` — do not invent paths. A present binary alone does not mean the connector is running.
+2. If the service is **missing**, install/configure the tunnel connector from the Cloudflare Zero Trust dashboard (Public Hostname → `http://127.0.0.1:8765`) before restarting anything. `harden_cloudflared_service.ps1` only hardens an **existing** service; it cannot create a tunnel. **Operator approval required** before install/start of Cloudflared or changes to Cloudflare DNS/tunnel routes.
+3. If the service exists but is Stopped: restart **only** Cloudflared (Automatic, prefer `tunnel run --token-file …`). Do **not** restart MT5, OMS, or Gateway trading paths.
+4. Do **not** add an unattended restart loop that kills MT5 or the Gateway.
 
 ## Communication
 
@@ -187,10 +190,23 @@ services/mt5_gateway/
 - This gateway is a **separate** Windows service for live MT5 IPC.
 - Backend integration can call the gateway over HTTPS with the gateway token — **without** storing broker credentials in Railway — and without changing current public API contracts.
 
+## Dual execution flags (fail-closed)
+
+| Flag | Where | Default | Gates |
+|------|-------|---------|-------|
+| `EXECUTION_ENABLED` | Railway / API process | `false` | `MT5Adapter` / OMS — never invents fills |
+| `MT5_GATEWAY_EXECUTION_ENABLED` | Windows Gateway `.env` only | `false` | `POST /trade/order_send`, `POST /trade/order_cancel` |
+
+These flags are **independent** and are **never auto-synced**. A real broker fill requires **both** to be `true`. Gateway token authentication alone must not authorize mutations.
+
+When `MT5_GATEWAY_EXECUTION_ENABLED=false`, mutating trade routes return **HTTP 403** with body detail `retcode=90001` (`RETCODE_EXECUTION_DISABLED`) and `comment=gateway execution disabled`. `GatewayMT5Client` maps that to a disabled send result (ticket 0) — never a fill.
+
+Read-only while execution is disabled: `/health`, `/account`, `/positions`, `/quotes`, `/candles`, `/history/*`, `/session/status`, `/trade/order_check`, `/trade/order_calc_*`.
+
 ## Security notes
 
 - Bind to a private network / VPN / SSH tunnel in production.
 - Rotate `MT5_GATEWAY_TOKEN` regularly.
 - Do not commit broker passwords or gateway tokens.
-- Keep `EXECUTION_ENABLED` / order_send policy on the QuantForg side; this gateway remains read + session oriented.
+- Keep both `EXECUTION_ENABLED` and `MT5_GATEWAY_EXECUTION_ENABLED` false unless intentionally live.
 - Production default: `MT5_GATEWAY_AUTO_ATTACH=false`. Enable only on private Windows hosts with an operator-managed terminal.

@@ -51,6 +51,8 @@ _HEALTH: dict[str, Any] = {
     "coverage_basis": None,
     "signals_generated": None,
     "catalogue_source": None,
+    "degraded_reason": None,
+    "broker_catalogue_required": True,
     "cycles": 0,
     "failures": 0,
 }
@@ -98,6 +100,8 @@ def reset_research_analysis_health_for_tests() -> None:
                 "coverage_basis": None,
                 "signals_generated": None,
                 "catalogue_source": None,
+                "degraded_reason": None,
+                "broker_catalogue_required": True,
                 "cycles": 0,
                 "failures": 0,
             }
@@ -153,6 +157,8 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
         _set_health(
             status="DEGRADED",
             last_error=f"{type(exc).__name__}:{exc}",
+            degraded_reason="research_cycle_exception",
+            broker_catalogue_required=True,
         )
         _bump(failures=True)
         logger.exception("research_analysis_cycle_failed")
@@ -209,8 +215,17 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
     if not isinstance(coverage_catalogue, (int, float)):
         coverage_catalogue = _coverage_pct(discovered, analyzed)
     status = "RUNNING"
+    degraded_reason: str | None = None
     if source in {"UNAVAILABLE", "ERROR", "MOCK"}:
         status = "DEGRADED"
+        degraded_reason = "broker_catalogue_unavailable"
+    cat_err = snap.get("error") if isinstance(snap, dict) else None
+    last_error = str(cat_err) if cat_err else None
+    if status == "DEGRADED" and not last_error:
+        last_error = (
+            "Broker Gold catalogue unavailable — Gateway offline or MT5 not attached. "
+            "Live XAUUSD research requires the Windows MT5 Gateway market feed."
+        )
     _bump(cycles=True)
     _set_health(
         status=status,
@@ -226,6 +241,7 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
             )
         ),
         last_scan_completed=datetime.now(UTC).isoformat(),
+        last_error=last_error,
         scan_duration_ms=elapsed_ms,
         instruments_discovered=discovered,
         instruments_eligible=eligible,
@@ -245,6 +261,8 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
         asset_class_counts=obs.get("asset_class_counts"),
         signals_generated=signal_n,
         catalogue_source=source,
+        degraded_reason=degraded_reason,
+        broker_catalogue_required=True,
         authorizes_trade=False,
         would_submit_order=False,
         forwarded_to_oms=False,

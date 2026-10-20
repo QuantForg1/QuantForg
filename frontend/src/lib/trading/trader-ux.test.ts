@@ -76,6 +76,7 @@ import {
   researchCoverageLabel,
   researchProgressCopy,
   researchSignalsEmptyCopy,
+  researchDeskStatusLabel,
   researchUniverseViewState,
   resolveAnalysisDeskStatus,
   analysisDeskStatusLabel,
@@ -177,6 +178,18 @@ assert.equal(
   traderFacingErrorMessage({ code: "INVALID_CREDENTIALS", message: "gateway boom traceback" }),
   "Broker login or password was not accepted.",
 );
+{
+  const cf = traderFacingErrorMessage({
+    code: "CLOUDFLARE_ORIGIN_UNREACHABLE",
+    message: "error code: 1033",
+  });
+  assert.match(cf, /530|tunnel|origin/i);
+  assert.match(cf, /not an authentication/i);
+  const viaMsg = traderFacingErrorMessage({
+    message: "Upstream failed with HTTP 530",
+  });
+  assert.match(viaMsg, /530|tunnel|origin/i);
+}
 assert.equal(
   traderFacingErrorMessage({
     code: "not_found",
@@ -703,6 +716,26 @@ assert.equal(
       "signal",
     )[0]?.broker_symbol,
     "BBB",
+  );
+}
+
+{
+  const degradedEmpty = researchSignalsEmptyCopy({
+    degradedReason: "broker_catalogue_unavailable",
+    catalogueSource: "UNAVAILABLE",
+    researchStatus: "DEGRADED",
+  });
+  assert.equal(degradedEmpty.title, "GOLD ANALYSIS DEGRADED");
+  assert.match(degradedEmpty.description, /Gateway|catalogue|Gold/i);
+  const skipEmpty = researchSignalsEmptyCopy({
+    skipReasons: ["Spread too high", "False-breakout risk"],
+  });
+  assert.equal(skipEmpty.title, "NO ACTIVE SIGNALS");
+  assert.match(skipEmpty.description, /Spread too high/);
+  assert.equal(researchDeskStatusLabel({ fetchError: true }), "Unavailable");
+  assert.equal(
+    researchDeskStatusLabel({ workerStatus: "DEGRADED" }),
+    "Degraded",
   );
 }
 

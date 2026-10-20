@@ -315,10 +315,10 @@ class Settings(BaseSettings):
         str,
         Field(
             description=(
-                "GOLD_ONLY or BROKER_DISCOVERED. Production remaps GOLD_ONLY to "
-                "BROKER_DISCOVERED so live execution consumes the broker catalogue "
-                "and global research signals. Invalid production values fail "
-                "closed (empty live universe)."
+                "GOLD_ONLY (XAUUSD only) or BROKER_DISCOVERED (live catalogue). "
+                "Production preserves GOLD_ONLY when set; explicit "
+                "BROKER_DISCOVERED lifts the gold clamp. Invalid production "
+                "values fail closed (empty live universe)."
             ),
             validation_alias=AliasChoices(
                 "EXECUTION_UNIVERSE_MODE", "execution_universe_mode"
@@ -896,13 +896,16 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "allow_risk_lock_override", False)
             if self.production_validation_mode:
                 object.__setattr__(self, "production_validation_mode", False)
-            # Live execution uses the existing LIVE_BROKER catalogue (global
-            # research signals). GOLD_ONLY remains valid in non-production;
-            # leftover production GOLD_ONLY env must not lock the robot to gold.
-            # Invalid/empty explicit garbage still fails closed.
+            # Production universe: GOLD_ONLY is authoritative (XAUUSD only).
+            # Explicit BROKER_DISCOVERED lifts the gold clamp for catalogue mode.
+            # Invalid/empty values still fail closed.
             raw_mode = str(self.execution_universe_mode or "").strip().upper()
             raw_mode = raw_mode.replace("-", "_")
-            if raw_mode in {"BROKER_DISCOVERED", "GOLD_ONLY"}:
+            if raw_mode == "GOLD_ONLY":
+                object.__setattr__(self, "execution_universe_mode", "GOLD_ONLY")
+                object.__setattr__(self, "gold_only_mode", True)
+                object.__setattr__(self, "multi_symbol_enabled", False)
+            elif raw_mode == "BROKER_DISCOVERED":
                 object.__setattr__(self, "execution_universe_mode", "BROKER_DISCOVERED")
                 object.__setattr__(self, "gold_only_mode", False)
                 object.__setattr__(self, "multi_symbol_enabled", True)

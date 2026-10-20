@@ -1,9 +1,9 @@
 /**
  * Trading symbol policy for the QuantForg frontend.
  *
- * Backend ``EXECUTION_UNIVERSE_MODE`` is authoritative. This file does not
- * restore a gold-only production lock. XAUUSD_i remains supported; other
- * broker-discovered symbols are allowed in the desk UI.
+ * Gold-only desk: XAUUSD / verified gold aliases only. Backend
+ * ``EXECUTION_UNIVERSE_MODE=GOLD_ONLY`` and ``require_xauusd`` remain
+ * authoritative — this file mirrors that clamp in selectors and lists.
  * Order routing still goes through existing backend Risk/OMS gates.
  */
 
@@ -22,10 +22,10 @@ export const AUTONOMOUS_DISPLAY = "XAUUSD (Gold)";
 export const AUTONOMOUS_BADGE = "XAUUSD · GOLD";
 
 /**
- * Broker-discovered symbols are allowed in the desk UI.
- * Autonomous execution still uses backend Risk / Safety / OMS gates.
+ * Gold-only desk UI. Keep false unless product explicitly enables
+ * multi-symbol selectors (backend must also leave GOLD_ONLY).
  */
-export const MULTI_SYMBOL_ENABLED = true;
+export const MULTI_SYMBOL_ENABLED = false;
 
 /** Default desk focus when no symbol is selected — never unsuffixed XAUUSD. */
 export const TRADING_SYMBOL = WELTRADE_XAUUSD;

@@ -939,6 +939,24 @@ def build_snapshot(
             logger.exception("market_universe_quote_probe_failed")
     registry = build_registry(rows, quotes=quotes_in)
     instruments = list(registry.get("instruments") or [])
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+        if gold_only_enabled():
+            instruments = [
+                item
+                for item in instruments
+                if is_gold_symbol(
+                    str(
+                        item.get("broker_symbol")
+                        or item.get("canonical_symbol")
+                        or item.get("symbol")
+                        or ""
+                    )
+                )
+            ]
+    except Exception:  # noqa: S110  # policy import is best-effort
+        pass
     _attach_timeframes(
         instruments, mt5_adapter=mt5_adapter, catalogue_source=source
     )

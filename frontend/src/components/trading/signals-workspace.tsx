@@ -56,16 +56,25 @@ import {
   type SignalFilterState,
   type SignalSortKey,
 } from "@/lib/trading/trader-ux";
+import {
+  filterTradingSymbolRecords,
+  isGoldSymbol,
+  MULTI_SYMBOL_ENABLED,
+} from "@/lib/trading/gold-only";
 import { freshnessTone } from "@/components/trading/intelligence-detail";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
   { id: "strongest", label: "Strongest" },
   { id: "newest", label: "Newest" },
   { id: "instrument", label: "Symbol" },
-  { id: "asset_class", label: "Asset class" },
+  ...(MULTI_SYMBOL_ENABLED
+    ? ([{ id: "asset_class" as const, label: "Asset class" }] as const)
+    : []),
 ];
 
-const MARKET_CLASS_FILTERS = ["ALL", ...ASSET_CLASS_ORDER] as const;
+const MARKET_CLASS_FILTERS = MULTI_SYMBOL_ENABLED
+  ? (["ALL", ...ASSET_CLASS_ORDER] as const)
+  : (["METALS"] as const);
 const SIGNAL_FEED_PAGE_SIZE = 40;
 const STATUS_FILTERS = [
   { id: "ALL", label: "All" },
@@ -148,15 +157,20 @@ function FilterControls({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <CompactSelect
           id="signal-class"
-          label="Asset"
-          value={filters.assetClass}
+          label="Instrument"
+          value={MULTI_SYMBOL_ENABLED ? filters.assetClass : "METALS"}
           onChange={(value) => {
             setUniversePage(1);
             setFilters((f) => ({ ...f, assetClass: value }));
           }}
           options={MARKET_CLASS_FILTERS.map((cls) => ({
             id: cls,
-            label: cls === "ALL" ? "All" : cls.charAt(0) + cls.slice(1).toLowerCase(),
+            label:
+              cls === "ALL"
+                ? "All assets"
+                : cls === "METALS"
+                  ? "XAUUSD (Gold)"
+                  : cls.charAt(0) + cls.slice(1).toLowerCase(),
           }))}
         />
         <CompactSelect
@@ -244,7 +258,10 @@ function StatusDot({
 
 export function SignalsWorkspace() {
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
+  const [filters, setFilters] = useState<SignalFilterState>({
+    ...EMPTY_SIGNAL_FILTERS,
+    assetClass: MULTI_SYMBOL_ENABLED ? "ALL" : "METALS",
+  });
   const [sort, setSort] = useState<SignalSortKey>("strongest");
   const [statusFilter, setStatusFilter] = useState<StatusFilterId>("ACTIVE");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
@@ -283,10 +300,11 @@ export function SignalsWorkspace() {
   const universeSnap = asRecord(universeQ.data);
   const universeInstruments = useMemo(() => {
     const rows = asList(universeSnap.instruments).map(asRecord);
-    return rows.filter((row) => {
+    const valid = rows.filter((row) => {
       const sym = str(row.broker_symbol || row.canonical_symbol || row.symbol, "");
       return Boolean(sym);
     });
+    return filterTradingSymbolRecords(valid);
   }, [universeSnap.instruments]);
 
   const filteredUniverse = useMemo(() => {
@@ -331,7 +349,13 @@ export function SignalsWorkspace() {
   const availability = signalsQ.isError
     ? ("UNAVAILABLE" as const)
     : normalized.availability;
-  const signalRows = normalized.rows;
+  const signalRows = useMemo(() => {
+    const rows = normalized.rows;
+    if (MULTI_SYMBOL_ENABLED) return rows;
+    return rows.filter((row) =>
+      isGoldSymbol(String(row.broker_symbol || row.symbol || "")),
+    );
+  }, [normalized.rows]);
   const researchHealth = normalized.researchAnalysis ?? {};
   const workerStatus = String(researchHealth.status || "UNKNOWN").toUpperCase();
   const researchLabel = researchStatusLabel({
@@ -375,6 +399,16 @@ export function SignalsWorkspace() {
     fabricatedBlocked: normalized.fabricatedBlocked,
     empty: true,
     universeSize: normalized.universeSize,
+    skipReasons: normalized.skipReasons,
+    degradedReason:
+      researchHealth.degraded_reason != null
+        ? String(researchHealth.degraded_reason)
+        : null,
+    catalogueSource:
+      researchHealth.catalogue_source != null
+        ? String(researchHealth.catalogue_source)
+        : null,
+    researchStatus: workerStatus,
   });
   const coverageLabel = researchCoverageLabel(researchHealth);
   const progressCopy = researchProgressCopy(researchHealth);
@@ -440,8 +474,8 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-5">
       <PageHeader
         eyebrow="Signals"
-        title="GLOBAL MARKET SIGNALS"
-        description="Research opportunities ranked by strength. Live execution still requires the existing risk, OMS, and broker gates."
+        title="XAUUSD SIGNALS"
+        description="Gold (XAUUSD) research opportunities ranked by strength. Live execution still requires the existing risk, OMS, and broker gates."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="hidden min-w-[12rem] md:block">
@@ -480,8 +514,9 @@ export function SignalsWorkspace() {
       />
 
       <p className="text-sm text-[var(--fg-muted)]">
-        Research does not require a personal MT5 session. Live trading is a separate
-        authorized step.
+        Research APIs do not require your personal MT5 login, but live Gold candles
+        still need a reachable Windows Gateway broker feed. Live trading is a
+        separate authorized step.
       </p>
 
       <section
@@ -541,7 +576,7 @@ export function SignalsWorkspace() {
         <DeskEmpty
           icon={Radar}
           title={productEmptyTitle(emptyCopy.title)}
-          description={`${emptyCopy.description} Research is independent of your broker connection. Retry when the research API is reachable.`}
+          description={`${emptyCopy.description} Retry when the research API is reachable.`}
         />
       ) : availability === "NOT_READY" ? (
         <DeskSkeleton rows={8} />

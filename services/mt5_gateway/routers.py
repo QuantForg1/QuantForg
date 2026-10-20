@@ -10,6 +10,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.mt5_gateway.auth import require_gateway_token
+from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
 from services.mt5_gateway.runtime import MT5CallTimeout, MT5GatewayRuntime
 from services.mt5_gateway.schemas import (
     AttachRequest,
@@ -17,7 +18,7 @@ from services.mt5_gateway.schemas import (
     ConnectRequest,
     TradeRequestBody,
 )
-from services.mt5_gateway.settings import get_gateway_settings
+from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
 
 router = APIRouter(tags=["mt5-gateway"])
 
@@ -56,9 +57,25 @@ RuntimeDep = Annotated[MT5GatewayRuntime, Depends(get_runtime)]
 TokenDep = Annotated[str, Depends(require_gateway_token)]
 
 
+def _require_gateway_execution(settings: MT5GatewaySettings | None = None) -> None:
+    """Fail closed before any MetaTrader5 mutation. Token alone is insufficient."""
+    cfg = settings if settings is not None else get_gateway_settings()
+    if not bool(cfg.mt5_gateway_execution_enabled):
+        disabled = GatewayExecutionDisabled()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=disabled.as_detail(),
+        )
+
+
 def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return fn()
+    except GatewayExecutionDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.as_detail(),
+        ) from exc
     except MT5CallTimeout as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
@@ -206,6 +223,7 @@ async def health(request: Request) -> dict[str, Any]:
         "token_configured": bool(token) and len(token) > 0,
         "websocket_enabled": settings.mt5_gateway_enable_websocket,
         "auto_attach_enabled": settings.mt5_gateway_auto_attach,
+        "gateway_execution_enabled": bool(settings.mt5_gateway_execution_enabled),
         "token_fingerprint": {
             "length": len(token),
             "preview": mask_gateway_token(token),
@@ -213,7 +231,10 @@ async def health(request: Request) -> dict[str, Any]:
             "process_env_len": meta.get("process_env_len"),
             "dotenv_len": meta.get("dotenv_len"),
             "dotenv_path": meta.get("dotenv_path"),
+            # Empty process env is classified as placeholder — that alone is OK
+            # when dotenv supplies a real token (see dotenv_is_placeholder).
             "process_is_placeholder": meta.get("process_is_placeholder"),
+            "dotenv_is_placeholder": meta.get("dotenv_is_placeholder"),
         },
     }
     if not token:
@@ -224,7 +245,10 @@ async def health(request: Request) -> dict[str, Any]:
         )
     if runtime is not None:
         # Hard ceiling so /health never exceeds ~500ms even if probe settings drift.
-        ceiling = min(0.45, float(settings.mt5_health_probe_timeout_seconds) + 0.1)
+        # Keep a scheduling margin above the inner MT5 probe timeout so Windows
+        # executor latency can still surface probe="timeout" before this fires.
+        probe_timeout = float(settings.mt5_health_probe_timeout_seconds)
+        ceiling = min(0.5, probe_timeout + 0.25)
         loop = asyncio.get_running_loop()
         try:
             mt5_payload = await asyncio.wait_for(
@@ -424,7 +448,13 @@ async def trade_order_calc_profit(
 async def trade_order_send(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    """Live MetaTrader5.order_send — never invents tickets."""
+    """Live MetaTrader5.order_send — never invents tickets.
+
+    Requires MT5_GATEWAY_EXECUTION_ENABLED=true in addition to the gateway token.
+    Independent of Railway EXECUTION_ENABLED. Covers entries, closes, SL/TP, and
+    pending modifies (all built into this single mutating route).
+    """
+    _require_gateway_execution()
     return await _call_trade_async(lambda: runtime.order_send(body.as_runtime_dict()))
 
 
@@ -432,4 +462,6 @@ async def trade_order_send(
 async def trade_order_cancel(
     body: CancelRequest, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
+    """Cancel a pending order — requires local Gateway execution authorization."""
+    _require_gateway_execution()
     return await _call_trade_async(lambda: runtime.order_cancel(body.ticket))

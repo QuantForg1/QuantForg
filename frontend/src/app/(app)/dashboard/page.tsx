@@ -34,6 +34,7 @@ import {
   normalizeSignalCenterPayload,
   researchAvailabilityAsCatalogue,
   researchDeskLiveTradingStatus,
+  researchDeskStatusLabel,
   researchSignalsEmptyCopy,
   researchUniverseViewState,
   skippedMalformedInstrumentCount,
@@ -47,6 +48,7 @@ import {
   traderFacingErrorMessage,
   UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
+import { filterTradingSymbolRecords } from "@/lib/trading/gold-only";
 
 type Row = Record<string, unknown>;
 
@@ -154,7 +156,9 @@ export default function DashboardPage() {
     refetchInterval: UNIVERSE_POLL_MS,
   });
   const universe = asRecord(universeQ.data);
-  const instruments = asList(universe.instruments).map(asRecord);
+  const instruments = filterTradingSymbolRecords(
+    asList(universe.instruments).map(asRecord),
+  );
   const catalogue = researchUniverseViewState({
     snapshotFetched: universeQ.isFetched,
     snapshotError: Boolean(universeQ.isError),
@@ -288,7 +292,7 @@ export default function DashboardPage() {
           className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
         >
           <p className="text-sm text-[var(--fg-muted)]">
-            Trading session temporarily unavailable. Research and signals remain independent.
+            Trading session temporarily unavailable. Gold research still needs a reachable broker Gateway.
           </p>
           <Button
             variant="secondary"
@@ -329,7 +333,13 @@ export default function DashboardPage() {
             Research{" "}
           </span>
           <span className="font-medium text-[var(--fg)]">
-            {signalsQ.isError || signalState === "UNAVAILABLE" ? "Unavailable" : "Running"}
+            {researchDeskStatusLabel({
+              fetchError: Boolean(signalsQ.isError),
+              workerStatus: String(
+                asRecord(research.researchAnalysis).status || "",
+              ),
+              availability: researchAvailability,
+            })}
           </span>
         </span>
         <span>
@@ -385,7 +395,7 @@ export default function DashboardPage() {
           </Button>
         </div>
         <p className="mb-3 text-sm text-[var(--fg-muted)]">
-          Research intelligence — independent of your MT5 connection, not a trade authorization.
+          Research is not a trade authorization. Live Gold candles still require a reachable broker Gateway.
         </p>
         {signalState === "UNAVAILABLE" ? (
           <DeskEmpty

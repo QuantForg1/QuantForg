@@ -25,7 +25,7 @@ curl -X POST "$API/api/v1/gateway-manager/gateways" \
   }'
 ```
 
-Save `gateway_id` and `gateway_token` from the response.  
+Save `gateway_id` and `gateway_token` from the response.
 **Never** put the token or broker passwords in Railway.
 
 ## 2. Windows host
@@ -47,6 +47,11 @@ Or install as a Windows Scheduled Task — see `docs/production/VPS_WINDOWS_DEPL
 and `deploy/mt5_gateway/deploy_production_vps.ps1`. Do not expose `:8765` on the public
 internet; keep `MT5_GATEWAY_HOST=127.0.0.1` and reach it through the existing
 authenticated tunnel (`MT5_GATEWAY_BASE_URL` on Railway).
+
+**Public hostname / HTTP 530:** Railway must reach an HTTPS origin that Cloudflare
+can forward to `127.0.0.1:8765`. If `https://gateway.quantforg.com/health` returns
+**530** while localhost health is OK, the Cloudflared connector is missing or
+stopped — not a Gateway token mismatch. See `MT5_GATEWAY.md` § Cloudflare HTTP 530.
 
 ## 3. Bind broker session (on gateway)
 
@@ -122,11 +127,14 @@ Update Windows `MT5_GATEWAY_TOKEN` immediately.
 
 ## Security checklist
 
-- [ ] IP allowlist set for each gateway  
-- [ ] Gateway token only on Windows host  
-- [ ] Broker passwords only via `/session/connect` (memory)  
-- [ ] Unique nonce per heartbeat  
-- [ ] Private network / VPN / mTLS terminator in front of gateway  
+- [ ] IP allowlist set for each gateway
+- [ ] Gateway token only on Windows host
+- [ ] Broker passwords only via `/session/connect` (memory)
+- [ ] Unique nonce per heartbeat
+- [ ] Private network / VPN / mTLS terminator in front of gateway
+- [ ] `MT5_GATEWAY_EXECUTION_ENABLED=false` unless intentionally live (independent of Railway `EXECUTION_ENABLED`)
+- [ ] Real fills only when **both** Railway `EXECUTION_ENABLED` and Windows `MT5_GATEWAY_EXECUTION_ENABLED` are true
+
 
 ## Operator UI
 

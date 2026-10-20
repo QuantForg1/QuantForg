@@ -1,5 +1,5 @@
 /**
- * Broker-discovered frontend symbol policy.
+ * Gold-only frontend symbol policy.
  * Run: node --experimental-strip-types src/lib/trading/gold-only.test.ts
  */
 import assert from "node:assert/strict";
@@ -20,7 +20,7 @@ import {
   displayTradingSymbol,
 } from "./gold-only.ts";
 
-assert.equal(MULTI_SYMBOL_ENABLED, true);
+assert.equal(MULTI_SYMBOL_ENABLED, false);
 assert.equal(AUTONOMOUS_SYMBOL, "XAUUSD_i");
 assert.equal(TRADING_SYMBOL, WELTRADE_XAUUSD);
 assert.equal(AUTONOMOUS_DISPLAY, "XAUUSD (Gold)");
@@ -30,16 +30,15 @@ assert.equal(DISABLED_AUTONOMOUS_SYMBOL, "DISABLED_AUTONOMOUS_SYMBOL");
 
 assert.equal(isAllowedTradingSymbol("XAUUSD_i"), true);
 assert.equal(isAllowedTradingSymbol("XAUUSD"), true);
-assert.equal(isAllowedTradingSymbol("EURUSD"), true);
+assert.equal(isAllowedTradingSymbol("EURUSD"), false);
 assert.equal(isAutonomousExecutionSymbol("XAUUSD_i"), true);
 assert.equal(resolveTradingSymbol("XAUUSD"), "XAUUSD_i");
 assert.equal(resolveTradingSymbol("XAUUSD_I"), "XAUUSD_i");
 assert.equal(resolveTradingSymbol(""), "XAUUSD_i");
-assert.notEqual(resolveTradingSymbol("EURUSD"), "XAUUSD_i");
 
-assert.equal(goldOnlySearchQuery("EURUSD"), "EURUSD");
+assert.equal(goldOnlySearchQuery("EURUSD"), null);
 assert.equal(goldOnlySearchQuery("XAU"), "XAUUSD_i");
-assert.equal(goldOnlySearchQuery(""), "");
+assert.equal(goldOnlySearchQuery(""), "XAUUSD_i");
 
 const filtered = filterTradingSymbolRecords([
   { code: "XAUUSD_i" },
@@ -47,7 +46,8 @@ const filtered = filterTradingSymbolRecords([
   { symbol: "GBPUSD" },
   { code: "BTCUSD" },
 ]);
-assert.equal(filtered.length, 4);
+assert.equal(filtered.length, 1);
+assert.equal(filtered[0]?.code, "XAUUSD_i");
 
 assert.equal(displayTradingSymbol("XAUUSD_i"), AUTONOMOUS_BADGE);
 assert.equal(displayTradingSymbol("XAUUSD_I"), AUTONOMOUS_BADGE);

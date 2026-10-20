@@ -20,6 +20,14 @@ export function gatewayStatusLabel(health: Record<string, unknown>): string {
   if (!detail || detail === "ok") return "Gateway unreachable";
 
   const lower = detail.toLowerCase();
+  if (
+    lower.includes("cloudflare_origin_unreachable") ||
+    lower.includes("origin unreachable") ||
+    lower.includes("error code: 1033") ||
+    /\b530\b/.test(lower)
+  ) {
+    return "CLOUDFLARE_ORIGIN_UNREACHABLE";
+  }
   if (lower.includes("invalid gateway token") || lower.includes("401")) {
     return "Invalid Gateway Token";
   }

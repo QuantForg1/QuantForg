@@ -327,10 +327,32 @@ def scan_setup_families(
     sell_score: int = 50,
     atr_band: Literal["high", "normal", "low"] = "normal",
     config: AiScalpingConfig | None = None,
+    mtf_conflict: bool = False,
+    range_bound: bool = False,
+    false_breakout_risk: bool = False,
+    session_allowed: bool = True,
+    abnormal_volatility: bool = False,
 ) -> SetupScanResult:
-    """Score each setup family independently; return highest-quality passer."""
+    """Score each setup family independently; return highest-quality passer.
+
+    Optional Gold quality flags veto selection without lowering family floors.
+    """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     min_pass = int(cfg.setup_min_local_score)
+
+    from app.domain.trading.gold_opportunity_quality import assess_gold_opportunity
+
+    quality = assess_gold_opportunity(
+        mtf_aligned=not mtf_conflict and alignment >= 55,
+        mtf_conflict=mtf_conflict,
+        range_bound=range_bound,
+        false_breakout_risk=false_breakout_risk,
+        session_allowed=session_allowed,
+        abnormal_volatility=abnormal_volatility,
+        stop_loss_present=True,
+        risk_reward_ok=True,
+        min_lot_fits_risk=True,
+    )
 
     candidates = (
         _score_pullback(
@@ -386,9 +408,15 @@ def scan_setup_families(
     )
 
     passed = [c for c in candidates if c.passed]
+    # Range / false-breakout: do not treat breakout as confirmation
+    if range_bound or false_breakout_risk:
+        passed = [c for c in passed if c.family != "breakout_continuation"]
     best = max(passed, key=lambda c: (c.score, c.family)) if passed else None
     meta: list[str] = []
-    if best:
+    if not quality.tradable:
+        meta.extend(quality.skip_reasons)
+        best = None
+    elif best:
         meta.append(
             f"Selected setup={best.family} score={best.score} dir={best.direction}"
         )
@@ -397,8 +425,11 @@ def scan_setup_families(
             meta.append(
                 f"{failed_n} other setup(s) failed independently — not blocking winner"
             )
+        meta.extend(quality.entry_conditions)
+        meta.extend(quality.notes)
     else:
         meta.append("No setup family cleared local evidence floor")
+        meta.extend(quality.notes)
 
     return SetupScanResult(
         candidates=candidates,

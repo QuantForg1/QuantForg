@@ -1684,6 +1684,7 @@ class MT5GatewayRuntime:
 
     def order_send(self, body: dict[str, Any]) -> dict[str, Any]:
         """Live MetaTrader5.order_send — returns real broker retcode / ticket."""
+        from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
         from services.mt5_gateway.trade import (
             TRADE_ACTION_SLTP,
             apply_filling_mode,
@@ -1694,6 +1695,9 @@ class MT5GatewayRuntime:
             serialize_send_result,
         )
 
+        # Belt-and-suspenders: never reach MetaTrader5 when local flag is off.
+        if not bool(self.settings.mt5_gateway_execution_enabled):
+            raise GatewayExecutionDisabled()
         self._require_connected()
         symbol_req = str(body.get("symbol") or "").strip()
         if not symbol_req:
@@ -1838,11 +1842,14 @@ class MT5GatewayRuntime:
         return payload
 
     def order_cancel(self, ticket: int) -> dict[str, Any]:
+        from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
         from services.mt5_gateway.trade import (
             TRADE_ACTION_REMOVE,
             serialize_send_result,
         )
 
+        if not bool(self.settings.mt5_gateway_execution_enabled):
+            raise GatewayExecutionDisabled()
         self._require_connected()
         if ticket <= 0:
             raise RuntimeError("ticket must be > 0")

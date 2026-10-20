@@ -31,17 +31,18 @@ const detail = readFileSync(
 
 assert.equal(dash.includes("Unable to load your trading session."), false);
 assert.match(dash, /Trading session temporarily unavailable/);
-assert.match(dash, /Research and signals remain independent/);
+assert.match(dash, /Gold research still needs a reachable broker Gateway/);
 assert.match(dash, /QuantForg workspace/);
 
-assert.match(signals, /GLOBAL MARKET SIGNALS/);
+assert.match(signals, /XAUUSD SIGNALS/);
+assert.equal(signals.includes("GLOBAL MARKET SIGNALS"), false);
 assert.match(signals, /SignalCard/);
 assert.match(signalCard, /Stop loss/);
 assert.match(signalCard, /Take profit/);
 assert.match(signalCard, /signalExecutionStatusLabel/);
 assert.match(signalCard, /signalMt5Ticket/);
 assert.equal(signals.includes("Why this signal"), false);
-assert.match(signals, /Research does not require a personal MT5 session/);
+assert.match(signals, /live Gold candles/);
 
 assert.match(broker, /Connect MT5/);
 assert.match(broker, /Live trading/);

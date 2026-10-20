@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from services.mt5_gateway import __version__ as gateway_version
 from services.mt5_gateway.main import create_app
 from services.mt5_gateway.runtime import LiveMT5Bridge, MT5GatewayRuntime
 from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
@@ -28,6 +29,7 @@ class _FakeBridge(LiveMT5Bridge):
         self._server = "XMGlobal-Demo" if prelogged else ""
         self.selected: list[str] = []
         self.login_calls = 0
+        self.order_send_calls = 0
 
     def _ensure_module(self) -> bool:
         return self._mt5 is not None
@@ -190,6 +192,7 @@ class _FakeBridge(LiveMT5Bridge):
         )
 
     def order_send(self, request: dict[str, Any]) -> Any:
+        self.order_send_calls += 1
         check = self.order_check(request)
         if int(getattr(check, "retcode", 10013)) not in {0, 10009}:
             return SimpleNamespace(
@@ -236,12 +239,15 @@ def gateway_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[MT5GatewaySettings]
     monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
     monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
     monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "false")
+    # Fail-closed by default — tests that send/cancel must opt in explicitly.
+    monkeypatch.delenv("MT5_GATEWAY_EXECUTION_ENABLED", raising=False)
     monkeypatch.setattr(
         "services.mt5_gateway.settings._read_token_from_dotenv_files",
         lambda: ("", ""),
     )
     get_gateway_settings.cache_clear()
     settings = get_gateway_settings()
+    assert settings.mt5_gateway_execution_enabled is False
     yield settings
     get_gateway_settings.cache_clear()
 
@@ -267,8 +273,9 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
-        assert body.get("gateway_version") == "1.1.7"
+        assert body.get("gateway_version") == gateway_version
         assert body["auto_attach_enabled"] is False
+        assert body.get("gateway_execution_enabled") is False
         mt5 = body.get("mt5") or {}
         # No session yet — capabilities not probed (never invent Enabled).
         assert mt5.get("mt5_autotrading_enabled") is None
@@ -361,6 +368,29 @@ class TestMT5Gateway:
     def test_requires_token(self, client: TestClient) -> None:
         res = client.get("/account")
         assert res.status_code == 401
+
+    def test_missing_auth_headers_rejected_as_401(self, client: TestClient) -> None:
+        """Matches production logs: header_source=missing, received_len=0."""
+        res = client.get("/account")
+        assert res.status_code == 401
+        assert "token" in str(res.json().get("detail", "")).lower()
+        # Public health must still work without Authorization.
+        health = client.get("/health")
+        assert health.status_code == 200
+
+    def test_wrong_token_rejected_even_when_header_present(
+        self, client: TestClient
+    ) -> None:
+        res = client.get(
+            "/session/status",
+            headers={"X-Gateway-Token": "wrong-fake-token-not-matching"},
+        )
+        assert res.status_code == 401
+
+    def test_quantforg_gateway_token_header_accepted(self, client: TestClient) -> None:
+        headers = {"X-QuantForg-Gateway-Token": "test-gateway-token"}
+        res = client.get("/session/status", headers=headers)
+        assert res.status_code == 200
 
     def test_connect_and_account_sync(self, client: TestClient) -> None:
         headers = {"Authorization": "Bearer test-gateway-token"}
@@ -503,9 +533,100 @@ class TestMT5Gateway:
         assert any(a["retcode"] == 10013 for a in body.get("filling_attempts", []))
         assert any(a["retcode"] == 0 for a in body.get("filling_attempts", []))
 
-    def test_order_send_live_after_check(self, client: TestClient) -> None:
+    def test_order_send_blocked_when_execution_disabled(
+        self, client: TestClient
+    ) -> None:
+        from services.mt5_gateway.execution_guard import RETCODE_EXECUTION_DISABLED
+
         headers = {"Authorization": "Bearer test-gateway-token"}
         runtime = client.app.state.runtime
+        bridge = _FakeBridge(prelogged=True)
+        runtime.bridge = bridge
+        runtime.diagnostics.connected = True
+        runtime.settings.mt5_gateway_execution_enabled = False
+        assert (
+            client.post("/session/attach", headers=headers, json={}).status_code == 200
+        )
+
+        res = client.post(
+            "/trade/order_send",
+            headers=headers,
+            json={"symbol": "EURUSD", "action": "buy", "volume": 0.01},
+        )
+        assert res.status_code == 403
+        detail = res.json()["detail"]
+        assert detail["ok"] is False
+        assert detail["retcode"] == RETCODE_EXECUTION_DISABLED
+        assert "disabled" in str(detail["comment"]).lower()
+        assert bridge.order_send_calls == 0
+
+    def test_order_cancel_blocked_when_execution_disabled(
+        self, client: TestClient
+    ) -> None:
+        from services.mt5_gateway.execution_guard import RETCODE_EXECUTION_DISABLED
+
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+        bridge = _FakeBridge(prelogged=True)
+        runtime.bridge = bridge
+        runtime.diagnostics.connected = True
+        runtime.settings.mt5_gateway_execution_enabled = False
+
+        res = client.post(
+            "/trade/order_cancel",
+            headers=headers,
+            json={"ticket": 99},
+        )
+        assert res.status_code == 403
+        detail = res.json()["detail"]
+        assert detail["retcode"] == RETCODE_EXECUTION_DISABLED
+        assert bridge.order_send_calls == 0
+
+    def test_order_check_allowed_when_execution_disabled(
+        self, client: TestClient
+    ) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+        runtime.bridge = _FakeBridge(prelogged=True)
+        runtime.diagnostics.connected = True
+        runtime.settings.mt5_gateway_execution_enabled = False
+        assert (
+            client.post("/session/attach", headers=headers, json={}).status_code == 200
+        )
+        res = client.post(
+            "/trade/order_check",
+            headers=headers,
+            json={"symbol": "EURUSD", "action": "buy", "volume": 0.01, "price": 0},
+        )
+        assert res.status_code == 200
+        assert res.json()["ok"] is True
+
+    def test_runtime_order_send_guard_without_router(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
+
+        _ = gateway_env
+        bridge = _FakeBridge(prelogged=True)
+        settings = get_gateway_settings()
+        settings.mt5_gateway_execution_enabled = False
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        runtime.diagnostics.connected = True
+        with pytest.raises(GatewayExecutionDisabled):
+            runtime.order_send(
+                {"symbol": "EURUSD", "action": "buy", "volume": 0.01}
+            )
+        assert bridge.order_send_calls == 0
+
+    def test_order_send_live_after_check(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Explicit local authorization — never implied by token alone.
+        monkeypatch.setenv("MT5_GATEWAY_EXECUTION_ENABLED", "true")
+        get_gateway_settings.cache_clear()
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+        runtime.settings = get_gateway_settings()
         runtime.bridge = _FakeBridge(prelogged=True)
         runtime.diagnostics.connected = True
         assert (
@@ -524,6 +645,7 @@ class TestMT5Gateway:
         assert body["order_ticket"] == 424242
         assert body["deal_ticket"] == 525252
         assert float(body["price"]) == 1.2
+        get_gateway_settings.cache_clear()
 
 
 @pytest.mark.unit
@@ -651,10 +773,15 @@ class TestFillingModeSelection:
         body = health.json()
         assert body["status"] == "ok"
         mt5 = body["mt5"]
-        assert mt5["probe"] == "timeout"
+        # Dual contract: runtime.health may report probe="timeout", or the
+        # async wait_for ceiling may fire first as probe="async_ceiling".
+        assert mt5["probe"] in {"timeout", "async_ceiling"}
         assert mt5["degraded"] is True
-        assert mt5["connected"] is True
-        assert mt5["login_status"] == "degraded"
+        if mt5["probe"] == "timeout":
+            assert mt5["connected"] is True
+            assert mt5["login_status"] == "degraded"
+        else:
+            assert mt5["login_status"] in {"timeout", "degraded"}
 
     def test_call_mt5_bounded_raises_on_hang(self) -> None:
         import time
@@ -683,7 +810,7 @@ class TestFillingModeSelection:
         body = res.json()
         assert body["status"] == "ok"
         assert body["probe"] == "live"
-        assert body["gateway_version"] == "1.1.7"
+        assert body["gateway_version"] == gateway_version
         assert "mt5" not in body
 
     def test_market_data_timeout_returns_503_not_hang(

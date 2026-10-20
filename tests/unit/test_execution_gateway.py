@@ -251,6 +251,9 @@ class TestSubmitExecutionUseCase:
             symbol="XAUUSD",
             side="buy",
             volume="0.01",
+            # Valid SL/TP required when EXECUTION_ENABLED — risk still enforced.
+            stop_loss="2301.80",
+            take_profit="2349.30",
         )
         first = await use_case.execute(cmd)
         assert first.outcome == "success"
@@ -259,3 +262,40 @@ class TestSubmitExecutionUseCase:
         assert second.idempotent_replay is True
         assert second.id == first.id
         assert second.order_ticket == first.order_ticket
+
+    @pytest.mark.asyncio
+    async def test_non_gold_rejected_when_gold_only(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Backend rejects non-Gold even if the frontend is bypassed."""
+        monkeypatch.setattr(
+            "app.domain.trading.gold_only.gold_only_enabled",
+            lambda: True,
+        )
+        mt5_factory, exec_factory, adapter, _gateway, audit, _, engine = _wire(
+            execution_enabled=True
+        )
+        user_id = uuid4()
+        await _connect(mt5_factory, adapter, audit, user_id)
+        use_case = SubmitExecutionUseCase(
+            mt5_uow_factory=mt5_factory,
+            execution_uow_factory=exec_factory,
+            engine=engine,
+            audit=audit,
+        )
+        from app.domain.exceptions.base import ValidationError
+        from app.domain.trading.gold_only import DISABLED_AUTONOMOUS_SYMBOL
+
+        with pytest.raises(ValidationError) as exc:
+            await use_case.execute(
+                ExecutionSubmitCommand(
+                    user_id=user_id,
+                    request_id="api-fx-1",
+                    symbol="EURUSD",
+                    side="buy",
+                    volume="0.01",
+                    stop_loss="1.1000",
+                    take_profit="1.1200",
+                )
+            )
+        assert exc.value.code == DISABLED_AUTONOMOUS_SYMBOL

@@ -263,6 +263,18 @@ class MT5GatewaySettings(BaseSettings):
             "terminal session without collecting the broker password."
         ),
     )
+    mt5_gateway_execution_enabled: bool = Field(
+        default=False,
+        description=(
+            "Authorize broker-mutating Gateway routes (order_send / order_cancel). "
+            "Default false — independent of Railway EXECUTION_ENABLED. "
+            "A real fill requires BOTH layers true. Token alone is not enough."
+        ),
+        validation_alias=AliasChoices(
+            "MT5_GATEWAY_EXECUTION_ENABLED",
+            "mt5_gateway_execution_enabled",
+        ),
+    )
     mt5_gateway_auth_debug: bool = Field(
         default=False,
         description=(

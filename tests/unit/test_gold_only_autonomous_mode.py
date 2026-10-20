@@ -106,7 +106,7 @@ def test_gold_only_wins_over_multi_symbol_settings() -> None:
     assert settings.gold_only_mode is True
 
 
-def test_production_remaps_gold_only_to_broker_discovered() -> None:
+def test_production_preserves_gold_only_universe() -> None:
     settings = production_settings(
         secret_key="a-real-production-secret-key-with-enough-entropy-here",
         postgres_password="a-real-production-password-here",
@@ -115,9 +115,9 @@ def test_production_remaps_gold_only_to_broker_discovered() -> None:
         institutional_alpha_enabled=True,
         execution_universe_mode="GOLD_ONLY",
     )
-    assert settings.gold_only_mode is False
-    assert settings.multi_symbol_enabled is True
-    assert str(settings.execution_universe_mode).upper() == "BROKER_DISCOVERED"
+    assert settings.gold_only_mode is True
+    assert settings.multi_symbol_enabled is False
+    assert str(settings.execution_universe_mode).upper() == "GOLD_ONLY"
     assert bool(getattr(settings, "force_first_trade", False)) is False
 
 

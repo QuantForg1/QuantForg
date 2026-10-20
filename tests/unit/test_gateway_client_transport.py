@@ -23,6 +23,14 @@ class TestGatewayDiagnostics:
             == "Invalid Gateway Token"
         )
         assert classify_gateway_failure(status_code=403) == "403 Forbidden"
+        assert (
+            classify_gateway_failure(
+                status_code=403,
+                error="gateway execution disabled",
+                body_preview='{"retcode":90001}',
+            )
+            == "Gateway execution disabled"
+        )
         assert classify_gateway_failure(status_code=404) == "404 Endpoint"
         assert (
             classify_gateway_failure(error="ConnectError connection refused")
@@ -48,6 +56,13 @@ class TestGatewayDiagnostics:
         )
         assert (
             classify_gateway_failure(status_code=530, cloudflare=True)
+            == "CLOUDFLARE_ORIGIN_UNREACHABLE"
+        )
+        assert (
+            classify_gateway_failure(
+                body_preview="error code: 1033",
+                cloudflare=True,
+            )
             == "CLOUDFLARE_ORIGIN_UNREACHABLE"
         )
         assert (
@@ -207,6 +222,39 @@ class TestGatewayHttpTransport:
         assert seen["x-gateway-token"] == "caller-secret"
         assert seen["x-quantforg-gateway-token"] == "caller-secret"
 
+    def test_empty_caller_token_raises_before_protected_send(self) -> None:
+        """Never hit Windows Gateway with missing Authorization (received_len=0)."""
+        sent = {"n": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent["n"] += 1
+            return httpx.Response(200, json={"connected": False})
+
+        transport = httpx.MockTransport(handler)
+        client = GatewayMT5Client(
+            base_url="https://tunnel.example",
+            token="",
+        )
+
+        import app.infrastructure.brokers.mt5.gateway_client as mod
+
+        original = mod.httpx.Client
+
+        class PatchedClient(original):  # type: ignore[valid-type,misc]
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                kwargs["transport"] = transport
+                super().__init__(*args, **kwargs)
+
+        mod.httpx.Client = PatchedClient  # type: ignore[misc]
+        try:
+            with pytest.raises(RuntimeError, match="CALLER_TOKEN|not configured"):
+                # Protected route — /health intentionally omits auth.
+                client._request("GET", "/account")
+        finally:
+            mod.httpx.Client = original  # type: ignore[misc]
+
+        assert sent["n"] == 0
+
     def test_health_route_has_no_auth_header(self) -> None:
         seen_auth = {"present": False}
 
@@ -322,6 +370,62 @@ class TestGatewayHttpTransport:
         assert GatewayMT5Client._is_transient_transport_error(
             RuntimeError("Cannot send a request, as the client has been closed.")
         )
+
+    def test_order_send_403_execution_disabled_is_not_a_fill(self) -> None:
+        """HTTP 403 + retcode 90001 must map to disabled — never a ticket."""
+        from decimal import Decimal
+
+        from app.domain.entities.execution_gateway import RETCODE_EXECUTION_DISABLED
+        from app.domain.entities.mt5_order import TradeRequest
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path.endswith("/trade/order_send")
+            return httpx.Response(
+                403,
+                json={
+                    "detail": {
+                        "ok": False,
+                        "retcode": RETCODE_EXECUTION_DISABLED,
+                        "comment": "gateway execution disabled",
+                        "order_ticket": 0,
+                        "deal_ticket": 0,
+                    }
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        client = GatewayMT5Client(base_url="https://gw.example", token="tok")
+        import app.infrastructure.brokers.mt5.gateway_client as mod
+
+        original = mod.httpx.Client
+
+        class PatchedClient(original):  # type: ignore[valid-type,misc]
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                kwargs["transport"] = transport
+                super().__init__(*args, **kwargs)
+
+        mod.httpx.Client = PatchedClient  # type: ignore[misc]
+        try:
+            object.__setattr__(client, "_connected", True)
+            result = client.order_send(
+                TradeRequest(
+                    symbol="EURUSD",
+                    action="buy",
+                    volume=Decimal("0.01"),
+                    price=Decimal("1.10000"),
+                    stop_loss=Decimal("0"),
+                    take_profit=Decimal("0"),
+                    deviation=20,
+                    magic=0,
+                )
+            )
+        finally:
+            mod.httpx.Client = original  # type: ignore[misc]
+
+        assert result.retcode == RETCODE_EXECUTION_DISABLED
+        assert int(result.order_ticket or 0) == 0
+        assert int(result.deal_ticket or 0) == 0
+        assert "disabled" in (result.comment or "").lower()
 
 
 @pytest.mark.unit

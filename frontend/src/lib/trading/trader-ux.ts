@@ -32,7 +32,14 @@ const TRADER_ERROR_COPY: Record<string, string> = {
   not_connected: "Connect your broker account to start.",
   INVALID_CREDENTIALS: "Broker login or password was not accepted.",
   CONNECTION_FAILED: "Could not verify the broker connection.",
-  GATEWAY_UNAVAILABLE: "The broker gateway is temporarily unavailable.",
+  GATEWAY_UNAVAILABLE:
+    "Broker Gateway Offline — Windows MT5 Gateway is unreachable. Check the tunnel/URL and that the Gateway process is running. Research Gold candles also require this feed.",
+  gateway_unavailable:
+    "Broker Gateway Offline — Windows MT5 Gateway is unreachable. Check the tunnel/URL and that the Gateway process is running. Research Gold candles also require this feed.",
+  CLOUDFLARE_ORIGIN_UNREACHABLE:
+    "Cloudflare tunnel cannot reach the Windows Gateway origin (HTTP 530). Start/repair the cloudflared connector — this is not an authentication failure. Gold market data and research require this path.",
+  cloudflare_origin_unreachable:
+    "Cloudflare tunnel cannot reach the Windows Gateway origin (HTTP 530). Start/repair the cloudflared connector — this is not an authentication failure. Gold market data and research require this path.",
   ACCOUNT_SESSION_MISMATCH: "Your trading session needs to be reconnected.",
   account_session_mismatch: "Your trading session needs to be reconnected.",
   CATALOGUE_UNAVAILABLE: "Connect or verify your broker and refresh market data.",
@@ -189,10 +196,26 @@ export function traderFacingErrorMessage(error: {
   const upper = code.toUpperCase();
   if (TRADER_ERROR_COPY[upper]) return TRADER_ERROR_COPY[upper];
   const msg = String(error.message || "");
+  const hay = `${msg} ${reason} ${code}`.toLowerCase();
+  if (
+    hay.includes("cloudflare_origin_unreachable") ||
+    hay.includes("origin unreachable") ||
+    /\b530\b/.test(hay) ||
+    hay.includes("error code: 1033")
+  ) {
+    return TRADER_ERROR_COPY.CLOUDFLARE_ORIGIN_UNREACHABLE;
+  }
   for (const key of Object.keys(TRADER_ERROR_COPY)) {
     if (msg.includes(key) || reason === key) return TRADER_ERROR_COPY[key];
   }
-  if (/gateway|traceback|exception|stack|password|token|secret/i.test(msg)) {
+  if (
+    /gateway|unreachable|timed out|timeout|connection refused|connection reset/i.test(
+      msg,
+    )
+  ) {
+    return TRADER_ERROR_COPY.GATEWAY_UNAVAILABLE;
+  }
+  if (/traceback|exception|stack|password|token|secret/i.test(msg)) {
     return TRADER_ERROR_COPY.CONNECTION_FAILED;
   }
   return msg || TRADER_ERROR_COPY.CONNECTION_FAILED;
@@ -575,7 +598,8 @@ export function researchDeskLiveTradingStatus(
   if (auth === "LIVE_PAUSED") {
     return {
       label: "LIVE_PAUSED",
-      detail: "Live trading is paused. Research continues independently.",
+      detail:
+        "Live trading is paused. Gold research still needs a reachable Gateway market feed.",
       state: "LIVE_TRADING_PAUSED",
     };
   }
@@ -825,7 +849,7 @@ export const TRADER_POLL_MS = 15_000;
 export const UNIVERSE_POLL_MS = 30_000;
 export const EXPLANATION_UNAVAILABLE = "EXPLANATION UNAVAILABLE";
 export const RESEARCH_INDEPENDENT_COPY =
-  "Research intelligence is independent of your MT5 connection.";
+  "Research is not a trade authorization. Live Gold candles still require a reachable broker Gateway.";
 
 export type SignalAvailability = CatalogueViewState;
 
@@ -862,6 +886,7 @@ export type NormalizedSignalCenter = {
   brokerRequiredForResearch?: boolean;
   /** Research analysis worker health — never live trading. */
   researchAnalysis?: Record<string, unknown>;
+  skipReasons?: string[];
   liveTradingState?: string;
   liveAuthorization?: string;
   ordersMaySubmit?: boolean;
@@ -902,6 +927,7 @@ export function normalizeSignalCenterPayload(
       scannerStatus: undefined,
       brokerRequiredForResearch: false,
       researchAnalysis: undefined,
+      skipReasons: undefined,
       liveTradingState: undefined,
       liveAuthorization: undefined,
       ordersMaySubmit: undefined,
@@ -917,6 +943,9 @@ export function normalizeSignalCenterPayload(
     payload.research_analysis && typeof payload.research_analysis === "object"
       ? (payload.research_analysis as Record<string, unknown>)
       : undefined;
+  const skipReasons = Array.isArray(payload.skip_reasons)
+    ? payload.skip_reasons.map((r) => String(r)).filter(Boolean)
+    : undefined;
   const universeSize =
     optionalConfirmedCount(payload.universe_size) ??
     optionalConfirmedCount(dash.total_symbols) ??
@@ -939,6 +968,7 @@ export function normalizeSignalCenterPayload(
       scannerStatus: "NO_ACTIVE_SIGNALS",
       brokerRequiredForResearch: false,
       researchAnalysis,
+      skipReasons,
       liveTradingState: String(payload.live_trading_state || "") || undefined,
       liveAuthorization: String(payload.live_authorization || "") || undefined,
       ordersMaySubmit: payload.orders_may_submit === true,
@@ -1126,6 +1156,7 @@ export function normalizeSignalCenterPayload(
     scannerStatus: scannerStatus || undefined,
     brokerRequiredForResearch: payload.broker_required_for_research === true,
     researchAnalysis,
+    skipReasons,
     liveTradingState: String(payload.live_trading_state || "") || undefined,
     liveAuthorization: String(payload.live_authorization || "") || undefined,
     ordersMaySubmit: payload.orders_may_submit === true,
@@ -1183,6 +1214,10 @@ export function researchSignalsEmptyCopy(input: {
   fabricatedBlocked?: boolean;
   empty?: boolean;
   universeSize?: number | null;
+  skipReasons?: string[] | null;
+  degradedReason?: string | null;
+  catalogueSource?: string | null;
+  researchStatus?: string | null;
 }): { title: string; description: string } {
   if (input.fetchError) {
     return {
@@ -1198,17 +1233,59 @@ export function researchSignalsEmptyCopy(input: {
         "Synthetic or fabricated signal payloads are not shown as live research.",
     };
   }
+  const reasons = (input.skipReasons || []).map((r) => String(r).trim()).filter(Boolean);
+  const degraded = String(input.degradedReason || "").trim();
+  const cat = String(input.catalogueSource || "").trim().toUpperCase();
+  const researchStatus = String(input.researchStatus || "").trim().toUpperCase();
+  if (
+    degraded === "broker_catalogue_unavailable" ||
+    cat === "UNAVAILABLE" ||
+    cat === "ERROR" ||
+    researchStatus === "DEGRADED"
+  ) {
+    const detail =
+      reasons[0] ||
+      "Broker Gold catalogue unavailable — Gateway Offline or MT5 Not attached. Live XAUUSD analysis needs the Windows Gateway market feed.";
+    return {
+      title: "GOLD ANALYSIS DEGRADED",
+      description: detail,
+    };
+  }
+  if (reasons.length > 0) {
+    return {
+      title: "NO ACTIVE SIGNALS",
+      description: reasons.slice(0, 4).join(" · "),
+    };
+  }
   if (input.universeSize != null && input.universeSize > 0) {
     return {
       title: "NO ACTIVE SIGNALS",
-      description: `The analysis engine scanned ${input.universeSize} instruments. No qualifying BUY/SELL setup currently exists.`,
+      description: `XAUUSD scanned among ${input.universeSize} catalogue row(s). No qualifying BUY/SELL setup currently exists.`,
     };
   }
   return {
     title: "NO ACTIVE SIGNALS",
     description:
-      "The analysis engine completed its scan. No qualifying BUY/SELL setup currently exists.",
+      "No qualifying XAUUSD BUY/SELL setup currently exists.",
   };
+}
+
+/** Dashboard Research chip — distinct from Broker / Markets / Live trading. */
+export function researchDeskStatusLabel(input: {
+  fetchError?: boolean;
+  workerStatus?: string | null;
+  availability?: string | null;
+}): string {
+  if (input.fetchError) return "Unavailable";
+  const worker = String(input.workerStatus || "").trim().toUpperCase();
+  if (worker === "DEGRADED") return "Degraded";
+  if (worker === "STOPPED") return "Stopped";
+  if (worker === "UNAVAILABLE") return "Unavailable";
+  if (worker === "RUNNING" || worker === "READY") return "Running";
+  const avail = String(input.availability || "").trim().toUpperCase();
+  if (avail === "UNAVAILABLE") return "Degraded";
+  if (avail === "NOT_READY") return "Loading";
+  return "Running";
 }
 
 export function accountConnectionHint(

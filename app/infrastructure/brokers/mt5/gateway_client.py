@@ -213,12 +213,14 @@ def classify_gateway_failure(
     if status_code == 401 or "invalid or missing gateway token" in err + body:
         return "Invalid Gateway Token"
     if status_code == 403:
+        if "90001" in err + body or "gateway execution disabled" in err + body:
+            return "Gateway execution disabled"
         return "403 Forbidden"
     if status_code == 404:
         return "404 Endpoint"
     if status_code == 429:
         return "Cloudflare rate limited"
-    if status_code == 530:
+    if status_code == 530 or "error code: 1033" in err + body or "error code 1033" in err + body:
         return "CLOUDFLARE_ORIGIN_UNREACHABLE"
     if status_code in {502, 504}:
         return "CLOUD_EDGE_ORIGIN_ERROR"
@@ -914,7 +916,40 @@ class GatewayMT5Client:
                     else payload
                 )
             except Exception:
+                payload = None
                 upstream_detail = _clip(body_text or response.reason_phrase)
+            # Local Gateway fail-closed: HTTP 403 + retcode 90001 is NOT a fill.
+            # Map to a structured disabled result so OMS never invents tickets.
+            if (
+                int(response.status_code) == 403
+                and path in {"/trade/order_send", "/trade/order_cancel"}
+                and isinstance(upstream_detail, dict)
+            ):
+                from app.domain.entities.execution_gateway import (
+                    RETCODE_EXECUTION_DISABLED,
+                )
+
+                try:
+                    detail_retcode = int(upstream_detail.get("retcode") or 0)
+                except (TypeError, ValueError):
+                    detail_retcode = 0
+                if detail_retcode == RETCODE_EXECUTION_DISABLED:
+                    upstream["diagnostic"] = "Gateway execution disabled"
+                    upstream["http_status"] = 403
+                    upstream["error"] = "gateway execution disabled (retcode 90001)"
+                    return {
+                        "ok": False,
+                        "retcode": RETCODE_EXECUTION_DISABLED,
+                        "comment": str(
+                            upstream_detail.get("comment")
+                            or "gateway execution disabled"
+                        ),
+                        "order_ticket": 0,
+                        "deal_ticket": 0,
+                        "order": 0,
+                        "deal": 0,
+                        "ticket": 0,
+                    }
             label = classify_gateway_failure(
                 error=str(upstream_detail),
                 status_code=response.status_code,

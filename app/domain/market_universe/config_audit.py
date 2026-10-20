@@ -156,15 +156,15 @@ def build_configuration_audit() -> dict[str, Any]:
         ),
         _row(
             setting="GOLD_ONLY_MODE",
-            source="settings.gold_only_mode (production remaps GOLD_ONLY)",
+            source="settings.gold_only_mode (production preserves GOLD_ONLY)",
             default=True,
             effective=gold_only,
             consumer="gold_only.autonomous_execution_symbols / scanner clamp",
             asset_class="METALS",
             live_or_research="UNUSED" if not gold_only else "LIVE_EFFECTIVE",
-            precedence="production finalize remaps GOLD_ONLY",
+            precedence="production finalize preserves GOLD_ONLY",
             status="UNUSED" if not gold_only else "LIVE_EFFECTIVE",
-            note="Production consumes the live broker catalogue and research signals.",
+            note="Production GOLD_ONLY locks autonomous universe to XAUUSD.",
         ),
         _row(
             setting="MULTI_SYMBOL_ENABLED",
@@ -174,7 +174,7 @@ def build_configuration_audit() -> dict[str, Any]:
             consumer="execution_universe / scanner (still gold-clamped when gold-only)",
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE" if not gold_only else "UNUSED",
-            precedence="production finalize forces True with BROKER_DISCOVERED",
+            precedence="forced False under GOLD_ONLY; True only with BROKER_DISCOVERED",
             status="UNUSED" if gold_only else "LIVE_EFFECTIVE",
         ),
         _row(

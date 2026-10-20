@@ -31,7 +31,7 @@ from core.config.environments import production_settings, testing_settings
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
-def test_production_gold_only_env_cannot_lock_live_universe() -> None:
+def test_production_gold_only_env_locks_live_universe() -> None:
     settings = production_settings(
         secret_key="a-real-production-secret-key-with-enough-entropy-here",
         postgres_password="a-real-production-password-here",
@@ -39,9 +39,9 @@ def test_production_gold_only_env_cannot_lock_live_universe() -> None:
         gold_only_mode=True,
         multi_symbol_enabled=False,
     )
-    assert str(settings.execution_universe_mode).upper() == "BROKER_DISCOVERED"
-    assert settings.gold_only_mode is False
-    assert settings.multi_symbol_enabled is True
+    assert str(settings.execution_universe_mode).upper() == "GOLD_ONLY"
+    assert settings.gold_only_mode is True
+    assert settings.multi_symbol_enabled is False
 
 
 def test_non_production_gold_only_still_clamps() -> None:

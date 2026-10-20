@@ -36,14 +36,15 @@ def test_scan_budget_leaves_reserve_for_execution() -> None:
     assert SCAN_SYMBOL_TIMEOUT_SECONDS <= 15.0
 
 
-def test_production_stays_broker_discovered() -> None:
+def test_production_default_gold_only_is_preserved() -> None:
     settings = production_settings(
         secret_key="a-real-production-secret-key-with-enough-entropy-here",
         postgres_password="a-real-production-password-here",
         execution_universe_mode="GOLD_ONLY",
     )
-    assert str(settings.execution_universe_mode).upper() == "BROKER_DISCOVERED"
-    assert settings.gold_only_mode is False
+    assert str(settings.execution_universe_mode).upper() == "GOLD_ONLY"
+    assert settings.gold_only_mode is True
+    assert settings.multi_symbol_enabled is False
 
 
 def test_83_symbol_catalogue_does_not_become_scan_universe() -> None:

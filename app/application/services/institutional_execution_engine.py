@@ -727,6 +727,54 @@ class InstitutionalExecutionEngine:
             result.journal_entry = self._write_journal(result, intent, None, uid)
             return result, decision
 
+        # Fail-closed EXECUTION_ENABLED gate before Risk sizing so missing SL /
+        # min-lot cannot mask the authoritative disabled outcome.
+        if not skip_broker and not bool(
+            getattr(self.gateway.adapter, "execution_enabled", False)
+        ):
+            t0 = time.perf_counter()
+            exec_result = ExecutionResult.disabled(
+                request_id=request_id, symbol=symbol
+            )
+            blocked = humanize_reasons([exec_result.message])[0]
+            self._stage(
+                stages,
+                stage=PipelineStage.EXECUTION_CHECK,
+                status="blocked",
+                reason=blocked,
+                t0=t0,
+                meta={"execution_enabled": False, "retcode": exec_result.retcode},
+            )
+            self._observe(
+                user_id=uid,
+                request_id=request_id,
+                symbol=symbol,
+                side=side,
+                order_type=order_type,
+                volume=volume,
+                stage=PipelineStage.REJECTED,
+                reason=blocked,
+            )
+            result = PipelineResult(
+                request_id=request_id,
+                action=action,
+                outcome=exec_result.outcome.value,
+                message=exec_result.message,
+                stages=stages,
+                rejection_reasons=[blocked],
+                warnings=list(decision.warnings),
+                checks=dict(decision.checks),
+                calculated_risk=dict(decision.calculated_risk),
+                execution_result=exec_result,
+                decision=decision.decision.value,
+                latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                idempotent_replay=decision.idempotent_replay,
+            )
+            result.journal_entry = self._write_journal(
+                result, intent, exec_result, uid
+            )
+            return result, decision
+
         # Authoritative Risk Engine — never skip on live submit path
         t0 = time.perf_counter()
         risk_reject: list[str] = []

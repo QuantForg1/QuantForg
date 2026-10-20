@@ -99,6 +99,7 @@ Windows Gateway process (VPS `.env` only):
 | `MT5_GATEWAY_PORT` | `8765`. |
 | `MT5_TERMINAL_PATH` | `C:\Program Files\MetaTrader 5\terminal64.exe` |
 | `MT5_GATEWAY_AUTO_ATTACH` | `true` on a private VPS with a logged-in terminal. |
+| `MT5_GATEWAY_EXECUTION_ENABLED` | Local mutation guard for `/trade/order_send` and `/trade/order_cancel`. Default `false`. Independent of Railway `EXECUTION_ENABLED` — both must be true for a real fill. |
 
 Do not put broker login/password in Railway. Do not put Gateway tokens in git.
 

@@ -2223,6 +2223,18 @@ def list_live_signals(
     if active_only:
         signals = [s for s in signals if is_active_signal_card(s)]
 
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+        if gold_only_enabled():
+            signals = [
+                s
+                for s in signals
+                if is_gold_symbol(str(s.get("symbol") or s.get("broker_symbol") or ""))
+            ]
+    except Exception:  # noqa: S110  # policy import is best-effort
+        pass
+
     qn = (q or "").strip().upper()
     if qn:
         signals = [s for s in signals if qn in s["symbol"]]
@@ -2335,6 +2347,51 @@ def list_live_signals(
             "authorizes_trade": False,
             "forwarded_to_oms": False,
         }
+    skip_reasons: list[str] = []
+    degraded = str(research_analysis.get("degraded_reason") or "")
+    if degraded == "broker_catalogue_unavailable":
+        skip_reasons.append(
+            "Market data unavailable — Gateway offline or broker catalogue empty"
+        )
+    elif research_analysis.get("last_error"):
+        skip_reasons.append(str(research_analysis.get("last_error"))[:200])
+    if scanner_status == "NO_ACTIVE_SIGNALS" and not skip_reasons:
+        skip_reasons.append("No qualifying XAUUSD BUY/SELL setup currently exists")
+    try:
+        from app.domain.trading.subsystem_status import build_subsystem_status
+        from core.config.settings import get_settings
+
+        settings = get_settings()
+        gw_url = bool((getattr(settings, "mt5_gateway_base_url", None) or "").strip())
+        cat = str(
+            research_analysis.get("catalogue_source")
+            or research_meta.get("catalogue_source")
+            or ""
+        ).upper()
+        catalogue_live = cat == "LIVE_BROKER"
+        subsystem_status = build_subsystem_status(
+            gateway_url_configured=gw_url,
+            gateway_online=catalogue_live,
+            gateway_reachable=catalogue_live,
+            worker_status=str(research_analysis.get("status") or ""),
+            catalogue_source=cat,
+            research_last_error=(
+                str(research_analysis.get("last_error"))
+                if research_analysis.get("last_error")
+                else None
+            ),
+            signal_count=len(signals),
+            execution_enabled=bool(getattr(settings, "execution_enabled", False)),
+            gateway_execution_enabled=False,
+            orders_may_submit=bool(auth.get("orders_may_submit")),
+        )
+    except Exception:
+        subsystem_status = {
+            "research": {
+                "status": str(research_analysis.get("status") or "UNKNOWN"),
+                "detail": research_analysis.get("last_error"),
+            }
+        }
     return {
         "as_of": as_of,
         "session": _session(),
@@ -2360,7 +2417,12 @@ def list_live_signals(
         "live_trading_state": auth.get("live_trading_state"),
         "live_authorization": auth.get("live_authorization"),
         "allow_live_promotion": False,
+        # Personal MT5 login is not required to call research APIs; live Gold
+        # OHLC still needs the Windows Gateway broker catalogue today.
         "broker_required_for_research": False,
+        "broker_catalogue_required_for_gold_md": True,
+        "skip_reasons": skip_reasons,
+        "subsystem_status": subsystem_status,
         "research_meta": research_meta,
         "research_analysis": research_analysis,
         "dashboard": {
