@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.application.dto.health import HealthStatus
 from app.application.services.health_service import HealthService
@@ -12,6 +12,7 @@ from app.domain.enums.user import UserRole
 from app.presentation.dependencies.auth import require_roles
 from app.presentation.dependencies.ops import OpsMetricsDep
 from app.presentation.dependencies.services import get_health_service
+from app.presentation.router_boot import evaluate_readiness
 from app.presentation.schemas.health import (
     DependencyStatusSchema,
     HealthResponse,
@@ -20,6 +21,14 @@ from app.presentation.schemas.ops import MetricsResponse
 from core.config.settings import get_settings
 
 router = APIRouter(tags=["Health"])
+
+
+def _readiness_payload(request: Request) -> dict[str, Any]:
+    """Derive readiness from router boot state (no secrets / stack traces)."""
+    boot = getattr(request.app.state, "router_boot", None)
+    if not isinstance(boot, dict):
+        boot = None
+    return evaluate_readiness(boot)
 
 
 def _to_response(report: object) -> HealthResponse:
@@ -68,11 +77,11 @@ async def healthz() -> dict[str, str]:
 @router.get(
     "/ready",
     summary="Alias ready probe",
-    status_code=status.HTTP_200_OK,
     include_in_schema=False,
 )
-async def ready_alias() -> dict[str, str]:
-    return {"status": "ok"}
+async def ready_alias(request: Request, response: Response) -> dict[str, Any]:
+    """Same semantics as ``/health/ready`` (router init, not DB)."""
+    return await readiness(request, response)
 
 
 @router.get(
@@ -96,13 +105,26 @@ async def health_status(
 
 @router.get(
     "/health/ready",
-    summary="Readiness probe (instant)",
-    description="Immediate 200 — process accepts traffic. Use /health/status for deps.",
-    status_code=status.HTTP_200_OK,
+    summary="Readiness probe",
+    description=(
+        "Reports whether required API routers finished registration. "
+        "Returns HTTP 503 while deferred routers are still pending or when a "
+        "critical router failed to import. Does not probe Postgres/Redis/MT5 "
+        "(use /health/status and /health/trading-components). "
+        "Railway platform healthcheck should use /health/live."
+    ),
 )
-async def readiness() -> dict[str, str]:
-    """Ready for edge probes — does not wait on infrastructure."""
-    return {"status": "ok"}
+async def readiness(request: Request, response: Response) -> dict[str, Any]:
+    """Router-init readiness — not a full dependency health check."""
+    payload = _readiness_payload(request)
+    if not payload.get("http_ready", True):
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    body: dict[str, Any] = {
+        "status": payload["status"],
+        "detail": payload.get("detail"),
+        "routers": payload.get("routers"),
+    }
+    return body
 
 
 @router.get(
@@ -114,6 +136,27 @@ async def readiness() -> dict[str, str]:
 async def liveness() -> dict[str, str]:
     """Kubernetes / Railway liveness — process is running."""
     return {"status": "ok"}
+
+
+
+@router.get(
+    "/health/openai",
+    summary="OpenAI advisor provider status",
+    description=(
+        "Observe-only OpenAI configuration status (no network call, no key "
+        "exposure). Advisory only — never authorizes trades. Gemini is not used."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+async def openai_provider_health() -> dict[str, object]:
+    from app.application.services.openai_advisor_service import (
+        build_openai_advisor_from_settings,
+    )
+
+    advisor = build_openai_advisor_from_settings(get_settings())
+    payload = advisor.provider_status().to_dict()
+    payload["status"] = "ok"
+    return payload
 
 
 @router.get(

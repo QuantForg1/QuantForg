@@ -7,6 +7,7 @@ hard-coded — they must come from the environment or a ``.env`` file.
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Any
@@ -402,6 +403,63 @@ class Settings(BaseSettings):
             validation_alias=AliasChoices("EXECUTION_ENABLED", "execution_enabled"),
         ),
     ] = False
+
+    # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
+    openai_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Enable OpenAI Responses API advisor. Advice is non-authoritative "
+                "and cannot bypass risk or call order_send."
+            ),
+            validation_alias=AliasChoices("OPENAI_ENABLED", "openai_enabled"),
+        ),
+    ] = False
+    openai_api_key: Annotated[
+        SecretStr | None,
+        Field(
+            description="OpenAI API key (server-side only). Never log or expose.",
+            validation_alias=AliasChoices("OPENAI_API_KEY", "openai_api_key"),
+        ),
+    ] = None
+    openai_model: Annotated[
+        str,
+        Field(
+            description=(
+                "OpenAI Responses model id (e.g. gpt-5.4-mini). "
+                "Override via OPENAI_MODEL; do not invent undocumented names."
+            ),
+            validation_alias=AliasChoices("OPENAI_MODEL", "openai_model"),
+        ),
+    ] = "gpt-5.4-mini"
+    openai_base_url: Annotated[
+        str,
+        Field(
+            description="OpenAI API base URL (default https://api.openai.com/v1)",
+            validation_alias=AliasChoices("OPENAI_BASE_URL", "openai_base_url"),
+        ),
+    ] = "https://api.openai.com/v1"
+    openai_timeout_seconds: Annotated[
+        float,
+        Field(
+            gt=0,
+            description="OpenAI HTTP timeout seconds",
+            validation_alias=AliasChoices(
+                "OPENAI_TIMEOUT_SECONDS", "openai_timeout_seconds"
+            ),
+        ),
+    ] = 20.0
+    openai_max_retries: Annotated[
+        int,
+        Field(
+            ge=0,
+            le=2,
+            description="Bounded retries for transient OpenAI failures (0–2)",
+            validation_alias=AliasChoices(
+                "OPENAI_MAX_RETRIES", "openai_max_retries"
+            ),
+        ),
+    ] = 1
 
     # -- Telegram observability (never on the trading path) -----------------
     telegram_enabled: Annotated[
@@ -896,6 +954,14 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "allow_risk_lock_override", False)
             if self.production_validation_mode:
                 object.__setattr__(self, "production_validation_mode", False)
+            # Public OpenAPI UI: opt-in only via DOCS_ENABLED=true (Dockerfile
+            # defaults false). A 404 on /docs in production is intentional.
+            docs_env = os.environ.get("DOCS_ENABLED", "").lower()
+            object.__setattr__(
+                self,
+                "docs_enabled",
+                docs_env in {"1", "true", "yes", "on"},
+            )
             # Production universe: GOLD_ONLY is authoritative (XAUUSD only).
             # Explicit BROKER_DISCOVERED lifts the gold clamp for catalogue mode.
             # Invalid/empty values still fail closed.

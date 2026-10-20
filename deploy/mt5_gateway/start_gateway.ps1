@@ -76,7 +76,29 @@ if ($LASTEXITCODE -ne 0) {
   throw "uvicorn missing in project env. Run: py -3.13 -m poetry install"
 }
 
+# Config presence check — never print token values.
+$tokenLen = 0
+if ($env:MT5_GATEWAY_TOKEN) {
+  $tokenLen = $env:MT5_GATEWAY_TOKEN.Trim().Length
+} elseif (Test-Path (Join-Path $RepoRoot ".env")) {
+  $dotenvLine = Get-Content (Join-Path $RepoRoot ".env") -ErrorAction SilentlyContinue |
+    Where-Object { $_ -match '^\s*MT5_GATEWAY_TOKEN\s*=' } |
+    Select-Object -First 1
+  if ($dotenvLine) {
+    $raw = ($dotenvLine -replace '^\s*MT5_GATEWAY_TOKEN\s*=\s*', '').Trim().Trim('"').Trim("'")
+    $tokenLen = $raw.Length
+  }
+}
+if ($tokenLen -lt 16) {
+  Write-Host "ERROR: MT5_GATEWAY_TOKEN is missing or too short (need >= 16 chars)."
+  Write-Host "Set it in the process environment or repo-root .env (see deploy/mt5_gateway/gateway.env.example)."
+  Write-Host "Never commit the real token. Do not paste it into chat logs."
+  exit 1
+}
+Write-Host "MT5_GATEWAY_TOKEN configured (length=$tokenLen; value not shown)."
+
 Write-Host "Starting gateway (foreground). Ctrl+C to stop."
 Write-Host "NOTE: Closing this window stops the gateway. Prefer supervise_gateway.ps1 for production."
+Write-Host "NOTE: A successful process start does not prove MT5 is attached — check /health after boot."
 & $Python -m services.mt5_gateway.main
 

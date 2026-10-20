@@ -25,6 +25,7 @@ from app.presentation.middleware.authentication import AuthenticationMiddleware
 from app.presentation.middleware.error_handler import register_exception_handlers
 from app.presentation.middleware.request_context import RequestContextMiddleware
 from app.presentation.middleware.session import SessionMiddleware
+from app.presentation.router_boot import empty_router_boot, merge_registration_summary
 from core.config.settings import Settings, get_settings
 from core.database.session import DatabaseManager, set_database_manager
 from core.di.container import Container, set_container
@@ -97,6 +98,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ),
     ("execution_intelligence", "app.presentation.routers.execution_intelligence"),
     ("quant_ai", "app.presentation.routers.quant_ai"),
+    ("openai_advisor", "app.presentation.routers.openai_advisor"),
     ("quant_studio", "app.presentation.routers.quant_studio"),
     ("decision_engine", "app.presentation.routers.decision_engine"),
     ("research_lab", "app.presentation.routers.research_lab"),
@@ -441,7 +443,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
         if pending:
             t_routes = time.perf_counter()
-            _register_routers(
+            summary = _register_routers(
                 _app,
                 settings,
                 specs=pending,
@@ -452,6 +454,31 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 flush=True,
             )
             _app.state.pending_router_specs = ()
+            boot = getattr(_app.state, "router_boot", None) or empty_router_boot(
+                mode="deferred"
+            )
+            _app.state.router_boot = merge_registration_summary(
+                boot, summary, remaining_pending=()
+            )
+            logger.info(
+                "deferred_router_boot_complete",
+                status=_app.state.router_boot.get("status"),
+                registered=len(_app.state.router_boot.get("registered") or []),
+                failed=_app.state.router_boot.get("failed") or [],
+                critical_failed=_app.state.router_boot.get("critical_failed") or [],
+            )
+        else:
+            boot = getattr(_app.state, "router_boot", None)
+            if isinstance(boot, dict) and boot.get("status") == "pending":
+                _app.state.router_boot = {
+                    **boot,
+                    "status": (
+                        "not_ready"
+                        if boot.get("critical_failed")
+                        else ("degraded" if boot.get("failed") else "complete")
+                    ),
+                    "pending": [],
+                }
 
         t_db = time.perf_counter()
         try:
@@ -799,6 +826,11 @@ def _register_routers(
 
     Health is always registered first (and unprefixed) so Railway probes work
     even if a later institutional router fails to import.
+
+    Already-mounted router names (``app.state.registered_router_names``) are
+    skipped to prevent duplicate registration when deferred boot re-runs.
+    Failures are logged with ``router_registration_failed`` and recorded in
+    the returned summary — never silently discarded without visibility.
     """
     import time
 
@@ -806,8 +838,12 @@ def _register_routers(
     prefix = settings.api_prefix
     registered: list[str] = []
     failed: list[str] = []
+    skipped_duplicate: list[str] = []
     first_failure: str | None = None
     selected = specs if specs is not None else _ROUTER_SPECS
+    already: set[str] = set(
+        getattr(application.state, "registered_router_names", ()) or ()
+    )
 
     # Ensure health is first in the registration order.
     ordered = sorted(
@@ -819,12 +855,17 @@ def _register_routers(
         if _is_disabled(name):
             logger.warning("router_skipped", router=name, reason="disabled")
             continue
+        if name in already:
+            skipped_duplicate.append(name)
+            logger.info("router_already_registered", router=name)
+            continue
         t_r = time.perf_counter()
         try:
             module = importlib.import_module(module_path)
             router = module.router
             application.include_router(router, prefix=prefix)
             registered.append(name)
+            already.add(name)
             ms = round((time.perf_counter() - t_r) * 1000.0, 1)
             logger.info("router_registered", router=name, prefix=prefix, ms=ms)
             if ms > 2000:
@@ -840,15 +881,19 @@ def _register_routers(
                 error=str(exc),
             )
 
+    application.state.registered_router_names = frozenset(already)
+
     # Unprefixed health for Railway / platform probes (GET /health, /health/live).
     if (
         mount_unprefixed_health
         and not _is_disabled("health")
-        and "health" in registered
+        and ("health" in registered or "health" in already)
+        and not getattr(application.state, "health_unprefixed_mounted", False)
     ):
         try:
             health_module = importlib.import_module("app.presentation.routers.health")
             application.include_router(health_module.router)
+            application.state.health_unprefixed_mounted = True
             logger.info("router_registered", router="health_unprefixed", prefix="")
             print("Routes loaded...", flush=True)
             print("Health endpoint ready...", flush=True)
@@ -863,11 +908,18 @@ def _register_routers(
     summary = {
         "registered": registered,
         "failed": failed,
+        "skipped_duplicate": skipped_duplicate,
         "first_failure": first_failure,
         "route_registration_ms": route_ms,
     }
     logger.info("router_registration_complete", **summary)
     print(f"Route Registration: {route_ms}ms", flush=True)
+    if failed:
+        logger.error(
+            "router_registration_had_failures",
+            failed=failed,
+            first_failure=first_failure,
+        )
     if route_ms > 5000:
         logger.warning(
             "route_registration_exceeded_5s",
@@ -918,8 +970,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     # Production: register core probes only so create_app returns quickly and
-    # Railway can healthcheck within seconds. Remaining routers load after listen.
-    # Tests default to eager; override with QF_EAGER_ROUTERS=false for smoke.
+    # Railway can healthcheck within seconds. Remaining routers load after listen
+    # via lifespan ``_deferred_boot`` (do not set QF_EAGER_ROUTERS blindly).
+    # Recommended:
+    #   production/Railway → unset (deferred; QF_EAGER_ROUTERS=false)
+    #   pytest / local full wiring → unset (eager when APP_ENV=testing) or true
+    #   smoke create_app timing → QF_EAGER_ROUTERS=false
     eager_env = os.environ.get("QF_EAGER_ROUTERS", "").lower()
     if eager_env in {"0", "false", "no", "off"}:
         eager = False
@@ -928,17 +984,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     else:
         eager = bool(settings.is_testing)
     if eager:
-        _register_routers(application, settings, specs=_ROUTER_SPECS)
+        summary = _register_routers(application, settings, specs=_ROUTER_SPECS)
         application.state.pending_router_specs = ()
+        application.state.router_boot = merge_registration_summary(
+            empty_router_boot(mode="eager"),
+            summary,
+            remaining_pending=(),
+        )
     else:
         core_specs = tuple(s for s in _ROUTER_SPECS if s[0] in _CORE_ROUTER_NAMES)
-        _register_routers(application, settings, specs=core_specs)
-        application.state.pending_router_specs = tuple(
-            s for s in _ROUTER_SPECS if s[0] not in _CORE_ROUTER_NAMES
+        pending = tuple(s for s in _ROUTER_SPECS if s[0] not in _CORE_ROUTER_NAMES)
+        summary = _register_routers(application, settings, specs=core_specs)
+        application.state.pending_router_specs = pending
+        application.state.router_boot = merge_registration_summary(
+            empty_router_boot(mode="deferred", pending=pending),
+            summary,
+            remaining_pending=pending,
         )
 
     total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
-    logger.info("create_app_complete", ms=total_ms, eager_routers=eager)
+    boot = getattr(application.state, "router_boot", None)
+    boot_status = boot.get("status") if isinstance(boot, dict) else None
+    logger.info(
+        "create_app_complete",
+        ms=total_ms,
+        eager_routers=eager,
+        router_boot_status=boot_status,
+        pending_routers=len(
+            getattr(application.state, "pending_router_specs", ()) or ()
+        ),
+    )
     if total_ms > 5000:
         logger.warning("create_app_exceeded_5s", ms=total_ms)
 
