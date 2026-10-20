@@ -202,10 +202,36 @@ def decide_gold(
 
     Conflict rule: if multiple strategies pass with opposing BUY/SELL → NO_TRADE.
     Stale quote → NO_TRADE. Never sets authorizes_trade.
+    Non-Gold symbols are rejected at the analysis boundary.
     """
-    symbol = str(score.get("symbol") or "XAUUSD").upper()
-    regime = str(score.get("market_regime") or score.get("regime") or "unknown")
+    from app.domain.trading.gold_only import (
+        DisabledAutonomousSymbolError,
+        require_gold_trading_symbol,
+    )
+
+    raw_symbol = str(score.get("symbol") or "XAUUSD").upper()
     as_of = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    regime = str(score.get("market_regime") or score.get("regime") or "unknown")
+    try:
+        symbol = require_gold_trading_symbol(raw_symbol)
+    except DisabledAutonomousSymbolError:
+        return UnifiedGoldDecision(
+            decision="NO_TRADE",
+            symbol=raw_symbol,
+            regime=regime,
+            selected_strategy_id=None,
+            selected_strategy_name=None,
+            confidence=0,
+            quality=0,
+            reasons=(
+                f"Non-Gold symbol rejected at analysis boundary: {raw_symbol}",
+            ),
+            rejected_strategies=(),
+            conflicting=False,
+            stale_data=False,
+            as_of=as_of,
+        )
+
     age = _quote_age_seconds(score)
     stale = age is not None and age > float(max_quote_age_seconds)
     if stale:
@@ -226,7 +252,9 @@ def decide_gold(
             as_of=as_of,
         )
 
-    evaluations = evaluate_all_strategies(score, live_boosts=live_boosts)
+    gold_score = dict(score)
+    gold_score["symbol"] = symbol
+    evaluations = evaluate_all_strategies(gold_score, live_boosts=live_boosts)
     passed = [e for e in evaluations if e.passed]
     rejected = [
         {

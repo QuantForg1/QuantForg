@@ -119,6 +119,10 @@ def build_gold_brain_status() -> dict[str, Any]:
     from app.application.services.execution_worker_status import (
         collect_execution_worker_status,
     )
+    from app.application.services.signal_notification_policy import (
+        notification_policy_diagnostics,
+    )
+    from app.domain.trading.gold_only import gold_only_diagnostics
 
     worker = collect_execution_worker_status()
     invent = inventory_strategies()
@@ -127,8 +131,10 @@ def build_gold_brain_status() -> dict[str, Any]:
         "symbol_focus": "XAUUSD",
         "unified_engine": "ai_scalping.strategies + gold_unified_brain facade",
         "duplicate_engines": False,
+        "gold_only": gold_only_diagnostics(),
         "inventory": invent,
         "activation_workflow": activation_workflow_document(),
+        "notification_policy": notification_policy_diagnostics(),
         "live_trading": worker.get("live_trading"),
         "continuous_trading_authorized": worker.get(
             "continuous_trading_authorized"

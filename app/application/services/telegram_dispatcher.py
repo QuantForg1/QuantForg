@@ -674,43 +674,32 @@ def emit_telegram(
 
 
 def emit_public_status(kind: str) -> None:
-    """Throttle public READY/SCANNING so worker cycles cannot spam."""
-    from app.application.services.public_signal_payload import render_status_message
-    from app.application.services.telegram_events import (
-        PUBLIC_MARKET_SCAN,
-        PUBLIC_MARKET_WATCH,
-    )
-    from app.application.services.telegram_thread_store import (
-        last_public_status,
-        mark_public_status,
-    )
+    """Scanner READY/SCANNING chatter disabled for Telegram/Jimvio users.
+
+    Internal status is still tracked for lifecycle bookkeeping. No user-facing
+    MARKET WATCH / MARKET SCAN messages are sent.
+    """
+    from app.application.services.telegram_thread_store import mark_public_status
 
     wanted = str(kind or "").strip().upper()
-    last = last_public_status()
-    if wanted == "READY":
-        if last == "READY":
-            return
-        event = PUBLIC_MARKET_WATCH
-        event_id = "public:status:READY"
-    elif wanted == "SCANNING":
-        if last not in {"READY", "CLOSED"}:
-            return
-        event = PUBLIC_MARKET_SCAN
-        event_id = "public:status:SCANNING"
-    else:
-        return
-    text = render_status_message(wanted)
-    emit_telegram(event, event_id, text)
-    mark_public_status(wanted)
+    if wanted in {"READY", "SCANNING", "SIGNAL", "CLOSED"}:
+        mark_public_status(wanted if wanted != "SCANNING" else "READY")
+        logger.debug(
+            "public_status_chatter_suppressed",
+            kind=wanted,
+            reason="signal_only_user_channel",
+        )
 
 
 def maybe_emit_market_scan(*, had_public_signal: bool) -> None:
+    """No-op for user channels — market-scan chatter is disabled."""
     if had_public_signal:
         from app.application.services.telegram_thread_store import mark_public_status
 
         mark_public_status("SIGNAL")
         return
-    emit_public_status("SCANNING")
+    # Deliberately do not emit PUBLIC_MARKET_SCAN / READY chatter.
+    logger.debug("market_scan_chatter_suppressed")
 
 
 async def start_telegram_dispatcher(settings: Any) -> TelegramDispatcher:
@@ -826,7 +815,11 @@ def _emit_verified_public_notices(classified: list[dict[str, Any]]) -> None:
     )
     from app.application.services.telegram_thread_store import mark_public_status
 
-    public = public_channel_notices(classified)
+    from app.application.services.signal_notification_policy import (
+        filter_user_signal_notices,
+    )
+
+    public = filter_user_signal_notices(public_channel_notices(classified))
     events = {str(n.get("event")) for n in public}
     for notice in public:
         fields = (

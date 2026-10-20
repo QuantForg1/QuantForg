@@ -345,6 +345,37 @@ def render_public_signal(fields: dict[str, Any]) -> str:
     return render_canonical(payload)
 
 
+def render_pre_signal(fields: dict[str, Any]) -> str:
+    """Public 'signal may be coming' — never invents entry/SL/TP."""
+    direction = _side(fields.get("direction") or fields.get("side"))
+    conditions = _clean(fields.get("conditions_pending")) or (
+        "Awaiting confirmation: structure, spread, and risk gates must clear."
+    )
+    as_of = _clean(fields.get("as_of") or fields.get("timestamp"))
+    extras: list[str] = ["Conditions required:", conditions]
+    if as_of:
+        extras.extend(["", f"As of: {as_of}"])
+    payload = build_canonical_signal(
+        kind="PRE_SIGNAL",
+        fields={
+            "symbol": fields.get("symbol"),
+            "direction": direction,
+            "opportunity": fields.get("opportunity"),
+            "confidence": fields.get("confidence"),
+            "regime": fields.get("regime"),
+            # Explicitly omit prices — do not invent levels for a pre-signal.
+            "entry": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "risk_reward": None,
+        },
+        headline=f"{_heading(direction)} QUANTFORG SIGNAL MAY BE COMING",
+        intro="A Gold pre-signal setup is forming. This is not a confirmed entry.",
+        extra_lines=tuple(extras),
+    )
+    return render_canonical(payload)
+
+
 def render_trade_active(fields: dict[str, Any]) -> str:
     payload = build_canonical_signal(
         kind="TRADE_ACTIVE",

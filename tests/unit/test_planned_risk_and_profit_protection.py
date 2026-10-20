@@ -819,12 +819,12 @@ class TestNoAveragingAndPublicQuiet:
         self, *, opportunity: str, ticket: int | None
     ) -> dict[str, object]:
         fields: dict[str, object] = {
-            "symbol": "EURUSD",
+            "symbol": "XAUUSD",
             "direction": "BUY",
             "opportunity": opportunity,
-            "entry": "1.10000",
-            "stop_loss": "1.09800",
-            "take_profit": "1.10400",
+            "entry": "2650.50",
+            "stop_loss": "2645.00",
+            "take_profit": "2665.00",
         }
         if ticket is not None:
             fields["ticket"] = ticket

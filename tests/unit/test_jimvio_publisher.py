@@ -36,6 +36,7 @@ from app.application.services.telegram_dispatcher import (
     reset_telegram_dispatcher_for_tests,
 )
 from app.application.services.telegram_events import (
+    SIGNAL_CONFIRMED,
     SIGNAL_GENERATED,
     TRADE_OPENED,
 )
@@ -169,31 +170,41 @@ class TestJimvioPayload:
         assert map_jimvio_event_type(SIGNAL_GENERATED) == "SIGNAL_DETECTED"
         payload = build_jimvio_payload(
             event=SIGNAL_GENERATED,
-            event_id="sig:EURUSD|BUY|1.1|1.0|1.2",
+            event_id="sig:XAUUSD|BUY|2650|2645|2665",
             message="signal",
             fields={
-                "symbol": "EURUSD",
+                "symbol": "XAUUSD",
                 "direction": "BUY",
-                "entry": "1.17012",
-                "stop_loss": "1.16500",
-                "take_profit": "1.18000",
+                "entry": "2650.50",
+                "stop_loss": "2645.00",
+                "take_profit": "2665.00",
             },
             timestamp="2026-09-01T00:00:00Z",
         )
         assert payload is not None
         assert payload["event_type"] == "SIGNAL_DETECTED"
-        assert payload["event_id"] == "sig:EURUSD|BUY|1.1|1.0|1.2"
-        assert payload["symbol"] == "EURUSD"
+        assert payload["event_id"] == "sig:XAUUSD|BUY|2650|2645|2665"
+        assert payload["symbol"] == "XAUUSD"
         assert payload["direction"] == "BUY"
-        assert payload["entry"] == pytest.approx(1.17012)
+        assert payload["entry"] == pytest.approx(2650.50)
         assert payload["status"] == "DETECTED"
         assert payload["metadata"]["quantforg_event"] == SIGNAL_GENERATED
+
+    def test_non_gold_jimvio_payload_rejected(self) -> None:
+        assert (
+            build_jimvio_payload(
+                event=SIGNAL_GENERATED,
+                event_id="sig:eur",
+                fields={"symbol": "EURUSD", "direction": "BUY"},
+            )
+            is None
+        )
 
     def test_trade_opened_executed_requires_ticket(self) -> None:
         opened = build_jimvio_payload(
             event=TRADE_OPENED,
             event_id="open:575000111",
-            fields={"symbol": "USDJPY", "direction": "BUY", "ticket": 575000111},
+            fields={"symbol": "XAUUSD", "direction": "BUY", "ticket": 575000111},
         )
         assert opened is not None
         assert opened["status"] == "ACTIVE"
@@ -201,7 +212,7 @@ class TestJimvioPayload:
         ghost = build_jimvio_payload(
             event=TRADE_OPENED,
             event_id="open:missing",
-            fields={"symbol": "USDJPY", "direction": "BUY"},
+            fields={"symbol": "XAUUSD", "direction": "BUY"},
         )
         assert ghost is not None
         assert ghost["event_type"] == "TRADE_REJECTED"
@@ -210,20 +221,20 @@ class TestJimvioPayload:
     def test_confirmed_fill_is_executed_with_ticket_metadata(self) -> None:
         payload = build_jimvio_payload(
             event="SIGNAL_CONFIRMED",
-            event_id="signal:sig-eurusd-1",
+            event_id="signal:sig-xauusd-1",
             message="QUANTFORG SIGNAL",
             fields={
-                "symbol": "EURUSD",
+                "symbol": "XAUUSD",
                 "direction": "BUY",
-                "entry": "1.08500",
-                "stop_loss": "1.08200",
-                "take_profit": "1.09400",
+                "entry": "2650.50",
+                "stop_loss": "2645.00",
+                "take_profit": "2665.00",
                 "ticket": 575929789,
                 "opportunity": 87,
                 "confidence": 91,
                 "risk_reward": "3.0",
                 "regime": "TRENDING",
-                "signal_id": "sig-eurusd-1",
+                "signal_id": "sig-xauusd-1",
             },
         )
         assert payload is not None
@@ -231,7 +242,7 @@ class TestJimvioPayload:
         assert payload["status"] == "CONFIRMED"
         assert "mt5_ticket" not in payload["metadata"]
         assert payload["metadata"]["opportunity"] == 87
-        assert payload["metadata"]["signal_id"] == "sig-eurusd-1"
+        assert payload["metadata"]["signal_id"] == "sig-xauusd-1"
 
     def test_telegram_test_is_not_published(self) -> None:
         assert map_jimvio_event_type("TELEGRAM_TEST") is None
@@ -282,7 +293,12 @@ class TestJimvioDelivery:
             raise httpx.TimeoutException("timed out")
 
         pub = _publisher(sender)
-        pub.emit("SYSTEM_ERROR", "sys:timeout", "err")
+        pub.emit(
+            SIGNAL_CONFIRMED,
+            "signal:timeout",
+            "err",
+            fields={"symbol": "XAUUSD", "direction": "BUY"},
+        )
         await pub.flush(wait_seconds=8)
         assert hits["n"] == 3
         assert pub.last_success is False
@@ -297,11 +313,16 @@ class TestJimvioDelivery:
             return _FakeResponse(500, "oops")
 
         pub = _publisher(sender)
-        pub.emit("SYSTEM_ERROR", "sys:stable", "err")
+        pub.emit(
+            SIGNAL_CONFIRMED,
+            "signal:stable",
+            "err",
+            fields={"symbol": "XAUUSD", "direction": "BUY"},
+        )
         await pub.flush(wait_seconds=8)
         assert len(ids) == 3
         assert len(set(ids)) == 1
-        assert '"event_id":"sys:stable"' in ids[0]
+        assert '"event_id":"signal:stable"' in ids[0]
 
 
 @pytest.mark.unit
@@ -316,8 +337,18 @@ class TestJimvioQueue:
             return _FakeResponse(200)
 
         pub = _publisher(sender)
-        pub.emit("SYSTEM_ERROR", "sys:dup", "one")
-        pub.emit("SYSTEM_ERROR", "sys:dup", "two")
+        pub.emit(
+            SIGNAL_CONFIRMED,
+            "signal:dup",
+            "one",
+            fields={"symbol": "XAUUSD", "direction": "BUY"},
+        )
+        pub.emit(
+            SIGNAL_CONFIRMED,
+            "signal:dup",
+            "two",
+            fields={"symbol": "XAUUSD", "direction": "BUY"},
+        )
         assert pub.pending == 1
 
     def test_missing_secret_disables_publisher(self) -> None:
@@ -551,7 +582,8 @@ class TestJimvioMatchesTelegramPublicFilter:
         assert pub.pending == 0
         assert telegram_ids == []
 
-    def test_no_ticket_is_not_executed_on_either(self) -> None:
+    def test_confirmed_signal_without_ticket_is_signal_only(self) -> None:
+        """Confirmed Gold signal may notify without a broker fill (no TRADE_OPENED)."""
         from tests.unit.test_telegram_dispatcher import (
             _Cycle,
             _Decision,
@@ -564,8 +596,9 @@ class TestJimvioMatchesTelegramPublicFilter:
             decision=_Decision(),
             pipeline=_exec_pipeline(opportunity_score=87),
         )
-        assert pub.pending == 0
-        assert telegram_ids == []
+        assert pub.pending == 1
+        assert len(telegram_ids) == 1
+        assert telegram_ids[0].startswith("signal:")
 
     @pytest.mark.asyncio
     async def test_real_ticket_sends_identical_verified_event_ids(self) -> None:
@@ -585,7 +618,7 @@ class TestJimvioMatchesTelegramPublicFilter:
         await pub.flush()
         jimvio_ids = [row["event_id"] for row in bodies]
         assert telegram_ids == jimvio_ids
-        assert "signal:sig-eurusd-1" in jimvio_ids
+        assert "signal:sig-xauusd-1" in jimvio_ids
         assert "open:575929789" in jimvio_ids
         types = {row["event_type"] for row in bodies}
         assert "SIGNAL_DETECTED" not in types
@@ -596,10 +629,10 @@ class TestJimvioMatchesTelegramPublicFilter:
         assert "Volume:" not in (opened.get("message") or "")
         assert "MT5 Ticket" not in (opened.get("message") or "")
         confirmed = next(
-            row for row in bodies if row["event_id"] == "signal:sig-eurusd-1"
+            row for row in bodies if row["event_id"] == "signal:sig-xauusd-1"
         )
         assert confirmed["status"] == "CONFIRMED"
-        assert confirmed["symbol"] == "EURUSD"
+        assert confirmed["symbol"] == "XAUUSD"
         assert confirmed["direction"] == "BUY"
         assert confirmed["metadata"]["opportunity"] == 87
         assert confirmed["message"]
@@ -715,8 +748,9 @@ class TestJimvioMatchesTelegramPublicFilter:
         assert pub.pending == 0
         assert telegram_ids == []
         notify_robot_started()
-        assert telegram_ids == ["public:status:READY"]
-        assert pub.pending == 1
+        # READY/SCANNING chatter is suppressed on user channels.
+        assert telegram_ids == []
+        assert pub.pending == 0
 
     @pytest.mark.asyncio
     async def test_duplicate_fill_is_not_reposted(self) -> None:

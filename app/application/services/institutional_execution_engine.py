@@ -129,11 +129,12 @@ def parse_order_intent(
     from app.domain.trading.gold_only import (
         DISABLED_AUTONOMOUS_SYMBOL,
         DisabledAutonomousSymbolError,
-        require_xauusd,
+        require_gold_trading_symbol,
     )
 
     try:
-        symbol_u = require_xauusd(symbol)
+        # Hard Gold-only at order-intent boundary (not UI-only).
+        symbol_u = require_gold_trading_symbol(symbol)
         return OrderIntent(
             symbol=symbol_u,
             side=OrderSide(side.strip().lower()),

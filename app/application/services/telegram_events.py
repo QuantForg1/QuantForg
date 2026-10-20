@@ -817,17 +817,44 @@ def _ticket_from_notices(notices: list[dict[str, Any]]) -> int | None:
 def public_channel_notices(
     notices: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Filter classified notices for the public Signals channel.
+    """Filter classified notices for Telegram/Jimvio user channels.
 
-    Research, rejects, risk/OMS noise, and operational events stay out.
-    A cycle becomes a public signal only after a real MT5 ticket AND
-    opportunity_score > 70 with a valid BUY/SELL setup.
+    Gold-only. Signal events only:
+    - SIGNAL_GENERATED → "signal may be coming" (meaningful pre-setup)
+    - SIGNAL_CONFIRMED → confirmed Gold signal (levels must be real)
+    - Lifecycle replies tied to an existing ticket/signal id
+
+    Scanner/health/risk/OMS chatter never ships to users.
     """
     if not notices:
         return []
+    from app.application.services.public_signal_payload import (
+        public_fields_only,
+        render_lifecycle_update,
+        render_pre_signal,
+        render_public_signal,
+        render_trade_active,
+        validate_canonical_signal,
+    )
+    from app.application.services.signal_notification_policy import (
+        filter_user_signal_notices,
+        symbol_allowed_for_user_signal,
+    )
+    from app.application.services.telegram_thread_store import record_lifecycle
+
     facts: dict[str, Any] = {}
     for notice in notices:
         facts.update(_notice_fields(notice))
+    symbol = _clean(facts.get("symbol"))
+    if symbol and not symbol_allowed_for_user_signal(symbol):
+        return []
+    if not symbol:
+        # Lifecycle-only rows may carry symbol on individual notices.
+        for notice in notices:
+            sym = _clean(_notice_fields(notice).get("symbol"))
+            if sym and not symbol_allowed_for_user_signal(sym):
+                return []
+
     ticket = _int_ticket(facts.get("ticket")) or _ticket_from_notices(notices)
     opportunity = facts.get("opportunity")
     direction = facts.get("direction")
@@ -851,8 +878,27 @@ def public_channel_notices(
     signal_id = _clean(facts.get("signal_id")) or f"sig:{fp}"
     out: list[dict[str, Any]] = []
     events = {str(n.get("event")) for n in notices}
+    # Risk/OMS/exec rejects never become user-facing "signals".
+    blocked_by_gates = bool(
+        events
+        & {
+            RISK_BLOCKED,
+            OMS_REJECTED,
+            TRADE_REJECTED,
+            ORDER_EXECUTION_ERROR,
+            SYSTEM_ERROR,
+        }
+    )
 
-    if TRADE_OPENED in events and ticket is not None and setup_ok:
+    # --- Confirmed path with live ticket (reply-capable) --------------------
+    if (
+        not blocked_by_gates
+        and TRADE_OPENED in events
+        and ticket is not None
+        and setup_ok
+    ):
+        if not symbol_allowed_for_user_signal(symbol or ""):
+            return []
         root_src = next(
             (
                 n
@@ -865,14 +911,6 @@ def public_channel_notices(
         if root_src is not None:
             root_fields.update(_notice_fields(root_src))
         root_id = f"signal:{signal_id}"
-        from app.application.services.public_signal_payload import (
-            public_fields_only,
-            render_public_signal,
-            render_trade_active,
-            validate_canonical_signal,
-        )
-        from app.application.services.telegram_thread_store import record_lifecycle
-
         visible = public_fields_only(root_fields)
         if validate_canonical_signal(visible):
             return []
@@ -910,17 +948,75 @@ def public_channel_notices(
         opened_out["lifecycle_state"] = "ACTIVE"
         opened_out["require_thread"] = False
         out.append(opened_out)
-        return out
+        return filter_user_signal_notices(out)
 
     if TRADE_OPENED in events:
         return []
 
-    from app.application.services.public_signal_payload import (
-        public_fields_only,
-        render_lifecycle_update,
-    )
-    from app.application.services.telegram_thread_store import record_lifecycle
+    # --- Confirmed Gold signal without requiring a broker fill --------------
+    if (
+        not blocked_by_gates
+        and SIGNAL_CONFIRMED in events
+        and setup_ok
+        and symbol_allowed_for_user_signal(symbol or "")
+    ):
+        visible = public_fields_only(facts)
+        if not validate_canonical_signal(visible):
+            try:
+                signal_text = render_public_signal(visible)
+            except ValueError:
+                signal_text = None
+            if signal_text:
+                out.append(
+                    {
+                        "event": SIGNAL_CONFIRMED,
+                        "event_id": f"signal:{signal_id}",
+                        "text": signal_text,
+                        "fields": visible,
+                        "bind_signal": signal_id,
+                        "lifecycle_state": "CONFIRMED",
+                        "require_thread": False,
+                    }
+                )
+                return filter_user_signal_notices(out)
 
+    # --- Pre-signal: may be coming (no invented prices) ---------------------
+    if (
+        not blocked_by_gates
+        and SIGNAL_GENERATED in events
+        and SIGNAL_CONFIRMED not in events
+        and symbol_allowed_for_user_signal(symbol or "")
+        and _side(direction) in {"BUY", "SELL"}
+        and opportunity_score_above_70(opportunity)
+    ):
+        visible = public_fields_only(
+            {
+                **facts,
+                "conditions_pending": (
+                    "Confirmation requires clear entry/SL/TP, acceptable spread, "
+                    "and risk gates. Levels are not published until confirmed."
+                ),
+            }
+        )
+        try:
+            pre_text = render_pre_signal(visible)
+        except ValueError:
+            pre_text = None
+        if pre_text:
+            out.append(
+                {
+                    "event": SIGNAL_GENERATED,
+                    "event_id": f"presignal:{signal_id}",
+                    "text": pre_text,
+                    "fields": visible,
+                    "bind_signal": signal_id,
+                    "lifecycle_state": "PRE_SIGNAL",
+                    "require_thread": False,
+                }
+            )
+            return filter_user_signal_notices(out)
+
+    # --- Lifecycle replies tied to existing signal/ticket -------------------
     for notice in notices:
         event = str(notice.get("event") or "")
         if event in _PUBLIC_NOISE_EVENTS or event == SIGNAL_CONFIRMED:
@@ -931,6 +1027,9 @@ def public_channel_notices(
         fields = _notice_fields(notice)
         reply = _int_ticket(fields.get("ticket")) or ticket
         if reply is None:
+            continue
+        sym = _clean(fields.get("symbol") or symbol)
+        if sym and not symbol_allowed_for_user_signal(sym):
             continue
         visible = public_fields_only(fields)
         try:
@@ -944,13 +1043,13 @@ def public_channel_notices(
         row["lifecycle_state"] = "CLOSED" if closed else "ACTIVE"
         record_lifecycle(
             ticket=str(reply),
-            signal_id=_clean(fields.get("signal_id")),
+            signal_id=_clean(fields.get("signal_id") or signal_id),
             state="CLOSED" if closed else "ACTIVE",
-            symbol=_clean(fields.get("symbol")),
+            symbol=sym,
             direction=_side(fields.get("direction") or fields.get("side")),
         )
         out.append(row)
-    return out
+    return filter_user_signal_notices(out)
 
 
 def classify_cycle_notices(

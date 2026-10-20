@@ -304,3 +304,29 @@ def require_xauusd(symbol: str) -> str:
             return raw
         return canonical_gold_execution_symbol(raw).upper()
     return resolve_trading_symbol(symbol)
+
+
+def require_gold_trading_symbol(symbol: str | None) -> str:
+    """Hard Gold gate for analysis, signals, and order intents.
+
+    Always rejects non-Gold desks (EURUSD, crypto, indices, etc.), even when
+    catalogue discovery exposes other symbols for unrelated gateway functions.
+    Preserves broker-suffixed Gold forms (``XAUUSD_i``, ``XAUUSD.a``).
+    """
+    raw = (symbol or "").strip().upper()
+    if not raw or not is_gold_symbol(raw):
+        raise DisabledAutonomousSymbolError(symbol or "")
+    if is_bare_gold_symbol(raw):
+        return canonical_gold_execution_symbol(raw).upper()
+    return raw
+
+
+def map_broker_gold_symbol(broker_code: str | None) -> str | None:
+    """Map broker Gold aliases to canonical desk identity, or None if not Gold."""
+    raw = (broker_code or "").strip()
+    if not raw or not is_gold_symbol(raw):
+        return None
+    try:
+        return require_gold_trading_symbol(raw)
+    except DisabledAutonomousSymbolError:
+        return None

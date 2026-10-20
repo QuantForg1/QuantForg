@@ -97,13 +97,14 @@ class _Cycle:
     broker_retcode: int | None = None
     oms_message: str | None = None
     signal_id: str | None = None
+    symbol: str | None = "XAUUSD"
 
 
 @dataclass
 class _Decision:
     action: str = "BUY"
     direction: str = "BUY"
-    symbol: str = "EURJPY"
+    symbol: str = "XAUUSD"
     confidence: int = 82
     approved_lots: Decimal = Decimal("0.01")
     estimated_rr: Decimal = Decimal("2.0")
@@ -585,13 +586,14 @@ class TestTelegramDoesNotBlockTrading:
 
 def _exec_pipeline(**extra: Any) -> _Pipeline:
     payload: dict[str, Any] = {
+        "symbol": "XAUUSD",
         "signal_action": "BUY",
         "direction": "BUY",
         "opportunity_score": 87,
         "ai_confidence": 91,
-        "entry": "1.08500",
-        "stop_loss": "1.08200",
-        "take_profit": "1.09400",
+        "entry": "2650.50",
+        "stop_loss": "2645.00",
+        "take_profit": "2665.00",
         "expected_rr": "3.0",
         "market_regime": "TRENDING",
     }
@@ -602,9 +604,8 @@ def _exec_pipeline(**extra: Any) -> _Pipeline:
 def _filled_cycle(
     *,
     ticket: int = 575929789,
-    symbol: str = "EURUSD",
+    symbol: str = "XAUUSD",
 ) -> tuple[Any, Any, Any]:
-    del symbol
     cycle = _Cycle(
         decision_action="BUY",
         forwarded_to_oms=True,
@@ -612,13 +613,14 @@ def _filled_cycle(
         abort_reason="none",
         mt5_ticket=ticket,
         broker_retcode=10009,
-        signal_id="sig-eurusd-1",
+        signal_id="sig-xauusd-1",
+        symbol=symbol,
     )
     decision = _Decision(
-        symbol="EURUSD",
-        entry_zone=_Zone(Decimal("1.085"), Decimal("1.085"), Decimal("1.085")),
-        stop_zone=_Zone(Decimal("1.082"), Decimal("1.082"), Decimal("1.082")),
-        target_zone=_Zone(Decimal("1.094"), Decimal("1.094"), Decimal("1.094")),
+        symbol=symbol,
+        entry_zone=_Zone(Decimal("2650.50"), Decimal("2650.50"), Decimal("2650.50")),
+        stop_zone=_Zone(Decimal("2645.00"), Decimal("2645.00"), Decimal("2645.00")),
+        target_zone=_Zone(Decimal("2665.00"), Decimal("2665.00"), Decimal("2665.00")),
         estimated_rr=Decimal("3.0"),
         confidence=91,
     )
@@ -630,8 +632,8 @@ def _pme_success(
     *,
     action: ManageActionKind,
     ticket: int = 575929789,
-    old_sl: str = "1.08200",
-    new_sl: str = "1.08500",
+    old_sl: str = "2645.00",
+    new_sl: str = "2650.50",
     to_state: PositionLifecycleState = PositionLifecycleState.BE_MOVED,
     reason: str = "Break-even",
     fingerprint: str = "be1",
@@ -642,13 +644,13 @@ def _pme_success(
 ) -> PositionManageResult:
     pos = ManagedPosition(
         ticket=ticket,
-        symbol="EURUSD",
+        symbol="XAUUSD",
         side="buy",
-        entry_price=Decimal("1.08500"),
+        entry_price=Decimal("2650.50"),
         initial_volume=Decimal("0.01"),
         remaining_volume=Decimal(remaining),
         initial_stop=Decimal(old_sl),
-        risk_distance=Decimal("0.003"),
+        risk_distance=Decimal("5.50"),
         opened_at=datetime.now(UTC),
         current_stop=Decimal(new_sl),
     )
@@ -664,7 +666,7 @@ def _pme_success(
         old_sl=Decimal(old_sl),
         new_sl=Decimal(new_sl),
         fingerprint=fingerprint,
-        symbol="EURUSD",
+        symbol="XAUUSD",
         volume=Decimal(volume) if volume is not None else None,
         pnl=pnl,
         exit_reason=exit_reason,
@@ -1104,13 +1106,14 @@ class TestPublicTelegramChannel:
         assert hits["n"] >= 1
         assert disp.last_success is False
 
-    def test_multi_market_symbols_are_public_when_filled(self) -> None:
-        for symbol in ("EURUSD", "GBPUSD", "XAGUSD", "BTCUSD"):
+    def test_non_gold_symbols_are_not_public(self) -> None:
+        for symbol in ("EURUSD", "GBPUSD", "XAGUSD", "BTCUSD", "USDJPY"):
             cycle = _Cycle(
                 decision_action="BUY",
                 mt5_ticket=100 + len(symbol),
                 abort_reason="none",
                 broker_retcode=10009,
+                symbol=symbol,
             )
             decision = _Decision(symbol=symbol)
             notices = classify_cycle_notices(
@@ -1121,11 +1124,10 @@ class TestPublicTelegramChannel:
                         mt5_ticket=100 + len(symbol), retcode=10009
                     )
                 ),
-                pipeline=_exec_pipeline(),
+                pipeline=_exec_pipeline(symbol=symbol),
             )
             public = public_channel_notices(notices)
-            assert TRADE_OPENED in [row["event"] for row in public], symbol
-            assert symbol in public[0]["text"]
+            assert public == [], symbol
 
     def test_cycle_timeout_stays_quiet(self) -> None:
         notices = classify_cycle_notices(
@@ -1139,7 +1141,7 @@ class TestPublicTelegramChannel:
 @pytest.mark.trading_core
 class TestPublicStatusDedupAndReplies:
     @pytest.mark.asyncio
-    async def test_ready_and_scanning_publish_once_per_state(self) -> None:
+    async def test_ready_and_scanning_chatter_suppressed(self) -> None:
         captured: list[dict[str, Any]] = []
 
         async def sender(url: str, payload: dict[str, Any]) -> _FakeResponse:
@@ -1157,13 +1159,7 @@ class TestPublicStatusDedupAndReplies:
         maybe_emit_market_scan(had_public_signal=False)
         maybe_emit_market_scan(had_public_signal=False)
         await disp.flush()
-        texts = [row["text"] for row in captured]
-        assert len(texts) == 2
-        assert "MARKET WATCH" in texts[0]
-        assert "MARKET SCAN" in texts[1]
-        blob = "\n".join(texts)
-        assert "Automated Trading System" not in blob
-        assert "MT5 Ticket" not in blob
+        assert captured == []
 
     def test_inbound_reply_uses_real_lifecycle(self) -> None:
         from app.application.services.telegram_dispatcher import compose_inbound_reply

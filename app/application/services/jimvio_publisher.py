@@ -183,9 +183,14 @@ def map_jimvio_event_type(quantforg_event: str) -> str | None:
     event = str(quantforg_event or "").strip()
     if event in _SKIP_EVENTS:
         return None
-    if event in JIMVIO_EVENT_TYPE:
-        return JIMVIO_EVENT_TYPE[event]
-    return None
+    # User channel is Gold signal-only — never map scanner/health chatter.
+    from app.application.services.signal_notification_policy import (
+        is_user_signal_event,
+    )
+
+    if not is_user_signal_event(event):
+        return None
+    return JIMVIO_EVENT_TYPE.get(event)
 
 
 def build_jimvio_payload(
@@ -227,6 +232,12 @@ def build_jimvio_payload(
     }
     symbol = extra.get("symbol")
     if symbol:
+        from app.application.services.signal_notification_policy import (
+            symbol_allowed_for_user_signal,
+        )
+
+        if not symbol_allowed_for_user_signal(symbol):
+            return None
         payload["symbol"] = str(symbol).upper()
     direction = extra.get("direction") or extra.get("side")
     if direction:
