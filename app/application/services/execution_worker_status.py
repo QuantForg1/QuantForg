@@ -223,6 +223,21 @@ def collect_execution_worker_status(
     else:
         payload["status"] = "ok"
 
+    # --- Activation workflow (observe-only; never ARM/ENABLE) ----------------
+    payload["activation_workflow"] = {
+        "steps": [
+            "Verify EXECUTION_ENABLED=true and gateway/MT5 ownership probes",
+            "OWNER/ADMIN POST /live-trading/arm with confirmation phrase",
+            "OWNER/ADMIN POST /live-trading/enable with confirmation phrase",
+            "Confirm live_trading.state=ENABLED and orders_may_submit=true",
+        ],
+        "confirmation_phrase": "I UNDERSTAND THIS USES REAL MONEY",
+        "current_blocker": payload["live_trading"].get("blocker"),
+        "auto_enable_on_deploy": False,
+        "openai_can_enable": False,
+        "unified_brain_can_enable": False,
+    }
+
     if hard and exec_on:
         logger.warning(
             "continuous_trading_blocked",
