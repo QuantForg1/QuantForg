@@ -251,6 +251,16 @@ def _build_payload(
             and mt5.status == "CONNECTED"
             and ai.status == "HEALTHY"
         ),
+        # Infra may be ready while LiveTradingController remains DISABLED.
+        # Continuous order submission also requires orders_may_submit=true.
+        "orders_authorized": bool(live_trading.get("orders_may_submit")),
+        "continuous_trading_ready": (
+            gateway.status == "HEALTHY"
+            and oms.status == "HEALTHY"
+            and mt5.status == "CONNECTED"
+            and ai.status == "HEALTHY"
+            and bool(live_trading.get("orders_may_submit"))
+        ),
         "timing": timing,
     }
 

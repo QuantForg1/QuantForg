@@ -23,6 +23,27 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Process-local last OpenAI failure (code + safe detail). Never stores keys.
+_LAST_OPENAI_ERROR: dict[str, str] | None = None
+
+
+def last_openai_provider_error() -> dict[str, str] | None:
+    return dict(_LAST_OPENAI_ERROR) if _LAST_OPENAI_ERROR else None
+
+
+def _record_openai_error(code: str, detail: str) -> None:
+    global _LAST_OPENAI_ERROR
+    _LAST_OPENAI_ERROR = {
+        "code": str(code or "unknown")[:64],
+        "detail": str(detail or "")[:200],
+    }
+
+
+def clear_openai_provider_error_for_tests() -> None:
+    global _LAST_OPENAI_ERROR
+    _LAST_OPENAI_ERROR = None
+
+
 _ADVICE_INSTRUCTIONS = (
     "You are QuantForg's advisory analyst (ADR-0015). "
     "Return ONLY a JSON object with keys: stance, confidence, summary, risks. "
@@ -223,9 +244,13 @@ class OpenAIAdvisorService(OpenAIAdvisorPort):
             advice = parse_advice_payload(text, model=self._model)
             # Fail-closed for trading: advice never authorizes.
             if advice.provider_status != "ok":
+                _record_openai_error(advice.provider_status, advice.detail)
                 return advice
+            global _LAST_OPENAI_ERROR
+            _LAST_OPENAI_ERROR = None
             return advice
         except OpenAIProviderError as exc:
+            _record_openai_error(exc.code, exc.message)
             logger.warning(
                 "openai_advise_failed",
                 code=exc.code,

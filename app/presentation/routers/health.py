@@ -151,12 +151,42 @@ async def liveness() -> dict[str, str]:
 async def openai_provider_health() -> dict[str, object]:
     from app.application.services.openai_advisor_service import (
         build_openai_advisor_from_settings,
+        last_openai_provider_error,
     )
 
     advisor = build_openai_advisor_from_settings(get_settings())
     payload = advisor.provider_status().to_dict()
-    payload["status"] = "ok"
+    last_err = last_openai_provider_error()
+    payload["http_ok"] = True
+    payload["degraded"] = bool(
+        last_err
+        and last_err.get("code")
+        in {"insufficient_quota", "rate_limited", "auth_failed", "provider_outage"}
+    )
+    payload["last_error_code"] = (last_err or {}).get("code")
+    payload["last_error_detail"] = (last_err or {}).get("detail")
+    payload["authorizes_trade"] = False
+    payload["gemini"] = False
     return payload
+
+
+@router.get(
+    "/health/execution-worker",
+    summary="ITE execution worker + live-trading authorization",
+    description=(
+        "Observe-only continuity diagnostics. Reports whether the in-process "
+        "ITE watchdog loop is running and whether LiveTradingController "
+        "authorizes orders. EXECUTION_ENABLED alone is not sufficient. "
+        "Never enables trading or sends orders."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+async def execution_worker_health() -> dict[str, object]:
+    from app.application.services.execution_worker_status import (
+        collect_execution_worker_status,
+    )
+
+    return collect_execution_worker_status(get_settings())
 
 
 @router.get(
