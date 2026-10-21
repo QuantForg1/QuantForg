@@ -1,5 +1,6 @@
 "use client";
 
+import { displayTradingSymbol } from "@/lib/trading/gold-only";
 import { Badge } from "@/components/ui/badge";
 import { str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
@@ -101,7 +102,7 @@ export function SignalCard({
       <div className="flex items-start justify-between gap-3 pl-1">
         <div className="min-w-0">
           <p className="truncate text-[1.05rem] font-semibold tracking-tight text-[var(--fg)]">
-            {symbol}
+            {displayTradingSymbol(symbol)}
           </p>
           <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
             {asset}

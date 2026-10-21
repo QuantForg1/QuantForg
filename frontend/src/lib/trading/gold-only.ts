@@ -138,18 +138,27 @@ export function filterTradingSymbolRecords<T extends Record<string, unknown>>(
   items: T[],
 ): T[] {
   if (MULTI_SYMBOL_ENABLED) return items;
+  // Universe instruments carry broker_symbol / canonical_symbol instead of code.
+  // `||` (not `??`) so an empty string falls through to the next field.
   return items.filter((item) =>
-    isGoldSymbol(String(item.code ?? item.symbol ?? "")),
+    isGoldSymbol(
+      String(
+        item.code || item.symbol || item.broker_symbol || item.canonical_symbol || "",
+      ),
+    ),
   );
 }
 
 export const DEFAULT_WATCHLIST_SYMBOLS = [TRADING_SYMBOL] as const;
 
-/** Operator-facing catalogue label. Wire/API symbol stays XAUUSD_i. */
-export function displayTradingSymbol(symbol: string): string {
+/**
+ * The single operator-facing symbol label: "XAUUSD (Gold)" for every Gold
+ * spelling (XAUUSD, XAUUSD_i, GOLD …). The wire/API symbol is unchanged.
+ */
+export function displayTradingSymbol(symbol: string | null | undefined): string {
   const raw = (symbol || "").trim();
   if (!raw) return "—";
-  if (isGoldSymbol(raw)) return AUTONOMOUS_BADGE;
+  if (isGoldSymbol(raw)) return AUTONOMOUS_DISPLAY;
   return raw;
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { displayTradingSymbol } from "@/lib/trading/gold-only";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   AreaSeries,
@@ -265,10 +266,10 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   return (
     <section
       className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
-      aria-label={`${symbol} chart workspace`}
+      aria-label={`${displayTradingSymbol(symbol)} chart workspace`}
     >
       <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[var(--border)]/70 px-2">
-        <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">{symbol}</p>
+        <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">{displayTradingSymbol(symbol)}</p>
         <span
           className={cn(
             "qf-status-dot",
@@ -376,10 +377,10 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           </div>
         ) : candles.length === 0 ? (
           <div className="flex h-full items-center justify-center p-6 text-sm text-[var(--fg-muted)]">
-            No candle history returned for {symbol} ({timeframe}).
+            No candle history returned for {displayTradingSymbol(symbol)} ({timeframe}).
           </div>
         ) : (
-          <div ref={hostRef} className="absolute inset-0" role="img" aria-label={`${symbol} price chart`} />
+          <div ref={hostRef} className="absolute inset-0" role="img" aria-label={`${displayTradingSymbol(symbol)} price chart`} />
         )}
       </div>
     </section>

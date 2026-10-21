@@ -32,8 +32,7 @@ import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import {
   AUTONOMOUS_BADGE,
   MULTI_SYMBOL_ENABLED,
-  resolveTradingSymbol,
-} from "@/lib/trading/gold-only";
+  resolveTradingSymbol, displayTradingSymbol } from "@/lib/trading/gold-only";
 import { humanExecutionError } from "@/lib/execution/humanize";
 import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
 import { invalidatePostTrade } from "@/lib/execution/post-trade-invalidate";
@@ -953,7 +952,7 @@ export const ExecutionOrderTicket = forwardRef<
             setRejectReason(undefined);
           }
         }}
-        title={`${side.toUpperCase()} ${symbol}`}
+        title={`${side.toUpperCase()} ${displayTradingSymbol(symbol)}`}
         description={`Submit ${confirmMode === "oneclick" ? "market" : orderType} ${side} ${volume} lots via the Execution Gateway. Live fills only occur when EXECUTION_ENABLED is true.`}
         confirmLabel="Confirm submit"
         tone={side === "sell" ? "danger" : "default"}

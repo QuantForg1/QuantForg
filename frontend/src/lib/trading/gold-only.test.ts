@@ -49,8 +49,20 @@ const filtered = filterTradingSymbolRecords([
 assert.equal(filtered.length, 1);
 assert.equal(filtered[0]?.code, "XAUUSD_i");
 
-assert.equal(displayTradingSymbol("XAUUSD_i"), AUTONOMOUS_BADGE);
-assert.equal(displayTradingSymbol("XAUUSD_I"), AUTONOMOUS_BADGE);
-assert.equal(displayTradingSymbol("XAUUSD"), AUTONOMOUS_BADGE);
+assert.equal(displayTradingSymbol("XAUUSD_i"), AUTONOMOUS_DISPLAY);
+assert.equal(displayTradingSymbol("XAUUSD_I"), AUTONOMOUS_DISPLAY);
+assert.equal(displayTradingSymbol("XAUUSD"), AUTONOMOUS_DISPLAY);
 
 console.log("gold-only.test.ts ok");
+
+// Universe rows carry broker_symbol / canonical_symbol, sometimes with code "".
+const universeRows = filterTradingSymbolRecords([
+  { code: "", broker_symbol: "XAUUSD_i", canonical_symbol: "XAUUSD", name: "Gold" },
+  { canonical_symbol: "XAUUSD" },
+  { broker_symbol: "EURUSD", canonical_symbol: "EURUSD" },
+]);
+assert.equal(universeRows.length, 2);
+assert.equal(displayTradingSymbol("GOLD"), AUTONOMOUS_DISPLAY);
+assert.equal(displayTradingSymbol(""), "—");
+assert.equal(displayTradingSymbol(undefined), "—");
+console.log("gold-only universe/display tests passed");
