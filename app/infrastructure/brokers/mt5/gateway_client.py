@@ -1550,6 +1550,14 @@ class GatewayMT5Client:
             )
         return out
 
+    def cached_symbol_info(self, symbol: str) -> MT5SymbolInfo | None:
+        """Last broker spec fetched for ``symbol`` — never calls the Gateway."""
+        try:
+            code = self._catalogue_code_for(symbol).strip().upper()
+        except Exception:  # catalogue not loaded yet
+            code = (symbol or "").strip().upper()
+        return self._symbol_info_cache.get(code)
+
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         self._require_connected()
         code = self._catalogue_code_for(symbol).strip().upper()

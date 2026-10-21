@@ -571,26 +571,49 @@ class RiskEngine:
             )
         )
 
+        # Owner live limits: the trade's real planned SL loss must sit inside
+        # ($1.50, cap] where cap = $2.00 (2% of equity above $100).
+        from app.domain.institutional_trading.owner_live_limits import (
+            OWNER_MIN_SL_RISK_USD,
+            max_sl_risk_usd,
+        )
+
+        lots_for_risk = (
+            size.approved_lots
+            if size.approved_lots > 0
+            else (size.requested_lots if size.requested_lots > 0 else cfg.min_lot)
+        )
+        planned_usd = (lots_for_risk * size.stop_distance * contract_size).quantize(
+            Decimal("0.01")
+        )
+        owner_cap = max_sl_risk_usd(drawdown.equity)
         risk_pct = (
-            (size.dollar_risk / drawdown.equity * Decimal("100")).quantize(
-                Decimal("0.01")
-            )
+            (planned_usd / drawdown.equity * Decimal("100")).quantize(Decimal("0.01"))
             if drawdown.equity > 0
             else Decimal("0")
         )
-        risk_st = self._limit_status(risk_pct, cfg.max_risk_per_trade_pct)
+        if size.stop_distance <= 0:
+            risk_st = "n/a"
+        elif planned_usd > owner_cap or planned_usd <= OWNER_MIN_SL_RISK_USD:
+            risk_st = "fail"
+        else:
+            risk_st = "pass"
         rules.append(
             self._rule(
                 rule_id="max_risk",
                 name="Max Risk Per Trade",
                 status=risk_st,
-                current=f"{risk_pct}%",
-                threshold=f"{cfg.max_risk_per_trade_pct}%",
-                reason=f"dollar risk {size.dollar_risk} on equity {drawdown.equity}",
+                current=f"${planned_usd} ({risk_pct}%)",
+                threshold=f"${OWNER_MIN_SL_RISK_USD}-${owner_cap} SL loss (owner)",
+                reason=(
+                    f"planned SL loss ${planned_usd} = {lots_for_risk} lots x "
+                    f"{size.stop_distance} x {contract_size} "
+                    f"on equity {drawdown.equity}"
+                ),
                 suggested_action=action_for(
                     risk_st,
                     "Tighten stop or reduce lots",
-                    "Reject — risk per trade exceeds policy",
+                    "Reject — planned SL loss outside the owner band",
                 ),
             )
         )

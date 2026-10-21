@@ -55,6 +55,8 @@ export type DiagnosticCycle = {
   marketSession: string;
   sessionAllowed: boolean | null;
   cycleOutcome: string;
+  /** Final result (filled / not_filled: reason / rejected: reason). */
+  cycleResult: string;
   decisionAction: string;
   executed: boolean;
   rejected: boolean;
@@ -111,6 +113,7 @@ function parseCycle(raw: unknown): DiagnosticCycle {
     sessionAllowed:
       r.session_allowed == null ? null : bool(r.session_allowed),
     cycleOutcome: str(r.cycle_outcome, "—"),
+    cycleResult: str(r.cycle_result, str(r.cycle_outcome, "—")),
     decisionAction: str(r.decision_action, "—"),
     executed: bool(r.executed),
     rejected: bool(r.rejected),

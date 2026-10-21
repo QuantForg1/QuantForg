@@ -37,6 +37,7 @@ import { humanExecutionError } from "@/lib/execution/humanize";
 import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
 import { invalidatePostTrade } from "@/lib/execution/post-trade-invalidate";
 import { protectiveStopsError } from "@/lib/execution/protective-stops";
+import { OWNER_MAX_SL_RISK_USD, OWNER_MIN_REWARD_RISK, OWNER_MIN_SL_RISK_USD, ticketRisk } from "@/lib/execution/ticket-risk";
 import { recordAudit } from "@/lib/observability/audit";
 import { captureError } from "@/lib/observability/error-monitor";
 import { isReadOnlyMode } from "@/lib/platform/beta";
@@ -147,6 +148,30 @@ export const ExecutionOrderTicket = forwardRef<
         : NaN;
   const slDist = stopLossDistance(entryForSize, num(stopLoss, NaN));
 
+  // Planned risk from the ticket's own numbers vs the owner live limits.
+  const quoteEntry =
+    orderType !== "market" && num(price) > 0
+      ? num(price)
+      : side === "buy"
+        ? Number(ask)
+        : Number(bid);
+  const ownerRisk = ticketRisk({
+    side,
+    entry: quoteEntry,
+    stopLoss: num(stopLoss, NaN),
+    takeProfit: num(takeProfit, NaN),
+    lots: num(volume, NaN),
+    contractSize: contractSizeForSymbol(symbol),
+    equity,
+    spread: Number.isFinite(spread) ? spread : NaN,
+  });
+  const preTradeBlocked =
+    validation?.valid === false || str(lastRisk?.decision).toUpperCase() === "REJECT";
+  const submitBlockReason =
+    stopsError ??
+    (ownerRisk.violations[0] ? `Owner limit: ${ownerRisk.violations[0]}` : null) ??
+    (preTradeBlocked ? "Pre-trade checks blocked — fix and Validate again" : null);
+
   const buildPayload = () => {
     const parts = [comment.trim() || "quantforg-execution"];
     if (trailingStop.trim()) parts.push(`trail:${trailingStop.trim()}`);
@@ -243,13 +268,6 @@ export const ExecutionOrderTicket = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, symbol, side, orderType, volume, price, stopLoss, takeProfit, dense]);
 
-  const positionSizeHint = () => {
-    if (!Number.isFinite(equity) || equity <= 0) return "—";
-    const pct = num(riskPct, 1) / 100;
-    if (!Number.isFinite(pct)) return "—";
-    return formatCurrency(equity * pct);
-  };
-
   const runSafety = async () => {
     setBusy(true);
     try {
@@ -308,8 +326,8 @@ export const ExecutionOrderTicket = forwardRef<
       toast.error("Broker disconnected — trading disabled");
       return;
     }
-    if (stopsError) {
-      toast.error(stopsError);
+    if (submitBlockReason) {
+      toast.error(submitBlockReason);
       return;
     }
     setConfirmOpen(true);
@@ -326,7 +344,7 @@ export const ExecutionOrderTicket = forwardRef<
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [connected, symbol, volume, stopLoss, takeProfit],
+    [connected, symbol, volume, stopLoss, takeProfit, submitBlockReason],
   );
 
   const submitLive = async () => {
@@ -345,10 +363,10 @@ export const ExecutionOrderTicket = forwardRef<
         return;
       }
 
-      if (stopsError) {
+      if (submitBlockReason) {
         setExecStage("rejected");
-        setRejectReason(stopsError);
-        toast.error(stopsError);
+        setRejectReason(submitBlockReason);
+        toast.error(submitBlockReason);
         return;
       }
 
@@ -621,8 +639,8 @@ export const ExecutionOrderTicket = forwardRef<
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
-            disabled={!connected || busy || stopsError != null}
-            title={stopsError ?? undefined}
+            disabled={!connected || busy || submitBlockReason != null}
+            title={submitBlockReason ?? undefined}
             onClick={() => void oneClick("buy")}
             aria-label="Buy market"
             className={cn(
@@ -639,8 +657,8 @@ export const ExecutionOrderTicket = forwardRef<
           </button>
           <button
             type="button"
-            disabled={!connected || busy || stopsError != null}
-            title={stopsError ?? undefined}
+            disabled={!connected || busy || submitBlockReason != null}
+            title={submitBlockReason ?? undefined}
             onClick={() => void oneClick("sell")}
             aria-label="Sell market"
             className={cn(
@@ -671,7 +689,15 @@ export const ExecutionOrderTicket = forwardRef<
         <div className="rounded-md border border-[var(--border)]/80 bg-[var(--surface-2)]/70 p-2.5">
           <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
             <span>Risk</span>
-            <span className="tabular text-[var(--fg)]">{positionSizeHint()}</span>
+            <span className="tabular text-[var(--fg)]">
+              {ownerRisk.riskUsd != null
+                ? `${formatCurrency(ownerRisk.riskUsd)}${
+                    ownerRisk.riskPctOfEquity != null
+                      ? ` · ${formatNumber(ownerRisk.riskPctOfEquity, 1)}%`
+                      : ""
+                  }`
+                : "Set SL / TP"}
+            </span>
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-[var(--surface)]">
             <div
@@ -698,6 +724,19 @@ export const ExecutionOrderTicket = forwardRef<
               label="Safety"
               value={lastCheck ? str(lastCheck.decision) : "—"}
             />
+            <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
+              Owner caps: SL loss ${OWNER_MIN_SL_RISK_USD.toFixed(2)}–$
+              {Math.min(OWNER_MAX_SL_RISK_USD, ownerRisk.maxSlRiskUsd).toFixed(2)} · RR ≥{" "}
+              {OWNER_MIN_REWARD_RISK.toFixed(1)} after spread
+              {ownerRisk.rewardRiskAfterSpread != null
+                ? ` (now ${formatNumber(ownerRisk.rewardRiskAfterSpread, 2)})`
+                : ""}
+            </p>
+            {ownerRisk.violations.length ? (
+              <p className="col-span-3 text-[10px] text-[var(--danger)]" role="status">
+                {ownerRisk.violations.join(" · ")}
+              </p>
+            ) : null}
           </div>
           {execMetrics.source === "live" && execMetrics.totalMs != null ? (
             <p className="mt-2 text-[10px] text-[var(--fg-subtle)]" aria-live="polite">
@@ -950,8 +989,8 @@ export const ExecutionOrderTicket = forwardRef<
           </Button>
           <Button
             className="h-9"
-            disabled={!connected || busy || stopsError != null}
-            title={stopsError ?? undefined}
+            disabled={!connected || busy || submitBlockReason != null}
+            title={submitBlockReason ?? undefined}
             onClick={() => {
               setConfirmMode("ticket");
               setExecStage("idle");

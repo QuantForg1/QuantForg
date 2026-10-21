@@ -479,7 +479,12 @@ def build_execution_state(
 
 
 _STATUS_SNAPSHOT_TTL_S = 2.0
-_status_snapshot_cache: tuple[float, int, AutoTradingStatusSnapshot] | None = None
+# (time, plane, settings, snapshot). Holds the plane/settings objects, not id():
+# a collected plane's id can be reused by a new one and would serve a stale
+# snapshot (e.g. execution_enabled from a different settings object).
+_status_snapshot_cache: (
+    tuple[float, OperationsControlPlane, object, AutoTradingStatusSnapshot] | None
+) = None
 
 
 def reset_auto_trading_status_cache() -> None:
@@ -499,14 +504,14 @@ def build_auto_trading_status(
     """
     global _status_snapshot_cache
     now = time.monotonic()
-    plane_id = id(plane)
     cached = _status_snapshot_cache
     if (
         cached is not None
         and now - cached[0] <= _STATUS_SNAPSHOT_TTL_S
-        and cached[1] == plane_id
+        and cached[1] is plane
+        and cached[2] is settings
     ):
-        return cached[2]
+        return cached[3]
     facts, live = build_status_facts(plane, settings=settings)
     safety = plane.evaluate_auto_trading(facts)
     primary, category = resolve_primary_blocker(safety)
@@ -526,5 +531,5 @@ def build_auto_trading_status(
         blocking_category=category,
         execution_state=execution_state,
     )
-    _status_snapshot_cache = (now, plane_id, snap)
+    _status_snapshot_cache = (now, plane, settings, snap)
     return snap

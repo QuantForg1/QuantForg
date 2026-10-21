@@ -96,7 +96,7 @@ function CycleIdentity({ cycle }: { cycle: DiagnosticCycle }) {
       />
       <MetricCard
         label="Outcome"
-        value={cycle.cycleOutcome}
+        value={cycle.cycleResult}
         tone={cycle.executed ? "ok" : "warn"}
       />
     </div>

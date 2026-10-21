@@ -170,6 +170,29 @@ def _rank_rejection_codes(codes: list[str]) -> list[str]:
     return seen
 
 
+def resolve_cycle_result(
+    *,
+    cycle_outcome: str,
+    forwarded_to_oms: bool,
+    executed: bool,
+    abort_reason: str | None,
+    primary_rejection: str | None,
+) -> str:
+    """Final result of a cycle for operators.
+
+    ``forwarded`` alone only means OMS received an order; the broker may still
+    have refused it (e.g. retcode 90001) or Risk may have stopped it.
+    """
+    if executed:
+        return "filled"
+    reason = str(abort_reason or primary_rejection or "").strip()
+    if forwarded_to_oms or str(cycle_outcome or "").lower() == "forwarded":
+        return f"not_filled: {reason}" if reason else "not_filled: no broker ticket"
+    if reason:
+        return f"rejected: {reason}"
+    return str(cycle_outcome or "—")
+
+
 def extract_cycle_diagnostics(
     *,
     snapshot: MarketAnalysisSnapshot | None,
@@ -410,6 +433,13 @@ def extract_cycle_diagnostics(
         "market_session": session,
         "session_allowed": session_allowed,
         "cycle_outcome": cycle_outcome,
+        "cycle_result": resolve_cycle_result(
+            cycle_outcome=cycle_outcome,
+            forwarded_to_oms=bool(forwarded_to_oms),
+            executed=bool(executed),
+            abort_reason=abort_reason,
+            primary_rejection=primary,
+        ),
         "decision_action": decision_action,
         "forwarded_to_oms": bool(forwarded_to_oms),
         "take": take,

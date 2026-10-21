@@ -46,6 +46,18 @@ def _reset_phase_a_plane() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _reset_auto_trading_status_cache() -> Iterator[None]:
+    """The 2s status snapshot cache is process-wide — never share it across tests."""
+    from app.application.services.auto_trading_status import (
+        reset_auto_trading_status_cache,
+    )
+
+    reset_auto_trading_status_cache()
+    yield
+    reset_auto_trading_status_cache()
+
+
+@pytest.fixture(autouse=True)
 def _reset_execution_account_binding() -> Iterator[None]:
     """Singleton gateway binding must not leak across tests."""
     from app.application.services.account_execution_gate import (
