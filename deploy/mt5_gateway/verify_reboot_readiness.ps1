@@ -158,9 +158,9 @@ try {
 if ($mt5Attached) {
   Add-Check "mt5_session" "PASS" "connected=true session_mode=attached"
 } elseif ($liveOk) {
-  Add-Check "mt5_session" "WARN" "Gateway live but MT5 not attached yet — MT5_SESSION_RECOVERY_UNPROVEN"
+  Add-Check "mt5_session" "WARN" "Gateway live but MT5 not attached yet - MT5_SESSION_RECOVERY_UNPROVEN"
 } else {
-  Add-Check "mt5_session" "WARN" "Gateway /health not confirming attached session — MT5_SESSION_RECOVERY_UNPROVEN"
+  Add-Check "mt5_session" "WARN" "Gateway /health not confirming attached session - MT5_SESSION_RECOVERY_UNPROVEN"
 }
 $mt5Running = ($mt5Procs.Count -ge 1)
 $mt5Responding = $false

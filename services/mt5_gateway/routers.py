@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.mt5_gateway.auth import require_gateway_token
 from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
+from services.mt5_gateway.order_guard import OrderGuardRejected, enforce_order_guard
 from services.mt5_gateway.runtime import MT5CallTimeout, MT5GatewayRuntime
 from services.mt5_gateway.schemas import (
     AttachRequest,
@@ -72,6 +73,11 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return fn()
     except GatewayExecutionDisabled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.as_detail(),
+        ) from exc
+    except OrderGuardRejected as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=exc.as_detail(),
@@ -205,10 +211,7 @@ async def health(request: Request) -> dict[str, Any]:
     health thread pool with a hard timeout; degraded MT5 still returns HTTP 200.
     """
     from services.mt5_gateway.settings import token_load_meta
-    from services.mt5_gateway.token_util import (
-        mask_gateway_token,
-        normalize_gateway_token,
-    )
+    from services.mt5_gateway.token_util import normalize_gateway_token
 
     settings = get_gateway_settings()
     runtime = getattr(request.app.state, "runtime", None)
@@ -226,11 +229,9 @@ async def health(request: Request) -> dict[str, Any]:
         "gateway_execution_enabled": bool(settings.mt5_gateway_execution_enabled),
         "token_fingerprint": {
             "length": len(token),
-            "preview": mask_gateway_token(token),
             "source": getattr(settings, "token_source", meta.get("source")),
             "process_env_len": meta.get("process_env_len"),
             "dotenv_len": meta.get("dotenv_len"),
-            "dotenv_path": meta.get("dotenv_path"),
             # Empty process env is classified as placeholder — that alone is OK
             # when dotenv supplies a real token (see dotenv_is_placeholder).
             "process_is_placeholder": meta.get("process_is_placeholder"),
@@ -452,10 +453,20 @@ async def trade_order_send(
 
     Requires MT5_GATEWAY_EXECUTION_ENABLED=true in addition to the gateway token.
     Independent of Railway EXECUTION_ENABLED. Covers entries, closes, SL/TP, and
-    pending modifies (all built into this single mutating route).
+    pending modifies (all built into this single mutating route). The order
+    guard then enforces the owner limits (see services.mt5_gateway.order_guard).
     """
     _require_gateway_execution()
-    return await _call_trade_async(lambda: runtime.order_send(body.as_runtime_dict()))
+    payload = body.as_runtime_dict()
+
+    def _guarded_send() -> dict[str, Any]:
+        enforce_order_guard(
+            payload,
+            positions_lookup=lambda: list(runtime.positions().get("items") or []),
+        )
+        return runtime.order_send(payload)
+
+    return await _call_trade_async(_guarded_send)
 
 
 @router.post("/trade/order_cancel")

@@ -166,7 +166,7 @@ function Wait-GatewayReady {
 }
 
 function Ensure-SingleHealthyInstance {
-  # HTTP first — connection-refused is immediate; do not wait on TCP table APIs.
+  # HTTP first - connection-refused is immediate; do not wait on TCP table APIs.
   if (Test-LiveOk) {
     $listen = Get-ListenPids
     Write-SupLog ("gateway already live on 127.0.0.1:{0} listener_count={1} pids={2}" -f $Port, $listen.Count, ($listen -join ","))

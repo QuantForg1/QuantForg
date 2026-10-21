@@ -1,10 +1,10 @@
-# QuantForg MT5 Gateway — Windows Service (NSSM example)
+# QuantForg MT5 Gateway - Windows Service (NSSM example)
 # Requires: NSSM (https://nssm.cc/) + Python 3.13 + MetaTrader5 package + terminal.
 
 # 1. Install:
 #    nssm install QuantForgMT5Gateway "C:\QuantForg\.venv\Scripts\python.exe" "-m" "services.mt5_gateway.main"
 # 2. Set AppDirectory to repo root (C:\QuantForg)
-# 3. Environment (NSSM → AppEnvironmentExtra):
+# 3. Environment (NSSM -> AppEnvironmentExtra):
 #      MT5_GATEWAY_TOKEN=<strong-token>
 #      MT5_GATEWAY_HOST=127.0.0.1
 #      MT5_GATEWAY_PORT=8765

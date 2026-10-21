@@ -76,7 +76,7 @@ if ($LASTEXITCODE -ne 0) {
   throw "uvicorn missing in project env. Run: py -3.13 -m poetry install"
 }
 
-# Config presence check — never print token values.
+# Config presence check - never print token values.
 $tokenLen = 0
 if ($env:MT5_GATEWAY_TOKEN) {
   $tokenLen = $env:MT5_GATEWAY_TOKEN.Trim().Length
@@ -99,6 +99,6 @@ Write-Host "MT5_GATEWAY_TOKEN configured (length=$tokenLen; value not shown)."
 
 Write-Host "Starting gateway (foreground). Ctrl+C to stop."
 Write-Host "NOTE: Closing this window stops the gateway. Prefer supervise_gateway.ps1 for production."
-Write-Host "NOTE: A successful process start does not prove MT5 is attached — check /health after boot."
+Write-Host "NOTE: A successful process start does not prove MT5 is attached - check /health after boot."
 & $Python -m services.mt5_gateway.main
 

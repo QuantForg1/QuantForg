@@ -97,7 +97,10 @@ class TestGatewayAuthHardening:
         health = http.get("/health")
         assert health.status_code == 200
         fp = health.json()["token_fingerprint"]
-        assert fp["preview"] == mask_gateway_token(token)
+        # Public /health never exposes a token preview or the dotenv path.
+        assert "preview" not in fp
+        assert "dotenv_path" not in fp
+        assert mask_gateway_token(token) not in health.text
         assert fp["source"].startswith("dotenv:")
         assert fp["length"] == len(token)
 

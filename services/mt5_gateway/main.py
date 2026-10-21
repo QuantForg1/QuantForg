@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
+from services.mt5_gateway import __version__
 from services.mt5_gateway.routers import router
 from services.mt5_gateway.runtime import MT5GatewayRuntime
 from services.mt5_gateway.settings import get_gateway_settings
@@ -76,7 +77,7 @@ def create_app() -> FastAPI:
     settings = get_gateway_settings()
     app = FastAPI(
         title="QuantForg MT5 Gateway",
-        version="1.1.8",
+        version=__version__,
         description=(
             "Windows MetaTrader 5 runtime gateway. "
             "Broker credentials stay in gateway memory — not Railway. "
