@@ -368,6 +368,11 @@ def assess_risk_engine(facts: GoldAssessmentFacts) -> EngineGate:
         leverage_int = int(facts.leverage)
 
     engine = RiskEngine(config=risk_config_from_ite(DEFAULT_ITE_CONFIG))
+    # The RiskEngine blocks a loss streak only via the time-boxed cooldown flag.
+    # This assessment has no cooldown clock, so a streak at/above the limit is
+    # treated as an active cooldown (fail closed) instead of passing silently.
+    max_streak = int(engine.config.max_consecutive_losses or 0)
+    streak_blocked = max_streak > 0 and facts.consecutive_losses >= max_streak
     check = RiskCheckInput(
         user_id=uuid4(),
         request_id=f"di-risk-{uuid4().hex[:12]}",
@@ -378,6 +383,7 @@ def assess_risk_engine(facts: GoldAssessmentFacts) -> EngineGate:
         entry_price=entry,
         spread=facts.spread,
         consecutive_losses=facts.consecutive_losses,
+        cooldown_active=streak_blocked,
         session_allowed=None,
     )
     free_margin = facts.free_margin if facts.free_margin is not None else equity

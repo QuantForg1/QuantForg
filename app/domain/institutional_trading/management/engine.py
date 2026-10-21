@@ -462,6 +462,11 @@ class PositionManagementEngine:
                 comment=comment,
                 connected=context.connected,
                 login=context.login,
+                current_stop_loss=(
+                    position.current_stop if position.current_stop > 0 else None
+                ),
+                take_profit_changed=plan.new_tp is not None
+                and plan.new_tp != position.current_tp,
             )
 
         if plan.kind is ManageActionKind.PARTIAL_CLOSE:

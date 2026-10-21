@@ -31,6 +31,7 @@ from app.application.services.threshold_promotion import (
 )
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.operations.models import OperatorIdentity
+from core.production_docs import production_docs_dir
 
 PROFILE_ID = "EXPERIMENTAL_75"
 EXPERIMENTAL_QUALITY = 75
@@ -38,7 +39,7 @@ EXPERIMENTAL_CONFLUENCE = 75
 EVAL_TARGET = 100
 BADGE_LABEL = "Experimental Profile Active (Q75/C75)"
 
-_REPORT_DIR = Path(__file__).resolve().parents[3] / "docs" / "production" / "reports"
+_REPORT_DIR = production_docs_dir() / "reports"
 
 
 def _git_commit_hash() -> str | None:

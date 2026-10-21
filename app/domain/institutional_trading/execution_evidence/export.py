@@ -13,6 +13,7 @@ from app.domain.institutional_trading.execution_evidence.models import (
     ExecutionEvidencePackage,
 )
 from core.logging import get_logger
+from core.production_docs import production_docs_override
 
 logger = get_logger(__name__)
 
@@ -31,6 +32,9 @@ WAITING_MESSAGE = "Waiting for first eligible production execution."
 def _repo_dir(rel: Path, override: Path | None = None) -> Path:
     if override is not None:
         return override
+    env_root = production_docs_override()
+    if env_root is not None:
+        return env_root / rel.relative_to("docs/production")
     cwd = Path.cwd() / rel
     if (Path.cwd() / "docs" / "production").exists():
         return cwd

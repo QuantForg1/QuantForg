@@ -1,3 +1,4 @@
+
 """Witness observability — separate auth health from trading execution health.
 
 Read-only helpers for the live execution witness. Never touches Strategy, Risk,
@@ -14,8 +15,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.production_docs import production_docs_dir
+
 ROOT = Path(__file__).resolve().parents[3]
-REPORTS = ROOT / "docs" / "production" / "reports"
+REPORTS = production_docs_dir() / "reports"
 HEALTH_PATH = REPORTS / "witness_health_latest.json"
 AUTH_INCIDENTS_PATH = REPORTS / "witness_auth_incidents.jsonl"
 WITNESS_LATEST_PATH = REPORTS / "live_execution_witness_latest.json"

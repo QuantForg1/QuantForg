@@ -21,6 +21,7 @@ from uuid import uuid4
 
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.operations.models import OperatorIdentity
+from core.production_docs import production_docs_dir
 
 PRODUCTION_QUALITY = 80
 PRODUCTION_CONFLUENCE = 80
@@ -240,8 +241,7 @@ def _persist(store: ThresholdPromotionStore) -> None:
 
 def _load_candidate_validation_summary() -> dict[str, Any]:
     """Best-effort load of latest candidate validation evidence (read-only)."""
-    root = Path(__file__).resolve().parents[3]
-    path = root / "docs" / "production" / "reports" / "candidate_validation_latest.json"
+    path = production_docs_dir() / "reports" / "candidate_validation_latest.json"
     if not path.is_file():
         return {"status": "missing", "path": str(path)}
     try:

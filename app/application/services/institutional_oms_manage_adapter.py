@@ -58,6 +58,8 @@ class InstitutionalOmsManageAdapter:
         comment: str,
         connected: bool,
         login: int | None,
+        current_stop_loss: Decimal | None = None,
+        take_profit_changed: bool = False,
     ) -> OmsManageResult:
         intent = parse_order_intent(
             symbol=symbol,

@@ -267,7 +267,9 @@ def test_no_forced_trade_and_no_second_path() -> None:
     runtime_src = (
         ROOT / "app/application/services/institutional_ite_runtime.py"
     ).read_text(encoding="utf-8")
-    assert "FORCE_FIRST_TRADE proceeding" in runtime_src
+    # The scan-continue log no longer claims a FORCE_FIRST_TRADE path.
+    assert "FORCE_FIRST_TRADE proceeding" not in runtime_src
+    assert "safety_scan_continue_oms_blocked" in runtime_src
     engine_src = (
         ROOT / "app/application/services/institutional_execution_engine.py"
     ).read_text(encoding="utf-8")
