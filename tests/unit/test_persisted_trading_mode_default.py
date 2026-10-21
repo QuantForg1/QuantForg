@@ -128,7 +128,7 @@ def test_hydrate_persisted_scalping_stays_scalping(
     cp._GLOBAL_PLANE = None
     plane = cp.get_control_plane()
     assert plane.trading_mode == "scalping"
-    assert plane.max_open_trades == 10
+    assert plane.max_open_trades == 1
     cp._GLOBAL_PLANE = None
 
 
@@ -155,7 +155,8 @@ def test_hydrate_explicit_swing_is_not_overwritten(
     state = load_ops_state()
     assert state.get("trading_mode") == "swing"
     assert state.get("trading_mode_explicit") is True
-    assert plane.max_open_trades == 2
+    # Persisted 2 is clamped to the owner limit at hydrate (never raises).
+    assert plane.max_open_trades == 1
     cp._GLOBAL_PLANE = None
 
 
@@ -178,9 +179,9 @@ def test_hydrate_unlabeled_legacy_swing_migrates_idempotently(
     cp._GLOBAL_PLANE = None
     plane = cp.get_control_plane()
     assert plane.trading_mode == "scalping"
-    assert plane.max_open_trades == 10
+    assert plane.max_open_trades == 1
     assert plane.risk_per_trade_pct == Decimal("1.0")
-    assert plane.max_daily_loss_pct == Decimal("80.0")
+    assert plane.max_daily_loss_pct == Decimal("3.0")
     state = load_ops_state()
     assert state.get("trading_mode") == "scalping"
     assert state.get("trading_mode_migrated_from") == "swing"
@@ -254,9 +255,9 @@ def test_ui_fallback_and_mode_select_reason_are_scalping() -> None:
 def test_mode_does_not_alter_risk_safety_leverage() -> None:
     assert AutoTradePolicy().trading_mode == "scalping"
     assert OperationsControlPlane().trading_mode == "scalping"
-    assert OperationsControlPlane().max_open_trades == 10
+    assert OperationsControlPlane().max_open_trades == 1
     assert OperationsControlPlane().risk_per_trade_pct == Decimal("1.0")
-    assert OperationsControlPlane().max_daily_loss_pct == Decimal("80.0")
+    assert OperationsControlPlane().max_daily_loss_pct == Decimal("3.0")
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
     assert STRONG_CANDIDATE_THRESHOLD == 85
     assert Decimal("2000") == MAX_LEVERAGE

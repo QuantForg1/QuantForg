@@ -393,6 +393,10 @@ def calculate_dynamic_lots_v2(
         if max_lot is not None and max_lot > 0
         else min(cfg.broker_max_lot, VOLUME_MAX)
     )
+    # Owner limit: never size above 0.01 lot, whatever the broker allows.
+    from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
+
+    broker_max = min(broker_max, OWNER_MAX_LOT)
     if contract_size is not None and contract_size > 0:
         cs = contract_size
     elif contract_size is not None:

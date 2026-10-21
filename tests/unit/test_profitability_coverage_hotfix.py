@@ -33,6 +33,7 @@ from app.domain.entities.mt5_portfolio import AccountSnapshot
 from app.domain.entities.risk_engine import RiskEngineConfig, contract_size_for_symbol
 from app.domain.enums.execution import ExecutionOutcome
 from app.domain.enums.risk import PositionSizingMethod, RiskDecision
+from app.domain.exceptions.base import ValidationError
 from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
@@ -60,6 +61,8 @@ def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     client = MockMT5Client()
     client.initialize()
     client.login(MT5LoginRequest(login=1, password="p", server="S"))
+    # Flat book: the owner limit allows only one open position.
+    client._positions = []
     adapter = MT5Adapter(client=client, execution_enabled=True)
     validation = MT5OrderValidationService(adapter=adapter)
     return (
@@ -120,38 +123,33 @@ def test_oms_uses_fx_contract_size_not_gold_default() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
-def test_oms_fx_step_up_volume_can_pass_when_in_band() -> None:
+def test_oms_gold_min_lot_passes_when_in_band() -> None:
     engine = RiskEngine(
         config=RiskEngineConfig(
             min_lot=Decimal("0.01"),
             lot_step=Decimal("0.01"),
-            max_lot=Decimal("100"),
-            contract_size=Decimal("100000"),
+            contract_size=Decimal("100"),
         )
     )
     assessment = engine.evaluate(
         RiskCheckInput(
             user_id=uuid4(),
-            request_id="fx-oms-ok",
-            symbol="EURUSD",
+            request_id="gold-oms-ok",
+            symbol="XAUUSD",
             side="buy",
-            requested_lots=Decimal("0.03"),
-            stop_loss_distance=Decimal("0.00250"),
+            requested_lots=Decimal("0.01"),
+            stop_loss_distance=Decimal("1.80"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
-            entry_price=Decimal("1.08520"),
-            contract_size=Decimal("100000"),
+            entry_price=Decimal("2320.80"),
+            contract_size=Decimal("100"),
         ),
         account=_fx_account(),
         positions=[],
     )
     assert assessment.decision is not RiskDecision.REJECT
-    assert assessment.approved_lots == Decimal("0.03")
-    assert assessment.approved_lots * Decimal("0.00250") * Decimal("100000") > (
-        MIN_PLANNED_RISK_USD
-    )
-    assert assessment.approved_lots * Decimal("0.00250") * Decimal("100000") <= (
-        MAX_PLANNED_SL_RISK_USD
-    )
+    assert assessment.approved_lots == Decimal("0.01")
+    planned = assessment.approved_lots * Decimal("1.80") * Decimal("100")
+    assert MIN_PLANNED_RISK_USD < planned <= MAX_PLANNED_SL_RISK_USD
 
 
 @pytest.mark.unit
@@ -164,95 +162,74 @@ def test_missing_live_cs_uses_symbol_class_not_gold_default() -> None:
         RiskCheckInput(
             user_id=uuid4(),
             request_id="fallback-cs",
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side="buy",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("0.00250"),
+            stop_loss_distance=Decimal("1.80"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
-            entry_price=Decimal("1.08520"),
+            entry_price=Decimal("2320.80"),
         ),
         account=_fx_account(),
         positions=[],
     )
     assert assessment.decision is not RiskDecision.REJECT
-    assert assessment.approved_lots == Decimal("0.03")
+    assert assessment.approved_lots == Decimal("0.01")
 
 
 @pytest.mark.unit
 @pytest.mark.trading_core
-def test_execution_engine_steps_fx_min_lot_into_planned_sl_band() -> None:
-    engine, _client = _engine()
-    with patch(
-        "app.domain.trading.gold_only.gold_only_enabled",
-        return_value=False,
-    ):
-        intent = parse_order_intent(
-            symbol="EURUSD",
-            side="sell",
-            order_type="market",
-            volume="0.01",
-            stop_loss="1.08750",
-            take_profit="1.08125",
-        )
-        pipeline, _decision = engine.run_submit(
-            user_id=uuid4(),
-            request_id="fx-0.01-block",
-            intent=intent,
-            connected=True,
-            login=1,
-            recent_decisions=[],
-        )
-    assert pipeline.outcome == ExecutionOutcome.SUCCESS.value
-    assert pipeline.execution_result is not None
-    assert pipeline.execution_result.order_ticket
-    filled = Decimal(str(getattr(pipeline.execution_result, "volume", "0") or "0"))
-    if filled <= 0:
-        filled = intent.volume.value
-    assert filled > Decimal("0.01")
-    assert filled * Decimal("0.00250") * Decimal("100000") > MIN_PLANNED_RISK_USD
-
-
-@pytest.mark.unit
-@pytest.mark.trading_core
-def test_execution_engine_allows_in_band_fx_volume() -> None:
-    engine, _client = _engine()
-    with patch(
-        "app.domain.trading.gold_only.gold_only_enabled",
-        return_value=False,
-    ):
-        intent = parse_order_intent(
-            symbol="EURUSD",
-            side="buy",
-            order_type="market",
-            volume="0.03",
-            stop_loss="1.08270",
-            take_profit="1.08895",
-        )
-        pipeline, decision = engine.run_submit(
-            user_id=uuid4(),
-            request_id="fx-0.03-allow",
-            intent=intent,
-            connected=True,
-            login=1,
-            recent_decisions=[],
-        )
-    assert decision.decision.value == "allow"
-    assert pipeline.outcome == ExecutionOutcome.SUCCESS.value
-    assert pipeline.execution_result is not None
-    assert pipeline.execution_result.order_ticket
-
-
-@pytest.mark.unit
-@pytest.mark.trading_core
-def test_execution_engine_allows_in_band_gold() -> None:
+def test_execution_engine_never_steps_gold_above_owner_max_lot() -> None:
+    # SL 0.50 away at 0.01 lot = $0.50 (below the $1.50 floor); 0.03 would fit $1.50
+    # but exceeds the 0.01 owner max lot -> reject, never step volume up.
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol="XAUUSD",
         side="buy",
         order_type="market",
         volume="0.01",
-        stop_loss="2301.50",
-        take_profit="2349.50",
+        stop_loss="2320.30",
+        take_profit="2322.80",
+    )
+    pipeline, _decision = engine.run_submit(
+        user_id=uuid4(),
+        request_id="gold-floor-block",
+        intent=intent,
+        connected=True,
+        login=1,
+        recent_decisions=[],
+    )
+    assert pipeline.outcome == "rejected"
+    assert pipeline.execution_result is None or not getattr(
+        pipeline.execution_result, "order_ticket", None
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_execution_engine_rejects_non_gold_symbol() -> None:
+    with pytest.raises(ValidationError, match="DISABLED_AUTONOMOUS_SYMBOL"):
+        parse_order_intent(
+            symbol="EURUSD",
+            side="buy",
+            order_type="market",
+            volume="0.01",
+            stop_loss="1.08270",
+            take_profit="1.08895",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_execution_engine_allows_in_band_gold() -> None:
+    # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> 3.20 / 2.10 = 1.52.
+    engine, _client = _engine()
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume="0.01",
+        stop_loss="2319.00",
+        take_profit="2324.00",
     )
     pipeline, decision = engine.run_submit(
         user_id=uuid4(),
@@ -270,17 +247,13 @@ def test_execution_engine_allows_in_band_gold() -> None:
 @pytest.mark.trading_core
 def test_normalize_intent_does_not_force_min_lot_on_new_entries() -> None:
     engine, _client = _engine()
-    with patch(
-        "app.domain.trading.gold_only.gold_only_enabled",
-        return_value=False,
-    ):
-        intent = parse_order_intent(
-            symbol="EURUSD",
-            side="buy",
-            order_type="market",
-            volume="0.001",
-        )
-        normalized, notes = engine.order_validation.normalize_intent(intent)
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume="0.001",
+    )
+    normalized, notes = engine.order_validation.normalize_intent(intent)
     assert normalized.volume.value == Decimal("0.001")
     assert any("not forced" in n.lower() for n in notes)
 
@@ -537,12 +510,12 @@ def test_public_telegram_filter_unchanged() -> None:
             {
                 "event": TRADE_OPENED,
                 "fields": {
-                    "symbol": "EURUSD",
+                    "symbol": "XAUUSD",
                     "direction": "BUY",
                     "opportunity": "91",
-                    "entry": "1.08500",
-                    "stop_loss": "1.08250",
-                    "take_profit": "1.09100",
+                    "entry": "2320.80",
+                    "stop_loss": "2319.00",
+                    "take_profit": "2324.00",
                     "ticket": 881201,
                 },
             }
@@ -707,32 +680,27 @@ def test_gold_over_20_planned_sl_rejected() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_execution_engine_rejects_tp_not_greater_than_sl() -> None:
+    # Gold SELL at bid 2320.50: SL 1.80 away, TP 1.80 away -> TP profit == SL loss.
     engine, _client = _engine()
-    with patch(
-        "app.domain.trading.gold_only.gold_only_enabled",
-        return_value=False,
-    ):
-        intent = parse_order_intent(
-            symbol="EURUSD",
-            side="sell",
-            order_type="market",
-            volume="0.03",
-            stop_loss="1.08750",
-            take_profit="1.08250",
-        )
-        pipeline, _decision = engine.run_submit(
-            user_id=uuid4(),
-            request_id="fx-tp-eq-sl",
-            intent=intent,
-            connected=True,
-            login=1,
-            recent_decisions=[],
-        )
-    assert pipeline.outcome == "rejected"
-    assert any(
-        "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r
-        for r in (pipeline.rejection_reasons or [pipeline.message])
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="sell",
+        order_type="market",
+        volume="0.01",
+        stop_loss="2322.30",
+        take_profit="2318.70",
     )
+    pipeline, _decision = engine.run_submit(
+        user_id=uuid4(),
+        request_id="gold-tp-eq-sl",
+        intent=intent,
+        connected=True,
+        login=1,
+        recent_decisions=[],
+    )
+    assert pipeline.outcome == "rejected"
+    reasons = " ".join(pipeline.rejection_reasons or [pipeline.message])
+    assert "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in reasons or "OWNER_MIN_RR" in reasons
     assert pipeline.execution_result is None or not getattr(
         pipeline.execution_result, "order_ticket", None
     )

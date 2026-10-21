@@ -212,11 +212,9 @@ class TestLotSizingLiveSpecs:
             calculate_scalping_lots,
         )
 
-        # 7.26 stop at $181.53 is ~4% — within the 80% hard max, so
-        # the broker min lot is used. A stop above 80% must still fail closed.
         sized = calculate_scalping_lots(
             equity=Decimal("181.53"),
-            stop_distance=Decimal("7.26"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("1.0"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -224,33 +222,33 @@ class TestLotSizingLiveSpecs:
         )
         assert sized.valid is True
         assert sized.lots == Decimal("0.01")
-        assert sized.method == "micro_conditional_min_lot"
+        # 7.26 stop = $7.26 at min lot: above the $2 owner cap -> fail closed.
+        for stop in (Decimal("7.26"), Decimal("150.00")):
+            blocked = calculate_scalping_lots(
+                equity=Decimal("181.53"),
+                stop_distance=stop,
+                risk_pct=Decimal("1.0"),
+                contract_size=Decimal("100"),
+                min_lot=Decimal("0.01"),
+                lot_step=Decimal("0.01"),
+            )
+            assert blocked.valid is False
+            assert blocked.lots == Decimal("0")
+            assert blocked.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
 
-        blocked = calculate_scalping_lots(
-            equity=Decimal("181.53"),
-            stop_distance=Decimal("150.00"),
-            risk_pct=Decimal("1.0"),
-            contract_size=Decimal("100"),
-            min_lot=Decimal("0.01"),
-            lot_step=Decimal("0.01"),
-        )
-        assert blocked.valid is False
-        assert blocked.lots == Decimal("0")
-        assert blocked.method in {"below_min_lot", "min_lot_exceeds_risk_budget"}
-
-    def test_finer_step_produces_tradable_lots(self) -> None:
+    def test_finer_step_never_exceeds_owner_max_lot(self) -> None:
         from app.domain.institutional_trading.ai_scalping.sizing import (
             calculate_scalping_lots,
         )
 
         sized = calculate_scalping_lots(
             equity=Decimal("181.53"),
-            stop_distance=Decimal("7.26"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("1.0"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.001"),
             lot_step=Decimal("0.001"),
         )
         assert sized.valid is True
-        assert sized.lots >= Decimal("0.001")
-        assert sized.lots < Decimal("0.01")
+        assert sized.lots <= Decimal("0.01")
+        assert sized.estimated_risk_amount <= Decimal("2.00")

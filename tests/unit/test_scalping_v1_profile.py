@@ -126,10 +126,10 @@ def test_config_post_init_clamps_rr_to_fixed_tp() -> None:
 
 
 @pytest.mark.unit
-def test_scalping_v1_multi_opportunity_not_one_best_only() -> None:
+def test_scalping_v1_scans_many_but_enters_one() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.max_entries_per_cycle >= 3
-    assert cfg.max_open_trades >= 3
+    assert cfg.max_entries_per_cycle == 1
+    assert cfg.max_open_trades == 1
     assert cfg.require_probability_improvement is False
     assert cfg.parallel_scan_enabled is True
     assert cfg.multi_asset_scan_enabled is True
@@ -164,4 +164,4 @@ def test_scalping_ite_maps_v1_floors() -> None:
     assert ite.trading_mode == "scalping"
     assert ite.min_trade_quality_score == 74
     assert ite.min_confluence_score == 71
-    assert ite.max_open_trades >= 3
+    assert ite.max_open_trades == 1

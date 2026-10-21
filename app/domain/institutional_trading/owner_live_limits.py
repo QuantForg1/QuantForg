@@ -115,8 +115,9 @@ def evaluate_owner_entry(
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
-    Reward:risk is measured after spread on both legs:
-    ``(|tp - entry| - spread) / (|entry - sl| + spread)``.
+    Reward:risk counts the spread once, on the risk leg:
+    ``|tp - entry| / (|entry - sl| + spread)`` must be >= 1.50
+    (e.g. SL 2.00 + spread 0.44 needs a TP at least 3.66 away).
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """
@@ -180,7 +181,7 @@ def evaluate_owner_entry(
             f"OWNER_STOPS_LEVEL: SL {sl_dist} / TP {tp_dist} closer than broker "
             f"stops_level distance {min_dist}"
         )
-    rr = (tp_dist - spr) / (sl_dist + spr)
+    rr = tp_dist / (sl_dist + spr)
     if rr < OWNER_MIN_REWARD_RISK:
         violations.append(
             f"OWNER_MIN_RR: reward:risk after spread {rr.quantize(_CENT)} "

@@ -61,7 +61,7 @@ def _account(balance: str) -> AccountSnapshot:
 
 
 def _entry(**overrides: object) -> list[str]:
-    # SELL 0.01 at 4116.43, SL 1.60 away ($1.60), TP 3.50 away -> RR 1.59 after spread
+    # SELL 0.01 at 4116.43, SL 1.60 away ($1.60), TP 3.50 away -> RR 3.50/1.98 = 1.77
     args: dict[str, object] = {
         "symbol": "XAUUSD_i",
         "side": "sell",
@@ -224,8 +224,17 @@ def test_sl_risk_201_rejected_200_allowed() -> None:
 
 
 def test_reward_risk_below_1_5_after_spread_rejected() -> None:
-    # SL 1.60, TP 3.30: (3.30 - 0.38) / (1.60 + 0.38) = 1.47
-    assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4113.13")))
+    # SL 1.60, TP 2.90: 2.90 / (1.60 + 0.38) = 1.46
+    assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4113.53")))
+
+
+def test_reward_risk_counts_spread_once_boundary() -> None:
+    # SL $2.00 + spread 0.44 -> minimum TP distance 3.66 (3.66 / 2.44 = 1.50).
+    kw = {"stop_loss": D("4118.43"), "spread": D("0.44")}
+    assert _entry(take_profit=D("4112.77"), **kw) == []
+    assert any(
+        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4112.78"), **kw)
+    )
 
 
 @pytest.mark.parametrize("field", ["stop_loss", "take_profit"])

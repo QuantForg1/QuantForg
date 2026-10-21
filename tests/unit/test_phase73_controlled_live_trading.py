@@ -497,15 +497,23 @@ def test_size_uses_broker_specs_not_generic_lot() -> None:
     )
     assert spec.contract_size == Decimal("100")
     sized = size_from_broker_specs(
-        equity=Decimal("33"),
+        equity=Decimal("50.84"),
         risk_pct=Decimal("0.50"),
-        stop_distance=Decimal("5"),
+        stop_distance=Decimal("1.80"),
         spec=spec,
     )
-    # Min 0.01 at $5 SL = $5 (<= $6 floor) → 0.02 = $10, fits remaining $30.
+    # 0.01 at $1.80 SL = $1.80 — inside the owner band, never stepped to 0.02.
     assert sized.accepted is True
-    assert sized.volume == Decimal("0.02")
-    assert sized.monetary_loss_at_sl == Decimal("10.00")
+    assert sized.volume == Decimal("0.01")
+    assert sized.monetary_loss_at_sl == Decimal("1.80")
+    small = size_from_broker_specs(
+        equity=Decimal("33"),
+        risk_pct=Decimal("0.50"),
+        stop_distance=Decimal("1.80"),
+        spec=spec,
+    )
+    # $33 * 4% micro hard max = $1.32 < $1.80 -> refuse, never upsize.
+    assert small.accepted is False
 
 
 @pytest.mark.unit
@@ -582,18 +590,29 @@ def test_no_fabricated_sl_tp_or_prices() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_no_martingale_size_increase_after_loss() -> None:
-    spec = _spec(
-        contract_size=Decimal("1000"),
-        volume_min=Decimal("0.01"),
-        volume_step=Decimal("0.01"),
+
+    gold = _spec(
+        symbol="XAUUSD",
+        contract_size=Decimal("100"),
+        tick_value=Decimal("1"),
+        tick_size=Decimal("0.01"),
+        stops_level=Decimal("50"),
+        spread=Decimal("0.30"),
     )
-    # Wide enough stop + tiny contract so 0.01 lots fit $33 * 0.50%.
+
     decision = evaluate_live_order(
         _req(
-            spec=spec,
-            stop_loss=Decimal("1.09990"),
-            take_profit=Decimal("1.10200"),
-            entry=Decimal("1.10000"),
+            spec=gold,
+            symbol="XAUUSD",
+            price=Decimal("2320.80"),
+            entry=Decimal("2320.80"),
+            stop_loss=Decimal("2319.00"),
+            take_profit=Decimal("2324.00"),
+            spread=Decimal("0.30"),
+            equity=Decimal("50.84"),
+            balance=Decimal("50.84"),
+            free_margin=Decimal("50.84"),
+            reward_risk=Decimal("1.78"),
         ),
         state="ENABLED",
         cfg=LiveTradingRiskConfig(),
@@ -871,34 +890,43 @@ def test_admin_page_and_nav_keep_trader_free_of_admin() -> None:
 
 @pytest.mark.unit
 @pytest.mark.trading_core
-def test_safe_size_accepted_when_min_lot_fits_risk() -> None:
-    spec = _spec(
-        contract_size=Decimal("10"),
-        volume_min=Decimal("0.01"),
-        volume_step=Decimal("0.01"),
-        tick_value=None,
-        tick_size=None,
+def test_safe_size_accepted_when_min_lot_fits_owner_band() -> None:
+
+    gold = _spec(
+        symbol="XAUUSD",
+        contract_size=Decimal("100"),
+        tick_value=Decimal("1"),
+        tick_size=Decimal("0.01"),
+        stops_level=Decimal("50"),
+        spread=Decimal("0.30"),
     )
+
     sized = size_from_broker_specs(
-        equity=Decimal("33"),
+        equity=Decimal("50.84"),
         risk_pct=Decimal("0.50"),
-        stop_distance=Decimal("0.10"),
-        spec=spec,
+        stop_distance=Decimal("1.80"),
+        spec=gold,
     )
     assert sized.accepted is True
-    assert sized.volume >= Decimal("0.01")
-    assert sized.monetary_loss_at_sl > Decimal("6.00")
+    assert sized.volume == Decimal("0.01")
+    assert Decimal("1.50") < sized.monetary_loss_at_sl <= Decimal("2.00")
     decision = evaluate_live_order(
         _req(
-            spec=spec,
-            stop_loss=Decimal("1.00000"),
-            entry=Decimal("1.10000"),
-            take_profit=Decimal("1.30000"),
+            spec=gold,
+            symbol="XAUUSD",
+            price=Decimal("2320.80"),
+            entry=Decimal("2320.80"),
+            stop_loss=Decimal("2319.00"),
+            take_profit=Decimal("2324.00"),
+            spread=Decimal("0.30"),
+            equity=Decimal("50.84"),
+            balance=Decimal("50.84"),
+            free_margin=Decimal("50.84"),
+            reward_risk=Decimal("1.78"),
         ),
         state="ENABLED",
         cfg=LiveTradingRiskConfig(),
     )
-    # 0.10 stop * contract 10 = $1/lot; size to planned risk > $6.
     assert decision.allowed is True
 
 
