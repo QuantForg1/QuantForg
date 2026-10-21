@@ -10,6 +10,7 @@ from app.domain.institutional_trading.rc1_production_validation.config import (
     CONFIDENCE_FLOOR,
     QUALITY_FLOOR,
 )
+from core.production_docs import production_docs_dir
 
 
 def _now_iso() -> str:
@@ -120,7 +121,7 @@ def write_rc1_validation_report(
     *,
     path: Path | None = None,
 ) -> Path:
-    target = path or Path("docs/production/RC1_VALIDATION_REPORT.md")
+    target = path or production_docs_dir() / "RC1_VALIDATION_REPORT.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(report_md, encoding="utf-8")
     return target

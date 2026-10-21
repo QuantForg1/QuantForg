@@ -105,7 +105,9 @@ class TestKillSwitch:
         assert plane.oms_orders_allowed() is True
         plane.arm_kill_switch(op, reason="emergency", confirmed=True)
         assert plane.oms_orders_allowed() is False
+        # Kill blocks every risk-adding action; protective actions stay allowed.
         assert plane.pme_modifications_allowed() is False
+        assert plane.pme_protective_allowed() is True
         assert plane.alerts.unacked_count() >= 1
 
     def test_shadow_blocks_oms_without_kill(self) -> None:
@@ -162,6 +164,62 @@ class TestKillSwitch:
             login=1,
         )
         assert m.outcome == "disabled"
+
+        # SL tightening (buy: new SL above current) is protective -> allowed.
+        tighten = g_manage.modify_sltp(
+            user_id=uuid4(),
+            request_id="4",
+            symbol="XAUUSD",
+            side="buy",
+            position=1,
+            stop_loss=Decimal("2305"),
+            take_profit=None,
+            comment="x",
+            connected=True,
+            login=1,
+            current_stop_loss=Decimal("2300"),
+        )
+        assert tighten.outcome != "disabled"
+        # Widening the SL adds risk -> blocked.
+        widen = g_manage.modify_sltp(
+            user_id=uuid4(),
+            request_id="5",
+            symbol="XAUUSD",
+            side="buy",
+            position=1,
+            stop_loss=Decimal("2295"),
+            take_profit=None,
+            comment="x",
+            connected=True,
+            login=1,
+            current_stop_loss=Decimal("2300"),
+        )
+        assert widen.outcome == "disabled"
+        # Closing and partial closing reduce risk -> allowed.
+        closed = g_manage.close_position(
+            user_id=uuid4(),
+            request_id="6",
+            symbol="XAUUSD",
+            side="sell",
+            position=1,
+            volume=Decimal("0.01"),
+            comment="x",
+            connected=True,
+            login=1,
+        )
+        assert closed.outcome != "disabled"
+        partial = g_manage.partial_close(
+            user_id=uuid4(),
+            request_id="7",
+            symbol="XAUUSD",
+            side="sell",
+            position=1,
+            volume=Decimal("0.01"),
+            comment="x",
+            connected=True,
+            login=1,
+        )
+        assert partial.outcome != "disabled"
 
 
 @pytest.mark.unit

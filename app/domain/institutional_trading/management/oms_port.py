@@ -25,6 +25,8 @@ class OmsManagePort(Protocol):
         comment: str,
         connected: bool,
         login: int | None,
+        current_stop_loss: Decimal | None = None,
+        take_profit_changed: bool = False,
     ) -> OmsManageResult: ...
 
     def partial_close(

@@ -929,7 +929,8 @@ def evaluate_auto_trade_safety(
 # A. GLOBAL SYSTEM SAFETY — abort the entire multi-symbol cycle.
 #    Kill switch, operator auto-trade off, EXECUTION_ENABLED, gateway/broker
 #    down, account trading disabled, MT5 AutoTrading (terminal-wide — never
-#    convert false→true), broker restrictions, unverified daily P/L, ops mode.
+#    convert false→true), broker restrictions, unverified daily P/L, ops mode,
+#    daily-loss stop and Live Trading Control state (owner decision 2026-10-20).
 #
 # B. SYMBOL-SPECIFIC SAFETY — skip this desk, continue the universe.
 #    Instrument-native spread, allowlist, tradable flag, broker session for
@@ -937,7 +938,7 @@ def evaluate_auto_trade_safety(
 #    symbol's context (stale tick / missing book for one desk).
 #
 # C. SCAN-CONTINUE — Decision may still record TAKE; OMS stays blocked.
-#    Daily loss, max open, risk engine, margin, live_trading_state overlay.
+#    Max open, risk engine, margin.
 # ---------------------------------------------------------------------------
 GLOBAL_SAFETY_CONDITION_KEYS = frozenset(
     {
@@ -952,6 +953,8 @@ GLOBAL_SAFETY_CONDITION_KEYS = frozenset(
         "mt5_autotrading",
         "broker_restrictions",
         "daily_pnl_verified",
+        "daily_loss",
+        "live_trading_state",
     }
 )
 SYMBOL_SPECIFIC_SAFETY_CONDITION_KEYS = frozenset(
@@ -966,11 +969,9 @@ SYMBOL_SPECIFIC_SAFETY_CONDITION_KEYS = frozenset(
 )
 _SCAN_CONTINUE_CONDITION_KEYS = frozenset(
     {
-        "daily_loss",
         "max_open_positions",
         "risk_engine",
         "margin_available",
-        "live_trading_state",
     }
 )
 
@@ -979,7 +980,7 @@ def safety_failure_scope(result: AutoTradeSafetyResult) -> str:
     """Classify a Safety miss as allowed / global / symbol / scan_continue."""
     if result.allowed:
         return "allowed"
-    failed = [c for c in result.conditions if not c.passed]
+    failed = [c for c in (getattr(result, "conditions", None) or ()) if not c.passed]
     if not failed:
         return "global"
     keys = {c.key for c in failed}

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from app.domain.institutional_trading.release_candidate.config import (
     DEFAULT_RC1_CONFIG,
 )
+from core.production_docs import production_docs_dir
 
-DOCS_DIR = Path(__file__).resolve().parents[4] / "docs" / "production" / "rc1_guides"
+DOCS_DIR = production_docs_dir() / "rc1_guides"
 
 
 OPERATOR_MANUAL = f"""# QuantForg RC1 - Operator Manual

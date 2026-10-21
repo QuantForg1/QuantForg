@@ -1,3 +1,4 @@
+
 """Institutional Production Readiness Review (PRR) — STRICTLY READ ONLY.
 
 Audits architecture, security, reliability, trading pipeline presence,
@@ -14,6 +15,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+
+from core.production_docs import production_docs_dir
 
 CheckStatus = Literal["PASS", "WARNING", "FAIL"]
 Recommendation = Literal[
@@ -527,7 +530,7 @@ def audit_data_integrity() -> dict[str, Any]:
         )
     )
 
-    witness = ROOT / "docs/production/reports/live_execution_witness_latest.json"
+    witness = production_docs_dir() / "reports" / "live_execution_witness_latest.json"
     checks.append(
         _check(
             "live_snapshots",
@@ -947,7 +950,7 @@ def build_institutional_production_readiness_review(
 
 
 def _write_report_files(payload: dict[str, Any]) -> None:
-    out_dir = ROOT / "docs" / "production" / "reports"
+    out_dir = production_docs_dir() / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     latest_json = out_dir / "institutional_prr_latest.json"
