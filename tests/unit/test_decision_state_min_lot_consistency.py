@@ -281,18 +281,15 @@ def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
     assert out["next_action"] != CandidateAction.NO_EXECUTABLE_FOCUS.value
 
 
-def test_live_min_lot_risk_math_steps_up_above_six() -> None:
+def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> None:
+    """Live 9.05 stop at 0.01 lot = $9.05 > $2 owner cap: reject, never upsize."""
     min_loss = (VOLUME_MIN * CONTRACT_SIZE * _LIVE_STOP).quantize(Decimal("0.0001"))
-    needed = (min_loss / _LIVE_EQUITY * Decimal("100")).quantize(Decimal("0.01"))
-    profile = MicroAccountProfile()
     assert Decimal("0.01") == VOLUME_MIN
-    assert profile.hard_max_risk_pct == Decimal("80.0")
-    assert needed == Decimal("5.64")
-    assert needed < profile.hard_max_risk_pct
-    assert min_loss > Decimal("6.00")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("4.0")
+    assert min_loss > Decimal("2.00")
 
     engine = RiskEngine()
-    size = engine.size_position(
+    wide = engine.size_position(
         equity=_LIVE_EQUITY,
         method=PositionSizingMethod.PERCENTAGE_RISK,
         requested_lots=None,
@@ -302,9 +299,22 @@ def test_live_min_lot_risk_math_steps_up_above_six() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == VOLUME_MIN
-    assert size.dollar_risk >= min_loss.quantize(Decimal("0.01"))
-    assert size.block_reason is None
+    assert wide.approved_lots == Decimal("0")
+    assert wide.block_reason is not None
+
+    tight = engine.size_position(
+        equity=_LIVE_EQUITY,
+        method=PositionSizingMethod.PERCENTAGE_RISK,
+        requested_lots=None,
+        stop_distance=Decimal("1.80"),
+        atr=_LIVE_ATR,
+        entry_price=Decimal("2400"),
+        contract_size=CONTRACT_SIZE,
+        risk_per_trade_pct=Decimal("1.0"),
+    )
+    assert tight.approved_lots == VOLUME_MIN
+    assert tight.dollar_risk == Decimal("1.80")
+    assert tight.block_reason is None
 
     result = engine.evaluate(
         RiskCheckInput(
@@ -330,31 +340,34 @@ def test_live_min_lot_risk_math_steps_up_above_six() -> None:
         ),
         positions=[],
     )
-    assert result.decision is not RiskDecision.REJECT
-    assert result.approved_lots == VOLUME_MIN
+    assert result.decision is RiskDecision.REJECT
+    assert result.approved_lots == Decimal("0")
 
 
-def test_hard_max_and_min_lot_unchanged() -> None:
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("80.0")
+def test_hard_max_and_min_lot_owner_values() -> None:
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("4.0")
     assert Decimal("0.01") == VOLUME_MIN
     assert RiskEngine().config.min_lot == Decimal("0.01")
+    assert RiskEngine().config.max_lot == Decimal("0.01")
     assert RiskEngine().config.max_risk_per_trade_pct == Decimal("1")
 
 
 def test_invalid_upward_normalization_uses_min_lot_when_remaining_allows() -> None:
+    # 0.007 requested -> broker min 0.01 is fine because $1.80 is inside the band.
     raw = Decimal("0.007")
     engine = RiskEngine()
     size = engine.size_position(
         equity=_LIVE_EQUITY,
         method=PositionSizingMethod.PERCENTAGE_RISK,
         requested_lots=raw,
-        stop_distance=_LIVE_STOP,
+        stop_distance=Decimal("1.80"),
         atr=_LIVE_ATR,
         entry_price=Decimal("2400"),
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
     assert size.approved_lots == VOLUME_MIN
+    assert size.dollar_risk == Decimal("1.80")
     assert size.block_reason is None
 
 
@@ -369,65 +382,37 @@ def test_scalp_atr_stop_provenance_unchanged() -> None:
     assert ITEConfig(trading_mode="scalping").is_scalping() is True
 
 
-def test_multiposition_caps_and_min_stack_unchanged() -> None:
+def test_owner_cap_overrides_strategy_targets_and_min_stack() -> None:
+    """Strategy targets still rank multiple legs; owner capacity allows one."""
     assert 2 <= strategy_target_count(
         trade_class=TradeClass.SCALP, opportunity_score=82
     ) <= SCALP_MAX_OPEN_TRADES
     assert 1 <= strategy_target_count(
         trade_class=TradeClass.HOLD, opportunity_score=86
     ) <= HOLD_MAX_OPEN_TRADES
-    scalp = build_position_plan(
-        cycle_id="c1",
-        snapshot_id="s1",
-        symbol="XAUUSD_i",
-        direction="BUY",
-        trade_class=TradeClass.SCALP,
-        opportunity_score=99,
-        confidence=99,
-        aggregate_lots=Decimal("1.00"),
-        current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
-        risk_allowed_count=10,
-        portfolio_allowed_count=10,
-        broker_allowed_count=10,
-        min_lot=Decimal("0.01"),
-    )
-    hold = build_position_plan(
-        cycle_id="c1",
-        snapshot_id="s1",
-        symbol="XAUUSD_i",
-        direction="BUY",
-        trade_class=TradeClass.HOLD,
-        opportunity_score=99,
-        confidence=99,
-        aggregate_lots=Decimal("1.00"),
-        current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=5, trading_mode="swing"),
-        risk_allowed_count=5,
-        portfolio_allowed_count=5,
-        broker_allowed_count=5,
-        min_lot=Decimal("0.01"),
-    )
-    constrained = build_position_plan(
-        cycle_id="c1",
-        snapshot_id="s1",
-        symbol="XAUUSD_i",
-        direction="BUY",
-        trade_class=TradeClass.SCALP,
-        opportunity_score=99,
-        confidence=99,
-        aggregate_lots=Decimal("1.00"),
-        current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
-        risk_allowed_count=2,
-        portfolio_allowed_count=8,
-        broker_allowed_count=7,
-        min_lot=Decimal("0.01"),
-    )
-    assert scalp.effective_count == SCALP_MAX_OPEN_TRADES
-    assert hold.effective_count == HOLD_MAX_OPEN_TRADES
-    assert constrained.effective_count == 2
-    assert constrained.aggregate_lots == Decimal("0.02") or constrained.per_position_lots > 0
+    for trade_class, mode, allowed in (
+        (TradeClass.SCALP, "scalping", 10),
+        (TradeClass.HOLD, "swing", 5),
+        (TradeClass.SCALP, "scalping", 2),
+    ):
+        plan = build_position_plan(
+            cycle_id="c1",
+            snapshot_id="s1",
+            symbol="XAUUSD_i",
+            direction="BUY",
+            trade_class=trade_class,
+            opportunity_score=99,
+            confidence=99,
+            aggregate_lots=Decimal("1.00"),
+            current_quantforg_count=0,
+            ite_config=ITEConfig(trading_mode=mode),
+            risk_allowed_count=allowed,
+            portfolio_allowed_count=allowed,
+            broker_allowed_count=allowed,
+            min_lot=Decimal("0.01"),
+        )
+        assert plan.effective_count == 1
+        assert plan.per_position_lots == Decimal("0.01")
 
 
 def test_gold_manual_and_session_regressions() -> None:

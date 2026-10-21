@@ -178,6 +178,16 @@ def evaluate_min_lot_feasibility(
     cs = _dec(contract_size) or CONTRACT_SIZE
     stop = _dec(stop_distance)
     eq = _dec(equity)
+    if eq is not None and eq > 0:
+        # Owner USD cap ($2 per trade) as a percent of equity binds when smaller.
+        from app.domain.institutional_trading.owner_live_limits import (
+            max_sl_risk_usd,
+        )
+
+        owner_pct = (max_sl_risk_usd(eq) / eq * _PCT).quantize(
+            Decimal("0.00000001"), rounding=ROUND_DOWN
+        )
+        hard = min(hard, owner_pct)
     ts = _dec(tick_size)
     tv = _dec(tick_value)
     if ts is not None and ts <= 0:

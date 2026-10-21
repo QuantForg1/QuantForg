@@ -80,7 +80,7 @@ def _plan(
         confidence=score,
         aggregate_lots=Decimal(lots),
         current_quantforg_count=current,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         risk_allowed_count=risk_n,
         portfolio_allowed_count=portfolio_n,
         broker_allowed_count=broker_n,
@@ -192,8 +192,8 @@ def test_approved_lots_exactly_min_lot_allows_one_position() -> None:
     assert plan.state == "POSITION_PLAN_READY"
 
 
-def test_aggregate_lots_reduce_count_instead_of_rejecting() -> None:
-    """0.03 approved / requested 6 → 3 x 0.01, still executable."""
+def test_aggregate_lots_reduce_to_one_owner_position_instead_of_rejecting() -> None:
+    """Split helper still divides lots; the owner cap leaves exactly one 0.01 leg."""
     n, per = split_aggregate_lots(
         aggregate_lots=Decimal("0.03"),
         count=6,
@@ -203,17 +203,18 @@ def test_aggregate_lots_reduce_count_instead_of_rejecting() -> None:
     assert n == 3
     assert per == MIN
     plan = _plan(lots="0.03", score=92)
-    assert plan.requested_count > 3
-    assert plan.effective_count == 3
+    assert plan.requested_count > 1
+    assert plan.effective_count == 1
     assert plan.per_position_lots == MIN
     assert plan.min_lot_constraint_reason is None
+    assert any("quantforg_capacity 1" in r for r in plan.reductions)
 
 
-def test_five_cents_lots_permit_five_min_lot_positions() -> None:
+def test_five_cents_lots_still_open_only_one_min_lot_position() -> None:
     plan = _plan(lots="0.05", score=92)
-    assert plan.effective_count == 5
+    assert plan.effective_count == 1
     assert plan.per_position_lots == MIN
-    assert plan.per_position_lots * plan.effective_count == Decimal("0.05")
+    assert plan.per_position_lots * plan.effective_count == Decimal("0.01")
 
 
 def test_lot_step_normalization_rounds_down() -> None:
@@ -235,11 +236,11 @@ def test_max_lot_caps_per_position_without_upsizing() -> None:
     assert plan.per_position_lots * plan.effective_count <= Decimal("1.00")
 
 
-def test_risk_reduction_happens_before_min_lot_failure() -> None:
+def test_owner_capacity_binds_before_risk_reduction() -> None:
     plan = _plan(lots="0.10", score=92, risk_n=2)
-    assert plan.effective_count == 2
+    assert plan.effective_count == 1
+    assert plan.per_position_lots == MIN
     assert plan.min_lot_constraint_reason is None
-    assert any("risk_allowed" in r for r in plan.reductions)
 
 
 def test_portfolio_reduction_keeps_candidate() -> None:
@@ -255,17 +256,17 @@ def test_margin_reduction_keeps_candidate_when_one_leg_fits() -> None:
         free_margin=Decimal("5"),
         margin_per_lot=Decimal("400"),
     )
-    assert plan.effective_count >= 1
-    assert plan.per_position_lots >= MIN
+    assert plan.effective_count == 1
+    assert plan.per_position_lots == MIN
     assert plan.min_lot_constraint_reason is None
     assert plan.margin_available == "5"
     assert plan.margin_required is not None
 
 
-def test_existing_quantforg_positions_reduce_count() -> None:
-    plan = _plan(lots="0.10", score=90, current=7)
-    assert plan.effective_count <= 3
-    assert plan.remaining_capacity == 3
+def test_one_existing_quantforg_position_leaves_no_capacity() -> None:
+    plan = _plan(lots="0.10", score=90, current=1)
+    assert plan.effective_count == 0
+    assert plan.remaining_capacity == 0
 
 
 def test_manual_positions_do_not_reduce_count() -> None:
@@ -372,39 +373,41 @@ def test_no_live_order_in_min_lot_suite() -> None:
     assert (n, per) == (1, MIN)
 
 
-def test_burst_does_not_emit_sub_six_dollar_legs() -> None:
-    """EURCAD production reject: 4 x 0.03 = $1.97 each; aggregate $7.87 > $6."""
-    from app.domain.institutional_trading.config import MIN_PLANNED_RISK_USD
+def test_burst_emits_one_gold_leg_inside_owner_band() -> None:
+    """A large aggregate (0.12) still yields one 0.01 XAUUSD_i leg of $1.80."""
+    from app.domain.institutional_trading.config import (
+        MAX_PLANNED_SL_RISK_USD,
+        MIN_PLANNED_RISK_USD,
+    )
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
         lot_dollar_risk,
     )
 
-    stop = Decimal("0.000655429")
-    cs = Decimal("100000")
+    stop = Decimal("1.80")
+    cs = Decimal("100")
     plan = build_position_plan(
-        cycle_id="cycle-eurcad-floor",
-        snapshot_id="snap-eurcad-floor",
-        symbol="EURCAD",
+        cycle_id="cycle-gold-band",
+        snapshot_id="snap-gold-band",
+        symbol="XAUUSD_i",
         direction="SELL",
         trade_class=TradeClass.SCALP,
         opportunity_score=92,
         confidence=92,
         aggregate_lots=Decimal("0.12"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         min_lot=MIN,
         lot_step=STEP,
         max_lot=MAX,
         stop_distance=stop,
         contract_size=cs,
-        base_input_hash="eurcad-floor",
+        base_input_hash="gold-band",
     )
-    assert plan.effective_count >= 1
-    assert plan.per_position_lots * plan.effective_count <= Decimal("0.12")
+    assert plan.effective_count == 1
+    assert plan.per_position_lots == MIN
     per_risk = lot_dollar_risk(
         plan.per_position_lots,
         stop_distance=stop,
         contract_size=cs,
     )
-    assert per_risk > MIN_PLANNED_RISK_USD
-    assert Decimal("6.00") == MIN_PLANNED_RISK_USD
+    assert MIN_PLANNED_RISK_USD < per_risk <= MAX_PLANNED_SL_RISK_USD

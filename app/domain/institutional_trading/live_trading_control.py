@@ -634,6 +634,10 @@ def size_from_broker_specs(
         min_planned_risk if min_planned_risk is not None else MIN_PLANNED_RISK_USD
     )
     vol_max = spec.volume_max if spec.volume_max is not None else Decimal("100")
+    # Owner limit: never size an entry above 0.01 lot.
+    from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
+
+    vol_max = min(vol_max, OWNER_MAX_LOT)
 
     raw = Decimal("0")
     loss_per_lot = stop_distance * spec.contract_size

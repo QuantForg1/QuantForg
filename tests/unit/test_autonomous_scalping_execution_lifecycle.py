@@ -263,36 +263,19 @@ def test_min_lot_infeasible_remains_blocked() -> None:
 
 
 @pytest.mark.unit
-def test_daily_loss_at_or_below_80_is_not_the_old_3_percent_cap() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
-    under = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-79.99"),
-        equity=Decimal("100"),
-        balance=Decimal("100"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
-    )
-    at_cap = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-80.00"),
-        equity=Decimal("100"),
-        balance=Decimal("100"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
-    )
-    over = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-80.01"),
-        equity=Decimal("100"),
-        balance=Decimal("100"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
-    )
-    assert under is False
-    assert at_cap is False
-    assert over is True
-    old_3pct = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-15.21"),
-        equity=Decimal("100"),
-        balance=Decimal("100"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
-    )
-    assert old_3pct is False
+def test_daily_loss_uses_owner_stop_not_a_flat_percent() -> None:
+    """$5 floor on a $100 day: 4.99/5.00 clear, 5.01 blocks; 3% alone would be $3."""
+    assert MAX_DAILY_LOSS_PCT == Decimal("3.0")
+    results = [
+        utc_daily_loss_exceeded(
+            daily_pnl=-Decimal(loss),
+            equity=Decimal("100"),
+            balance=Decimal("100"),
+            max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        )
+        for loss in ("3.01", "4.99", "5.00", "5.01")
+    ]
+    assert results == [False, False, False, True]
 
 
 @pytest.mark.unit

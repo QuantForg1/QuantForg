@@ -1,6 +1,6 @@
 """UTC daily-loss latch — accurate session, auto re-arm under cap.
 
-Does not bypass Risk or send orders. Cap is ITE MAX_DAILY_LOSS_PCT (80.0).
+Does not bypass Risk or send orders. Stop is max($5, 3%) of start-of-day, max 10%.
 """
 
 from __future__ import annotations
@@ -61,8 +61,8 @@ def test_utc_loss_pct_matches_risk_engine_balance_base() -> None:
     )
     assert pct == Decimal("15.21")
     cap = DEFAULT_ITE_CONFIG.max_daily_loss_pct
-    assert cap == MAX_DAILY_LOSS_PCT == Decimal("80.0")
-    assert not utc_daily_loss_exceeded(
+    assert cap == MAX_DAILY_LOSS_PCT == Decimal("3.0")
+    assert utc_daily_loss_exceeded(
         daily_pnl=Decimal("-25.11"),
         equity=Decimal("165.13"),
         balance=Decimal("165.13"),
@@ -76,35 +76,31 @@ def test_utc_loss_pct_matches_risk_engine_balance_base() -> None:
     )
 
 
-def test_daily_loss_boundary_7999_8000_8001() -> None:
-    """Existing convention: block only when pct > cap (80.00% is still under)."""
+def test_daily_loss_boundary_owner_stop_499_500_501() -> None:
+    """Block only when loss > owner stop ($5 floor on a $100 start of day)."""
     cap = MAX_DAILY_LOSS_PCT
-    base = Decimal("100")
-    assert not utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-79.99"),
-        equity=base,
-        balance=base,
-        max_daily_loss_pct=cap,
-    )
-    assert not utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-80.00"),
-        equity=base,
-        balance=base,
-        max_daily_loss_pct=cap,
-    )
-    assert utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-80.01"),
-        equity=base,
-        balance=base,
-        max_daily_loss_pct=cap,
-    )
+    for loss, blocked in (("4.99", False), ("5.00", False), ("5.01", True)):
+        balance = Decimal("100") - Decimal(loss)
+        assert (
+            utc_daily_loss_exceeded(
+                daily_pnl=-Decimal(loss),
+                equity=balance,
+                balance=balance,
+                max_daily_loss_pct=cap,
+            )
+            is blocked
+        ), loss
 
 
-def test_authoritative_cap_rejects_above_80() -> None:
-    assert coerce_max_daily_loss_pct(Decimal("80.0")) == Decimal("80.0")
-    with pytest.raises(ValueError, match=r"\(0, 80.0\]"):
-        coerce_max_daily_loss_pct(Decimal("80.01"))
-    with pytest.raises(ValueError, match=r"\(0, 80.0\]"):
+def test_authoritative_cap_rejects_above_owner_ceiling() -> None:
+    """Owner limits: daily-loss pct is configurable only within (0, 10]."""
+    assert coerce_max_daily_loss_pct(Decimal("3.0")) == Decimal("3.0")
+    assert coerce_max_daily_loss_pct(Decimal("10.0")) == Decimal("10.0")
+    with pytest.raises(ValueError, match=r"\(0, 10.0\]"):
+        coerce_max_daily_loss_pct(Decimal("10.01"))
+    with pytest.raises(ValueError, match=r"\(0, 10.0\]"):
+        coerce_max_daily_loss_pct(Decimal("80.0"))
+    with pytest.raises(ValueError, match=r"\(0, 10.0\]"):
         coerce_max_daily_loss_pct(Decimal("0"))
 
 
@@ -118,20 +114,21 @@ def test_lock_arms_when_utc_day_exceeds_and_clears_when_under() -> None:
     )
     armed = sync_utc_daily_loss_lock(
         plane,
-        daily_pnl=Decimal("-80.01"),
-        equity=Decimal("100"),
-        balance=Decimal("100"),
+        daily_pnl=Decimal("-5.01"),
+        equity=Decimal("94.99"),
+        balance=Decimal("94.99"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
         trusted=True,
     )
     assert plane.daily_loss_exceeded is True
     assert armed["daily_loss_exceeded"] is True
-    assert armed["daily_loss_limit_pct"] == "80.0"
+    assert armed["daily_loss_limit_pct"] == "3.0"
+    assert armed["daily_loss_limit_usd"] == "5.00"
     cleared = sync_utc_daily_loss_lock(
         plane,
         daily_pnl=Decimal("0"),
-        equity=Decimal("100"),
-        balance=Decimal("100"),
+        equity=Decimal("94.99"),
+        balance=Decimal("94.99"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
         trusted=True,
         now=datetime(2026, 8, 28, 0, 1, tzinfo=UTC),
@@ -233,16 +230,15 @@ def test_restart_untrusted_zero_does_not_fabricate_daily_loss() -> None:
     assert out["daily_loss_lock"] == "UNKNOWN"
     assert out["daily_loss_exceeded"] is False
     assert plane.daily_loss_exceeded is False
-    payload = str(out)
-    assert "-40" not in payload
-    assert "80.0" in payload
+    assert out["daily_loss_limit_pct"] == "3.0"
+    assert out["daily_loss_limit_usd"] == "5.00"
 
 
 def test_cap_unchanged() -> None:
     assert AiScalpingConfig().allow_martingale is False
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 
-    assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("80.0")
+    assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("3.0")
     resets = utc_daily_loss_resets_at(datetime(2026, 8, 27, 14, 0, tzinfo=UTC))
     assert resets.startswith("2026-08-28T00:00:00")
 
@@ -847,10 +843,11 @@ def test_take_under_cap_may_reach_oms_without_ticket() -> None:
     assert handoff["mt5_ticket"] is None
 
 
-def test_live_15_21_percent_clears_under_80_cap() -> None:
+def test_live_15_21_percent_now_locks_under_owner_stop() -> None:
+    """-25.11 on 165.13 (15.21%) is far above max($5, 3% of SOD 190.24 = $5.71)."""
     plane = SimpleNamespace(
-        daily_loss_exceeded=True,
-        flag_daily_loss=lambda now=None: None,
+        daily_loss_exceeded=False,
+        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
         clear_daily_loss=lambda now=None, reason="": (
             setattr(plane, "daily_loss_exceeded", False) or True
         ),
@@ -864,11 +861,11 @@ def test_live_15_21_percent_clears_under_80_cap() -> None:
         trusted=True,
     )
     assert out["daily_loss_pct"] == "15.21"
-    assert out["daily_loss_limit_pct"] == "80.0"
-    assert out["daily_loss_exceeded"] is False
-    assert out["daily_loss_lock"] == "CLEAR"
-    assert out["rearm_state"] == "REARMED"
-    assert plane.daily_loss_exceeded is False
+    assert out["daily_loss_limit_pct"] == "3.0"
+    assert out["daily_loss_limit_usd"] == "5.70"
+    assert out["daily_loss_exceeded"] is True
+    assert out["daily_loss_lock"] == "EXCEEDED"
+    assert plane.daily_loss_exceeded is True
 
 
 def test_operator_cannot_set_daily_loss_above_hard_cap() -> None:
@@ -885,15 +882,15 @@ def test_operator_cannot_set_daily_loss_above_hard_cap() -> None:
         role="owner",
         display_name="Daily Loss Cap Tester",
     )
-    with pytest.raises(ValueError, match=r"\(0, 80.0\]"):
+    with pytest.raises(ValueError, match=r"\(0, 10.0\]"):
         plane.update_auto_trade_controls(
             op,
-            max_daily_loss_pct=Decimal("80.01"),
-            reason="reject above hard cap",
+            max_daily_loss_pct=Decimal("10.01"),
+            reason="reject above hard ceiling",
         )
     policy = plane.update_auto_trade_controls(
         op,
-        max_daily_loss_pct=Decimal("80.0"),
-        reason="set hard cap",
+        max_daily_loss_pct=Decimal("3.0"),
+        reason="set owner daily pct",
     )
-    assert policy.max_daily_loss_pct == Decimal("80.0")
+    assert policy.max_daily_loss_pct == Decimal("3.0")

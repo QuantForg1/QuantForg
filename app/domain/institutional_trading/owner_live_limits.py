@@ -14,6 +14,8 @@ from decimal import ROUND_DOWN, Decimal
 from app.domain.trading.gold_only import is_gold_symbol
 
 OWNER_MAX_LOT = Decimal("0.01")
+# Planned SL loss band at 0.01 lot: above $1.50 (spread ~$0.44), at most $2.00.
+OWNER_MIN_SL_RISK_USD = Decimal("1.50")
 OWNER_MAX_SL_RISK_USD = Decimal("2.00")
 # Percent per-trade cap only applies once equity is above this threshold.
 OWNER_SL_RISK_PCT = Decimal("2.0")
@@ -109,11 +111,14 @@ def evaluate_owner_entry(
     spread: Decimal | None,
     contract_size: Decimal,
     equity: Decimal,
+    min_stop_distance: Decimal = Decimal("0"),
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
     Reward:risk is measured after spread on both legs:
     ``(|tp - entry| - spread) / (|entry - sl| + spread)``.
+    ``min_stop_distance`` is the broker stops_level in price units
+    (``point * stops_level``); SL and TP must both be at least that far away.
     """
     reasons: list[str] = []
     vol = Decimal(str(volume or 0))
@@ -164,6 +169,17 @@ def evaluate_owner_entry(
     cap = max_sl_risk_usd(equity)
     if risk_usd > cap:
         violations.append(f"OWNER_SL_RISK: planned SL loss ${risk_usd} > ${cap}")
+    if risk_usd <= OWNER_MIN_SL_RISK_USD:
+        violations.append(
+            f"OWNER_SL_RISK_BELOW_MIN: planned SL loss ${risk_usd} "
+            f"must be above ${OWNER_MIN_SL_RISK_USD}"
+        )
+    min_dist = Decimal(str(min_stop_distance or 0))
+    if min_dist > 0 and (sl_dist < min_dist or tp_dist < min_dist):
+        violations.append(
+            f"OWNER_STOPS_LEVEL: SL {sl_dist} / TP {tp_dist} closer than broker "
+            f"stops_level distance {min_dist}"
+        )
     rr = (tp_dist - spr) / (sl_dist + spr)
     if rr < OWNER_MIN_REWARD_RISK:
         violations.append(

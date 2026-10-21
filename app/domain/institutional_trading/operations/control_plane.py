@@ -1316,7 +1316,9 @@ def get_control_plane() -> OperationsControlPlane:
                     mop_raw: Any = state.get("max_open_positions")
                     mop = int(mop_raw)
                     if mop >= 1:
-                        plane.max_open_trades = mop
+                        # Persisted values above the owner limit are clamped, never
+                        # raised — a stale ops_state must not crash boot.
+                        plane.max_open_trades = min(mop, OWNER_MAX_OPEN_POSITIONS)
                 except (TypeError, ValueError):
                     pass
             if str(plane.trading_mode or "").strip().lower() == "scalping":

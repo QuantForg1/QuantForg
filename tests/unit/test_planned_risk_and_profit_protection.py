@@ -137,56 +137,45 @@ def _pos_mt5(
 
 
 class TestPositionSizingUsdTarget:
-    def test_target_is_strictly_above_six(self) -> None:
+    def test_target_is_owner_band(self) -> None:
         assert TARGET_PLANNED_RISK_USD == TARGET_RISK_PER_TRADE_USD
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
-        assert Decimal("6.00") == MIN_PLANNED_RISK_USD
-        assert Decimal("20.00") == MAX_PLANNED_SL_RISK_USD
+        assert Decimal("1.50") == MIN_PLANNED_RISK_USD
+        assert Decimal("2.00") == MAX_PLANNED_SL_RISK_USD
         assert Decimal("1.50") == PREFERRED_REWARD_RISK
 
-    def test_eurusd_sizes_above_six_not_universal_min_lot(self) -> None:
-        stop = Decimal("0.00200")  # 20 pips
+    def test_tight_gold_stop_is_not_upsized_past_owner_max_lot(self) -> None:
+        # $0.50 at 0.01 is below the $1.50 floor; 0.04 would be $2 but > 0.01 lot.
         sized = size_from_broker_specs(
             equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=stop,
-            spec=_fx_spec(),
+            risk_pct=Decimal("1.0"),
+            stop_distance=Decimal("0.50"),
+            spec=_gold_spec(),
             max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
-        assert sized.accepted is True
-        assert sized.volume > Decimal("0.01")
-        assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
-        # 0.03 = $6.00 (not > $6) → step to 0.04 = $8.00
-        assert sized.volume == Decimal("0.04")
-        assert sized.monetary_loss_at_sl == Decimal("8.00")
-        assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
+        assert sized.accepted is False
+        assert sized.volume == Decimal("0")
 
-    def test_usdjpy_uses_tick_value(self) -> None:
-        spec = _fx_spec(
-            symbol="USDJPY",
-            tick_size=Decimal("0.001"),
-            tick_value=Decimal("0.67"),
-        )
+    def test_gold_uses_tick_value(self) -> None:
+        spec = _gold_spec()
         sized = size_from_broker_specs(
             equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=Decimal("0.200"),
+            risk_pct=Decimal("1.0"),
+            stop_distance=Decimal("1.80"),
             spec=spec,
             max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         per_lot = lot_dollar_risk(
             Decimal("1"),
-            stop_distance=Decimal("0.200"),
-            contract_size=Decimal("100000"),
+            stop_distance=Decimal("1.80"),
+            contract_size=Decimal("100"),
             tick_size=Decimal("0.001"),
-            tick_value=Decimal("0.67"),
+            tick_value=Decimal("0.1"),
         )
         assert sized.accepted is True
-        actual = sized.volume * per_lot
-        assert actual > MIN_PLANNED_RISK_USD
-        assert sized.volume != Decimal("0.01")
+        assert sized.volume * per_lot == Decimal("1.80")
 
-    def test_xauusd_allows_min_lot_when_it_fits_remaining_portfolio(self) -> None:
+    def test_xauusd_min_lot_above_owner_cap_is_rejected(self) -> None:
         sized = size_from_broker_specs(
             equity=Decimal("500"),
             risk_pct=Decimal("1.0"),
@@ -195,12 +184,9 @@ class TestPositionSizingUsdTarget:
             max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
         min_loss = Decimal("0.01") * Decimal("100") * Decimal("10.00")
-        assert min_loss > TARGET_PLANNED_RISK_USD
-        assert min_loss <= MAX_TOTAL_PLANNED_RISK_USD
-        assert sized.accepted is True
-        assert sized.volume == Decimal("0.01")
-        assert sized.monetary_loss_at_sl == min_loss
-        assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
+        assert min_loss > MAX_PLANNED_SL_RISK_USD
+        assert sized.accepted is False
+        assert sized.volume == Decimal("0")
 
     def test_xauusd_rejects_when_min_lot_exceeds_per_trade_cap(self) -> None:
         sized = size_from_broker_specs(
@@ -228,19 +214,17 @@ class TestPositionSizingUsdTarget:
         assert sized.volume == Decimal("0")
         assert sized.monetary_loss_at_sl >= Decimal("10.00")
 
-    def test_volume_step_and_max_are_respected(self) -> None:
-        spec = _fx_spec(volume_step=Decimal("0.05"), volume_max=Decimal("0.10"))
+    def test_broker_min_lot_above_owner_max_lot_is_rejected(self) -> None:
+        spec = _gold_spec(volume_min=Decimal("0.05"), volume_step=Decimal("0.05"))
         sized = size_from_broker_specs(
             equity=Decimal("5000"),
             risk_pct=Decimal("1.0"),
-            stop_distance=Decimal("0.00100"),
+            stop_distance=Decimal("0.20"),
             spec=spec,
             max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
-        assert sized.accepted is True
-        assert sized.volume % Decimal("0.05") == Decimal("0")
-        assert sized.volume <= Decimal("0.10")
-        assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
+        assert sized.accepted is False
+        assert sized.volume == Decimal("0")
 
     def test_invalid_stop_rejects(self) -> None:
         sized = size_from_broker_specs(
@@ -252,55 +236,19 @@ class TestPositionSizingUsdTarget:
         )
         assert sized.accepted is False
 
-    def test_different_fx_symbols_produce_different_volumes(self) -> None:
-        stop_fx = Decimal("0.00200")
-        eurusd = size_from_broker_specs(
-            equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=stop_fx,
-            spec=_fx_spec(symbol="EURUSD"),
-            max_risk_amount=TARGET_PLANNED_RISK_USD,
-        )
-        gbpusd = size_from_broker_specs(
-            equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=stop_fx,
-            spec=_fx_spec(symbol="GBPUSD", tick_value=Decimal("1.25")),
-            max_risk_amount=TARGET_PLANNED_RISK_USD,
-        )
-        usdjpy = size_from_broker_specs(
-            equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=Decimal("0.200"),
-            spec=_fx_spec(
-                symbol="USDJPY",
-                tick_size=Decimal("0.001"),
-                tick_value=Decimal("0.67"),
-            ),
-            max_risk_amount=TARGET_PLANNED_RISK_USD,
-        )
-        gbpjpy = size_from_broker_specs(
-            equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=Decimal("0.250"),
-            spec=_fx_spec(
-                symbol="GBPJPY",
-                tick_size=Decimal("0.001"),
-                tick_value=Decimal("0.64"),
-            ),
-            max_risk_amount=TARGET_PLANNED_RISK_USD,
-        )
-        assert eurusd.accepted and gbpusd.accepted and usdjpy.accepted
-        assert gbpjpy.accepted is True
-        assert eurusd.volume != gbpusd.volume
-        assert Decimal("0.01") not in {
-            eurusd.volume,
-            gbpusd.volume,
-            usdjpy.volume,
-            gbpjpy.volume,
-        }
-        for sized in (eurusd, gbpusd, usdjpy, gbpjpy):
-            assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
+    def test_gold_sizes_at_owner_min_lot(self) -> None:
+        for equity in (Decimal("50.84"), Decimal("2000")):
+            sized = size_from_broker_specs(
+                equity=equity,
+                risk_pct=Decimal("1.0"),
+                stop_distance=Decimal("1.80"),
+                spec=_gold_spec(),
+                max_risk_amount=TARGET_PLANNED_RISK_USD,
+            )
+            assert sized.accepted is True
+            assert sized.volume == Decimal("0.01")
+            assert sized.monetary_loss_at_sl == Decimal("1.80")
+            assert MIN_PLANNED_RISK_USD < sized.monetary_loss_at_sl
             assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
 
     def test_volume_min_rejected_when_next_step_exceeds_remaining(self) -> None:
@@ -317,106 +265,67 @@ class TestPositionSizingUsdTarget:
         assert sized.accepted is False
         assert sized.volume == Decimal("0")
 
-    def test_next_step_exceeding_remaining_does_not_force_trade(self) -> None:
+    def test_remaining_below_min_lot_risk_does_not_force_trade(self) -> None:
         sized = size_from_broker_specs(
             equity=Decimal("2000"),
-            risk_pct=Decimal("0.50"),
-            stop_distance=Decimal("0.00200"),
-            spec=_fx_spec(),
+            risk_pct=Decimal("1.0"),
+            stop_distance=Decimal("1.80"),
+            spec=_gold_spec(),
             max_risk_amount=TARGET_PLANNED_RISK_USD,
-            remaining_portfolio_risk=Decimal("7.00"),
+            remaining_portfolio_risk=Decimal("1.00"),
         )
-        # 0.03 = $6 (not > $6); 0.04 = $8 > remaining $7 → no trade
         assert sized.accepted is False
         assert sized.volume == Decimal("0")
 
-    def test_dynamic_v2_fx_not_universal_min_lot(self) -> None:
+    def test_dynamic_v2_gold_never_exceeds_owner_max_lot(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("2000"),
-            stop_distance=Decimal("0.00200"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("0.50"),
-            contract_size=Decimal("100000"),
+            contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
             lot_step=Decimal("0.01"),
             max_lot=Decimal("50"),
-            tick_size=Decimal("0.00001"),
-            tick_value=Decimal("1"),
+            tick_size=Decimal("0.001"),
+            tick_value=Decimal("0.1"),
             quality_score=90,
             confidence=88,
             quality_reject=False,
             log=False,
         )
         assert d.valid is True
-        assert d.final_lot > Decimal("0.01")
+        assert d.final_lot == Decimal("0.01")
         extra = d.extras.get("actual_estimated_risk")
         assert extra is not None
-        assert Decimal(str(extra)) > MIN_PLANNED_RISK_USD
+        assert MIN_PLANNED_RISK_USD < Decimal(str(extra)) <= MAX_PLANNED_SL_RISK_USD
 
 
 class TestAggregatePlannedRisk:
-    def test_six_plus_six_allowed_thirty_plus_blocked(self) -> None:
-        engine = RiskEngine(
-            config=RiskEngineConfig(
-                max_open_positions=10,
-                min_lot=Decimal("0.01"),
-                contract_size=Decimal("100"),
-                target_risk_per_trade_usd=TARGET_PLANNED_RISK_USD,
-                min_planned_risk_usd=MIN_PLANNED_RISK_USD,
-                max_total_planned_risk_usd=MAX_TOTAL_PLANNED_RISK_USD,
-                max_symbol_exposure_pct=Decimal("200"),
-                max_asset_class_exposure_pct=Decimal("200"),
-                max_total_exposure_pct=Decimal("500"),
-                max_correlated_exposure_pct=Decimal("200"),
-            )
-        )
-        one = _pos_mt5(
+    def test_one_open_leg_uses_whole_2_dollar_aggregate(self) -> None:
+        engine = _agg_engine()
+        open_leg = _pos_mt5(
             ticket=11,
             symbol="XAUUSD",
             volume=Decimal("0.01"),
             entry=Decimal("2300"),
-            sl=Decimal("2294"),
+            sl=Decimal("2298.20"),
         )
-        check = RiskCheckInput(
-            user_id=uuid4(),
-            request_id="agg-12",
-            symbol="XAUUSD",
-            side="buy",
-            stop_loss_distance=Decimal("6.00"),
-            sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
-            entry_price=Decimal("2300"),
-            contract_size=Decimal("100"),
-        )
-        two = engine.evaluate(check, account=_account(), positions=[one])
-        assert two.decision is not RiskDecision.REJECT
-
-        five = [
-            _pos_mt5(
-                ticket=20 + i,
-                symbol="XAUUSD",
-                volume=Decimal("0.01"),
-                entry=Decimal("2300"),
-                sl=Decimal("2294"),
-            )
-            for i in range(5)
-        ]
-        sixth = engine.evaluate(
+        second = engine.evaluate(
             RiskCheckInput(
                 user_id=uuid4(),
-                request_id="agg-30",
+                request_id="agg-2",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("6.00"),
+                stop_loss_distance=Decimal("1.80"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
             ),
             account=_account(),
-            positions=five,
+            positions=[open_leg],
         )
-        assert sixth.decision is RiskDecision.REJECT
-        joined = " ".join(sixth.reasons)
-        assert "aggregate planned SL risk" in joined
-        assert Decimal("30.00") == MAX_TOTAL_PLANNED_RISK_USD
+        assert second.decision is RiskDecision.REJECT
+        assert Decimal("2.00") == MAX_TOTAL_PLANNED_RISK_USD
 
     def test_daily_loss_protection_still_rejects(
         self, monkeypatch: pytest.MonkeyPatch
@@ -583,7 +492,7 @@ class TestInitialPlannedRiskAccounting:
         )
         assert fifth.decision is RiskDecision.REJECT
 
-    def test_twenty_one_plus_seven_allowed(
+    def test_open_initial_risk_blocks_any_additional_leg(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
@@ -593,16 +502,23 @@ class TestInitialPlannedRiskAccounting:
         )
         engine = _agg_engine()
         open_legs = [
-            _leg_initial_seven(ticket=70 + i, current_sl=Decimal("2300"))
-            for i in range(3)
+            _pos_mt5(
+                ticket=70,
+                symbol="XAUUSD",
+                volume=Decimal("0.01"),
+                entry=Decimal("2300"),
+                sl=Decimal("2300"),
+                initial_stop=Decimal("2298.20"),
+                initial_volume=Decimal("0.01"),
+            )
         ]
-        fourth = engine.evaluate(
+        nxt = engine.evaluate(
             RiskCheckInput(
                 user_id=uuid4(),
-                request_id="agg-21-plus-7",
+                request_id="agg-1-80-plus",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("7.00"),
+                stop_loss_distance=Decimal("1.80"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -610,12 +526,10 @@ class TestInitialPlannedRiskAccounting:
             account=_account(),
             positions=open_legs,
         )
-        assert fourth.decision is not RiskDecision.REJECT
-        assert fourth.approved_lots > 0
-        open_risk = engine.aggregate_planned_sl_risk(open_legs)
-        assert open_risk == Decimal("21.00")
-        proposed = (fourth.approved_lots * Decimal("700")).quantize(Decimal("0.01"))
-        assert open_risk + proposed <= MAX_TOTAL_PLANNED_RISK_USD
+        # Initial risk ($1.80) counts even after the SL moved to break-even.
+        assert engine.aggregate_planned_sl_risk(open_legs) == Decimal("1.80")
+        assert nxt.decision is RiskDecision.REJECT
+        assert nxt.approved_lots == Decimal("0")
 
 
 def _quality_req(**overrides: object) -> LiveOrderRequest:

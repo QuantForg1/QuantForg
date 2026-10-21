@@ -83,24 +83,24 @@ def _account(equity: Decimal = _EQUITY) -> AccountSnapshot:
 def test_calculated_lot_below_min_uses_min_when_budget_allows() -> None:
     out = _norm(
         calculated_lot=Decimal("0.0025"),
-        stop_distance=Decimal("4.00"),
-        risk_budget=Decimal("5.00"),
+        stop_distance=Decimal("1.80"),
+        risk_budget=Decimal("2.00"),
         min_planned_risk=Decimal("0"),
-        remaining_portfolio_risk=Decimal("5.00"),
+        remaining_portfolio_risk=Decimal("2.00"),
     )
     assert out.calculated_lot == Decimal("0.0025")
     assert out.broker_min_lot == _MIN
     assert out.normalized_lot == _MIN
     assert out.sizing_status == STATUS_NORMALIZED_TO_MIN
     assert out.block_reason is None
-    assert out.estimated_risk_amount == Decimal("4.00")
+    assert out.estimated_risk_amount == Decimal("1.80")
     assert out.approved is True
 
 
 def test_minimum_lot_exceeding_remaining_portfolio_is_blocked() -> None:
     out = _norm(
         calculated_lot=Decimal("0.0025"),
-        stop_distance=Decimal("4.00"),
+        stop_distance=Decimal("1.80"),
         remaining_portfolio_risk=Decimal("1.62"),
     )
     assert out.normalized_lot == Decimal("0")
@@ -112,9 +112,9 @@ def test_minimum_lot_exceeding_remaining_portfolio_is_blocked() -> None:
 def test_calculated_lot_exactly_at_broker_minimum() -> None:
     out = _norm(
         calculated_lot=_MIN,
-        stop_distance=Decimal("4.00"),
+        stop_distance=Decimal("1.80"),
         min_planned_risk=Decimal("0"),
-        remaining_portfolio_risk=Decimal("5.00"),
+        remaining_portfolio_risk=Decimal("2.00"),
     )
     assert out.normalized_lot == _MIN
     assert out.sizing_status == STATUS_OK
@@ -124,9 +124,9 @@ def test_calculated_lot_exactly_at_broker_minimum() -> None:
 def test_normalization_to_broker_lot_step() -> None:
     out = _norm(
         calculated_lot=Decimal("0.037"),
-        stop_distance=Decimal("2.00"),
+        stop_distance=Decimal("0.05"),
         min_planned_risk=Decimal("0"),
-        remaining_portfolio_risk=Decimal("30.00"),
+        remaining_portfolio_risk=Decimal("2.00"),
     )
     assert out.normalized_lot == Decimal("0.03")
     assert out.broker_lot_step == _STEP
@@ -135,11 +135,12 @@ def test_normalization_to_broker_lot_step() -> None:
 
 
 def test_calculated_lot_above_minimum() -> None:
+    # Mechanics only: 0.05 at a 0.20 stop = $1.00, inside the $2 cap.
     out = _norm(
         calculated_lot=Decimal("0.05"),
-        stop_distance=Decimal("2.00"),
+        stop_distance=Decimal("0.20"),
         min_planned_risk=Decimal("0"),
-        remaining_portfolio_risk=Decimal("30.00"),
+        remaining_portfolio_risk=Decimal("2.00"),
     )
     assert out.normalized_lot == Decimal("0.05")
     assert out.sizing_status == STATUS_OK
@@ -195,15 +196,15 @@ def test_zero_invalid_broker_specification_fail_closed() -> None:
 def test_xauusd_i_sizing_helper_and_scalping() -> None:
     sized = calculate_scalping_lots(
         equity=_EQUITY,
-        stop_distance=Decimal("4.00"),
+        stop_distance=Decimal("1.80"),
         risk_pct=Decimal("1.0"),
         contract_size=_CS,
         min_lot=_MIN,
         lot_step=_STEP,
     )
     assert sized.valid is True
-    assert sized.lots > _MIN
-    assert sized.estimated_risk_amount > Decimal("6.00")
+    assert sized.lots == _MIN
+    assert sized.estimated_risk_amount == Decimal("1.80")
     assert sized.broker_min_lot == _MIN
     assert sized.block_reason is None
     wide = calculate_scalping_lots(
@@ -282,20 +283,20 @@ def test_restart_recovery_does_not_treat_in_flight_cycle_as_stalled() -> None:
     )
 
 
-def test_risk_engine_xauusd_i_min_lot_within_budget() -> None:
+def test_risk_engine_xauusd_i_min_lot_within_owner_budget() -> None:
     engine = RiskEngine()
     size = engine.size_position(
         equity=_EQUITY,
         method=PositionSizingMethod.PERCENTAGE_RISK,
         requested_lots=None,
-        stop_distance=Decimal("4.00"),
+        stop_distance=Decimal("1.80"),
         atr=None,
         entry_price=Decimal("4380"),
         contract_size=_CS,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == Decimal("0.02")
-    assert size.dollar_risk == Decimal("8.00")
+    assert size.approved_lots == Decimal("0.01")
+    assert size.dollar_risk == Decimal("1.80")
     assert size.capped is False
     assert size.block_reason is None
 
@@ -343,26 +344,26 @@ def test_gold_contract_min_lot_exceeds_budget_does_not_submit() -> None:
     assert out.next_action == CandidateAction.WAIT_SAME_FOCUS.value
 
 
-def test_institutional_equity_upsizes_to_meet_min_planned_risk() -> None:
+def test_institutional_equity_never_upsizes_past_owner_cap() -> None:
+    # $4.00 at min lot exceeds the $2 owner cap even on a $501 account.
     out = _norm(
         equity=Decimal("501.00"),
         calculated_lot=Decimal("0.002"),
         stop_distance=Decimal("4.00"),
-        risk_budget=Decimal("7.00"),
-        remaining_portfolio_risk=Decimal("30.00"),
+        risk_budget=Decimal("2.00"),
+        max_lot=Decimal("0.01"),
     )
-    assert out.normalized_lot > Decimal("0.01")
-    assert out.estimated_risk_amount > Decimal("6.00")
-    assert out.approved is True
+    assert out.normalized_lot == Decimal("0")
+    assert out.approved is False
 
 
 def test_calculated_lot_0_001_normalizes_to_broker_min_when_budget_allows() -> None:
     out = _norm(
         calculated_lot=Decimal("0.001"),
-        stop_distance=Decimal("4.00"),
-        risk_budget=Decimal("5.00"),
+        stop_distance=Decimal("1.80"),
+        risk_budget=Decimal("2.00"),
         min_planned_risk=Decimal("0"),
-        remaining_portfolio_risk=Decimal("5.00"),
+        remaining_portfolio_risk=Decimal("2.00"),
     )
     assert out.normalized_lot == _MIN
     assert out.broker_min_lot == Decimal("0.01")
@@ -377,7 +378,7 @@ def test_setup_tradeability_tight_stop_is_tradeable() -> None:
     )
 
     out = evaluate_setup_tradeability(
-        stop_distance=Decimal("4.00"),
+        stop_distance=Decimal("1.80"),
         equity=_EQUITY,
         min_lot=_MIN,
         lot_step=_STEP,
@@ -386,8 +387,8 @@ def test_setup_tradeability_tight_stop_is_tradeable() -> None:
     )
     assert out.tradeability == TRADEABLE
     assert out.feasibility.infeasible is False
-    assert out.estimated_risk_at_min_lot == Decimal("4.00")
-    assert out.maximum_tradeable_stop_distance == Decimal("129.6")
+    assert out.estimated_risk_at_min_lot == Decimal("1.80")
+    assert Decimal("1.999") <= out.maximum_tradeable_stop_distance <= Decimal("2.00")
     assert out.feasibility.stop_changed is False
 
 
@@ -399,7 +400,7 @@ def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
     )
 
     out = evaluate_setup_tradeability(
-        stop_distance=Decimal("150.00"),
+        stop_distance=Decimal("4.00"),
         equity=_EQUITY,
         min_lot=_MIN,
         lot_step=_STEP,
@@ -408,41 +409,41 @@ def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
     )
     assert out.tradeability == NOT_TRADEABLE
     assert out.tradeability_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
-    assert out.estimated_risk_at_min_lot == Decimal("150.00")
-    assert out.maximum_tradeable_stop_distance == Decimal("129.6")
+    assert out.estimated_risk_at_min_lot == Decimal("4.00")
+    assert out.maximum_tradeable_stop_distance <= Decimal("2.00")
     assert out.feasibility.stop_changed is False
-    assert out.stop_distance == Decimal("150.00")
+    assert out.stop_distance == Decimal("4.00")
 
 
-def test_small_account_vs_larger_account_tradeability() -> None:
+def test_owner_cap_binds_on_small_and_large_accounts() -> None:
+    """The $2 owner cap applies regardless of equity: a $4 stop never trades."""
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
         NOT_TRADEABLE,
         TRADEABLE,
         evaluate_setup_tradeability,
     )
 
-    stop = Decimal("150.00")
-    small = evaluate_setup_tradeability(
-        stop_distance=stop,
-        equity=Decimal("162.00"),
-        min_lot=_MIN,
-        contract_size=_CS,
-    )
-    large = evaluate_setup_tradeability(
-        stop_distance=stop,
-        equity=Decimal("2000.00"),
-        min_lot=_MIN,
-        contract_size=_CS,
-    )
-    assert small.tradeability == NOT_TRADEABLE
-    assert large.tradeability == TRADEABLE
-    assert large.estimated_risk_at_min_lot == Decimal("150.00")
+    for equity in (Decimal("162.00"), Decimal("2000.00")):
+        wide = evaluate_setup_tradeability(
+            stop_distance=Decimal("4.00"),
+            equity=equity,
+            min_lot=_MIN,
+            contract_size=_CS,
+        )
+        tight = evaluate_setup_tradeability(
+            stop_distance=Decimal("1.80"),
+            equity=equity,
+            min_lot=_MIN,
+            contract_size=_CS,
+        )
+        assert wide.tradeability == NOT_TRADEABLE
+        assert tight.tradeability == TRADEABLE
 
 
-def test_hard_max_risk_pct_stays_eighty() -> None:
+def test_hard_max_risk_pct_is_owner_four() -> None:
     from app.domain.institutional_trading.micro_account_mode import MicroAccountProfile
 
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("80.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("4.0")
 
 
 def test_kill_switch_blocks_before_oms() -> None:
@@ -644,7 +645,7 @@ def test_strategy_stop_never_clamped_to_min_lot_max() -> None:
     assert trade.feasibility.stop_changed is False
 
 
-def test_tight_structure_stop_is_tradeable_without_moving_sl() -> None:
+def test_structure_stop_above_owner_cap_is_not_tradeable_and_sl_unmoved() -> None:
     from types import SimpleNamespace
 
     from app.domain.institutional_trading.ai_scalping.structure_targets import (
@@ -652,7 +653,7 @@ def test_tight_structure_stop_is_tradeable_without_moving_sl() -> None:
     )
     from app.domain.institutional_trading.decision_models import TradeDirection
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
-        TRADEABLE,
+        NOT_TRADEABLE,
         evaluate_setup_tradeability,
     )
 
@@ -684,5 +685,8 @@ def test_tight_structure_stop_is_tradeable_without_moving_sl() -> None:
         min_lot=_MIN,
         contract_size=_CS,
     )
-    assert trade.tradeability == TRADEABLE
+    # Structure stop (> $2 at 0.01 lot) is outside the owner cap: not tradeable,
+    # and the stop is never moved to make it fit.
+    assert chosen * _MIN * _CS > Decimal("2.00")
+    assert trade.tradeability == NOT_TRADEABLE
     assert trade.feasibility.stop_changed is False

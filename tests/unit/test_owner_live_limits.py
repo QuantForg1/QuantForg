@@ -85,7 +85,7 @@ def test_owner_constants_replace_80_percent_caps() -> None:
     assert MAX_DAILY_LOSS_CEILING_PCT == D("10.0")
     assert MAX_PLANNED_SL_RISK_USD == D("2.00")
     assert TARGET_PLANNED_RISK_USD == D("2.00")
-    assert MIN_PLANNED_RISK_USD < TARGET_PLANNED_RISK_USD
+    assert MIN_PLANNED_RISK_USD == D("1.50") < TARGET_PLANNED_RISK_USD
     assert MIN_REWARD_RISK == D("1.50")
     assert MicroAccountProfile().hard_max_risk_pct == D("4.0")
 
@@ -246,3 +246,18 @@ def test_unknown_spread_fails_closed() -> None:
 
 def test_non_gold_symbol_rejected() -> None:
     assert any(r.startswith("OWNER_GOLD_ONLY") for r in _entry(symbol="EURUSD"))
+
+
+def test_sl_risk_band_is_above_150_and_at_most_200() -> None:
+    # SL 1.50 away at 0.01 lot = $1.50 -> rejected; $1.51 -> accepted.
+    at_floor = _entry(stop_loss=D("4117.93"), take_profit=D("4108.00"))
+    assert any(r.startswith("OWNER_SL_RISK_BELOW_MIN") for r in at_floor)
+    assert _entry(stop_loss=D("4117.94"), take_profit=D("4108.00")) == []
+    assert MIN_PLANNED_RISK_USD == D("1.50")
+
+
+def test_stops_level_distance_enforced() -> None:
+    # Broker stops_level 200 points at point 0.01 -> 2.00 minimum distance.
+    reasons = _entry(min_stop_distance=D("2.00"))
+    assert any(r.startswith("OWNER_STOPS_LEVEL") for r in reasons)
+    assert _entry(min_stop_distance=D("1.00")) == []

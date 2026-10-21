@@ -572,11 +572,11 @@ def test_v_losing_position_cannot_scale_in() -> None:
     assert loser.allow is False
 
 
-def test_w_daily_loss_at_or_below_40_is_clear() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
+def test_w_daily_loss_at_or_below_owner_stop_is_clear() -> None:
+    assert MAX_DAILY_LOSS_PCT == Decimal("3.0")
     assert (
         utc_daily_loss_exceeded(
-            daily_pnl=Decimal("-40.00"),
+            daily_pnl=Decimal("-5.00"),
             equity=Decimal("100"),
             balance=Decimal("100"),
             max_daily_loss_pct=MAX_DAILY_LOSS_PCT,

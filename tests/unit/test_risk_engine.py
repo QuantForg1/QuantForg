@@ -41,55 +41,43 @@ def _account(equity: str = "10000") -> AccountSnapshot:
 
 
 @pytest.mark.unit
-def test_percentage_risk_uses_operator_risk_pct() -> None:
+def test_percentage_risk_stays_inside_owner_band() -> None:
     engine = RiskEngine()
-    size_1 = engine.size_position(
-        equity=Decimal("10000"),
-        method=PositionSizingMethod.PERCENTAGE_RISK,
-        requested_lots=None,
-        stop_distance=Decimal("10"),
-        atr=None,
-        entry_price=Decimal("2300"),
-        contract_size=Decimal("100"),
-        risk_per_trade_pct=Decimal("1"),
-    )
-    size_half = engine.size_position(
-        equity=Decimal("10000"),
-        method=PositionSizingMethod.PERCENTAGE_RISK,
-        requested_lots=None,
-        stop_distance=Decimal("10"),
-        atr=None,
-        entry_price=Decimal("2300"),
-        contract_size=Decimal("100"),
-        risk_per_trade_pct=Decimal("0.5"),
-    )
-    assert size_1.approved_lots > 0
-    assert size_half.approved_lots > 0
-    assert size_1.dollar_risk > Decimal("6.00")
-    assert size_1.dollar_risk <= Decimal("20.00")
-    assert size_half.dollar_risk > Decimal("6.00")
-    assert size_half.dollar_risk <= Decimal("20.00")
+    sizes = [
+        engine.size_position(
+            equity=Decimal("10000"),
+            method=PositionSizingMethod.PERCENTAGE_RISK,
+            requested_lots=None,
+            stop_distance=Decimal("1.80"),
+            atr=None,
+            entry_price=Decimal("2300"),
+            contract_size=Decimal("100"),
+            risk_per_trade_pct=pct,
+        )
+        for pct in (Decimal("1"), Decimal("0.5"))
+    ]
+    for size in sizes:
+        assert size.approved_lots == Decimal("0.01")
+        assert Decimal("1.50") < size.dollar_risk <= Decimal("2.00")
 
 
 @pytest.mark.unit
 class TestPositionSizing:
     def test_fixed_lot_and_cap(self) -> None:
-        engine = RiskEngine(
-            config=RiskEngineConfig(max_lot=Decimal("1"), fixed_lot=Decimal("2"))
-        )
+        # A configured fixed lot above the owner max is capped to 0.01.
+        engine = RiskEngine(config=RiskEngineConfig(fixed_lot=Decimal("2")))
         size = engine.size_position(
             equity=Decimal("10000"),
             method=PositionSizingMethod.FIXED_LOT,
             requested_lots=None,
-            stop_distance=Decimal("0.07"),
+            stop_distance=Decimal("1.80"),
             atr=None,
-            entry_price=Decimal("1.08"),
+            entry_price=Decimal("2300"),
             contract_size=Decimal("100"),
         )
-        assert size.approved_lots == Decimal("1")
+        assert size.approved_lots == Decimal("0.01")
         assert size.capped is True
-        assert size.dollar_risk > Decimal("6.00")
-        assert size.dollar_risk <= Decimal("20.00")
+        assert Decimal("1.50") < size.dollar_risk <= Decimal("2.00")
 
     def test_percentage_and_atr(self) -> None:
         engine = RiskEngine()
@@ -97,29 +85,25 @@ class TestPositionSizing:
             equity=Decimal("10000"),
             method=PositionSizingMethod.PERCENTAGE_RISK,
             requested_lots=Decimal("5"),
-            stop_distance=Decimal("0.00070"),
+            stop_distance=Decimal("1.80"),
             atr=None,
-            entry_price=Decimal("1.08"),
-            contract_size=Decimal("100000"),
+            entry_price=Decimal("2300"),
+            contract_size=Decimal("100"),
         )
-        assert pct.approved_lots > 0
-        assert pct.approved_lots <= Decimal("5")
-        assert pct.dollar_risk > Decimal("6.00")
-        assert pct.dollar_risk <= Decimal("20.00")
+        assert pct.approved_lots == Decimal("0.01")
+        assert Decimal("1.50") < pct.dollar_risk <= Decimal("2.00")
         atr = engine.size_position(
             equity=Decimal("10000"),
             method=PositionSizingMethod.ATR_BASED,
             requested_lots=None,
             stop_distance=None,
-            atr=Decimal("0.00080"),
-            entry_price=Decimal("1.08"),
-            contract_size=Decimal("100000"),
+            atr=Decimal("1.20"),
+            entry_price=Decimal("2300"),
+            contract_size=Decimal("100"),
         )
         assert atr.method is PositionSizingMethod.ATR_BASED
-        # ATR % budget may exceed the $20 cap — then reject rather than round up.
-        if atr.approved_lots > 0:
-            assert atr.dollar_risk > Decimal("6.00")
-            assert atr.dollar_risk <= Decimal("20.00")
+        assert atr.approved_lots == Decimal("0.01")
+        assert Decimal("1.50") < atr.dollar_risk <= Decimal("2.00")
 
 
 @pytest.mark.unit
@@ -131,13 +115,13 @@ class TestRiskEngineEvaluate:
             RiskCheckInput(
                 user_id=user_id,
                 request_id="risk-ok-1",
-                symbol="EURUSD",
+                symbol="XAUUSD",
                 side="buy",
-                requested_lots=Decimal("0.10"),
-                stop_loss_distance=Decimal("0.00070"),
+                requested_lots=Decimal("0.01"),
+                stop_loss_distance=Decimal("1.80"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
-                entry_price=Decimal("1.08500"),
-                contract_size=Decimal("100000"),
+                entry_price=Decimal("4014.137"),
+                contract_size=Decimal("100"),
             ),
             account=_account(),
             positions=[],
@@ -147,7 +131,7 @@ class TestRiskEngineEvaluate:
             RiskScoreBand.LOW,
             RiskScoreBand.MEDIUM,
         }
-        assert result.approved_lots > 0
+        assert result.approved_lots == Decimal("0.01")
         events = engine.drain_events()
         assert any(e.event_type == "risk.approved" for e in events)
 
@@ -174,18 +158,18 @@ class TestRiskEngineEvaluate:
         assert any(e.event_type == "risk.rejected" for e in events)
 
     def test_reduce_size_on_cap(self) -> None:
-        engine = RiskEngine(config=RiskEngineConfig(max_lot=Decimal("0.05")))
+        engine = RiskEngine()
         result = engine.evaluate(
             RiskCheckInput(
                 user_id=uuid4(),
                 request_id="risk-cap-1",
-                symbol="EURUSD",
+                symbol="XAUUSD",
                 side="buy",
-                requested_lots=Decimal("1.00"),
-                stop_loss_distance=Decimal("0.00350"),
+                requested_lots=Decimal("0.05"),
+                stop_loss_distance=Decimal("1.80"),
                 sizing_method=PositionSizingMethod.FIXED_LOT,
-                entry_price=Decimal("1.08500"),
-                contract_size=Decimal("100000"),
+                entry_price=Decimal("4014.137"),
+                contract_size=Decimal("100"),
             ),
             account=_account(),
             positions=[],
@@ -194,8 +178,7 @@ class TestRiskEngineEvaluate:
             RiskDecision.REDUCE_SIZE,
             RiskDecision.ALLOW,
         }
-        assert result.approved_lots <= Decimal("0.05")
-        assert result.approved_lots > 0
+        assert result.approved_lots == Decimal("0.01")
 
     def test_correlation_and_exposure(self) -> None:
         engine = RiskEngine(
@@ -238,7 +221,7 @@ class TestRiskEngineEvaluate:
         )
 
     def test_xauusd_min_lot_uses_metal_contract_size(self) -> None:
-        """Gold 0.01 must remain allowable on a live micro account (no FX 100k)."""
+        """Gold 0.01 at a $1.80 stop is allowable on a micro account (no FX 100k)."""
         engine = RiskEngine()
         result = engine.evaluate(
             RiskCheckInput(
@@ -247,7 +230,7 @@ class TestRiskEngineEvaluate:
                 symbol="XAUUSD",
                 side="buy",
                 requested_lots=Decimal("0.01"),
-                stop_loss_distance=Decimal("7.00"),
+                stop_loss_distance=Decimal("1.80"),
                 sizing_method=PositionSizingMethod.FIXED_LOT,
                 entry_price=Decimal("4014.137"),
                 contract_size=Decimal("100"),

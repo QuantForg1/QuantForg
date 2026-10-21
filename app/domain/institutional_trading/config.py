@@ -13,6 +13,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_SL_RISK_USD,
     OWNER_MIN_REWARD_RISK,
+    OWNER_MIN_SL_RISK_USD,
     OWNER_SL_RISK_PCT,
 )
 from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
@@ -30,7 +31,7 @@ MAX_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_CEILING_PCT
 # Planned SL-loss (not margin). Accepted normal trades must be STRICTLY above
 # MIN and at most MAX per trade. TARGET is the single sizing budget. Aggregate
 # is a hard ceiling, not a fill quota. Owner cap: $2.00 per trade, one position.
-MIN_PLANNED_RISK_USD = Decimal("1.00")
+MIN_PLANNED_RISK_USD = OWNER_MIN_SL_RISK_USD
 TARGET_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD
 TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
 MAX_PLANNED_SL_RISK_USD = OWNER_MAX_SL_RISK_USD

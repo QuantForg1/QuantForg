@@ -986,6 +986,10 @@ class InstitutionalExecutionEngine:
                         spread=spread_val,
                         contract_size=live_cs,
                         equity=account.equity,
+                        min_stop_distance=(
+                            live_constraints.point
+                            * Decimal(live_constraints.stops_level)
+                        ),
                     )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
