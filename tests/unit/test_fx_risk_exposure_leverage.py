@@ -79,10 +79,10 @@ def _acct(*, leverage: int) -> AccountSnapshot:
     )
 
 
-def test_floors_unchanged() -> None:
-    assert MIN_PLANNED_RISK_USD == Decimal("6.00")
-    assert MAX_PLANNED_SL_RISK_USD == Decimal("20.00")
-    assert MAX_TOTAL_PLANNED_RISK_USD == Decimal("30.00")
+def test_floors_are_owner_band() -> None:
+    assert MIN_PLANNED_RISK_USD == Decimal("1.50")
+    assert MAX_PLANNED_SL_RISK_USD == Decimal("2.00")
+    assert MAX_TOTAL_PLANNED_RISK_USD == Decimal("2.00")
 
 
 def test_hardcoded_100_leverage_halves_then_misses_six_dollar_floor() -> None:
@@ -122,14 +122,14 @@ def test_live_fx_leverage_keeps_planned_risk_in_six_to_twenty_band() -> None:
     assert planned <= MAX_PLANNED_SL_RISK_USD
 
 
-def test_six_dollar_floor_still_rejects_halved_fx_size() -> None:
+def test_owner_floor_rejects_sub_1_50_gold_leg() -> None:
     planned = lot_dollar_risk(
-        Decimal("0.08"),
-        stop_distance=_USDCAD_SL,
-        contract_size=_USDCAD_CS,
+        Decimal("0.01"),
+        stop_distance=Decimal("1.40"),
+        contract_size=Decimal("100"),
     )
     assert planned < MIN_PLANNED_RISK_USD
-    assert planned.quantize(Decimal("0.01")) == Decimal("3.42")
+    assert planned.quantize(Decimal("0.01")) == Decimal("1.40")
 
 
 def test_ite_snapshot_uses_live_account_leverage_not_gold_100() -> None:

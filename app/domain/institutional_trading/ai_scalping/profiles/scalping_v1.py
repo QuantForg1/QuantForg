@@ -18,11 +18,17 @@ from app.domain.institutional_trading.ai_scalping.config import (
     AiScalpingConfig,
 )
 from app.domain.institutional_trading.config import PREFERRED_REWARD_RISK
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_ENTRIES_PER_CYCLE,
+    OWNER_MAX_OPEN_POSITIONS,
+)
 
 PROFILE_ID = "SCALPING_V1"
 PROFILE_VERSION = "ai-scalping-v8.2.0+SCALPING_V1+UNIVERSE_GATE_FIX"
 
 # Professional scalping RR target — min gate MUST match (never demand more).
+# The owner minimum (1.50, spread on the risk leg) is enforced at submit by
+# owner_live_limits.evaluate_owner_entry.
 _SCALP_RR = Decimal("1.20")
 
 
@@ -72,10 +78,9 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         cooldown_min_seconds=20,
         cooldown_base_seconds=45,
         cooldown_max_seconds=180,
-        # Multi independent opportunities (not one-best only).
-        # SCALP class cap 10; HOLD class cap remains 5 in the planner.
-        max_open_trades=10,
-        max_entries_per_cycle=10,
+        # Owner limits 2026-10-20: one open position, one entry per cycle.
+        max_open_trades=OWNER_MAX_OPEN_POSITIONS,
+        max_entries_per_cycle=OWNER_MAX_ENTRIES_PER_CYCLE,
         require_probability_improvement=False,
         min_confidence_delta_for_add=0,
         parallel_scan_enabled=True,
@@ -114,7 +119,7 @@ _LEGACY_SCALP_CAPS = frozenset({1, 2, 3, 5})
 
 
 def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> int:
-    """Lift stale 1/3/5 scalping caps to the live profile. Never exceed 10."""
+    """Align the plane cap to the live profile. Never exceeds the owner limit."""
     profile = int(SCALPING_V1.max_open_trades)
     try:
         n = int(current)
@@ -122,7 +127,7 @@ def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> in
         n = 1
     mode = str(trading_mode or "scalping").strip().lower()
     if mode != "scalping":
-        return max(1, n)
+        return max(1, min(n, OWNER_MAX_OPEN_POSITIONS))
     if n in _LEGACY_SCALP_CAPS:
-        return profile
-    return max(1, min(n, profile))
+        return min(profile, OWNER_MAX_OPEN_POSITIONS)
+    return max(1, min(n, profile, OWNER_MAX_OPEN_POSITIONS))

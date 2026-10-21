@@ -91,14 +91,14 @@ def build_configuration_audit() -> dict[str, Any]:
     except Exception:  # noqa: S110  # optional live constant lookup
         pass
 
-    max_open = 10
-    daily_loss = "80.0"
+    max_open = 1
+    daily_loss = "3.0"
     try:
         from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
             SCALPING_V1 as _SV1,
         )
 
-        max_open = int(getattr(_SV1, "max_open_trades", 10) or 10)
+        max_open = int(getattr(_SV1, "max_open_trades", 1) or 1)
     except Exception:  # noqa: S110  # optional live constant lookup
         pass
     try:
@@ -215,26 +215,26 @@ def build_configuration_audit() -> dict[str, Any]:
         _row(
             setting="MAX_OPEN_TRADES",
             source="SCALPING_V1.max_open_trades",
-            default=10,
+            default=1,
             effective=max_open,
             consumer="portfolio / scalp planner",
             asset_class="ALL (live gold book)",
             live_or_research="LIVE_EFFECTIVE",
             precedence="SCALPING_V1",
-            status="LIVE_EFFECTIVE" if int(max_open) == 10 else "CONFLICTING",
+            status="LIVE_EFFECTIVE" if int(max_open) == 1 else "CONFLICTING",
             note="Research must not change this.",
         ),
         _row(
             setting="MAX_DAILY_LOSS_PCT",
             source="institutional_trading.config.MAX_DAILY_LOSS_PCT",
-            default="80.0",
+            default="3.0",
             effective=daily_loss,
             consumer="Risk / daily loss lock",
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
             status="LIVE_EFFECTIVE"
-            if str(daily_loss).startswith("80")
+            if str(daily_loss).startswith("3.0")
             else "CONFLICTING",
             note="Research must not change this.",
         ),

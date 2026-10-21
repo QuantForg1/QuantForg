@@ -253,12 +253,12 @@ async def test_one_missing_snapshot_does_not_abort_other_symbols(
 
 def test_wait_and_missing_snapshot_release_entry_slot() -> None:
     rt = _runtime()
-    rt._eligible_handoff_queue = ["EURUSD_I", "AUDUSD_I", "NZDUSD_I"]
-    rt._eligible_consumed = {"EURUSD_I"}
-    rt._entries_this_scan = 3
+    rt._eligible_handoff_queue = ["XAUUSD_I", "XAUUSD"]
+    rt._eligible_consumed = {"XAUUSD_I"}
+    rt._entries_this_scan = 1
     rt._release_non_entry_slot()
-    assert rt._entries_this_scan == 2
-    assert rt._take_next_handoff_symbol() == "AUDUSD_I"
+    assert rt._entries_this_scan == 0
+    assert rt._take_next_handoff_symbol() == "XAUUSD"
 
 
 def test_pick_is_not_wrapped_in_cycle_budget() -> None:
@@ -366,9 +366,9 @@ def test_no_direct_order_send_on_runtime_or_scanner() -> None:
 
 
 def test_risk_usd_bands_immutable() -> None:
-    assert Decimal("6.00") == MIN_PLANNED_RISK_USD
-    assert Decimal("20.00") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("30.00") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("1.50") == MIN_PLANNED_RISK_USD
+    assert Decimal("2.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("2.00") == MAX_TOTAL_PLANNED_RISK_USD
 
 
 def test_invalid_broker_symbol_fails_closed() -> None:
@@ -489,13 +489,15 @@ def test_symbol_spread_skip_does_not_abort_universe() -> None:
     assert "safety_evaluation_symbol(getattr(snapshot, \"symbol\", None))" in src
 
 
-def test_data_failure_on_one_desk_still_rotates_handoff() -> None:
+def test_data_failure_releases_the_single_entry_slot() -> None:
     rt = _runtime()
-    rt._eligible_handoff_queue = ["XAUUSD_I", "EURUSD_I", "GBPUSD_I"]
+    rt._eligible_handoff_queue = ["XAUUSD_I", "XAUUSD"]
     rt._eligible_consumed = {"XAUUSD_I"}
-    rt._entries_this_scan = 3
+    rt._entries_this_scan = 1
+    assert rt._take_next_handoff_symbol() is None
     rt._release_non_entry_slot()
-    assert rt._take_next_handoff_symbol() == "EURUSD_I"
+    assert rt._entries_this_scan == 0
+    assert rt._take_next_handoff_symbol() == "XAUUSD"
 
 
 def test_safety_diagnostics_include_symbol() -> None:

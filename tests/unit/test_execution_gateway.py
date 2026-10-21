@@ -239,6 +239,7 @@ class TestSubmitExecutionUseCase:
         )
         user_id = uuid4()
         await _connect(mt5_factory, adapter, audit, user_id)
+        adapter._client._positions = []  # owner limit: one open position, start flat
         use_case = SubmitExecutionUseCase(
             mt5_uow_factory=mt5_factory,
             execution_uow_factory=exec_factory,
@@ -251,9 +252,9 @@ class TestSubmitExecutionUseCase:
             symbol="XAUUSD",
             side="buy",
             volume="0.01",
-            # Valid SL/TP required when EXECUTION_ENABLED — risk still enforced.
-            stop_loss="2301.80",
-            take_profit="2349.30",
+            # Valid SL/TP inside the owner band ($1.80 SL, RR 1.52 after spread).
+            stop_loss="2319.00",
+            take_profit="2324.00",
         )
         first = await use_case.execute(cmd)
         assert first.outcome == "success"

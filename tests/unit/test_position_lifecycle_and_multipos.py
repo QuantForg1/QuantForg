@@ -414,7 +414,7 @@ def test_auto_trading_policy_stays_running_after_flat() -> None:
     assert policy.to_dict()["may_open_new_trades"] is True
 
 
-def test_scalp_can_request_multiple_and_max_10() -> None:
+def test_scalp_can_request_multiple_but_owner_allows_one() -> None:
     plan = build_position_plan(
         cycle_id="c",
         snapshot_id="s",
@@ -425,12 +425,11 @@ def test_scalp_can_request_multiple_and_max_10() -> None:
         confidence=99,
         aggregate_lots=Decimal("0.20"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
     )
     assert 2 <= plan.target_count <= SCALP_MAX_OPEN_TRADES
-    assert plan.effective_count <= 10
-    assert plan.effective_count >= 2
-    assert plan.blocking_reason is None or "risk" not in (plan.blocking_reason or "")
+    assert plan.effective_count == 1
+    assert plan.per_position_lots == Decimal("0.01")
 
 
 def test_hold_max_5() -> None:
@@ -444,13 +443,13 @@ def test_hold_max_5() -> None:
         confidence=99,
         aggregate_lots=Decimal("0.20"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
     )
     assert plan.effective_count <= 5
     assert plan.target_count <= 5
 
 
-def test_target_reduced_by_broker_and_not_forced_to_one() -> None:
+def test_broker_allowance_never_lifts_owner_cap() -> None:
     fat = build_position_plan(
         cycle_id="c",
         snapshot_id="s",
@@ -461,12 +460,11 @@ def test_target_reduced_by_broker_and_not_forced_to_one() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
         broker_allowed_count=4,
     )
-    assert fat.effective_count == 4
-    assert fat.effective_count != 1
-    assert any("broker_allowed" in r for r in fat.reductions)
+    assert fat.effective_count == 1
+    assert any("quantforg_capacity 1" in r for r in fat.reductions)
 
 
 def test_unrelated_symbol_and_manual_do_not_consume_capacity() -> None:

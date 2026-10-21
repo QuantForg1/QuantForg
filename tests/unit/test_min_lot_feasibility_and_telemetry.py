@@ -64,9 +64,9 @@ def test_max_allowed_stop_formula_current_account() -> None:
         min_lot=_MIN_LOT,
         contract_size=_CS,
     )
-    # 201.77 * 0.80 / (0.01 * 100) = 161.416
-    assert max_stop == Decimal("161.416")
-    assert _EQUITY * Decimal("0.80") == Decimal("161.416")
+    # 201.77 * 0.04 / (0.01 * 100) = 8.0708 (micro 4%; the $2 owner cap is tighter)
+    assert max_stop == Decimal("8.0708")
+    assert _HARD == Decimal("4.0")
 
 
 def test_stop_above_threshold_is_min_lot_infeasible() -> None:
@@ -89,12 +89,13 @@ def test_observed_live_stops_are_infeasible_on_201_equity() -> None:
 
 
 def test_stop_within_threshold_continues_to_risk() -> None:
-    result = _feas(stop=Decimal("8.00"))
+    result = _feas(stop=Decimal("1.80"))
     assert result.classification == CLASS_FEASIBLE
     assert result.infeasible is False
     assert result.skip_expensive_downstream is False
     assert result.risk_engine_authoritative is True
     assert result.needed_pct is not None and result.needed_pct <= _HARD
+    assert _feas(stop=Decimal("8.00")).classification == CLASS_INFEASIBLE
 
 
 def test_boundary_needed_pct_equals_hard_max_is_not_false_reject() -> None:
@@ -144,21 +145,21 @@ def test_filter_agrees_with_risk_engine_min_lot_math() -> None:
 
 
 def test_risk_engine_remains_authoritative_on_feasible_stop() -> None:
-    feas = _feas(stop=Decimal("5.00"))
+    feas = _feas(stop=Decimal("1.80"))
     assert feas.classification == CLASS_FEASIBLE
     engine = RiskEngine()
     sized = engine.size_position(
         equity=_EQUITY,
         method=PositionSizingMethod.PERCENTAGE_RISK,
         requested_lots=None,
-        stop_distance=Decimal("5.00"),
+        stop_distance=Decimal("1.80"),
         atr=None,
         entry_price=Decimal("4600"),
         contract_size=_CS,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert sized.approved_lots >= _MIN_LOT
-    assert sized.dollar_risk > Decimal("6.00")
+    assert sized.approved_lots == _MIN_LOT
+    assert Decimal("1.50") < sized.dollar_risk <= Decimal("2.00")
     # Filter does not invent lots or a tighter stop.
     assert feas.lot_changed is False
     assert feas.stop_changed is False
@@ -178,7 +179,7 @@ def test_pipeline_gate_records_skip_vs_continue() -> None:
     assert pipe.last_min_lot_feasibility()["classification"] == CLASS_INFEASIBLE
 
     ok = pipe.evaluate_min_lot_feasibility_gate(
-        stop_distance=Decimal("8.00"),
+        stop_distance=Decimal("1.80"),
         equity=_EQUITY,
         min_lot=_MIN_LOT,
         contract_size=_CS,

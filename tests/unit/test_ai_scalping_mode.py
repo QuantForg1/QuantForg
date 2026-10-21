@@ -38,7 +38,7 @@ def test_scalping_ite_config_drops_h4_requirement() -> None:
     assert cfg.entry_confirmation_tf is Timeframe.M5
     assert cfg.execution_management_tf is Timeframe.M1
     assert Timeframe.H4 not in cfg.analysis_timeframes()
-    assert cfg.max_open_trades == 10
+    assert cfg.max_open_trades == 1
     assert cfg.risk_per_trade_pct == DEFAULT_AI_SCALPING_CONFIG.risk_per_trade_pct
 
 
@@ -68,12 +68,11 @@ def test_adaptive_thresholds_by_volatility() -> None:
 def test_dynamic_lot_sizing_respects_broker_step() -> None:
     sized = calculate_scalping_lots(
         equity=Decimal("1000"),
-        stop_distance=Decimal("5"),
+        stop_distance=Decimal("1.80"),
         risk_pct=Decimal("1.0"),
     )
     assert sized.valid
-    assert sized.lots >= Decimal("0.01")
-    # Must be multiple of 0.01
+    assert sized.lots == Decimal("0.01")
     assert (sized.lots * 100) % 1 == 0
 
     blocked = calculate_scalping_lots(

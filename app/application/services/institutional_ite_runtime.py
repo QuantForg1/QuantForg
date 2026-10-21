@@ -48,6 +48,10 @@ from app.domain.institutional_trading.operations.control_plane import (
     get_control_plane,
 )
 from app.domain.institutional_trading.operations.models import OpsExecutionMode
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_ENTRIES_PER_CYCLE,
+    OWNER_MAX_OPEN_POSITIONS,
+)
 from app.domain.institutional_trading.reliability.models import (
     ComponentName,
     TimelineEvent,
@@ -534,7 +538,6 @@ class InstitutionalIteRuntime:
                     from app.domain.institutional_trading.ai_scalping.config import (
                         DEFAULT_SCALPING_UNIVERSE,
                     )
-
                     from app.domain.trading.gold_only import (
                         autonomous_execution_symbols,
                         gold_only_enabled,
@@ -3090,16 +3093,15 @@ class InstitutionalIteRuntime:
         portfolio_allow = True
         portfolio_reasons: tuple[str, ...] = ()
         try:
+            from app.domain.institutional_trading.operations.quantforg_position_cap import (
+                engine_position_rows,
+                quantforg_open_symbols,
+            )
             from app.domain.institutional_trading.portfolio_intelligence import (
                 build_portfolio_state,
                 evaluate_capital_protection,
                 get_dynamic_risk_budget,
                 get_opportunity_queue,
-            )
-
-            from app.domain.institutional_trading.operations.quantforg_position_cap import (
-                engine_position_rows,
-                quantforg_open_symbols,
             )
 
             open_syms = sorted(
@@ -3124,8 +3126,28 @@ class InstitutionalIteRuntime:
                 ),
             )
             budget = get_dynamic_risk_budget().budget_for_state(st)
+            from dataclasses import replace as _pi_replace
+
+            from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
+            from app.domain.institutional_trading.owner_live_limits import (
+                daily_loss_cap_pct,
+            )
+            from app.domain.institutional_trading.portfolio_intelligence.config import (
+                DEFAULT_PI_CONFIG,
+            )
+
+            # Owner daily stop (max $5 / 3%, 10% cap) as a percent of equity.
+            _owner_daily_pct = daily_loss_cap_pct(
+                daily_pnl=Decimal(str(account.daily_pnl or 0)),
+                base_now=Decimal(str(account.equity or 0)),
+                pct=MAX_DAILY_LOSS_PCT,
+            )
             prot = evaluate_capital_protection(
-                st, candidate_symbol=str(getattr(decision, "symbol", "") or "")
+                st,
+                candidate_symbol=str(getattr(decision, "symbol", "") or ""),
+                config=_pi_replace(
+                    DEFAULT_PI_CONFIG, max_daily_loss_pct=float(_owner_daily_pct)
+                ),
             )
             _ai_opp_q = getattr(self.decision_pipeline, "_last_ai_score", None)
             _ai_opp_q = _ai_opp_q if isinstance(_ai_opp_q, dict) else {}
@@ -5932,12 +5954,13 @@ class InstitutionalIteRuntime:
                     eligible_symbols=eligible[:8],
                     blocked_by_portfolio=scan.get("blocked_by_portfolio"),
                     handoff="multi_symbol_independent",
-                    max_entries_per_cycle=int(
-                        getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 5)
-                        or 5
+                    max_entries_per_cycle=min(
+                        OWNER_MAX_ENTRIES_PER_CYCLE,
+                        int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 1) or 1),
                     ),
-                    max_open_trades=int(
-                        getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 5) or 5
+                    max_open_trades=min(
+                        OWNER_MAX_OPEN_POSITIONS,
+                        int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 1) or 1),
                     ),
                     open_positions=open_n,
                 )
@@ -5973,8 +5996,15 @@ class InstitutionalIteRuntime:
             DEFAULT_AI_SCALPING_CONFIG,
         )
 
-        max_e = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 3) or 3))
-        max_open = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 5) or 5))
+        # Owner limits: one entry per cycle, one open position.
+        max_e = min(
+            OWNER_MAX_ENTRIES_PER_CYCLE,
+            max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 1) or 1)),
+        )
+        max_open = min(
+            OWNER_MAX_OPEN_POSITIONS,
+            max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 1) or 1)),
+        )
         from app.domain.institutional_trading.operations.quantforg_position_cap import (
             count_quantforg_positions,
             engine_position_rows,
@@ -7714,7 +7744,10 @@ class InstitutionalIteRuntime:
                             nxt = sym
                             break
                     entries = int(self._entries_this_scan)
-                max_e = max(1, int(getattr(_sc, "max_entries_per_cycle", 3) or 3))
+                max_e = min(
+                    OWNER_MAX_ENTRIES_PER_CYCLE,
+                    max(1, int(getattr(_sc, "max_entries_per_cycle", 1) or 1)),
+                )
                 if cls.get("skip_idle_sleep") and nxt:
                     sleep_s = 0.0
                     logger.warning(

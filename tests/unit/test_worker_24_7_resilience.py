@@ -117,7 +117,9 @@ def test_stale_utc_off_hours_cannot_block_broker_open() -> None:
 
 
 def test_scheduler_stalled_only_when_loop_stops_ticking() -> None:
-    now = time.monotonic()
+    # Fixed base: on a freshly booted CI runner time.monotonic() can be < 200s,
+    # which made now - 200 negative and hit the in-flight-cycle branch.
+    now = 10_000.0
     assert (
         scheduler_is_stalled(
             last_cycle_finished_mono=now,

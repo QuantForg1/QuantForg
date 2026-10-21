@@ -655,9 +655,9 @@ async def test_scanner_quantforg_same_symbol_blocks_duplicate(
         config=cfg,
         open_positions=1,
     )
+    # The open QuantForg gold position fills the single owner slot: no new entry.
     assert out.get("already_open_reason") == "QUANTFORG_SAME_SYMBOL_OPEN"
-    assert out.get("best_symbol") == "XAUUSD"
-    assert "XAUUSD" in list(out.get("eligible_symbols") or [])
+    assert out.get("best_symbol") is None
 
 
 def test_manual_does_not_reduce_effective_count() -> None:
@@ -671,14 +671,14 @@ def test_manual_does_not_reduce_effective_count() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
         risk_allowed_count=10,
         portfolio_allowed_count=10,
         broker_allowed_count=10,
         min_lot=Decimal("0.01"),
     )
-    assert plan.effective_count >= 2
-    assert plan.effective_count <= SCALP_MAX_OPEN_TRADES
+    # Manual (non-QuantForg) positions do not consume the single owner slot.
+    assert plan.effective_count == 1
 
 
 def test_quantforg_positions_reduce_remaining_capacity() -> None:
@@ -692,7 +692,7 @@ def test_quantforg_positions_reduce_remaining_capacity() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=3,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
         risk_allowed_count=10,
         portfolio_allowed_count=10,
         broker_allowed_count=10,
@@ -708,7 +708,7 @@ def test_quantforg_positions_reduce_remaining_capacity() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
         risk_allowed_count=10,
         portfolio_allowed_count=10,
         broker_allowed_count=10,
@@ -717,7 +717,7 @@ def test_quantforg_positions_reduce_remaining_capacity() -> None:
     assert plan.effective_count < empty.effective_count
 
 
-def test_effective_count_follows_min_stack() -> None:
+def test_effective_count_follows_min_stack_including_owner_cap() -> None:
     plan = build_position_plan(
         cycle_id="c1",
         snapshot_id="s1",
@@ -728,16 +728,16 @@ def test_effective_count_follows_min_stack() -> None:
         confidence=99,
         aggregate_lots=Decimal("1.00"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
         risk_allowed_count=2,
         portfolio_allowed_count=8,
         broker_allowed_count=7,
         min_lot=Decimal("0.01"),
     )
-    assert plan.effective_count == 2
+    assert plan.effective_count == 1
 
 
-def test_scalp_can_target_up_to_ten() -> None:
+def test_scalp_targets_ten_but_effective_is_owner_one() -> None:
     plan = build_position_plan(
         cycle_id="c1",
         snapshot_id="s1",
@@ -748,17 +748,17 @@ def test_scalp_can_target_up_to_ten() -> None:
         confidence=99,
         aggregate_lots=Decimal("1.00"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10, trading_mode="scalping"),
+        ite_config=ITEConfig(trading_mode="scalping"),
         risk_allowed_count=10,
         portfolio_allowed_count=10,
         broker_allowed_count=10,
         min_lot=Decimal("0.01"),
     )
-    assert plan.effective_count == SCALP_MAX_OPEN_TRADES
-    assert plan.effective_count != 1
+    assert plan.target_count == SCALP_MAX_OPEN_TRADES
+    assert plan.effective_count == 1
 
 
-def test_hold_can_target_up_to_five() -> None:
+def test_hold_targets_five_but_effective_is_owner_one() -> None:
     plan = build_position_plan(
         cycle_id="c1",
         snapshot_id="s1",
@@ -769,14 +769,14 @@ def test_hold_can_target_up_to_five() -> None:
         confidence=99,
         aggregate_lots=Decimal("1.00"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=5, trading_mode="swing"),
+        ite_config=ITEConfig(trading_mode="swing"),
         risk_allowed_count=5,
         portfolio_allowed_count=5,
         broker_allowed_count=5,
         min_lot=Decimal("0.01"),
     )
-    assert plan.effective_count == HOLD_MAX_OPEN_TRADES
-    assert plan.effective_count != 1
+    assert plan.target_count == HOLD_MAX_OPEN_TRADES
+    assert plan.effective_count == 1
 
 
 def test_account_open_still_observable_for_global_risk() -> None:

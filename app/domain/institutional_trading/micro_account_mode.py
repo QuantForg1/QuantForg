@@ -70,7 +70,9 @@ class MicroAccountProfile:
     # Recommended ceiling for "safely tradable" labelling.
     recommended_max_risk_pct: Decimal = Decimal("2.0")
     # Absolute ceiling - never exceed; never upsize past this to hit min_lot.
-    hard_max_risk_pct: Decimal = Decimal("80.0")
+    # Owner $2.00 per-trade cap at the $50 minimum supported balance (= 4%).
+    # owner_live_limits.max_sl_risk_usd is the binding per-trade limit.
+    hard_max_risk_pct: Decimal = Decimal("4.0")
     drawdown_horizon_pct: Decimal = DRAWDOWN_HORIZON_PCT
     # Broker constraints - copied from XAUUSD specs; never overridden.
     broker_min_lot: Decimal = VOLUME_MIN

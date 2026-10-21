@@ -21,6 +21,7 @@ from app.domain.institutional_trading.auto_trading import (
 from app.domain.institutional_trading.config import (
     MAX_DAILY_LOSS_PCT,
     coerce_max_daily_loss_pct,
+    coerce_risk_per_trade_pct,
 )
 from app.domain.institutional_trading.operations.alerts import AlertService
 from app.domain.institutional_trading.operations.audit import AuditLog
@@ -40,6 +41,7 @@ from app.domain.institutional_trading.operations.models import (
     OpsPermission,
 )
 from app.domain.institutional_trading.operations.runbooks import RunbookCatalog
+from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_OPEN_POSITIONS
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
 
@@ -91,6 +93,14 @@ def _default_allowed_symbols(
     return DEFAULT_SCALPING_UNIVERSE
 
 
+def _coerce_max_open_trades(value: int) -> int:
+    """Owner limit: open positions in [1, OWNER_MAX_OPEN_POSITIONS]."""
+    n = int(value)
+    if not 1 <= n <= OWNER_MAX_OPEN_POSITIONS:
+        raise ValueError(f"max_open_trades must be in [1, {OWNER_MAX_OPEN_POSITIONS}]")
+    return n
+
+
 class PermissionDenied(PermissionError):
     pass
 
@@ -113,7 +123,7 @@ class OperationsControlPlane:
     git_commit: str | None = None
     risk_per_trade_pct: Decimal = Decimal("1.0")
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
-    max_open_trades: int = 10
+    max_open_trades: int = OWNER_MAX_OPEN_POSITIONS
     daily_loss_exceeded: bool = False
     daily_loss_armed_at: datetime | None = None
     auto_trading_enabled: bool = False
@@ -184,7 +194,10 @@ class OperationsControlPlane:
             self.kill_switch_armed = True
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
-            from app.domain.institutional_trading.phase_a.kill_state import HaltKind, HaltMode
+            from app.domain.institutional_trading.phase_a.kill_state import (
+                HaltKind,
+                HaltMode,
+            )
 
             get_phase_a_plane().set_halt(
                 HaltMode.HALT_ALL_TRADING,
@@ -229,7 +242,10 @@ class OperationsControlPlane:
             self.kill_switch_armed = False
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
-            from app.domain.institutional_trading.phase_a.kill_state import HaltKind, HaltMode
+            from app.domain.institutional_trading.phase_a.kill_state import (
+                HaltKind,
+                HaltMode,
+            )
 
             get_phase_a_plane().set_halt(
                 HaltMode.ACTIVE,
@@ -260,7 +276,10 @@ class OperationsControlPlane:
     ) -> dict[str, Any]:
         """Phase A durable halt: ACTIVE | HALT_NEW_ENTRIES | HALT_ALL_TRADING."""
         from app.domain.institutional_trading.phase_a import get_phase_a_plane
-        from app.domain.institutional_trading.phase_a.kill_state import HaltKind, HaltMode
+        from app.domain.institutional_trading.phase_a.kill_state import (
+            HaltKind,
+            HaltMode,
+        )
 
         target = HaltMode(str(mode).strip().upper())
         if target is HaltMode.ACTIVE:
@@ -401,11 +420,11 @@ class OperationsControlPlane:
         self.require(operator, OpsPermission.PROMOTE_STRATEGY)
         with self._lock:
             if risk_per_trade_pct is not None:
-                self.risk_per_trade_pct = risk_per_trade_pct
+                self.risk_per_trade_pct = coerce_risk_per_trade_pct(risk_per_trade_pct)
             if max_daily_loss_pct is not None:
                 self.max_daily_loss_pct = coerce_max_daily_loss_pct(max_daily_loss_pct)
             if max_open_trades is not None:
-                self.max_open_trades = max_open_trades
+                self.max_open_trades = _coerce_max_open_trades(max_open_trades)
             self.config_version = config_version
             self.strategy_version = strategy_version
             self.promotion_status = "promoted"
@@ -449,14 +468,18 @@ class OperationsControlPlane:
         record = self.configs.rollback_to(target_config_version)
         if record is None:
             raise ValueError(f"unknown config version {target_config_version}")
+        # A rollback may never restore limits above the owner ceilings.
+        rb_risk = coerce_risk_per_trade_pct(record.risk_per_trade_pct)
+        rb_daily = coerce_max_daily_loss_pct(record.max_daily_loss_pct)
+        rb_open = _coerce_max_open_trades(record.max_open_trades)
         with self._lock:
             old_cfg = self.config_version
             old_mode = self.mode
             self.config_version = record.config_version
             self.strategy_version = record.strategy_version
-            self.risk_per_trade_pct = record.risk_per_trade_pct
-            self.max_daily_loss_pct = record.max_daily_loss_pct
-            self.max_open_trades = record.max_open_trades
+            self.risk_per_trade_pct = rb_risk
+            self.max_daily_loss_pct = rb_daily
+            self.max_open_trades = rb_open
             self.mode = record.execution_mode
             self.promotion_status = "rolled_back"
         self.audit.record(
@@ -485,9 +508,9 @@ class OperationsControlPlane:
                 f"{self.risk_per_trade_pct}|{self.max_daily_loss_pct}|"
                 f"{self.max_open_trades}"
             )
-            self.risk_per_trade_pct = risk_per_trade_pct
+            self.risk_per_trade_pct = coerce_risk_per_trade_pct(risk_per_trade_pct)
             self.max_daily_loss_pct = coerce_max_daily_loss_pct(max_daily_loss_pct)
-            self.max_open_trades = max_open_trades
+            self.max_open_trades = _coerce_max_open_trades(max_open_trades)
             new = (
                 f"{self.risk_per_trade_pct}|{self.max_daily_loss_pct}|"
                 f"{self.max_open_trades}"
@@ -553,13 +576,9 @@ class OperationsControlPlane:
                 self.auto_trading_enabled = enabled
                 self.auto_trading_run_state = "running" if enabled else "off"
             if max_open_positions is not None:
-                if max_open_positions < 1:
-                    raise ValueError("max_open_positions must be >= 1")
-                self.max_open_trades = max_open_positions
+                self.max_open_trades = _coerce_max_open_trades(max_open_positions)
             if risk_per_trade_pct is not None:
-                if risk_per_trade_pct <= 0 or risk_per_trade_pct > Decimal("5"):
-                    raise ValueError("risk_per_trade_pct must be in (0, 5]")
-                self.risk_per_trade_pct = risk_per_trade_pct
+                self.risk_per_trade_pct = coerce_risk_per_trade_pct(risk_per_trade_pct)
             if max_daily_loss_pct is not None:
                 self.max_daily_loss_pct = coerce_max_daily_loss_pct(max_daily_loss_pct)
             if allowed_sessions is not None:
@@ -638,8 +657,7 @@ class OperationsControlPlane:
                         trading_mode="alpha",
                         alpha_engine_enabled=True,
                     )
-                    if max_open_positions is None and self.max_open_trades < 3:
-                        self.max_open_trades = 3
+                    # Owner limit: alpha mode no longer lifts the open-trade cap.
             if compounding_enabled is not None:
                 self.compounding_enabled = bool(compounding_enabled)
             if alpha_engine_enabled is not None:
@@ -1307,7 +1325,9 @@ def get_control_plane() -> OperationsControlPlane:
                     mop_raw: Any = state.get("max_open_positions")
                     mop = int(mop_raw)
                     if mop >= 1:
-                        plane.max_open_trades = mop
+                        # Persisted values above the owner limit are clamped, never
+                        # raised — a stale ops_state must not crash boot.
+                        plane.max_open_trades = min(mop, OWNER_MAX_OPEN_POSITIONS)
                 except (TypeError, ValueError):
                     pass
             if str(plane.trading_mode or "").strip().lower() == "scalping":
@@ -1342,7 +1362,9 @@ def get_control_plane() -> OperationsControlPlane:
             # MULTI_SYMBOL / Alpha must not remain stuck on XAUUSD after restart.
             _ensure_multi_symbol_allowlist(plane)
             try:
-                from app.application.services.ops_state_persistence import save_ops_state
+                from app.application.services.ops_state_persistence import (
+                    save_ops_state,
+                )
 
                 save_ops_state({"allowed_symbols": list(plane.allowed_symbols)})
             except Exception:

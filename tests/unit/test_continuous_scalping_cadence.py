@@ -21,10 +21,10 @@ def test_continuous_scalp_flow_knobs_locked() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.parallel_scan_enabled is True
     assert cfg.parallel_scan_concurrency >= 2
-    assert cfg.max_entries_per_cycle >= 2
+    assert cfg.max_entries_per_cycle == 1
     assert cfg.post_close_rescan_enabled is True
     assert cfg.post_close_rescan_delay_seconds == 0.0
-    assert cfg.max_open_trades >= 2
+    assert cfg.max_open_trades == 1
     # Strategy floors = SCALPING_V1 (profile-owned)
     assert cfg.normal_vol.quality == 74
     assert cfg.min_structure_score == 60
@@ -43,7 +43,7 @@ def test_broker_dead_indexes_excluded_from_universe() -> None:
 
 
 @pytest.mark.unit
-def test_handoff_queue_drains_without_rescan() -> None:
+def test_handoff_queue_stops_after_one_entry_per_cycle() -> None:
     rt = InstitutionalIteRuntime(
         plane=MagicMock(),
         reliability=MagicMock(),
@@ -53,11 +53,11 @@ def test_handoff_queue_drains_without_rescan() -> None:
         execution=MagicMock(),
         position_management=SimpleNamespace(engine=SimpleNamespace(_positions={})),
     )
-    rt._eligible_handoff_queue = ["XAUUSD", "EURUSD", "GBPUSD"]
-    rt._eligible_consumed = {"XAUUSD"}
-    rt._entries_this_scan = 1
-    assert rt._take_next_handoff_symbol() == "EURUSD"
-    assert rt._take_next_handoff_symbol() == "GBPUSD"
+    rt._eligible_handoff_queue = ["XAUUSD_I", "XAUUSD"]
+    rt._eligible_consumed = set()
+    rt._entries_this_scan = 0
+    assert rt._take_next_handoff_symbol() == "XAUUSD_I"
+    # Owner limit: one entry per cycle — the queue does not hand off again.
     assert rt._take_next_handoff_symbol() is None
 
 
@@ -107,9 +107,9 @@ def test_handoff_does_not_skip_manual_same_symbol() -> None:
 
 
 @pytest.mark.unit
-def test_scalping_v1_multi_asset_concurrent_caps() -> None:
+def test_scalping_v1_caps_are_owner_one() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.max_open_trades >= 5
-    assert cfg.max_entries_per_cycle >= 5
+    assert cfg.max_open_trades == 1
+    assert cfg.max_entries_per_cycle == 1
     assert cfg.require_probability_improvement is False
-    assert "MULTI_ASSET_CONCURRENT" in cfg.version or "SCALPING_V1" in cfg.version
+    assert "SCALPING_V1" in cfg.version

@@ -68,7 +68,7 @@ def max_allowed_stop_at_min_lot(
     compared in account currency, not raw quote points.
 
     ``hard_max_risk_pct`` is the percent figure used by MicroAccountProfile
-    (80.0 means 80%), not a 0.80 fraction.
+    (4.0 means 4%), not a 0.04 fraction.
     """
     if equity <= 0 or min_lot <= 0 or hard_max_risk_pct <= 0:
         return Decimal("0")
@@ -178,6 +178,16 @@ def evaluate_min_lot_feasibility(
     cs = _dec(contract_size) or CONTRACT_SIZE
     stop = _dec(stop_distance)
     eq = _dec(equity)
+    if eq is not None and eq > 0:
+        # Owner USD cap ($2 per trade) as a percent of equity binds when smaller.
+        from app.domain.institutional_trading.owner_live_limits import (
+            max_sl_risk_usd,
+        )
+
+        owner_pct = (max_sl_risk_usd(eq) / eq * _PCT).quantize(
+            Decimal("0.00000001"), rounding=ROUND_DOWN
+        )
+        hard = min(hard, owner_pct)
     ts = _dec(tick_size)
     tv = _dec(tick_value)
     if ts is not None and ts <= 0:
@@ -218,7 +228,7 @@ def evaluate_min_lot_feasibility(
         tick_value=tv,
     )
     # Match RiskEngine: reject only when quantized needed_pct > hard max.
-    # A stop slightly above the raw formula can still round to <= 80.00%.
+    # A stop slightly above the raw formula can still round to <= 4.00%.
     infeasible = needed > hard
     if infeasible:
         reasons = (

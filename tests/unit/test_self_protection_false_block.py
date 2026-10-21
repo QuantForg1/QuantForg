@@ -233,17 +233,17 @@ def test_recovered_gateway_allows_without_execute_now() -> None:
     assert why == "ok"
 
 
-def test_daily_loss_40_percent_still_enforced() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
+def test_daily_loss_owner_stop_still_enforced() -> None:
+    assert MAX_DAILY_LOSS_PCT == Decimal("3.0")
     assert bridge_abort_stage("DAILY_LOSS_BLOCK") == "RISK"
 
 
-def test_max_positions_two_and_winner_only_scale_in_preserved() -> None:
+def test_max_positions_owner_one_and_winner_only_scale_in_preserved() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.max_positions_per_symbol == 2
     assert cfg.pyramid_winners_only is True
     assert cfg.allow_martingale is False
-    assert cfg.max_open_trades >= 2
+    assert cfg.max_open_trades == 1
 
 
 def test_take_without_oms_forward_is_not_executed() -> None:

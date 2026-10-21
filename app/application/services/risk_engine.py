@@ -1022,8 +1022,23 @@ class RiskEngine:
         )
         reasons: list[str] = []
         warnings: list[str] = []
-        if daily > self.config.max_daily_loss_pct:
-            msg = f"daily loss {daily}% exceeds {self.config.max_daily_loss_pct}%"
+        from app.domain.institutional_trading.owner_live_limits import (
+            daily_loss_cap_usd,
+            daily_loss_exceeded as owner_daily_loss_exceeded,
+        )
+
+        loss_base = account.balance if account.balance > 0 else equity
+        if owner_daily_loss_exceeded(
+            daily_pnl=daily_pnl,
+            base_now=loss_base,
+            pct=self.config.max_daily_loss_pct,
+        ):
+            sod = loss_base + max(-daily_pnl, Decimal("0"))
+            cap_usd = daily_loss_cap_usd(sod, self.config.max_daily_loss_pct)
+            msg = (
+                f"daily loss {daily}% (${-daily_pnl}) exceeds owner daily stop "
+                f"${cap_usd} (max $5 / {self.config.max_daily_loss_pct}%, 10% cap)"
+            )
             from app.domain.institutional_trading.risk_lock_override import (
                 risk_lock_override_enabled,
             )

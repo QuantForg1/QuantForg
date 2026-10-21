@@ -122,13 +122,13 @@ class TestDynamicSizingSafety:
         )
         assert d.calculated_lot < d.broker_min_lot
 
-    def test_micro_conditional_approves_when_min_lot_within_hard_max(self) -> None:
-        """Gold min-lot $7.26 is above $6 and fits remaining portfolio."""
+    def test_micro_approves_min_lot_inside_owner_band(self) -> None:
+        """Gold min-lot $1.80 is above the $1.50 floor and within the $2 cap."""
         d = calculate_dynamic_lots_v2(
             equity=Decimal("181.53"),
             balance=Decimal("181.53"),
             free_margin=Decimal("181.53"),
-            stop_distance=Decimal("7.26"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -139,10 +139,10 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
-        assert d.final_lot >= Decimal("0.01")
+        assert d.final_lot == Decimal("0.01")
         extra = d.extras.get("actual_estimated_risk")
         assert extra is not None
-        assert Decimal(str(extra)) > Decimal("6.00")
+        assert Decimal("1.50") < Decimal(str(extra)) <= Decimal("2.00")
 
     def test_weak_setup_rejects(self) -> None:
         d = calculate_dynamic_lots_v2(
@@ -162,7 +162,7 @@ class TestDynamicSizingSafety:
         """Live stall: quality 66 / conf 57 after Opportunity 73 + sniper TAKE."""
         d = calculate_dynamic_lots_v2(
             equity=Decimal("5000"),
-            stop_distance=Decimal("1.50"),
+            stop_distance=Decimal("1.60"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -175,14 +175,14 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
-        assert d.final_lot > 0
+        assert d.final_lot == Decimal("0.01")
         assert d.quality_band == "average"
         assert "Weak setup" not in (d.rejection_reason or "")
 
-    def test_opportunity_pass_sizes_gold_above_six_when_remaining_allows(self) -> None:
+    def test_opportunity_pass_sizes_gold_inside_owner_band(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("139.90"),
-            stop_distance=Decimal("9.1724"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("1.0"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -195,15 +195,15 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
-        assert d.final_lot >= Decimal("0.01")
+        assert d.final_lot == Decimal("0.01")
         extra = d.extras.get("actual_estimated_risk")
         assert extra is not None
-        assert Decimal(str(extra)) > Decimal("6.00")
+        assert Decimal("1.50") < Decimal(str(extra)) <= Decimal("2.00")
 
     def test_never_exceed_configured_max_risk(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("10000"),
-            stop_distance=Decimal("1.00"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -215,13 +215,14 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
+        assert d.final_lot == Decimal("0.01")
         assert d.risk_pct <= Decimal("0.50")
         assert d.configured_max_risk_pct == Decimal("0.50")
 
     def test_average_reduces_risk_vs_high(self) -> None:
         common = {
             "equity": Decimal("8000"),
-            "stop_distance": Decimal("1.20"),
+            "stop_distance": Decimal("1.80"),
             "risk_pct": Decimal("0.50"),
             "contract_size": Decimal("100"),
             "min_lot": Decimal("0.01"),
@@ -234,12 +235,13 @@ class TestDynamicSizingSafety:
         high = calculate_dynamic_lots_v2(quality_score=90, confidence=88, **common)
         assert avg.valid and high.valid
         assert avg.risk_pct < high.risk_pct
-        assert avg.final_lot <= high.final_lot
+        # Owner cap: both land on the single 0.01 lot.
+        assert avg.final_lot == high.final_lot == Decimal("0.01")
 
     def test_smooth_growth_dampens_abrupt_jump(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("10000"),
-            stop_distance=Decimal("1.00"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -252,9 +254,9 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
-        # Cap growth to 0.05 * 1.35 = 0.0675 → quantize 0.06
-        assert d.final_lot <= Decimal("0.07")
-        assert d.final_lot < d.calculated_lot or d.final_lot <= Decimal("0.07")
+        # Growth never exceeds 0.05 * 1.35, and the owner cap keeps it at 0.01.
+        assert d.final_lot <= Decimal("0.0675")
+        assert d.final_lot == Decimal("0.01")
 
     def test_audit_log_fields(self) -> None:
         d = calculate_dynamic_lots_v2(
@@ -292,7 +294,7 @@ class TestDynamicSizingSafety:
         assert payload["engine"] == "dynamic_sizing_v2"
 
     def test_preferred_hi_caps_never_forces_preferred_lo(self) -> None:
-        """Risk-based raw below preferred_lo must not be forced up."""
+        """Risk-based raw below preferred_lo must not be forced up; $5 stop rejects."""
         d = calculate_dynamic_lots_v2(
             equity=Decimal("1000"),
             stop_distance=Decimal("5.00"),
@@ -305,12 +307,9 @@ class TestDynamicSizingSafety:
             log=False,
         )
         tier = interpolate_equity_tier(Decimal("1000"))
-        # raw ≈ 0.01; preferred_lo = 0.20 — must not upsize to 0.20
-        if d.valid:
-            assert d.final_lot < tier.preferred_lot_lo
-        else:
-            assert d.method == "below_min_lot"
-            assert d.calculated_lot < tier.preferred_lot_lo
+        assert d.valid is False
+        assert d.final_lot == Decimal("0")
+        assert d.calculated_lot < tier.preferred_lot_lo
 
     def test_lot_result_compat(self) -> None:
         d = calculate_dynamic_lots_v2(

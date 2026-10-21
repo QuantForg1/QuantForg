@@ -216,7 +216,7 @@ def test_same_cycle_evaluates_signal() -> None:
         confidence=75,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash="h",
     )
     assert classified.trade_class is TradeClass.SCALP
@@ -295,7 +295,7 @@ def test_scalp_never_exceeds_cap_10() -> None:
         confidence=99,
         aggregate_lots=Decimal("1.00"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         min_lot=Decimal("0.01"),
     )
     assert plan.effective_count <= 10
@@ -314,13 +314,13 @@ def test_hold_never_exceeds_cap_5() -> None:
         confidence=99,
         aggregate_lots=Decimal("1.00"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         min_lot=Decimal("0.01"),
     )
     assert plan.effective_count <= 5
 
 
-def test_risk_can_reduce_requested_count() -> None:
+def test_owner_capacity_caps_requested_count_at_one() -> None:
     plan = build_position_plan(
         cycle_id="c",
         snapshot_id="s",
@@ -331,15 +331,16 @@ def test_risk_can_reduce_requested_count() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         risk_allowed_count=2,
     )
-    assert plan.target_count > 2
-    assert plan.effective_count == 2
-    assert any("risk_allowed" in r for r in plan.reductions)
+    assert plan.target_count > 1
+    assert plan.effective_count == 1
+    assert plan.per_position_lots == Decimal("0.01")
+    assert any("quantforg_capacity 1" in r for r in plan.reductions)
 
 
-def test_portfolio_can_reduce_requested_count() -> None:
+def test_portfolio_can_reduce_requested_count_to_zero() -> None:
     plan = build_position_plan(
         cycle_id="c",
         snapshot_id="s",
@@ -350,10 +351,10 @@ def test_portfolio_can_reduce_requested_count() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
-        portfolio_allowed_count=1,
+        ite_config=ITEConfig(),
+        portfolio_allowed_count=0,
     )
-    assert plan.effective_count == 1
+    assert plan.effective_count == 0
     assert any("portfolio_allowed" in r for r in plan.reductions)
 
 
@@ -368,7 +369,7 @@ def test_margin_can_reduce_requested_count() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         free_margin=Decimal("2"),
         margin_per_lot=Decimal("100"),
         min_lot=Decimal("0.01"),
@@ -392,7 +393,7 @@ def test_existing_quantforg_positions_reduce_capacity() -> None:
         confidence=90,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=7,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
     )
     assert plan.effective_count <= 3
 
@@ -436,7 +437,7 @@ def test_direction_none_never_trades() -> None:
         confidence=95,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
     )
     assert plan.effective_count == 0
 
@@ -482,7 +483,7 @@ def test_hard_risk_failure_blocks_entire_batch() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash=decision.input_hash,
     )
     calls: list[int] = []
@@ -494,9 +495,10 @@ def test_hard_risk_failure_blocks_entire_batch() -> None:
     _out, tally, _ = submit_position_plan_batch(
         plan=plan, decision=decision, context=ctx, submit=submit, trade_class="SCALP"
     )
+    assert plan.effective_count == 1
     assert tally.state == "HARD_BLOCK"
     assert tally.submitted_count == 1
-    assert tally.submitted_count < plan.effective_count
+    assert tally.accepted_count == 0
     assert len(calls) == 1
 
 
@@ -513,7 +515,7 @@ def test_hard_safety_failure_blocks_entire_batch() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash=decision.input_hash,
     )
 
@@ -546,13 +548,13 @@ def test_one_cycle_one_position_plan() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
     )
     assert plan.position_plan_id
     assert all(leg.idempotency_key.startswith(plan.idempotency_key) for leg in plan.legs)
 
 
-def test_batch_orders_share_cycle_snapshot_plan_ids() -> None:
+def test_single_leg_shares_cycle_snapshot_plan_ids() -> None:
     plan = build_position_plan(
         cycle_id="cyc-shared",
         snapshot_id="snap-shared",
@@ -563,19 +565,18 @@ def test_batch_orders_share_cycle_snapshot_plan_ids() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash="base",
     )
-    assert plan.effective_count >= 2
-    hashes = {leg.input_hash for leg in plan.legs}
-    assert len(hashes) == len(plan.legs)
-    for leg in plan.legs:
-        assert plan.cycle_id == "cyc-shared"
-        assert plan.snapshot_id == "snap-shared"
-        assert plan.position_plan_id in leg.idempotency_key or leg.idempotency_key
+    assert plan.effective_count == 1
+    assert len(plan.legs) == 1
+    leg = plan.legs[0]
+    assert plan.cycle_id == "cyc-shared"
+    assert plan.snapshot_id == "snap-shared"
+    assert leg.idempotency_key.startswith(plan.idempotency_key)
 
 
-def test_partial_fill_is_reconciled() -> None:
+def test_single_leg_rejection_is_recorded_not_filled() -> None:
     decision = _decision()
     ctx = _ctx(decision)
     plan = build_position_plan(
@@ -588,15 +589,11 @@ def test_partial_fill_is_reconciled() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash=decision.input_hash,
     )
-    n = {"i": 0}
 
     def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
-        n["i"] += 1
-        if n["i"] <= 2:
-            return _ok_result()
         rec = ExecutionAttemptRecord(
             decision_hash="r",
             input_hash="i",
@@ -604,7 +601,7 @@ def test_partial_fill_is_reconciled() -> None:
             decision_action=DecisionAction.BUY,
             confidence=80,
             quality=80,
-            approved_lots=Decimal("0.02"),
+            approved_lots=Decimal("0.01"),
             oms_status="rejected",
             gateway_status="rejected",
             mt5_ticket=None,
@@ -629,10 +626,10 @@ def test_partial_fill_is_reconciled() -> None:
     out, tally, _ = submit_position_plan_batch(
         plan=plan, decision=decision, context=ctx, submit=submit, trade_class="SCALP"
     )
-    assert tally.accepted_count == 2
-    assert tally.rejected_count >= 1
-    assert out.state == "PARTIAL_FILL"
-    assert tally.requested_count == plan.effective_count
+    assert tally.requested_count == plan.effective_count == 1
+    assert tally.accepted_count == 0
+    assert tally.rejected_count == 1
+    assert out.state != "FULL_FILL"
 
 
 def test_unknown_order_is_not_blindly_retried() -> None:
@@ -648,15 +645,13 @@ def test_unknown_order_is_not_blindly_retried() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash=decision.input_hash,
     )
     calls = {"n": 0}
 
     def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
         calls["n"] += 1
-        if calls["n"] == 1:
-            return _ok_result()
         return _unknown_result()
 
     out, tally, _ = submit_position_plan_batch(
@@ -665,8 +660,7 @@ def test_unknown_order_is_not_blindly_retried() -> None:
     assert tally.unknown_count == 1
     assert tally.retried_count == 0
     assert out.state == "RECONCILIATION_REQUIRED"
-    assert calls["n"] == 2
-    assert calls["n"] < plan.effective_count or plan.effective_count <= 2
+    assert calls["n"] == 1
 
 
 def test_duplicate_cycle_cannot_duplicate_execution() -> None:
@@ -682,7 +676,7 @@ def test_duplicate_cycle_cannot_duplicate_execution() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.05"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash=decision.input_hash,
     )
     calls = {"n": 0}
@@ -781,7 +775,7 @@ def test_same_snapshot_feeds_all_stages() -> None:
         confidence=75,
         aggregate_lots=Decimal("0.05"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
     )
     assert classified.cycle_id == snap.cycle_id
     assert plan.snapshot_id == snap.snapshot_id
@@ -847,13 +841,11 @@ def test_no_hidden_soft_gates_kill_probability_candidate() -> None:
     assert out.trade_class is TradeClass.SCALP
 
 
-def test_scalping_profile_cap_is_10() -> None:
-    assert SCALPING_V1.max_open_trades == 10
-    assert SCALPING_V1.max_entries_per_cycle == 10
-    assert align_live_scalp_cap(5, trading_mode="scalping") == 10
-    assert align_live_scalp_cap(2, trading_mode="scalping") == 10
-    assert align_live_scalp_cap(1, trading_mode="scalping") == 10
-    assert align_live_scalp_cap(8, trading_mode="scalping") == 8
+def test_scalping_profile_cap_is_owner_one() -> None:
+    assert SCALPING_V1.max_open_trades == 1
+    assert SCALPING_V1.max_entries_per_cycle == 1
+    for current in (1, 2, 5, 8, 10):
+        assert align_live_scalp_cap(current, trading_mode="scalping") == 1
 
 
 def test_event_driven_wakeup_on_score_cross() -> None:
@@ -882,7 +874,7 @@ def test_split_lots_do_not_multiply_risk() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         min_lot=Decimal("0.01"),
         lot_step=Decimal("0.01"),
     )

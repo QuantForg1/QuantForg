@@ -200,18 +200,18 @@ def test_zero_quantforg_gold_positions_capacity_available() -> None:
 
 
 @pytest.mark.unit
-def test_one_quantforg_gold_position_second_entry_allowed_when_max_gt_1() -> None:
+def test_one_quantforg_gold_position_blocks_second_entry_at_owner_max() -> None:
     rows = [_pos(10, magic=QUANTFORG_MAGIC, comment="ite:v1:abc")]
     assert count_quantforg_positions(rows, symbol="XAUUSD_i") == 1
-    assert capacity_available(current_count=1, configured_max=5) is True
-    elig = PositionEligibilityEngine(config=ITEConfig(max_open_trades=5)).evaluate(
+    assert capacity_available(current_count=1, configured_max=1) is False
+    elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
         snapshot=_snapshot(),
         confluence=_conf(),
         account=_account(open_n=1, already=True),
         risk_allowed=True,
     )
-    assert elig.eligible is True
-    assert elig.checks["max_open_trades"] is True
+    assert elig.eligible is False
+    assert elig.checks["max_open_trades"] is False
 
 
 @pytest.mark.unit
@@ -219,7 +219,7 @@ def test_quantforg_at_configured_max_blocks() -> None:
     rows = [_pos(i, magic=QUANTFORG_MAGIC) for i in range(1, 6)]
     assert count_quantforg_positions(rows, symbol="XAUUSD_i") == 5
     assert capacity_available(current_count=5, configured_max=5) is False
-    elig = PositionEligibilityEngine(config=ITEConfig(max_open_trades=5)).evaluate(
+    elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
         snapshot=_snapshot(),
         confluence=_conf(),
         account=_account(open_n=5, already=True),
@@ -306,7 +306,7 @@ def test_portfolio_hard_block_still_blocks() -> None:
 
 @pytest.mark.unit
 def test_oms_rejection_path_still_present_via_eligibility() -> None:
-    elig = PositionEligibilityEngine(config=ITEConfig(max_open_trades=5)).evaluate(
+    elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
         snapshot=_snapshot(),
         confluence=_conf(),
         account=_account(),
@@ -341,7 +341,7 @@ def test_unknown_order_still_requires_reconciliation() -> None:
 
 
 @pytest.mark.unit
-def test_backtest_max_open_trades_one_does_not_leak_into_live() -> None:
+def test_backtest_and_live_both_use_one_open_trade() -> None:
     assert RunBacktestCommand(
         user_id=uuid4(), request_id="b", symbol="XAUUSD"
     ).max_open_trades == 1
@@ -353,14 +353,8 @@ def test_backtest_max_open_trades_one_does_not_leak_into_live() -> None:
         DEFAULT_AI_SCALPING_CONFIG,
     )
 
-    live_max = live_strategy_max_open(
-        ITEConfig(max_open_trades=DEFAULT_AI_SCALPING_CONFIG.max_open_trades)
-    )
-    assert live_max == DEFAULT_AI_SCALPING_CONFIG.max_open_trades
-    assert BacktestRunInput(
-        user_id=uuid4(), request_id="c", symbol="XAUUSD"
-    ).max_open_trades == 1
-    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades >= 3
+    assert live_strategy_max_open(ITEConfig()) == 1
+    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == 1
 
 
 @pytest.mark.unit

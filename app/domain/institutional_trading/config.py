@@ -6,37 +6,62 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_DAILY_LOSS_CEILING_PCT,
+    OWNER_DAILY_LOSS_PCT,
+    OWNER_MAX_CONSECUTIVE_LOSSES,
+    OWNER_MAX_OPEN_POSITIONS,
+    OWNER_MAX_SL_RISK_USD,
+    OWNER_MIN_REWARD_RISK,
+    OWNER_MIN_SL_RISK_USD,
+    OWNER_SL_RISK_PCT,
+)
 from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
-# Authoritative XAUUSD autonomous daily-loss hard cap. Risk, Auto Trading,
-# diagnostics, Signal Center, and execution readiness must all read this value.
-# It is a maximum, not a target. Boundary: pct > cap blocks; pct == cap does not.
-MAX_DAILY_LOSS_PCT = Decimal("80.0")
+# Authoritative XAUUSD autonomous daily-loss percent (owner limits 2026-10-20).
+# The effective stop is max($5, this pct of start-of-day equity), never above
+# MAX_DAILY_LOSS_CEILING_PCT — see owner_live_limits.daily_loss_cap_usd.
+# Boundary: loss > cap blocks; loss == cap does not.
+MAX_DAILY_LOSS_PCT = OWNER_DAILY_LOSS_PCT
+MAX_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_CEILING_PCT
 
 # Planned SL-loss (not margin). Accepted normal trades must be STRICTLY above
 # MIN and at most MAX per trade. TARGET is the single sizing budget. Aggregate
-# is a hard ceiling, not a fill quota — capacity is floor(ceiling / actual
-# sized risk), not "five trades".
-MIN_PLANNED_RISK_USD = Decimal("6.00")
-TARGET_PLANNED_RISK_USD = Decimal("7.00")
+# is a hard ceiling, not a fill quota. Owner cap: $2.00 per trade, one position.
+MIN_PLANNED_RISK_USD = OWNER_MIN_SL_RISK_USD
+TARGET_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD
 TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
-MAX_PLANNED_SL_RISK_USD = Decimal("20.00")
-MAX_TOTAL_PLANNED_RISK_USD = Decimal("30.00")
-# Reward must exceed planned SL (TP > SL). Prefer 1.5R when structure supports
-# it; never stretch TP just to hit the preference — reject instead.
-MIN_REWARD_RISK = Decimal("1.00")
+MAX_PLANNED_SL_RISK_USD = OWNER_MAX_SL_RISK_USD
+MAX_TOTAL_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD * OWNER_MAX_OPEN_POSITIONS
+# Reward must be at least 1.5R after spread; never stretch TP to reach it —
+# reject instead.
+MIN_REWARD_RISK = OWNER_MIN_REWARD_RISK
 PREFERRED_REWARD_RISK = Decimal("1.50")
+# Per-trade percent ceiling (applies above $100 equity; USD cap binds below).
+RISK_PER_TRADE_CEILING_PCT = OWNER_SL_RISK_PCT
 
 
 def coerce_max_daily_loss_pct(value: Decimal) -> Decimal:
-    """Reject non-positive values and anything above the hard cap."""
+    """Reject non-positive values and anything above the hard ceiling."""
     cap = Decimal(str(value))
-    if cap <= 0 or cap > MAX_DAILY_LOSS_PCT:
-        raise ValueError(f"max_daily_loss_pct must be in (0, {MAX_DAILY_LOSS_PCT}]")
+    if cap <= 0 or cap > MAX_DAILY_LOSS_CEILING_PCT:
+        raise ValueError(
+            f"max_daily_loss_pct must be in (0, {MAX_DAILY_LOSS_CEILING_PCT}]"
+        )
     return cap
+
+
+def coerce_risk_per_trade_pct(value: Decimal) -> Decimal:
+    """Reject non-positive values and anything above the per-trade ceiling."""
+    pct = Decimal(str(value))
+    if pct <= 0 or pct > RISK_PER_TRADE_CEILING_PCT:
+        raise ValueError(
+            f"risk_per_trade_pct must be in (0, {RISK_PER_TRADE_CEILING_PCT}]"
+        )
+    return pct
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +93,8 @@ class ITEConfig:
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_drawdown_pct: Decimal = Decimal("8.0")
-    max_open_trades: int = 1
-    max_consecutive_losses: int = 3
+    max_open_trades: int = OWNER_MAX_OPEN_POSITIONS
+    max_consecutive_losses: int = OWNER_MAX_CONSECUTIVE_LOSSES
 
     # Trade management (Phase D)
     break_even_at_r: Decimal = Decimal("1.0")
@@ -102,6 +127,19 @@ class ITEConfig:
     swing_right: int = 2
 
     simulation_fill_model: str = "next_bar_open"
+
+    def __post_init__(self) -> None:
+        # Owner ceilings — a config may be stricter, never looser.
+        coerce_max_daily_loss_pct(self.max_daily_loss_pct)
+        coerce_risk_per_trade_pct(self.risk_per_trade_pct)
+        if self.max_planned_sl_risk_usd > OWNER_MAX_SL_RISK_USD:
+            raise ValueError(
+                f"max_planned_sl_risk_usd must be <= {OWNER_MAX_SL_RISK_USD}"
+            )
+        if not 1 <= self.max_open_trades <= OWNER_MAX_OPEN_POSITIONS:
+            raise ValueError(
+                f"max_open_trades must be in [1, {OWNER_MAX_OPEN_POSITIONS}]"
+            )
 
     def timeframe_roles(self) -> dict[Timeframe, str]:
         return {

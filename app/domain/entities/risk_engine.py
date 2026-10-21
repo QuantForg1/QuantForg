@@ -22,13 +22,19 @@ from app.domain.institutional_trading.config import (
     MIN_PLANNED_RISK_USD,
     TARGET_PLANNED_RISK_USD,
 )
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_LOSS_STREAK_COOLDOWN_MINUTES,
+    OWNER_MAX_CONSECUTIVE_LOSSES,
+    OWNER_MAX_LOT,
+    OWNER_MAX_OPEN_POSITIONS,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class RiskEngineConfig:
     """Runtime limits for a risk check (defaults + optional profile overrides)."""
 
-    max_lot: Decimal = Decimal("10")
+    max_lot: Decimal = OWNER_MAX_LOT
     min_lot: Decimal = Decimal("0.01")
     lot_step: Decimal = Decimal("0.01")
     max_risk_per_trade_pct: Decimal = Decimal("1")  # % of equity
@@ -46,17 +52,18 @@ class RiskEngineConfig:
     max_asset_class_exposure_pct: Decimal = Decimal("50")
     max_total_exposure_pct: Decimal = Decimal("80")
     max_correlated_exposure_pct: Decimal = Decimal("40")
-    max_open_positions: int = 5
+    max_open_positions: int = OWNER_MAX_OPEN_POSITIONS
     default_sizing: PositionSizingMethod = PositionSizingMethod.PERCENTAGE_RISK
-    fixed_lot: Decimal = Decimal("0.10")
+    fixed_lot: Decimal = OWNER_MAX_LOT
     fixed_dollar_risk: Decimal = Decimal("100")
     atr_multiplier: Decimal = Decimal("1.5")
     # XAUUSD MT5 contract (100 oz). Never use FX 100000 defaults on this desk.
     contract_size: Decimal = Decimal("100")
     exposure_leverage: Decimal = Decimal("1000")  # Weltrade gold fallback
     # --- Institutional extensions (Phase B) ---
-    max_consecutive_losses: int = 3
-    cooldown_minutes_after_loss_streak: int = 60
+    max_consecutive_losses: int = OWNER_MAX_CONSECUTIVE_LOSSES
+    # Owner: 3 consecutive losses -> pause for the day.
+    cooldown_minutes_after_loss_streak: int = OWNER_LOSS_STREAK_COOLDOWN_MINUTES
     max_spread: Decimal = Decimal("2.00")
     min_atr: Decimal = Decimal("0")  # 0 = disabled
     max_atr: Decimal = Decimal("0")  # 0 = disabled

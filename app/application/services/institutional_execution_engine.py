@@ -31,6 +31,11 @@ from app.domain.exceptions.base import ValidationError
 from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.execution_engine.pipeline import STAGE_TO_LIFECYCLE, PipelineStage
 from app.domain.execution_engine.reasons import humanize_reason, humanize_reasons
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_LOT,
+    OWNER_MAX_OPEN_POSITIONS,
+    evaluate_owner_entry,
+)
 from app.domain.value_objects.mt5_order import (
     LotSize,
     MagicNumber,
@@ -855,7 +860,12 @@ class InstitutionalExecutionEngine:
                         self.risk_engine.config,
                         min_lot=live_constraints.min_volume,
                         lot_step=live_constraints.volume_step,
-                        max_lot=live_constraints.max_volume,
+                        # Owner limit: never size above 0.01 lot.
+                        max_lot=min(live_constraints.max_volume, OWNER_MAX_LOT),
+                        max_open_positions=min(
+                            self.risk_engine.config.max_open_positions,
+                            OWNER_MAX_OPEN_POSITIONS,
+                        ),
                         contract_size=live_cs,
                     )
                 )
@@ -960,6 +970,27 @@ class InstitutionalExecutionEngine:
                             "final volume invalid after Risk approval: "
                             f"{msg_final_vol}"
                         ]
+                if not risk_reject and not _is_manage_intent(intent):
+                    # Final owner guard on the exact intent that goes to the broker.
+                    risk_reject = evaluate_owner_entry(
+                        symbol=intent.symbol,
+                        side=intent.side.value,
+                        volume=intent.volume.value,
+                        entry=entry,
+                        stop_loss=(
+                            intent.stop_loss.value if intent.stop_loss else None
+                        ),
+                        take_profit=(
+                            intent.take_profit.value if intent.take_profit else None
+                        ),
+                        spread=spread_val,
+                        contract_size=live_cs,
+                        equity=account.equity,
+                        min_stop_distance=(
+                            live_constraints.point
+                            * Decimal(live_constraints.stops_level)
+                        ),
+                    )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
 

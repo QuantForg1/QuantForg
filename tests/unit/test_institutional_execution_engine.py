@@ -48,14 +48,16 @@ def test_humanize_reason_market_closed() -> None:
 
 @pytest.mark.unit
 def test_pipeline_market_buy_observes_stages() -> None:
-    engine, _client = _engine(enabled=True)
+    engine, client = _engine(enabled=True)
+    client._positions = []  # owner limit: one open position, start flat
+    # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> RR 1.52 after spread.
     intent = parse_order_intent(
         symbol="XAUUSD",
         side="buy",
         order_type="market",
         volume="0.01",
-        stop_loss="2301.80",
-        take_profit="2349.30",
+        stop_loss="2319.00",
+        take_profit="2324.00",
     )
     user_id = uuid4()
     pipeline, decision = engine.run_submit(

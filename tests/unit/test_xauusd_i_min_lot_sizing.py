@@ -65,20 +65,14 @@ def test_xauusd_i_volume_step_normalization() -> None:
 
 
 @pytest.mark.unit
-def test_xauusd_i_below_min_lot_is_legitimate_account_constraint() -> None:
+def test_xauusd_i_atr_stop_above_owner_cap_is_legitimate_block() -> None:
+    """ATR stop (~$9.79 at 0.01 lot on $100.72) is above the $2 cap: no upsizing."""
     atr = (_PRICE * Decimal("0.0015")).quantize(Decimal("0.001"))
     dist = stop_distance_from_atr(atr)
-    risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
-    risk_amount = (_EQUITY * risk_pct / Decimal("100")).quantize(Decimal("0.01"))
-    raw = risk_amount / (_CONTRACT * dist)
-    norm = raw.quantize(_VOLUME_STEP, rounding=ROUND_DOWN)
     min_loss = (_VOLUME_MIN * _CONTRACT * dist).quantize(Decimal("0.01"))
     needed = (min_loss / _EQUITY * Decimal("100")).quantize(Decimal("0.01"))
-    profile = MicroAccountProfile()
-
-    assert norm < _VOLUME_MIN
-    assert needed < profile.hard_max_risk_pct
-    # $9.85 min-lot is above the $6 floor and fits the $30 remaining ceiling.
+    assert min_loss > Decimal("2.00")
+    assert needed > MicroAccountProfile().hard_max_risk_pct
     engine = RiskEngine()
     size = engine.size_position(
         equity=_EQUITY,
@@ -88,17 +82,15 @@ def test_xauusd_i_below_min_lot_is_legitimate_account_constraint() -> None:
         atr=atr,
         entry_price=_PRICE,
         contract_size=_CONTRACT,
-        risk_per_trade_pct=risk_pct,
+        risk_per_trade_pct=DEFAULT_ITE_CONFIG.risk_per_trade_pct,
     )
-    assert size.approved_lots == _VOLUME_MIN
-    assert size.block_reason is None
-    assert size.dollar_risk >= Decimal("6.01")
+    assert size.approved_lots == Decimal("0")
+    assert size.block_reason is not None
 
 
 @pytest.mark.unit
-def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_hard_max() -> None:
-    """Tight stop where min_lot risk <= 80% hard_max → micro conditional OK."""
-    dist = Decimal("4.00")  # min_lot $ risk = 4.00 → ~3.97% of $100.72
+def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_owner_band() -> None:
+    dist = Decimal("1.80")  # min_lot $ risk = 1.80 (inside $1.50..$2.00)
     engine = RiskEngine()
     size = engine.size_position(
         equity=_EQUITY,
@@ -110,11 +102,9 @@ def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_hard_max() -> None:
         contract_size=_CONTRACT,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots > _VOLUME_MIN
+    assert size.approved_lots == _VOLUME_MIN
     assert size.capped is False
-    min_loss = (_VOLUME_MIN * _CONTRACT * dist).quantize(Decimal("0.01"))
-    assert size.dollar_risk > Decimal("6.00")
-    assert size.dollar_risk >= min_loss
+    assert size.dollar_risk == Decimal("1.80")
 
 
 @pytest.mark.unit

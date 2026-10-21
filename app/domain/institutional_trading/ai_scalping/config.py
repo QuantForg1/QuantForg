@@ -7,11 +7,15 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from app.domain.institutional_trading.config import (
-    ITEConfig,
     MAX_PLANNED_SL_RISK_USD,
     MAX_TOTAL_PLANNED_RISK_USD,
     MIN_PLANNED_RISK_USD,
     TARGET_PLANNED_RISK_USD,
+    ITEConfig,
+)
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_ENTRIES_PER_CYCLE,
+    OWNER_MAX_OPEN_POSITIONS,
 )
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
@@ -113,8 +117,8 @@ class AiScalpingConfig:
     # Quality / confluence / structure / momentum floors unchanged.
     parallel_scan_enabled: bool = True
     parallel_scan_concurrency: int = 4
-    # Independent eligible symbols may enter in one outer cycle (exposure caps apply).
-    max_entries_per_cycle: int = 3
+    # Owner limit 2026-10-20: one entry per outer cycle.
+    max_entries_per_cycle: int = OWNER_MAX_ENTRIES_PER_CYCLE
     # After PME close — skip idle sleep and rescan immediately.
     post_close_rescan_delay_seconds: float = 0.0
 
@@ -208,8 +212,8 @@ class AiScalpingConfig:
     optimizer_defer_below_quality: int = 40
 
     # Multi-trade - prefer quality, not stacking losers
-    # SCALPING_V1 live cap is 10; HOLD plans still clamp to 5.
-    max_open_trades: int = 10
+    # Owner limit 2026-10-20: one open position.
+    max_open_trades: int = OWNER_MAX_OPEN_POSITIONS
     require_probability_improvement: bool = True
     min_confidence_delta_for_add: int = 5
 
@@ -224,7 +228,7 @@ class AiScalpingConfig:
     # Prior 2.00 daily / 1.00 symbol caps were BELOW one min-lot fill, so after
     # the first ORDER ACCEPTED the portfolio gate blocked all further entries
     # until flat — swing cadence, not continuous scalping. Align with
-    # MicroAccountProfile.hard_max_risk_pct (80%). Quality floors unchanged.
+    # MicroAccountProfile.hard_max_risk_pct (4%). Quality floors unchanged.
     max_daily_exposure_pct: Decimal = Decimal("5.00")
     broker_min_lot: Decimal = Decimal("0.01")
     broker_lot_step: Decimal = Decimal("0.01")
@@ -568,7 +572,7 @@ def scalping_ite_config(
         target_risk_per_trade_usd=cfg.target_risk_per_trade_usd,
         max_planned_sl_risk_usd=cfg.max_planned_sl_risk_usd,
         max_total_planned_risk_usd=cfg.max_total_planned_risk_usd,
-        max_open_trades=cfg.max_open_trades,
+        max_open_trades=min(cfg.max_open_trades, OWNER_MAX_OPEN_POSITIONS),
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=cfg.partial_at_r,
         partial_close_pct=cfg.partial_close_pct,

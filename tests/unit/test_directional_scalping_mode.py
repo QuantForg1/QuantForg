@@ -206,7 +206,7 @@ def test_current_snapshot_direction_is_not_stale_buy() -> None:
     assert buy.eligible is sell.eligible
 
 
-def test_scalp_plan_can_target_multiple_risk_constrained_legs() -> None:
+def test_scalp_plan_targets_one_owner_leg() -> None:
     classified = classify_trade(opportunity_score=83, direction="SELL", structure=62)
     assert classified.trade_class is TradeClass.SCALP
     plan = build_position_plan(
@@ -219,18 +219,16 @@ def test_scalp_plan_can_target_multiple_risk_constrained_legs() -> None:
         confidence=80,
         aggregate_lots=Decimal("0.04"),
         current_quantforg_count=0,
-        ite_config=ITEConfig(max_open_trades=10),
+        ite_config=ITEConfig(),
         base_input_hash="h-dir",
         risk_allowed_count=4,
     )
-    assert plan.effective_count == 4
+    assert plan.effective_count == 1
     assert plan.target_count >= plan.effective_count
     assert plan.cycle_id == "cycle-dir-1"
     assert plan.snapshot_id == "snap-dir-1"
     assert plan.position_plan_id
-    assert len(plan.legs) == plan.effective_count
-    keys = [leg.idempotency_key for leg in plan.legs]
-    assert len(set(keys)) == len(keys)
+    assert len(plan.legs) == 1
 
 
 def test_empty_trading_mode_applies_scalping() -> None:

@@ -111,44 +111,44 @@ def test_london_session_prioritizes_micro_safe_over_gold_and_crosses() -> None:
 
 
 @pytest.mark.unit
-def test_xauusd_i_min_lot_approved_on_micro_equity_under_hard_max() -> None:
-    """Realistic gold ATR on ~$100 stays under the 80% hard max."""
+def test_xauusd_i_min_lot_approved_on_micro_equity_inside_owner_band() -> None:
+    """A $1.80 gold stop on ~$100 is approved at 0.01; the ATR stop is not."""
     equity = Decimal("100.72")
     price = Decimal("4380.013")
-    atr = (price * Decimal("0.0015")).quantize(Decimal("0.001"))
-    dist = stop_distance_from_atr(atr)
-    engine = RiskEngine()
-    result = engine.evaluate(
-        RiskCheckInput(
-            user_id=uuid4(),
-            request_id="align-xau-1",
-            symbol="XAUUSD_I",
-            side="buy",
-            requested_lots=Decimal("0.01"),
-            stop_loss_distance=dist,
-            atr=atr,
-            sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
-            entry_price=price,
-        ),
-        account=AccountSnapshot(
-            login=1,
-            balance=equity,
-            equity=equity,
-            margin=Decimal("0"),
-            free_margin=equity,
-            margin_level=Decimal("0"),
-            profit=Decimal("0"),
-            leverage=2000,
-        ),
-        positions=[],
+    account = AccountSnapshot(
+        login=1,
+        balance=equity,
+        equity=equity,
+        margin=Decimal("0"),
+        free_margin=equity,
+        margin_level=Decimal("0"),
+        profit=Decimal("0"),
+        leverage=2000,
     )
-    assert result.decision is RiskDecision.ALLOW or result.decision is RiskDecision.REDUCE_SIZE
-    assert result.approved_lots == Decimal("0.01")
-    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" not in " ".join(result.reasons)
-    profile = MicroAccountProfile()
-    min_loss = (Decimal("0.01") * Decimal("100") * dist).quantize(Decimal("0.01"))
-    needed = (min_loss / equity * Decimal("100")).quantize(Decimal("0.01"))
-    assert needed < profile.hard_max_risk_pct
+    engine = RiskEngine()
+
+    def _eval(dist: Decimal):
+        return engine.evaluate(
+            RiskCheckInput(
+                user_id=uuid4(),
+                request_id=f"align-xau-{dist}",
+                symbol="XAUUSD_I",
+                side="buy",
+                requested_lots=Decimal("0.01"),
+                stop_loss_distance=dist,
+                sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
+                entry_price=price,
+            ),
+            account=account,
+            positions=[],
+        )
+
+    ok = _eval(Decimal("1.80"))
+    assert ok.decision in {RiskDecision.ALLOW, RiskDecision.REDUCE_SIZE}
+    assert ok.approved_lots == Decimal("0.01")
+    atr = (price * Decimal("0.0015")).quantize(Decimal("0.001"))
+    wide = _eval(stop_distance_from_atr(atr))
+    assert wide.decision is RiskDecision.REJECT
 
 
 @pytest.mark.unit
@@ -184,7 +184,7 @@ def test_usdjpy_i_existing_cs_stop_sizing_still_rejects_micro_equity() -> None:
 @pytest.mark.unit
 def test_alignment_does_not_change_risk_ceilings() -> None:
     profile = MicroAccountProfile()
-    assert profile.hard_max_risk_pct == Decimal("80.0")
+    assert profile.hard_max_risk_pct == Decimal("4.0")
     assert DEFAULT_ITE_CONFIG.risk_per_trade_pct == Decimal("1.0")
     # Seed list still contains gold — analysis retained, not force-executable.
     assert "XAUUSD" in DEFAULT_SCALPING_UNIVERSE
