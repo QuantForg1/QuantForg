@@ -212,3 +212,20 @@ class TestLaunchReadiness:
         )
         assert result.ok is False
         assert plane.mode is OpsExecutionMode.SHADOW
+
+
+def test_status_cache_never_serves_another_settings_snapshot() -> None:
+    """Regression: the 2s cache keyed on id(plane) served a stale snapshot."""
+    from app.application.services.auto_trading_status import build_auto_trading_status
+
+    plane = OperationsControlPlane()
+    p1, p2, off = _patch_status(execution_enabled=False)
+    with p1, p2:
+        first = build_auto_trading_status(plane, settings=off)
+    p1, p2, on = _patch_status(execution_enabled=True)
+    with p1, p2:
+        second = build_auto_trading_status(plane, settings=on)
+        other_plane = build_auto_trading_status(OperationsControlPlane(), settings=on)
+    assert first.facts.execution_enabled is False
+    assert second.facts.execution_enabled is True
+    assert other_plane.facts.execution_enabled is True

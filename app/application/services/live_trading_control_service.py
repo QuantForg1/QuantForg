@@ -20,13 +20,16 @@ from app.application.services.account_execution_gate import (
     classify_account_session,
 )
 from app.domain.institutional_trading.live_trading_control import (
+    BrokerSymbolSpec,
     LiveOrderRequest,
     LiveTradingController,
     LiveTradingState,
     LiveTradingTransitionError,
     get_live_trading_controller,
     orders_may_submit,
+    price_reward_risk,
     public_state_name,
+    spec_from_broker,
     strip_secrets,
 )
 from app.domain.institutional_trading.operations.models import OperatorIdentity
@@ -560,6 +563,23 @@ def _research_block() -> dict[str, Any]:
     return block
 
 
+def _cached_broker_spec(symbol: str) -> BrokerSymbolSpec | None:
+    """Broker spec the ITE runtime already fetched; never a new Gateway call."""
+    try:
+        from app.application.services.institutional_ite_runtime import (
+            get_ite_runtime,
+        )
+
+        runtime = get_ite_runtime()
+        adapter = getattr(runtime, "mt5_adapter", None) if runtime else None
+        client = getattr(adapter, "client", None)
+        lookup = getattr(client, "cached_symbol_info", None)
+        info = lookup(symbol) if callable(lookup) else None
+    except Exception:
+        return None
+    return spec_from_broker(symbol, info) if info is not None else None
+
+
 def _signal_cards(
     ctrl: LiveTradingController, facts: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -588,13 +608,20 @@ def _signal_cards(
         )
         if why is not None and not isinstance(why, str):
             why = None
+        symbol = str(row.get("symbol") or row.get("broker_symbol") or "")
+        entry = _dec(row.get("entry") or row.get("price"))
+        stop_loss = _dec(row.get("stop_loss") or row.get("sl"))
+        take_profit = _dec(row.get("take_profit") or row.get("tp"))
+        model_rr = _dec(row.get("reward_risk") or row.get("rr"))
+        # Shown and gated RR come from the card's own prices, not the model.
+        price_rr = price_reward_risk(direction, entry, stop_loss, take_profit)
         req = LiveOrderRequest(
-            symbol=str(row.get("symbol") or row.get("broker_symbol") or ""),
+            symbol=symbol,
             direction=direction,
             price=_dec(row.get("price")),
-            entry=_dec(row.get("entry") or row.get("price")),
-            stop_loss=_dec(row.get("stop_loss") or row.get("sl")),
-            take_profit=_dec(row.get("take_profit") or row.get("tp")),
+            entry=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             score=_dec(row.get("opportunity_score") or row.get("score")),
             edge=_dec(row.get("directional_edge") or row.get("edge")),
             regime=str(evidence.get("REGIME") or row.get("regime") or "") or None,
@@ -607,7 +634,8 @@ def _signal_cards(
             )
             or None,
             evidence=evidence or None,
-            reward_risk=_dec(row.get("reward_risk") or row.get("rr")),
+            reward_risk=price_rr if price_rr is not None else model_rr,
+            spec=_cached_broker_spec(symbol),
             equity=facts.get("equity"),
             balance=facts.get("balance"),
             free_margin=facts.get("free_margin"),
@@ -639,9 +667,10 @@ def _signal_cards(
                 "take_profit": str(req.take_profit)
                 if req.take_profit is not None
                 else None,
-                "risk_reward": str(req.reward_risk)
-                if req.reward_risk is not None
+                "risk_reward": str(round(price_rr, 2))
+                if price_rr is not None
                 else None,
+                "model_risk_reward": str(model_rr) if model_rr is not None else None,
                 "score": str(req.score) if req.score is not None else None,
                 "edge": str(req.edge) if req.edge is not None else None,
                 "regime": req.regime,

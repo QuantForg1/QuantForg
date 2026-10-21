@@ -804,6 +804,7 @@ def opportunity_window_snapshot(
     *,
     now_mono: float | None = None,
     current_scan: dict[str, Any] | None = None,
+    broker_open_positions: int | None = None,
 ) -> dict[str, Any]:
     ts = float(now_mono if now_mono is not None else time.monotonic())
     with _LOCK:
@@ -1015,6 +1016,7 @@ def opportunity_window_snapshot(
         window_active=bool(window_meta.get("active")),
         window_started=bool(window_meta.get("started")),
         first_natural_trade=bool(window_meta.get("first_natural_trade")),
+        broker_open_positions=broker_open_positions,
         forwarded_to_oms=forwarded,
     )
     now_mono = ts

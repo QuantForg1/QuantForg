@@ -93,3 +93,27 @@ def test_snapshot_states_the_clear_condition() -> None:
     snap = BurstLatch().snapshot()
     assert "cooldown" in snap["reject_burst"]["clear_condition"]
     assert "fill not required" in snap["reject_burst"]["clear_condition"]
+
+
+def test_new_process_starts_unlatched() -> None:
+    """The latch is process memory only, so a deploy starts clear."""
+    from app.domain.institutional_trading.phase_a.plane import PhaseAControlPlane
+
+    plane = PhaseAControlPlane()
+    assert plane.burst.is_latched() is False
+    assert plane.burst.last_event is None
+
+
+def test_arming_is_logged_with_its_trigger(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.domain.institutional_trading.phase_a.burst_latch as mod
+
+    seen: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        mod.logger, "warning", lambda event, **kw: seen.append((event, kw))
+    )
+    latch = BurstLatch()
+    for i in range(latch.ambiguous_threshold):
+        latch.record_ambiguous(now=100.0 + i, stage="GATEWAY")
+    assert seen and seen[-1][0] == "phase_a_burst_latch_armed"
+    assert seen[-1][1]["trigger"] == "ambiguous_order_burst"
+    assert seen[-1][1]["stage"] == "GATEWAY"

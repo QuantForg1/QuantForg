@@ -6132,10 +6132,15 @@ class InstitutionalIteRuntime:
             )
 
             current = self._current_scan_snapshot()
+            last_account = getattr(self, "_last_account_risk", None)
+            broker_open = getattr(last_account, "open_positions", None)
             snap = opportunity_window_snapshot(
                 current_scan=current
                 if isinstance(current, dict) and current.get("label") == "CURRENT_SCAN"
-                else None
+                else None,
+                broker_open_positions=int(broker_open)
+                if isinstance(broker_open, int)
+                else None,
             )
             last_pipeline = self._last_pipeline_snapshot()
             with self._lock:

@@ -22,6 +22,10 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class BurstLatchEvent:
@@ -131,6 +135,17 @@ class BurstLatch:
         self.history.append(ev)
         if len(self.history) > 50:
             self.history = self.history[-50:]
+        # One line per arming so production logs name the exact trigger.
+        logger.warning(
+            "phase_a_burst_latch_armed",
+            trigger=trigger,
+            count=count,
+            threshold=threshold,
+            window_s=window_s,
+            cooldown_s=float(self.cooldown_s),
+            stage=ev.last_event_stage,
+            correlation_id=ev.correlation_id,
+        )
         return ev
 
     def record_entry_attempt(self, *, now: float | None = None) -> BurstLatchEvent | None:

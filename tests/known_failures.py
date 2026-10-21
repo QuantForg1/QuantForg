@@ -173,16 +173,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "infra",
         "synthetic signal projection/disarm",
     ),
-    _G
-    + "test_launch_readiness.py::TestLaunchReadiness::test_refuses_promotion_when_execution_disabled": (
-        "infra",
-        "launch readiness promotion gate",
-    ),
-    _G
-    + "test_phase_e_live_operations.py::TestPhaseELaunchLockMapping::test_broker_down_only_broker_family_blocks_when_gateway_up": (
-        "infra",
-        "launch lock family mapping",
-    ),
     _G + "test_production_hardening_v6.py::test_lifecycle_stages_cover_full_path": (
         "infra",
         "lifecycle stage order (FIRST_BLOCKING_GATE vs EXIT)",

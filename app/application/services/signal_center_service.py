@@ -1631,6 +1631,21 @@ def _signal_type_from_row(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _price_rr(direction: str, entry: Any, stop: Any, take: Any) -> float | None:
+    from decimal import Decimal, InvalidOperation
+
+    from app.domain.institutional_trading.live_trading_control import (
+        price_reward_risk,
+    )
+
+    try:
+        values = [Decimal(str(v)) for v in (entry, stop, take)]
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    rr = price_reward_risk(direction, *values)
+    return round(float(rr), 2) if rr is not None else None
+
+
 def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
     """Map market-universe opportunity / research signal into desk contract."""
     sym = str(row.get("broker_symbol") or row.get("symbol") or "").upper()
@@ -1663,6 +1678,10 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
             or row.get("tp")
             or row.get("target")
         )
+    price_rr = _price_rr(direction, entry, stop, take)
+    if price_rr is not None:
+        # The row's own entry/SL/TP win over a model-projected RR.
+        rr = price_rr
     price = row.get("price")
     if price in (None, "UNKNOWN"):
         price = row.get("mid") or row.get("last") or row.get("last_price")

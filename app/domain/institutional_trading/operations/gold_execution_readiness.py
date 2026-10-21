@@ -302,12 +302,17 @@ def resolve_tracker_state(
     first_natural_trade: bool,
     window_started: bool = False,
     forwarded_to_oms: bool = False,
+    broker_open_positions: int | None = None,
 ) -> str:
     ds = str(decision_state or "").upper()
     fc = str(fault_class or "").upper()
     nxt = str(next_action or "").upper()
     eligible = int(eligible_count or 0) > 0
-    if first_natural_trade or ds in {"POSITION_OPEN", "FILLED"}:
+    claims_position = first_natural_trade or ds in {"POSITION_OPEN", "FILLED"}
+    # Broker truth wins: a forwarded/refused order is not an open position.
+    if claims_position and not (
+        broker_open_positions is not None and int(broker_open_positions) <= 0
+    ):
         return TrackerState.POSITION_OPEN.value
     if ds == "RECONCILIATION_REQUIRED" or ds == "ORDER_UNKNOWN":
         return TrackerState.RECONCILIATION.value

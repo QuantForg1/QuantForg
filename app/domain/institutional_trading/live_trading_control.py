@@ -781,6 +781,34 @@ def _gate(key: str, passed: bool, reason: str = "") -> GateResult:
     return GateResult(key=key, passed=passed, reason="" if passed else reason)
 
 
+def price_reward_risk(
+    direction: str | None,
+    entry: Decimal | None,
+    stop_loss: Decimal | None,
+    take_profit: Decimal | None,
+) -> Decimal | None:
+    """Reward:risk from the order's own prices: |tp - entry| / |entry - sl|.
+
+    None unless SL and TP sit on the correct sides of entry. A model-supplied
+    RR is never used in place of this when the prices are known.
+    """
+    side = str(direction or "").strip().upper()
+    if side not in {"BUY", "SELL"}:
+        return None
+    if (
+        entry is None
+        or stop_loss is None
+        or take_profit is None
+        or not all(finite_positive(v) for v in (entry, stop_loss, take_profit))
+    ):
+        return None
+    if side == "BUY" and not (stop_loss < entry < take_profit):
+        return None
+    if side == "SELL" and not (take_profit < entry < stop_loss):
+        return None
+    return abs(take_profit - entry) / abs(entry - stop_loss)
+
+
 def evaluate_signal_quality(
     req: LiveOrderRequest, cfg: LiveTradingRiskConfig
 ) -> list[GateResult]:
@@ -808,17 +836,15 @@ def evaluate_signal_quality(
             tp_ok = tp < entry
     evidence_ok = isinstance(req.evidence, dict) and bool(req.evidence)
     score_ok = req.score is not None and req.score >= cfg.min_score
-    rr = req.reward_risk
+    # Prices are the truth: a model RR (req.reward_risk) only counts when the
+    # order's own entry/SL/TP cannot produce one.
+    price_rr = price_reward_risk(direction, entry, sl, tp)
+    rr = price_rr if price_rr is not None else req.reward_risk
     profit_exceeds_loss = False
     if sl_ok and tp_ok and entry is not None and sl is not None and tp is not None:
         risk_dist = abs(entry - sl)
         reward_dist = abs(tp - entry)
         profit_exceeds_loss = risk_dist > 0 and reward_dist > risk_dist
-        if (
-            rr is None
-            and risk_dist > 0
-        ):
-            rr = reward_dist / risk_dist
     rr_ok = (
         profit_exceeds_loss
         and rr is not None
