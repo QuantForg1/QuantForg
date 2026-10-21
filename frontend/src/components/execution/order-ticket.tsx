@@ -36,6 +36,7 @@ import {
 import { humanExecutionError } from "@/lib/execution/humanize";
 import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
 import { invalidatePostTrade } from "@/lib/execution/post-trade-invalidate";
+import { protectiveStopsError } from "@/lib/execution/protective-stops";
 import { recordAudit } from "@/lib/observability/audit";
 import { captureError } from "@/lib/observability/error-monitor";
 import { isReadOnlyMode } from "@/lib/platform/beta";
@@ -98,6 +99,7 @@ export const ExecutionOrderTicket = forwardRef<
   const [price, setPrice] = useState("");
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
+  const stopsError = protectiveStopsError(stopLoss, takeProfit);
   const [riskPct, setRiskPct] = useState("1");
   const [comment, setComment] = useState("");
   const [trailingStop, setTrailingStop] = useState("");
@@ -306,6 +308,10 @@ export const ExecutionOrderTicket = forwardRef<
       toast.error("Broker disconnected — trading disabled");
       return;
     }
+    if (stopsError) {
+      toast.error(stopsError);
+      return;
+    }
     setConfirmOpen(true);
   };
 
@@ -320,7 +326,7 @@ export const ExecutionOrderTicket = forwardRef<
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [connected, symbol, volume],
+    [connected, symbol, volume, stopLoss, takeProfit],
   );
 
   const submitLive = async () => {
@@ -336,6 +342,13 @@ export const ExecutionOrderTicket = forwardRef<
         setExecStage("rejected");
         setRejectReason("Read-only mode is enabled — live orders are blocked");
         toast.error("Read-only mode is enabled — live orders are blocked");
+        return;
+      }
+
+      if (stopsError) {
+        setExecStage("rejected");
+        setRejectReason(stopsError);
+        toast.error(stopsError);
         return;
       }
 
@@ -608,7 +621,8 @@ export const ExecutionOrderTicket = forwardRef<
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
-            disabled={!connected || busy}
+            disabled={!connected || busy || stopsError != null}
+            title={stopsError ?? undefined}
             onClick={() => void oneClick("buy")}
             aria-label="Buy market"
             className={cn(
@@ -625,7 +639,8 @@ export const ExecutionOrderTicket = forwardRef<
           </button>
           <button
             type="button"
-            disabled={!connected || busy}
+            disabled={!connected || busy || stopsError != null}
+            title={stopsError ?? undefined}
             onClick={() => void oneClick("sell")}
             aria-label="Sell market"
             className={cn(
@@ -867,6 +882,11 @@ export const ExecutionOrderTicket = forwardRef<
               disabled={!connected}
             />
           </div>
+          {connected && stopsError ? (
+            <p className="col-span-2 text-[11px] text-[var(--warning)]" role="status">
+              {stopsError} before submitting.
+            </p>
+          ) : null}
 
           {!dense ? (
             <>
@@ -930,7 +950,8 @@ export const ExecutionOrderTicket = forwardRef<
           </Button>
           <Button
             className="h-9"
-            disabled={!connected || busy}
+            disabled={!connected || busy || stopsError != null}
+            title={stopsError ?? undefined}
             onClick={() => {
               setConfirmMode("ticket");
               setExecStage("idle");

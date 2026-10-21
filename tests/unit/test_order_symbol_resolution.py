@@ -28,7 +28,9 @@ def service() -> MT5OrderValidationService:
     return MT5OrderValidationService(adapter=adapter)
 
 
-@pytest.mark.parametrize("requested", ["XAUUSD", "xauusd", "XAUUSD_i", "XAUUSD_I"])
+@pytest.mark.parametrize(
+    "requested", ["XAUUSD", "xauusd", "XAUUSD_i", "XAUUSD_I", "GOLD", "gold"]
+)
 def test_gold_aliases_validate_against_broker_symbol(
     service: MT5OrderValidationService, requested: str
 ) -> None:
@@ -53,4 +55,6 @@ def test_symbol_compare_is_case_insensitive(service: MT5OrderValidationService) 
 
 def test_non_gold_symbol_is_rejected() -> None:
     with pytest.raises(ValidationError, match="DISABLED_AUTONOMOUS_SYMBOL"):
-        parse_order_intent(symbol="EURUSD", side="buy", order_type="market", volume="0.01")
+        parse_order_intent(
+            symbol="EURUSD", side="buy", order_type="market", volume="0.01"
+        )
