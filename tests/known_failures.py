@@ -57,31 +57,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "parses EURUSD intents",
     ),
     _G
-    + "test_profitability_coverage_hotfix.py::test_execution_engine_allows_in_band_fx_volume": (
-        "gold-only",
-        "EURUSD submit",
-    ),
-    _G
-    + "test_profitability_coverage_hotfix.py::test_execution_engine_rejects_tp_not_greater_than_sl": (
-        "gold-only",
-        "EURUSD submit; re-test TP>SL on XAUUSD",
-    ),
-    _G
-    + "test_profitability_coverage_hotfix.py::test_execution_engine_steps_fx_min_lot_into_planned_sl_band": (
-        "gold-only",
-        "EURUSD volume step-up",
-    ),
-    _G
-    + "test_profitability_coverage_hotfix.py::test_normalize_intent_does_not_force_min_lot_on_new_entries": (
-        "gold-only",
-        "EURUSD intent",
-    ),
-    _G
-    + "test_profitability_coverage_hotfix.py::test_public_telegram_filter_unchanged": (
-        "gold-only",
-        "EURUSD public notice filtered by Gold-only policy",
-    ),
-    _G
     + "test_symbol_management_and_signals.py::test_scalping_enforces_operator_multi_symbol_allowlist": (
         "gold-only",
         "multi-symbol allowlist",
@@ -157,11 +132,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "forbids marketUniverseApi import in signals desk",
     ),
     # --- owner-policy: fixed by FT-1 (#66); remove when it merges ---
-    _G
-    + "test_portfolio_intelligence_v9.py::test_capital_protection_blocks_daily_loss": (
-        "owner-policy",
-        "41% daily loss allowed under the 80% cap",
-    ),
     _G
     + "test_portfolio_intelligence_v9.py::test_capital_protection_scales_near_limit": (
         "owner-policy",
