@@ -250,7 +250,7 @@ class MT5OrderValidationService:
     def validate_symbol(
         self, intent: OrderIntent, constraints: OrderConstraints
     ) -> tuple[bool, str]:
-        if intent.symbol != constraints.symbol:
+        if intent.symbol.strip().upper() != constraints.symbol.strip().upper():
             return False, "symbol mismatch"
         if not constraints.visible:
             return False, f"Symbol {constraints.symbol} is not visible in Market Watch."
@@ -359,6 +359,11 @@ class MT5OrderValidationService:
         rejection_component = ""
 
         try:
+            # Resolve "XAUUSD" / "GOLD" / "XAUUSD_i" to the exact broker symbol
+            # before validation, so it matches the broker constraints.
+            canonical = self.resolve_canonical_broker_symbol(intent.symbol)
+            if canonical and canonical != intent.symbol:
+                intent = self._intent_with_symbol(intent, canonical)
             intent, norm_notes = self.normalize_intent(intent)
             messages.extend(norm_notes)
             constraints = self.constraints_for(intent.symbol)

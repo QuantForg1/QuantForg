@@ -1,5 +1,6 @@
 "use client";
 
+import { displayTradingSymbol } from "@/lib/trading/gold-only";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -677,7 +678,7 @@ export function OrdersHistoryDesk() {
                   >
                     <td className="whitespace-nowrap px-2 py-2 font-mono">{t.ticket}</td>
                     <td className="whitespace-nowrap px-2 py-2 font-mono">{t.deal}</td>
-                    <td className="px-2 py-2 font-medium">{t.symbol}</td>
+                    <td className="px-2 py-2 font-medium">{displayTradingSymbol(t.symbol)}</td>
                     <td className="px-2 py-2">
                       <Badge tone={t.side === "buy" ? "success" : "danger"}>
                         {t.side.toUpperCase()}
@@ -796,7 +797,7 @@ export function OrdersHistoryDesk() {
               </DialogTitle>
               <p className="mt-1 text-xs text-[var(--fg-muted)]">
                 {selected
-                  ? `${selected.symbol} · ${selected.side.toUpperCase()} · ${inferTradeSession(selected.time)}`
+                  ? `${displayTradingSymbol(selected.symbol)} · ${selected.side.toUpperCase()} · ${inferTradeSession(selected.time)}`
                   : ""}
               </p>
             </div>
@@ -811,7 +812,7 @@ export function OrdersHistoryDesk() {
                       label="Exit deal"
                       value={selected.exitDeal == null ? NA : String(selected.exitDeal)}
                     />
-                    <DetailRow label="Symbol" value={selected.symbol} />
+                    <DetailRow label="Symbol" value={displayTradingSymbol(selected.symbol)} />
                     <DetailRow label="Side" value={selected.side.toUpperCase()} />
                     <DetailRow label="Volume" value={formatNumber(selected.volume, 2)} />
                     <DetailRow label="Entry" value={formatNumber(selected.entry, 3)} />

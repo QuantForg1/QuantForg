@@ -59,8 +59,7 @@ import {
 import {
   filterTradingSymbolRecords,
   isGoldSymbol,
-  MULTI_SYMBOL_ENABLED,
-} from "@/lib/trading/gold-only";
+  MULTI_SYMBOL_ENABLED, displayTradingSymbol } from "@/lib/trading/gold-only";
 import { freshnessTone } from "@/components/trading/intelligence-detail";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
@@ -815,7 +814,7 @@ export function SignalsWorkspace() {
                           key={`${symbol}-uni-${i}`}
                           className="border-b border-[var(--border)]"
                         >
-                          <td className="py-2 pr-3 font-medium">{symbol}</td>
+                          <td className="py-2 pr-3 font-medium">{displayTradingSymbol(symbol)}</td>
                           <td className="py-2 pr-3">
                             {presentUnavailable(presentField(row.asset_class))}
                           </td>
@@ -884,7 +883,7 @@ export function SignalsWorkspace() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-semibold">{symbol}</p>
+                          <p className="font-semibold">{displayTradingSymbol(symbol)}</p>
                           <p className="text-[11px] text-[var(--fg-subtle)]">
                             {presentField(row.asset_class)} · {researchLifecycleLabel(row)}
                           </p>

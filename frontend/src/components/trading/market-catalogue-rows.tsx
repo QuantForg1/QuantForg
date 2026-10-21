@@ -1,5 +1,6 @@
 "use client";
 
+import { displayTradingSymbol } from "@/lib/trading/gold-only";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -260,10 +261,10 @@ export function MarketCatalogueRows({
                             onClick={() => openRow(row)}
                             className="font-medium text-[var(--fg)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                           >
-                            {symbol}
+                            {displayTradingSymbol(symbol)}
                           </button>
                         ) : (
-                          <span className="font-medium text-[var(--fg)]">{symbol}</span>
+                          <span className="font-medium text-[var(--fg)]">{displayTradingSymbol(symbol)}</span>
                         )}
                       </td>
                       <td className="py-2 pr-3 text-[var(--fg-muted)]">
@@ -314,7 +315,7 @@ export function MarketCatalogueRows({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate font-medium">{symbol}</p>
+                        <p className="truncate font-medium">{displayTradingSymbol(symbol)}</p>
                         <p className="truncate text-xs text-[var(--fg-muted)]">
                           {str(row.asset_class, "UNKNOWN")} · {presentField(rowSession(row))}
                         </p>
@@ -347,7 +348,7 @@ export function MarketCatalogueRows({
                     <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{symbol}</p>
+                          <p className="truncate font-medium">{displayTradingSymbol(symbol)}</p>
                           <p className="truncate text-xs text-[var(--fg-muted)]">
                             {str(row.asset_class, "UNKNOWN")} · {presentField(rowSession(row))}
                           </p>
