@@ -124,6 +124,8 @@ class SimulationOmsPort:
         comment: str,
         connected: bool,
         login: int | None,
+        current_stop_loss: Decimal | None = None,
+        take_profit_changed: bool = False,
     ) -> OmsManageResult:
         pos = self.book.positions.get(position)
         if not pos:

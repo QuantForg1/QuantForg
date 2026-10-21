@@ -15,6 +15,7 @@ from app.domain.institutional_trading.production_validation_mode.recorder import
     ProductionValidationRecorder,
 )
 from core.logging import get_logger
+from core.production_docs import production_docs_override
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,9 @@ def _or_dash(val: Any) -> Any:
 def _repo_export_dir(base: Path | None = None) -> Path:
     if base is not None:
         return base
+    env_root = production_docs_override()
+    if env_root is not None:
+        return env_root / "validation"
     # Prefer repo-relative path from CWD; fall back to /workspace if present.
     cwd = Path.cwd() / "docs" / "production" / "validation"
     if (Path.cwd() / "docs" / "production").exists():

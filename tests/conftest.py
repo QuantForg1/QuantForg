@@ -23,6 +23,26 @@ os.environ.setdefault("LOG_JSON", "false")
 os.environ.setdefault("DEBUG", "true")
 os.environ.setdefault("GOLD_ONLY_MODE", "false")
 os.environ.setdefault("MULTI_SYMBOL_ENABLED", "true")
+# Generated reports/validation/execution evidence go to a temp dir, never into
+# the tracked docs/production tree (see core.production_docs).
+if not os.environ.get("QUANTFORG_PRODUCTION_DOCS_DIR"):
+    import tempfile
+
+    os.environ["QUANTFORG_PRODUCTION_DOCS_DIR"] = tempfile.mkdtemp(
+        prefix="quantforg-production-docs-"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _reset_phase_a_plane() -> Iterator[None]:
+    """Phase A halt is a process singleton — a kill in one test must not leak."""
+    from app.domain.institutional_trading.phase_a.plane import (
+        reset_phase_a_plane_for_tests,
+    )
+
+    reset_phase_a_plane_for_tests()
+    yield
+    reset_phase_a_plane_for_tests()
 
 
 @pytest.fixture(autouse=True)
@@ -92,3 +112,21 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
+    """Apply the tracked known-failure list as strict xfails (tests/known_failures.py)."""
+    from tests.known_failures import GROUP_ISSUES, KNOWN_FAILURES
+
+    for item in items:
+        nodeid = item.nodeid.replace("\\", "/")
+        entry = KNOWN_FAILURES.get(nodeid)
+        if entry is None:
+            continue
+        group, reason = entry
+        item.add_marker(
+            pytest.mark.xfail(
+                strict=True,
+                reason=f"[known:{group}] {reason} — {GROUP_ISSUES.get(group, '')}",
+            )
+        )

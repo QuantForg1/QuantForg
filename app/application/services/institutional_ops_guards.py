@@ -70,18 +70,43 @@ class GuardedOmsSubmitPort:
         )
 
 
+def _sl_tightens(kwargs: dict[str, Any]) -> bool:
+    """True when the new SL moves toward price and the TP is left unchanged."""
+    from decimal import Decimal
+
+    current = kwargs.get("current_stop_loss")
+    new = kwargs.get("stop_loss")
+    if current is None or new is None or kwargs.get("take_profit_changed"):
+        return False
+    cur, nxt = Decimal(str(current)), Decimal(str(new))
+    if cur <= 0 or nxt <= 0:
+        return False
+    side = str(kwargs.get("side") or "").strip().lower()
+    if side == "buy":
+        return nxt > cur
+    if side == "sell":
+        return nxt < cur
+    return False
+
+
 @dataclass
 class GuardedOmsManagePort:
-    """Blocks PME modifications when kill switch armed."""
+    """Kill switch / Phase A halt block every risk-adding PME action.
+
+    Closes, partial closes and provable SL tightening are always allowed
+    (owner decision 2026-10-20).
+    """
 
     inner: Any  # OmsManagePort
     plane: OperationsControlPlane
 
     def modify_sltp(self, **kwargs: Any) -> OmsManageResult:
-        if not self.plane.pme_modifications_allowed():
+        if not self.plane.pme_modifications_allowed() and not (
+            self.plane.pme_protective_allowed() and _sl_tightens(kwargs)
+        ):
             return OmsManageResult(
                 outcome="disabled",
-                message="Ops kill switch armed — PME modifications blocked",
+                message="Ops kill switch armed — only SL tightening is allowed",
                 retcode=90001,
                 oms_status="blocked",
                 gateway_status="not_called",
@@ -89,25 +114,9 @@ class GuardedOmsManagePort:
         return cast("OmsManageResult", self.inner.modify_sltp(**kwargs))
 
     def partial_close(self, **kwargs: Any) -> OmsManageResult:
-        if not self.plane.pme_modifications_allowed():
-            return OmsManageResult(
-                outcome="disabled",
-                message="Ops kill switch armed — PME modifications blocked",
-                retcode=90001,
-                oms_status="blocked",
-                gateway_status="not_called",
-            )
+        # Reducing size is protective — never blocked by the kill switch.
         return cast("OmsManageResult", self.inner.partial_close(**kwargs))
 
     def close_position(self, **kwargs: Any) -> OmsManageResult:
-        # Flatten during emergency still allowed? Spec: PME stops sending modifications.
-        # Close is a modification — block under kill switch.
-        if not self.plane.pme_modifications_allowed():
-            return OmsManageResult(
-                outcome="disabled",
-                message="Ops kill switch armed — PME close blocked",
-                retcode=90001,
-                oms_status="blocked",
-                gateway_status="not_called",
-            )
+        # Flattening is protective — never blocked by the kill switch.
         return cast("OmsManageResult", self.inner.close_position(**kwargs))

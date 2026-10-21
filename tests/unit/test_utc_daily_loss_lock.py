@@ -638,7 +638,7 @@ def _live_safety_facts(**overrides: object) -> AutoTradeLiveFacts:
     return AutoTradeLiveFacts(**payload)  # type: ignore[arg-type]
 
 
-def test_daily_loss_keeps_scanning_mt5_autotrading_is_safety() -> None:
+def test_daily_loss_is_global_blocker_mt5_autotrading_is_safety() -> None:
     from app.domain.institutional_trading.auto_trading import (
         AutoTradePolicy,
         evaluate_auto_trade_safety,
@@ -650,7 +650,8 @@ def test_daily_loss_keeps_scanning_mt5_autotrading_is_safety() -> None:
         policy, _live_safety_facts(daily_loss_exceeded=True)
     )
     assert daily.allowed is False
-    assert safety_blocks_decision(daily) is False
+    # Owner decision 2026-10-20: the daily-loss stop aborts the whole universe.
+    assert safety_blocks_decision(daily) is True
     assert any("daily loss" in r.lower() for r in daily.failed_reasons)
 
     still_over = sync_utc_daily_loss_lock(

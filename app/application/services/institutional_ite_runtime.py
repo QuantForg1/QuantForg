@@ -1222,9 +1222,11 @@ class InstitutionalIteRuntime:
                         except Exception:
                             logger.exception("symbol_safety_focus_release_failed")
                     return result
+            # Scan-continue miss (max open / risk / margin): Decision may still
+            # run for diagnostics, OMS stays blocked. Not a FORCE_FIRST_TRADE path.
             logger.warning(
-                "FORCE_FIRST_TRADE proceeding despite safety blockers: %s",
-                "; ".join(safety.failed_reasons) or "unknown",
+                "safety_scan_continue_oms_blocked",
+                reasons="; ".join(safety.failed_reasons) or "unknown",
             )
 
         try:

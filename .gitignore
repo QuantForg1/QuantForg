@@ -269,3 +269,8 @@ backups/
 # Local scratch / unrelated IDE artifacts
 2025.1
 
+# Generated production evidence (tests write to QUANTFORG_PRODUCTION_DOCS_DIR).
+# Already-tracked files stay tracked until a separate cleanup removes them.
+docs/production/validation/
+docs/production/reports/*_[0-9]*T[0-9]*Z.*
+docs/production/execution/execution_history.*

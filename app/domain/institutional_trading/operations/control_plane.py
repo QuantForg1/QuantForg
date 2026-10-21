@@ -324,17 +324,25 @@ class OperationsControlPlane:
             return self.mode is not OpsExecutionMode.SHADOW
 
     def pme_modifications_allowed(self) -> bool:
-        # Phase A halt modes keep PME safety / reconciliation alive.
+        """Risk-adding or neutral PME changes (widen SL, move TP, re-open size).
+
+        Blocked while the kill switch is armed or Phase A is halted. Risk-
+        reducing actions use ``pme_protective_allowed`` and are never blocked.
+        """
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
             from app.domain.institutional_trading.phase_a.kill_state import HaltMode
 
             if get_phase_a_plane().halt.mode is not HaltMode.ACTIVE:
-                return bool(get_phase_a_plane().halt.pme_safety_allowed())
+                return False
         except Exception:
             pass
         with self._lock:
             return not self.kill_switch_armed
+
+    def pme_protective_allowed(self) -> bool:
+        """Closes, partial closes and SL tightening stay allowed under kill/halt."""
+        return True
 
     # --- Mode transitions --------------------------------------------------
 
@@ -1093,6 +1101,7 @@ class OperationsControlPlane:
                 "active_config": active.to_dict() if active else None,
                 "oms_orders_allowed": self.oms_orders_allowed(),
                 "pme_modifications_allowed": self.pme_modifications_allowed(),
+                "pme_protective_allowed": self.pme_protective_allowed(),
                 "auto_trading": {
                     "enabled": self.auto_trading_enabled,
                     "status": (
