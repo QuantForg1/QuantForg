@@ -15,6 +15,7 @@ from app.domain.institutional_trading.management.config import (
     DEFAULT_PME_CONFIG,
     PositionManagementConfig,
 )
+from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_OPEN_POSITIONS
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -91,7 +92,7 @@ def apply_trading_mode_to_runtime(
             ite,
             trading_mode="alpha",
             config_version=f"{ite.config_version}+alpha",
-            max_open_trades=max(3, ite.max_open_trades),
+            max_open_trades=min(ite.max_open_trades, OWNER_MAX_OPEN_POSITIONS),
         )
         pme = pme_config_for_scalping(scalp)
         set_alpha_enabled(True)
@@ -125,15 +126,11 @@ def apply_trading_mode_to_runtime(
         if plane is not None and hasattr(plane, "max_open_trades"):
             try:
                 # Scalping/alpha: plane must not serialize to one-trade — sync to ITE.
-                if mode_l in {"scalping", "alpha"}:
-                    plane.max_open_trades = max(
-                        2, int(getattr(ite, "max_open_trades", 5) or 5)
-                    )
-                else:
-                    plane.max_open_trades = max(
-                        int(getattr(ite, "max_open_trades", 1) or 1),
-                        int(getattr(plane, "max_open_trades", 1) or 1),
-                    )
+                # Owner limit: one open position in every mode.
+                plane.max_open_trades = min(
+                    OWNER_MAX_OPEN_POSITIONS,
+                    max(1, int(getattr(ite, "max_open_trades", 1) or 1)),
+                )
                 plane.trading_mode = mode_l
             except Exception:
                 logger.exception("trading_mode_plane_sync_failed")

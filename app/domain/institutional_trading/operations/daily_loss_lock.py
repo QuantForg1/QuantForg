@@ -15,6 +15,9 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.owner_live_limits import (
+    daily_loss_exceeded as owner_daily_loss_exceeded,
+)
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -61,9 +64,12 @@ def utc_daily_loss_exceeded(
     balance: Decimal | None,
     max_daily_loss_pct: Decimal,
 ) -> bool:
+    """Owner daily stop: loss > max($5, cap% of start-of-day), max 10%."""
     cap = Decimal(str(max_daily_loss_pct or 0))
-    pct = utc_daily_loss_pct(daily_pnl=daily_pnl, equity=equity, balance=balance)
-    return pct > cap > 0
+    if cap <= 0:
+        return False
+    base, _name = utc_daily_loss_base(equity=equity, balance=balance)
+    return owner_daily_loss_exceeded(daily_pnl=daily_pnl, base_now=base, pct=cap)
 
 
 def utc_daily_loss_resets_at(now: datetime | None = None) -> str:

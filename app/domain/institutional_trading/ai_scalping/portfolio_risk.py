@@ -17,6 +17,10 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.decision_models import AccountRiskState
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_OPEN_POSITIONS,
+    daily_loss_cap_pct,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,9 +117,16 @@ def aggregate_portfolio_risk(
         risk_per_trade_pct=cfg.risk_per_trade_pct,
         position_risk_pcts=position_risk_pcts,
     )
-    max_open = int(cfg.max_open_trades)
-    # Prefer ITE institutional daily-loss ceiling (same as v6.3 desk); never raise it
-    max_dd = Decimal(str(ite.max_daily_loss_pct))
+    # Effective limits are the minimum across profile, ITE and owner limits.
+    max_open = min(
+        int(cfg.max_open_trades), int(ite.max_open_trades), OWNER_MAX_OPEN_POSITIONS
+    )
+    # Owner daily stop (max $5 / ITE pct, 10% cap) as a percent of equity.
+    max_dd = daily_loss_cap_pct(
+        daily_pnl=daily_pnl,
+        base_now=equity,
+        pct=Decimal(str(ite.max_daily_loss_pct)),
+    )
     max_exp = Decimal(str(cfg.max_daily_exposure_pct))
 
     reasons.append(
