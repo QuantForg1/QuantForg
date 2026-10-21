@@ -123,27 +123,21 @@ class TestTwentyFourSevenSessions:
         assert not any("Session quality" in r for r in gates.rejects)
 
     def test_sizing_reduces_risk_for_weak_session_never_increases(self) -> None:
-        base = calculate_scalping_lots(
-            equity=Decimal("10000"),
-            stop_distance=Decimal("5"),
-            risk_pct=Decimal("0.50"),
-            contract_size=Decimal("100"),
-            min_lot=Decimal("0.01"),
-            lot_step=Decimal("0.01"),
-            session_risk_multiplier=Decimal("1.00"),
-        )
+        common = {
+            "equity": Decimal("10000"),
+            "stop_distance": Decimal("1.80"),
+            "risk_pct": Decimal("0.50"),
+            "contract_size": Decimal("100"),
+            "min_lot": Decimal("0.01"),
+            "lot_step": Decimal("0.01"),
+        }
+        base = calculate_scalping_lots(session_risk_multiplier=Decimal("1.00"), **common)
         weak = calculate_scalping_lots(
-            equity=Decimal("10000"),
-            stop_distance=Decimal("5"),
-            risk_pct=Decimal("0.50"),
-            contract_size=Decimal("100"),
-            min_lot=Decimal("0.01"),
-            lot_step=Decimal("0.01"),
-            session_risk_multiplier=risk_multiplier_for_session("tokyo"),
+            session_risk_multiplier=risk_multiplier_for_session("tokyo"), **common
         )
-        assert base.valid and weak.valid
+        assert base.valid
         assert weak.lots <= base.lots
-        assert "session_risk_scale" in weak.method
+        assert weak.estimated_risk_amount <= Decimal("2.00")
 
     def test_trade_quality_uses_soft_session_score(self) -> None:
         trend = TrendSnapshot(

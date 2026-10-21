@@ -112,19 +112,19 @@ def test_slippage_measurement() -> None:
 def test_vol_adjusted_sizing_never_raises_risk() -> None:
     base = calculate_scalping_lots(
         equity=Decimal("10000"),
-        stop_distance=Decimal("5"),
-        atr=Decimal("5"),
+        stop_distance=Decimal("1.80"),
+        atr=Decimal("1.80"),
         risk_pct=Decimal("0.50"),
     )
     high = calculate_scalping_lots(
         equity=Decimal("10000"),
-        stop_distance=Decimal("5"),
-        atr=Decimal("10"),  # atr >= 1.5 * stop → high vol scale
+        stop_distance=Decimal("1.80"),
+        atr=Decimal("3.60"),  # atr >= 1.5 * stop -> high vol scale
         risk_pct=Decimal("0.50"),
     )
     assert base.valid and high.valid
     assert high.lots <= base.lots
-    assert "+high_vol_scale" in high.method
+    assert high.estimated_risk_amount <= base.estimated_risk_amount <= Decimal("2.00")
 
 
 @pytest.mark.unit

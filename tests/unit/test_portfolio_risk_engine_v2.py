@@ -295,13 +295,10 @@ class TestPortfolioBookAndAllocation:
             ),
             log=False,
         )
+        # A losing book can never be added to: the single owner slot is taken.
         assert alloc.allow is False
-        assert alloc.rejection_reason is not None
-        assert (
-            "loser" in alloc.rejection_reason.lower()
-            or "unrealized" in alloc.rejection_reason.lower()
-            or "pyramid" in alloc.rejection_reason.lower()
-        )
+        reason = (alloc.rejection_reason or "").lower()
+        assert any(k in reason for k in ("loser", "unrealized", "pyramid", "max open"))
 
     def test_independent_symbol_not_blocked_by_other_open(self) -> None:
         """XAUUSD open must not false-block EURUSD via cross-symbol duplicate."""

@@ -399,10 +399,18 @@ class TestAutoTradeOpsControls:
         )
         plane.transition_mode(op, OpsExecutionMode.LIVE, reason="live", confirmed=True)
 
+        with pytest.raises(ValueError, match="max_open_trades"):
+            plane.update_auto_trade_controls(
+                op, max_open_positions=2, reason="above owner limit"
+            )
+        with pytest.raises(ValueError, match="risk_per_trade_pct"):
+            plane.update_auto_trade_controls(
+                op, risk_per_trade_pct=Decimal("2.5"), reason="above owner ceiling"
+            )
         policy = plane.update_auto_trade_controls(
             op,
             enabled=True,
-            max_open_positions=2,
+            max_open_positions=1,
             risk_per_trade_pct=Decimal("0.75"),
             max_daily_loss_pct=Decimal("2.5"),
             allowed_sessions=("london", "new_york"),
@@ -412,7 +420,7 @@ class TestAutoTradeOpsControls:
             reason="configure auto trade",
         )
         assert policy.enabled is True
-        assert policy.max_open_positions == 2
+        assert policy.max_open_positions == 1
         assert policy.news_filter_enabled is True
 
         from app.domain.institutional_trading.live_trading_control import (

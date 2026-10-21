@@ -385,7 +385,7 @@ def test_multi_asset_scan_config_present() -> None:
     assert cfg.break_even_at_r == Decimal("0.80")
     assert cfg.partial_at_r == Decimal("1.20")
     assert cfg.parallel_scan_enabled is True
-    assert cfg.max_entries_per_cycle >= 2
+    assert cfg.max_entries_per_cycle == 1
     assert cfg.post_close_rescan_enabled is True
     assert "NAS100" not in cfg.universe
     assert "EURUSD" in cfg.universe

@@ -27,6 +27,8 @@ PROFILE_ID = "SCALPING_V1"
 PROFILE_VERSION = "ai-scalping-v8.2.0+SCALPING_V1+UNIVERSE_GATE_FIX"
 
 # Professional scalping RR target — min gate MUST match (never demand more).
+# The owner minimum (1.50, spread on the risk leg) is enforced at submit by
+# owner_live_limits.evaluate_owner_entry.
 _SCALP_RR = Decimal("1.20")
 
 

@@ -273,14 +273,13 @@ def test_no_martingale_and_no_sl_widen_in_module() -> None:
     assert ctrl.last_loss_volume == Decimal("1.74")
 
 
-def test_risk_limits_and_rr_floor_unchanged() -> None:
-    assert Decimal("6.00") == MIN_PLANNED_RISK_USD
-    assert Decimal("20.00") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("30.00") == MAX_TOTAL_PLANNED_RISK_USD
-    assert Decimal("1.00") == MIN_REWARD_RISK
+def test_risk_limits_and_rr_floor_are_owner_values() -> None:
+    assert Decimal("1.50") == MIN_PLANNED_RISK_USD
+    assert Decimal("2.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("2.00") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("1.50") == MIN_REWARD_RISK
     assert DEFAULT_AI_SCALPING_CONFIG.min_expected_rr >= Decimal("1")
     assert CAUTIOUS_MIN_RR_SOFT >= 1.0
-    assert DEFAULT_AI_SCALPING_CONFIG.min_expected_rr >= Decimal("1")
 
 
 def test_tp_cannot_be_fabricated_wait_code_still_in_scoring() -> None:

@@ -26,7 +26,7 @@ def _gold_payload(**overrides: object) -> dict[str, object]:
         "equity": "10000",
         "leverage": str(MAX_LEVERAGE),
         "price": "2400",
-        "stop_distance": "5",
+        "stop_distance": "1.80",
         "atr": "4.80",
         "consecutive_losses": 0,
         "daily_drawdown_pct": "0.2",
@@ -115,6 +115,15 @@ def test_risk_pass_and_safety_pass_propagate() -> None:
     assert facts.symbol == CANONICAL_GOLD_BROKER_DISPLAY
     assert risk.state == "PASS" and risk.passed is True
     assert safety.state == "PASS" and safety.passed is True
+
+
+def test_stop_above_owner_cap_fails_risk() -> None:
+    # $5 stop at 0.01 lot = $5 planned loss > $2 owner cap.
+    _facts, risk, _safety = assess_decision_center_engines(
+        _gold_payload(stop_distance="5"),
+        use_live=False,
+    )
+    assert risk.state == "FAIL"
 
 
 def test_risk_fail_is_hard_block() -> None:

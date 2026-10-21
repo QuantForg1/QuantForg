@@ -30,6 +30,7 @@ from app.domain.institutional_trading.ai_scalping.post_trade_analytics import (
 from app.domain.institutional_trading.ai_scalping.symbol_state import SymbolStateBook
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.institutional_trading.decision_models import AccountRiskState
+from app.domain.institutional_trading.owner_live_limits import daily_loss_cap_pct
 
 
 def _opp(symbol: str, **kwargs: object) -> dict:
@@ -55,13 +56,11 @@ def _opp(symbol: str, **kwargs: object) -> dict:
 @pytest.mark.unit
 def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
     """Exposure is portfolio-combined, not per-symbol silos."""
-    # Two open positions → 2 x risk_per_trade_pct
     exp = portfolio_exposure_pct(
         open_positions=2,
         risk_per_trade_pct=DEFAULT_AI_SCALPING_CONFIG.risk_per_trade_pct,
     )
     assert exp == Decimal("1.00")  # 2 * 0.50
-    # Explicit per-position risks sum across symbols
     exp2 = portfolio_exposure_pct(
         open_positions=2,
         risk_per_trade_pct=Decimal("0.50"),
@@ -69,31 +68,40 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
     )
     assert exp2 == Decimal("1.50")
 
-    account = AccountRiskState(
+    flat = AccountRiskState(
+        equity=Decimal("10000"),
+        daily_pnl=Decimal("0"),
+        open_positions=0,
+    )
+    result = scan_multi_asset_portfolio(
+        [_opp("EURUSD", ai_confidence=95, trade_quality=95)],
+        account=flat,
+        config=DEFAULT_AI_SCALPING_CONFIG,
+        state_book=SymbolStateBook(),
+    )
+    assert result.blocked_by_portfolio is False
+
+    one_open = AccountRiskState(
         equity=Decimal("10000"),
         daily_pnl=Decimal("0"),
         open_positions=1,
     )
-    snap = aggregate_portfolio_risk(account, config=DEFAULT_AI_SCALPING_CONFIG)
+    snap = aggregate_portfolio_risk(one_open, config=DEFAULT_AI_SCALPING_CONFIG)
     assert snap.exposure_pct == Decimal("0.50")
-    assert snap.max_exposure_pct == DEFAULT_AI_SCALPING_CONFIG.max_daily_exposure_pct
-
-    result = scan_multi_asset_portfolio(
+    assert snap.max_open_positions == 1
+    full = scan_multi_asset_portfolio(
         [_opp("EURUSD", ai_confidence=95, trade_quality=95)],
-        account=account,
+        account=one_open,
         config=DEFAULT_AI_SCALPING_CONFIG,
         state_book=SymbolStateBook(),
     )
-    # 0.50% exposure < 2.00% max and open 1 < 2 → allowed
-    assert result.blocked_by_portfolio is False
-    assert result.exposure_pct == Decimal("0.50")
+    # Owner limit: one open position fills the book.
+    assert full.blocked_by_portfolio is True
+    assert full.best is None
 
-    # Hit portfolio exposure ceiling via summed position risks across symbols
     blocked = scan_multi_asset_portfolio(
         [_opp("NAS100", ai_confidence=99, trade_quality=99)],
-        account=AccountRiskState(
-            equity=Decimal("10000"), daily_pnl=Decimal("0"), open_positions=1
-        ),
+        account=flat,
         position_risk_pcts=(Decimal("2.00"), Decimal("2.00"), Decimal("2.00")),
         max_exposure_pct=Decimal("5.00"),
         state_book=SymbolStateBook(),
@@ -106,7 +114,7 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
 
 
 @pytest.mark.unit
-def test_blocker2_daily_loss_from_account_ite_ceiling() -> None:
+def test_blocker2_daily_loss_from_account_owner_stop() -> None:
     dd = portfolio_daily_loss_pct(equity=Decimal("10000"), daily_pnl=Decimal("-8001"))
     assert dd == Decimal("80.01")
     account = AccountRiskState(
@@ -120,7 +128,10 @@ def test_blocker2_daily_loss_from_account_ite_ceiling() -> None:
         ite_config=DEFAULT_ITE_CONFIG,
     )
     assert snap.daily_loss_pct == Decimal("80.01")
-    assert snap.max_daily_loss_pct == DEFAULT_ITE_CONFIG.max_daily_loss_pct
+    # Owner stop: max($5, 3% of start-of-day $18,001) as % of equity.
+    assert snap.max_daily_loss_pct == daily_loss_cap_pct(
+        daily_pnl=Decimal("-8001"), base_now=Decimal("10000")
+    )
 
     result = scan_multi_asset_portfolio(
         [_opp("EURUSD", ai_confidence=99, trade_quality=99)],

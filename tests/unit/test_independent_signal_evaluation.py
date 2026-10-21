@@ -119,7 +119,7 @@ def test_research_merge_never_drops_scanner_eligible() -> None:
     assert "NZDUSD" in catalogue_only
 
 
-def test_handoff_continues_after_one_symbol_consumed() -> None:
+def test_handoff_stops_after_one_entry_per_cycle() -> None:
     rt = InstitutionalIteRuntime(
         plane=MagicMock(),
         reliability=MagicMock(),
@@ -129,11 +129,10 @@ def test_handoff_continues_after_one_symbol_consumed() -> None:
         execution=MagicMock(),
         position_management=SimpleNamespace(engine=SimpleNamespace(_positions={})),
     )
-    rt._eligible_handoff_queue = ["EURJPY", "USDCHF", "GBPUSD"]
-    rt._eligible_consumed = {"EURJPY"}
+    rt._eligible_handoff_queue = ["XAUUSD_I", "XAUUSD"]
+    rt._eligible_consumed = {"XAUUSD_I"}
     rt._entries_this_scan = 1
-    assert rt._take_next_handoff_symbol() == "USDCHF"
-    assert rt._take_next_handoff_symbol() == "GBPUSD"
+    # Owner limit: one entry per cycle — no further handoff this scan.
     assert rt._take_next_handoff_symbol() is None
 
 

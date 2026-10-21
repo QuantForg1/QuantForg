@@ -398,7 +398,7 @@ class TestInitialRiskAndProtection:
         )
         assert result.decision is RiskDecision.REJECT
 
-    def test_m_twenty_one_plus_seven_allowed(
+    def test_m_open_initial_risk_blocks_additional_leg(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
@@ -406,18 +406,15 @@ class TestInitialRiskAndProtection:
             ".load_initial_leg_facts_fail_open",
             lambda: {},
         )
-        legs = [
-            _pos(ticket=40 + i, sl=Decimal("2300"), initial_stop=Decimal("2293"))
-            for i in range(3)
-        ]
+        legs = [_pos(ticket=40, sl=Decimal("2300"), initial_stop=Decimal("2298.20"))]
         engine = _engine()
         result = engine.evaluate(
             RiskCheckInput(
                 user_id=uuid4(),
-                request_id="phase2-21-7",
+                request_id="phase2-1-80",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("7.00"),
+                stop_loss_distance=Decimal("1.80"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -425,10 +422,9 @@ class TestInitialRiskAndProtection:
             account=_account(),
             positions=legs,
         )
-        assert result.decision is not RiskDecision.REJECT
-        assert engine.aggregate_planned_sl_risk(legs) == Decimal("21.00")
-        proposed = (result.approved_lots * Decimal("700")).quantize(Decimal("0.01"))
-        assert Decimal("21.00") + proposed <= MAX_TOTAL_PLANNED_RISK_USD
+        # Initial risk $1.80 still counts after SL moved to break-even.
+        assert engine.aggregate_planned_sl_risk(legs) == Decimal("1.80")
+        assert result.decision is RiskDecision.REJECT
 
     def test_n_no_averaging_into_losing_positions(self) -> None:
         decision = may_add_scalping_trade(
