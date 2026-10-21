@@ -433,9 +433,8 @@ def test_structure_sl_caps_wide_stop_to_atr() -> None:
 
 @pytest.mark.unit
 def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
-    """Live blocker: 11.91 stop vs max 6.995 at 0.01 lot / 5% hard max.
-
-    M15 swing invalidation must not replace M5 ATR×1.10 when it blows min-lot.
+    """M15 swing invalidation never replaces M5 ATR x1.10; the capped stop is
+    still above the $2 owner cap at 0.01 lot, so it is infeasible (no upsize).
     """
     from types import SimpleNamespace
 
@@ -473,7 +472,9 @@ def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
         contract_size=Decimal("100"),
         hard_max_risk_pct=Decimal("5.0"),
     )
-    assert feasible.infeasible is False
+    # $6.17 at 0.01 lot > $2 owner cap -> infeasible, stop never moved.
+    assert feasible.infeasible is True
+    assert feasible.stop_changed is False
 
     wide = select_scalp_stop_distance(
         structure_distance=Decimal("11.90825"),

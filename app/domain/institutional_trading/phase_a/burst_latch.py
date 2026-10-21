@@ -1,4 +1,17 @@
-"""Phase A per-minute / reject-burst latch — HALT_NEW_ENTRIES style cooldown."""
+"""Phase A per-minute / reject-burst latch — HALT_NEW_ENTRIES style cooldown.
+
+EXECUTION_REJECT_BURST lifecycle:
+
+* Arms on genuine downstream failures only (see
+  ``execution_reject.apply_oms_outcome_to_burst``): broker/MT5 rejects
+  (retcode 10000-19999 or ``order_send`` reached) — 5 within 120 s — or gateway
+  failures (HTTP 5xx / unreachable) — 3 ambiguous within 120 s.
+* Never arms on pre-OMS aborts or on the gateway-disabled reply
+  (retcode 90001 / ``EXECUTION_DISABLED``): the broker never received those.
+* Clears automatically ``cooldown_s`` (300 s) after the last arming event; no
+  fill is required. A new failure inside the window re-arms it, so a healthy
+  gateway clears it within one cooldown, and accepted orders keep it clear.
+"""
 
 from __future__ import annotations
 

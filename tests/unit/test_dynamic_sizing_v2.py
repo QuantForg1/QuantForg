@@ -203,7 +203,7 @@ class TestDynamicSizingSafety:
     def test_never_exceed_configured_max_risk(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("10000"),
-            stop_distance=Decimal("1.00"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -215,6 +215,7 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
+        assert d.final_lot == Decimal("0.01")
         assert d.risk_pct <= Decimal("0.50")
         assert d.configured_max_risk_pct == Decimal("0.50")
 
@@ -240,7 +241,7 @@ class TestDynamicSizingSafety:
     def test_smooth_growth_dampens_abrupt_jump(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("10000"),
-            stop_distance=Decimal("1.00"),
+            stop_distance=Decimal("1.80"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -253,9 +254,9 @@ class TestDynamicSizingSafety:
             log=False,
         )
         assert d.valid is True
-        # Cap growth to 0.05 * 1.35 = 0.0675 → quantize 0.06
-        assert d.final_lot <= Decimal("0.07")
-        assert d.final_lot < d.calculated_lot or d.final_lot <= Decimal("0.07")
+        # Growth never exceeds 0.05 * 1.35, and the owner cap keeps it at 0.01.
+        assert d.final_lot <= Decimal("0.0675")
+        assert d.final_lot == Decimal("0.01")
 
     def test_audit_log_fields(self) -> None:
         d = calculate_dynamic_lots_v2(
