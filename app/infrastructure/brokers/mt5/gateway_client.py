@@ -1817,6 +1817,8 @@ class GatewayMT5Client:
             "position": int(request.position or 0),
             "order_ticket": int(request.order_ticket or 0),
             "oms_kind": request.oms_kind or "",
+            # The Gateway order guard requires a unique id per new entry.
+            "client_order_id": request.client_order_id or uuid4().hex,
         }
         try:
             data = self._request(

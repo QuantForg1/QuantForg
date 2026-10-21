@@ -153,10 +153,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "min_expected_rr 1.20 != fixed_tp_r 1.50",
     ),
     # --- infra ---
-    _G + "test_windows_vps_deployment_scripts.py::test_watchdog_ps1_files_parse": (
-        "infra",
-        "start_gateway.ps1 em-dashes without UTF-8 BOM (fix in FT-3)",
-    ),
     _G
     + "test_weltrade_integration.py::TestWeltradeConnectHTTP::test_http_gateway_unavailable_returns_503_with_detail": (
         "infra",

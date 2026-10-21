@@ -234,6 +234,39 @@ class _FakeBridge(LiveMT5Bridge):
         return 1.5
 
 
+class _GoldBridge(_FakeBridge):
+    """Catalogue lists gold as plain XAUUSD with one open BUY (SL 4100)."""
+
+    def symbols_get(self) -> Any:
+        return [SimpleNamespace(name="XAUUSD", description="Gold", digits=2)]
+
+    def positions_get(self) -> Any:
+        return [
+            SimpleNamespace(
+                ticket=1,
+                symbol="XAUUSD",
+                type=0,
+                volume=0.01,
+                price_open=4101.0,
+                price_current=4102.0,
+                sl=4100.0,
+                tp=4110.0,
+                profit=1.0,
+            )
+        ]
+
+
+def _gold_entry(client_order_id: str) -> dict[str, Any]:
+    return {
+        "symbol": "XAUUSD_i",
+        "action": "buy",
+        "volume": 0.01,
+        "sl": 4100.0,
+        "tp": 4103.5,
+        "client_order_id": client_order_id,
+    }
+
+
 @pytest.fixture
 def gateway_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[MT5GatewaySettings]:
     monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
@@ -636,7 +669,7 @@ class TestMT5Gateway:
         res = client.post(
             "/trade/order_send",
             headers=headers,
-            json={"symbol": "EURUSD", "action": "buy", "volume": 0.01},
+            json=_gold_entry("live-after-check"),
         )
         assert res.status_code == 200
         body = res.json()
@@ -645,6 +678,103 @@ class TestMT5Gateway:
         assert body["order_ticket"] == 424242
         assert body["deal_ticket"] == 525252
         assert float(body["price"]) == 1.2
+        get_gateway_settings.cache_clear()
+
+    def _enable_execution(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> _GoldBridge:
+        monkeypatch.setenv("MT5_GATEWAY_EXECUTION_ENABLED", "true")
+        get_gateway_settings.cache_clear()
+        runtime = client.app.state.runtime
+        runtime.settings = get_gateway_settings()
+        bridge = _GoldBridge(prelogged=True)
+        runtime.bridge = bridge
+        runtime.diagnostics.connected = True
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        assert (
+            client.post("/session/attach", headers=headers, json={}).status_code == 200
+        )
+        return bridge
+
+    @pytest.mark.parametrize(
+        ("overrides", "code"),
+        [
+            ({"symbol": "EURUSD"}, "GUARD_GOLD_ONLY"),
+            ({"sl": 0}, "GUARD_SL_REQUIRED"),
+            ({"tp": 0}, "GUARD_TP_REQUIRED"),
+            ({"volume": 0.02}, "GUARD_MAX_LOT"),
+            ({"client_order_id": ""}, "GUARD_CLIENT_ORDER_ID_REQUIRED"),
+        ],
+    )
+    def test_order_guard_blocks_entry_before_mt5(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        overrides: dict[str, Any],
+        code: str,
+    ) -> None:
+        from services.mt5_gateway.order_guard import RETCODE_ORDER_GUARD_REJECTED
+
+        bridge = self._enable_execution(client, monkeypatch)
+        res = client.post(
+            "/trade/order_send",
+            headers={"Authorization": "Bearer test-gateway-token"},
+            json={**_gold_entry(f"guard-{code}"), **overrides},
+        )
+        assert res.status_code == 403
+        detail = res.json()["detail"]
+        assert detail["retcode"] == RETCODE_ORDER_GUARD_REJECTED
+        assert detail["code"] == code
+        assert bridge.order_send_calls == 0
+        get_gateway_settings.cache_clear()
+
+    def test_duplicate_client_order_id_never_reaches_mt5_twice(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        body = _gold_entry("dup-router")
+        first = client.post("/trade/order_send", headers=headers, json=body)
+        assert first.status_code == 200
+        again = client.post("/trade/order_send", headers=headers, json=body)
+        assert again.status_code == 403
+        assert again.json()["detail"]["code"] == "GUARD_DUPLICATE_CLIENT_ORDER_ID"
+        assert bridge.order_send_calls == 1
+        get_gateway_settings.cache_clear()
+
+    def test_close_allowed_and_sl_widen_blocked(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        close = client.post(
+            "/trade/order_send",
+            headers=headers,
+            json={
+                "symbol": "XAUUSD",
+                "action": "sell",
+                "volume": 0.01,
+                "position": 1,
+                "oms_kind": "close",
+            },
+        )
+        assert close.status_code == 200, close.text
+        widen = client.post(
+            "/trade/order_send",
+            headers=headers,
+            json={
+                "symbol": "XAUUSD",
+                "action": "sltp",
+                "oms_kind": "sltp",
+                "volume": 0,
+                "position": 1,
+                "sl": 4090.0,
+                "tp": 4110.0,
+            },
+        )
+        assert widen.status_code == 403
+        assert widen.json()["detail"]["code"] == "GUARD_SL_WIDEN"
+        assert bridge.order_send_calls == 1
         get_gateway_settings.cache_clear()
 
 

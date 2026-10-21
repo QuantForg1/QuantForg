@@ -139,6 +139,7 @@ class TradeRequest:
     position: int = 0
     order_ticket: int = 0
     oms_kind: str = ""
+    client_order_id: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -156,6 +157,7 @@ class TradeRequest:
             "position": self.position,
             "order_ticket": self.order_ticket,
             "oms_kind": self.oms_kind,
+            "client_order_id": self.client_order_id,
         }
 
 

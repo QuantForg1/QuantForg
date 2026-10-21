@@ -1,4 +1,4 @@
-# QuantForg VPS watchdog — one idempotent pass per Task Scheduler firing.
+# QuantForg VPS watchdog - one idempotent pass per Task Scheduler firing.
 # Authoritative recovery for Gateway/MT5/Cloudflared. Not a permanent daemon.
 # NEVER kills a healthy Gateway listener. NEVER sends broker orders.
 # NEVER reads or logs gateway/tunnel tokens.
@@ -126,7 +126,7 @@ try {
     $script:WatchdogStarts = $existingCounters.Starts
     $script:WatchdogWindowUtc = $existingCounters.WindowUtc
 
-    # 1. MT5 — never duplicate terminal64; no broker login; process != session
+    # 1. MT5 - never duplicate terminal64; no broker login; process != session
     $mt5Pids = @(Get-Mt5TerminalPids)
     if ($mt5Pids.Count -gt 1) {
       Write-Wd "mt5" "observe" "duplicate_terminal" ("count={0} not_killing" -f $mt5Pids.Count)
@@ -158,7 +158,7 @@ try {
       }
     }
 
-    # 2. Local Gateway — Task Scheduler Ready is NOT health
+    # 2. Local Gateway - Task Scheduler Ready is NOT health
     $liveOk = Test-LocalLive
     $listen = Get-Listen
 
@@ -208,7 +208,7 @@ try {
       Write-Wd "supervisor" "preserve" "process_running" ("pid={0}" -f $sup[0].ProcessId)
     }
 
-    # 3. Cloudflared — do not restart Gateway for public-only failure
+    # 3. Cloudflared - do not restart Gateway for public-only failure
     $cfPids = @(Get-CloudflaredPids)
     if ($cfPids.Count -gt 1) {
       Write-Wd "cloudflared" "observe" "cloudflared_duplicate" ("count={0} not_killing" -f $cfPids.Count)

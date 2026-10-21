@@ -59,6 +59,11 @@ class TradeRequestBody(BaseModel):
         max_length=32,
         description="deal | pending | sltp | modify_pending | close",
     )
+    client_order_id: str = Field(
+        default="",
+        max_length=64,
+        description="Unique per new entry; replays are rejected by the order guard",
+    )
 
     def as_runtime_dict(self) -> dict:
         return {
@@ -75,6 +80,7 @@ class TradeRequestBody(BaseModel):
             "position": self.position,
             "order_ticket": self.order_ticket,
             "oms_kind": self.oms_kind,
+            "client_order_id": self.client_order_id,
         }
 
 
