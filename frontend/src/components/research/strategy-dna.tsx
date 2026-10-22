@@ -6,7 +6,7 @@ import { cn, formatNumber } from "@/lib/utils";
 import { ResearchEmpty } from "@/components/research/empty-state";
 
 /**
- * Strategy DNA â€” fingerprint of the selected strategy from catalog / library.
+ * Strategy DNA — fingerprint of the selected strategy from catalog / library.
  * Real fields only; never invents parameters or edge.
  */
 export const StrategyDna = memo(function StrategyDna({
@@ -28,26 +28,26 @@ export const StrategyDna = memo(function StrategyDna({
     const rows: { label: string; value: string }[] = [
       {
         label: "Key",
-        value: str(src.strategy_key ?? src.key ?? src.id, strategyKey || "â€”"),
+        value: str(src.strategy_key ?? src.key ?? src.id, strategyKey || "—"),
       },
-      { label: "Name", value: str(src.name ?? src.title, "â€”") },
-      { label: "Family", value: str(src.family ?? src.category ?? src.type, "â€”") },
-      { label: "Status", value: str(src.status ?? src.state, "â€”") },
+      { label: "Name", value: str(src.name ?? src.title, "—") },
+      { label: "Family", value: str(src.family ?? src.category ?? src.type, "—") },
+      { label: "Status", value: str(src.status ?? src.state, "—") },
       {
         label: "Trades (saved)",
         value: Number.isFinite(num(src.trade_count ?? asRecord(src.metrics).trade_count))
           ? formatNumber(num(src.trade_count ?? asRecord(src.metrics).trade_count), 0)
-          : "â€”",
+          : "—",
       },
       {
         label: "Sharpe (saved)",
         value: Number.isFinite(num(asRecord(src.metrics).sharpe_ratio ?? src.sharpe))
           ? formatNumber(num(asRecord(src.metrics).sharpe_ratio ?? src.sharpe), 2)
-          : "â€”",
+          : "—",
       },
     ];
     for (const k of paramKeys) {
-      rows.push({ label: `Param Â· ${k}`, value: String(params[k] ?? "â€”") });
+      rows.push({ label: `Param · ${k}`, value: String(params[k] ?? "—") });
     }
     return rows;
   }, [catalogItem, libraryItem, strategyKey]);
@@ -62,7 +62,7 @@ export const StrategyDna = memo(function StrategyDna({
     >
       <header className="mb-2 shrink-0">
         <h2 className="qf-label text-[var(--fg)]">Strategy DNA</h2>
-        <p className="qf-caption">Identity & parameters â€” catalog / library only</p>
+        <p className="qf-caption">Identity & parameters — catalog / library only</p>
       </header>
       {strands.length === 0 ? (
         <ResearchEmpty
