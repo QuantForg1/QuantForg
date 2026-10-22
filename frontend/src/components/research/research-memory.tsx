@@ -6,7 +6,7 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import { ResearchEmpty } from "@/components/research/empty-state";
 
 /**
- * Research Memory â€” dashboard leaders, regime, paper snapshot, library preview.
+ * Research Memory — dashboard leaders, regime, paper snapshot, library preview.
  * Real research-lab fields only.
  */
 export const ResearchMemory = memo(function ResearchMemory({
@@ -32,25 +32,25 @@ export const ResearchMemory = memo(function ResearchMemory({
     if (Object.keys(candidate).length) {
       rows.push({
         title: "Candidate",
-        body: str(candidate.name, str(candidate.strategy_key, "â€”")),
+        body: str(candidate.name, str(candidate.strategy_key, "—")),
       });
     }
     if (Object.keys(best).length) {
       rows.push({
         title: "Best on file",
-        body: str(best.name, str(best.strategy_key, "â€”")),
+        body: str(best.name, str(best.strategy_key, "—")),
       });
     }
     if (Object.keys(worst).length) {
       rows.push({
         title: "Weakest on file",
-        body: str(worst.name, str(worst.strategy_key, "â€”")),
+        body: str(worst.name, str(worst.strategy_key, "—")),
       });
     }
     if (regime && Object.keys(regime).length) {
       rows.push({
         title: "Regime",
-        body: str(regime.label ?? regime.regime ?? regime.name, "â€”"),
+        body: str(regime.label ?? regime.regime ?? regime.name, "—"),
       });
     }
     if (paper && Object.keys(paper).length) {
@@ -58,14 +58,14 @@ export const ResearchMemory = memo(function ResearchMemory({
         title: "Paper desk",
         body: str(
           paper.status ?? paper.summary,
-          `trades ${str(asRecord(paper.metrics).trade_count, "â€”")}`,
+          `trades ${str(asRecord(paper.metrics).trade_count, "—")}`,
         ),
       });
     }
     for (const p of preview.slice(0, 4)) {
       rows.push({
         title: "Library",
-        body: `${str(p.name, str(p.strategy_key))} Â· ${
+        body: `${str(p.name, str(p.strategy_key))} · ${
           p.updated_at
             ? formatRelativeTime(String(p.updated_at))
             : str(p.status, "saved")
@@ -85,7 +85,7 @@ export const ResearchMemory = memo(function ResearchMemory({
     >
       <header className="mb-2 shrink-0">
         <h2 className="qf-label text-[var(--fg)]">Research Memory</h2>
-        <p className="qf-caption">Leaders, regime, paper â€” from research lab</p>
+        <p className="qf-caption">Leaders, regime, paper — from research lab</p>
       </header>
       {memories.length === 0 ? (
         <ResearchEmpty
