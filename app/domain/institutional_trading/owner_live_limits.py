@@ -10,9 +10,11 @@ layer may be stricter, never looser.
   and execution failures can make a loss larger.
 - Daily loss limit: 19% of the UTC day's starting equity ($9.50 at $50).
 - No independent overall-drawdown limit.
-- Stop loss: max(2.5 x ATR(M1|M5), beyond the nearest structure + spread).
+- Stop loss: max(1.5 x ATR(M1|M5), beyond the nearest structure + spread).
   A stop is never shrunk to fit the budget: too wide -> no trade.
 - Reward:risk after spread >= 1.50: |tp - entry| / (|entry - sl| + spread).
+  TP is a real structure level: the nearest one that clears 1.50, at most
+  the second level out (2026-10-23). Neither clears -> no trade.
 - Entries 07:00-17:00 UTC (London + New York), spread <= 0.45.
 - Volume 0.01 (gateway max); 1 open position; 1 entry per cycle.
 - 3 consecutive losses pause new entries until the next UTC day.
@@ -83,7 +85,10 @@ OWNER_SESSION_START_UTC = time(_SESSION_START_H, 0)
 OWNER_SESSION_END_UTC = (
     time(23, 59, 59, 999999) if _SESSION_END_H == 24 else time(_SESSION_END_H, 0)
 )
-OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "2.5")
+# Owner 2026-10-23: 1.5 x ATR (was 2.5); structure + spread still wins when wider.
+OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "1.5")
+# TP may move to the second structure level only when the first is < 1.50 RR.
+OWNER_TP_MAX_STRUCTURE_LEVELS = 2
 OWNER_SL_ATR_TIMEFRAME = (
     (os.environ.get("OWNER_SL_ATR_TIMEFRAME") or "M1").strip().upper()
 )
@@ -223,6 +228,16 @@ def owner_stop_distance(
     return floor
 
 
+def reward_risk_after_spread(
+    *, tp_distance: Decimal, stop_distance: Decimal, spread: Decimal
+) -> Decimal | None:
+    """Owner RR: |tp - entry| / (|entry - sl| + spread). None when undefined."""
+    risk = stop_distance + max(spread, Decimal("0"))
+    if risk <= 0 or tp_distance <= 0:
+        return None
+    return tp_distance / risk
+
+
 def evaluate_owner_entry(
     *,
     symbol: str,
@@ -315,7 +330,9 @@ def evaluate_owner_entry(
             f"OWNER_STOPS_LEVEL: SL {sl_dist} / TP {tp_dist} closer than broker "
             f"stops_level distance {min_dist}"
         )
-    rr = tp_dist / (sl_dist + spr)
+    rr = reward_risk_after_spread(
+        tp_distance=tp_dist, stop_distance=sl_dist, spread=spr
+    ) or Decimal("0")
     if rr < OWNER_MIN_REWARD_RISK:
         violations.append(
             f"OWNER_MIN_RR: reward:risk after spread {rr.quantize(_CENT)} "

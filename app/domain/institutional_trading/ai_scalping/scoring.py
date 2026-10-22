@@ -521,7 +521,13 @@ def score_scalping_setup(
             + (f" symbol={sym_key}" if sym_key else "")
         )
 
-    stop_atr = getattr(snapshot, "entry_atr", None) or atr
+    # Owner stop ATR (M1|M5) first; entry ATR is M15 on the swing-config scan.
+    owner_stop_atr = getattr(snapshot, "stop_atr", None)
+    stop_atr = (
+        (owner_stop_atr if isinstance(owner_stop_atr, Decimal) else None)
+        or getattr(snapshot, "entry_atr", None)
+        or atr
+    )
     targets = compute_structure_targets(
         snapshot,
         direction=direction,
@@ -866,6 +872,8 @@ def score_scalping_setup(
             ),
             "stop_source": targets.stop_source,
             "stop_atr": str(targets.stop_atr) if targets.stop_atr is not None else None,
+            "tp_level": targets.tp_level,
+            "tp_source": targets.tp_source,
         },
         entry_reason=entry_reason,
         regime_execution=exec_profile.to_dict(),

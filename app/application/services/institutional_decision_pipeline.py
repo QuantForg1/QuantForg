@@ -626,7 +626,12 @@ class InstitutionalDecisionPipeline:
             side = "none"
 
         stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")
-        stop_atr = getattr(snapshot, "entry_atr", None) or account.atr
+        owner_stop_atr = getattr(snapshot, "stop_atr", None)
+        stop_atr = (
+            (owner_stop_atr if isinstance(owner_stop_atr, Decimal) else None)
+            or getattr(snapshot, "entry_atr", None)
+            or account.atr
+        )
         if stop_atr is None or stop_atr <= 0:
             stop_atr = account.atr
         atr_stop = stop_atr * stop_mult if stop_atr else None

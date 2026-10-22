@@ -12,8 +12,16 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
-from app.domain.institutional_trading.owner_live_limits import owner_stop_distance
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MIN_REWARD_RISK,
+    OWNER_TP_MAX_STRUCTURE_LEVELS,
+    owner_stop_distance,
+    reward_risk_after_spread,
+)
 from app.domain.market_data.timeframe import Timeframe
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _NOISE_ATR_MULT = Decimal("0.35")
 
@@ -42,6 +50,9 @@ class StructureTargets:
     reason: str
     stop_source: str | None = None
     stop_atr: Decimal | None = None
+    # Owner TP: which structure level (1 or 2) and what kind of level it was.
+    tp_level: int | None = None
+    tp_source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +71,8 @@ class StructureTargets:
             "fixed_stop": False,
             "stop_source": self.stop_source,
             "stop_atr": str(self.stop_atr) if self.stop_atr is not None else None,
+            "tp_level": self.tp_level,
+            "tp_source": self.tp_source,
         }
 
 
@@ -280,6 +293,71 @@ def _zone_invalidations(
     return lows, highs
 
 
+@dataclass(frozen=True, slots=True)
+class OwnerTpChoice:
+    """Owner TP pick among real structure levels beyond entry."""
+
+    level: int | None
+    price: Decimal | None
+    source: str | None
+    rr_after_spread: Decimal | None
+    considered: tuple[tuple[int, Decimal, str, Decimal | None], ...]
+
+
+def owner_tp_levels(
+    levels: list[tuple[Decimal, str]],
+    *,
+    direction: TradeDirection,
+    entry: Decimal,
+    merge_tolerance: Decimal,
+) -> list[tuple[Decimal, str]]:
+    """Real structure levels beyond entry, nearest first.
+
+    Levels within ``merge_tolerance`` of the previous kept level are the same
+    level at execution (the spread) and are merged, keeping the nearer price.
+    """
+    if direction is TradeDirection.BUY:
+        beyond = sorted((p, s) for p, s in levels if p > entry)
+    else:
+        beyond = sorted(((p, s) for p, s in levels if p < entry), reverse=True)
+    merged: list[tuple[Decimal, str]] = []
+    for price, src in beyond:
+        if merged and abs(price - merged[-1][0]) <= merge_tolerance:
+            kept_price, kept_src = merged[-1]
+            if src not in kept_src.split("+"):
+                merged[-1] = (kept_price, f"{kept_src}+{src}")
+            continue
+        merged.append((price, src))
+    return merged
+
+
+def select_owner_structure_tp(
+    levels: list[tuple[Decimal, str]],
+    *,
+    entry: Decimal,
+    stop_distance: Decimal,
+    spread: Decimal,
+    min_rr: Decimal = OWNER_MIN_REWARD_RISK,
+    max_levels: int = OWNER_TP_MAX_STRUCTURE_LEVELS,
+) -> OwnerTpChoice:
+    """Nearest of the first ``max_levels`` levels with RR after spread >= min.
+
+    ``levels`` come from :func:`owner_tp_levels` (nearest first). Never looks
+    past the second level and never stretches a TP beyond a real level.
+    """
+    considered: list[tuple[int, Decimal, str, Decimal | None]] = []
+    for idx, (price, src) in enumerate(levels[:max_levels], start=1):
+        rr = reward_risk_after_spread(
+            tp_distance=abs(price - entry),
+            stop_distance=stop_distance,
+            spread=spread,
+        )
+        considered.append((idx, price, src, rr))
+        if rr is not None and rr >= min_rr:
+            return OwnerTpChoice(idx, price, src, rr, tuple(considered))
+    return OwnerTpChoice(None, None, None, None, tuple(considered))
+
+
 def compute_structure_targets(
     snapshot: MarketAnalysisSnapshot,
     *,
@@ -309,6 +387,9 @@ def compute_structure_targets(
 
     candidate_lows: list[Decimal] = []
     candidate_highs: list[Decimal] = []
+    # Owner TP candidates, labelled by kind of structure level.
+    tp_lows: list[tuple[Decimal, str]] = []
+    tp_highs: list[tuple[Decimal, str]] = []
     # Prefer M5 execution swings when present; M15 primary is context only.
     # The owner policy also uses M1 swings (nearest M1/M5 structure).
     smap = getattr(snapshot, "structure_by_tf", None)
@@ -319,12 +400,25 @@ def compute_structure_targets(
             tf_lows, tf_highs = _collect_swings(tf_structure)
             candidate_lows.extend(tf_lows)
             candidate_highs.extend(tf_highs)
+            tp_lows.extend((p, f"swing_{tf}") for p in tf_lows)
+            tp_highs.extend((p, f"swing_{tf}") for p in tf_highs)
     zone_lows, zone_highs = _zone_invalidations(snapshot, side=direction)
     candidate_lows.extend(zone_lows)
     candidate_highs.extend(zone_highs)
-    prim_lows, prim_highs = _collect_swings(getattr(snapshot, "primary_structure", None))
+    prim_lows, prim_highs = _collect_swings(
+        getattr(snapshot, "primary_structure", None)
+    )
     candidate_lows.extend(prim_lows)
     candidate_highs.extend(prim_highs)
+    tp_lows.extend((p, "swing_primary") for p in prim_lows)
+    tp_highs.extend((p, "swing_primary") for p in prim_highs)
+    # Zones as targets: the near edge of any active OB/FVG beyond entry.
+    opposite = (
+        TradeDirection.SELL if direction is TradeDirection.BUY else TradeDirection.BUY
+    )
+    opp_lows, opp_highs = _zone_invalidations(snapshot, side=opposite)
+    tp_highs.extend((p, "zone") for p in [*zone_lows, *opp_lows])
+    tp_lows.extend((p, "zone") for p in [*zone_highs, *opp_highs])
 
     below_entry_lows = [p for p in candidate_lows if p < entry]
     above_entry_highs = [p for p in candidate_highs if p > entry]
@@ -342,8 +436,10 @@ def compute_structure_targets(
                 continue
             if "HIGH" in side or "ASK" in side:
                 liq_high = price if liq_high is None else max(liq_high, price)
+                tp_highs.append((price, "liquidity"))
             if "LOW" in side or "BID" in side:
                 liq_low = price if liq_low is None else min(liq_low, price)
+                tp_lows.append((price, "liquidity"))
 
     reason_parts: list[str] = []
     raw_distance: Decimal | None = None
@@ -414,6 +510,18 @@ def compute_structure_targets(
         reason_parts.append("SL lifted to noise floor")
     elif source == "atr_fallback":
         reason_parts.append(f"SL ATR×{cfg.stop_atr_mult}")
+
+    if cfg.owner_atr_stop:
+        return _owner_targets(
+            direction=direction,
+            entry=entry,
+            stop_distance=stop_distance,
+            spread=spread or Decimal("0"),
+            tp_levels=tp_highs if direction is TradeDirection.BUY else tp_lows,
+            reason_parts=reason_parts,
+            stop_source=source,
+            atr=atr_d,
+        )
 
     if direction is TradeDirection.BUY:
         sl = entry - stop_distance
@@ -534,4 +642,82 @@ def compute_structure_targets(
         reason="; ".join(reason_parts),
         stop_source=source,
         stop_atr=atr_d,
+    )
+
+
+def _owner_targets(
+    *,
+    direction: TradeDirection,
+    entry: Decimal,
+    stop_distance: Decimal,
+    spread: Decimal,
+    tp_levels: list[tuple[Decimal, str]],
+    reason_parts: list[str],
+    stop_source: str,
+    atr: Decimal | None,
+) -> StructureTargets:
+    """Owner TP: nearest structure level clearing 1.50 RR, at most level 2."""
+    if direction is TradeDirection.BUY:
+        sl = entry - stop_distance
+    else:
+        sl = entry + stop_distance
+    levels = owner_tp_levels(
+        tp_levels,
+        direction=direction,
+        entry=entry,
+        merge_tolerance=spread if spread > 0 else Decimal("0.01"),
+    )
+    choice = select_owner_structure_tp(
+        levels, entry=entry, stop_distance=stop_distance, spread=spread
+    )
+    tried = ", ".join(
+        f"L{idx} {src} {price} RR "
+        f"{rr.quantize(Decimal('0.01')) if rr is not None else 'n/a'}"
+        for idx, price, src, rr in choice.considered
+    )
+    if choice.price is None:
+        best = max((abs(p - entry) for _, p, _, _ in choice.considered), default=None)
+        return StructureTargets(
+            entry,
+            sl,
+            None,
+            stop_distance,
+            (best / stop_distance).quantize(Decimal("0.01")) if best else None,
+            "OWNER_TP_NO_STRUCTURE_RR: no structure level within "
+            f"{OWNER_TP_MAX_STRUCTURE_LEVELS} gives RR after spread >= "
+            f"{OWNER_MIN_REWARD_RISK} ({tried or 'no level beyond entry'}); "
+            "TP not stretched",
+            stop_source=stop_source,
+            stop_atr=atr,
+        )
+    tp = choice.price
+    expected_rr = (abs(tp - entry) / stop_distance).quantize(Decimal("0.01"))
+    rr_after = (choice.rr_after_spread or Decimal("0")).quantize(Decimal("0.01"))
+    reason_parts.append(
+        f"TP structure level {choice.level} ({choice.source} {tp}) "
+        f"RR after spread {rr_after} [{tried}]"
+    )
+    logger.info(
+        "owner_tp_level_selected",
+        direction=direction.value,
+        entry=str(entry),
+        stop_loss=str(sl),
+        take_profit=str(tp),
+        tp_level=choice.level,
+        tp_source=choice.source,
+        rr_after_spread=str(rr_after),
+        stop_distance=str(stop_distance),
+        spread=str(spread),
+    )
+    return StructureTargets(
+        entry=entry,
+        stop_loss=sl,
+        take_profit=tp,
+        stop_distance=stop_distance,
+        expected_rr=expected_rr,
+        reason="; ".join(reason_parts),
+        stop_source=stop_source,
+        stop_atr=atr,
+        tp_level=choice.level,
+        tp_source=choice.source,
     )

@@ -270,7 +270,8 @@ class InstitutionalAnalysisPipeline:
         atr = compute_atr(entry_bars)
         stop_tf = Timeframe.M1 if OWNER_SL_ATR_TIMEFRAME == "M1" else Timeframe.M5
         stop_bars = list(self.bars.as_mapping().get(stop_tf, []))
-        entry_atr = compute_atr(stop_bars) if cfg.is_scalping() else atr
+        stop_atr = compute_atr(stop_bars)
+        entry_atr = stop_atr if cfg.is_scalping() else atr
         if entry_atr is None:
             entry_atr = atr
         entry_opens = tuple(float(c.open.value) for c in entry_bars)
@@ -295,6 +296,7 @@ class InstitutionalAnalysisPipeline:
             spread=spread,
             atr=atr,
             entry_atr=entry_atr,
+            stop_atr=stop_atr,
             entry_opens=entry_opens,
             entry_highs=entry_highs,
             entry_lows=entry_lows,

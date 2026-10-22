@@ -174,9 +174,13 @@ class MarketAnalysisSnapshot:
     trade_quality: TradeQualityScore
     spread: Decimal | None = None
     atr: Decimal | None = None
-    # Scalp stop ATR (owner timeframe, M1 or M5). ``atr`` remains the
-    # analysis/volatility ATR.
+    # Scalp-config entry ATR (owner timeframe when scalping, else ``atr``).
+    # ``atr`` remains the analysis/volatility ATR.
     entry_atr: Decimal | None = None
+    # Owner stop ATR: always ATR(OWNER_SL_ATR_TIMEFRAME, M1|M5) whatever the
+    # analysis config — the live scan snapshot uses the default (swing)
+    # config, whose entry ATR is M15. Only the stop distance reads this.
+    stop_atr: Decimal | None = None
     # Entry-TF OHLC for EMA/RSI/candle PA — empty when unavailable (never invent).
     entry_opens: tuple[float, ...] = ()
     entry_highs: tuple[float, ...] = ()
@@ -225,6 +229,7 @@ class MarketAnalysisSnapshot:
             "spread": str(self.spread) if self.spread is not None else None,
             "atr": str(self.atr) if self.atr is not None else None,
             "entry_atr": str(self.entry_atr) if self.entry_atr is not None else None,
+            "stop_atr": str(self.stop_atr) if self.stop_atr is not None else None,
             "ltf_order_blocks": [s.to_dict() for s in self.ltf_order_blocks],
             "ltf_fair_value_gaps": [s.to_dict() for s in self.ltf_fair_value_gaps],
         }
