@@ -27,6 +27,8 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_CONSECUTIVE_LOSSES,
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
+    OWNER_MONTHLY_LOSS_PCT,
+    OWNER_WEEKLY_LOSS_PCT,
 )
 
 
@@ -45,9 +47,12 @@ class RiskEngineConfig:
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     # Authoritative ITE daily-loss cap — never a parallel 5% OMS policy.
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
-    max_weekly_loss_pct: Decimal = Decimal("10")
-    max_monthly_loss_pct: Decimal = Decimal("20")
-    max_drawdown_pct: Decimal = Decimal("25")
+    # Owner 2026-10-22: weekly/monthly sit above the 19% daily stop so one
+    # maximum loss never blocks the week; no independent overall drawdown
+    # limit (0 = disabled).
+    max_weekly_loss_pct: Decimal = OWNER_WEEKLY_LOSS_PCT
+    max_monthly_loss_pct: Decimal = OWNER_MONTHLY_LOSS_PCT
+    max_drawdown_pct: Decimal = Decimal("0")
     max_symbol_exposure_pct: Decimal = Decimal("30")
     max_asset_class_exposure_pct: Decimal = Decimal("50")
     max_total_exposure_pct: Decimal = Decimal("80")

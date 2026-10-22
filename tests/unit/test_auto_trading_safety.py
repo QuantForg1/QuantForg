@@ -405,7 +405,7 @@ class TestAutoTradeOpsControls:
             )
         with pytest.raises(ValueError, match="risk_per_trade_pct"):
             plane.update_auto_trade_controls(
-                op, risk_per_trade_pct=Decimal("2.5"), reason="above owner ceiling"
+                op, risk_per_trade_pct=Decimal("9.5"), reason="above owner ceiling"
             )
         policy = plane.update_auto_trade_controls(
             op,

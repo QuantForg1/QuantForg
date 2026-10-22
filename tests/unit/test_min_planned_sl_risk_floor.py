@@ -1,4 +1,6 @@
-"""Owner planned initial-SL band ($1.50 exclusive .. $2.00) on the final volume.
+"""Owner planned initial-SL cap on the final volume (2026-10-22: 9%, no floor).
+
+Static configs carry the $50-reference cap ($4.50); there is no minimum floor.
 
 Does not create a second Risk/OMS/PME path. Never sends orders.
 """
@@ -116,12 +118,13 @@ def _fx_norm(**overrides: object):
 
 
 def _gold_norm(*, stop: Decimal, **overrides: object):
+    # $50 reference account: owner cap 9% = $4.50 (recomputed from equity).
     base: dict[str, object] = {
         "calculated_lot": Decimal("0.01"),
         "min_lot": _MIN,
         "lot_step": _STEP,
         "max_lot": _MAX,
-        "equity": _EQUITY,
+        "equity": Decimal("50"),
         "stop_distance": stop,
         "contract_size": _GOLD_CS,
         "risk_budget": TARGET_PLANNED_RISK_USD,
@@ -171,13 +174,12 @@ def _qf_pos(
     )
 
 
-def test_tight_gold_stop_does_not_trade_when_cannot_step() -> None:
-    # $0.50 at 0.01 is below the floor; owner max lot forbids stepping to 0.04.
+def test_tight_gold_stop_trades_at_min_lot_without_floor() -> None:
+    # $0.50 at 0.01: no minimum planned-risk floor any more; never stepped up.
     out = _gold_norm(stop=Decimal("0.50"), max_lot=OWNER_MAX_LOT)
-    assert out.approved is False
-    assert out.normalized_lot == Decimal("0")
+    assert out.approved is True
+    assert out.normalized_lot == Decimal("0.01")
     assert out.estimated_risk_amount == Decimal("0.50")
-    assert out.block_reason == CODE_MIN_PLANNED_RISK_NOT_REACHED
 
 
 def test_owner_band_accepts_1_51_at_min_lot() -> None:
@@ -189,12 +191,14 @@ def test_owner_band_accepts_1_51_at_min_lot() -> None:
     assert out.estimated_risk_amount <= MAX_PLANNED_SL_RISK_USD
 
 
-def test_exactly_1_50_is_rejected_at_owner_max_lot() -> None:
-    # 0.01 * 100 * 1.50 = $1.50 is not above the exclusive floor; no step-up.
-    out = _gold_norm(stop=Decimal("1.50"), max_lot=OWNER_MAX_LOT)
-    assert out.estimated_risk_amount == Decimal("1.50")
-    assert out.approved is False
-    assert out.block_reason == CODE_MIN_PLANNED_RISK_NOT_REACHED
+def test_exactly_4_50_is_accepted_and_4_51_rejected_at_owner_max_lot() -> None:
+    # 0.01 * 100 * 4.50 = $4.50 = cap (inclusive); $4.51 is above it.
+    at_cap = _gold_norm(stop=Decimal("4.50"), max_lot=OWNER_MAX_LOT)
+    assert at_cap.estimated_risk_amount == Decimal("4.50")
+    assert at_cap.approved is True
+    over = _gold_norm(stop=Decimal("4.51"), max_lot=OWNER_MAX_LOT)
+    assert over.approved is False
+    assert over.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
 
 
 def test_six_01_is_now_rejected() -> None:
@@ -236,12 +240,12 @@ def test_volume_min_itself_above_20_is_rejected() -> None:
     assert out.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
 
 
-def test_next_volume_step_exceeding_2_is_rejected_not_rounded_up() -> None:
-    # 0.01=$1.90 is in band; 0.02 would be $3.80 — reject, never round up.
-    in_band = _gold_norm(stop=Decimal("1.90"), calculated_lot=Decimal("0.01"))
+def test_next_volume_step_exceeding_cap_is_rejected_not_rounded_up() -> None:
+    # 0.01=$4.00 is inside the $4.50 cap; 0.02 would be $8.00 — reject.
+    in_band = _gold_norm(stop=Decimal("4.00"), calculated_lot=Decimal("0.01"))
     assert in_band.approved is True
     assert in_band.normalized_lot == Decimal("0.01")
-    too_big = _gold_norm(stop=Decimal("1.90"), calculated_lot=Decimal("0.02"))
+    too_big = _gold_norm(stop=Decimal("4.00"), calculated_lot=Decimal("0.02"))
     assert too_big.approved is False
     assert too_big.normalized_lot == Decimal("0")
     assert too_big.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
@@ -254,11 +258,11 @@ def test_remaining_portfolio_blocks_entry() -> None:
     assert out.block_reason == CODE_REMAINING_PORTFOLIO_RISK_EXCEEDED
 
 
-def test_open_initial_plus_proposed_above_2_is_rejected() -> None:
+def test_open_initial_plus_proposed_above_cap_is_rejected() -> None:
     engine = _fx_engine(contract_size=_GOLD_CS)
     open_leg = _qf_pos(
         ticket=880001,
-        initial_stop=Decimal("2298.10"),  # 0.01 * 100 * 1.90 = $1.90
+        initial_stop=Decimal("2296.00"),  # 0.01 * 100 * 4.00 = $4.00
     )
     result = engine.evaluate(
         RiskCheckInput(
@@ -308,11 +312,11 @@ def test_be_trailing_does_not_reduce_initial_aggregate() -> None:
 
 
 def test_gold_uses_same_broker_aware_path() -> None:
-    accept = _gold_norm(stop=Decimal("1.90"))
+    accept = _gold_norm(stop=Decimal("4.40"))
     assert accept.approved is True
     assert accept.normalized_lot == Decimal("0.01")
-    assert accept.estimated_risk_amount == Decimal("1.90")
-    reject = _gold_norm(stop=Decimal("2.01"))
+    assert accept.estimated_risk_amount == Decimal("4.40")
+    reject = _gold_norm(stop=Decimal("4.51"))
     assert reject.approved is False
     assert reject.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
     buy = planned_sl_risk_usd(
@@ -330,16 +334,16 @@ def test_gold_uses_same_broker_aware_path() -> None:
     assert buy == sell == Decimal("1.90")
 
 
-def test_no_universal_0_01_fallback_when_actual_below_floor() -> None:
+def test_no_universal_0_01_fallback_when_actual_above_cap() -> None:
     engine = _fx_engine(contract_size=_GOLD_CS, max_lot=OWNER_MAX_LOT)
     result = engine.evaluate(
         RiskCheckInput(
             user_id=uuid4(),
-            request_id="gold-below-floor",
+            request_id="gold-above-cap",
             symbol="XAUUSD",
             side="buy",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("0.50"),
+            stop_loss_distance=Decimal("4.60"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("2300"),
             contract_size=_GOLD_CS,
@@ -349,7 +353,6 @@ def test_no_universal_0_01_fallback_when_actual_below_floor() -> None:
     )
     assert result.decision is RiskDecision.REJECT
     assert result.approved_lots == Decimal("0")
-    assert CODE_MIN_PLANNED_RISK_NOT_REACHED in " ".join(result.reasons)
 
 
 def test_rejected_sizing_does_not_live_in_order_send_path() -> None:
@@ -369,7 +372,7 @@ def test_rejected_sizing_does_not_live_in_order_send_path() -> None:
             symbol="EURUSD",
             side="sell",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=_FX_STOP,
+            stop_loss_distance=Decimal("0.0050"),  # $5.00 > $4.50 cap
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08500"),
             contract_size=_FX_CS,
@@ -438,12 +441,12 @@ def test_pme_be_and_trail_unchanged() -> None:
     assert Decimal("1.20") == _SCALP_RR
 
 
-def test_v2_does_not_allow_below_min_planned() -> None:
+def test_v2_does_not_allow_above_max_planned() -> None:
     sized = calculate_dynamic_lots_v2(
-        equity=_EQUITY,
-        balance=_EQUITY,
-        free_margin=_EQUITY,
-        stop_distance=_FX_STOP,
+        equity=Decimal("50"),
+        balance=Decimal("50"),
+        free_margin=Decimal("50"),
+        stop_distance=Decimal("0.0050"),  # 0.01 lot = $5.00 > $4.50 (9% of $50)
         risk_pct=Decimal("1.0"),
         contract_size=_FX_CS,
         min_lot=_MIN,
@@ -477,7 +480,7 @@ def test_tick_path_matches_contract_fallback_for_fx_step_up() -> None:
 
 
 def test_constants_remain_single_source() -> None:
-    assert Decimal("1.50") == MIN_PLANNED_RISK_USD
-    assert Decimal("2.00") == TARGET_PLANNED_RISK_USD
-    assert Decimal("2.00") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("2.00") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("0") == MIN_PLANNED_RISK_USD
+    assert Decimal("4.50") == TARGET_PLANNED_RISK_USD
+    assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD

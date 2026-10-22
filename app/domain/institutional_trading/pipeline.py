@@ -15,6 +15,7 @@ from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfi
 from app.domain.institutional_trading.fingerprint import compute_input_hash
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.institutional_trading.news_protection import NewsProtection
+from app.domain.institutional_trading.owner_live_limits import OWNER_SL_ATR_TIMEFRAME
 from app.domain.institutional_trading.ports import (
     MultiTimeframeBarStore,
     SnapshotLiquidityPort,
@@ -263,11 +264,13 @@ class InstitutionalAnalysisPipeline:
             spread=str(spread) if spread is not None else None,
         )
 
-        # Volatility ATR on entry confirmation TF. Scalp stops prefer M5 ATR.
+        # Volatility ATR on entry confirmation TF. Scalp stops use the owner's
+        # stop ATR timeframe (M1 or M5, OWNER_SL_ATR_TIMEFRAME).
         entry_bars = list(self.bars.as_mapping().get(cfg.entry_confirmation_tf, []))
         atr = compute_atr(entry_bars)
-        m5_bars = list(self.bars.as_mapping().get(Timeframe.M5, []))
-        entry_atr = compute_atr(m5_bars) if cfg.is_scalping() else atr
+        stop_tf = Timeframe.M1 if OWNER_SL_ATR_TIMEFRAME == "M1" else Timeframe.M5
+        stop_bars = list(self.bars.as_mapping().get(stop_tf, []))
+        entry_atr = compute_atr(stop_bars) if cfg.is_scalping() else atr
         if entry_atr is None:
             entry_atr = atr
         entry_opens = tuple(float(c.open.value) for c in entry_bars)

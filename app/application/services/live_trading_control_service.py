@@ -564,6 +564,38 @@ def _research_block() -> dict[str, Any]:
     return block
 
 
+def _owner_limits_block(equity: Any) -> dict[str, Any]:
+    """Owner live limits as enforced on every entry (dollar figures from equity)."""
+    from app.domain.institutional_trading import owner_live_limits as ol
+
+    eq = _dec(equity)
+    cap = ol.max_planned_risk_usd(eq) if eq is not None and eq > 0 else None
+    return {
+        "owner_max_planned_risk_pct": str(ol.OWNER_MAX_PLANNED_RISK_PCT),
+        "owner_max_planned_risk_usd": str(cap) if cap is not None else None,
+        "owner_daily_loss_pct": str(ol.OWNER_DAILY_LOSS_PCT),
+        "owner_weekly_loss_pct": str(ol.OWNER_WEEKLY_LOSS_PCT),
+        "owner_monthly_loss_pct": str(ol.OWNER_MONTHLY_LOSS_PCT),
+        "owner_overall_drawdown_limit": None,
+        "owner_min_reward_risk": str(ol.OWNER_MIN_REWARD_RISK),
+        "owner_max_spread": str(ol.OWNER_MAX_SPREAD),
+        "owner_session_utc": (
+            f"{ol.OWNER_SESSION_START_UTC:%H:%M}-{ol.OWNER_SESSION_END_UTC:%H:%M}"
+        ),
+        "owner_sl_policy": (
+            f"max({ol.OWNER_SL_ATR_MULTIPLIER} x ATR({ol.OWNER_SL_ATR_TIMEFRAME}), "
+            "structure + spread)"
+        ),
+        "owner_max_lot": str(ol.OWNER_MAX_LOT),
+        "owner_max_consecutive_losses": ol.OWNER_MAX_CONSECUTIVE_LOSSES,
+        "planned_risk_note": (
+            "9% is the maximum planned risk per trade, not a cap on realised "
+            "loss: slippage, gaps, commissions and execution failures can make "
+            "a loss larger."
+        ),
+    }
+
+
 def _cached_broker_spec(symbol: str) -> BrokerSymbolSpec | None:
     """Broker spec the ITE runtime already fetched; never a new Gateway call."""
     try:
@@ -872,6 +904,7 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
             },
             "risk": {
                 **ctrl.risk.to_dict(),
+                **_owner_limits_block(facts.get("equity")),
                 "consecutive_losses": ctrl.consecutive_losses,
                 "remaining_daily_risk_budget": remaining_daily,
                 "open_exposure": facts.get("open_positions") or 0,

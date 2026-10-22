@@ -181,7 +181,7 @@ def test_hydrate_unlabeled_legacy_swing_migrates_idempotently(
     assert plane.trading_mode == "scalping"
     assert plane.max_open_trades == 1
     assert plane.risk_per_trade_pct == Decimal("1.0")
-    assert plane.max_daily_loss_pct == Decimal("3.0")
+    assert plane.max_daily_loss_pct == Decimal("19.0")
     state = load_ops_state()
     assert state.get("trading_mode") == "scalping"
     assert state.get("trading_mode_migrated_from") == "swing"
@@ -257,7 +257,7 @@ def test_mode_does_not_alter_risk_safety_leverage() -> None:
     assert OperationsControlPlane().trading_mode == "scalping"
     assert OperationsControlPlane().max_open_trades == 1
     assert OperationsControlPlane().risk_per_trade_pct == Decimal("1.0")
-    assert OperationsControlPlane().max_daily_loss_pct == Decimal("3.0")
+    assert OperationsControlPlane().max_daily_loss_pct == Decimal("19.0")
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
     assert STRONG_CANDIDATE_THRESHOLD == 85
     assert Decimal("2000") == MAX_LEVERAGE

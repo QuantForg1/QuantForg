@@ -15,22 +15,22 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MIN_REWARD_RISK,
     OWNER_MIN_SL_RISK_USD,
     OWNER_SL_RISK_PCT,
+    OWNER_WEEKLY_LOSS_PCT,
 )
 from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
-# Authoritative XAUUSD autonomous daily-loss percent (owner limits 2026-10-20).
-# The effective stop is max($5, this pct of start-of-day equity), never above
-# MAX_DAILY_LOSS_CEILING_PCT — see owner_live_limits.daily_loss_cap_usd.
+# Authoritative XAUUSD autonomous daily-loss percent (owner limits 2026-10-22):
+# 19% of the UTC day's starting equity — see owner_live_limits.daily_loss_cap_usd.
 # Boundary: loss > cap blocks; loss == cap does not.
 MAX_DAILY_LOSS_PCT = OWNER_DAILY_LOSS_PCT
 MAX_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_CEILING_PCT
 
-# Planned SL-loss (not margin). Accepted normal trades must be STRICTLY above
-# MIN and at most MAX per trade. TARGET is the single sizing budget. Aggregate
-# is a hard ceiling, not a fill quota. Owner cap: $2.00 per trade, one position.
+# Planned SL-loss (not margin) at the reference capital: 9% ($4.50 at $50).
+# No minimum floor. TARGET is the single sizing budget. The live owner guard
+# recomputes the cap from equity on every entry (owner_live_limits).
 MIN_PLANNED_RISK_USD = OWNER_MIN_SL_RISK_USD
 TARGET_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD
 TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
@@ -40,7 +40,7 @@ MAX_TOTAL_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD * OWNER_MAX_OPEN_POSITIONS
 # reject instead.
 MIN_REWARD_RISK = OWNER_MIN_REWARD_RISK
 PREFERRED_REWARD_RISK = Decimal("1.50")
-# Per-trade percent ceiling (applies above $100 equity; USD cap binds below).
+# Per-trade percent ceiling (9% of the risk reference).
 RISK_PER_TRADE_CEILING_PCT = OWNER_SL_RISK_PCT
 
 
@@ -92,7 +92,7 @@ class ITEConfig:
     max_planned_sl_risk_usd: Decimal = MAX_PLANNED_SL_RISK_USD
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
-    max_weekly_drawdown_pct: Decimal = Decimal("8.0")
+    max_weekly_drawdown_pct: Decimal = OWNER_WEEKLY_LOSS_PCT
     max_open_trades: int = OWNER_MAX_OPEN_POSITIONS
     max_consecutive_losses: int = OWNER_MAX_CONSECUTIVE_LOSSES
 

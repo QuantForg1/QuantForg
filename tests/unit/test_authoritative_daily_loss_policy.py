@@ -126,20 +126,20 @@ def _daily_loss_oms(*, message: str) -> OmsSubmitResult:
     )
 
 
-def test_1_configured_daily_loss_pct_is_owner_3() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("3.0")
-    assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("3.0")
-    assert RiskEngineConfig().max_daily_loss_pct == Decimal("3.0")
+def test_1_configured_daily_loss_pct_is_owner_19() -> None:
+    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("19.0")
+    assert RiskEngineConfig().max_daily_loss_pct == Decimal("19.0")
     assert RiskEngineConfig().max_daily_loss_pct == MAX_DAILY_LOSS_PCT
     assert oms_risk_config_from_ite().max_daily_loss_pct == MAX_DAILY_LOSS_PCT
     assert risk_config_from_ite(DEFAULT_ITE_CONFIG).max_daily_loss_pct == MAX_DAILY_LOSS_PCT
 
 
-def test_2_live_15_21_percent_now_daily_loss_blocks() -> None:
-    """15.21% (-$25.11) is above max($5, 3% of SOD $190.24) — blocks everywhere."""
+def test_2_loss_above_19_percent_of_day_start_blocks_everywhere() -> None:
+    """-$40.00 on a $165.13 balance: SOD $205.13 -> 19% stop $38.97 -> blocks."""
     cap = MAX_DAILY_LOSS_PCT
     assert utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-25.11"),
+        daily_pnl=Decimal("-40.00"),
         equity=Decimal("165.13"),
         balance=Decimal("165.13"),
         max_daily_loss_pct=cap,
@@ -147,68 +147,78 @@ def test_2_live_15_21_percent_now_daily_loss_blocks() -> None:
     ite = RiskEngine(config=risk_config_from_ite(DEFAULT_ITE_CONFIG))
     oms = oms_risk_engine_from_ite(DEFAULT_ITE_CONFIG)
     for engine in (ite, oms, RiskEngine()):
-        reasons = _daily_reasons(
-            engine, Decimal("-25.11"), equity="165.13"
-        )
+        reasons = _daily_reasons(engine, Decimal("-40.00"), equity="165.13")
         assert any("daily loss" in r.lower() for r in reasons)
         result = engine.evaluate(
-            _gold_check(request_id="dl-15-21"),
+            _gold_check(request_id="dl-40"),
             account=_account(equity="165.13"),
             positions=[],
-            daily_pnl=Decimal("-25.11"),
+            daily_pnl=Decimal("-40.00"),
         )
         assert result.decision is RiskDecision.REJECT
         assert any("owner daily stop" in r for r in result.reasons)
 
 
-def test_3_boundary_4_99_allowed() -> None:
+def test_2b_15_21_percent_is_below_the_19_percent_stop() -> None:
+    """-$25.11 on $165.13 (15.21%): SOD $190.24 -> stop $36.14 -> not blocked."""
+    assert not utc_daily_loss_exceeded(
+        daily_pnl=Decimal("-25.11"),
+        equity=Decimal("165.13"),
+        balance=Decimal("165.13"),
+        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+    )
+
+
+def test_3_boundary_23_44_allowed() -> None:
     cap = MAX_DAILY_LOSS_PCT
     assert not utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-4.99"),
+        daily_pnl=Decimal("-23.44"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=cap,
     )
-    reasons = _daily_reasons(RiskEngine(), Decimal("-4.99"))
+    reasons = _daily_reasons(RiskEngine(), Decimal("-23.44"))
     assert not any("daily loss" in r.lower() for r in reasons)
 
 
-def test_4_boundary_5_00_allowed_5_01_blocked() -> None:
+def test_4_boundary_23_45_allowed_23_46_blocked() -> None:
+    # Balance $100 after the loss: SOD 123.45 -> stop 23.45 (allowed, equal);
+    # SOD 123.46 -> stop 23.45 < 23.46 (blocked).
     cap = MAX_DAILY_LOSS_PCT
     assert not utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-5.00"),
+        daily_pnl=Decimal("-23.45"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=cap,
     )
-    reasons = _daily_reasons(RiskEngine(), Decimal("-5.00"))
+    reasons = _daily_reasons(RiskEngine(), Decimal("-23.45"))
     assert not any("daily loss" in r.lower() for r in reasons)
     assert utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-5.01"),
+        daily_pnl=Decimal("-23.46"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=cap,
     )
-    reasons = _daily_reasons(RiskEngine(), Decimal("-5.01"))
+    reasons = _daily_reasons(RiskEngine(), Decimal("-23.46"))
     assert any("daily loss" in r.lower() for r in reasons)
 
 
-def test_5_boundary_5_01_daily_loss_block_names_owner_stop() -> None:
+def test_5_boundary_23_46_daily_loss_block_names_owner_stop() -> None:
     cap = MAX_DAILY_LOSS_PCT
     assert utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-5.01"),
+        daily_pnl=Decimal("-23.46"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=cap,
     )
     engine = RiskEngine()
-    reasons = _daily_reasons(engine, Decimal("-5.01"))
-    assert any("owner daily stop $5.00" in r for r in reasons)
+    reasons = _daily_reasons(engine, Decimal("-23.46"))
+    assert any("owner daily stop $23.45" in r for r in reasons)
     result = engine.evaluate(
-        _gold_check(request_id="dl-5-01"),
+        _gold_check(request_id="dl-23-46"),
         account=_account(),
         positions=[],
-        daily_pnl=Decimal("-5.01"),
+        daily_pnl=Decimal("-23.46"),
     )
     assert result.decision is RiskDecision.REJECT
     assert any("daily loss" in r.lower() for r in result.reasons)
@@ -216,7 +226,7 @@ def test_5_boundary_5_01_daily_loss_block_names_owner_stop() -> None:
 
 def test_6_oms_uses_authoritative_owner_pct() -> None:
     cfg = oms_risk_config_from_ite(DEFAULT_ITE_CONFIG)
-    assert cfg.max_daily_loss_pct == Decimal("3.0")
+    assert cfg.max_daily_loss_pct == Decimal("19.0")
     engine = oms_risk_engine_from_ite()
     assert engine.config.max_daily_loss_pct == MAX_DAILY_LOSS_PCT
     factory = InstitutionalExecutionEngine.__dataclass_fields__["risk_engine"].default_factory
@@ -240,12 +250,13 @@ def test_8_risk_and_oms_agree_on_daily_loss_decision() -> None:
     ite = RiskEngine(config=risk_config_from_ite(DEFAULT_ITE_CONFIG))
     oms = oms_risk_engine_from_ite(DEFAULT_ITE_CONFIG)
     cases = (
-        (Decimal("-25.11"), "165.13", True),
-        (Decimal("-4.99"), "100", False),
-        (Decimal("-5.00"), "100", False),
-        (Decimal("-5.01"), "100", True),
-        (Decimal("-30.00"), "1000", False),
-        (Decimal("-31.00"), "969", True),
+        (Decimal("-25.11"), "165.13", False),
+        (Decimal("-40.00"), "165.13", True),
+        (Decimal("-23.44"), "100", False),
+        (Decimal("-23.45"), "100", False),
+        (Decimal("-23.46"), "100", True),
+        (Decimal("-226.00"), "1000", False),
+        (Decimal("-240.00"), "1000", True),
     )
     for pnl, equity, blocked in cases:
         ite_hit = any(

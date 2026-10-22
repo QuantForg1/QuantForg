@@ -540,6 +540,22 @@ def normalize_lots_against_broker(
         if max_planned_sl_risk is not None
         else MAX_PLANNED_SL_RISK_USD
     )
+    # Owner cap is 9% of live equity: the static reference-capital default
+    # ($4.50 at $50) is recomputed from equity; a stricter explicit cap stays.
+    if equity > 0:
+        from app.domain.institutional_trading.owner_live_limits import (
+            OWNER_MAX_OPEN_POSITIONS,
+            max_planned_risk_usd,
+        )
+
+        dynamic_cap = max_planned_risk_usd(equity)
+        if per_trade_max == MAX_PLANNED_SL_RISK_USD:
+            per_trade_max = dynamic_cap
+        if (
+            remaining_portfolio_risk is None
+            or remaining_portfolio_risk == MAX_TOTAL_PLANNED_RISK_USD
+        ):
+            remaining_portfolio_risk = dynamic_cap * OWNER_MAX_OPEN_POSITIONS
     hard_usd = (
         (equity * hard / _PCT).quantize(_CENTS)
         if equity > 0 and hard > 0

@@ -12,6 +12,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
+from app.domain.institutional_trading.owner_live_limits import owner_stop_distance
 from app.domain.market_data.timeframe import Timeframe
 
 _NOISE_ATR_MULT = Decimal("0.35")
@@ -162,7 +163,13 @@ def choose_strategy_stop_distance(
         )
         if targets.stop_distance is not None and targets.stop_distance > 0:
             src = targets.stop_source or "structure"
+            if cfg.owner_atr_stop:
+                # Owner policy: max(k x ATR, structure + spread) is final — a
+                # tighter candidate would shrink the stop to fit.
+                return targets.stop_distance, src
             candidates.append((targets.stop_distance, src))
+    if cfg.owner_atr_stop:
+        return None, "none"
 
     if ai_stop_distance is not None and ai_stop_distance > 0:
         chosen, source = select_scalp_stop_distance(
@@ -295,16 +302,23 @@ def compute_structure_targets(
 
     atr_d = atr if atr and atr > 0 else None
     buffer = atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001")
+    spread = _dec(getattr(snapshot, "spread", None))
+    if cfg.owner_atr_stop and spread is not None and spread > 0:
+        # Owner policy: the stop sits beyond structure by the spread.
+        buffer = spread
 
     candidate_lows: list[Decimal] = []
     candidate_highs: list[Decimal] = []
     # Prefer M5 execution swings when present; M15 primary is context only.
+    # The owner policy also uses M1 swings (nearest M1/M5 structure).
     smap = getattr(snapshot, "structure_by_tf", None)
     if isinstance(smap, dict):
-        m5 = smap.get(Timeframe.M5.value) or smap.get("M5")
-        m5_lows, m5_highs = _collect_swings(m5)
-        candidate_lows.extend(m5_lows)
-        candidate_highs.extend(m5_highs)
+        tfs = ("M5", "M1") if cfg.owner_atr_stop else ("M5",)
+        for tf in tfs:
+            tf_structure = smap.get(Timeframe(tf).value) or smap.get(tf)
+            tf_lows, tf_highs = _collect_swings(tf_structure)
+            candidate_lows.extend(tf_lows)
+            candidate_highs.extend(tf_highs)
     zone_lows, zone_highs = _zone_invalidations(snapshot, side=direction)
     candidate_lows.extend(zone_lows)
     candidate_highs.extend(zone_highs)
@@ -364,11 +378,30 @@ def compute_structure_targets(
                 "Cannot place SELL SL without structure/ATR",
             )
 
-    stop_distance, source = select_scalp_stop_distance(
-        structure_distance=raw_distance,
-        atr=atr_d,
-        stop_atr_mult=cfg.stop_atr_mult,
-    )
+    if cfg.owner_atr_stop:
+        stop_distance = owner_stop_distance(
+            atr=atr_d,
+            structure_distance=raw_distance,
+            multiplier=cfg.owner_stop_atr_mult,
+        )
+        if stop_distance is not None and atr_d is not None:
+            floor = atr_d * cfg.owner_stop_atr_mult
+            source = (
+                "owner_structure"
+                if raw_distance is not None and stop_distance > floor
+                else "owner_atr"
+            )
+            reason_parts.append(
+                f"SL = max({cfg.owner_stop_atr_mult} x ATR, structure + spread)"
+            )
+        else:
+            source = "none"
+    else:
+        stop_distance, source = select_scalp_stop_distance(
+            structure_distance=raw_distance,
+            atr=atr_d,
+            stop_atr_mult=cfg.stop_atr_mult,
+        )
     if stop_distance is None or stop_distance <= 0:
         return StructureTargets(
             entry, None, None, None, None, "Non-positive stop distance"

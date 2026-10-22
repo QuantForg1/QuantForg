@@ -61,8 +61,8 @@ MappingLike = dict[str, Any]
 # Micro-account hard ceiling — configuration cannot exceed these.
 # ITE MAX_DAILY_LOSS_PCT (3%, $5 floor, 10% ceiling) is the global engine cap;
 # this overlay is strictly tighter for real-money live authorization.
-HARD_CEILING_RISK_PER_TRADE_PCT = Decimal("1.00")
-HARD_CEILING_DAILY_LOSS_PCT = Decimal("8.00")
+HARD_CEILING_RISK_PER_TRADE_PCT = Decimal("9.00")
+HARD_CEILING_DAILY_LOSS_PCT = Decimal("19.00")
 HARD_CEILING_MAX_POSITIONS = 2
 HARD_CEILING_CONSECUTIVE_LOSSES = 3
 HARD_CEILING_MARGIN_UTIL_PCT = Decimal("40.00")
@@ -72,16 +72,16 @@ HARD_CEILING_MAX_SLIPPAGE = Decimal("1.00")
 HARD_CEILING_QUOTE_AGE_S = Decimal("5.00")
 
 # Conservative defaults for a ~$33 real-money account (capital preservation).
-DEFAULT_RISK_PER_TRADE_PCT = Decimal("0.50")
-DEFAULT_DAILY_LOSS_PCT = Decimal("3.00")
+DEFAULT_RISK_PER_TRADE_PCT = Decimal("9.00")
+DEFAULT_DAILY_LOSS_PCT = Decimal("19.00")
 DEFAULT_MAX_POSITIONS = 1
-DEFAULT_CONSECUTIVE_LOSSES = 2
+DEFAULT_CONSECUTIVE_LOSSES = 3
 DEFAULT_MARGIN_UTIL_PCT = Decimal("25.00")
 DEFAULT_TOTAL_EXPOSURE_PCT = Decimal("30.00")
-DEFAULT_MAX_SPREAD = Decimal("1.50")
+DEFAULT_MAX_SPREAD = Decimal("0.45")
 DEFAULT_MAX_SLIPPAGE = Decimal("0.50")
 DEFAULT_QUOTE_AGE_S = Decimal("3.00")
-DEFAULT_MIN_RR = Decimal("1.20")
+DEFAULT_MIN_RR = Decimal("1.50")
 DEFAULT_MIN_SCORE = Decimal("70")
 DEFAULT_DUPLICATE_TTL_S = 120
 ACCOUNT_TOO_SMALL = "Account too small for configured risk limits on this instrument."
@@ -1523,7 +1523,11 @@ class LiveTradingController:
             if until.tzinfo is None:
                 until = until.replace(tzinfo=UTC)
             if clock >= until:
+                # Owner: the 3-loss pause lasts until the next UTC day; a new day
+                # starts a new streak (otherwise the streak gate never clears,
+                # because a paused desk cannot record the win that resets it).
                 self.loss_streak_cooldown_until = None
+                self.consecutive_losses = 0
                 return False
             return True
 
@@ -1533,10 +1537,11 @@ class LiveTradingController:
             loss_streak_adaptation as streak_mod,
         )
 
+        # Expiry check first: an ended pause resets the streak before it is read.
+        active = self.loss_streak_cooldown_active()
         with self._lock:
             losses = int(self.consecutive_losses or 0)
             until = self.loss_streak_cooldown_until
-        active = self.loss_streak_cooldown_active()
         adaptation = streak_mod.resolve_loss_streak_adaptation(
             consecutive_losses=losses,
             cooldown_until=until if active else None,
@@ -1570,6 +1575,13 @@ class LiveTradingController:
                     ),
                 )
                 if until is not None:
+                    from app.domain.institutional_trading.owner_live_limits import (
+                        next_utc_day_start,
+                    )
+
+                    # Pause until the next UTC day (never longer than the
+                    # configured cooldown cap).
+                    until = min(until, next_utc_day_start())
                     # Refresh cooldown when streak is at/above max.
                     self.loss_streak_cooldown_until = until
             else:

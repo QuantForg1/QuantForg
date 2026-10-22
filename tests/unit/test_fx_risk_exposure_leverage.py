@@ -80,25 +80,25 @@ def _acct(*, leverage: int) -> AccountSnapshot:
 
 
 def test_floors_are_owner_band() -> None:
-    assert MIN_PLANNED_RISK_USD == Decimal("1.50")
-    assert MAX_PLANNED_SL_RISK_USD == Decimal("2.00")
-    assert MAX_TOTAL_PLANNED_RISK_USD == Decimal("2.00")
+    assert MIN_PLANNED_RISK_USD == Decimal("0")
+    assert MAX_PLANNED_SL_RISK_USD == Decimal("4.50")
+    assert MAX_TOTAL_PLANNED_RISK_USD == Decimal("4.50")
 
 
-def test_hardcoded_100_leverage_halves_then_misses_six_dollar_floor() -> None:
-    """Reproduction: ITE snapshot leverage=100 → 263% exposure → 0.16→0.08 → $3.42."""
+def test_hardcoded_100_leverage_halves_size_without_a_floor_reject() -> None:
+    """Leverage=100 → exposure halves the size; with no planned-risk floor the
+    reduced size is kept (REDUCE_SIZE), never rejected for being too small."""
     result = _ite_engine().evaluate(
         _check(),
         account=_acct(leverage=100),
         positions=[],
         daily_pnl=Decimal("0"),
     )
-    assert result.decision is RiskDecision.REJECT
-    hay = " ".join(result.reasons)
+    assert result.decision is RiskDecision.REDUCE_SIZE
+    hay = " ".join(result.reasons + result.warnings)
     assert "symbol exposure" in hay
-    assert "size reduced from" in hay
-    assert CODE_MIN_PLANNED_RISK_NOT_REACHED in hay
-    assert result.approved_lots == Decimal("0")
+    assert CODE_MIN_PLANNED_RISK_NOT_REACHED not in hay
+    assert result.approved_lots > Decimal("0")
 
 
 def test_live_fx_leverage_keeps_planned_risk_in_six_to_twenty_band() -> None:
@@ -122,13 +122,13 @@ def test_live_fx_leverage_keeps_planned_risk_in_six_to_twenty_band() -> None:
     assert planned <= MAX_PLANNED_SL_RISK_USD
 
 
-def test_owner_floor_rejects_sub_1_50_gold_leg() -> None:
+def test_no_owner_floor_for_sub_1_50_gold_leg() -> None:
     planned = lot_dollar_risk(
         Decimal("0.01"),
         stop_distance=Decimal("1.40"),
         contract_size=Decimal("100"),
     )
-    assert planned < MIN_PLANNED_RISK_USD
+    assert planned > MIN_PLANNED_RISK_USD  # floor removed (2026-10-22)
     assert planned.quantize(Decimal("0.01")) == Decimal("1.40")
 
 

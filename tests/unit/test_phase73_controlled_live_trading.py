@@ -509,10 +509,10 @@ def test_size_uses_broker_specs_not_generic_lot() -> None:
     small = size_from_broker_specs(
         equity=Decimal("33"),
         risk_pct=Decimal("0.50"),
-        stop_distance=Decimal("1.80"),
+        stop_distance=Decimal("3.50"),
         spec=spec,
     )
-    # $33 * 4% micro hard max = $1.32 < $1.80 -> refuse, never upsize.
+    # $33 * 9% = $2.97 < $3.50 at 0.01 lot -> refuse, never upsize.
     assert small.accepted is False
 
 
@@ -528,7 +528,7 @@ def test_size_uses_broker_specs_not_generic_lot() -> None:
         ({"stop_loss": None}, "stop_loss"),
         ({"take_profit": None}, "take_profit"),
         ({"spread": Decimal("9")}, "spread"),
-        ({"daily_loss_pct": Decimal("10")}, "daily_loss"),
+        ({"daily_loss_pct": Decimal("20")}, "daily_loss"),
         ({"loss_streak_cooldown_active": True}, "cooldown"),
         ({"open_exposure_pct": Decimal("90")}, "exposure"),
         ({"used_margin": Decimal("20"), "equity": Decimal("33")}, "margin"),
@@ -630,7 +630,7 @@ def test_hard_limit_pauses_execution() -> None:
     ctrl.transition(op, "ARMED", confirmed=True, reason="arm")
     ctrl.transition(op, "ENABLED", confirmed=True, reason="enable")
     decision = ctrl.evaluate(
-        _req(daily_loss_pct=Decimal("10")), apply_side_effects=True
+        _req(daily_loss_pct=Decimal("20")), apply_side_effects=True
     )
     assert decision.allowed is False
     assert ctrl.snapshot_state() == "PAUSED"

@@ -46,6 +46,22 @@ def _reset_phase_a_plane() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _owner_session_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the owner session clock to 10:00 UTC today (London open).
+
+    The owner guard only accepts entries 07:00-17:00 UTC; without a pinned
+    clock every entry test would depend on the wall-clock hour. Session tests
+    pass explicit times and are unaffected.
+    """
+    from datetime import UTC, datetime, time
+
+    from app.domain.institutional_trading import owner_live_limits as ol
+
+    fixed = datetime.combine(datetime.now(UTC).date(), time(10, 0), tzinfo=UTC)
+    monkeypatch.setattr(ol, "_now", lambda: fixed)
+
+
+@pytest.fixture(autouse=True)
 def _reset_auto_trading_status_cache() -> Iterator[None]:
     """The 2s status snapshot cache is process-wide — never share it across tests."""
     from app.application.services.auto_trading_status import (

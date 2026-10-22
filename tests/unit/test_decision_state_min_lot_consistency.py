@@ -282,15 +282,15 @@ def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
 
 
 def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> None:
-    """Live 9.05 stop at 0.01 lot = $9.05 > $2 owner cap: reject, never upsize."""
+    """Live 9.05 stop at 0.01 lot = $9.05 > 9% of $50 ($4.50): reject, never upsize."""
     min_loss = (VOLUME_MIN * CONTRACT_SIZE * _LIVE_STOP).quantize(Decimal("0.0001"))
     assert Decimal("0.01") == VOLUME_MIN
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("4.0")
-    assert min_loss > Decimal("2.00")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
+    assert min_loss > Decimal("4.50")
 
     engine = RiskEngine()
     wide = engine.size_position(
-        equity=_LIVE_EQUITY,
+        equity=Decimal("50"),
         method=PositionSizingMethod.PERCENTAGE_RISK,
         requested_lots=None,
         stop_distance=_LIVE_STOP,
@@ -330,10 +330,10 @@ def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> N
         ),
         account=AccountSnapshot(
             login=1,
-            balance=_LIVE_EQUITY,
-            equity=_LIVE_EQUITY,
+            balance=Decimal("50"),
+            equity=Decimal("50"),
             margin=Decimal("0"),
-            free_margin=_LIVE_EQUITY,
+            free_margin=Decimal("50"),
             margin_level=Decimal("0"),
             profit=Decimal("0"),
             leverage=2000,
@@ -345,7 +345,7 @@ def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> N
 
 
 def test_hard_max_and_min_lot_owner_values() -> None:
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("4.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
     assert Decimal("0.01") == VOLUME_MIN
     assert RiskEngine().config.min_lot == Decimal("0.01")
     assert RiskEngine().config.max_lot == Decimal("0.01")

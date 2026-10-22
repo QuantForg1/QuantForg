@@ -93,7 +93,8 @@ def _fx_account() -> AccountSnapshot:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_oms_uses_fx_contract_size_not_gold_default() -> None:
-    """EURUSD 0.01 at 25-pip SL is $2.50 — must REJECT, not inherit gold CS=100."""
+    """EURUSD 0.01 at a 500-pip SL is $50 > 9% of $500 — must REJECT; with the
+    gold CS=100 it would wrongly look like $0.05."""
     engine = RiskEngine(
         config=RiskEngineConfig(
             min_lot=Decimal("0.01"),
@@ -109,7 +110,7 @@ def test_oms_uses_fx_contract_size_not_gold_default() -> None:
             symbol="EURUSD",
             side="sell",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("0.00250"),
+            stop_loss_distance=Decimal("0.05000"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08500"),
             contract_size=Decimal("100000"),
@@ -179,8 +180,8 @@ def test_missing_live_cs_uses_symbol_class_not_gold_default() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_execution_engine_never_steps_gold_above_owner_max_lot() -> None:
-    # SL 0.50 away at 0.01 lot = $0.50 (below the $1.50 floor); 0.03 would fit $1.50
-    # but exceeds the 0.01 owner max lot -> reject, never step volume up.
+    # SL 0.50 away at 0.01 lot = $0.50: no minimum floor any more, so it is
+    # accepted at exactly 0.01 — the volume is never stepped up.
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol="XAUUSD",
@@ -198,10 +199,8 @@ def test_execution_engine_never_steps_gold_above_owner_max_lot() -> None:
         login=1,
         recent_decisions=[],
     )
-    assert pipeline.outcome == "rejected"
-    assert pipeline.execution_result is None or not getattr(
-        pipeline.execution_result, "order_ticket", None
-    )
+    assert pipeline.outcome == ExecutionOutcome.SUCCESS.value
+    assert intent.volume.value == Decimal("0.01")
 
 
 @pytest.mark.unit

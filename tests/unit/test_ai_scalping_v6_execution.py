@@ -106,7 +106,10 @@ def test_pme_maps_v6_execution_knobs() -> None:
     assert pme.structure_trail_enabled is True
     assert pme.liquidity_trail_enabled is True
     assert pme.atr_trail_enabled is True
-    assert pme.momentum_fade_threshold == DEFAULT_AI_SCALPING_CONFIG.momentum_fade_threshold
+    assert (
+        pme.momentum_fade_threshold
+        == DEFAULT_AI_SCALPING_CONFIG.momentum_fade_threshold
+    )
     assert pme.partial_tp_enabled is True
     assert pme.break_even_at_r == Decimal("0.80")
 
@@ -252,6 +255,7 @@ def test_structure_tp_below_min_rr_after_atr_still_nulls_when_insufficient() -> 
     snap.fair_value_gaps = None
     snap.order_blocks = None
     cfg = AiScalpingConfig(
+        owner_atr_stop=False,
         fixed_tp_r=Decimal("1.5"),
         stop_atr_mult=Decimal("1.10"),
         atr_tp_mult=Decimal("1.15"),
@@ -292,6 +296,7 @@ def test_structure_tp_below_min_rr_prefers_atr_expansion() -> None:
     snap.fair_value_gaps = None
     snap.order_blocks = None
     cfg = AiScalpingConfig(
+        owner_atr_stop=False,
         fixed_tp_r=Decimal("1.5"),
         stop_atr_mult=Decimal("1.10"),
         atr_tp_mult=Decimal("1.40"),
@@ -334,6 +339,7 @@ def test_structure_nearby_swing_inside_stop_falls_back_to_atr_tp() -> None:
     snap.fair_value_gaps = None
     snap.order_blocks = None
     cfg = AiScalpingConfig(
+        owner_atr_stop=False,
         fixed_tp_r=Decimal("1.5"),
         stop_atr_mult=Decimal("1.10"),
         atr_tp_mult=Decimal("1.40"),
@@ -363,7 +369,7 @@ def test_structure_nearby_swing_inside_stop_falls_back_to_atr_tp() -> None:
 @pytest.mark.unit
 def test_fixed_tp_r_is_preference_not_manufactured_tp() -> None:
     snap = _snap()
-    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"))
+    cfg = AiScalpingConfig(owner_atr_stop=False, fixed_tp_r=Decimal("1.5"))
     targets = compute_structure_targets(
         snap,
         direction=TradeDirection.SELL,
@@ -395,7 +401,9 @@ def test_structure_sl_uses_nearest_swing_not_farthest() -> None:
             SimpleNamespace(price=Decimal("1900"), kind="LOW"),
         ),
     )
-    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"), stop_atr_mult=Decimal("1.10"))
+    cfg = AiScalpingConfig(
+        owner_atr_stop=False, fixed_tp_r=Decimal("1.5"), stop_atr_mult=Decimal("1.10")
+    )
     targets = compute_structure_targets(
         snap,
         direction=TradeDirection.SELL,
@@ -419,7 +427,9 @@ def test_structure_sl_caps_wide_stop_to_atr() -> None:
         last_swing_high=Decimal("2000"),  # 90 pts above 1910
         swings=(),
     )
-    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"), stop_atr_mult=Decimal("1.10"))
+    cfg = AiScalpingConfig(
+        owner_atr_stop=False, fixed_tp_r=Decimal("1.5"), stop_atr_mult=Decimal("1.10")
+    )
     targets = compute_structure_targets(
         snap,
         direction=TradeDirection.SELL,
@@ -434,7 +444,7 @@ def test_structure_sl_caps_wide_stop_to_atr() -> None:
 @pytest.mark.unit
 def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
     """M15 swing invalidation never replaces M5 ATR x1.10; the capped stop is
-    still above the $2 owner cap at 0.01 lot, so it is infeasible (no upsize).
+    above the 9% owner cap on a $50 account, so it is infeasible (no upsize).
     """
     from types import SimpleNamespace
 
@@ -451,7 +461,9 @@ def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
         last_swing_high=Decimal("4605.74"),
         swings=(),
     )
-    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.20"), stop_atr_mult=Decimal("1.10"))
+    cfg = AiScalpingConfig(
+        owner_atr_stop=False, fixed_tp_r=Decimal("1.20"), stop_atr_mult=Decimal("1.10")
+    )
     entry = Decimal("4593.83")
     atr = Decimal("5.61")
     targets = compute_structure_targets(
@@ -467,12 +479,12 @@ def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
     assert targets.stop_source == "atr_cap"
     feasible = evaluate_min_lot_feasibility(
         stop_distance=targets.stop_distance,
-        equity=Decimal("139.90"),
+        equity=Decimal("50"),
         min_lot=Decimal("0.01"),
         contract_size=Decimal("100"),
         hard_max_risk_pct=Decimal("5.0"),
     )
-    # $6.17 at 0.01 lot > $2 owner cap -> infeasible, stop never moved.
+    # $6.17 at 0.01 lot > $4.50 (9% of $50) -> infeasible, stop never moved.
     assert feasible.infeasible is True
     assert feasible.stop_changed is False
 
@@ -499,7 +511,9 @@ def test_fvg_zone_is_preferred_invalidation_when_tighter_than_swing() -> None:
     zone = SimpleNamespace(high_price=Decimal("4621.20"), low_price=Decimal("4618.80"))
     gap = SimpleNamespace(side="BEARISH", bias=None, direction=None, zone=zone)
     snap.fair_value_gaps = SimpleNamespace(active_gaps=[gap])
-    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.20"), stop_atr_mult=Decimal("1.10"))
+    cfg = AiScalpingConfig(
+        owner_atr_stop=False, fixed_tp_r=Decimal("1.20"), stop_atr_mult=Decimal("1.10")
+    )
     targets = compute_structure_targets(
         snap,
         direction=TradeDirection.SELL,

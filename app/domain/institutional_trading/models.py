@@ -174,7 +174,8 @@ class MarketAnalysisSnapshot:
     trade_quality: TradeQualityScore
     spread: Decimal | None = None
     atr: Decimal | None = None
-    # M5 scalp ATR for stop distance. ``atr`` remains the analysis/volatility ATR.
+    # Scalp stop ATR (owner timeframe, M1 or M5). ``atr`` remains the
+    # analysis/volatility ATR.
     entry_atr: Decimal | None = None
     # Entry-TF OHLC for EMA/RSI/candle PA — empty when unavailable (never invent).
     entry_opens: tuple[float, ...] = ()
