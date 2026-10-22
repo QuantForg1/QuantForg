@@ -39,8 +39,23 @@ def _env_decimal(name: str, default: str) -> Decimal:
     return value if value > 0 else Decimal(default)
 
 
+def _env_hour(name: str, default: int) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    try:
+        hour = int(raw) if raw else default
+    except ValueError:
+        hour = default
+    return hour if 0 <= hour <= 24 else default
+
+
 _CENT = Decimal("0.01")
 _PCT = Decimal("100")
+
+
+def _now() -> datetime:
+    """Clock for session / day-boundary defaults (tests pin it)."""
+    return datetime.now(UTC)
+
 
 OWNER_MAX_LOT = Decimal("0.01")
 # Starting reference capital (configurable). Live equity is the risk reference;
@@ -49,15 +64,29 @@ OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
 OWNER_MAX_PLANNED_RISK_PCT = Decimal("9.0")
 OWNER_DAILY_LOSS_PCT = Decimal("19.0")
 # Weekly / monthly guards sit above the daily stop so one maximum loss (or one
-# full daily stop) never blocks the week: weekly = 2 daily stops, monthly = 3.
-OWNER_WEEKLY_LOSS_PCT = OWNER_DAILY_LOSS_PCT * 2
-OWNER_MONTHLY_LOSS_PCT = OWNER_DAILY_LOSS_PCT * 3
+# full daily stop) never blocks the week. Configurable as multiples of the
+# daily stop: weekly = 2 daily stops (38%), monthly = 3 (57%).
+OWNER_WEEKLY_LOSS_PCT = OWNER_DAILY_LOSS_PCT * _env_decimal(
+    "OWNER_WEEKLY_LOSS_DAILY_MULTIPLE", "2"
+)
+OWNER_MONTHLY_LOSS_PCT = OWNER_DAILY_LOSS_PCT * _env_decimal(
+    "OWNER_MONTHLY_LOSS_DAILY_MULTIPLE", "3"
+)
 OWNER_MIN_REWARD_RISK = Decimal("1.50")
-OWNER_MAX_SPREAD = Decimal("0.45")
-OWNER_SESSION_START_UTC = time(7, 0)
-OWNER_SESSION_END_UTC = time(17, 0)
+# Owner 2026-10-22: London + New York 07:00-17:00 UTC, spread <= $0.45.
+OWNER_MAX_SPREAD = _env_decimal("OWNER_MAX_SPREAD", "0.45")
+_SESSION_START_H = _env_hour("OWNER_SESSION_START_UTC_HOUR", 7)
+_SESSION_END_H = _env_hour("OWNER_SESSION_END_UTC_HOUR", 17)
+if _SESSION_END_H <= _SESSION_START_H:
+    _SESSION_START_H, _SESSION_END_H = 7, 17
+OWNER_SESSION_START_UTC = time(_SESSION_START_H, 0)
+OWNER_SESSION_END_UTC = (
+    time(23, 59, 59, 999999) if _SESSION_END_H == 24 else time(_SESSION_END_H, 0)
+)
 OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "2.5")
-OWNER_SL_ATR_TIMEFRAME = (os.environ.get("OWNER_SL_ATR_TIMEFRAME") or "M1").strip().upper()
+OWNER_SL_ATR_TIMEFRAME = (
+    (os.environ.get("OWNER_SL_ATR_TIMEFRAME") or "M1").strip().upper()
+)
 if OWNER_SL_ATR_TIMEFRAME not in {"M1", "M5"}:
     OWNER_SL_ATR_TIMEFRAME = "M1"
 OWNER_MAX_OPEN_POSITIONS = 1
@@ -158,7 +187,7 @@ def daily_loss_cap_pct(
 
 def in_owner_session(now: datetime | None = None) -> bool:
     """London + New York: 07:00 <= UTC time < 17:00."""
-    clock = now or datetime.now(UTC)
+    clock = now or _now()
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
     t = clock.astimezone(UTC).time()
@@ -167,7 +196,7 @@ def in_owner_session(now: datetime | None = None) -> bool:
 
 def next_utc_day_start(now: datetime | None = None) -> datetime:
     """Start of the next UTC day (end of the loss-streak pause)."""
-    clock = now or datetime.now(UTC)
+    clock = now or _now()
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
     day = clock.astimezone(UTC).date() + timedelta(days=1)

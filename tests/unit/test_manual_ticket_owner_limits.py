@@ -159,6 +159,7 @@ def test_ticket_risk_check_passes_inside_owner_band() -> None:
     assert str(rule["current"]).startswith("$1.80")
 
 
-def test_ticket_risk_check_fails_at_or_below_floor() -> None:
+def test_ticket_risk_check_has_no_minimum_floor() -> None:
+    # Old $1.50 floor removed: a $1.50 planned loss passes the per-trade rule.
     _decision, rule = _max_risk_rule("1.50")
-    assert rule["status"] == "fail"
+    assert rule["status"] == "pass"

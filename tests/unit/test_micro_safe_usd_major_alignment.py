@@ -184,7 +184,7 @@ def test_usdjpy_i_existing_cs_stop_sizing_still_rejects_micro_equity() -> None:
 @pytest.mark.unit
 def test_alignment_does_not_change_risk_ceilings() -> None:
     profile = MicroAccountProfile()
-    assert profile.hard_max_risk_pct == Decimal("4.0")
+    assert profile.hard_max_risk_pct == Decimal("9.0")
     assert DEFAULT_ITE_CONFIG.risk_per_trade_pct == Decimal("1.0")
     # Seed list still contains gold — analysis retained, not force-executable.
     assert "XAUUSD" in DEFAULT_SCALPING_UNIVERSE

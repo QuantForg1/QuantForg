@@ -227,14 +227,15 @@ def build_configuration_audit() -> dict[str, Any]:
         _row(
             setting="MAX_DAILY_LOSS_PCT",
             source="institutional_trading.config.MAX_DAILY_LOSS_PCT",
-            default="3.0",
+            default="19.0",
             effective=daily_loss,
             consumer="Risk / daily loss lock",
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
+            # Owner daily stop (2026-10-22): 19% of the UTC day's start equity.
             status="LIVE_EFFECTIVE"
-            if str(daily_loss).startswith("3.0")
+            if str(daily_loss).startswith("19.0")
             else "CONFLICTING",
             note="Research must not change this.",
         ),

@@ -37,7 +37,13 @@ import { humanExecutionError } from "@/lib/execution/humanize";
 import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
 import { invalidatePostTrade } from "@/lib/execution/post-trade-invalidate";
 import { protectiveStopsError } from "@/lib/execution/protective-stops";
-import { OWNER_MAX_SL_RISK_USD, OWNER_MIN_REWARD_RISK, OWNER_MIN_SL_RISK_USD, ticketRisk } from "@/lib/execution/ticket-risk";
+import {
+  OWNER_MAX_PLANNED_RISK_PCT,
+  OWNER_MAX_SPREAD,
+  OWNER_MIN_REWARD_RISK,
+  PLANNED_RISK_NOTE,
+  ticketRisk,
+} from "@/lib/execution/ticket-risk";
 import { recordAudit } from "@/lib/observability/audit";
 import { captureError } from "@/lib/observability/error-monitor";
 import { isReadOnlyMode } from "@/lib/platform/beta";
@@ -725,12 +731,16 @@ export const ExecutionOrderTicket = forwardRef<
               value={lastCheck ? str(lastCheck.decision) : "—"}
             />
             <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
-              Owner caps: SL loss ${OWNER_MIN_SL_RISK_USD.toFixed(2)}–$
-              {Math.min(OWNER_MAX_SL_RISK_USD, ownerRisk.maxSlRiskUsd).toFixed(2)} · RR ≥{" "}
+              Owner caps: planned risk ≤ ${ownerRisk.maxSlRiskUsd.toFixed(2)} (
+              {OWNER_MAX_PLANNED_RISK_PCT}% of equity) · RR ≥{" "}
               {OWNER_MIN_REWARD_RISK.toFixed(1)} after spread
               {ownerRisk.rewardRiskAfterSpread != null
                 ? ` (now ${formatNumber(ownerRisk.rewardRiskAfterSpread, 2)})`
                 : ""}
+              {" "}· spread ≤ {OWNER_MAX_SPREAD.toFixed(2)} · 07:00–17:00 UTC
+            </p>
+            <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
+              {PLANNED_RISK_NOTE}
             </p>
             {ownerRisk.violations.length ? (
               <p className="col-span-3 text-[10px] text-[var(--danger)]" role="status">

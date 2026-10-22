@@ -306,8 +306,16 @@ export function LiveTradingControlPanel() {
                   : str(risk.daily_loss_used_pct, "—")
               }
             />
-            <Metric label="Risk / trade" value={`${str(risk.risk_per_trade_pct, "—")}%`} />
-            <Metric label="Daily loss limit" value={`${str(risk.max_daily_loss_pct, "—")}%`} />
+            <Metric
+              label="Max planned risk / trade"
+              value={`${str(risk.owner_max_planned_risk_pct, str(risk.risk_per_trade_pct, "—"))}%${
+                risk.owner_max_planned_risk_usd ? ` ($${str(risk.owner_max_planned_risk_usd)})` : ""
+              }`}
+            />
+            <Metric
+              label="Daily loss limit"
+              value={`${str(risk.owner_daily_loss_pct, str(risk.max_daily_loss_pct, "—"))}%`}
+            />
             <Metric
               label="Remaining daily budget"
               value={str(risk.remaining_daily_risk_budget, "—")}
@@ -317,6 +325,14 @@ export function LiveTradingControlPanel() {
               label="Consecutive losses"
               value={`${str(risk.consecutive_losses, "0")} / ${str(risk.max_consecutive_losses, "2")}`}
             />
+            {risk.planned_risk_note ? (
+              <p className="col-span-full text-[11px] text-[var(--fg-subtle)]">
+                {str(risk.planned_risk_note)} Stop loss:{" "}
+                {str(risk.owner_sl_policy, "ATR + structure")}; spread ≤{" "}
+                {str(risk.owner_max_spread, "0.45")}; entries{" "}
+                {str(risk.owner_session_utc, "07:00-17:00")} UTC.
+              </p>
+            ) : null}
             <Metric label="Cycles" value={str(d.cycles, "0")} />
             <Metric label="Last cycle" value={str(d.last_cycle_at, "—")} />
             <Metric
@@ -720,13 +736,14 @@ function ConfirmationBlock({
           </dd>
         </div>
         <div>
-          <dt className="text-[var(--fg-subtle)]">Risk / trade</dt>
-          <dd>{str(risk.risk_per_trade_pct)}%</dd>
+          <dt className="text-[var(--fg-subtle)]">Max planned risk / trade</dt>
+          <dd>{str(risk.owner_max_planned_risk_pct, str(risk.risk_per_trade_pct))}%</dd>
         </div>
         <div>
           <dt className="text-[var(--fg-subtle)]">Daily loss / max positions</dt>
           <dd>
-            {str(risk.max_daily_loss_pct)}% / {str(risk.max_open_positions)}
+            {str(risk.owner_daily_loss_pct, str(risk.max_daily_loss_pct))}% /{" "}
+            {str(risk.max_open_positions)}
           </dd>
         </div>
         <div>

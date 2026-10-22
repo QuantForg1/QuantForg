@@ -88,8 +88,8 @@ def _plane(*, exceeded: bool) -> SimpleNamespace:
     return plane
 
 
-def test_max_daily_loss_pct_is_owner_3() -> None:
-    assert Decimal("3.0") == MAX_DAILY_LOSS_PCT
+def test_max_daily_loss_pct_is_owner_19() -> None:
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_verified_deposit_clears_latch_via_existing_lock_not_assignment() -> None:
@@ -414,7 +414,7 @@ async def test_ite_cycle_verified_deposit_sets_audit_baseline(
     assert ctx.diagnostics.get("daily_pnl_trusted") is True
     assert ctx.diagnostics.get("new_capital_detected") is True
     assert ctx.diagnostics.get("deposit_verification") == "verified"
-    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "3.0"
+    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "19.0"
     baseline = ctx.diagnostics.get("capital_baseline")
     assert isinstance(baseline, dict)
     assert baseline.get("broker_deal_ticket") == 2

@@ -90,7 +90,7 @@ def test_xauusd_i_atr_stop_above_owner_cap_is_legitimate_block() -> None:
 
 @pytest.mark.unit
 def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_owner_band() -> None:
-    dist = Decimal("1.80")  # min_lot $ risk = 1.80 (inside $1.50..$2.00)
+    dist = Decimal("1.80")  # min_lot $ risk = 1.80 (inside the 9% cap)
     engine = RiskEngine()
     size = engine.size_position(
         equity=_EQUITY,
@@ -103,7 +103,8 @@ def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_owner_band() -> None:
         risk_per_trade_pct=Decimal("1.0"),
     )
     assert size.approved_lots == _VOLUME_MIN
-    assert size.capped is False
+    # The 9% budget allows more; the owner max lot (0.01) caps the volume.
+    assert size.capped is True
     assert size.dollar_risk == Decimal("1.80")
 
 

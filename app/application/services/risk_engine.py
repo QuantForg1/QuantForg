@@ -1039,7 +1039,10 @@ class RiskEngine:
         daily = _loss_pct(daily_pnl)
         weekly = _loss_pct(weekly_pnl)
         monthly = _loss_pct(monthly_pnl)
-        protected = dd < self.config.max_drawdown_pct
+        # max_drawdown_pct <= 0 disables the independent overall-drawdown limit
+        # (owner 2026-10-22); daily/weekly/monthly loss limits still apply.
+        dd_limit_enabled = self.config.max_drawdown_pct > 0
+        protected = (not dd_limit_enabled) or dd < self.config.max_drawdown_pct
 
         state = DrawdownState(
             equity=equity,
@@ -1067,7 +1070,7 @@ class RiskEngine:
             cap_usd = daily_loss_cap_usd(sod, self.config.max_daily_loss_pct)
             msg = (
                 f"daily loss {daily}% (${-daily_pnl}) exceeds owner daily stop "
-                f"${cap_usd} (max $5 / {self.config.max_daily_loss_pct}%, 10% cap)"
+                f"${cap_usd} ({self.config.max_daily_loss_pct}% of day-start equity)"
             )
             from app.domain.institutional_trading.risk_lock_override import (
                 risk_lock_override_enabled,
@@ -1086,12 +1089,12 @@ class RiskEngine:
             reasons.append(
                 f"monthly loss {monthly}% exceeds {self.config.max_monthly_loss_pct}%"
             )
-        if dd >= self.config.max_drawdown_pct:
+        if dd_limit_enabled and dd >= self.config.max_drawdown_pct:
             reasons.append(
                 f"max drawdown {dd}% reaches {self.config.max_drawdown_pct}%"
             )
             protected = False
-        elif dd >= self.config.max_drawdown_pct * Decimal("0.8"):
+        elif dd_limit_enabled and dd >= self.config.max_drawdown_pct * Decimal("0.8"):
             warnings.append("drawdown approaching equity protection limit")
         return (
             DrawdownState(
