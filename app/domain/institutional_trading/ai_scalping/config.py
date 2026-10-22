@@ -16,6 +16,7 @@ from app.domain.institutional_trading.config import (
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_ENTRIES_PER_CYCLE,
     OWNER_MAX_OPEN_POSITIONS,
+    OWNER_SL_ATR_MULTIPLIER,
 )
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
@@ -233,7 +234,11 @@ class AiScalpingConfig:
     broker_min_lot: Decimal = Decimal("0.01")
     broker_lot_step: Decimal = Decimal("0.01")
     broker_max_lot: Decimal = Decimal("50.00")
-    stop_atr_mult: Decimal = Decimal("1.10")  # structure-first; ATR is fallback
+    stop_atr_mult: Decimal = Decimal("1.10")  # legacy structure-first cap
+    # Owner stop policy (2026-10-22): stop = max(k x ATR, beyond the nearest
+    # M1/M5 structure + spread). Never shrunk to fit the risk budget.
+    owner_atr_stop: bool = True
+    owner_stop_atr_mult: Decimal = OWNER_SL_ATR_MULTIPLIER
 
     # Profit management - scale out fast
     partial_tp_enabled: bool = True

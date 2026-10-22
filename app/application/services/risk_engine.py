@@ -571,11 +571,12 @@ class RiskEngine:
             )
         )
 
-        # Owner live limits: the trade's real planned SL loss must sit inside
-        # ($1.50, cap] where cap = $2.00 (2% of equity above $100).
+        # Owner live limits: planned risk = (|entry - SL| + spread) x contract x
+        # lots must not exceed 9% of equity. No minimum floor.
         from app.domain.institutional_trading.owner_live_limits import (
-            OWNER_MIN_SL_RISK_USD,
-            max_sl_risk_usd,
+            OWNER_MAX_PLANNED_RISK_PCT,
+            max_planned_risk_usd,
+            planned_risk_usd,
         )
 
         lots_for_risk = (
@@ -583,10 +584,13 @@ class RiskEngine:
             if size.approved_lots > 0
             else (size.requested_lots if size.requested_lots > 0 else cfg.min_lot)
         )
-        planned_usd = (lots_for_risk * size.stop_distance * contract_size).quantize(
-            Decimal("0.01")
+        planned_usd = planned_risk_usd(
+            stop_distance=size.stop_distance,
+            spread=check.spread,
+            contract_size=contract_size,
+            volume=lots_for_risk,
         )
-        owner_cap = max_sl_risk_usd(drawdown.equity)
+        owner_cap = max_planned_risk_usd(drawdown.equity)
         risk_pct = (
             (planned_usd / drawdown.equity * Decimal("100")).quantize(Decimal("0.01"))
             if drawdown.equity > 0
@@ -594,7 +598,7 @@ class RiskEngine:
         )
         if size.stop_distance <= 0:
             risk_st = "n/a"
-        elif planned_usd > owner_cap or planned_usd <= OWNER_MIN_SL_RISK_USD:
+        elif planned_usd > owner_cap:
             risk_st = "fail"
         else:
             risk_st = "pass"
@@ -604,16 +608,19 @@ class RiskEngine:
                 name="Max Risk Per Trade",
                 status=risk_st,
                 current=f"${planned_usd} ({risk_pct}%)",
-                threshold=f"${OWNER_MIN_SL_RISK_USD}-${owner_cap} SL loss (owner)",
+                threshold=(
+                    f"${owner_cap} = {OWNER_MAX_PLANNED_RISK_PCT}% of equity "
+                    "(owner, planned)"
+                ),
                 reason=(
-                    f"planned SL loss ${planned_usd} = {lots_for_risk} lots x "
-                    f"{size.stop_distance} x {contract_size} "
-                    f"on equity {drawdown.equity}"
+                    f"planned risk ${planned_usd} = {lots_for_risk} lots x "
+                    f"({size.stop_distance} + spread {check.spread or 0}) x "
+                    f"{contract_size} on equity {drawdown.equity}"
                 ),
                 suggested_action=action_for(
                     risk_st,
                     "Tighten stop or reduce lots",
-                    "Reject — planned SL loss outside the owner band",
+                    "Reject — planned risk above the owner cap",
                 ),
             )
         )

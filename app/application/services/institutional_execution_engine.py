@@ -35,6 +35,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
     evaluate_owner_entry,
+    max_planned_risk_usd,
 )
 from app.domain.value_objects.mt5_order import (
     LotSize,
@@ -784,8 +785,11 @@ class InstitutionalExecutionEngine:
         # Authoritative Risk Engine — never skip on live submit path
         t0 = time.perf_counter()
         risk_reject: list[str] = []
+        # Equity for the owner's dynamic 9% planned-risk cap (band check below).
+        owner_band_equity: Decimal | None = None
         try:
             account = self.gateway.adapter.account_snapshot()
+            owner_band_equity = account.equity
             positions = list(self.gateway.adapter.list_positions())
             entry = Decimal("0")
             try:
@@ -1183,8 +1187,27 @@ class InstitutionalExecutionEngine:
                         remaining_cap = (
                             self.risk_engine.config.max_total_planned_risk_usd
                         )
+                    # Owner cap recomputed from live equity (9%), not the static
+                    # reference-capital value; one position -> same total cap.
+                    owner_cap = (
+                        max_planned_risk_usd(owner_band_equity)
+                        if owner_band_equity is not None and owner_band_equity > 0
+                        else None
+                    )
+                    if owner_cap is not None:
+                        open_risk = (
+                            self.risk_engine.config.max_total_planned_risk_usd
+                            - remaining_cap
+                            if remaining_cap is not None
+                            else Decimal("0")
+                        )
+                        remaining_cap = max(
+                            owner_cap * OWNER_MAX_OPEN_POSITIONS - open_risk,
+                            Decimal("0"),
+                        )
                     band_reason = actual_planned_sl_band_reason(
                         actual,
+                        per_trade_max=owner_cap,
                         remaining_portfolio_risk=remaining_cap,
                     )
                     if band_reason is not None:
