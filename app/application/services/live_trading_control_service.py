@@ -6,6 +6,7 @@ journal. Never fabricates broker state. Never submits orders.
 
 from __future__ import annotations
 
+import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from decimal import Decimal
 from typing import Any
@@ -1148,6 +1149,9 @@ def apply_fail_closed_from_probes(
     return ctrl.snapshot_state()
 
 
+_RECOVERY_GUARD = threading.local()
+
+
 def resume_live_trading_after_safe_recovery() -> LiveTradingState:
     """Re-ENABLE after restart or safety pause when activation probes pass.
 
@@ -1159,7 +1163,16 @@ def resume_live_trading_after_safe_recovery() -> LiveTradingState:
         return ctrl.snapshot_state()
     if not (ctrl.recovered_from_enabled or ctrl.paused_for_safety):
         return ctrl.snapshot_state()
-    facts = _live_probe_facts(enrich_account=True)
+    # The probe builds the auto-trading status, whose safety evaluation calls
+    # back into this function; without the guard that recursed until
+    # RecursionError on every restart-PAUSED boot.
+    if getattr(_RECOVERY_GUARD, "active", False):
+        return ctrl.snapshot_state()
+    _RECOVERY_GUARD.active = True
+    try:
+        facts = _live_probe_facts(enrich_account=True)
+    finally:
+        _RECOVERY_GUARD.active = False
     failures = activation_probe_failures(facts)
     if failures:
         logger.info("live_trading_safe_recovery_blocked", failures=failures)

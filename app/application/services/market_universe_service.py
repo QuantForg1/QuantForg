@@ -729,6 +729,15 @@ def _unavailable_counts(counts: dict[str, Any] | None) -> dict[str, Any]:
     return out
 
 
+def _gold_only_probe(codes: list[str]) -> list[str]:
+    """In Gold-only mode the broker is never asked for non-Gold quotes/candles."""
+    from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+    if not gold_only_enabled():
+        return codes
+    return [code for code in codes if is_gold_symbol(code)]
+
+
 def _probe_codes(instruments: list[dict[str, Any]]) -> list[str]:
     """Round-robin probe across asset classes up to MAX_HISTORY_PROBE_SYMBOLS."""
     out: list[str] = []
@@ -795,7 +804,9 @@ def _attach_timeframes(
     if catalogue_source != CATALOGUE_LIVE_BROKER or mt5_adapter is None:
         return
     try:
-        frames = probe_timeframe_history(mt5_adapter, _probe_codes(instruments))
+        frames = probe_timeframe_history(
+            mt5_adapter, _gold_only_probe(_probe_codes(instruments))
+        )
     except Exception:
         logger.exception("market_universe_history_probe_failed")
         return
@@ -932,7 +943,9 @@ def build_snapshot(
     quotes_in = dict(quotes or {})
     if source == CATALOGUE_LIVE_BROKER and mt5_adapter is not None:
         try:
-            probed = probe_quotes(mt5_adapter, _probe_codes_from_rows(rows))
+            probed = probe_quotes(
+                mt5_adapter, _gold_only_probe(_probe_codes_from_rows(rows))
+            )
             for code, tick in probed.items():
                 quotes_in[code] = {**quotes_in.get(code, {}), **tick}
         except Exception:

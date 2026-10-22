@@ -151,6 +151,15 @@ def _facts_from_runtime_symbol(
     )
 
 
+def alpha_scan_universe(cfg: InstitutionalAlphaConfig) -> tuple[str, ...]:
+    """Symbols the scan may query; Gold-only mode never touches other markets."""
+    from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+    if not gold_only_enabled():
+        return tuple(cfg.universe)
+    return tuple(sym for sym in cfg.universe if is_gold_symbol(sym))
+
+
 def run_alpha_scan(
     *,
     mt5_adapter: Any | None = None,
@@ -164,7 +173,7 @@ def run_alpha_scan(
     cfg = config or get_alpha_config()
     facts = [
         _facts_from_runtime_symbol(sym, mt5_adapter=mt5_adapter, session=session)
-        for sym in cfg.universe
+        for sym in alpha_scan_universe(cfg)
     ]
     result = scan_universe(
         facts,
