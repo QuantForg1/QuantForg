@@ -14,7 +14,7 @@ type EvidenceRow = {
 };
 
 /**
- * Evidence Stack â€” stored backtests, walk-forwards, compare rows, library hits.
+ * Evidence Stack — stored backtests, walk-forwards, compare rows, library hits.
  * Never invents runs.
  */
 export const EvidenceStack = memo(function EvidenceStack({
@@ -54,7 +54,7 @@ export const EvidenceStack = memo(function EvidenceStack({
             : null,
         ]
           .filter(Boolean)
-          .join(" Â· "),
+          .join(" · "),
         strategyKey: key,
       });
     }
@@ -73,7 +73,7 @@ export const EvidenceStack = memo(function EvidenceStack({
           str(w.promotion, ""),
         ]
           .filter(Boolean)
-          .join(" Â· "),
+          .join(" · "),
         strategyKey: key,
       });
     }
@@ -147,7 +147,7 @@ export const EvidenceStack = memo(function EvidenceStack({
                     </span>
                   </span>
                   <span className="shrink-0 tabular text-[10px] text-[var(--fg-subtle)]">
-                    {r.meta || "â€”"}
+                    {r.meta || "—"}
                   </span>
                 </button>
               </li>
