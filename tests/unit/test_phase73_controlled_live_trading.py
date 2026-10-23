@@ -281,6 +281,23 @@ def test_restart_hydrate_persists_when_dropping_incomplete_arm() -> None:
     persist.assert_called_once()
 
 
+@pytest.fixture(autouse=True)
+def _positions_reconciled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
+) -> None:
+    """Auto-resume also needs broker positions reconciled (owner 2026-10-23).
+
+    These tests run without an MT5 adapter: report no unknown position.
+    test_autonomous_resume.py covers the unknown / unverified cases. Auto-pause
+    now persists the controller, so each test gets its own ops-state file.
+    """
+    monkeypatch.setenv("QUANTFORG_OPS_STATE_PATH", str(tmp_path / "ops_state.json"))
+    monkeypatch.setattr(
+        "app.application.services.live_trading_control_service._unknown_positions",
+        lambda: [],
+    )
+
+
 _PASS_PROBE_FACTS = {
     "gateway_online": True,
     "mt5_connected": True,
@@ -305,30 +322,37 @@ def test_safe_recovery_resumes_only_when_probes_pass() -> None:
     recovered = ctrl.hydrate({"live_trading_state": "ENABLED"})
     assert recovered == "PAUSED"
     assert ctrl.research_can_execute() is False
-    with patch(
-        "app.application.services.live_trading_control_service._live_probe_facts",
-        return_value={
-            "gateway_online": False,
-            "mt5_connected": False,
-            "mt5_attached": False,
-            "ownership": "NOT_OWNED",
-            "account_available": False,
-        },
-    ), patch(
-        "app.application.services.live_trading_control_service.persist_live_trading",
-        return_value=True,
+    with (
+        patch(
+            "app.application.services.live_trading_control_service._live_probe_facts",
+            return_value={
+                "gateway_online": False,
+                "mt5_connected": False,
+                "mt5_attached": False,
+                "ownership": "NOT_OWNED",
+                "account_available": False,
+            },
+        ),
+        patch(
+            "app.application.services.live_trading_control_service.persist_live_trading",
+            return_value=True,
+        ),
     ):
         assert resume_live_trading_after_safe_recovery() == "PAUSED"
         assert ctrl.research_can_execute() is False
         assert ctrl.recovered_from_enabled is True
-    with patch(
-        "app.application.services.live_trading_control_service._live_probe_facts",
-        return_value=_PASS_PROBE_FACTS,
-    ), patch(
-        "app.application.services.live_trading_control_service.persist_live_trading",
-        return_value=True,
-    ), patch(
-        "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+    with (
+        patch(
+            "app.application.services.live_trading_control_service._live_probe_facts",
+            return_value=_PASS_PROBE_FACTS,
+        ),
+        patch(
+            "app.application.services.live_trading_control_service.persist_live_trading",
+            return_value=True,
+        ),
+        patch(
+            "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+        ),
     ):
         assert resume_live_trading_after_safe_recovery() == "ENABLED"
     assert ctrl.research_can_execute() is True
@@ -352,14 +376,18 @@ def test_operator_pause_does_not_auto_resume() -> None:
     assert ctrl.transition(op, "PAUSED", confirmed=True, reason="operator") == "PAUSED"
     assert ctrl.recovered_from_enabled is False
     assert ctrl.paused_for_safety is False
-    with patch(
-        "app.application.services.live_trading_control_service._live_probe_facts",
-        return_value=_PASS_PROBE_FACTS,
-    ), patch(
-        "app.application.services.live_trading_control_service.persist_live_trading",
-        return_value=True,
-    ), patch(
-        "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+    with (
+        patch(
+            "app.application.services.live_trading_control_service._live_probe_facts",
+            return_value=_PASS_PROBE_FACTS,
+        ),
+        patch(
+            "app.application.services.live_trading_control_service.persist_live_trading",
+            return_value=True,
+        ),
+        patch(
+            "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+        ),
     ):
         assert resume_live_trading_after_safe_recovery() == "PAUSED"
     assert ctrl.research_can_execute() is False
@@ -391,14 +419,18 @@ def test_safety_pause_resumes_when_probes_pass() -> None:
         assert apply_fail_closed_from_probes() == "PAUSED"
     assert ctrl.paused_for_safety is True
     assert ctrl.research_can_execute() is False
-    with patch(
-        "app.application.services.live_trading_control_service._live_probe_facts",
-        return_value=_PASS_PROBE_FACTS,
-    ), patch(
-        "app.application.services.live_trading_control_service.persist_live_trading",
-        return_value=True,
-    ), patch(
-        "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+    with (
+        patch(
+            "app.application.services.live_trading_control_service._live_probe_facts",
+            return_value=_PASS_PROBE_FACTS,
+        ),
+        patch(
+            "app.application.services.live_trading_control_service.persist_live_trading",
+            return_value=True,
+        ),
+        patch(
+            "app.domain.institutional_trading.operations.control_plane.get_control_plane",
+        ),
     ):
         assert resume_live_trading_after_safe_recovery() == "ENABLED"
     assert ctrl.research_can_execute() is True

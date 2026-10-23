@@ -1213,6 +1213,10 @@ class LiveTradingController:
     emergency_latched: bool = False
     recovered_from_enabled: bool = False
     paused_for_safety: bool = False
+    # Owner pressed Pause: survives every restart; only the owner's Enable clears
+    # it. Stored separately from safety pauses (owner 2026-10-23).
+    owner_paused: bool = False
+    safety_pause_reason: str = ""
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def snapshot_state(self) -> LiveTradingState:
@@ -1223,11 +1227,33 @@ class LiveTradingController:
         """True only after explicit ENABLE. Research never sets this."""
         return orders_may_submit(self.snapshot_state())
 
+    def durable_authorization_state(self) -> LiveTradingState:
+        """State written to durable ops storage (authorization, not runtime).
+
+        A restart or safety pause leaves the owner's ENABLE valid: persisting
+        that runtime PAUSED would look like an owner pause after the next
+        restart and block automatic recovery. Owner PAUSED / DISABLED / KILLED
+        are written as-is.
+        """
+        with self._lock:
+            if (
+                self.state == "PAUSED"
+                and not self.owner_paused
+                and (self.recovered_from_enabled or self.paused_for_safety)
+            ):
+                return "ENABLED"
+            return self.state
+
     def persist_payload(self) -> dict[str, Any]:
         with self._lock:
+            durable = self.durable_authorization_state()
             return strip_secrets(
                 {
-                    "live_trading_state": self.state,
+                    "live_trading_state": durable,
+                    "live_trading_runtime_state": self.state,
+                    "live_trading_owner_paused": bool(self.owner_paused),
+                    "live_trading_paused_for_safety": bool(self.paused_for_safety),
+                    "live_trading_safety_pause_reason": self.safety_pause_reason,
                     "live_trading_risk": self.risk.to_dict(),
                     "live_trading_armed_at": self.armed_at,
                     "live_trading_enabled_at": self.enabled_at,
@@ -1258,6 +1284,14 @@ class LiveTradingController:
             )
             # Restart-PAUSE is safety recovery, not an operator pause.
             self.paused_for_safety = self.recovered_from_enabled
+            # Safety pauses are persisted as durable ENABLED, so a persisted
+            # PAUSED is the owner's own pause (legacy rows: fail safe).
+            self.owner_paused = (
+                recovered == "PAUSED" and not self.recovered_from_enabled
+            )
+            self.safety_pause_reason = (
+                "restart_recovery" if self.recovered_from_enabled else ""
+            )
             persisted_killed = (
                 normalize_state(data.get("live_trading_state")) == "KILLED"
             )
@@ -1371,10 +1405,15 @@ class LiveTradingController:
                 self.enabled_at = moment
                 self.recovered_from_enabled = False
                 self.paused_for_safety = False
+                self.owner_paused = False
+                self.safety_pause_reason = ""
             if wanted == "PAUSED":
                 # Operator pause must not auto-resume after probes recover.
                 self.recovered_from_enabled = False
                 self.paused_for_safety = False
+                self.owner_paused = not str(
+                    getattr(operator, "display_name", "") or ""
+                ).startswith("system:")
             if wanted == "DISABLED":
                 self.armed_at = None
                 self.enabled_at = None
@@ -1383,12 +1422,14 @@ class LiveTradingController:
                 self.paused_symbols.clear()
                 self.recovered_from_enabled = False
                 self.paused_for_safety = False
+                self.owner_paused = False
             if wanted == "KILLED":
                 self.enabled_at = None
                 self.kill_reason = reason or "kill_switch"
                 self.emergency_latched = True
                 self.recovered_from_enabled = False
                 self.paused_for_safety = False
+                self.owner_paused = False
             self._record_locked(
                 operator=operator,
                 action=f"transition_{current}_{wanted}".lower(),
@@ -1442,6 +1483,7 @@ class LiveTradingController:
             before = self.state
             self.state = "PAUSED"
             self.paused_for_safety = True
+            self.safety_pause_reason = str(reason or "safety")
             self._record_locked(
                 operator=_system_operator("safety"),
                 action="safety_pause",
@@ -1456,7 +1498,7 @@ class LiveTradingController:
     ) -> LiveTradingState:
         """PAUSED → ENABLED only after restart/safety pause. Not operator pause."""
         with self._lock:
-            if self.state != "PAUSED":
+            if self.state != "PAUSED" or self.owner_paused:
                 return self.state
             if not (self.recovered_from_enabled or self.paused_for_safety):
                 return self.state

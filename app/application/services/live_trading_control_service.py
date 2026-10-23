@@ -6,6 +6,7 @@ journal. Never fabricates broker state. Never submits orders.
 
 from __future__ import annotations
 
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from decimal import Decimal
@@ -32,6 +33,7 @@ from app.domain.institutional_trading.live_trading_control import (
     public_state_name,
     spec_from_broker,
     strip_secrets,
+    utc_now,
 )
 from app.domain.institutional_trading.operations.models import OperatorIdentity
 from app.domain.trading.trading_context import mask_broker_login, mask_broker_server
@@ -1152,6 +1154,122 @@ def update_live_risk(
     return build_live_trading_status()
 
 
+def approved_mt5_logins() -> frozenset[int]:
+    """Owner-approved MT5 logins (``OWNER_APPROVED_MT5_LOGINS``, comma list).
+
+    Empty = not configured: ownership (the login the owner bound by connecting
+    with the account password) is the approval.
+    """
+    raw = os.environ.get("OWNER_APPROVED_MT5_LOGINS") or ""
+    out: set[int] = set()
+    for part in raw.replace(";", ",").split(","):
+        token = part.strip()
+        if token.isdigit() and int(token) > 1:
+            out.add(int(token))
+    return frozenset(out)
+
+
+def _unknown_positions() -> list[str] | None:
+    """Open positions not opened by the robot (magic/symbol). None = unverified."""
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            OWNER_QUANTFORG,
+            classify_position_owner,
+        )
+
+        runtime = get_ite_runtime()
+        adapter = getattr(getattr(runtime, "probes", None), "mt5_adapter", None)
+        if adapter is None:
+            return None
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            rows = list(pool.submit(adapter.list_positions).result(timeout=5) or [])
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+    except Exception as exc:
+        logger.info("live_trading_positions_unverified", error=str(exc))
+        return None
+    unknown: list[str] = []
+    for row in rows:
+        if classify_position_owner(row) != OWNER_QUANTFORG:
+            ticket = getattr(row, "ticket", None)
+            if ticket is None and isinstance(row, dict):
+                ticket = row.get("ticket")
+            unknown.append(str(ticket))
+    return unknown
+
+
+def autonomous_resume_blockers(
+    facts: dict[str, Any], *, now: Any | None = None
+) -> list[str]:
+    """Everything that must hold before a safety/restart pause auto-resumes.
+
+    Owner 2026-10-23: gateway healthy and broker connected, the approved login,
+    equity read, the 25% daily stop not hit today, positions reconciled with
+    no unknown position, inside the allowed session. Fail closed.
+    """
+    from app.domain.institutional_trading.owner_live_limits import in_owner_session
+
+    blockers = list(activation_probe_failures(facts))
+    if blockers:
+        # Gateway / broker / account first: nothing else is trustworthy yet.
+        return blockers
+    approved = approved_mt5_logins()
+    login = facts.get("account_login")
+    if approved and (not isinstance(login, int) or login not in approved):
+        blockers.append("unapproved_login")
+    try:
+        from app.domain.institutional_trading.operations.control_plane import (
+            get_control_plane,
+        )
+
+        if getattr(get_control_plane(), "daily_loss_exceeded", False) is True:
+            blockers.append("daily_stop_hit")
+    except Exception:
+        blockers.append("daily_stop_unverified")
+    unknown = _unknown_positions()
+    if unknown is None:
+        blockers.append("positions_unverified")
+    elif unknown:
+        blockers.append("unknown_position")
+    if not in_owner_session(now):
+        blockers.append("outside_session")
+    return blockers
+
+
+def _notify_operator(kind: str, text: str, *, key: str) -> None:
+    """Telegram operator alert (logged only when the chat id is not set)."""
+    try:
+        from app.application.services.operator_alerts import get_operator_watch
+
+        watch = get_operator_watch()
+        if watch is not None:
+            watch.alerter.alert(kind, text, key=key)
+            return
+    except Exception as exc:
+        logger.warning("live_trading_operator_alert_failed", error=str(exc))
+    logger.warning("operator_alert_unsent", kind=kind, text=text)
+
+
+_LAST_RESUME_BLOCKERS: dict[str, tuple[str, ...]] = {}
+
+
+def _safety_pause(ctrl: Any, *, reason: str) -> LiveTradingState:
+    before = ctrl.snapshot_state()
+    after = ctrl.safety_pause(reason=reason)
+    if before == "ENABLED" and after == "PAUSED":
+        persist_live_trading(ctrl)
+        _notify_operator(
+            "ROBOT AUTO-PAUSED",
+            f"Reason: {reason}. New entries stopped. It resumes by itself when "
+            "gateway, broker, approved login, equity, daily stop, positions and "
+            "session checks all pass.",
+            key=f"autopause:{reason}:{utc_now().isoformat(timespec='minutes')}",
+        )
+    return after
+
+
 def apply_fail_closed_from_probes(
     *,
     gateway_online: bool | None = None,
@@ -1181,13 +1299,18 @@ def apply_fail_closed_from_probes(
         mt5_attached = bool(facts.get("mt5_attached"))
         ownership = str(facts.get("ownership") or "")
     if gateway_online is False:
-        return ctrl.safety_pause(reason="gateway_offline")
+        return _safety_pause(ctrl, reason="gateway_offline")
     if mt5_connected is False:
-        return ctrl.safety_pause(reason="mt5_disconnected")
+        return _safety_pause(ctrl, reason="mt5_disconnected")
     if mt5_attached is False:
-        return ctrl.safety_pause(reason="mt5_not_attached")
+        return _safety_pause(ctrl, reason="mt5_not_attached")
     if ownership is not None and ownership != "OWNED":
-        return ctrl.safety_pause(reason="broker_ownership_uncertain")
+        return _safety_pause(ctrl, reason="broker_ownership_uncertain")
+    approved = approved_mt5_logins()
+    if approved:
+        login = _live_probe_facts(enrich_account=False).get("account_login")
+        if isinstance(login, int) and login not in approved:
+            return _safety_pause(ctrl, reason="unapproved_login")
     return ctrl.snapshot_state()
 
 
@@ -1201,7 +1324,7 @@ def resume_live_trading_after_safe_recovery() -> LiveTradingState:
     owner ENABLE remains the authorization; this is not a new enable path.
     """
     ctrl = get_live_trading_controller()
-    if ctrl.snapshot_state() != "PAUSED":
+    if ctrl.snapshot_state() != "PAUSED" or ctrl.owner_paused:
         return ctrl.snapshot_state()
     if not (ctrl.recovered_from_enabled or ctrl.paused_for_safety):
         return ctrl.snapshot_state()
@@ -1215,10 +1338,20 @@ def resume_live_trading_after_safe_recovery() -> LiveTradingState:
         facts = _live_probe_facts(enrich_account=True)
     finally:
         _RECOVERY_GUARD.active = False
-    failures = activation_probe_failures(facts)
+    failures = autonomous_resume_blockers(facts)
     if failures:
         logger.info("live_trading_safe_recovery_blocked", failures=failures)
+        key = tuple(sorted(failures))
+        if _LAST_RESUME_BLOCKERS.get("last") != key:
+            _LAST_RESUME_BLOCKERS["last"] = key
+            if "unapproved_login" in failures or "unknown_position" in failures:
+                _notify_operator(
+                    "ROBOT STAYS PAUSED",
+                    "Auto-resume blocked: " + ", ".join(failures) + ".",
+                    key=f"resumeblock:{','.join(key)}",
+                )
         return ctrl.snapshot_state()
+    pause_reason = ctrl.safety_pause_reason or "restart_recovery"
     try:
         recovered = ctrl.resume_after_safe_recovery()
     except LiveTradingTransitionError as exc:
@@ -1236,6 +1369,17 @@ def resume_live_trading_after_safe_recovery() -> LiveTradingState:
     except Exception as exc:
         logger.warning("live_trading_resume_auto_trade_sync_failed", error=str(exc))
     persist_live_trading(ctrl)
+    if recovered == "ENABLED":
+        _LAST_RESUME_BLOCKERS.pop("last", None)
+        login = facts.get("account_login")
+        _notify_operator(
+            "ROBOT AUTO-RESUMED",
+            f"Paused for: {pause_reason}. All checks pass: gateway and broker "
+            f"connected, login {mask_broker_login(login) if login else 'n/a'}, "
+            f"equity {facts.get('equity')}, daily stop not hit, positions "
+            "reconciled, inside session. New entries allowed.",
+            key=f"autoresume:{utc_now().isoformat(timespec='seconds')}",
+        )
     return recovered
 
 
