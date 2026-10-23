@@ -495,6 +495,18 @@ class Settings(BaseSettings):
             validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "telegram_chat_id"),
         ),
     ] = ""
+    telegram_operator_chat_id: Annotated[
+        str,
+        Field(
+            description=(
+                "Private operator chat id for robot alerts (never the public "
+                "signals channel). Empty = alerts are logged only."
+            ),
+            validation_alias=AliasChoices(
+                "TELEGRAM_OPERATOR_CHAT_ID", "telegram_operator_chat_id"
+            ),
+        ),
+    ] = ""
 
     # -- Jimvio webhook (observability only — never on the trading path) ----
     jimvio_enabled: Annotated[
