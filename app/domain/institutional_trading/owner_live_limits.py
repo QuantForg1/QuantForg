@@ -8,8 +8,8 @@ layer may be stricter, never looser.
   $50). Planned risk = (|entry - SL| + spread) x contract size x volume. This is
   a planned maximum, not a cap on realised loss: slippage, gaps, commissions
   and execution failures can make a loss larger.
-- Daily loss limit: 19% of the UTC day's starting equity ($9.50 at $50).
-- No independent overall-drawdown limit.
+- Daily loss limit: 25% of the UTC day's starting equity ($12.50 at $50).
+- No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
 - Stop loss: max(1.5 x ATR(M1|M5), beyond the nearest structure + spread).
   A stop is never shrunk to fit the budget: too wide -> no trade.
 - Reward:risk after spread >= 1.50: |tp - entry| / (|entry - sl| + spread).
@@ -17,7 +17,7 @@ layer may be stricter, never looser.
   the second level out (2026-10-23). Neither clears -> no trade.
 - Entries 07:00-17:00 UTC (London + New York), spread <= 0.45.
 - Volume 0.01 (gateway max); 1 open position; 1 entry per cycle.
-- 3 consecutive losses pause new entries until the next UTC day.
+- No consecutive-loss pause (owner 2026-10-23).
 
 ``evaluate_owner_entry`` is the final deterministic guard for NEW entries on
 the live submit path. Closes and SL/TP management are never blocked here.
@@ -64,16 +64,12 @@ OWNER_MAX_LOT = Decimal("0.01")
 # this value is the documented starting point and the $-figures shown at rest.
 OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
 OWNER_MAX_PLANNED_RISK_PCT = Decimal("9.0")
-OWNER_DAILY_LOSS_PCT = Decimal("19.0")
-# Weekly / monthly guards sit above the daily stop so one maximum loss (or one
-# full daily stop) never blocks the week. Configurable as multiples of the
-# daily stop: weekly = 2 daily stops (38%), monthly = 3 (57%).
-OWNER_WEEKLY_LOSS_PCT = OWNER_DAILY_LOSS_PCT * _env_decimal(
-    "OWNER_WEEKLY_LOSS_DAILY_MULTIPLE", "2"
-)
-OWNER_MONTHLY_LOSS_PCT = OWNER_DAILY_LOSS_PCT * _env_decimal(
-    "OWNER_MONTHLY_LOSS_DAILY_MULTIPLE", "3"
-)
+# Owner 2026-10-23 (final): daily stop 25% of the UTC day's starting equity.
+OWNER_DAILY_LOSS_PCT = Decimal("25.0")
+# Weekly / monthly loss limits removed (0 = disabled, as for drawdown). Weekly
+# and monthly P/L are still computed for reporting (summaries, journal).
+OWNER_WEEKLY_LOSS_PCT = Decimal("0")
+OWNER_MONTHLY_LOSS_PCT = Decimal("0")
 OWNER_MIN_REWARD_RISK = Decimal("1.50")
 # Owner 2026-10-22: London + New York 07:00-17:00 UTC, spread <= $0.45.
 OWNER_MAX_SPREAD = _env_decimal("OWNER_MAX_SPREAD", "0.45")
@@ -96,8 +92,9 @@ if OWNER_SL_ATR_TIMEFRAME not in {"M1", "M5"}:
     OWNER_SL_ATR_TIMEFRAME = "M1"
 OWNER_MAX_OPEN_POSITIONS = 1
 OWNER_MAX_ENTRIES_PER_CYCLE = 1
-OWNER_MAX_CONSECUTIVE_LOSSES = 3
-# Upper bound for the streak pause; the pause itself ends at the next UTC day.
+# Consecutive-loss pause removed (owner 2026-10-23): 0 = disabled.
+OWNER_MAX_CONSECUTIVE_LOSSES = 0
+# Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
 
 # Compatibility names used by other layers (values at the reference capital).
@@ -144,7 +141,7 @@ def planned_risk_usd(
 def daily_loss_cap_usd(
     start_of_day_equity: Decimal, pct: Decimal = OWNER_DAILY_LOSS_PCT
 ) -> Decimal:
-    """Daily stop in USD: pct (max 19%) of the UTC day's starting equity."""
+    """Daily stop in USD: pct (max 25%) of the UTC day's starting equity."""
     sod = Decimal(str(start_of_day_equity or 0))
     if sod <= 0:
         return Decimal("0")

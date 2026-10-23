@@ -5,7 +5,7 @@ Planned risk = (|entry - SL| + spread) x contract x volume <= 9% of equity.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -87,20 +87,22 @@ def test_no_minimum_risk_floor() -> None:
     assert _entry(stop_loss=Decimal("4132.00"), take_profit=Decimal("4135.00")) == []
 
 
-# --- 19% daily loss, no overall drawdown ------------------------------------
+# --- 25% daily loss (owner 2026-10-23), no overall drawdown ------------------
 
 
-def test_daily_cap_is_19_pct_of_day_start() -> None:
-    assert ol.daily_loss_cap_usd(Decimal("50")) == Decimal("9.50")
-    assert ol.daily_loss_cap_usd(Decimal("80")) == Decimal("15.20")
+def test_daily_cap_is_25_pct_of_day_start() -> None:
+    assert ol.daily_loss_cap_usd(Decimal("50")) == Decimal("12.50")
+    assert ol.daily_loss_cap_usd(Decimal("80")) == Decimal("20.00")
 
 
 def test_daily_boundary() -> None:
-    # Day started at $50: a $9.50 loss is at the cap (allowed), $9.51 blocks.
+    # Day started at $50: a $12.50 loss is at the cap (allowed), $12.51 blocks.
     assert not ol.daily_loss_exceeded(
-        daily_pnl=Decimal("-9.50"), base_now=Decimal("40.50")
+        daily_pnl=Decimal("-12.50"), base_now=Decimal("37.50")
     )
-    assert ol.daily_loss_exceeded(daily_pnl=Decimal("-9.51"), base_now=Decimal("40.49"))
+    assert ol.daily_loss_exceeded(
+        daily_pnl=Decimal("-12.51"), base_now=Decimal("37.49")
+    )
 
 
 def test_no_independent_overall_drawdown_limit() -> None:
@@ -113,18 +115,13 @@ def test_no_independent_overall_drawdown_limit() -> None:
     assert RiskEngine._limit_status(Decimal("80"), cfg.max_drawdown_pct) == "n/a"
 
 
-def test_weekly_and_monthly_sit_above_one_daily_stop() -> None:
+def test_weekly_and_monthly_limits_are_disabled() -> None:
     from app.domain.entities.risk_engine import RiskEngineConfig
 
     cfg = RiskEngineConfig()
-    assert cfg.max_weekly_loss_pct == ol.OWNER_WEEKLY_LOSS_PCT == Decimal("38.0")
-    assert cfg.max_monthly_loss_pct == ol.OWNER_MONTHLY_LOSS_PCT == Decimal("57.0")
-    # One maximum loss (9%) or one full daily stop (19%) never blocks the week.
-    assert (
-        ol.OWNER_WEEKLY_LOSS_PCT
-        > ol.OWNER_DAILY_LOSS_PCT
-        > ol.OWNER_MAX_PLANNED_RISK_PCT
-    )
+    # Owner 2026-10-23: only the daily stop applies (0 = disabled).
+    assert cfg.max_weekly_loss_pct == ol.OWNER_WEEKLY_LOSS_PCT == Decimal("0")
+    assert cfg.max_monthly_loss_pct == ol.OWNER_MONTHLY_LOSS_PCT == Decimal("0")
 
 
 # --- Stop loss policy --------------------------------------------------------
@@ -214,24 +211,21 @@ def test_rr_after_spread() -> None:
     assert "OWNER_MIN_RR" in _codes(_entry(take_profit=Decimal("4139.00")))
 
 
-# --- Loss streak pause until the next UTC day --------------------------------
+# --- No loss-streak pause (owner 2026-10-23) ----------------------------------
 
 
-def test_three_losses_pause_until_next_utc_day_then_reset() -> None:
+def test_losing_streak_never_pauses_entries() -> None:
     from app.domain.institutional_trading.live_trading_control import (
         reset_live_trading_controller_for_tests,
     )
 
+    assert ol.OWNER_MAX_CONSECUTIVE_LOSSES == 0
     ctrl = reset_live_trading_controller_for_tests()
-    for _ in range(3):
+    for _ in range(5):
         ctrl.note_closed_trade(loss=True, volume=Decimal("0.01"))
-    until = ctrl.loss_streak_cooldown_until
-    assert until is not None
-    assert until == ol.next_utc_day_start()
-    assert ctrl.loss_streak_cooldown_active() is True
-    # Next UTC day: the pause ends and the streak resets (no permanent block).
-    assert ctrl.loss_streak_cooldown_active(now=until + timedelta(seconds=1)) is False
-    assert ctrl.consecutive_losses == 0
+    assert ctrl.consecutive_losses == 5  # still counted for reporting
+    assert ctrl.loss_streak_cooldown_until is None
+    assert ctrl.loss_streak_cooldown_active() is False
     reset_live_trading_controller_for_tests()
 
 
@@ -239,3 +233,36 @@ def test_no_martingale_volume_after_losses() -> None:
     # Volume never rises after a loss: the owner guard caps every entry at 0.01.
     assert "OWNER_MAX_LOT" in _codes(_entry(volume=Decimal("0.02")))
     assert Decimal("0.01") == ol.OWNER_MAX_LOT
+
+
+# --- Persisted Live Trading Control profile follows the owner limits ----------
+
+
+def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        LiveTradingRiskConfig,
+    )
+
+    # Exact operator profile still stored in production ops state (2026-10-23).
+    stale = {
+        "min_score": "70",
+        "max_spread": "1.50",
+        "max_slippage": "0.50",
+        "min_reward_risk": "1.20",
+        "max_daily_loss_pct": "3.00",
+        "max_open_positions": 1,
+        "risk_per_trade_pct": "0.50",
+        "max_consecutive_losses": 2,
+    }
+    cfg = LiveTradingRiskConfig.from_dict(stale)
+    assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("9.0")
+    assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("25.0")
+    assert cfg.max_consecutive_losses == 0  # no loss-streak pause
+    assert cfg.min_reward_risk == Decimal("1.50")
+    assert cfg.max_spread == Decimal("0.45")
+    assert cfg.max_open_positions == 1
+    # Operator-only settings that are not owner limits are kept.
+    assert cfg.min_score == Decimal("70")
+    shown = cfg.to_dict()
+    assert shown["max_daily_loss_pct"] == "25.0"
+    assert shown["risk_per_trade_pct"] == "9.0"

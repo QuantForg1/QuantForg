@@ -5,8 +5,10 @@ Never silently normalizes conflicting settings. Never mutates settings.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.owner_live_limits import OWNER_DAILY_LOSS_PCT
 from app.domain.market_universe.constants import (
     ALLOW_LIVE_PROMOTION,
     FROZEN_DIRECTIONAL_EDGE,
@@ -227,15 +229,15 @@ def build_configuration_audit() -> dict[str, Any]:
         _row(
             setting="MAX_DAILY_LOSS_PCT",
             source="institutional_trading.config.MAX_DAILY_LOSS_PCT",
-            default="19.0",
+            default=str(OWNER_DAILY_LOSS_PCT),
             effective=daily_loss,
             consumer="Risk / daily loss lock",
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
-            # Owner daily stop (2026-10-22): 19% of the UTC day's start equity.
+            # Owner daily stop (2026-10-23): 25% of the UTC day's start equity.
             status="LIVE_EFFECTIVE"
-            if str(daily_loss).startswith("19.0")
+            if Decimal(str(daily_loss)) == OWNER_DAILY_LOSS_PCT
             else "CONFLICTING",
             note="Research must not change this.",
         ),

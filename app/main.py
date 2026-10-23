@@ -436,10 +436,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _app.state.container = container
     shadow_task: asyncio.Task[Any] | None = None
     research_task: asyncio.Task[Any] | None = None
+    operator_task: asyncio.Task[Any] | None = None
     boot_task: asyncio.Task[Any] | None = None
 
     async def _deferred_boot() -> None:
-        nonlocal shadow_task, research_task
+        nonlocal shadow_task, research_task, operator_task
         # Finish mounting non-core routers after listen (production path).
         pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
         if pending:
@@ -632,6 +633,20 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                     execution_enabled=bool(settings.execution_enabled),
                     watchdog=True,
                 )
+                # Private operator alerts (Telegram) — observability only.
+                adapter = getattr(container, "mt5_adapter", None)
+                if adapter is not None:
+                    try:
+                        from app.application.services.operator_alerts import (
+                            run_operator_watch,
+                        )
+
+                        operator_task = asyncio.create_task(
+                            run_operator_watch(adapter, settings),
+                            name="operator-alerts",
+                        )
+                    except Exception:
+                        logger.exception("operator_watch_start_failed")
             # Research analysis worker — distinct from live-trading robot.
             # Refreshes market-universe research snapshot only; never OMS.
             try:
@@ -700,6 +715,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             research_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await research_task
+        if operator_task is not None:
+            operator_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await operator_task
         await container.shutdown()
     except Exception as exc:
         logger.warning("application_shutdown_error", error=str(exc))

@@ -322,8 +322,20 @@ export function LiveTradingControlPanel() {
             />
             <Metric label="Max positions" value={str(risk.max_open_positions, "1")} />
             <Metric
+              label="Weekly / monthly limit"
+              value={
+                risk.owner_weekly_monthly_limits === "disabled"
+                  ? "None (daily stop only)"
+                  : `${str(risk.owner_weekly_loss_pct, "—")}% / ${str(risk.owner_monthly_loss_pct, "—")}%`
+              }
+            />
+            <Metric
               label="Consecutive losses"
-              value={`${str(risk.consecutive_losses, "0")} / ${str(risk.max_consecutive_losses, "2")}`}
+              value={
+                risk.owner_loss_streak_pause === "disabled"
+                  ? `${str(risk.consecutive_losses, "0")} (no pause)`
+                  : `${str(risk.consecutive_losses, "0")} / ${str(risk.max_consecutive_losses, "2")}`
+              }
             />
             {risk.planned_risk_note ? (
               <p className="col-span-full text-[11px] text-[var(--fg-subtle)]">

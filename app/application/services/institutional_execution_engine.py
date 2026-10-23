@@ -132,6 +132,7 @@ def parse_order_intent(
     position: int = 0,
     order_ticket: int = 0,
     oms_kind: str = "",
+    plan_price: str | None = None,
 ) -> OrderIntent:
     from app.domain.trading.gold_only import (
         DISABLED_AUTONOMOUS_SYMBOL,
@@ -156,6 +157,7 @@ def parse_order_intent(
             position=int(position or 0),
             order_ticket=int(order_ticket or 0),
             oms_kind=(oms_kind or "").strip().lower(),
+            plan_price=Decimal(str(plan_price)) if plan_price else None,
         )
     except DisabledAutonomousSymbolError as exc:
         raise ValidationError(
@@ -816,9 +818,12 @@ class InstitutionalExecutionEngine:
                 and live_entry > 0
                 and not _is_manage_intent(intent)
             ):
+                # Compare with the price the stop was planned from (scan),
+                # not the order's own price: robot market intents carry the
+                # plan price separately (2026-10-23, trade 3).
                 drift = stop_shrink_violation(
                     side=intent.side.value,
-                    signal_price=intent.price,
+                    signal_price=intent.plan_price or intent.price,
                     live_price=live_entry,
                     stop_loss=(intent.stop_loss.value if intent.stop_loss else None),
                 )

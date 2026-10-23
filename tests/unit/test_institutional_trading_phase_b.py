@@ -192,6 +192,16 @@ class TestConfluenceEngine:
         assert result.direction is TradeDirection.NONE
         assert "mtf_not_aligned" in result.rejected_rules
 
+    def test_drawdown_never_hard_rejects_without_weekly_limit(self) -> None:
+        # Owner 2026-10-23: weekly limit disabled (0). A drawdown after a loss
+        # must not become a "drawdown_elevated" hard reject (0 >= 0 bug).
+        snap = _snapshot(direction_bias=TrendDirection.UP, quality=92)
+        assert ITEConfig().max_weekly_drawdown_pct == Decimal("0")
+        result = ConfluenceEngine(config=ITEConfig()).evaluate(
+            snap, atr=Decimal("5"), current_drawdown_pct=Decimal("3.4")
+        )
+        assert "drawdown_elevated" not in result.rejected_rules
+
     def test_low_quality_rejected(self) -> None:
         snap = _snapshot(quality=50)
         result = ConfluenceEngine(config=ITEConfig()).evaluate(snap)

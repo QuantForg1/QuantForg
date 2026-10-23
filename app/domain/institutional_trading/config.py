@@ -23,7 +23,7 @@ from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
 # Authoritative XAUUSD autonomous daily-loss percent (owner limits 2026-10-22):
-# 19% of the UTC day's starting equity — see owner_live_limits.daily_loss_cap_usd.
+# 25% of the UTC day's starting equity — see owner_live_limits.daily_loss_cap_usd.
 # Boundary: loss > cap blocks; loss == cap does not.
 MAX_DAILY_LOSS_PCT = OWNER_DAILY_LOSS_PCT
 MAX_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_CEILING_PCT

@@ -75,3 +75,97 @@ def test_unknown_inputs_defer_to_other_guards(
         )
         is None
     )
+
+
+def test_trade_3_compared_with_the_plan_price_is_refused() -> None:
+    # Production 2026-10-23 08:23Z: the stop (SL 4021.417) was planned from the
+    # scan mid 4018.285 (3.132 away); the order's own price was 4018.853 and
+    # the fill 4018.633 (2.784 away, 11% narrower). Against the order price the
+    # stop looks wider and slipped through; against the plan price it is refused.
+    assert _check("SELL", "4018.853", "4018.633", "4021.417") is None
+    reason = _check("SELL", "4018.285", "4018.633", "4021.417")
+    assert reason is not None
+    assert "3.13 to 2.78" in reason
+
+
+def test_bridge_stamps_the_ai_plan_price_on_the_intent() -> None:
+    from unittest.mock import MagicMock
+
+    from app.domain.institutional_trading.decision_models import DecisionAction
+    from app.domain.institutional_trading.execution.bridge import (
+        ExecutionBridge,
+        ExecutionBridgeConfig,
+        ExecutionMode,
+    )
+
+    bridge = ExecutionBridge(
+        oms=MagicMock(), config=ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
+    )
+    decision = MagicMock()
+    decision.action = DecisionAction.SELL
+    decision.stop_zone = MagicMock(low=D("4021.0"), high=D("4022.0"))
+    decision.target_zone = MagicMock(low=D("4012.0"), high=D("4013.0"))
+    decision.approved_lots = D("0.01")
+    decision.symbol = "XAUUSD"
+    decision.input_hash = "abcdefghijklmnop"
+    decision.reasons = ()
+    decision.ai_score = {
+        "entry": "4018.285",
+        "stop_loss": "4021.417",
+        "take_profit": "4012.813",
+    }
+    context = MagicMock()
+    context.account.mid_price = D("4018.700")
+    context.account.atr = D("1.85")
+    intent = bridge._build_intent(decision, context)
+    assert intent.stop_loss is not None
+    assert intent.stop_loss.value == D("4021.417")
+    assert intent.plan_price == D("4018.285")
+    assert intent.price is None  # market order: no broker price is sent
+
+
+@pytest.mark.parametrize(
+    ("plan_price", "refused"),
+    [("2321.50", True), ("2320.90", False)],
+)
+def test_run_submit_refuses_a_stop_that_shrank_since_the_plan(
+    plan_price: str, refused: bool
+) -> None:
+    """End to end: BUY at the mock ask 2320.80 with SL 2319.00 (1.80 live).
+
+    Planned from 2321.50 the stop was 2.50 -> 28% narrower -> refused before
+    order_send. Planned from 2320.90 it was 1.90 -> 5% narrower -> allowed.
+    """
+    from uuid import uuid4
+
+    from app.application.services.institutional_execution_engine import (
+        parse_order_intent,
+    )
+    from tests.unit.test_manual_ticket_owner_limits import _engine
+
+    engine, client = _engine()
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume="0.01",
+        stop_loss="2319.00",
+        take_profit="2324.00",
+        plan_price=plan_price,
+    )
+    pipeline, decision = engine.run_submit(
+        user_id=uuid4(),
+        request_id=f"drift-{plan_price}",
+        intent=intent,
+        connected=True,
+        login=1,
+        recent_decisions=[],
+    )
+    text = str(pipeline)
+    if refused:
+        assert pipeline.outcome == "rejected"
+        assert "OWNER_PRICE_DRIFT" in text
+        assert client._positions == []
+    else:
+        assert "OWNER_PRICE_DRIFT" not in text
+        assert decision.decision.value == "allow", pipeline

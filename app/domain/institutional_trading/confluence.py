@@ -380,7 +380,11 @@ class ConfluenceEngine:
 
         # Current drawdown soft penalty
         if current_drawdown_pct is not None and current_drawdown_pct > 0:
-            if current_drawdown_pct >= cfg.max_weekly_drawdown_pct:
+            # max_weekly_drawdown_pct 0 = no weekly limit (owner 2026-10-23).
+            if (
+                cfg.max_weekly_drawdown_pct > 0
+                and current_drawdown_pct >= cfg.max_weekly_drawdown_pct
+            ):
                 factors["drawdown"] = 0
                 rejected.append("drawdown_elevated")
                 reasons.append(f"Drawdown {current_drawdown_pct}% elevated")
