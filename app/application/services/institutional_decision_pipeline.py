@@ -829,6 +829,7 @@ class InstitutionalDecisionPipeline:
             peak_equity=account.peak_equity or account.equity,
             daily_pnl=account.daily_pnl,
             weekly_pnl=account.weekly_pnl,
+            monthly_pnl=account.monthly_pnl,
         )
 
         risk_allowed = assessment.decision is not RiskDecision.REJECT

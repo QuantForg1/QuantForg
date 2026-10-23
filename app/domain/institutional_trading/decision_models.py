@@ -144,6 +144,7 @@ class AccountRiskState:
     peak_equity: Decimal | None = None
     daily_pnl: Decimal = Decimal("0")
     weekly_pnl: Decimal = Decimal("0")
+    monthly_pnl: Decimal = Decimal("0")
     open_positions: int = 0
     already_in_trade: bool = False
     consecutive_losses: int = 0
@@ -175,6 +176,7 @@ class AccountRiskState:
             "peak_equity": str(self.peak_equity) if self.peak_equity else None,
             "daily_pnl": str(self.daily_pnl),
             "weekly_pnl": str(self.weekly_pnl),
+            "monthly_pnl": str(self.monthly_pnl),
             "open_positions": self.open_positions,
             "account_open_positions": self.account_open_positions,
             "already_in_trade": self.already_in_trade,

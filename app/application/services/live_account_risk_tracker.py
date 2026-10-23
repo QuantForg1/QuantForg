@@ -364,6 +364,29 @@ class LiveAccountRiskTracker:
         return out
 
     @staticmethod
+    def trade_pnl_since(deals: list[Any], *, since: datetime) -> Decimal:
+        """Realized trade P/L (profit + commission + swap) from ``since`` on.
+
+        Deduplicates by ticket. Balance/credit/deposit deals never count.
+        Used for the weekly and monthly loss stops.
+        """
+        seen: set[int] = set()
+        total = Decimal("0")
+        for deal in deals:
+            moment = LiveAccountRiskTracker._deal_time(deal)
+            if moment is None or moment < since:
+                continue
+            if not LiveAccountRiskTracker._is_trade_deal(deal):
+                continue
+            ticket = LiveAccountRiskTracker._deal_ticket(deal)
+            if ticket > 0:
+                if ticket in seen:
+                    continue
+                seen.add(ticket)
+            total += LiveAccountRiskTracker._deal_cash_delta(deal)
+        return total
+
+    @staticmethod
     def daily_pnl_from_deals(
         deals: list[Any],
         *,

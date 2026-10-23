@@ -1036,9 +1036,18 @@ class RiskEngine:
                 return Decimal("0")
             return ((-pnl) / base * Decimal("100")).quantize(Decimal("0.01"))
 
+        def _period_loss_pct(pnl: Decimal) -> Decimal:
+            # Same basis as the owner daily stop: % of the period-start
+            # balance (current balance plus the realised period loss).
+            base = account.balance if account.balance > 0 else equity
+            if base <= 0 or pnl >= 0:
+                return Decimal("0")
+            start = base - pnl
+            return ((-pnl) / start * Decimal("100")).quantize(Decimal("0.01"))
+
         daily = _loss_pct(daily_pnl)
-        weekly = _loss_pct(weekly_pnl)
-        monthly = _loss_pct(monthly_pnl)
+        weekly = _period_loss_pct(weekly_pnl)
+        monthly = _period_loss_pct(monthly_pnl)
         # max_drawdown_pct <= 0 disables the independent overall-drawdown limit
         # (owner 2026-10-22); daily/weekly/monthly loss limits still apply.
         dd_limit_enabled = self.config.max_drawdown_pct > 0

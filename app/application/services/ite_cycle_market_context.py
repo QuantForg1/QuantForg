@@ -848,6 +848,11 @@ async def build_ite_cycle_market_context(
         else None
     )
     day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Weekly (Monday 00:00 UTC) and monthly loss stops need deals back to the
+    # earlier of the two period starts; the daily figure still uses today only.
+    week_start = day_start - timedelta(days=day_start.weekday())
+    month_start = day_start.replace(day=1)
+    deals_from = min(week_start, month_start)
     health_diag_box: dict[str, Any] = {}
     skip_account_bundle = str(purpose or "execution").strip().lower() == "scan"
     bundled = await asyncio.gather(
@@ -869,7 +874,7 @@ async def build_ite_cycle_market_context(
             else _io(
                 _load_history_deals,
                 mt5_adapter,
-                date_from=day_start,
+                date_from=deals_from,
                 date_to=datetime.now(UTC) + timedelta(days=1),
             )
         ),
@@ -1100,6 +1105,8 @@ async def build_ite_cycle_market_context(
     # Authoritative peak HWM + daily PnL from MT5 deals (not floating profit alone)
     peak_equity = equity
     daily_pnl = Decimal("0")
+    weekly_pnl = Decimal("0")
+    monthly_pnl = Decimal("0")
     daily_pnl_trusted = False
     try:
         from app.application.services.live_account_risk_tracker import (
@@ -1133,6 +1140,14 @@ async def build_ite_cycle_market_context(
                 deals=deals,
             )
             daily_pnl_trusted = True
+            weekly_pnl = LiveAccountRiskTracker.trade_pnl_since(
+                list(deals), since=week_start
+            )
+            monthly_pnl = LiveAccountRiskTracker.trade_pnl_since(
+                list(deals), since=month_start
+            )
+            diag["weekly_pnl"] = str(weekly_pnl)
+            diag["monthly_pnl"] = str(monthly_pnl)
             try:
                 resolved = LiveAccountRiskTracker.session_pnl_resolution(
                     list(deals),
@@ -1289,7 +1304,8 @@ async def build_ite_cycle_market_context(
         equity=equity,
         peak_equity=peak_equity if peak_equity > 0 else equity,
         daily_pnl=daily_pnl,
-        weekly_pnl=Decimal("0"),
+        weekly_pnl=weekly_pnl,
+        monthly_pnl=monthly_pnl,
         open_positions=open_n,
         already_in_trade=open_n > 0,
         account_open_positions=int(diag.get("account_positions") or open_n),
