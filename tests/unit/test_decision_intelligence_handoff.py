@@ -15,6 +15,12 @@ from app.domain.trading.gold_only import CANONICAL_GOLD_BROKER_DISPLAY
 from app.domain.trading.xauusd_specs import MAX_LEVERAGE
 
 
+# Risk FAIL trigger: a daily loss beyond the owner's 25% daily stop ($4,000 on
+# $10,000 now = 28.6% of day-start equity). The loss-streak pause was removed
+# (owner 2026-10-23), so 10 consecutive losses no longer fail Risk.
+_DAILY_STOP_BREACH = "-4000"
+
+
 def _gold_payload(**overrides: object) -> dict[str, object]:
     body: dict[str, object] = {
         "symbol": CANONICAL_GOLD_BROKER_DISPLAY,
@@ -118,9 +124,9 @@ def test_risk_pass_and_safety_pass_propagate() -> None:
 
 
 def test_stop_above_owner_cap_fails_risk() -> None:
-    # $5 stop at 0.01 lot = $5 planned loss > $2 owner cap.
+    # $5 stop at 0.01 lot = $5 planned loss > 9% of $50 equity ($4.50).
     _facts, risk, _safety = assess_decision_center_engines(
-        _gold_payload(stop_distance="5"),
+        _gold_payload(stop_distance="5", equity="50"),
         use_live=False,
     )
     assert risk.state == "FAIL"
@@ -128,7 +134,7 @@ def test_stop_above_owner_cap_fails_risk() -> None:
 
 def test_risk_fail_is_hard_block() -> None:
     svc = DecisionIntelligenceService()
-    out = svc.evaluate(_gold_payload(consecutive_losses=10))
+    out = svc.evaluate(_gold_payload(daily_pnl=_DAILY_STOP_BREACH))
     risk = _stage(out, "risk_engine")
     assert risk["state"] == "FAIL"
     assert out["decision"] == "REJECT"
@@ -149,7 +155,7 @@ def test_safety_fail_is_hard_block() -> None:
 def test_confidence_does_not_bypass_risk_or_safety() -> None:
     svc = DecisionIntelligenceService()
     out = svc.evaluate(
-        _gold_payload(consecutive_losses=10, leverage=str(MAX_LEVERAGE + 1))
+        _gold_payload(daily_pnl=_DAILY_STOP_BREACH, leverage=str(MAX_LEVERAGE + 1))
     )
     conf = out["confidence"]
     assert isinstance(conf, dict)
@@ -165,7 +171,7 @@ def test_claimed_true_cannot_bypass_engine_fail() -> None:
     svc = DecisionIntelligenceService()
     out = svc.evaluate(
         _gold_payload(
-            consecutive_losses=10,
+            daily_pnl=_DAILY_STOP_BREACH,
             leverage=str(MAX_LEVERAGE + 1),
             risk_engine_passed=True,
             safety_engine_passed=True,

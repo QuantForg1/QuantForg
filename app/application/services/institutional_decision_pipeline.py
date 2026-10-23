@@ -1388,12 +1388,17 @@ class InstitutionalDecisionPipeline:
             and stop_distance > 0
         ):
             from app.domain.institutional_trading.config import (
+                MAX_PLANNED_SL_RISK_USD,
                 MAX_TOTAL_PLANNED_RISK_USD,
             )
             from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
                 actual_planned_sl_band_reason,
                 format_planned_sl_reject_detail,
                 lot_dollar_risk,
+            )
+            from app.domain.institutional_trading.owner_live_limits import (
+                OWNER_MAX_OPEN_POSITIONS,
+                owner_risk_cap_usd,
             )
 
             actual = lot_dollar_risk(
@@ -1409,11 +1414,26 @@ class InstitutionalDecisionPipeline:
                 if pos_all
                 else Decimal("0")
             )
-            remaining_agg = MAX_TOTAL_PLANNED_RISK_USD - open_planned
+            # 9% of live equity, not the $50-reference default (2026-10-23).
+            per_trade_cap = owner_risk_cap_usd(
+                equity=account.equity,
+                configured=MAX_PLANNED_SL_RISK_USD,
+                reference_default=MAX_PLANNED_SL_RISK_USD,
+            )
+            remaining_agg = (
+                owner_risk_cap_usd(
+                    equity=account.equity,
+                    configured=MAX_TOTAL_PLANNED_RISK_USD,
+                    reference_default=MAX_TOTAL_PLANNED_RISK_USD,
+                    positions=OWNER_MAX_OPEN_POSITIONS,
+                )
+                - open_planned
+            )
             if remaining_agg < 0:
                 remaining_agg = Decimal("0")
             band_reason = actual_planned_sl_band_reason(
                 actual,
+                per_trade_max=per_trade_cap,
                 remaining_portfolio_risk=remaining_agg,
             )
             if band_reason is not None:
