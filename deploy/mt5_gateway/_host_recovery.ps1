@@ -266,10 +266,15 @@ function Get-LocalAdministratorState {
 }
 
 # Local SAM Autologon identity. Never returns a password.
-# Domain must be "." for local Administrator. DNS hostnames (example: US-HOST-421124)
-# are invalid Autologon domains and make Sysinternals Autologon report invalid credentials.
+# The account is the interactive user that runs MT5 and the QuantForg tasks
+# ($env:USERNAME, e.g. "os" on the owner's PC; "Administrator" on a VPS),
+# overridable with QUANTFORG_AUTOLOGON_USER. Domain must be "." for a local
+# account. DNS hostnames (example: US-HOST-421124) are invalid Autologon domains
+# and make Sysinternals Autologon report invalid credentials.
 function Get-LocalAutologonIdentity {
-  $AutoLogonUser = "Administrator"
+  $AutoLogonUser = [string]$env:QUANTFORG_AUTOLOGON_USER
+  if ([string]::IsNullOrWhiteSpace($AutoLogonUser)) { $AutoLogonUser = [string]$env:USERNAME }
+  if ([string]::IsNullOrWhiteSpace($AutoLogonUser)) { $AutoLogonUser = "Administrator" }
   $AutoLogonDomain = "."
   return [ordered]@{
     Username = $AutoLogonUser
@@ -279,7 +284,7 @@ function Get-LocalAutologonIdentity {
 }
 
 # True when Winlogon DefaultDomainName is set to something other than local SAM ".".
-# US-HOST-421124 and any other hostname/NetBIOS/USERDOMAIN value is incorrect for local Administrator.
+# US-HOST-421124 and any other hostname/NetBIOS/USERDOMAIN value is incorrect for a local account.
 function Test-IsIncorrectLocalAutologonDomain {
   param([string]$Domain)
   if ([string]::IsNullOrWhiteSpace($Domain)) { return $false }
@@ -294,8 +299,9 @@ function Test-AutologonDomainLooksLikeRejectedDnsHostname {
 
 # Writes only non-secret Winlogon identity. Never writes AutoAdminLogon or DefaultPassword.
 function Set-AutologonNonSecretIdentity {
-  $AutoLogonUser = "Administrator"
-  $AutoLogonDomain = "."
+  $identity = Get-LocalAutologonIdentity
+  $AutoLogonUser = $identity.Username
+  $AutoLogonDomain = $identity.Domain
   $keyPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
   if (-not (Test-Path -LiteralPath $keyPath)) { return $false }
   try {
@@ -308,8 +314,9 @@ function Set-AutologonNonSecretIdentity {
 }
 
 function Write-AutologonOperatorInstructions {
-  $AutoLogonUser = "Administrator"
-  $AutoLogonDomain = "."
+  $identity = Get-LocalAutologonIdentity
+  $AutoLogonUser = $identity.Username
+  $AutoLogonDomain = $identity.Domain
   Write-Host ("Username={0}" -f $AutoLogonUser)
   Write-Host ("Domain={0}" -f $AutoLogonDomain)
   Write-Host "Password=dialog only"
