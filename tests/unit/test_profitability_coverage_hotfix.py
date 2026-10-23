@@ -77,13 +77,13 @@ def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     )
 
 
-def _fx_account() -> AccountSnapshot:
+def _fx_account(equity: Decimal = Decimal("500")) -> AccountSnapshot:
     return AccountSnapshot(
         login=1,
-        balance=Decimal("500"),
-        equity=Decimal("500"),
+        balance=equity,
+        equity=equity,
         margin=Decimal("0"),
-        free_margin=Decimal("500"),
+        free_margin=equity,
         margin_level=Decimal("0"),
         profit=Decimal("0"),
         leverage=500,
@@ -648,7 +648,7 @@ def test_fx_002_cannot_pass_when_max_lot_blocks_step_up() -> None:
             entry_price=Decimal("1.08520"),
             contract_size=Decimal("100000"),
         ),
-        account=_fx_account(),
+        account=_fx_account(Decimal("50")),  # cap 9% of $50 = $4.50
         positions=[],
     )
     assert assessment.decision is RiskDecision.REJECT
@@ -670,7 +670,7 @@ def test_gold_over_20_planned_sl_rejected() -> None:
             entry_price=Decimal("2320.80"),
             contract_size=Decimal("100"),
         ),
-        account=_fx_account(),
+        account=_fx_account(Decimal("50")),  # cap 9% of $50 = $4.50
         positions=[],
     )
     assert assessment.decision is RiskDecision.REJECT

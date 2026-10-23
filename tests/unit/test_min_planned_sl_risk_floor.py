@@ -63,6 +63,8 @@ _MIN = Decimal("0.01")
 _STEP = Decimal("0.01")
 _MAX = Decimal("10")
 _EQUITY = Decimal("2000")
+# Owner cap is 9% of live equity: $4.50 at $50 (2026-10-23).
+_CAP_EQUITY = Decimal("50")
 
 
 def _account(equity: Decimal = _EQUITY) -> AccountSnapshot:
@@ -276,7 +278,7 @@ def test_open_initial_plus_proposed_above_cap_is_rejected() -> None:
             entry_price=Decimal("2300"),
             contract_size=_GOLD_CS,
         ),
-        account=_account(),
+        account=_account(_CAP_EQUITY),  # 9% of $50 = $4.50
         positions=[open_leg],
     )
     assert result.decision is RiskDecision.REJECT
@@ -304,7 +306,7 @@ def test_be_trailing_does_not_reduce_initial_aggregate() -> None:
             entry_price=Decimal("2300"),
             contract_size=_GOLD_CS,
         ),
-        account=_account(),
+        account=_account(_CAP_EQUITY),  # 9% of $50 = $4.50
         positions=[trailed],
     )
     assert result.decision is RiskDecision.REJECT
@@ -348,7 +350,7 @@ def test_no_universal_0_01_fallback_when_actual_above_cap() -> None:
             entry_price=Decimal("2300"),
             contract_size=_GOLD_CS,
         ),
-        account=_account(),
+        account=_account(_CAP_EQUITY),  # 9% of $50 = $4.50
         positions=[],
     )
     assert result.decision is RiskDecision.REJECT
@@ -377,7 +379,7 @@ def test_rejected_sizing_does_not_live_in_order_send_path() -> None:
             entry_price=Decimal("1.08500"),
             contract_size=_FX_CS,
         ),
-        account=_account(),
+        account=_account(_CAP_EQUITY),  # 9% of $50 = $4.50
         positions=[],
     )
     assert result.decision is RiskDecision.REJECT
