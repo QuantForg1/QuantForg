@@ -1858,8 +1858,10 @@ class InstitutionalExecutionEngine:
         bid = Decimal(presend_log["check_bid"])
         ask = Decimal(presend_log["check_ask"])
         planned = (
-            abs(request.price - request.stop_loss) + (ask - bid)
-        ) * Decimal("100") * request.volume
+            (abs(request.price - request.stop_loss) + (ask - bid))
+            * Decimal("100")
+            * request.volume
+        )
         blocked = book.entry_block_reason(
             equity=equity, now=utc_now_shadow(), planned_risk_usd=planned
         )
