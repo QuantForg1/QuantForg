@@ -151,8 +151,16 @@ def _tree_root(processes: list[dict], pid: int) -> int:
 def test_parent_child_gateway_is_one_tree_not_duplicate() -> None:
     processes = [
         {"pid": 3168, "ppid": 1, "cmd": "powershell.exe -File supervise_gateway.ps1"},
-        {"pid": 7728, "ppid": 3168, "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main"},
-        {"pid": 7848, "ppid": 7728, "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main"},
+        {
+            "pid": 7728,
+            "ppid": 3168,
+            "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main",
+        },
+        {
+            "pid": 7848,
+            "ppid": 7728,
+            "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main",
+        },
     ]
     listen = [7848]
     roots = {_tree_root(processes, pid) for pid in listen}
@@ -224,7 +232,10 @@ def test_production_task_not_once_and_startup_ignore_new() -> None:
         '$arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Supervise`""'
         in text
     )
-    assert "-Once" not in text.split("Do NOT append -Once")[1].split("$arg =")[1].split("\n")[0]
+    assert (
+        "-Once"
+        not in text.split("Do NOT append -Once")[1].split("$arg =")[1].split("\n")[0]
+    )
 
 
 def test_trading_logic_untouched_by_vps_process_fix() -> None:
@@ -361,8 +372,12 @@ def test_no_secret_leakage_in_vps_scripts() -> None:
         body = _read(name).lower()
         assert "eyj" not in body
         assert "bearer " not in body or "authorization" not in body
-        assert "c:\\programdata\\cloudflared\\token" not in body or "not logged" in body or "never" in body
-        assert "getvalue(\"defaultpassword\")" not in body
+        assert (
+            "c:\\programdata\\cloudflared\\token" not in body
+            or "not logged" in body
+            or "never" in body
+        )
+        assert 'getvalue("defaultpassword")' not in body
         assert "getvalue('defaultpassword')" not in body
 
 
@@ -440,7 +455,9 @@ def test_watchdog_ps1_files_parse() -> None:
             capture_output=True,
             text=True,
         )
-        assert completed.returncode == 0, f"{name}: {completed.stdout}\n{completed.stderr}"
+        assert completed.returncode == 0, (
+            f"{name}: {completed.stdout}\n{completed.stderr}"
+        )
 
 
 def test_autologon_detection_does_not_expose_password() -> None:
@@ -456,7 +473,7 @@ def test_autologon_detection_does_not_expose_password() -> None:
     assert "ERROR" in inspect
     assert "READY" in inspect
     assert "cannot enable Auto-Logon" in inspect
-    assert "GetValue(\"DefaultPassword\")" not in text
+    assert 'GetValue("DefaultPassword")' not in text
     assert "GetValue('DefaultPassword')" not in text
     assert "Restart-Computer" not in inspect
     assert "order_send" not in inspect.lower()
@@ -466,7 +483,11 @@ def test_watchdog_does_not_trust_task_state_as_health() -> None:
     text = _read("watchdog_vps.ps1")
     assert "Task Scheduler Ready is NOT health" in text
     assert "Start-WatchdogGateway" in text
-    assert "health is live" in text.lower() or "health_is_live" in text or "ignored_health_is_live" in text
+    assert (
+        "health is live" in text.lower()
+        or "health_is_live" in text
+        or "ignored_health_is_live" in text
+    )
     assert "restart_storm_prevented" in text
     assert "Test-WatchdogGatewayStartAllowed" in text
     assert "duplicate_terminal" in text
@@ -511,7 +532,7 @@ def test_open_autologon_ui_never_takes_password() -> None:
     assert "-Password" not in text
     assert "Write-AutologonOperatorInstructions" in text
     assert "Set-AutologonNonSecretIdentity" in text
-    assert 'Domain=. applied' in text or "Domain=." in text
+    assert "Domain=. applied" in text or "Domain=." in text
 
 
 def test_local_autologon_uses_dot_domain_not_dns_hostname() -> None:
@@ -526,7 +547,11 @@ def test_local_autologon_uses_dot_domain_not_dns_hostname() -> None:
     )
     identity = host + inspect + open_ui + finalize
     assert "Get-LocalAutologonIdentity" in host
-    assert '$AutoLogonUser = "Administrator"' in host
+    # Identity = the interactive user running MT5 (owner PC "os", VPS
+    # "Administrator"), overridable; "Administrator" only as a last fallback.
+    assert "$env:QUANTFORG_AUTOLOGON_USER" in host
+    assert "$AutoLogonUser = [string]$env:USERNAME" in host
+    assert "Username=Administrator" not in open_ui
     assert '$AutoLogonDomain = "."' in host
     assert "Test-IsIncorrectLocalAutologonDomain" in host
     assert "US-HOST-421124" in host
@@ -546,12 +571,15 @@ def test_local_autologon_uses_dot_domain_not_dns_hostname() -> None:
     assert "New-LocalUser" not in identity
     assert "Restart-Computer" not in identity
     assert "order_send" not in identity.lower()
-    assert 'Username=Administrator  Domain={0}' not in identity
-    assert '-f $computer' not in identity
-    assert 'Domain   = {0}' not in open_ui
+    assert "Username=Administrator  Domain={0}" not in identity
+    assert "-f $computer" not in identity
+    assert "Domain   = {0}" not in open_ui
     assert "the VPS computer name" not in doc
-    assert '$result.Enabled -and $result.UserConfigured' in host
-    assert '$result.Enabled -and $result.UserConfigured -and $result.DomainConfigured' not in host
+    assert "$result.Enabled -and $result.UserConfigured" in host
+    assert (
+        "$result.Enabled -and $result.UserConfigured -and $result.DomainConfigured"
+        not in host
+    )
     assert "ACTION_REQUIRED" in inspect
     assert "ACTION_REQUIRED" in reboot
     assert "cannot enable Auto-Logon" in inspect
@@ -582,8 +610,6 @@ def test_autologon_identity_never_uses_hostname_as_domain() -> None:
     ]
     assert 'if ($Domain -eq ".") { return $false }' in checker
     assert "return $true" in checker
-
-
 
 
 def test_provider_power_attestation_is_not_bios_detection() -> None:
@@ -620,7 +646,7 @@ def test_autologon_lsa_case_is_ready_without_winlogon_secret_name() -> None:
     assert 'SecretStorage = "lsa_or_external"' in host
     assert "NOT_SUPPORTED" in host
     assert '$result.State = "ERROR"' in host
-    assert "GetValue(\"DefaultPassword\")" not in host
+    assert 'GetValue("DefaultPassword")' not in host
     assert "New-LocalUser" not in host
     assert "Get-LocalAdministratorState" in host
 
@@ -637,3 +663,34 @@ def test_finalize_unattended_reboot_never_takes_password_or_creates_users() -> N
     assert "open_autologon_ui.ps1" in text
     assert "Restart-Computer" not in text
     assert "-Password" not in text
+
+
+def test_autologon_identity_is_the_current_interactive_user() -> None:
+    import os
+    import shutil
+    import subprocess
+
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    if shell is None:
+        pytest.skip("PowerShell not available")
+    helper = REPO / "deploy" / "mt5_gateway" / "_host_recovery.ps1"
+    script = f". '{helper}'; (Get-LocalAutologonIdentity).Username"
+
+    def username(**overrides: str) -> str:
+        env = {**os.environ, "USERNAME": "os"}
+        env.pop("QUANTFORG_AUTOLOGON_USER", None)
+        env.update(overrides)
+        out = subprocess.run(  # noqa: S603  # fixed local script, no user input
+            [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
+            check=False,
+        )
+        lines = out.stdout.strip().splitlines()
+        assert lines, out.stderr
+        return lines[-1]
+
+    assert username() == "os"
+    assert username(QUANTFORG_AUTOLOGON_USER="trader") == "trader"
