@@ -239,6 +239,11 @@ def reward_risk_after_spread(
 # much versus the signal's distance before the order is refused (2026-10-23).
 OWNER_MAX_STOP_SHRINK_PCT = _env_decimal("OWNER_MAX_STOP_SHRINK_PCT", "10")
 
+# Pre-send RR check: assume the fill lands this far adversely from the check
+# price (TP distance - B over stop distance + spread + B). Owner default 0
+# (2026-10-23); recalibrate from logged check-vs-fill moves after ~30 fills.
+OWNER_RR_SLIPPAGE_BUFFER = _env_decimal("OWNER_RR_SLIPPAGE_BUFFER", "0")
+
 
 def stop_shrink_violation(
     *,
@@ -381,3 +386,63 @@ def evaluate_owner_entry(
             f"< {OWNER_MIN_REWARD_RISK}"
         )
     return violations
+
+
+def presend_owner_violations(
+    *,
+    symbol: str,
+    side: str,
+    volume: Decimal,
+    request_price: Decimal,
+    bid: Decimal,
+    ask: Decimal,
+    stop_loss: Decimal | None,
+    take_profit: Decimal | None,
+    plan_price: Decimal | None,
+    contract_size: Decimal,
+    equity: Decimal,
+    min_stop_distance: Decimal = Decimal("0"),
+    rr_buffer: Decimal = OWNER_RR_SLIPPAGE_BUFFER,
+    now: datetime | None = None,
+) -> list[str]:
+    """Final owner check on the exact tick the market request was built from.
+
+    Re-runs the full owner entry check with ``request_price`` and that tick's
+    spread, the stop-shrink guard against the plan price, and (when
+    ``rr_buffer`` > 0) RR with the fill assumed ``rr_buffer`` worse.
+    """
+    spread = Decimal(str(ask)) - Decimal(str(bid))
+    violations = evaluate_owner_entry(
+        symbol=symbol,
+        side=side,
+        volume=volume,
+        entry=request_price,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        spread=spread,
+        contract_size=contract_size,
+        equity=equity,
+        min_stop_distance=min_stop_distance,
+        now=now,
+    )
+    drift = stop_shrink_violation(
+        side=side,
+        signal_price=plan_price,
+        live_price=request_price,
+        stop_loss=stop_loss,
+    )
+    if drift:
+        violations.append(drift)
+    buf = Decimal(str(rr_buffer or 0))
+    if buf > 0 and stop_loss is not None and take_profit is not None:
+        rr = reward_risk_after_spread(
+            tp_distance=abs(Decimal(str(take_profit)) - request_price) - buf,
+            stop_distance=abs(request_price - Decimal(str(stop_loss))) + buf,
+            spread=spread,
+        ) or Decimal("0")
+        if rr < OWNER_MIN_REWARD_RISK:
+            violations.append(
+                f"OWNER_MIN_RR_SLIPPAGE: reward:risk {rr.quantize(_CENT)} with "
+                f"{buf} slippage buffer < {OWNER_MIN_REWARD_RISK}"
+            )
+    return [f"PRESEND {v}" for v in violations]
