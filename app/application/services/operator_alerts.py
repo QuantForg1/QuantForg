@@ -421,7 +421,6 @@ class OperatorWatch:
     now_utc: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     _gateway: _Down = field(default_factory=_Down)
     _mt5: _Down = field(default_factory=_Down)
-    _ltc: _Down = field(default_factory=_Down)
     _stops_checked_at: float = -1e9
     _summary_marks: dict[str, str] = field(default_factory=dict)
 
@@ -489,7 +488,6 @@ class OperatorWatch:
         balance = _dec(getattr(account, "balance", None))
         positions = list(self.adapter.list_positions() or [])
         self._positions(positions, equity=equity, utc=utc)
-        self._ltc_watch(now=now)
         self._loss_streak()
         self._equity_drop(equity=equity, utc=utc)
         if now - self._stops_checked_at >= STOPS_CHECK_INTERVAL_S:
@@ -652,30 +650,6 @@ class OperatorWatch:
             f"SL {entry.stop_loss} | TP {entry.take_profit}\n"
             f"P/L {_money(entry.pnl)} ({r})",
             key=f"close:{entry.ticket}",
-        )
-
-    def _ltc_watch(self, *, now: float) -> None:
-        try:
-            from app.domain.institutional_trading.live_trading_control import (
-                get_live_trading_controller,
-            )
-
-            ctrl = get_live_trading_controller()
-            state = str(ctrl.snapshot_state())
-            safety = bool(ctrl.paused_for_safety or ctrl.recovered_from_enabled)
-        except Exception:
-            return
-        paused_for_safety = state == "PAUSED" and safety
-        self._track(
-            self._ltc,
-            ok=not paused_for_safety,
-            now=now,
-            down_kind="ROBOT PAUSED",
-            up_kind="ROBOT RESUMED",
-            what=(
-                "Live Trading Control is PAUSED for safety (restart recovery or "
-                "gateway/MT5 checks failing). It resumes by itself when checks pass."
-            ),
         )
 
     def _loss_streak(self) -> None:
