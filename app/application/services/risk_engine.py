@@ -1299,7 +1299,27 @@ class RiskEngine:
             account, fallback=self.config.exposure_leverage
         )
 
-        cap = self.config.max_total_planned_risk_usd
+        from app.domain.institutional_trading.config import (
+            MAX_PLANNED_SL_RISK_USD,
+            MAX_TOTAL_PLANNED_RISK_USD,
+        )
+        from app.domain.institutional_trading.owner_live_limits import (
+            OWNER_MAX_OPEN_POSITIONS,
+            owner_risk_cap_usd,
+        )
+
+        # 9% of live equity, not the $50-reference default (owner 2026-10-23).
+        cap = owner_risk_cap_usd(
+            equity=account.equity,
+            configured=self.config.max_total_planned_risk_usd,
+            reference_default=MAX_TOTAL_PLANNED_RISK_USD,
+            positions=OWNER_MAX_OPEN_POSITIONS,
+        )
+        per_trade_cap = owner_risk_cap_usd(
+            equity=account.equity,
+            configured=self.config.max_planned_sl_risk_usd,
+            reference_default=MAX_PLANNED_SL_RISK_USD,
+        )
         open_planned = self._aggregate_planned_sl_risk(positions)
         remaining = (cap - open_planned) if cap > 0 else None
         if remaining is not None and remaining < 0:
@@ -1349,7 +1369,6 @@ class RiskEngine:
                 f"aggregate planned SL risk {total_planned} exceeds "
                 f"{cap} (open={open_planned} proposed={proposed_planned})"
             )
-        per_trade_cap = self.config.max_planned_sl_risk_usd
         checks["per_trade_planned_risk"] = (
             proposed_planned <= 0
             or per_trade_cap is None
@@ -1536,7 +1555,7 @@ class RiskEngine:
             band_reason = actual_planned_sl_band_reason(
                 actual,
                 min_floor=self.config.min_planned_risk_usd,
-                per_trade_max=self.config.max_planned_sl_risk_usd,
+                per_trade_max=per_trade_cap,
                 remaining_portfolio_risk=remaining_cap,
             )
             checks["planned_sl_band"] = band_reason is None

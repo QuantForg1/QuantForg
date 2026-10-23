@@ -53,7 +53,18 @@ def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
 
 @pytest.mark.parametrize("symbol", ["XAUUSD", "XAUUSD_i", "GOLD"])
 def test_manual_submit_with_23_dollar_sl_is_rejected(symbol: str) -> None:
+    from dataclasses import replace
+
     engine, client = _engine()
+    # The cap is 9% of LIVE equity (owner 2026-10-23): run at the real $50.84
+    # account (cap $4.57), not the mock's $10,000.
+    mock_snapshot = client.account_snapshot
+    client.account_snapshot = lambda: replace(
+        mock_snapshot(),
+        balance=Decimal("50.84"),
+        equity=Decimal("50.84"),
+        free_margin=Decimal("50.84"),
+    )
     intent = parse_order_intent(
         symbol=symbol,
         side="buy",
