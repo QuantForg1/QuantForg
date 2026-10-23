@@ -37,6 +37,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     evaluate_owner_entry,
     max_planned_risk_usd,
     presend_owner_violations,
+    sltp_move_violations,
     stop_shrink_violation,
 )
 from app.domain.value_objects.mt5_order import (
@@ -835,7 +836,20 @@ class InstitutionalExecutionEngine:
             stop_dist = None
             if intent.stop_loss is not None and entry > 0:
                 stop_dist = abs(entry - intent.stop_loss.value)
-            if entry <= 0:
+            if intent.oms_kind in {"sltp", "modify_sltp"}:
+                # An SL/TP move on an open position adds no exposure: entry-only
+                # limits (open-position cap, sizing, planned risk) blocked every
+                # breakeven and trail (2026-10-23). Closes are unchanged here.
+                risk_reject = sltp_move_violations(
+                    side=intent.side.value,
+                    position_ticket=int(intent.position or 0),
+                    stop_loss=(intent.stop_loss.value if intent.stop_loss else None),
+                    take_profit=(
+                        intent.take_profit.value if intent.take_profit else None
+                    ),
+                    positions=positions,
+                )
+            elif entry <= 0:
                 risk_reject = [
                     "Risk Engine unavailable — fail-closed: "
                     "entry price unresolved from tick/intent"

@@ -280,8 +280,10 @@ class MT5OrderValidationService:
         entry_price: Decimal,
     ) -> tuple[bool, str]:
         if intent.oms_kind in {"sltp", "modify_sltp"} and entry_price <= 0:
+            # An open position closes at the opposite price (SELL at ask, BUY
+            # at bid); the broker checks SL/TP moves against that price.
             tick = self.adapter.latest_tick(intent.symbol)
-            entry_price = tick.bid if intent.side is OrderSide.SELL else tick.ask
+            entry_price = tick.ask if intent.side is OrderSide.SELL else tick.bid
         min_distance = constraints.point * Decimal(constraints.stops_level)
         if intent.stop_loss is not None and intent.stop_loss.value > 0:
             dist = abs(entry_price - intent.stop_loss.value)

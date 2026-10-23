@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime, time, timedelta
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.trading.gold_only import is_gold_symbol
 
@@ -446,3 +447,49 @@ def presend_owner_violations(
                 f"{buf} slippage buffer < {OWNER_MIN_REWARD_RISK}"
             )
     return [f"PRESEND {v}" for v in violations]
+
+
+def sltp_move_violations(
+    *,
+    side: str,
+    position_ticket: int,
+    stop_loss: Decimal | None,
+    take_profit: Decimal | None,
+    positions: list[Any],
+) -> list[str]:
+    """Owner check for an SL/TP move (breakeven, trail) on an OPEN position.
+
+    An SL/TP move adds no exposure, so entry-only limits (open-position cap,
+    sizing, planned risk) must not judge it. It is allowed only on an open
+    position of the same side, and it never removes the SL or the TP and
+    never moves the SL further from price.
+    """
+    side_u = str(side or "").strip().upper()
+    pos = next(
+        (p for p in positions if int(getattr(p, "ticket", 0) or 0) == position_ticket),
+        None,
+    )
+    if position_ticket <= 0 or pos is None:
+        return [f"MANAGE_POSITION_NOT_OPEN: ticket {position_ticket} is not open"]
+    pos_side = str(getattr(pos, "side", "") or "").strip().upper()
+    reasons: list[str] = []
+    if side_u != pos_side:
+        reasons.append(f"MANAGE_SIDE: SL/TP move side {side_u} != position {pos_side}")
+    new_sl = Decimal(str(stop_loss or 0))
+    cur_sl = Decimal(str(getattr(pos, "stop_loss", 0) or 0))
+    if new_sl <= 0:
+        reasons.append("OWNER_SL_REQUIRED: an SL/TP move may not remove the stop loss")
+    elif cur_sl > 0 and (
+        (pos_side == "SELL" and new_sl > cur_sl)
+        or (pos_side == "BUY" and new_sl < cur_sl)
+    ):
+        reasons.append(
+            f"MANAGE_SL_WIDENS: new SL {new_sl} is further from price than "
+            f"the current SL {cur_sl}"
+        )
+    cur_tp = Decimal(str(getattr(pos, "take_profit", 0) or 0))
+    if cur_tp > 0 and Decimal(str(take_profit or 0)) <= 0:
+        reasons.append(
+            "OWNER_TP_REQUIRED: an SL/TP move may not remove the take profit"
+        )
+    return reasons
