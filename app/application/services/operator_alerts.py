@@ -346,12 +346,14 @@ def summarize(entries: list[JournalEntry]) -> dict[str, Any]:
     return {
         "trades": len(pnls),
         "wins": wins,
-        "win_rate": (Decimal(wins) / Decimal(len(pnls)) * 100).quantize(Decimal("0.1"))
-        if pnls
-        else None,
-        "avg_r": (sum(rs, Decimal("0")) / Decimal(len(rs))).quantize(_CENT)
-        if rs
-        else None,
+        "win_rate": (
+            (Decimal(wins) / Decimal(len(pnls)) * 100).quantize(Decimal("0.1"))
+            if pnls
+            else None
+        ),
+        "avg_r": (
+            (sum(rs, Decimal("0")) / Decimal(len(rs))).quantize(_CENT) if rs else None
+        ),
         "pnl": total.quantize(_CENT),
         "max_dd": max_dd.quantize(_CENT),
     }
@@ -406,6 +408,29 @@ class RepeatedErrorHandler(logging.Handler):
 # --- Watcher -----------------------------------------------------------------------
 
 
+def shadow_bars_utc(
+    rates: list[Any], *, now: datetime
+) -> list[tuple[datetime, Decimal, Decimal, Decimal]]:
+    """(UTC open time, high, low, spread) for MT5 M1 rates.
+
+    MT5 bar times are broker server time; the offset (whole hours) is inferred
+    from the newest bar against ``now`` so it stays right across DST.
+    """
+    rows = [r for r in rates if getattr(r, "open_time", None) is not None]
+    if not rows:
+        return []
+    newest = max(r.open_time for r in rows)
+    newest = newest if newest.tzinfo else newest.replace(tzinfo=UTC)
+    offset = timedelta(hours=round((newest - now).total_seconds() / 3600))
+    out = []
+    for r in rows:
+        t = r.open_time if r.open_time.tzinfo else r.open_time.replace(tzinfo=UTC)
+        point = Decimal("0.001")
+        spread = Decimal(int(getattr(r, "spread_points", 0) or 0)) * point
+        out.append((t - offset, _dec(r.high), _dec(r.low), spread))
+    return out
+
+
 @dataclass
 class _Down:
     since: float | None = None
@@ -423,6 +448,7 @@ class OperatorWatch:
     _mt5: _Down = field(default_factory=_Down)
     _stops_checked_at: float = -1e9
     _summary_marks: dict[str, str] = field(default_factory=dict)
+    _shadow_seen: set[str] = field(default_factory=set)
 
     # -- public ------------------------------------------------------------------
 
@@ -494,6 +520,69 @@ class OperatorWatch:
             self._stops_checked_at = now
             self._stops(balance=balance, utc=utc)
         self._summaries(equity=equity, utc=utc)
+        self._shadow(utc=utc)
+
+    def _shadow(self, *, utc: datetime) -> None:
+        """Follow the open shadow trade with live prices (shadow mode only)."""
+        from app.domain.institutional_trading.shadow_book import (
+            get_shadow_book,
+            persist_shadow_book,
+            shadow_mode_enabled,
+        )
+
+        if not shadow_mode_enabled():
+            return
+        book = get_shadow_book()
+        for trade in book.trades[-5:]:
+            if trade.id in self._shadow_seen:
+                continue
+            self._shadow_seen.add(trade.id)
+            risk = trade.planned_risk_usd.quantize(_CENT)
+            pct = (
+                (trade.planned_risk_usd / trade.equity * 100).quantize(_CENT)
+                if trade.equity > 0
+                else None
+            )
+            rr = trade.rr.quantize(_CENT) if trade.rr is not None else None
+            self.alerter.alert(
+                "SHADOW ORDER (not sent)",
+                f"{trade.side} {trade.symbol} {trade.volume} @ {trade.entry}  "
+                f"SL {trade.stop_loss}  TP {trade.take_profit}  "
+                f"spread {trade.spread}" + chr(10) + f"planned risk ${risk} ({pct}% of "
+                f"{_money(trade.equity)}), RR {rr}",
+                key=f"shadow-open:{trade.id}",
+            )
+        trade = book.open_trade()
+        if trade is None:
+            return
+        try:
+            from app.domain.market_data.timeframe import Timeframe
+
+            rates = list(
+                self.adapter.copy_rates_from_pos(trade.symbol, Timeframe("M1"), 0, 15)
+                or []
+            )
+            tick = self.adapter.latest_tick(trade.symbol)
+        except Exception as exc:
+            logger.warning("shadow_update_failed", error=type(exc).__name__)
+            return
+        bars = shadow_bars_utc(rates, now=utc)
+        closed = book.update(
+            bars=bars,
+            bid=_dec(getattr(tick, "bid", None)) or None,
+            ask=_dec(getattr(tick, "ask", None)) or None,
+            now=utc,
+        )
+        if closed is None:
+            return
+        persist_shadow_book(book)
+        self.alerter.alert(
+            "SHADOW TRADE CLOSED",
+            f"{closed.side} {closed.symbol} @ {closed.entry} -> {closed.outcome} "
+            f"{closed.exit_price}: P/L {_money(closed.pnl_usd or Decimal('0'))} "
+            f"({closed.r_multiple}R). Not a real trade.",
+            key=f"shadow-close:{closed.id}",
+        )
 
     def _track(
         self, d: _Down, *, ok: bool, now: float, down_kind: str, up_kind: str, what: str

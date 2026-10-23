@@ -39,6 +39,12 @@ from app.domain.institutional_trading.owner_live_limits import (
     presend_owner_violations,
     stop_shrink_violation,
 )
+from app.domain.institutional_trading.shadow_book import (
+    get_shadow_book,
+    persist_shadow_book,
+    shadow_mode_enabled,
+    utc_now as utc_now_shadow,
+)
 from app.domain.value_objects.mt5_order import (
     LotSize,
     MagicNumber,
@@ -1545,6 +1551,41 @@ class InstitutionalExecutionEngine:
                 )
                 result.journal_entry = self._write_journal(result, intent, None, uid)
                 return result, decision
+        if shadow_mode_enabled() and not _is_manage_intent(intent):
+            # Shadow mode (owner 2026-10-24): every live check has passed; the
+            # entry is recorded on paper at the checked price, never sent.
+            shadow_reason = self._shadow_entry(
+                intent=intent,
+                request=presend_request,
+                presend_log=presend_log,
+                equity=owner_presend_ctx[0] if owner_presend_ctx else None,
+            )
+            self._observe(
+                user_id=uid,
+                request_id=request_id,
+                symbol=symbol,
+                side=side,
+                order_type=order_type,
+                volume=volume,
+                stage=PipelineStage.REJECTED,
+                reason=shadow_reason,
+            )
+            result = PipelineResult(
+                request_id=request_id,
+                action=action,
+                outcome="rejected",
+                message=shadow_reason,
+                stages=stages,
+                rejection_reasons=[shadow_reason],
+                warnings=list(decision.warnings),
+                checks=dict(decision.checks),
+                calculated_risk=dict(decision.calculated_risk),
+                decision=ExecutionDecision.REJECT.value,
+                latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                idempotent_replay=decision.idempotent_replay,
+            )
+            result.journal_entry = self._write_journal(result, intent, None, uid)
+            return result, decision
         self._observe(
             user_id=uid,
             request_id=request_id,
@@ -1798,6 +1839,49 @@ class InstitutionalExecutionEngine:
             order_send_reached=send_reached,
         )
         return result, decision
+
+    def _shadow_entry(
+        self,
+        *,
+        intent: OrderIntent,
+        request: Any,
+        presend_log: dict[str, str],
+        equity: Decimal | None,
+    ) -> str:
+        """Record a shadow entry, or say why not. Never calls the broker."""
+        if request is None or not presend_log or equity is None:
+            return (
+                "SHADOW_MODE: entry not recorded (no same-tick pre-send check); "
+                "nothing sent"
+            )
+        book = get_shadow_book()
+        bid = Decimal(presend_log["check_bid"])
+        ask = Decimal(presend_log["check_ask"])
+        planned = (
+            abs(request.price - request.stop_loss) + (ask - bid)
+        ) * Decimal("100") * request.volume
+        blocked = book.entry_block_reason(
+            equity=equity, now=utc_now_shadow(), planned_risk_usd=planned
+        )
+        if blocked:
+            return f"{blocked}; nothing sent"
+        trade = book.record_entry(
+            symbol=intent.symbol,
+            side=intent.side.value,
+            volume=request.volume,
+            entry=request.price,
+            stop_loss=request.stop_loss,
+            take_profit=request.take_profit,
+            bid=bid,
+            ask=ask,
+            equity=book.shadow_equity(equity),
+            plan_price=intent.plan_price,
+        )
+        persist_shadow_book(book)
+        return (
+            f"SHADOW_MODE: recorded {trade.id} {trade.side} @ {trade.entry}; "
+            "not sent"
+        )
 
     def run_cancel(
         self,
