@@ -490,7 +490,7 @@ class TestInitialPlannedRiskAccounting:
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
             ),
-            account=_account(),
+            account=_account(Decimal("50")),  # cap 9% of $50 = $4.50
             positions=open_legs,
         )
         assert fifth.decision is RiskDecision.REJECT

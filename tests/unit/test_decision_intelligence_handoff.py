@@ -124,9 +124,9 @@ def test_risk_pass_and_safety_pass_propagate() -> None:
 
 
 def test_stop_above_owner_cap_fails_risk() -> None:
-    # $5 stop at 0.01 lot = $5 planned loss > $2 owner cap.
+    # $5 stop at 0.01 lot = $5 planned loss > 9% of $50 equity ($4.50).
     _facts, risk, _safety = assess_decision_center_engines(
-        _gold_payload(stop_distance="5"),
+        _gold_payload(stop_distance="5", equity="50"),
         use_live=False,
     )
     assert risk.state == "FAIL"

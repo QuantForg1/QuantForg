@@ -116,6 +116,26 @@ def max_planned_risk_usd(equity: Decimal) -> Decimal:
 OWNER_MAX_SL_RISK_USD = max_planned_risk_usd(OWNER_RISK_REFERENCE_USD)
 
 
+
+def owner_risk_cap_usd(
+    *,
+    equity: Decimal | None,
+    configured: Decimal | None,
+    reference_default: Decimal,
+    positions: int = 1,
+) -> Decimal:
+    """Planned-risk cap from 9% of LIVE equity (owner, 2026-10-23).
+
+    Static configs carry the cap at the $50 reference capital ($4.50); that
+    default is replaced by 9% of live equity (x ``positions`` for an
+    aggregate cap). A stricter explicitly configured cap stays.
+    """
+    eq = Decimal(str(equity or 0))
+    if eq > 0 and (configured is None or configured == reference_default):
+        return max_planned_risk_usd(eq) * positions
+    return configured if configured is not None else reference_default
+
+
 def max_sl_risk_usd(equity: Decimal) -> Decimal:
     """Per-trade planned-loss cap in USD for the given equity (alias)."""
     return max_planned_risk_usd(equity)
