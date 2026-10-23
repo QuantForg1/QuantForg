@@ -235,6 +235,51 @@ def reward_risk_after_spread(
     return tp_distance / risk
 
 
+# Market entries: the stop distance at the live price may shrink at most this
+# much versus the signal's distance before the order is refused (2026-10-23).
+OWNER_MAX_STOP_SHRINK_PCT = _env_decimal("OWNER_MAX_STOP_SHRINK_PCT", "10")
+
+
+def stop_shrink_violation(
+    *,
+    side: str,
+    signal_price: Decimal | None,
+    live_price: Decimal | None,
+    stop_loss: Decimal | None,
+    max_shrink_pct: Decimal = OWNER_MAX_STOP_SHRINK_PCT,
+) -> str | None:
+    """Refuse a market entry whose stop shrank because price moved since the signal.
+
+    The SL is an absolute price beyond structure. If price moved toward it
+    between the signal and the send, the real stop is narrower than the owner
+    rule allows ("never shrunk"). Returns a reason, or None when acceptable or
+    when any input is unknown (other guards cover missing data).
+    """
+    if signal_price is None or live_price is None or stop_loss is None:
+        return None
+    if signal_price <= 0 or live_price <= 0 or stop_loss <= 0:
+        return None
+    sell = str(side).strip().upper() == "SELL"
+    planned = (stop_loss - signal_price) if sell else (signal_price - stop_loss)
+    live = (stop_loss - live_price) if sell else (live_price - stop_loss)
+    if planned <= 0:
+        return None
+    if live <= 0:
+        return (
+            f"OWNER_PRICE_DRIFT: live price {live_price} is already beyond the "
+            f"stop loss {stop_loss} (signal price {signal_price}); not sent"
+        )
+    floor = planned * (Decimal("1") - Decimal(str(max_shrink_pct)) / Decimal("100"))
+    if live < floor:
+        return (
+            f"OWNER_PRICE_DRIFT: stop distance shrank from {planned.quantize(_CENT)} "
+            f"to {live.quantize(_CENT)} (price {signal_price} -> {live_price}); "
+            f"more than {max_shrink_pct}% narrower than planned; not sent, "
+            "re-evaluated next cycle"
+        )
+    return None
+
+
 def evaluate_owner_entry(
     *,
     symbol: str,

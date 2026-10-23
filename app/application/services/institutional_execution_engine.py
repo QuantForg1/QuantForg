@@ -36,6 +36,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     evaluate_owner_entry,
     max_planned_risk_usd,
+    stop_shrink_violation,
 )
 from app.domain.value_objects.mt5_order import (
     LotSize,
@@ -802,8 +803,27 @@ class InstitutionalExecutionEngine:
                 spread_val = Decimal(str(tick.ask)) - Decimal(str(tick.bid))
             except (OSError, RuntimeError, ValueError):
                 spread_val = None
-            if intent.price is not None:
+            live_entry = entry
+            # Market orders fill at the live bid/ask: check against it, not the
+            # (seconds-old) signal price. The signal price stays authoritative
+            # for pending orders and when no live tick is available.
+            if intent.price is not None and (
+                intent.order_type is not OrderType.MARKET or entry <= 0
+            ):
                 entry = intent.price
+            if (
+                intent.order_type is OrderType.MARKET
+                and live_entry > 0
+                and not _is_manage_intent(intent)
+            ):
+                drift = stop_shrink_violation(
+                    side=intent.side.value,
+                    signal_price=intent.price,
+                    live_price=live_entry,
+                    stop_loss=(intent.stop_loss.value if intent.stop_loss else None),
+                )
+                if drift:
+                    risk_reject = [drift]
             stop_dist = None
             if intent.stop_loss is not None and entry > 0:
                 stop_dist = abs(entry - intent.stop_loss.value)
