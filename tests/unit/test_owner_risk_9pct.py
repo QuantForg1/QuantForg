@@ -133,10 +133,10 @@ def test_weekly_and_monthly_sit_above_one_daily_stop() -> None:
 def test_stop_is_max_of_atr_and_structure() -> None:
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=None
-    ) == Decimal("3.00")
+    ) == Decimal("1.80")
     assert ol.owner_stop_distance(
-        atr=Decimal("1.2"), structure_distance=Decimal("2.0")
-    ) == Decimal("3.00")  # never narrower than 2.5 x ATR
+        atr=Decimal("1.2"), structure_distance=Decimal("1.5")
+    ) == Decimal("1.80")  # never narrower than 1.5 x ATR
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=Decimal("3.6")
     ) == Decimal("3.6")  # beyond structure when it is further away
@@ -164,7 +164,7 @@ def test_structure_targets_place_stop_beyond_m1_structure_plus_spread() -> None:
         entry=Decimal("4133.00"),
         atr=Decimal("1.2"),
     )
-    # Structure 4.00 below entry + 0.30 spread = 4.30 > 2.5 x 1.2 = 3.00.
+    # Structure 4.00 below entry + 0.30 spread = 4.30 > 1.5 x 1.2 = 1.80.
     assert targets.stop_distance == Decimal("4.30")
     assert targets.stop_loss == Decimal("4128.70")
 

@@ -18,6 +18,7 @@ from app.application.services.institutional_trading_analysis import (
 )
 from app.domain.institutional_trading.decision_models import AccountRiskState
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
+from app.domain.institutional_trading.owner_live_limits import OWNER_SL_ATR_TIMEFRAME
 from app.domain.market_data.candle import Candle
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -1239,7 +1240,11 @@ async def build_ite_cycle_market_context(
             diag["analysis_atr"] = str(analysis_atr)
             if "atr" not in diag:
                 diag["atr"] = str(analysis_atr)
-        if atr_dec is not None:
+        owner_stop_atr = getattr(snapshot, "stop_atr", None)
+        if owner_stop_atr is not None:
+            diag["stop_atr"] = str(owner_stop_atr)
+            diag["stop_atr_timeframe"] = OWNER_SL_ATR_TIMEFRAME
+        elif atr_dec is not None:
             diag["stop_atr"] = str(atr_dec)
     except Exception:
         pass

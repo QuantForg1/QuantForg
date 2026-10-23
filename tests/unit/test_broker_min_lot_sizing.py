@@ -633,7 +633,7 @@ def test_strategy_stop_never_clamped_to_min_lot_max() -> None:
         stop_atr_mult=Decimal("1.10"),
         config=AiScalpingConfig(owner_atr_stop=False),
     )
-    # Owner policy: max(2.5 x ATR, beyond structure) - also never min-lot max.
+    # Owner policy: max(1.5 x ATR, beyond structure) - also never min-lot max.
     owner_chosen, _owner_source = choose_strategy_stop_distance(
         snap,  # type: ignore[arg-type]
         direction=TradeDirection.SELL,
@@ -642,7 +642,7 @@ def test_strategy_stop_never_clamped_to_min_lot_max() -> None:
         stop_atr_mult=Decimal("1.10"),
     )
     assert owner_chosen is not None
-    assert owner_chosen >= atr * Decimal("2.5")
+    assert owner_chosen >= atr * Decimal("1.5")
     max_stop = max_allowed_stop_at_min_lot(
         equity=_EQUITY,
         hard_max_risk_pct=Decimal("80.0"),
@@ -692,16 +692,16 @@ def test_structure_stop_above_owner_cap_is_not_tradeable_and_sl_unmoved() -> Non
         atr=atr,
         stop_atr_mult=Decimal("1.10"),
     )
-    # Owner policy: structure is only 4 away, so 2.5 x ATR (30.00) wins.
+    # Owner policy: structure is only 4 away, so 1.5 x ATR (18.00) wins.
     assert source == "owner_atr"
-    assert chosen == Decimal("30.00")
+    assert chosen == Decimal("18.00")
     trade = evaluate_setup_tradeability(
         stop_distance=chosen,
         equity=_EQUITY,
         min_lot=_MIN,
         contract_size=_CS,
     )
-    # $30 at 0.01 lot is outside 9% of $162 ($14.58): not tradeable, and the
+    # $18 at 0.01 lot is outside 9% of $162 ($14.58): not tradeable, and the
     # stop is never moved to make it fit.
     assert chosen * _MIN * _CS > Decimal("14.58")
     assert trade.tradeability == NOT_TRADEABLE
