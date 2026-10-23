@@ -10,6 +10,7 @@ from app.domain.entities.execution_gateway import (
     ExecutionResult,
     map_retcode_to_outcome,
 )
+from app.domain.entities.mt5_market import MT5Tick
 from app.domain.entities.mt5_order import OrderIntent, TradeRequest
 from app.domain.enums.execution import ExecutionOutcome
 from app.domain.events.base import DomainEvent
@@ -44,9 +45,11 @@ class ExecutionGateway:
         self._events.clear()
         return events
 
-    def prepare(self, intent: OrderIntent) -> TradeRequest:
+    def prepare(
+        self, intent: OrderIntent, *, tick: MT5Tick | None = None
+    ) -> TradeRequest:
         """Build a normalized TradeRequest without sending."""
-        return self.order_validation.build_order_request(intent)
+        return self.order_validation.build_order_request(intent, tick=tick)
 
     def submit(
         self,
@@ -54,8 +57,13 @@ class ExecutionGateway:
         *,
         user_id: UUID,
         request_id: str,
+        request: TradeRequest | None = None,
     ) -> ExecutionResult:
-        """Prepare + optionally send. Never sends when execution is disabled."""
+        """Prepare + optionally send. Never sends when execution is disabled.
+
+        ``request`` sends an already-built (and already-checked) request
+        unchanged instead of re-reading the price.
+        """
         self._events.append(
             ExecutionRequested(
                 user_id=user_id,
@@ -63,7 +71,8 @@ class ExecutionGateway:
                 symbol=intent.symbol,
             )
         )
-        request = self.prepare(intent)
+        if request is None:
+            request = self.prepare(intent)
 
         if not self.adapter.execution_enabled:
             result = ExecutionResult.disabled(
