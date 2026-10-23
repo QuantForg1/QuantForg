@@ -84,7 +84,8 @@ def classify_drawdown(inputs: CompoundingInputs) -> tuple[DrawdownState, tuple[s
                 (inputs.peak_equity - inputs.equity) / inputs.peak_equity * _PCT
             )
 
-    if daily >= max_daily or weekly >= max_week:
+    # max_week 0 = no weekly limit (owner 2026-10-23: daily stop only).
+    if daily >= max_daily or (max_week > 0 and weekly >= max_week):
         notes.append(
             f"CAPITAL_PRESERVATION daily_loss={daily}% "
             f"max_daily={max_daily}% peak_dd={weekly}% max_week={max_week}%"

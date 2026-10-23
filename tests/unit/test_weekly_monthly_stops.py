@@ -1,8 +1,10 @@
-"""Weekly (38%) and monthly (57%) loss stops are fed from MT5 deals.
+"""Weekly / monthly P/L from MT5 deals; the limits are disabled by the owner.
 
-Before 2026-10-23 the live account state hard-coded weekly_pnl=0, so neither
-stop could trigger. Both are now % of the period-start balance, the same basis
-as the owner daily stop (% of day-start equity).
+Owner 2026-10-23 (final): only the 25% daily stop applies. Weekly and monthly
+P/L are still computed from MT5 deals for reporting (summaries, journal) and
+reach the Risk Engine, but a 0 limit means disabled. If a limit is ever
+configured again it is measured against the period-start balance, the same
+basis as the daily stop.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import pytest
 from app.application.services.live_account_risk_tracker import LiveAccountRiskTracker
 from app.application.services.risk_engine import RiskEngine
 from app.domain.entities.mt5_portfolio import AccountSnapshot
+from app.domain.entities.risk_engine import RiskEngineConfig
 from app.domain.institutional_trading.decision_models import AccountRiskState
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
@@ -68,28 +71,31 @@ def test_account_state_carries_monthly_pnl() -> None:
     assert state.to_dict()["monthly_pnl"] == "-4"
 
 
+def test_owner_default_has_no_weekly_or_monthly_block() -> None:
+    # 80% of the week/month lost: still no weekly/monthly reason (disabled).
+    _s, reasons, _w = RiskEngine().evaluate_drawdown(
+        _account("10"), weekly_pnl=D("-40"), monthly_pnl=D("-40")
+    )
+    assert not any("weekly" in r or "monthly" in r for r in reasons)
+    state, _r, _w = RiskEngine().evaluate_drawdown(
+        _account("10"), weekly_pnl=D("-40"), monthly_pnl=D("-40")
+    )
+    assert state.weekly_loss_pct == D("80.00")  # still reported
+
+
 @pytest.mark.parametrize(
     ("weekly", "blocked"),
     [("-19.00", False), ("-19.01", True)],  # week started at $50: 38% = $19.00
 )
-def test_weekly_stop_is_38_pct_of_week_start(weekly: str, blocked: bool) -> None:
+def test_a_configured_weekly_limit_uses_week_start_basis(
+    weekly: str, blocked: bool
+) -> None:
     balance = D("50") + D(weekly)
-    _s, reasons, _w = RiskEngine().evaluate_drawdown(
+    engine = RiskEngine(config=RiskEngineConfig(max_weekly_loss_pct=D("38")))
+    _s, reasons, _w = engine.evaluate_drawdown(
         _account(str(balance)), weekly_pnl=D(weekly)
     )
     assert any("weekly loss" in r for r in reasons) is blocked
-
-
-@pytest.mark.parametrize(
-    ("monthly", "blocked"),
-    [("-28.50", False), ("-28.51", True)],  # month started at $50: 57% = $28.50
-)
-def test_monthly_stop_is_57_pct_of_month_start(monthly: str, blocked: bool) -> None:
-    balance = D("50") + D(monthly)
-    _s, reasons, _w = RiskEngine().evaluate_drawdown(
-        _account(str(balance)), monthly_pnl=D(monthly)
-    )
-    assert any("monthly loss" in r for r in reasons) is blocked
 
 
 def test_profit_never_blocks() -> None:

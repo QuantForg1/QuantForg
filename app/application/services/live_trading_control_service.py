@@ -574,8 +574,14 @@ def _owner_limits_block(equity: Any) -> dict[str, Any]:
         "owner_max_planned_risk_pct": str(ol.OWNER_MAX_PLANNED_RISK_PCT),
         "owner_max_planned_risk_usd": str(cap) if cap is not None else None,
         "owner_daily_loss_pct": str(ol.OWNER_DAILY_LOSS_PCT),
+        # 0 = disabled: only the daily stop applies (owner 2026-10-23).
         "owner_weekly_loss_pct": str(ol.OWNER_WEEKLY_LOSS_PCT),
         "owner_monthly_loss_pct": str(ol.OWNER_MONTHLY_LOSS_PCT),
+        "owner_weekly_monthly_limits": (
+            "disabled"
+            if ol.OWNER_WEEKLY_LOSS_PCT <= 0 and ol.OWNER_MONTHLY_LOSS_PCT <= 0
+            else "enabled"
+        ),
         "owner_overall_drawdown_limit": None,
         "owner_min_reward_risk": str(ol.OWNER_MIN_REWARD_RISK),
         "owner_max_spread": str(ol.OWNER_MAX_SPREAD),
@@ -588,6 +594,9 @@ def _owner_limits_block(equity: Any) -> dict[str, Any]:
         ),
         "owner_max_lot": str(ol.OWNER_MAX_LOT),
         "owner_max_consecutive_losses": ol.OWNER_MAX_CONSECUTIVE_LOSSES,
+        "owner_loss_streak_pause": (
+            "disabled" if ol.OWNER_MAX_CONSECUTIVE_LOSSES <= 0 else "enabled"
+        ),
         "planned_risk_note": (
             "9% is the maximum planned risk per trade, not a cap on realised "
             "loss: slippage, gaps, commissions and execution failures can make "

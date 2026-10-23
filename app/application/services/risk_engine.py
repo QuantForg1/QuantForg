@@ -1090,11 +1090,18 @@ class RiskEngine:
                 warnings.append(f"TEST MODE — daily loss lock overridden ({msg})")
             else:
                 reasons.append(msg)
-        if weekly > self.config.max_weekly_loss_pct:
+        # 0 = disabled (owner 2026-10-23: only the daily stop applies).
+        if (
+            self.config.max_weekly_loss_pct > 0
+            and weekly > self.config.max_weekly_loss_pct
+        ):
             reasons.append(
                 f"weekly loss {weekly}% exceeds {self.config.max_weekly_loss_pct}%"
             )
-        if monthly > self.config.max_monthly_loss_pct:
+        if (
+            self.config.max_monthly_loss_pct > 0
+            and monthly > self.config.max_monthly_loss_pct
+        ):
             reasons.append(
                 f"monthly loss {monthly}% exceeds {self.config.max_monthly_loss_pct}%"
             )

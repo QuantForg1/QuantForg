@@ -364,13 +364,15 @@ def test_scoring_does_not_apply_global_loss_streak_cooldown() -> None:
     assert 'reject_list.append("WAIT_LOSS_STREAK_COOLDOWN")' not in src
 
 
-def test_global_controller_streak_still_time_boxed() -> None:
+def test_global_controller_streak_never_pauses() -> None:
+    # Owner 2026-10-23: no consecutive-loss pause; the streak is only counted.
     ctrl = LiveTradingController()
     ctrl.note_closed_trade(loss=True, volume=Decimal("1.74"))
     ctrl.note_closed_trade(loss=True, volume=Decimal("1.77"))
     ctrl.note_closed_trade(loss=True, volume=Decimal("1.63"))
     assert ctrl.consecutive_losses == 3
-    assert ctrl.loss_streak_cooldown_active() is True
+    assert ctrl.loss_streak_cooldown_active() is False
+    # A legacy persisted cooldown still expires on its own.
     ctrl.loss_streak_cooldown_until = datetime.now(UTC) - timedelta(minutes=1)
     assert ctrl.loss_streak_cooldown_active() is False
     ctrl.note_closed_trade(loss=False, volume=Decimal("0.04"))

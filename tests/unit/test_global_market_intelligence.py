@@ -173,9 +173,10 @@ def test_controller_notes_closed_trade_and_recovers() -> None:
     ctrl.note_closed_trade(loss=True, volume=Decimal("0.01"))
     ctrl.note_closed_trade(loss=True, volume=Decimal("0.01"))
     assert ctrl.consecutive_losses == 3
-    assert ctrl.loss_streak_cooldown_active() is True
+    # Owner 2026-10-23: no consecutive-loss pause; the robot keeps trading.
+    assert ctrl.loss_streak_cooldown_active() is False
     snap = ctrl.loss_streak_snapshot()
-    assert snap["cooldown_active"] is True
+    assert snap["cooldown_active"] is False
     # Simulate cooldown expiry
     ctrl.loss_streak_cooldown_until = datetime.now(UTC) - timedelta(minutes=1)
     assert ctrl.loss_streak_cooldown_active() is False

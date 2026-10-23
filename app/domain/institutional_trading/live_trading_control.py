@@ -62,7 +62,7 @@ MappingLike = dict[str, Any]
 # ITE MAX_DAILY_LOSS_PCT (3%, $5 floor, 10% ceiling) is the global engine cap;
 # this overlay is strictly tighter for real-money live authorization.
 HARD_CEILING_RISK_PER_TRADE_PCT = Decimal("9.00")
-HARD_CEILING_DAILY_LOSS_PCT = Decimal("19.00")
+HARD_CEILING_DAILY_LOSS_PCT = Decimal("25.00")
 HARD_CEILING_MAX_POSITIONS = 2
 HARD_CEILING_CONSECUTIVE_LOSSES = 3
 HARD_CEILING_MARGIN_UTIL_PCT = Decimal("40.00")
@@ -73,7 +73,7 @@ HARD_CEILING_QUOTE_AGE_S = Decimal("5.00")
 
 # Conservative defaults for a ~$33 real-money account (capital preservation).
 DEFAULT_RISK_PER_TRADE_PCT = Decimal("9.00")
-DEFAULT_DAILY_LOSS_PCT = Decimal("19.00")
+DEFAULT_DAILY_LOSS_PCT = Decimal("25.00")
 DEFAULT_MAX_POSITIONS = 1
 DEFAULT_CONSECUTIVE_LOSSES = 3
 DEFAULT_MARGIN_UTIL_PCT = Decimal("25.00")
@@ -1569,7 +1569,8 @@ class LiveTradingController:
                 self.last_loss_volume = volume
                 until = streak_mod.cooldown_until_after_streak(
                     consecutive_losses=self.consecutive_losses,
-                    max_consecutive_losses=int(cfg.max_consecutive_losses or 3),
+                    # 0 = no loss-streak pause (owner 2026-10-23).
+                    max_consecutive_losses=int(cfg.max_consecutive_losses or 0),
                     cooldown_minutes=int(
                         cfg.cooldown_minutes_after_loss_streak or 60
                     ),

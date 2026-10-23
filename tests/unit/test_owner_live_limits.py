@@ -1,4 +1,4 @@
-"""Owner live limits (2026-10-22): 9% planned risk, 19% daily stop, entry guard."""
+"""Owner live limits (2026-10-23): 9% planned risk, 25% daily stop, entry guard."""
 
 from __future__ import annotations
 
@@ -82,8 +82,8 @@ def _entry(**overrides: object) -> list[str]:
 
 
 def test_owner_constants_replace_80_percent_caps() -> None:
-    assert MAX_DAILY_LOSS_PCT == D("19.0")
-    assert MAX_DAILY_LOSS_CEILING_PCT == D("19.0")
+    assert MAX_DAILY_LOSS_PCT == D("25.0")
+    assert MAX_DAILY_LOSS_CEILING_PCT == D("25.0")
     # Static values are at the $50 reference capital; live checks use equity.
     assert MAX_PLANNED_SL_RISK_USD == D("4.50")
     assert TARGET_PLANNED_RISK_USD == D("4.50")
@@ -105,14 +105,14 @@ def test_default_configs_respect_owner_limits() -> None:
     cfg = RiskEngineConfig()
     assert cfg.max_lot == OWNER_MAX_LOT
     assert cfg.max_open_positions == 1
-    assert cfg.max_consecutive_losses == 3
+    assert cfg.max_consecutive_losses == 0  # no loss-streak pause (2026-10-23)
     assert cfg.cooldown_minutes_after_loss_streak == 24 * 60
 
 
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("max_daily_loss_pct", D("19.01")),
+        ("max_daily_loss_pct", D("25.01")),
         ("max_daily_loss_pct", D("80.0")),
         ("risk_per_trade_pct", D("9.01")),
         ("max_planned_sl_risk_usd", D("4.51")),
@@ -132,36 +132,36 @@ def test_live_scalp_cap_never_exceeds_one() -> None:
         assert align_live_scalp_cap(current, trading_mode="alpha") == 1
 
 
-# --- Daily stop: 19% of the UTC day's starting equity ---
+# --- Daily stop: 25% of the UTC day's starting equity ---
 
 
 @pytest.mark.parametrize(
     "sod,expected",
     [
-        ("50.84", "9.65"),
-        ("20.00", "3.80"),
-        ("1000", "190.00"),
+        ("50.84", "12.71"),
+        ("20.00", "5.00"),
+        ("1000", "250.00"),
     ],
 )
 def test_daily_loss_cap_usd(sod: str, expected: str) -> None:
     assert daily_loss_cap_usd(D(sod)) == D(expected)
 
 
-def test_daily_loss_966_blocks_and_965_does_not() -> None:
-    # Start of day 50.84 -> cap $9.65: realised -9.65 leaves balance 41.19.
-    assert daily_loss_exceeded(daily_pnl=D("-9.65"), base_now=D("41.19")) is False
-    assert daily_loss_exceeded(daily_pnl=D("-9.66"), base_now=D("41.18")) is True
+def test_daily_loss_1272_blocks_and_1271_does_not() -> None:
+    # Start of day 50.84 -> cap $12.71: realised -12.71 leaves balance 38.13.
+    assert daily_loss_exceeded(daily_pnl=D("-12.71"), base_now=D("38.13")) is False
+    assert daily_loss_exceeded(daily_pnl=D("-12.72"), base_now=D("38.12")) is True
 
 
-def test_nineteen_point_one_percent_blocks_on_larger_account() -> None:
-    # SOD 1000 -> cap $190 (19%). 19.1% blocks; 18.9% does not.
-    assert daily_loss_exceeded(daily_pnl=D("-191"), base_now=D("809")) is True
-    assert daily_loss_exceeded(daily_pnl=D("-189"), base_now=D("811")) is False
+def test_twenty_five_point_one_percent_blocks_on_larger_account() -> None:
+    # SOD 1000 -> cap $250 (25%). 25.1% blocks; 24.9% does not.
+    assert daily_loss_exceeded(daily_pnl=D("-251"), base_now=D("749")) is True
+    assert daily_loss_exceeded(daily_pnl=D("-249"), base_now=D("751")) is False
 
 
 def test_utc_lock_uses_owner_daily_stop() -> None:
-    kw = {"equity": D("41.18"), "max_daily_loss_pct": MAX_DAILY_LOSS_PCT}
-    assert utc_daily_loss_exceeded(daily_pnl=D("-9.66"), balance=D("41.18"), **kw)
+    kw = {"equity": D("38.12"), "max_daily_loss_pct": MAX_DAILY_LOSS_PCT}
+    assert utc_daily_loss_exceeded(daily_pnl=D("-12.72"), balance=D("38.12"), **kw)
     assert not utc_daily_loss_exceeded(
         daily_pnl=D("-1.60"),
         balance=D("49.24"),
@@ -172,7 +172,9 @@ def test_utc_lock_uses_owner_daily_stop() -> None:
 
 def test_risk_engine_drawdown_blocks_above_owner_daily_stop() -> None:
     engine = RiskEngine()
-    _s, reasons, _w = engine.evaluate_drawdown(_account("41.18"), daily_pnl=D("-9.66"))
+    _s, reasons, _w = engine.evaluate_drawdown(
+        _account("38.12"), daily_pnl=D("-12.72")
+    )
     assert any("owner daily stop" in r for r in reasons)
     _s, reasons_ok, _w = engine.evaluate_drawdown(
         _account("49.24"), daily_pnl=D("-1.60")
@@ -182,7 +184,7 @@ def test_risk_engine_drawdown_blocks_above_owner_daily_stop() -> None:
 
 def test_daily_loss_cap_pct_matches_usd_stop() -> None:
     pct = daily_loss_cap_pct(daily_pnl=D("0"), base_now=D("50.84"))
-    assert (D("50.84") * pct / 100).quantize(D("0.01")) == D("9.65")
+    assert (D("50.84") * pct / 100).quantize(D("0.01")) == D("12.71")
 
 
 # --- Per-trade planned-risk cap: 9% of equity ---

@@ -7,9 +7,10 @@ and sender: no getUpdates polling, no reply threads, no shared dedupe store.
 ``OperatorWatch`` checks broker truth every 30 s and alerts on:
 order opened / closed, rule violations on open positions, gateway or MT5
 offline > 2 min (and recovery), robot (Railway) restart, Live Trading Control
-paused for safety > 2 min (and resume), daily / weekly stop hit, loss-streak
-pause, equity 30% below the owner reference, repeated errors, and sends a
-daily summary at 17:15 UTC and a weekly summary on Friday.
+paused for safety > 2 min (and resume), daily stop hit (weekly stop and
+loss-streak pause only if those limits are ever re-enabled; both are 0 =
+disabled since 2026-10-23), equity 30% below the owner reference, repeated
+errors, and sends a daily summary at 17:15 UTC and a weekly summary on Friday.
 
 Opened / closed trades are journaled in Supabase ``live_trade_journal`` so
 nothing is lost on restart. Observability only: never sends orders, never
@@ -678,6 +679,12 @@ class OperatorWatch:
         )
 
     def _loss_streak(self) -> None:
+        from app.domain.institutional_trading.owner_live_limits import (
+            OWNER_MAX_CONSECUTIVE_LOSSES,
+        )
+
+        if OWNER_MAX_CONSECUTIVE_LOSSES <= 0:
+            return  # no loss-streak pause (owner 2026-10-23)
         try:
             from app.domain.institutional_trading.live_trading_control import (
                 get_live_trading_controller,
@@ -746,7 +753,8 @@ class OperatorWatch:
                 "No new entries until 00:00 UTC.",
                 key=f"daily:{day.date().isoformat()}",
             )
-        if balance > 0 and weekly < 0:
+        # 0 = weekly limit disabled (owner 2026-10-23: daily stop only).
+        if OWNER_WEEKLY_LOSS_PCT > 0 and balance > 0 and weekly < 0:
             pct = (-weekly) / (balance - weekly) * 100
             if pct > OWNER_WEEKLY_LOSS_PCT:
                 self.alerter.alert(
