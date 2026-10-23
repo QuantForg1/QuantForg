@@ -547,6 +547,13 @@ class TelegramDispatcher:
                 )
             if max_id != offset:
                 set_telegram_update_offset(max_id)
+        except httpx.TimeoutException as exc:
+            # Routine network slowness on getUpdates: one line, no traceback.
+            logger.warning(
+                "telegram_inbound_poll_timeout",
+                error=type(exc).__name__,
+                timeout_seconds=self._timeout,
+            )
         except Exception:
             logger.exception("telegram_inbound_poll_failed")
 

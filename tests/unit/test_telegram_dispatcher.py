@@ -1208,3 +1208,64 @@ def get_disp() -> TelegramDispatcher:
     disp = dispatcher_mod.get_telegram_dispatcher()
     assert disp is not None
     return disp
+
+
+class _LogRecorder:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def warning(self, event: str, **kw: Any) -> None:
+        self.calls.append(("warning", event, kw))
+
+    def exception(self, event: str, **kw: Any) -> None:
+        self.calls.append(("exception", event, kw))
+
+    def __getattr__(self, name: str) -> Any:
+        return lambda *_a, **_k: None
+
+
+def _poll_dispatcher(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> tuple[TelegramDispatcher, _LogRecorder]:
+    rec = _LogRecorder()
+    monkeypatch.setattr(dispatcher_mod, "logger", rec)
+    disp = TelegramDispatcher(
+        enabled=True,
+        token=SecretStr(TOKEN),
+        chat_id="@QuantForgSignals",
+        sender=None,
+        timeout_seconds=0.2,
+    )
+
+    async def _raise(url: str, payload: dict[str, Any]) -> Any:
+        del url, payload
+        raise error
+
+    monkeypatch.setattr(disp, "_post", _raise)
+    return disp, rec
+
+
+def test_inbound_poll_read_timeout_is_a_warning_without_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    disp, rec = _poll_dispatcher(monkeypatch, httpx.ReadTimeout("slow"))
+    asyncio.run(disp._poll_inbound_replies())
+    assert rec.calls == [
+        (
+            "warning",
+            "telegram_inbound_poll_timeout",
+            {"error": "ReadTimeout", "timeout_seconds": 0.2},
+        )
+    ]
+
+
+def test_inbound_poll_other_errors_keep_the_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    disp, rec = _poll_dispatcher(monkeypatch, RuntimeError("boom"))
+    asyncio.run(disp._poll_inbound_replies())
+    assert rec.calls == [("exception", "telegram_inbound_poll_failed", {})]
