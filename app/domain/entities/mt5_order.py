@@ -88,6 +88,9 @@ class OrderIntent:
     position: int = 0
     order_ticket: int = 0
     oms_kind: str = ""
+    # Price the stop/target were planned from (scan/plan entry). Audit and
+    # pre-send drift check only — never sent to the broker.
+    plan_price: Decimal | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.strip().upper())
@@ -118,6 +121,7 @@ class OrderIntent:
             "position": self.position,
             "order_ticket": self.order_ticket,
             "oms_kind": self.oms_kind,
+            "plan_price": str(self.plan_price) if self.plan_price is not None else None,
         }
 
 

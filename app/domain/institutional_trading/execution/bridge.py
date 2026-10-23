@@ -1307,6 +1307,12 @@ class ExecutionBridge:
             ai = {}
         ai_sl = ai.get("stop_loss")
         ai_tp = ai.get("take_profit")
+        # Price the AI structure stop was computed from (scan mid).
+        try:
+            ai_entry = Decimal(str(ai.get("entry"))) if ai.get("entry") else None
+        except Exception:
+            ai_entry = None
+        plan_price = mid_d
         fallback_dist = (
             (atr_d * Decimal("1.10"))
             if atr_d is not None and atr_d > 0
@@ -1322,10 +1328,12 @@ class ExecutionBridge:
                         cand = Decimal(str(ai_sl))
                         if cand < mid_d:
                             sl = cand
+                            plan_price = ai_entry or mid_d
                     except Exception:
                         pass
                 if sl >= mid_d:
                     sl = mid_d - fallback_dist
+                    plan_price = mid_d
                 if ai_tp:
                     try:
                         cand = Decimal(str(ai_tp))
@@ -1345,10 +1353,12 @@ class ExecutionBridge:
                         cand = Decimal(str(ai_sl))
                         if cand > mid_d:
                             sl = cand
+                            plan_price = ai_entry or mid_d
                     except Exception:
                         pass
                 if sl <= mid_d:
                     sl = mid_d + fallback_dist
+                    plan_price = mid_d
                 if ai_tp:
                     try:
                         cand = Decimal(str(ai_tp))
@@ -1401,6 +1411,7 @@ class ExecutionBridge:
             slippage=self.config.slippage,
             magic=self.config.magic,
             comment=comment,
+            plan_price=str(plan_price) if plan_price else None,
         )
 
     def _auto_trade_facts(self, context: ExecutionBridgeContext) -> AutoTradeLiveFacts:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dataclass_replace
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID
@@ -135,24 +135,8 @@ class MT5OrderValidationService:
             )
         if aligned == raw:
             return intent, notes
-        return (
-            OrderIntent(
-                symbol=intent.symbol,
-                side=intent.side,
-                order_type=intent.order_type,
-                volume=LotSize.of(str(aligned)),
-                price=intent.price,
-                stop_loss=intent.stop_loss,
-                take_profit=intent.take_profit,
-                slippage=intent.slippage,
-                magic=intent.magic,
-                comment=intent.comment,
-                position=intent.position,
-                order_ticket=intent.order_ticket,
-                oms_kind=intent.oms_kind,
-            ),
-            notes,
-        )
+        # replace() keeps every field (incl. plan_price for the drift check).
+        return (dataclass_replace(intent, volume=LotSize.of(str(aligned))), notes)
 
     def build_order_request(self, intent: OrderIntent) -> TradeRequest:
         normalized, _ = self.normalize_intent(intent)
@@ -558,21 +542,7 @@ class MT5OrderValidationService:
 
     @staticmethod
     def _intent_with_symbol(intent: OrderIntent, symbol: str) -> OrderIntent:
-        return OrderIntent(
-            symbol=symbol,
-            side=intent.side,
-            order_type=intent.order_type,
-            volume=intent.volume,
-            price=intent.price,
-            stop_loss=intent.stop_loss,
-            take_profit=intent.take_profit,
-            slippage=intent.slippage,
-            magic=intent.magic,
-            comment=intent.comment,
-            position=intent.position,
-            order_ticket=intent.order_ticket,
-            oms_kind=intent.oms_kind,
-        )
+        return dataclass_replace(intent, symbol=symbol)
 
     def calculate(
         self, intent: OrderIntent
