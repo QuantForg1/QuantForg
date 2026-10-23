@@ -22,7 +22,7 @@ Write-Host ""
 if (Get-Command Write-AutologonOperatorInstructions -ErrorAction SilentlyContinue) {
   Write-AutologonOperatorInstructions
 } else {
-  Write-Host "If the Autologon dialog appears, set Username=Administrator Domain=. then Enable."
+  Write-Host ("If the Autologon dialog appears, set Username={0} Domain=. then Enable." -f $env:USERNAME)
 }
 Write-Host ""
 
@@ -48,7 +48,8 @@ if (-not [string]::IsNullOrWhiteSpace($autoBin)) {
   if ($null -eq $ready -or $ready.State -ne "READY") {
     if (Get-Command Set-AutologonNonSecretIdentity -ErrorAction SilentlyContinue) {
       $prefilled = Set-AutologonNonSecretIdentity
-      Write-Host ("Non-secret identity prefill Username=Administrator Domain=. applied={0}" -f $prefilled)
+      $who = (Get-LocalAutologonIdentity).Username
+      Write-Host ("Non-secret identity prefill Username={0} Domain=. applied={1}" -f $who, $prefilled)
     }
   }
   Write-Host ("Launching {0} (no password argument; GUI only)." -f $autoBin)
@@ -66,7 +67,8 @@ if (Get-Command Get-AutoLogonReadiness -ErrorAction SilentlyContinue) {
   $ready = Get-AutoLogonReadiness
   if ($ready.State -ne "READY" -and (Get-Command Set-AutologonNonSecretIdentity -ErrorAction SilentlyContinue)) {
     $prefilled = Set-AutologonNonSecretIdentity
-    Write-Host ("Non-secret identity prefill Username=Administrator Domain=. applied={0}" -f $prefilled)
+    $who = (Get-LocalAutologonIdentity).Username
+    Write-Host ("Non-secret identity prefill Username={0} Domain=. applied={1}" -f $who, $prefilled)
   }
 }
 if (Test-Path -LiteralPath $netplwiz) {
