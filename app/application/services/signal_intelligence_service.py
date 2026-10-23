@@ -71,6 +71,17 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _as_utc_datetime(value: Any) -> datetime:
+    """asyncpg needs a datetime for a timestamptz parameter, not ISO text."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.now(UTC)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
 def _supabase_rest_config() -> tuple[str, str] | None:
     try:
         from core.config.settings import get_settings
@@ -224,7 +235,7 @@ def _upsert_history_direct(rows: list[dict[str, Any]]) -> int:
         args.append(
             (
                 str(r.get("id") or uuid4()),
-                r.get("observed_at") or _now_iso(),
+                _as_utc_datetime(r.get("observed_at") or _now_iso()),
                 str(r["scan_as_of"]),
                 str(r["symbol"]).upper(),
                 str(r.get("direction") or "NONE"),
