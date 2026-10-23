@@ -53,11 +53,14 @@ def _owner_session_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     clock every entry test would depend on the wall-clock hour. Session tests
     pass explicit times and are unaffected.
     """
-    from datetime import UTC, datetime, time
+    from datetime import UTC, datetime, time, timedelta
 
     from app.domain.institutional_trading import owner_live_limits as ol
 
-    fixed = datetime.combine(datetime.now(UTC).date(), time(10, 0), tzinfo=UTC)
+    day = datetime.now(UTC).date()
+    while day.weekday() >= 5:  # session is Mon-Fri: weekend runs use Friday
+        day -= timedelta(days=1)
+    fixed = datetime.combine(day, time(10, 0), tzinfo=UTC)
     monkeypatch.setattr(ol, "_now", lambda: fixed)
 
 

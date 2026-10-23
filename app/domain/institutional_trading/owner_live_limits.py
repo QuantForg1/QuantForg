@@ -208,12 +208,17 @@ def daily_loss_cap_pct(
 
 
 def in_owner_session(now: datetime | None = None) -> bool:
-    """London + New York: 07:00 <= UTC time < 17:00."""
+    """London + New York, Monday-Friday: 07:00 <= UTC time < 17:00.
+
+    No entries on Saturday or Sunday UTC (owner 2026-10-23).
+    """
     clock = now or _now()
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
-    t = clock.astimezone(UTC).time()
-    return OWNER_SESSION_START_UTC <= t < OWNER_SESSION_END_UTC
+    utc = clock.astimezone(UTC)
+    if utc.weekday() >= 5:
+        return False
+    return OWNER_SESSION_START_UTC <= utc.time() < OWNER_SESSION_END_UTC
 
 
 def next_utc_day_start(now: datetime | None = None) -> datetime:
@@ -343,7 +348,7 @@ def evaluate_owner_entry(
         violations.append(f"OWNER_MAX_LOT: volume {vol} > {OWNER_MAX_LOT}")
     if not in_owner_session(now):
         violations.append(
-            "OWNER_SESSION: entries only 07:00-17:00 UTC (London + New York)"
+            "OWNER_SESSION: entries only Mon-Fri 07:00-17:00 UTC (London + New York)"
         )
     if vol <= 0:
         reasons.append("OWNER_VOLUME_INVALID: volume must be > 0")
