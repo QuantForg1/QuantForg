@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime, time, timedelta
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from typing import Any
 
 from app.domain.trading.gold_only import is_gold_symbol
 
@@ -239,6 +240,11 @@ def reward_risk_after_spread(
 # much versus the signal's distance before the order is refused (2026-10-23).
 OWNER_MAX_STOP_SHRINK_PCT = _env_decimal("OWNER_MAX_STOP_SHRINK_PCT", "10")
 
+# Pre-send RR check: assume the fill lands this far adversely from the check
+# price (TP distance - B over stop distance + spread + B). Owner default 0
+# (2026-10-23); recalibrate from logged check-vs-fill moves after ~30 fills.
+OWNER_RR_SLIPPAGE_BUFFER = _env_decimal("OWNER_RR_SLIPPAGE_BUFFER", "0")
+
 
 def stop_shrink_violation(
     *,
@@ -381,3 +387,109 @@ def evaluate_owner_entry(
             f"< {OWNER_MIN_REWARD_RISK}"
         )
     return violations
+
+
+def presend_owner_violations(
+    *,
+    symbol: str,
+    side: str,
+    volume: Decimal,
+    request_price: Decimal,
+    bid: Decimal,
+    ask: Decimal,
+    stop_loss: Decimal | None,
+    take_profit: Decimal | None,
+    plan_price: Decimal | None,
+    contract_size: Decimal,
+    equity: Decimal,
+    min_stop_distance: Decimal = Decimal("0"),
+    rr_buffer: Decimal = OWNER_RR_SLIPPAGE_BUFFER,
+    now: datetime | None = None,
+) -> list[str]:
+    """Final owner check on the exact tick the market request was built from.
+
+    Re-runs the full owner entry check with ``request_price`` and that tick's
+    spread, the stop-shrink guard against the plan price, and (when
+    ``rr_buffer`` > 0) RR with the fill assumed ``rr_buffer`` worse.
+    """
+    spread = Decimal(str(ask)) - Decimal(str(bid))
+    violations = evaluate_owner_entry(
+        symbol=symbol,
+        side=side,
+        volume=volume,
+        entry=request_price,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        spread=spread,
+        contract_size=contract_size,
+        equity=equity,
+        min_stop_distance=min_stop_distance,
+        now=now,
+    )
+    drift = stop_shrink_violation(
+        side=side,
+        signal_price=plan_price,
+        live_price=request_price,
+        stop_loss=stop_loss,
+    )
+    if drift:
+        violations.append(drift)
+    buf = Decimal(str(rr_buffer or 0))
+    if buf > 0 and stop_loss is not None and take_profit is not None:
+        rr = reward_risk_after_spread(
+            tp_distance=abs(Decimal(str(take_profit)) - request_price) - buf,
+            stop_distance=abs(request_price - Decimal(str(stop_loss))) + buf,
+            spread=spread,
+        ) or Decimal("0")
+        if rr < OWNER_MIN_REWARD_RISK:
+            violations.append(
+                f"OWNER_MIN_RR_SLIPPAGE: reward:risk {rr.quantize(_CENT)} with "
+                f"{buf} slippage buffer < {OWNER_MIN_REWARD_RISK}"
+            )
+    return [f"PRESEND {v}" for v in violations]
+
+
+def sltp_move_violations(
+    *,
+    side: str,
+    position_ticket: int,
+    stop_loss: Decimal | None,
+    take_profit: Decimal | None,
+    positions: list[Any],
+) -> list[str]:
+    """Owner check for an SL/TP move (breakeven, trail) on an OPEN position.
+
+    An SL/TP move adds no exposure, so entry-only limits (open-position cap,
+    sizing, planned risk) must not judge it. It is allowed only on an open
+    position of the same side, and it never removes the SL or the TP and
+    never moves the SL further from price.
+    """
+    side_u = str(side or "").strip().upper()
+    pos = next(
+        (p for p in positions if int(getattr(p, "ticket", 0) or 0) == position_ticket),
+        None,
+    )
+    if position_ticket <= 0 or pos is None:
+        return [f"MANAGE_POSITION_NOT_OPEN: ticket {position_ticket} is not open"]
+    pos_side = str(getattr(pos, "side", "") or "").strip().upper()
+    reasons: list[str] = []
+    if side_u != pos_side:
+        reasons.append(f"MANAGE_SIDE: SL/TP move side {side_u} != position {pos_side}")
+    new_sl = Decimal(str(stop_loss or 0))
+    cur_sl = Decimal(str(getattr(pos, "stop_loss", 0) or 0))
+    if new_sl <= 0:
+        reasons.append("OWNER_SL_REQUIRED: an SL/TP move may not remove the stop loss")
+    elif cur_sl > 0 and (
+        (pos_side == "SELL" and new_sl > cur_sl)
+        or (pos_side == "BUY" and new_sl < cur_sl)
+    ):
+        reasons.append(
+            f"MANAGE_SL_WIDENS: new SL {new_sl} is further from price than "
+            f"the current SL {cur_sl}"
+        )
+    cur_tp = Decimal(str(getattr(pos, "take_profit", 0) or 0))
+    if cur_tp > 0 and Decimal(str(take_profit or 0)) <= 0:
+        reasons.append(
+            "OWNER_TP_REQUIRED: an SL/TP move may not remove the take profit"
+        )
+    return reasons

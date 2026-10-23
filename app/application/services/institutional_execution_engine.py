@@ -36,6 +36,8 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     evaluate_owner_entry,
     max_planned_risk_usd,
+    presend_owner_violations,
+    sltp_move_violations,
     stop_shrink_violation,
 )
 from app.domain.value_objects.mt5_order import (
@@ -790,6 +792,8 @@ class InstitutionalExecutionEngine:
         risk_reject: list[str] = []
         # Equity for the owner's dynamic 9% planned-risk cap (band check below).
         owner_band_equity: Decimal | None = None
+        # (equity, contract size, stops-level distance) for the pre-send check.
+        owner_presend_ctx: tuple[Decimal, Decimal, Decimal] | None = None
         try:
             account = self.gateway.adapter.account_snapshot()
             owner_band_equity = account.equity
@@ -832,7 +836,20 @@ class InstitutionalExecutionEngine:
             stop_dist = None
             if intent.stop_loss is not None and entry > 0:
                 stop_dist = abs(entry - intent.stop_loss.value)
-            if entry <= 0:
+            if intent.oms_kind in {"sltp", "modify_sltp"}:
+                # An SL/TP move on an open position adds no exposure: entry-only
+                # limits (open-position cap, sizing, planned risk) blocked every
+                # breakeven and trail (2026-10-23). Closes are unchanged here.
+                risk_reject = sltp_move_violations(
+                    side=intent.side.value,
+                    position_ticket=int(intent.position or 0),
+                    stop_loss=(intent.stop_loss.value if intent.stop_loss else None),
+                    take_profit=(
+                        intent.take_profit.value if intent.take_profit else None
+                    ),
+                    positions=positions,
+                )
+            elif entry <= 0:
                 risk_reject = [
                     "Risk Engine unavailable — fail-closed: "
                     "entry price unresolved from tick/intent"
@@ -1001,6 +1018,9 @@ class InstitutionalExecutionEngine:
                         ]
                 if not risk_reject and not _is_manage_intent(intent):
                     # Final owner guard on the exact intent that goes to the broker.
+                    owner_min_stop = live_constraints.point * Decimal(
+                        live_constraints.stops_level
+                    )
                     risk_reject = evaluate_owner_entry(
                         symbol=intent.symbol,
                         side=intent.side.value,
@@ -1015,11 +1035,9 @@ class InstitutionalExecutionEngine:
                         spread=spread_val,
                         contract_size=live_cs,
                         equity=account.equity,
-                        min_stop_distance=(
-                            live_constraints.point
-                            * Decimal(live_constraints.stops_level)
-                        ),
+                        min_stop_distance=owner_min_stop,
                     )
+                    owner_presend_ctx = (account.equity, live_cs, owner_min_stop)
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
 
@@ -1449,6 +1467,98 @@ class InstitutionalExecutionEngine:
             )
             result.journal_entry = self._write_journal(result, intent, None, uid)
             return result, decision
+        # Final owner check on the same tick the market request is built from,
+        # immediately before order_send (2026-10-23 slippage review).
+        presend_request = None
+        presend_log: dict[str, str] = {}
+        if (
+            intent.order_type is OrderType.MARKET
+            and not _is_manage_intent(intent)
+            and owner_presend_ctx is not None
+        ):
+            try:
+                presend_tick = self.gateway.adapter.latest_tick(intent.symbol)
+                presend_request = self.gateway.prepare(intent, tick=presend_tick)
+                p_bid = Decimal(str(presend_tick.bid))
+                p_ask = Decimal(str(presend_tick.ask))
+                presend_log = {
+                    "check_bid": str(p_bid),
+                    "check_ask": str(p_ask),
+                    "check_spread": str(p_ask - p_bid),
+                    "check_price": str(presend_request.price),
+                    "plan_price": str(intent.plan_price),
+                    "sl": str(presend_request.stop_loss),
+                    "tp": str(presend_request.take_profit),
+                }
+                p_equity, p_cs, p_min_stop = owner_presend_ctx
+                presend_reject = presend_owner_violations(
+                    symbol=intent.symbol,
+                    side=intent.side.value,
+                    volume=presend_request.volume,
+                    request_price=presend_request.price,
+                    bid=p_bid,
+                    ask=p_ask,
+                    stop_loss=presend_request.stop_loss,
+                    take_profit=presend_request.take_profit,
+                    plan_price=intent.plan_price,
+                    contract_size=p_cs,
+                    equity=p_equity,
+                    min_stop_distance=p_min_stop,
+                )
+            except (
+                OSError,
+                RuntimeError,
+                ValueError,
+                TypeError,
+                ArithmeticError,
+            ) as exc:
+                presend_request = None
+                presend_reject = [
+                    f"PRESEND owner check unavailable, fail-closed: {exc}"
+                ]
+            logger.info(
+                "owner_presend_check",
+                symbol=intent.symbol,
+                side=intent.side.value,
+                result="REFUSED" if presend_reject else "PASS",
+                reasons="; ".join(presend_reject),
+                **presend_log,
+            )
+            if presend_reject:
+                self._observe(
+                    user_id=uid,
+                    request_id=request_id,
+                    symbol=symbol,
+                    side=side,
+                    order_type=order_type,
+                    volume=volume,
+                    stage=PipelineStage.REJECTED,
+                    reason="; ".join(presend_reject),
+                )
+                self._stage(
+                    stages,
+                    stage=PipelineStage.RISK_CHECK,
+                    status="failed",
+                    reason="; ".join(presend_reject),
+                    t0=t0,
+                    meta={"component": "owner_presend_check", **presend_log},
+                )
+                result = PipelineResult(
+                    request_id=request_id,
+                    action=action,
+                    outcome="rejected",
+                    message="; ".join(presend_reject),
+                    stages=stages,
+                    rejection_reasons=presend_reject,
+                    warnings=list(decision.warnings),
+                    checks=dict(decision.checks),
+                    calculated_risk=dict(decision.calculated_risk),
+                    decision=ExecutionDecision.REJECT.value,
+                    latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                    idempotent_replay=decision.idempotent_replay,
+                )
+                result.journal_entry = self._write_journal(result, intent, None, uid)
+                return result, decision
         self._observe(
             user_id=uid,
             request_id=request_id,
@@ -1460,8 +1570,28 @@ class InstitutionalExecutionEngine:
             reason="submitting to broker via Execution Gateway",
         )
         exec_result = self.gateway.submit(
-            intent, user_id=user_id, request_id=request_id
+            intent,
+            user_id=user_id,
+            request_id=request_id,
+            request=presend_request,
         )
+        if presend_log:
+            # Check price vs fill on every robot market order (calibrates
+            # OWNER_RR_SLIPPAGE_BUFFER).
+            fill_move = ""
+            if exec_result.price and presend_request is not None:
+                fill_move = str(exec_result.price - presend_request.price)
+            logger.info(
+                "order_fill_vs_check",
+                symbol=intent.symbol,
+                side=intent.side.value,
+                outcome=exec_result.outcome.value,
+                retcode=exec_result.retcode,
+                fill_price=str(exec_result.price),
+                fill_minus_check=fill_move,
+                deal_ticket=exec_result.deal_ticket,
+                **presend_log,
+            )
         _ = self.gateway.drain_events()
         self._stage(
             stages,

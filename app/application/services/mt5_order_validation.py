@@ -7,6 +7,7 @@ from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID
 
+from app.domain.entities.mt5_market import MT5Tick
 from app.domain.entities.mt5_order import (
     OrderConstraints,
     OrderIntent,
@@ -138,7 +139,10 @@ class MT5OrderValidationService:
         # replace() keeps every field (incl. plan_price for the drift check).
         return (dataclass_replace(intent, volume=LotSize.of(str(aligned))), notes)
 
-    def build_order_request(self, intent: OrderIntent) -> TradeRequest:
+    def build_order_request(
+        self, intent: OrderIntent, *, tick: MT5Tick | None = None
+    ) -> TradeRequest:
+        """Build the broker request; ``tick`` pins the market price source."""
         normalized, _ = self.normalize_intent(intent)
         intent = normalized
         oms = intent.oms_kind
@@ -181,7 +185,8 @@ class MT5OrderValidationService:
                 oms_kind="modify_pending",
             )
 
-        tick = self.adapter.latest_tick(intent.symbol)
+        if tick is None:
+            tick = self.adapter.latest_tick(intent.symbol)
         constraints = self.constraints_for(intent.symbol)
         digits = max(0, int(constraints.digits))
         if intent.order_type is OrderType.MARKET:
@@ -275,8 +280,10 @@ class MT5OrderValidationService:
         entry_price: Decimal,
     ) -> tuple[bool, str]:
         if intent.oms_kind in {"sltp", "modify_sltp"} and entry_price <= 0:
+            # An open position closes at the opposite price (SELL at ask, BUY
+            # at bid); the broker checks SL/TP moves against that price.
             tick = self.adapter.latest_tick(intent.symbol)
-            entry_price = tick.bid if intent.side is OrderSide.SELL else tick.ask
+            entry_price = tick.ask if intent.side is OrderSide.SELL else tick.bid
         min_distance = constraints.point * Decimal(constraints.stops_level)
         if intent.stop_loss is not None and intent.stop_loss.value > 0:
             dist = abs(entry_price - intent.stop_loss.value)
