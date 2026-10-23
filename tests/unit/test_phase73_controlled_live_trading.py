@@ -447,7 +447,7 @@ def test_risk_ceiling_cannot_bypass() -> None:
     )
     assert cfg.risk_per_trade_pct == HARD_CEILING_RISK_PER_TRADE_PCT
     assert cfg.max_daily_loss_pct == HARD_CEILING_DAILY_LOSS_PCT
-    assert cfg.max_open_positions == 2
+    assert cfg.max_open_positions == 1  # owner limit (2026-10-23)
     assert cfg.allow_martingale is False
     assert cfg.allow_grid_averaging is False
     assert cfg.allow_revenge_sizing is False

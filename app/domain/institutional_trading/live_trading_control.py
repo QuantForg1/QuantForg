@@ -17,6 +17,7 @@ from threading import RLock
 from typing import Any, Literal
 from uuid import UUID
 
+from app.domain.institutional_trading import owner_live_limits as _ol
 from app.domain.institutional_trading.operations.models import OperatorIdentity
 
 LiveTradingState = Literal[
@@ -376,6 +377,18 @@ class LiveTradingRiskConfig:
         object.__setattr__(
             self, "close_positions_on_kill", bool(self.close_positions_on_kill)
         )
+        # Owner-governed limits (2026-10-23): a persisted or patched operator
+        # profile (e.g. 3% daily / 0.5% risk / 2-loss streak / RR 1.20 /
+        # spread 1.50) can no longer show or enforce values that differ from
+        # the owner limits on the manual-order check, the UI or the audit.
+        object.__setattr__(self, "risk_per_trade_pct", _ol.OWNER_MAX_PLANNED_RISK_PCT)
+        object.__setattr__(self, "max_daily_loss_pct", _ol.OWNER_DAILY_LOSS_PCT)
+        object.__setattr__(
+            self, "max_consecutive_losses", _ol.OWNER_MAX_CONSECUTIVE_LOSSES
+        )
+        object.__setattr__(self, "min_reward_risk", _ol.OWNER_MIN_REWARD_RISK)
+        object.__setattr__(self, "max_spread", _ol.OWNER_MAX_SPREAD)
+        object.__setattr__(self, "max_open_positions", _ol.OWNER_MAX_OPEN_POSITIONS)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -845,11 +858,7 @@ def evaluate_signal_quality(
         risk_dist = abs(entry - sl)
         reward_dist = abs(tp - entry)
         profit_exceeds_loss = risk_dist > 0 and reward_dist > risk_dist
-    rr_ok = (
-        profit_exceeds_loss
-        and rr is not None
-        and rr >= cfg.min_rr_or_default()
-    )
+    rr_ok = profit_exceeds_loss and rr is not None and rr >= cfg.min_rr_or_default()
     regime_ok = bool(str(req.regime or "").strip())
     fresh = req.analysis_age_seconds is None or req.analysis_age_seconds <= Decimal(
         "180"
@@ -920,9 +929,7 @@ def evaluate_live_order(
         spread_limit = spread_reject_ceiling(
             getattr(req, "symbol", None), policy_max_spread=cfg.max_spread
         )
-        spread_ok = (
-            req.spread <= spread_limit if spread_limit > 0 else False
-        )
+        spread_ok = req.spread <= spread_limit if spread_limit > 0 else False
     gates.append(_gate("acceptable_spread", bool(spread_ok), "excessive_spread"))
 
     if req.quote_age_seconds is not None:
@@ -1047,8 +1054,7 @@ def evaluate_live_order(
         if sizing.accepted:
             planned = sizing.monetary_loss_at_sl
             in_band = (
-                planned > MIN_PLANNED_RISK_USD
-                and planned <= MAX_PLANNED_SL_RISK_USD
+                planned > MIN_PLANNED_RISK_USD and planned <= MAX_PLANNED_SL_RISK_USD
             )
             gates.append(
                 _gate(
@@ -1571,9 +1577,7 @@ class LiveTradingController:
                     consecutive_losses=self.consecutive_losses,
                     # 0 = no loss-streak pause (owner 2026-10-23).
                     max_consecutive_losses=int(cfg.max_consecutive_losses or 0),
-                    cooldown_minutes=int(
-                        cfg.cooldown_minutes_after_loss_streak or 60
-                    ),
+                    cooldown_minutes=int(cfg.cooldown_minutes_after_loss_streak or 60),
                 )
                 if until is not None:
                     from app.domain.institutional_trading.owner_live_limits import (

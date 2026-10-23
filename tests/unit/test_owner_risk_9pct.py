@@ -233,3 +233,36 @@ def test_no_martingale_volume_after_losses() -> None:
     # Volume never rises after a loss: the owner guard caps every entry at 0.01.
     assert "OWNER_MAX_LOT" in _codes(_entry(volume=Decimal("0.02")))
     assert Decimal("0.01") == ol.OWNER_MAX_LOT
+
+
+# --- Persisted Live Trading Control profile follows the owner limits ----------
+
+
+def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        LiveTradingRiskConfig,
+    )
+
+    # Exact operator profile still stored in production ops state (2026-10-23).
+    stale = {
+        "min_score": "70",
+        "max_spread": "1.50",
+        "max_slippage": "0.50",
+        "min_reward_risk": "1.20",
+        "max_daily_loss_pct": "3.00",
+        "max_open_positions": 1,
+        "risk_per_trade_pct": "0.50",
+        "max_consecutive_losses": 2,
+    }
+    cfg = LiveTradingRiskConfig.from_dict(stale)
+    assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("9.0")
+    assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("25.0")
+    assert cfg.max_consecutive_losses == 0  # no loss-streak pause
+    assert cfg.min_reward_risk == Decimal("1.50")
+    assert cfg.max_spread == Decimal("0.45")
+    assert cfg.max_open_positions == 1
+    # Operator-only settings that are not owner limits are kept.
+    assert cfg.min_score == Decimal("70")
+    shown = cfg.to_dict()
+    assert shown["max_daily_loss_pct"] == "25.0"
+    assert shown["risk_per_trade_pct"] == "9.0"
