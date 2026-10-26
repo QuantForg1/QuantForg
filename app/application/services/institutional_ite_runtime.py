@@ -2645,6 +2645,51 @@ class InstitutionalIteRuntime:
             last = self.execution.bridge.handle(blocked, ctx, trace_id=tid)
         return last, diagnostics
 
+    def _record_m1_complement(
+        self,
+        result: Any,
+        *,
+        account: Any,
+        snapshot: Any,
+        execution_enabled: bool,
+        force_shadow: bool,
+        primary_forwarded: bool,
+    ) -> None:
+        """Evaluate the M1 complement without changing the primary decision.
+
+        Flag off returns before any market read. A failure here cannot replace
+        the primary cycle result.
+        """
+        try:
+            from app.domain.institutional_trading.m1_micro.live_bridge import (
+                consider_m1_complement,
+            )
+
+            m1_note = consider_m1_complement(
+                adapter=self.mt5_adapter,
+                account=account,
+                snapshot=snapshot,
+                execution_enabled=bool(execution_enabled) and not force_shadow,
+                primary_forwarded=primary_forwarded,
+                submit_market=getattr(self.guarded_submit, "submit_market", None),
+                close_position=getattr(self.guarded_manage, "close_position", None),
+                user_id=self.user_id,
+                login=getattr(account, "login", None),
+            )
+            if m1_note is not None and isinstance(
+                result.market_context_diagnostics, dict
+            ):
+                result.market_context_diagnostics["m1_micro"] = m1_note
+                logger.info(
+                    "m1_complement",
+                    action=m1_note.get("action"),
+                    reason=m1_note.get("reason"),
+                    submitted=bool(m1_note.get("submitted")),
+                    withheld=m1_note.get("submit_withheld"),
+                )
+        except Exception:
+            logger.exception("m1_complement_failed")
+
     def _run_cycle(
         self,
         *,
@@ -3657,6 +3702,14 @@ class InstitutionalIteRuntime:
                 self._last_decision = decision
                 self._cycles += 1
                 self._last_bridge_result = None
+            self._record_m1_complement(
+                result,
+                account=account,
+                snapshot=snapshot,
+                execution_enabled=execution_enabled,
+                force_shadow=force_shadow,
+                primary_forwarded=False,
+            )
             return result
 
         from app.domain.institutional_trading.operations.gold_execution_contract import (
@@ -3763,6 +3816,14 @@ class InstitutionalIteRuntime:
                 self._cycles += 1
                 self._last_bridge_result = None
             self._emit_telegram_cycle(result)
+            self._record_m1_complement(
+                result,
+                account=account,
+                snapshot=snapshot,
+                execution_enabled=execution_enabled,
+                force_shadow=force_shadow,
+                primary_forwarded=False,
+            )
             return result
 
         from app.application.services.ite_cycle_market_context import (
@@ -4598,32 +4659,16 @@ class InstitutionalIteRuntime:
             pvm_finalize()
         except Exception:
             logger.exception("pvm_cycle_finalize_failed")
-        # M1 is a complement. The flag-off path returns before any market
-        # read or submit, so the primary decision above is unchanged.
-        try:
-            from app.domain.institutional_trading.m1_micro.live_bridge import (
-                consider_m1_complement,
-            )
-
-            m1_note = consider_m1_complement(
-                adapter=self.mt5_adapter,
-                account=account,
-                snapshot=snapshot,
-                execution_enabled=bool(execution_enabled) and not force_shadow,
-                primary_forwarded=bool(
-                    getattr(bridge_result, "forwarded_to_oms", False)
-                ),
-                submit_market=getattr(self.guarded_submit, "submit_market", None),
-                close_position=getattr(self.guarded_manage, "close_position", None),
-                user_id=self.user_id,
-                login=getattr(account, "login", None),
-            )
-            if m1_note is not None and isinstance(
-                result.market_context_diagnostics, dict
-            ):
-                result.market_context_diagnostics["m1_micro"] = m1_note
-        except Exception:
-            logger.exception("m1_complement_failed")
+        self._record_m1_complement(
+            result,
+            account=account,
+            snapshot=snapshot,
+            execution_enabled=execution_enabled,
+            force_shadow=force_shadow,
+            primary_forwarded=bool(
+                getattr(bridge_result, "forwarded_to_oms", False)
+            ),
+        )
         return result
 
     def _log_post_ai_execution_chain(
