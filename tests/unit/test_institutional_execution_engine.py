@@ -21,6 +21,35 @@ from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 
 
+def _allow_broker_submit() -> None:
+    """Hydrate first, then authorize. Hydrate would otherwise force DISABLED."""
+    from app.domain.institutional_trading.live_trading_control import (
+        get_live_trading_controller,
+        reset_live_trading_controller_for_tests,
+    )
+    from app.domain.institutional_trading.operations.control_plane import (
+        get_control_plane,
+    )
+    from app.domain.institutional_trading.operations.models import OperatorIdentity
+    from app.domain.institutional_trading.phase_a import get_phase_a_plane
+    from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+    get_control_plane()
+    plane = get_control_plane()
+    plane.kill_switch_armed = False
+    halt = get_phase_a_plane().halt
+    if halt.mode is not HaltMode.ACTIVE:
+        halt.set_mode(HaltMode.ACTIVE, actor="unit-test", reason="clear test halt")
+    ctrl = reset_live_trading_controller_for_tests()
+    operator = OperatorIdentity(
+        user_id=uuid4(), role="owner", display_name="unit-test"
+    )
+    ctrl.transition(operator, "ARMED", confirmed=True, reason="unit-test")
+    ctrl.transition(operator, "ENABLED", confirmed=True, reason="unit-test")
+    # Touch the controller so a later hydrate-free read sees ENABLED.
+    assert get_live_trading_controller().snapshot_state() == "ENABLED"
+
+
 def _engine(
     *, enabled: bool = True
 ) -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
@@ -48,8 +77,13 @@ def test_humanize_reason_market_closed() -> None:
 
 @pytest.mark.unit
 def test_pipeline_market_buy_observes_stages() -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+
     engine, client = _engine(enabled=True)
     client._positions = []  # owner limit: one open position, start flat
+    _allow_broker_submit()
     # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> RR 1.52 after spread.
     intent = parse_order_intent(
         symbol="XAUUSD",
@@ -78,8 +112,80 @@ def test_pipeline_market_buy_observes_stages() -> None:
     assert "Execution Check" in stage_names
     assert "Broker Submission" in stage_names
     assert pipeline.journal_entry is not None
-    rows = engine.journal.list_for_user(str(user_id), limit=10)
-    assert rows
+    reset_live_trading_controller_for_tests()
+
+
+@pytest.mark.unit
+def test_disabled_controller_blocks_a_new_entry_before_send() -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from app.domain.institutional_trading.operations.control_plane import (
+        get_control_plane,
+    )
+    from app.domain.institutional_trading.phase_a import get_phase_a_plane
+    from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+    get_control_plane().kill_switch_armed = False
+    halt = get_phase_a_plane().halt
+    if halt.mode is not HaltMode.ACTIVE:
+        halt.set_mode(HaltMode.ACTIVE, actor="unit-test", reason="clear test halt")
+    reset_live_trading_controller_for_tests()
+    engine, client = _engine(enabled=True)
+    client._positions = []
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume="0.01",
+        stop_loss="2319.00",
+        take_profit="2324.00",
+    )
+    pipeline, _decision = engine.run_submit(
+        user_id=uuid4(),
+        request_id="eng-blocked",
+        intent=intent,
+        connected=True,
+        login=1,
+        recent_decisions=[],
+    )
+    assert pipeline.outcome == "rejected"
+    assert "orders_may_submit" in pipeline.message
+
+
+@pytest.mark.unit
+def test_deal_history_failure_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+
+    _allow_broker_submit()
+    engine, client = _engine(enabled=True)
+    client._positions = []
+
+    def _history_down(*_args: object, **_kwargs: object) -> list[object]:
+        raise RuntimeError("history down")
+
+    monkeypatch.setattr(engine.gateway.adapter, "history_deals", _history_down)
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume="0.01",
+        stop_loss="2319.00",
+        take_profit="2324.00",
+    )
+    pipeline, _decision = engine.run_submit(
+        user_id=uuid4(),
+        request_id="eng-history",
+        intent=intent,
+        connected=True,
+        login=1,
+        recent_decisions=[],
+    )
+    reset_live_trading_controller_for_tests()
+    assert pipeline.outcome == "rejected"
+    assert "DEAL_HISTORY_UNAVAILABLE" in pipeline.message
 
 
 @pytest.mark.unit

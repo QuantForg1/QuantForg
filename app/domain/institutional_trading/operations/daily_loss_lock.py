@@ -66,7 +66,7 @@ def utc_daily_loss_exceeded(
     balance: Decimal | None,
     max_daily_loss_pct: Decimal,
 ) -> bool:
-    """Owner daily stop: loss > max($5, cap% of start-of-day), max 10%."""
+    """Owner daily stop: loss strictly above 19% of the UTC day's start."""
     cap = Decimal(str(max_daily_loss_pct or 0))
     if cap <= 0:
         return False

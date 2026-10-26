@@ -1108,6 +1108,28 @@ def open_position_initial_planned_risk_usd(
 
     if not belongs_to_quantforg(pos):
         return Decimal("0")
+    return _priced_open_leg_risk_usd(
+        pos,
+        contract_size=contract_size,
+        initial_facts=initial_facts,
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
+
+
+def _priced_open_leg_risk_usd(
+    pos: Any,
+    *,
+    contract_size: Decimal,
+    initial_facts: dict[int, dict[str, Any]] | None = None,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
+) -> Decimal:
+    """Planned loss of one open ticket, whether or not QuantForg owns it."""
+    try:
+        ticket = int(getattr(pos, "ticket", 0) or 0)
+    except (TypeError, ValueError):
+        ticket = 0
     facts = (initial_facts or {}).get(ticket) or {}
     volume = _positive_decimal(facts.get("initial_volume"))
     if volume <= 0:
@@ -1137,6 +1159,140 @@ def open_position_initial_planned_risk_usd(
         contract_size=contract_size,
         tick_size=tick_size,
         tick_value=tick_value,
+    )
+
+
+def quantforg_open_risk_unmeasured(
+    pos: Any,
+    *,
+    contract_size: Decimal,
+    initial_facts: dict[int, dict[str, Any]] | None = None,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
+) -> bool:
+    """True when a QuantForg ticket is open but its planned loss cannot be priced.
+
+    Manual and other-EA rows stay out of this budget. A QuantForg leg with no
+    measurable stop, volume, or entry is not treated as zero risk.
+    """
+    try:
+        ticket = int(getattr(pos, "ticket", 0) or 0)
+    except (TypeError, ValueError):
+        return False
+    if ticket <= 0:
+        return False
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        belongs_to_quantforg,
+    )
+
+    if not belongs_to_quantforg(pos):
+        return False
+    try:
+        risk = open_position_initial_planned_risk_usd(
+            pos,
+            contract_size=contract_size,
+            initial_facts=initial_facts,
+            tick_size=tick_size,
+            tick_value=tick_value,
+        )
+    except Exception:
+        return True
+    return risk <= 0
+
+
+@dataclass(frozen=True, slots=True)
+class EntryBookExposure:
+    """Measured planned loss for every open ticket on the entry path.
+
+    ``blocked`` is true when any open ticket, including a manual or other-EA
+    position, cannot be priced. Those tickets are named in ``reason``.
+    """
+
+    measured_usd: Decimal
+    blocked: bool
+    reason: str
+    external_tickets: tuple[str, ...]
+    unmeasured_tickets: tuple[str, ...]
+
+
+def entry_book_exposure(
+    positions: list[Any] | tuple[Any, ...] | None,
+    *,
+    contract_size_for: Any,
+    initial_facts: dict[int, dict[str, Any]] | None = None,
+) -> EntryBookExposure:
+    """Price the whole open book. Unmeasured exposure blocks a new entry.
+
+    QuantForg and external tickets that can be priced are both included, so a
+    9% entry cannot ignore overlapping exposure. A ticket with no measurable
+    stop, volume, entry, or contract size is identified and blocks.
+    """
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        belongs_to_quantforg,
+        classify_position_owner,
+    )
+
+    facts = (
+        initial_facts
+        if initial_facts is not None
+        else load_initial_leg_facts_fail_open()
+    )
+    measured = Decimal("0")
+    external: list[str] = []
+    unmeasured: list[str] = []
+    for pos in positions or ():
+        try:
+            ticket = int(getattr(pos, "ticket", 0) or 0)
+        except (TypeError, ValueError):
+            ticket = 0
+        if ticket <= 0:
+            continue
+        symbol = str(getattr(pos, "symbol", "") or "") or "unknown"
+        try:
+            owner = classify_position_owner(pos)
+        except Exception:
+            owner = "unknown"
+        label = f"{owner}:{ticket}:{symbol}"
+        try:
+            external_row = not belongs_to_quantforg(pos)
+        except Exception:
+            external_row = True
+        if external_row:
+            external.append(label)
+        try:
+            contract_size = (
+                contract_size_for(symbol)
+                if callable(contract_size_for)
+                else contract_size_for
+            )
+            contract_size = Decimal(str(contract_size))
+        except Exception:
+            contract_size = Decimal("0")
+        try:
+            risk = _priced_open_leg_risk_usd(
+                pos,
+                contract_size=contract_size,
+                initial_facts=facts,
+            )
+        except Exception:
+            risk = Decimal("0")
+        if contract_size <= 0 or risk <= 0:
+            unmeasured.append(label)
+            continue
+        measured += risk
+    blocked = bool(unmeasured)
+    reason = ""
+    if blocked:
+        reason = (
+            "aggregate planned SL risk is unmeasured; new entries blocked "
+            f"({', '.join(unmeasured)})"
+        )
+    return EntryBookExposure(
+        measured_usd=measured.quantize(_CENTS),
+        blocked=blocked,
+        reason=reason,
+        external_tickets=tuple(external),
+        unmeasured_tickets=tuple(unmeasured),
     )
 
 

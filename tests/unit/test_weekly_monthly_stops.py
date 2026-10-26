@@ -1,6 +1,6 @@
 """Weekly / monthly P/L from MT5 deals; the limits are disabled by the owner.
 
-Owner 2026-10-23 (final): only the 25% daily stop applies. Weekly and monthly
+Only the 19% daily stop applies. Weekly and monthly
 P/L are still computed from MT5 deals for reporting (summaries, journal) and
 reach the Risk Engine, but a 0 limit means disabled. If a limit is ever
 configured again it is measured against the period-start balance, the same

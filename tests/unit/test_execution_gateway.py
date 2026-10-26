@@ -256,13 +256,26 @@ class TestSubmitExecutionUseCase:
             stop_loss="2319.00",
             take_profit="2324.00",
         )
-        first = await use_case.execute(cmd)
-        assert first.outcome == "success"
-        assert first.stages
-        second = await use_case.execute(cmd)
-        assert second.idempotent_replay is True
-        assert second.id == first.id
-        assert second.order_ticket == first.order_ticket
+        # A successful send requires the live controller to be ENABLED.
+        # This test checks idempotent replay, not the disabled-controller gate.
+        from app.domain.institutional_trading.live_trading_control import (
+            reset_live_trading_controller_for_tests,
+        )
+        from tests.unit.test_institutional_execution_engine import (
+            _allow_broker_submit,
+        )
+
+        _allow_broker_submit()
+        try:
+            first = await use_case.execute(cmd)
+            assert first.outcome == "success"
+            assert first.stages
+            second = await use_case.execute(cmd)
+            assert second.idempotent_replay is True
+            assert second.id == first.id
+            assert second.order_ticket == first.order_ticket
+        finally:
+            reset_live_trading_controller_for_tests()
 
     @pytest.mark.asyncio
     async def test_non_gold_rejected_when_gold_only(

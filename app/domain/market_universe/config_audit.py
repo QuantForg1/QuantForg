@@ -235,7 +235,7 @@ def build_configuration_audit() -> dict[str, Any]:
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
-            # Owner daily stop (2026-10-23): 25% of the UTC day's start equity.
+            # Owner daily stop: 19% of the UTC day's start equity. Equal does not halt.
             status="LIVE_EFFECTIVE"
             if Decimal(str(daily_loss)) == OWNER_DAILY_LOSS_PCT
             else "CONFLICTING",

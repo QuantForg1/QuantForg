@@ -1236,7 +1236,7 @@ def autonomous_resume_blockers(
     """Everything that must hold before a safety/restart pause auto-resumes.
 
     Owner 2026-10-23: gateway healthy and broker connected, the approved login,
-    equity read, the 25% daily stop not hit today, positions reconciled with
+    equity read, the 19% daily stop not hit today, positions reconciled with
     no unknown position, inside the allowed session. Fail closed.
     """
     from app.domain.institutional_trading.owner_live_limits import in_owner_session

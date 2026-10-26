@@ -87,21 +87,21 @@ def test_no_minimum_risk_floor() -> None:
     assert _entry(stop_loss=Decimal("4132.00"), take_profit=Decimal("4135.00")) == []
 
 
-# --- 25% daily loss (owner 2026-10-23), no overall drawdown ------------------
+# --- 19% daily loss, no overall drawdown ------------------------------------
 
 
-def test_daily_cap_is_25_pct_of_day_start() -> None:
-    assert ol.daily_loss_cap_usd(Decimal("50")) == Decimal("12.50")
-    assert ol.daily_loss_cap_usd(Decimal("80")) == Decimal("20.00")
+def test_daily_cap_is_19_pct_of_day_start() -> None:
+    assert ol.daily_loss_cap_usd(Decimal("50")) == Decimal("9.50")
+    assert ol.daily_loss_cap_usd(Decimal("80")) == Decimal("15.20")
 
 
 def test_daily_boundary() -> None:
-    # Day started at $50: a $12.50 loss is at the cap (allowed), $12.51 blocks.
+    # Day started at $50: a $9.50 loss is at the cap (allowed), $9.51 blocks.
     assert not ol.daily_loss_exceeded(
-        daily_pnl=Decimal("-12.50"), base_now=Decimal("37.50")
+        daily_pnl=Decimal("-9.50"), base_now=Decimal("40.50")
     )
     assert ol.daily_loss_exceeded(
-        daily_pnl=Decimal("-12.51"), base_now=Decimal("37.49")
+        daily_pnl=Decimal("-9.51"), base_now=Decimal("40.49")
     )
 
 
@@ -256,7 +256,7 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
     }
     cfg = LiveTradingRiskConfig.from_dict(stale)
     assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("9.0")
-    assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("25.0")
+    assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("19.0")
     assert cfg.max_consecutive_losses == 0  # no loss-streak pause
     assert cfg.min_reward_risk == Decimal("1.50")
     assert cfg.max_spread == Decimal("0.45")
@@ -264,5 +264,5 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
     # Operator-only settings that are not owner limits are kept.
     assert cfg.min_score == Decimal("70")
     shown = cfg.to_dict()
-    assert shown["max_daily_loss_pct"] == "25.0"
+    assert shown["max_daily_loss_pct"] == "19.0"
     assert shown["risk_per_trade_pct"] == "9.0"

@@ -234,6 +234,47 @@ def _is_manage_intent(intent: OrderIntent) -> bool:
     return intent.oms_kind in manage_kinds or int(intent.position or 0) > 0
 
 
+def _explicit_risk_reducing(intent: OrderIntent) -> bool:
+    """Close / partial close / SLTP only. A position ticket alone is not enough."""
+    return intent.oms_kind in {"sltp", "modify_sltp", "close", "partial_close"}
+
+
+def broker_submit_block_reason(intent: OrderIntent) -> str | None:
+    """Block broker submission. None means this intent may be sent.
+
+    Kill switch armed, or an unreadable control plane, blocks every submit.
+    orders_may_submit false blocks new entries and still allows an explicit
+    risk-reducing close or stop update when the kill switch is confirmed clear.
+    """
+    try:
+        from app.domain.institutional_trading.execution.kill_switch import KillSwitch
+        from app.domain.institutional_trading.operations.control_plane import (
+            get_control_plane,
+        )
+
+        armed = bool(KillSwitch(plane=get_control_plane()).enabled)
+    except Exception:
+        return "KILL_SWITCH: control plane unreadable — broker submit blocked"
+    if armed:
+        return "KILL_SWITCH: kill switch armed — OMS receives nothing"
+    if _explicit_risk_reducing(intent):
+        return None
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+            orders_may_submit,
+        )
+
+        allowed = orders_may_submit(get_live_trading_controller().snapshot_state())
+    except Exception:
+        return (
+            "AUTO_TRADING_BLOCKED: live controller unreadable — new entries blocked"
+        )
+    if not allowed:
+        return "AUTO_TRADING_BLOCKED: orders_may_submit is false — new entries blocked"
+    return None
+
+
 def order_attempt_execution_result(
     *,
     order_send_reached: bool,
@@ -849,6 +890,7 @@ class InstitutionalExecutionEngine:
             else:
                 # Authoritative peak (persisted HWM) + daily PnL from MT5 deals.
                 deals: list[Any] = []
+                history_failed = False
                 try:
                     from datetime import UTC, datetime, timedelta
 
@@ -862,13 +904,24 @@ class InstitutionalExecutionEngine:
                         )
                     )
                 except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
-                    deals = []
-                peak, daily_pnl = self.risk_tracker.resolve_for_risk(
-                    login=int(account.login or 0),
-                    equity=account.equity,
-                    balance=account.balance,
-                    deals=deals,
-                )
+                    history_failed = True
+                if history_failed and not _explicit_risk_reducing(intent):
+                    raise RuntimeError(
+                        "DEAL_HISTORY_UNAVAILABLE: deal history retrieval failed; "
+                        "new entries blocked"
+                    )
+                if history_failed:
+                    # Do not call resolve_for_risk(deals=[]). An empty day would
+                    # clear the daily stop while a close is still allowed.
+                    peak = account.equity if account.equity > 0 else account.balance
+                    daily_pnl = Decimal("0")
+                else:
+                    peak, daily_pnl = self.risk_tracker.resolve_for_risk(
+                        login=int(account.login or 0),
+                        equity=account.equity,
+                        balance=account.balance,
+                        deals=deals,
+                    )
                 from app.domain.entities.risk_engine import contract_size_for_symbol
 
                 live_constraints = self.order_validation.constraints_for(
@@ -1203,15 +1256,28 @@ class InstitutionalExecutionEngine:
                         tick_size=band_tick_size,
                         tick_value=band_tick_value,
                     )
-                    remaining_cap = None
+                    from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
+                        entry_book_exposure,
+                    )
+
+                    open_risk_unknown = False
+                    open_risk = Decimal("0")
                     try:
                         open_positions = list(self.gateway.adapter.list_positions())
-                        remaining_cap = (
-                            self.risk_engine.config.max_total_planned_risk_usd
-                            - self.risk_engine.aggregate_planned_sl_risk(open_positions)
+                        exposure = entry_book_exposure(
+                            open_positions,
+                            contract_size_for=lambda symbol: (
+                                contract_size_for_symbol(
+                                    str(symbol or intent.symbol),
+                                    default=band_cs
+                                    if band_cs > 0
+                                    else Decimal("100"),
+                                )
+                            ),
                         )
-                        if remaining_cap < 0:
-                            remaining_cap = Decimal("0")
+                        open_risk_unknown = exposure.blocked
+                        if not open_risk_unknown:
+                            open_risk = exposure.measured_usd
                     except (
                         OSError,
                         RuntimeError,
@@ -1219,32 +1285,24 @@ class InstitutionalExecutionEngine:
                         TypeError,
                         AttributeError,
                     ):
-                        remaining_cap = (
-                            self.risk_engine.config.max_total_planned_risk_usd
-                        )
-                    # Owner cap recomputed from live equity (9%), not the static
-                    # reference-capital value; one position -> same total cap.
+                        open_risk_unknown = True
+                    # One 9% budget for the open book plus this entry. A failed
+                    # position read is not treated as zero open risk.
                     owner_cap = (
                         max_planned_risk_usd(owner_band_equity)
                         if owner_band_equity is not None and owner_band_equity > 0
                         else None
                     )
-                    if owner_cap is not None:
-                        open_risk = (
-                            self.risk_engine.config.max_total_planned_risk_usd
-                            - remaining_cap
-                            if remaining_cap is not None
-                            else Decimal("0")
+                    band_reason: str | None
+                    if open_risk_unknown or owner_cap is None:
+                        band_reason = "OPEN_PLANNED_RISK_UNAVAILABLE"
+                    else:
+                        remaining_cap = max(owner_cap - open_risk, Decimal("0"))
+                        band_reason = actual_planned_sl_band_reason(
+                            actual,
+                            per_trade_max=owner_cap,
+                            remaining_portfolio_risk=remaining_cap,
                         )
-                        remaining_cap = max(
-                            owner_cap * OWNER_MAX_OPEN_POSITIONS - open_risk,
-                            Decimal("0"),
-                        )
-                    band_reason = actual_planned_sl_band_reason(
-                        actual,
-                        per_trade_max=owner_cap,
-                        remaining_portfolio_risk=remaining_cap,
-                    )
                     if band_reason is not None:
                         detail = format_planned_sl_reject_detail(
                             reason=band_reason,
@@ -1422,6 +1480,13 @@ class InstitutionalExecutionEngine:
                 )
                 return result, decision
 
+        if (
+            not _explicit_risk_reducing(intent)
+            and not str(intent.client_order_id or "").strip()
+        ):
+            intent = replace(
+                intent, client_order_id=str(request_id or "").strip()[:64]
+            )
         t0 = time.perf_counter()
         send_request = self.gateway.prepare(intent)
         if (
@@ -1577,6 +1642,34 @@ class InstitutionalExecutionEngine:
                 message=shadow_reason,
                 stages=stages,
                 rejection_reasons=[shadow_reason],
+                warnings=list(decision.warnings),
+                checks=dict(decision.checks),
+                calculated_risk=dict(decision.calculated_risk),
+                decision=ExecutionDecision.REJECT.value,
+                latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                idempotent_replay=decision.idempotent_replay,
+            )
+            result.journal_entry = self._write_journal(result, intent, None, uid)
+            return result, decision
+        submit_block = broker_submit_block_reason(intent)
+        if submit_block:
+            self._observe(
+                user_id=uid,
+                request_id=request_id,
+                symbol=symbol,
+                side=side,
+                order_type=order_type,
+                volume=volume,
+                stage=PipelineStage.REJECTED,
+                reason=submit_block,
+            )
+            result = PipelineResult(
+                request_id=request_id,
+                action=action,
+                outcome="rejected",
+                message=submit_block,
+                stages=stages,
+                rejection_reasons=[submit_block],
                 warnings=list(decision.warnings),
                 checks=dict(decision.checks),
                 calculated_risk=dict(decision.calculated_risk),

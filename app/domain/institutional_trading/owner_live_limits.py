@@ -8,7 +8,7 @@ layer may be stricter, never looser.
   $50). Planned risk = (|entry - SL| + spread) x contract size x volume. This is
   a planned maximum, not a cap on realised loss: slippage, gaps, commissions
   and execution failures can make a loss larger.
-- Daily loss limit: 25% of the UTC day's starting equity ($12.50 at $50).
+- Daily loss limit: 19% of the UTC day's starting equity ($9.50 at $50).
 - No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
 - Stop loss: max(1.5 x ATR(M1|M5), beyond the nearest structure + spread).
   A stop is never shrunk to fit the budget: too wide -> no trade.
@@ -64,8 +64,9 @@ OWNER_MAX_LOT = Decimal("0.01")
 # this value is the documented starting point and the $-figures shown at rest.
 OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
 OWNER_MAX_PLANNED_RISK_PCT = Decimal("9.0")
-# Owner 2026-10-23 (final): daily stop 25% of the UTC day's starting equity.
-OWNER_DAILY_LOSS_PCT = Decimal("25.0")
+# Authoritative daily stop: 19% of the UTC day's starting equity.
+# A loss equal to the cap does not halt; a loss above the cap does.
+OWNER_DAILY_LOSS_PCT = Decimal("19.0")
 # Weekly / monthly loss limits removed (0 = disabled, as for drawdown). Weekly
 # and monthly P/L are still computed for reporting (summaries, journal).
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
@@ -164,7 +165,7 @@ def planned_risk_usd(
 def daily_loss_cap_usd(
     start_of_day_equity: Decimal, pct: Decimal = OWNER_DAILY_LOSS_PCT
 ) -> Decimal:
-    """Daily stop in USD: pct (max 25%) of the UTC day's starting equity."""
+    """Daily stop in USD: pct (max 19%) of the UTC day's starting equity."""
     sod = Decimal(str(start_of_day_equity or 0))
     if sod <= 0:
         return Decimal("0")
