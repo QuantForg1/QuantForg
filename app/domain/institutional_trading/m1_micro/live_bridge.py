@@ -5,6 +5,9 @@ reads the adapter, the book, or the submit port. The primary strategy cycle
 is unchanged. Live submission also requires ``QUANTFORG_M1_MICRO_LIVE_SUBMIT``
 and the caller's execution switch. This module never invents a stop or a
 signal, and it never closes a position that M1 did not open.
+
+An opposite primary direction submits nothing. The same direction submits
+at most once, through the guarded port already used by the primary.
 """
 
 from __future__ import annotations
@@ -31,6 +34,10 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_PLANNED_RISK_PCT,
     max_planned_risk_usd,
 )
+from app.domain.institutional_trading.unified_decision import (
+    NormalizedSignal,
+    resolve_unified,
+)
 from app.domain.trading.gold_only import is_gold_symbol
 
 _HUNDRED = Decimal("100")
@@ -47,6 +54,11 @@ def consider_m1_complement(
     close_position: Any = None,
     user_id: UUID | None = None,
     login: int | None = None,
+    primary_direction: str | None = None,
+    primary_owns_order: bool = False,
+    primary_invalidation: Decimal | None = None,
+    primary_confidence: Decimal | None = None,
+    primary_holding_period: str = "",
 ) -> dict[str, Any] | None:
     """Evaluate one M1 complement. ``None`` means the flag is off.
 
@@ -66,6 +78,7 @@ def consider_m1_complement(
         "reason": "",
         "submitted": False,
         "commission_known": False,
+        "entry_valid": False,
     }
     if not is_gold_symbol(symbol):
         note["reason"] = "not_gold"
@@ -169,6 +182,18 @@ def consider_m1_complement(
     if risk_pct + open_pct > OWNER_MAX_PLANNED_RISK_PCT:
         note["reason"] = "combined_planned_risk_above_9_percent"
         return note
+    note["entry_valid"] = True
+    if _coordinated_elsewhere(
+        note,
+        decision=decision,
+        primary_direction=primary_direction,
+        primary_forwarded=primary_forwarded,
+        primary_owns_order=primary_owns_order,
+        primary_invalidation=primary_invalidation,
+        primary_confidence=primary_confidence,
+        primary_holding_period=primary_holding_period,
+    ):
+        return note
     if (
         not m1_live_submit_enabled()
         or not execution_enabled
@@ -192,6 +217,69 @@ def consider_m1_complement(
         decision=decision,
     )
     return note
+
+
+def _coordinated_elsewhere(
+    note: dict[str, Any],
+    *,
+    decision: Any,
+    primary_direction: str | None,
+    primary_forwarded: bool,
+    primary_owns_order: bool,
+    primary_invalidation: Decimal | None,
+    primary_confidence: Decimal | None,
+    primary_holding_period: str,
+) -> bool:
+    """True when this M1 entry must not be submitted.
+
+    Opposite directions wait. The primary keeps a same-direction entry when
+    it already owns the cycle. A blocked primary leaves that one entry to M1.
+    """
+    primary = None
+    if str(primary_direction or "").strip():
+        primary = NormalizedSignal(
+            source="primary",
+            direction=str(primary_direction),
+            confidence=primary_confidence,
+            timeframe="primary",
+            invalidation=primary_invalidation,
+            holding_period=primary_holding_period,
+            direction_counts_without_stop=True,
+        )
+    plan = resolve_unified(
+        primary,
+        NormalizedSignal(
+            source="m1",
+            direction=str(decision.action),
+            confidence=None,
+            timeframe="M1",
+            invalidation=decision.stop,
+            holding_period="m1",
+        ),
+        primary_executable=bool(primary_owns_order or primary_forwarded),
+    )
+    note["unified"] = plan.to_dict()
+    if plan.submit_m1:
+        return False
+    if plan.reason == "direction_conflict":
+        note["reason"] = "direction_conflict"
+        note["submit_withheld"] = (
+            "primary_cycle_already_forwarded"
+            if primary_forwarded
+            else "direction_conflict"
+        )
+        return True
+    if primary_forwarded or primary_owns_order:
+        note["reason"] = decision.reason
+        note["submit_withheld"] = (
+            "primary_cycle_already_forwarded"
+            if primary_forwarded
+            else "primary_owns_order"
+        )
+        return True
+    note["reason"] = str(plan.reason or decision.reason)
+    note["submit_withheld"] = str(plan.reason or "unified_decision")
+    return True
 
 
 def _submit_entry(

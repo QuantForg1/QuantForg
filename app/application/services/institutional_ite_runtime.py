@@ -2645,6 +2645,81 @@ class InstitutionalIteRuntime:
             last = self.execution.bridge.handle(blocked, ctx, trace_id=tid)
         return last, diagnostics
 
+    def _m1_coordination(
+        self,
+        decision: Any,
+        *,
+        forwarded: bool,
+        owns_order: bool,
+    ) -> dict[str, Any]:
+        from app.domain.institutional_trading.unified_decision import (
+            signal_from_decision,
+        )
+
+        signal = signal_from_decision(decision)
+        return {
+            "primary_forwarded": forwarded,
+            "primary_direction": signal.direction,
+            "primary_owns_order": owns_order,
+            "primary_invalidation": signal.invalidation,
+            "primary_confidence": signal.confidence,
+            "primary_holding_period": signal.holding_period,
+        }
+
+    def _unified_conflict_holds_primary(
+        self,
+        *,
+        decision: Any,
+        account: Any,
+        snapshot: Any,
+        diagnostics: dict[str, Any] | None,
+    ) -> bool:
+        """True when this cycle must not send the primary entry.
+
+        Flag off returns before any market read. The preview has no submit
+        port and no close port. A preview failure leaves the primary path.
+        """
+        try:
+            from app.domain.institutional_trading.m1_micro.config import (
+                m1_micro_enabled,
+            )
+
+            if not m1_micro_enabled():
+                return False
+            from app.domain.institutional_trading.m1_micro.live_bridge import (
+                consider_m1_complement,
+            )
+            from app.domain.institutional_trading.unified_decision import (
+                resolve_unified,
+                signal_from_decision,
+                signal_from_m1_note,
+            )
+
+            note = consider_m1_complement(
+                adapter=self.mt5_adapter,
+                account=account,
+                snapshot=snapshot,
+                execution_enabled=False,
+                primary_forwarded=False,
+                submit_market=None,
+                close_position=None,
+                user_id=None,
+                login=None,
+            )
+            if not isinstance(note, dict):
+                return False
+            plan = resolve_unified(
+                signal_from_decision(decision),
+                signal_from_m1_note(note),
+                primary_executable=True,
+            )
+            if isinstance(diagnostics, dict):
+                diagnostics["unified_decision"] = plan.to_dict()
+            return plan.reason == "direction_conflict"
+        except Exception:
+            logger.exception("unified_decision_preview_failed")
+            return False
+
     def _record_m1_complement(
         self,
         result: Any,
@@ -2654,11 +2729,16 @@ class InstitutionalIteRuntime:
         execution_enabled: bool,
         force_shadow: bool,
         primary_forwarded: bool,
+        primary_direction: str | None = None,
+        primary_owns_order: bool = False,
+        primary_invalidation: Decimal | None = None,
+        primary_confidence: Decimal | None = None,
+        primary_holding_period: str = "",
     ) -> None:
-        """Evaluate the M1 complement without changing the primary decision.
+        """Evaluate M1 on the shared book without replacing the primary.
 
         Flag off returns before any market read. A failure here cannot replace
-        the primary cycle result.
+        the primary cycle result. Opposite direction does not submit.
         """
         try:
             from app.domain.institutional_trading.m1_micro.live_bridge import (
@@ -2675,17 +2755,27 @@ class InstitutionalIteRuntime:
                 close_position=getattr(self.guarded_manage, "close_position", None),
                 user_id=self.user_id,
                 login=getattr(account, "login", None),
+                primary_direction=primary_direction,
+                primary_owns_order=primary_owns_order,
+                primary_invalidation=primary_invalidation,
+                primary_confidence=primary_confidence,
+                primary_holding_period=primary_holding_period,
             )
             if m1_note is not None and isinstance(
                 result.market_context_diagnostics, dict
             ):
                 result.market_context_diagnostics["m1_micro"] = m1_note
+                unified = m1_note.get("unified")
+                unified_reason = ""
+                if isinstance(unified, dict):
+                    unified_reason = str(unified.get("reason") or "")
                 logger.info(
                     "m1_complement",
                     action=m1_note.get("action"),
                     reason=m1_note.get("reason"),
                     submitted=bool(m1_note.get("submitted")),
                     withheld=m1_note.get("submit_withheld"),
+                    unified=unified_reason,
                 )
         except Exception:
             logger.exception("m1_complement_failed")
@@ -3708,7 +3798,7 @@ class InstitutionalIteRuntime:
                 snapshot=snapshot,
                 execution_enabled=execution_enabled,
                 force_shadow=force_shadow,
-                primary_forwarded=False,
+                **self._m1_coordination(decision, forwarded=False, owns_order=False),
             )
             return result
 
@@ -3822,7 +3912,52 @@ class InstitutionalIteRuntime:
                 snapshot=snapshot,
                 execution_enabled=execution_enabled,
                 force_shadow=force_shadow,
-                primary_forwarded=False,
+                **self._m1_coordination(decision, forwarded=False, owns_order=False),
+            )
+            return result
+
+        if self._unified_conflict_holds_primary(
+            decision=decision,
+            account=account,
+            snapshot=snapshot,
+            diagnostics=market_context_diagnostics,
+        ):
+            logger.warning(
+                "unified_direction_conflict",
+                trace_id=tid,
+                decision_action=str(getattr(decision.action, "value", "") or ""),
+            )
+            result = ShadowCycleResult(
+                ok=True,
+                trace_id=tid,
+                mode=self.plane.mode.value,
+                decision_action=decision.action.value,
+                forwarded_to_oms=False,
+                detail="direction_conflict",
+                health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="unified_decision",
+                abort_reason="DIRECTION_CONFLICT",
+                decision_reasons=("direction_conflict",),
+                snapshot_present=True,
+                market_context_diagnostics=(
+                    dict(market_context_diagnostics)
+                    if market_context_diagnostics
+                    else None
+                ),
+                signal_id=str(getattr(decision, "id", "") or "") or None,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._last_decision = decision
+                self._cycles += 1
+                self._last_bridge_result = None
+            self._record_m1_complement(
+                result,
+                account=account,
+                snapshot=snapshot,
+                execution_enabled=False,
+                force_shadow=force_shadow,
+                **self._m1_coordination(decision, forwarded=False, owns_order=False),
             )
             return result
 
@@ -4665,8 +4800,10 @@ class InstitutionalIteRuntime:
             snapshot=snapshot,
             execution_enabled=execution_enabled,
             force_shadow=force_shadow,
-            primary_forwarded=bool(
-                getattr(bridge_result, "forwarded_to_oms", False)
+            **self._m1_coordination(
+                decision,
+                forwarded=bool(getattr(bridge_result, "forwarded_to_oms", False)),
+                owns_order=True,
             ),
         )
         return result

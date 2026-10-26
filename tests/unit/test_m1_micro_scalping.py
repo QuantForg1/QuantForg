@@ -410,6 +410,7 @@ def test_live_execution_engine_does_not_call_the_m1_module() -> None:
     source = inspect.getsource(engine)
     assert "m1_micro" not in source
     assert "evaluate_m1" not in source
+    assert "unified_decision" not in source
 
 
 def test_primary_block_still_evaluates_m1(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -423,11 +424,22 @@ def test_primary_block_still_evaluates_m1(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
     monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
     cycle = inspect.getsource(InstitutionalIteRuntime._run_cycle)
-    assert cycle.count("self._record_m1_complement(") == 3
+    assert cycle.count("self._record_m1_complement(") == 4
     after_contract = cycle.split('cycle_outcome="execution_contract"', 1)[1]
     assert after_contract.find("self._record_m1_complement(") < after_contract.find(
         "return result"
     )
+    before_batch = cycle.split("self._submit_same_cycle_batch(", 1)[0]
+    assert "self._unified_conflict_holds_primary(" in before_batch
+    assert before_batch.count("self._record_m1_complement(") == 3
+    preview = inspect.getsource(InstitutionalIteRuntime._unified_conflict_holds_primary)
+    assert "execution_enabled=False" in preview
+    assert "submit_market=None" in preview
+    assert "close_position=None" in preview
+    assert "user_id=None" in preview
+    conflict = cycle.split("self._unified_conflict_holds_primary(", 1)[1]
+    conflict_record = conflict.split("self._record_m1_complement(", 1)[1]
+    assert "execution_enabled=False" in conflict_record.split("return result", 1)[0]
 
     class _Boom:
         def __getattr__(self, name: str) -> object:
@@ -455,3 +467,184 @@ def test_primary_block_still_evaluates_m1(monkeypatch: pytest.MonkeyPatch) -> No
     assert result.market_context_diagnostics == {}
     assert result.decision_action == "NO_TRADE"
     assert result.forwarded_to_oms is False
+
+
+def test_opposite_primary_direction_does_not_submit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domain.institutional_trading.m1_micro.live_bridge import (
+        consider_m1_complement,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    sent: list[object] = []
+    note = consider_m1_complement(
+        adapter=_m1_adapter(),
+        account=SimpleNamespace(equity=Decimal("1000"), login=1),
+        snapshot=_m1_snapshot(),
+        execution_enabled=True,
+        primary_forwarded=False,
+        submit_market=lambda **kwargs: sent.append(kwargs),
+        user_id=uuid4(),
+        primary_direction="SELL",
+        primary_invalidation=Decimal("2320"),
+    )
+    assert note is not None
+    assert note["action"] == "buy"
+    assert note["submitted"] is False
+    assert note["reason"] == "direction_conflict"
+    assert note["submit_withheld"] == "direction_conflict"
+    assert sent == []
+
+
+def test_forwarded_conflict_keeps_the_forwarded_withhold_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domain.institutional_trading.m1_micro.live_bridge import (
+        consider_m1_complement,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    sent: list[object] = []
+    note = consider_m1_complement(
+        adapter=_m1_adapter(),
+        account=SimpleNamespace(equity=Decimal("1000"), login=1),
+        snapshot=_m1_snapshot(),
+        execution_enabled=True,
+        primary_forwarded=True,
+        submit_market=lambda **kwargs: sent.append(kwargs),
+        user_id=uuid4(),
+        primary_direction="SELL",
+    )
+    assert note is not None
+    assert note["submitted"] is False
+    assert note["reason"] == "direction_conflict"
+    assert note["submit_withheld"] == "primary_cycle_already_forwarded"
+    assert sent == []
+
+
+def test_primary_owner_blocks_a_same_direction_m1_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domain.institutional_trading.m1_micro.live_bridge import (
+        consider_m1_complement,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    sent: list[object] = []
+    note = consider_m1_complement(
+        adapter=_m1_adapter(),
+        account=SimpleNamespace(equity=Decimal("1000"), login=1),
+        snapshot=_m1_snapshot(),
+        execution_enabled=True,
+        primary_forwarded=False,
+        submit_market=lambda **kwargs: sent.append(kwargs),
+        user_id=uuid4(),
+        primary_direction="BUY",
+        primary_owns_order=True,
+    )
+    assert note is not None
+    assert note["submitted"] is False
+    assert note["submit_withheld"] == "primary_owns_order"
+    assert sent == []
+
+
+def test_blocked_same_direction_primary_still_allows_one_m1_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domain.institutional_trading.m1_micro.live_bridge import (
+        consider_m1_complement,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    sent: list[dict] = []
+
+    def _submit(**kwargs: object) -> SimpleNamespace:
+        sent.append(kwargs)
+        return SimpleNamespace(
+            outcome="accepted",
+            retcode=10009,
+            order_ticket=None,
+            deal_ticket=None,
+            message="",
+        )
+
+    note = consider_m1_complement(
+        adapter=_m1_adapter(),
+        account=SimpleNamespace(equity=Decimal("1000"), login=1),
+        snapshot=_m1_snapshot(),
+        execution_enabled=True,
+        primary_forwarded=False,
+        submit_market=_submit,
+        user_id=uuid4(),
+        primary_direction="BUY",
+        primary_owns_order=False,
+    )
+    assert note is not None
+    assert note["submitted"] is True
+    assert len(sent) == 1
+
+
+def test_conflict_preview_holds_the_primary_and_cannot_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from app.application.services.institutional_ite_runtime import (
+        InstitutionalIteRuntime,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    diagnostics: dict[str, object] = {}
+    held = InstitutionalIteRuntime._unified_conflict_holds_primary(
+        SimpleNamespace(mt5_adapter=_m1_adapter()),  # type: ignore[arg-type]
+        decision=SimpleNamespace(
+            action=SimpleNamespace(value="SELL"),
+            stop_zone=SimpleNamespace(mid=Decimal("2320"), low=Decimal("2318")),
+            confidence=70,
+            expected_duration="intraday",
+        ),
+        account=SimpleNamespace(equity=Decimal("1000"), login=1),
+        snapshot=_m1_snapshot(),
+        diagnostics=diagnostics,
+    )
+    assert held is True
+    plan = diagnostics["unified_decision"]
+    assert isinstance(plan, dict)
+    assert plan["reason"] == "direction_conflict"
+    assert plan["submit_primary"] is False
+    assert plan["submit_m1"] is False
+
+    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+
+    class _Boom:
+        def __getattr__(self, name: str) -> object:
+            raise AssertionError(name)
+
+    assert (
+        InstitutionalIteRuntime._unified_conflict_holds_primary(
+            SimpleNamespace(mt5_adapter=_Boom()),  # type: ignore[arg-type]
+            decision=SimpleNamespace(action=SimpleNamespace(value="SELL")),
+            account=SimpleNamespace(equity=Decimal("1000"), login=1),
+            snapshot=SimpleNamespace(symbol="XAUUSD"),
+            diagnostics={},
+        )
+        is False
+    )
