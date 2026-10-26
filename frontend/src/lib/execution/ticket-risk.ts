@@ -14,8 +14,9 @@ export const OWNER_MAX_LOT = 0.01;
 export const OWNER_MAX_PLANNED_RISK_PCT = 9;
 export const OWNER_MIN_REWARD_RISK = 1.5;
 export const OWNER_MAX_SPREAD = 0.45;
-export const OWNER_SESSION_START_UTC_HOUR = 7;
-export const OWNER_SESSION_END_UTC_HOUR = 17;
+export const OWNER_SESSION_START_UTC_HOUR = 0;
+/** 24 means the window runs through 23:59 UTC. There is no desk-hour close. */
+export const OWNER_SESSION_END_UTC_HOUR = 24;
 export const PLANNED_RISK_NOTE =
   "9% is the maximum planned risk per trade, not a cap on realised loss: " +
   "slippage, gaps, commissions and execution failures can make a loss larger.";
@@ -52,8 +53,12 @@ export function maxSlRiskUsd(equity: number): number {
 }
 
 export function inOwnerSession(now: Date = new Date()): boolean {
-  const h = now.getUTCHours();
-  return h >= OWNER_SESSION_START_UTC_HOUR && h < OWNER_SESSION_END_UTC_HOUR;
+  if (Number.isNaN(now.getTime())) return false;
+  const minute = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const start = OWNER_SESSION_START_UTC_HOUR * 60;
+  const end =
+    OWNER_SESSION_END_UTC_HOUR >= 24 ? 24 * 60 : OWNER_SESSION_END_UTC_HOUR * 60;
+  return minute >= start && minute < end;
 }
 
 export function ticketRisk(input: TicketRiskInput): TicketRisk {
@@ -65,7 +70,7 @@ export function ticketRisk(input: TicketRiskInput): TicketRisk {
     violations.push(`Volume ${lots} exceeds owner max ${OWNER_MAX_LOT} lot`);
   if (!finitePositive(equity)) violations.push("Equity unavailable — cannot size risk");
   if (!inOwnerSession(input.now))
-    violations.push("Entries only 07:00–17:00 UTC (London + New York)");
+    violations.push("Entries only 00:00–23:59 UTC");
   if (!finitePositive(entry) || !finitePositive(stopLoss) || !finitePositive(takeProfit)) {
     violations.push("Entry, stop loss and take profit are required");
     return {

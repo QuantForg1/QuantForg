@@ -737,7 +737,7 @@ export const ExecutionOrderTicket = forwardRef<
               {ownerRisk.rewardRiskAfterSpread != null
                 ? ` (now ${formatNumber(ownerRisk.rewardRiskAfterSpread, 2)})`
                 : ""}
-              {" "}· spread ≤ {OWNER_MAX_SPREAD.toFixed(2)} · 07:00–17:00 UTC
+              {" "}· spread ≤ {OWNER_MAX_SPREAD.toFixed(2)} · 00:00–23:59 UTC
             </p>
             <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
               {PLANNED_RISK_NOTE}

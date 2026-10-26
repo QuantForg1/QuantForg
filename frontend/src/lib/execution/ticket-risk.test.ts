@@ -38,17 +38,33 @@ assert.equal(maxSlRiskUsd(80), 7.2);
 assert.equal(maxSlRiskUsd(33.33), 2.99);
 assert.equal(maxSlRiskUsd(0), 0);
 
-// Spread above $0.45, outside session, low RR, volume above 0.01, missing SL.
+// Spread above $0.45, low RR, volume above 0.01, missing SL.
+// 22:00 UTC is inside the full-day window: the old 07:00-17:00 gate must not fire.
 assert.ok(
   ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4140, spread: 0.5 }).violations.some((v) =>
     v.startsWith("Spread"),
   ),
 );
-assert.ok(
-  ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4140, spread: 0.3, now: NIGHT }).violations.some(
-    (v) => v.startsWith("Entries only"),
-  ),
+const night = ticketRisk({
+  ...base,
+  stopLoss: 4130,
+  takeProfit: 4140,
+  spread: 0.3,
+  now: NIGHT,
+});
+assert.equal(
+  night.violations.some((v) => v.startsWith("Entries only")),
+  false,
 );
+assert.deepEqual(night.violations, []);
+const weekend = ticketRisk({
+  ...base,
+  stopLoss: 4130,
+  takeProfit: 4140,
+  spread: 0.3,
+  now: new Date("2026-10-24T10:00:00Z"),
+});
+assert.deepEqual(weekend.violations, []);
 assert.ok(
   ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4134, spread: 0.3 }).violations.some((v) =>
     v.startsWith("Reward:risk"),

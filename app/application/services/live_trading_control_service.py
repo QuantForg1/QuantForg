@@ -1235,9 +1235,10 @@ def autonomous_resume_blockers(
 ) -> list[str]:
     """Everything that must hold before a safety/restart pause auto-resumes.
 
-    Owner 2026-10-23: gateway healthy and broker connected, the approved login,
-    equity read, the 19% daily stop not hit today, positions reconciled with
-    no unknown position, inside the allowed session. Fail closed.
+    Owner 2026-10-26: gateway healthy and broker connected, the approved login,
+    equity read, the 19% daily stop not hit today, and positions reconciled
+    with no unknown position. The fixed 07:00-17:00 desk clock is not a
+    blocker. Broker-closed markets are enforced on the entry path. Fail closed.
     """
     from app.domain.institutional_trading.owner_live_limits import in_owner_session
 
