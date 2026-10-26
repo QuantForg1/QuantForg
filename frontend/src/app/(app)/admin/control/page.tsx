@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api/client";
+import {
+  POLICY_NUMERIC_KEYS,
+  buildPolicyChanges,
+  m1ChoiceFromDocument,
+  policyStatusText,
+  type M1Choice,
+} from "@/lib/trading/admin-policy";
 
 type PolicyPayload = {
   ok?: boolean;
@@ -30,16 +37,17 @@ type Overview = {
   audit?: Array<Record<string, unknown>>;
 };
 
-const EDITABLE = [
-  ["max_planned_risk_pct", "Max planned risk % (ceiling 9)"],
-  ["daily_loss_pct", "Daily loss halt % (ceiling 19)"],
-  ["weekly_loss_pct", "Weekly loss halt % (0 = off until you set it)"],
-  ["max_aggregate_open_risk_pct", "Max aggregate open risk % (ceiling 9)"],
-  ["max_lot", "Max lot (ceiling 0.01)"],
-  ["max_spread", "Max spread (ceiling 0.45)"],
-  ["min_reward_risk", "Minimum reward:risk (floor 1.50)"],
-  ["min_trade_quality", "Minimum trade quality (floor 75)"],
-] as const;
+const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
+  max_planned_risk_pct: "Max planned risk % (ceiling 9)",
+  daily_loss_pct: "Daily loss halt % (ceiling 19)",
+  weekly_loss_pct: "Weekly loss halt % (0 = off until you set it)",
+  max_aggregate_open_risk_pct: "Max aggregate open risk % (ceiling 9)",
+  min_lot: "Min lot (empty uses the broker minimum, ceiling 0.01)",
+  max_lot: "Max lot (ceiling 0.01)",
+  max_spread: "Max spread (ceiling 0.45)",
+  min_reward_risk: "Minimum reward:risk (floor 1.50)",
+  min_trade_quality: "Minimum trade quality (floor 75)",
+};
 
 function text(value: unknown): string {
   if (value == null) return "—";
@@ -51,8 +59,8 @@ export default function AdminControlPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [m1, setM1] = useState(false);
-  const [m1Live, setM1Live] = useState(false);
+  const [m1, setM1] = useState<M1Choice>("defer");
+  const [m1Live, setM1Live] = useState<M1Choice>("defer");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -60,13 +68,13 @@ export default function AdminControlPage() {
     setOverview(body);
     const doc = body.policy?.document || {};
     const next: Record<string, string> = {};
-    for (const [key] of EDITABLE) {
+    for (const key of POLICY_NUMERIC_KEYS) {
       const raw = doc[key];
       next[key] = raw == null ? "" : String(raw);
     }
     setDraft(next);
-    setM1(doc.m1_micro_enabled === true);
-    setM1Live(doc.m1_live_submit === true);
+    setM1(m1ChoiceFromDocument(doc.m1_micro_enabled));
+    setM1Live(m1ChoiceFromDocument(doc.m1_live_submit));
   }, []);
 
   useEffect(() => {
@@ -90,19 +98,7 @@ export default function AdminControlPage() {
     setSaving(true);
     setError("");
     setNotice("");
-    const changes: Record<string, unknown> = {};
-    for (const [key] of EDITABLE) {
-      const raw = (draft[key] || "").trim();
-      if (!raw) continue;
-      changes[key] = key === "min_trade_quality" ? Number(raw) : raw;
-    }
-    changes.m1_micro_enabled = m1;
-    changes.m1_live_submit = m1Live;
-    changes.gold_only = true;
-    changes.protective_stop_required = true;
-    changes.evaluate_full_utc_day = true;
-    changes.ite_enabled = true;
-    changes.unified_decision_enabled = true;
+    const changes = buildPolicyChanges({ draft, m1, m1Live });
     try {
       const saved = await apiFetch<PolicyPayload>("/admin/control/policy", {
         method: "PUT",
@@ -173,6 +169,8 @@ export default function AdminControlPage() {
           <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
             <p>Commit {overview?.deployment?.commit_sha || "—"}</p>
             <p>Policy v{text(policy?.version)} · {text(policy?.status)}</p>
+            <p>Applied v{text(policy?.applied_version)}</p>
+            <p>{policy ? policyStatusText(policy) : "—"}</p>
             <p>Source {text(policy?.source)}</p>
             <p>Live state {text(overview?.live_trading?.state)}</p>
             <Badge tone="neutral">24h evaluation stays on</Badge>
@@ -187,11 +185,11 @@ export default function AdminControlPage() {
             Weekly loss stays off at 0 until you save a percent. Gold-only, protective stops, the kill switch, and the full UTC day cannot be turned off. A save does not arm live trading.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {EDITABLE.map(([key, label]) => (
+            {POLICY_NUMERIC_KEYS.map((key) => (
               <label key={key} className="space-y-1 text-xs">
-                <span className="text-[var(--fg-muted)]">{label}</span>
+                <span className="text-[var(--fg-muted)]">{FIELD_LABELS[key]}</span>
                 <Input
-                  aria-label={label}
+                  aria-label={FIELD_LABELS[key]}
                   value={draft[key] || ""}
                   onChange={(event) =>
                     setDraft((prev) => ({ ...prev, [key]: event.target.value }))
@@ -200,17 +198,37 @@ export default function AdminControlPage() {
               </label>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={m1} onChange={(event) => setM1(event.target.checked)} />
-            M1 micro-scalping module (still requires the deployment flag)
+          <div className="grid gap-2 text-xs text-[var(--fg-muted)] sm:grid-cols-2">
+            <p>Max concurrent positions: 1. This cap is saved and cannot be raised.</p>
+            <p>Trading schedule: 00:00–23:59 UTC, seven days. Broker closures still block entries.</p>
+            <p>Symbol: XAUUSD only. This cannot be turned off.</p>
+            <p>Every new entry still requires a protective Stop Loss.</p>
+          </div>
+          <label className="block space-y-1 text-sm">
+            <span>M1 micro-scalping</span>
+            <select
+              aria-label="M1 micro-scalping"
+              className="block w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-transparent px-2 py-1"
+              value={m1}
+              onChange={(event) => setM1(event.target.value as M1Choice)}
+            >
+              <option value="defer">Use deployment flag</option>
+              <option value="on">On, if the deployment flag is on</option>
+              <option value="off">Off</option>
+            </select>
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={m1Live}
-              onChange={(event) => setM1Live(event.target.checked)}
-            />
-            M1 live submit (still requires execution authorization)
+          <label className="block space-y-1 text-sm">
+            <span>M1 live submit</span>
+            <select
+              aria-label="M1 live submit"
+              className="block w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-transparent px-2 py-1"
+              value={m1Live}
+              onChange={(event) => setM1Live(event.target.value as M1Choice)}
+            >
+              <option value="defer">Use deployment flag</option>
+              <option value="on">On, if execution is authorized</option>
+              <option value="off">Off</option>
+            </select>
           </label>
           <Button type="button" onClick={() => void savePolicy()} disabled={saving}>
             {saving ? "Saving" : "Save policy"}

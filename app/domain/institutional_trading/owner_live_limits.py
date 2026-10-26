@@ -106,6 +106,19 @@ def _active_planned_risk_pct() -> Decimal:
     return active_max_planned_risk_pct()
 
 
+def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
+    """Shared open-risk budget. Never above the per-trade cap or 9%."""
+    eq = Decimal(str(equity or 0))
+    if eq <= 0:
+        return Decimal("0")
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_aggregate_open_risk_pct,
+    )
+
+    pct = min(active_max_aggregate_open_risk_pct(), _active_planned_risk_pct())
+    return (eq * pct / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
+
+
 def max_planned_risk_usd(equity: Decimal) -> Decimal:
     """Planned-risk cap for live equity, rounded down to the cent.
 
@@ -360,7 +373,9 @@ def evaluate_owner_entry(
     from app.domain.institutional_trading.runtime_policy import (
         active_max_lot,
         active_max_spread,
+        active_min_lot,
         active_min_reward_risk,
+        full_utc_day_required,
         policy_unavailable,
         weekly_loss_limit_pct,
     )
@@ -377,13 +392,20 @@ def evaluate_owner_entry(
     lot_cap = active_max_lot()
     spread_cap = active_max_spread()
     rr_floor = active_min_reward_risk()
+    min_lot = active_min_lot()
 
     # Policy violations are collected; missing inputs stop evaluation below.
     violations: list[str] = []
+    if not full_utc_day_required():
+        violations.append(
+            "OWNER_SESSION_POLICY: full UTC day evaluation cannot be disabled"
+        )
     if not is_gold_symbol(symbol):
         violations.append(f"OWNER_GOLD_ONLY: symbol {symbol!r} is not XAUUSD")
     if vol > lot_cap:
         violations.append(f"OWNER_MAX_LOT: volume {vol} > {lot_cap}")
+    if min_lot is not None and vol < min_lot:
+        violations.append(f"OWNER_MIN_LOT: volume {vol} < {min_lot}")
     if not in_owner_session(now):
         violations.append(
             "OWNER_SESSION: entry is outside "

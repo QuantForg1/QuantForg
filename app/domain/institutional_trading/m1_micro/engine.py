@@ -16,6 +16,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_PLANNED_RISK_PCT,
 )
+from app.domain.institutional_trading.runtime_policy import active_max_open_positions
 
 _COST_MULTIPLE = Decimal("1.50")
 
@@ -80,7 +81,9 @@ def evaluate_m1(
             setup="",
             reason="open_planned_risk_unmeasured",
         )
-    if int(open_positions) >= OWNER_MAX_OPEN_POSITIONS:
+    if int(open_positions) >= min(
+        active_max_open_positions(), OWNER_MAX_OPEN_POSITIONS
+    ):
         return M1Decision(
             action="none",
             setup="",

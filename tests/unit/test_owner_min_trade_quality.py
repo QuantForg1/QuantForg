@@ -122,6 +122,22 @@ def test_live_scorer_rejects_a_robot_setup_below_the_floor() -> None:
     assert "OWNER_MIN_TRADE_QUALITY: trade quality 63 < 75" in out.reject_reasons
 
 
+def test_saved_quality_floor_is_stricter_than_75() -> None:
+    from app.domain.institutional_trading.runtime_policy import (
+        approved_baseline,
+        reset_runtime_policy,
+        use_runtime_policy,
+    )
+
+    token = use_runtime_policy({**approved_baseline(), "min_trade_quality": 90})
+    try:
+        out = _score(80)
+    finally:
+        reset_runtime_policy(token)
+    assert out.reject is True
+    assert "OWNER_MIN_TRADE_QUALITY: trade quality 80 < 90" in out.reject_reasons
+
+
 def test_live_scorer_does_not_apply_the_floor_at_75() -> None:
     out = _score(75)
     assert out.trade_quality == 75

@@ -946,6 +946,10 @@ class InstitutionalExecutionEngine:
                         live_cs = info_cs
                 except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
                     pass
+                from app.domain.institutional_trading.runtime_policy import (
+                    active_max_open_positions,
+                )
+
                 live_risk = RiskEngine(
                     config=replace(
                         self.risk_engine.config,
@@ -955,6 +959,7 @@ class InstitutionalExecutionEngine:
                         max_lot=min(live_constraints.max_volume, OWNER_MAX_LOT),
                         max_open_positions=min(
                             self.risk_engine.config.max_open_positions,
+                            active_max_open_positions(),
                             OWNER_MAX_OPEN_POSITIONS,
                         ),
                         contract_size=live_cs,

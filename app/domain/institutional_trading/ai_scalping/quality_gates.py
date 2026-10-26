@@ -28,7 +28,6 @@ from app.domain.institutional_trading.ai_scalping.volatility_gate_v2 import (
     VolatilityDecision,
     evaluate_volatility_gate_v2,
 )
-from app.domain.institutional_trading.owner_live_limits import OWNER_MIN_TRADE_QUALITY
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,12 +188,17 @@ def evaluate_quality_gates(
             f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"  # noqa: E501
         )
 
-    # Owner hard floor: unlike the adaptive floor above, this one blocks entry.
-    checks["owner_min_trade_quality"] = trade_quality >= OWNER_MIN_TRADE_QUALITY
+    # Owner hard floor. A saved policy may raise it. It cannot fall below 75.
+    from app.domain.institutional_trading.runtime_policy import (
+        active_min_trade_quality,
+    )
+
+    quality_floor = active_min_trade_quality()
+    checks["owner_min_trade_quality"] = trade_quality >= quality_floor
     if not checks["owner_min_trade_quality"]:
         hard_rejects.append(
             f"OWNER_MIN_TRADE_QUALITY: trade quality {trade_quality} "
-            f"< {OWNER_MIN_TRADE_QUALITY}"
+            f"< {quality_floor}"
         )
 
     min_rr = (

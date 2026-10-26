@@ -106,6 +106,58 @@ def active_max_lot() -> Decimal:
     return value
 
 
+def active_min_lot() -> Decimal | None:
+    """Saved minimum lot. Missing means the broker minimum still applies."""
+    doc = _POLICY.get()
+    if not isinstance(doc, dict) or doc.get("unavailable"):
+        return None
+    raw = doc.get("min_lot")
+    if raw is None or raw == "":
+        return None
+    try:
+        value = _dec(raw)
+    except Exception:
+        return OWNER_MAX_LOT
+    if value <= 0 or value > OWNER_MAX_LOT:
+        return OWNER_MAX_LOT
+    return value
+
+
+def active_max_aggregate_open_risk_pct() -> Decimal:
+    """Saved book cap. It cannot exceed the 9% ceiling."""
+    value = _active_decimal("max_aggregate_open_risk_pct", OWNER_MAX_PLANNED_RISK_PCT)
+    if value <= 0 or value > OWNER_MAX_PLANNED_RISK_PCT:
+        return OWNER_MAX_PLANNED_RISK_PCT
+    return value
+
+
+def active_max_open_positions() -> int:
+    """Saved concurrent-position cap. It cannot exceed one."""
+    doc = _POLICY.get()
+    if not isinstance(doc, dict) or doc.get("unavailable"):
+        return OWNER_MAX_OPEN_POSITIONS
+    raw = doc.get("max_concurrent_positions")
+    if raw is None:
+        return OWNER_MAX_OPEN_POSITIONS
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return OWNER_MAX_OPEN_POSITIONS
+    if value < 1 or value > OWNER_MAX_OPEN_POSITIONS:
+        return OWNER_MAX_OPEN_POSITIONS
+    return value
+
+
+def full_utc_day_required() -> bool:
+    """False only when a saved document explicitly disables the full UTC day."""
+    doc = _POLICY.get()
+    if not isinstance(doc, dict) or doc.get("unavailable"):
+        return True
+    if "evaluate_full_utc_day" not in doc:
+        return True
+    return doc.get("evaluate_full_utc_day") is True
+
+
 def active_max_spread() -> Decimal:
     value = _active_decimal("max_spread", OWNER_MAX_SPREAD)
     if value <= 0 or value > OWNER_MAX_SPREAD:
