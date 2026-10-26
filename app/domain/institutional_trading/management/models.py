@@ -27,6 +27,7 @@ class ManageActionKind(StrEnum):
     TIME_STOP = "time_stop"
     EMERGENCY_EXIT = "emergency_exit"
     DAILY_SHUTDOWN = "daily_shutdown"
+    RESTORE_STOP = "restore_stop"
     NOOP = "noop"
     SKIP = "skip"  # already exited / not managed / duplicate
 
@@ -178,6 +179,9 @@ class PositionManageContext:
     entry_slippage: Decimal | None = None
     # Session label for session-aware management (soft)
     market_session: str | None = None
+    # True only when the live position row parsed a stop <= 0.
+    # None/unreadable stays False so a missing book is not treated as naked.
+    broker_stop_missing: bool = False
 
 
 @dataclass(frozen=True, slots=True)

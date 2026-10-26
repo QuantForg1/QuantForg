@@ -1465,24 +1465,16 @@ class InstitutionalIteRuntime:
             # Non-empty book without this ticket ⇒ truly closed on MT5.
             pos_still_open = True if not live_by_ticket else (live is not None)
             book_vol = None
-            book_sl = None
             if live is not None:
                 try:
                     book_vol = Decimal(str(getattr(live, "volume", 0) or 0))
                 except Exception:
                     book_vol = None
-                try:
-                    book_sl = Decimal(
-                        str(
-                            getattr(live, "stop_loss", 0)
-                            or getattr(live, "sl", 0)
-                            or 0
-                        )
-                    )
-                    if book_sl <= 0:
-                        book_sl = None
-                except Exception:
-                    book_sl = None
+            from app.domain.institutional_trading.management.policies import (
+                broker_stop_fields,
+            )
+
+            book_sl, broker_stop_missing = broker_stop_fields(live)
             pctx = PositionManageContext(
                 now=datetime.now(UTC),
                 current_price=current_px,
@@ -1495,6 +1487,7 @@ class InstitutionalIteRuntime:
                 position_still_open=pos_still_open,
                 book_volume=book_vol,
                 book_stop=book_sl,
+                broker_stop_missing=broker_stop_missing,
                 kill_switch_armed=self.plane.kill_switch_armed,
                 daily_loss_exceeded=self.plane.daily_loss_exceeded,
                 user_id=self.user_id,

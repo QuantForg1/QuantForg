@@ -71,7 +71,12 @@ class GuardedOmsSubmitPort:
 
 
 def _sl_tightens(kwargs: dict[str, Any]) -> bool:
-    """True when the new SL moves toward price and the TP is left unchanged."""
+    """True when the modify reduces risk and leaves the TP unchanged.
+
+    Omitting the current stop does not grant a free modify. An explicit
+    current stop at or below zero means the broker stop is missing, and
+    installing a positive stop only reduces risk.
+    """
     from decimal import Decimal
 
     current = kwargs.get("current_stop_loss")
@@ -79,8 +84,10 @@ def _sl_tightens(kwargs: dict[str, Any]) -> bool:
     if current is None or new is None or kwargs.get("take_profit_changed"):
         return False
     cur, nxt = Decimal(str(current)), Decimal(str(new))
-    if cur <= 0 or nxt <= 0:
+    if nxt <= 0:
         return False
+    if cur <= 0:
+        return True
     side = str(kwargs.get("side") or "").strip().lower()
     if side == "buy":
         return nxt > cur

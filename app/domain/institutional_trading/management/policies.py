@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from app.domain.institutional_trading.management.class_policy import (
     TRADE_CLASS_UNKNOWN,
@@ -35,6 +35,39 @@ class PlannedAction:
     new_tp: Decimal | None = None
     volume: Decimal | None = None
     target_state: PositionLifecycleState | None = None
+
+
+def broker_stop_fields(live: object | None) -> tuple[Decimal | None, bool]:
+    """Return the broker stop and whether that row confirms it is missing.
+
+    An empty book and an unreadable stop stay unknown. Only a value that
+    parses and is at or below zero is a confirmed naked stop.
+    """
+    if live is None:
+        return None, False
+    raw = getattr(live, "stop_loss", 0) or getattr(live, "sl", 0) or 0
+    try:
+        parsed = Decimal(str(raw))
+    except (InvalidOperation, ValueError, TypeError):
+        return None, False
+    if parsed <= 0:
+        return None, True
+    return parsed, False
+
+
+def _protective_local_stop(position: ManagedPosition, price: Decimal) -> Decimal | None:
+    """Current stop when it still protects, otherwise the initial stop."""
+    side = position.side.lower()
+    for raw in (position.current_stop, position.initial_stop):
+        try:
+            stop = Decimal(str(raw))
+        except (InvalidOperation, ValueError, TypeError):
+            continue
+        if side == "buy" and stop > 0 and stop < price:
+            return stop
+        if side == "sell" and stop > 0 and stop > price:
+            return stop
+    return None
 
 
 def _pick_trail_stop(
@@ -141,6 +174,24 @@ def plan_action(
         return PlannedAction(
             ManageActionKind.DAILY_SHUTDOWN,
             "News protection requests exit — flatten",
+            volume=position.remaining_volume,
+            target_state=PositionLifecycleState.EXITED,
+        )
+
+    # Confirmed naked broker stop. Unknown stays on the normal path.
+    if context.broker_stop_missing:
+        restore = _protective_local_stop(position, context.current_price)
+        if restore is not None:
+            preserved_tp = position.current_tp if position.current_tp > 0 else None
+            return PlannedAction(
+                ManageActionKind.RESTORE_STOP,
+                "Broker stop missing — restore the protective local stop",
+                new_sl=restore,
+                new_tp=preserved_tp,
+            )
+        return PlannedAction(
+            ManageActionKind.EMERGENCY_EXIT,
+            "Broker stop missing and no protective local stop — flatten",
             volume=position.remaining_volume,
             target_state=PositionLifecycleState.EXITED,
         )
