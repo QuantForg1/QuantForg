@@ -948,6 +948,7 @@ export const weltradeApi = {
     prefer_attach?: boolean;
     path?: string;
     remember_on_gateway?: boolean;
+    confirm_leave_exposure?: boolean;
   }) =>
     apiFetch<Record<string, unknown>>("/weltrade/connect", {
       method: "POST",
@@ -968,6 +969,12 @@ export const weltradeApi = {
       method: "POST",
       body: {},
     }),
+  claim: () =>
+    apiFetch<Record<string, unknown>>("/weltrade/claim", {
+      method: "POST",
+      body: {},
+    }),
+  exposure: () => apiFetch<Record<string, unknown>>("/weltrade/exposure"),
   runtimeProfile: () =>
     apiFetch<{ ok: boolean; profile: Record<string, unknown> | null }>(
       "/weltrade/runtime-profile",

@@ -13,19 +13,41 @@ from threading import Lock
 from uuid import UUID
 
 ACCOUNT_SESSION_MISMATCH = "ACCOUNT_SESSION_MISMATCH"
+ACCOUNT_SWITCH_IN_PROGRESS = "ACCOUNT_SWITCH_IN_PROGRESS"
 SESSION_MATCHED = "MATCHED"
 SESSION_NOT_CONNECTED = "NOT_CONNECTED"
 
 _LOCK = Lock()
 _BOUND_USER_ID: UUID | None = None
 _BOUND_LOGIN: int = 0
+_SWITCH_HOLD = False
 
 
 def reset_execution_binding_for_tests() -> None:
-    global _BOUND_USER_ID, _BOUND_LOGIN
+    global _BOUND_USER_ID, _BOUND_LOGIN, _SWITCH_HOLD
     with _LOCK:
         _BOUND_USER_ID = None
         _BOUND_LOGIN = 0
+        _SWITCH_HOLD = False
+
+
+def begin_account_switch() -> None:
+    """Block new entries while the terminal is moving between accounts."""
+    global _SWITCH_HOLD
+    with _LOCK:
+        _SWITCH_HOLD = True
+
+
+def finish_account_switch() -> None:
+    """Release the switch hold after the new account is verified."""
+    global _SWITCH_HOLD
+    with _LOCK:
+        _SWITCH_HOLD = False
+
+
+def account_switch_in_progress() -> bool:
+    with _LOCK:
+        return _SWITCH_HOLD
 
 
 def bind_execution_account(*, user_id: UUID, login: int) -> None:
@@ -80,12 +102,15 @@ def classify_account_session(
 
 
 def submit_blocked_reason(*, user_id: UUID, login: int | None) -> str | None:
-    """Return ACCOUNT_SESSION_MISMATCH when the live binding disagrees.
+    """Return a block code when the live binding disagrees or a switch is open.
 
-    When nothing is bound, return None so existing Safety/OMS gates remain
-    authoritative (no second engine). After a user binds, the singleton must
-    not execute for a different user_id or login.
+    When nothing is bound and no switch is in progress, return None so existing
+    Safety/OMS gates remain authoritative. After a user binds, the singleton
+    must not execute for a different user_id or login. A switch hold blocks
+    new entries even when the binding has been cleared.
     """
+    if account_switch_in_progress():
+        return ACCOUNT_SWITCH_IN_PROGRESS
     bound_user, bound_login = bound_execution_account()
     if bound_user is None or bound_login <= 1:
         return None

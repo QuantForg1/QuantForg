@@ -52,7 +52,7 @@ class GuardedOmsSubmitPort:
         if mismatch is not None:
             return OmsSubmitResult(
                 outcome="disabled",
-                message="ACCOUNT_SESSION_MISMATCH — OMS not called",
+                message=f"{mismatch} — OMS not called",
                 retcode=90001,
                 oms_status="blocked",
                 gateway_status="not_called",

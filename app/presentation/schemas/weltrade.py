@@ -15,8 +15,15 @@ class WeltradeConnectRequest(BaseModel):
     remember_on_gateway: bool = Field(
         default=True,
         description=(
-            "Credentials remain in Windows gateway memory only — never Railway, "
-            "database, or browser storage."
+            "The password is encrypted in the broker credential store. "
+            "It is never returned to the browser."
+        ),
+    )
+    confirm_leave_exposure: bool = Field(
+        default=False,
+        description=(
+            "Owner confirms that open positions stay on the current account "
+            "and are not closed or moved."
         ),
     )
 

@@ -155,13 +155,11 @@ class GetTradingSessionUseCase:
     adapter: MT5Adapter
 
     async def execute(self, *, user_id: UUID) -> dict[str, Any]:
+        task = asyncio.create_task(
+            ensure_live_mt5_session_for_user(self.uow_factory, self.adapter, user_id)
+        )
         try:
-            connection = await asyncio.wait_for(
-                ensure_live_mt5_session_for_user(
-                    self.uow_factory, self.adapter, user_id
-                ),
-                timeout=4.0,
-            )
+            connection = await asyncio.wait_for(asyncio.shield(task), timeout=12.0)
         except TimeoutError:
             logger.warning(
                 "trading_session_ensure_timeout",
@@ -172,7 +170,7 @@ class GetTradingSessionUseCase:
             logger.warning(
                 "trading_session_ensure_failed",
                 user_id=str(user_id),
-                error=str(exc),
+                error_type=type(exc).__name__,
             )
             connection = None
         plane = get_control_plane()
@@ -190,6 +188,8 @@ class GetTradingSessionUseCase:
         free_margin = None
         currency = ""
         leverage = None
+        account_mode = ""
+        trade_allowed: bool | None = None
         live_login = 0
         owned_login = int(getattr(connection, "login", 0) or 0) if connection else 0
         session_code = "NOT_CONNECTED"
@@ -215,6 +215,9 @@ class GetTradingSessionUseCase:
                     margin = str(getattr(info, "margin", "") or "")
                     free_margin = str(getattr(info, "free_margin", "") or "")
                     currency = str(getattr(info, "currency", "") or "")
+                    account_mode = str(getattr(info, "trade_mode", "") or "")
+                    allowed = getattr(info, "trade_allowed", None)
+                    trade_allowed = None if allowed is None else bool(allowed)
                     lev = getattr(info, "leverage", None)
                     leverage = int(lev) if lev is not None else None
             except Exception:
@@ -368,6 +371,26 @@ class GetTradingSessionUseCase:
                 if owned and session_code != ACCOUNT_SESSION_MISMATCH
                 else "none"
             ),
+            "account_mode": account_mode or None,
+            "trade_allowed": trade_allowed,
+            "mt5_terminal": (
+                "connected"
+                if owned
+                and session_code != ACCOUNT_SESSION_MISMATCH
+                and live_login > 1
+                else "disconnected"
+            ),
+            "broker_authenticated": bool(
+                owned
+                and session_code != ACCOUNT_SESSION_MISMATCH
+                and balance is not None
+            ),
+            "trading_authorization": (
+                "enabled" if lt_fields["orders_may_submit"] and ctx.execution_permitted
+                and session_code != ACCOUNT_SESSION_MISMATCH
+                else "disabled"
+            ),
+            "ownership_block_reason": None,
         }
 
 

@@ -22,6 +22,7 @@ import {
   SIGNAL_CENTER_QUERY_KEY,
   latencyLabel,
   researchDeskLiveTradingStatus,
+  ownershipBlockMessage,
   resolveConnectionPresentation,
   traderFacingErrorMessage,
 } from "@/lib/trading/trader-ux";
@@ -86,6 +87,13 @@ export function BrokerConfigWorkspace() {
     refetchInterval: 12_000,
     retry: false,
   });
+  const exposureQ = useQuery({
+    queryKey: ["weltrade-exposure"],
+    queryFn: weltradeApi.exposure,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
+    retry: false,
+  });
   const profileQ = useQuery({
     queryKey: ["weltrade-profile"],
     queryFn: weltradeApi.profile,
@@ -119,6 +127,8 @@ export function BrokerConfigWorkspace() {
   const [passwordFieldKey, setPasswordFieldKey] = useState(0);
   const [terminalPath, setTerminalPath] = useState("");
   const [progress, setProgress] = useState<string | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [changingAccount, setChangingAccount] = useState(false);
 
   const serverOptions = useMemo(() => {
     const servers = asRecord(asRecord(profile).servers);
@@ -145,7 +155,11 @@ export function BrokerConfigWorkspace() {
 
   const refresh = async () => {
     await session.invalidateAll();
-    await Promise.all([healthQ.refetch(), mt5Q.refetch()]);
+    await Promise.all([
+      healthQ.refetch(),
+      mt5Q.refetch(),
+      exposureQ.refetch(),
+    ]);
   };
 
   const refreshOwnedCatalogue = async () => {
@@ -203,6 +217,7 @@ export function BrokerConfigWorkspace() {
         qc.setQueryData(["weltrade-dashboard"], body);
       }
       toast.success("CONNECTED");
+      setChangingAccount(false);
       await qc.invalidateQueries({ queryKey: ["trading-session"] });
       await refresh();
       await refreshOwnedCatalogue();
@@ -248,6 +263,7 @@ export function BrokerConfigWorkspace() {
         prefer_attach: true,
         path: terminalPath || undefined,
         remember_on_gateway: true,
+        confirm_leave_exposure: confirmLeave,
       });
     },
     onMutate: () => {
@@ -256,6 +272,7 @@ export function BrokerConfigWorkspace() {
     onSuccess: async () => {
       clearPasswordField();
       toast.success("CONNECTED");
+      setChangingAccount(false);
       await refresh();
       await refreshOwnedCatalogue();
       setProgress(null);
@@ -273,20 +290,25 @@ export function BrokerConfigWorkspace() {
     },
   });
 
-  const busy =
+  const requestBusy =
     connectMut.isPending ||
     disconnectMut.isPending ||
     saveMut.isPending;
 
   const onConnect = () => {
-    if (connected) {
-      toast.message("Broker already connected");
-      return;
-    }
     const loginNum = Number(login);
     if ((!Number.isFinite(loginNum) || loginNum <= 0) && !password) {
-      // Configured profile may exist server-side — prefer reconnect.
+      // Claim the verified terminal first. Reconnect only if that is refused.
       void (async () => {
+        setProgress("Verifying ownership…");
+        try {
+          await weltradeApi.claim();
+          toast.success("Account ownership verified");
+          await refresh();
+          return;
+        } catch {
+          /* claim refused — try the persisted account next */
+        }
         setProgress("Reconnecting…");
         try {
           await weltradeApi.reconnect();
@@ -322,18 +344,48 @@ export function BrokerConfigWorkspace() {
       prefer_attach: true,
       path: terminalPath || undefined,
       remember_on_gateway: true,
+      confirm_leave_exposure: confirmLeave,
     });
   };
 
+  const claimMut = useMutation({
+    mutationFn: weltradeApi.claim,
+    onMutate: () => setProgress("Verifying ownership…"),
+    onSuccess: async () => {
+      toast.success("Account ownership verified");
+      setChangingAccount(false);
+      await qc.invalidateQueries({ queryKey: ["trading-session"] });
+      await refresh();
+      setProgress(null);
+    },
+    onError: (e) => {
+      setProgress(null);
+      toast.error(
+        e instanceof ApiError
+          ? traderFacingErrorMessage(e)
+          : "CONNECTION_FAILED",
+      );
+    },
+  });
+
+  const busy = requestBusy || claimMut.isPending;
   const tradingSnap = tradingSnapEarly;
   const connectionView = resolveConnectionPresentation(tradingSnap, {
-    connecting: Boolean(progress) || connectMut.isPending || saveMut.isPending,
+    connecting: Boolean(progress) || busy,
   });
   const uxState = str(
     tradingSnap.ux_state,
     connected ? "CONNECTED" : "NO_BROKER",
   );
-  const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
+  const showConnectForm = !connected || uxState === "SESSION_MISMATCH" || changingAccount;
+  const exposure = asRecord(exposureQ.data);
+  const exposureOpen = Number(exposure.open_positions ?? 0);
+  const exposurePending = Number(exposure.pending_orders ?? 0);
+  const exposureSymbols = Array.isArray(exposure.symbols)
+    ? exposure.symbols.map((item) => String(item)).filter(Boolean)
+    : [];
+  const exposureNeedsConfirm =
+    exposureQ.isSuccess && (exposureOpen > 0 || exposurePending > 0);
 
   const liveTradingHint = researchDeskLiveTradingStatus(
     connectionView,
@@ -507,12 +559,35 @@ export function BrokerConfigWorkspace() {
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Account mode
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {str(tradingSnap.account_mode) || "Unverified"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Trading authorization
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {str(tradingSnap.trading_authorization) || liveTradingHint.label}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
                 Live trading
               </dt>
               <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
             </div>
           </dl>
           <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => setChangingAccount(true)}
+            >
+              Change account
+            </Button>
             <Button variant="secondary" disabled={busy} onClick={onReconnect}>
               <RefreshCw className="h-4 w-4" />
               Reconnect
@@ -570,6 +645,9 @@ export function BrokerConfigWorkspace() {
             <p className="mt-3 text-xs text-[var(--warning)]">
               A gateway session may exist, but it is not your owned broker connection.
               Use Connect MT5 to claim ownership.
+              {ownershipBlockMessage(tradingSnap.ownership_block_reason)
+                ? ` ${ownershipBlockMessage(tradingSnap.ownership_block_reason)}`
+                : ""}
             </p>
           ) : null}
         </Section>
@@ -682,6 +760,15 @@ export function BrokerConfigWorkspace() {
                 )}
                 Connect MT5
               </Button>
+              {gatewayMt5Attached && !connected ? (
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => claimMut.mutate()}
+                >
+                  Claim ownership
+                </Button>
+              ) : null}
               <Button variant="secondary" disabled={busy} onClick={onVerify}>
                 Verify connection
               </Button>
@@ -691,6 +778,32 @@ export function BrokerConfigWorkspace() {
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 {progress}
               </p>
+            ) : null}
+            {gatewayMt5Attached ? (
+              <p className="mt-4 text-sm text-[var(--fg-muted)]">
+                {exposureQ.isError
+                  ? "Open positions could not be read. The account will not be switched until exposure is verified."
+                  : exposureQ.isLoading
+                    ? "Reading open positions and pending orders…"
+                    : exposureNeedsConfirm
+                      ? `This terminal has ${exposureOpen} open position(s) and ${exposurePending} pending order(s)${exposureSymbols.length ? ` (${exposureSymbols.join(", ")})` : ""}. They stay at the broker and are not closed or moved.`
+                      : "No open positions or pending orders on this terminal."}
+              </p>
+            ) : null}
+            {gatewayMt5Attached && exposureNeedsConfirm ? (
+              <label className="mt-4 flex items-start gap-2 text-sm text-[var(--fg-muted)]">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={confirmLeave}
+                  onChange={(e) => setConfirmLeave(e.target.checked)}
+                />
+                <span>
+                  I understand open positions and pending orders stay on the current
+                  account. They are not closed or moved. This terminal will trade
+                  only the account it verifies next.
+                </span>
+              </label>
             ) : null}
             <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
               Password is used only to submit this form. It is never stored in the browser,

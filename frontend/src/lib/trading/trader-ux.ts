@@ -43,7 +43,38 @@ const TRADER_ERROR_COPY: Record<string, string> = {
   ACCOUNT_SESSION_MISMATCH: "Your trading session needs to be reconnected.",
   account_session_mismatch: "Your trading session needs to be reconnected.",
   CATALOGUE_UNAVAILABLE: "Connect or verify your broker and refresh market data.",
+  OPEN_EXPOSURE:
+    "This account has open positions or pending orders. They stay at the broker and are not closed. Confirm the switch to leave them without management from this terminal.",
+  EXPOSURE_UNVERIFIED:
+    "Open positions could not be read, so the account was not switched.",
+  ACCOUNT_MODE_MISMATCH:
+    "Live or Demo does not match the account the terminal verified.",
+  OWNERSHIP_HELD:
+    "This attached account is owned by another user. Enter the account password to claim it. A gateway that is online does not grant ownership.",
 };
+
+const OWNERSHIP_REASON_COPY: Record<string, string> = {
+  login_owned_by_other_user: TRADER_ERROR_COPY.OWNERSHIP_HELD,
+  role_not_privileged:
+    "This sign-in cannot claim the attached terminal. Use the account password.",
+  bind_timeout:
+    "Ownership verification did not finish. Refresh and try Claim ownership again.",
+  bind_failed:
+    "Ownership verification failed. Refresh and try Claim ownership again.",
+  gateway_handle_unavailable:
+    "The gateway is online, but the terminal session is not ready to claim.",
+  unresolved_live_identity:
+    "The terminal did not report a verified account. Connect with login and password.",
+  bind_user_session_failed:
+    "The terminal identity could not be saved to your account. Try Claim ownership again.",
+  claim_failed:
+    "Ownership was not verified. A gateway that is online does not grant ownership.",
+};
+
+export function ownershipBlockMessage(reason: unknown): string {
+  const key = String(reason || "").trim();
+  return OWNERSHIP_REASON_COPY[key] || "";
+}
 
 export function isLiveBrokerCatalogue(session: Record<string, unknown>): boolean {
   return (

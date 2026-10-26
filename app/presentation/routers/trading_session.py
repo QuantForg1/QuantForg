@@ -39,40 +39,68 @@ def _control_uc() -> ControlTradingRobotUseCase:
     )
 
 
+async def _bind_owned_session(user: CurrentUser, weltrade: WeltradeSvc) -> None:
+    """Let a slow ownership bind finish if the HTTP request is cancelled."""
+    task = asyncio.create_task(
+        weltrade.ensure_user_session_bound(
+            user_id=user.id, role=str(getattr(user, "role", "") or "")
+        )
+    )
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=12.0)
+    except TimeoutError:
+        logger.warning("trading_account_bind_timeout", user_id=str(user.id))
+    except Exception:
+        logger.warning(
+            "trading_account_bind_failed",
+            user_id=str(user.id),
+            error_type="bind_failed",
+        )
+
+
 @router.get("/session")
 async def get_trading_session(
     user: CurrentUser, weltrade: WeltradeSvc
 ) -> dict[str, object]:
     # Owner/admin adopt after Railway redeploy loses ephemeral profile/DB bind.
     # Best-effort: a bind failure must not 500 the whole workspace.
-    try:
-        await asyncio.wait_for(
-            weltrade.ensure_user_session_bound(
-                user_id=user.id, role=str(getattr(user, "role", "") or "")
-            ),
-            timeout=4.0,
+    diag: dict[str, object] = {"reason": None, "adopted": False}
+    task = asyncio.create_task(
+        weltrade.ensure_user_session_bound(
+            user_id=user.id, role=str(getattr(user, "role", "") or "")
         )
+    )
+    try:
+        # Shield so a slow gateway probe still commits ownership.
+        bound = await asyncio.wait_for(asyncio.shield(task), timeout=12.0)
+        if isinstance(bound, dict):
+            diag = bound
     except TimeoutError:
         logger.warning(
             "trading_session_bind_timeout",
             user_id=str(user.id),
         )
-    except Exception as exc:
+        diag = {"reason": "bind_timeout", "adopted": False}
+    except Exception:
         logger.warning(
             "trading_session_bind_failed",
             user_id=str(user.id),
-            error=str(exc),
+            error_type="bind_failed",
         )
-    return await _session_uc().execute(user_id=user.id)
+        diag = {"reason": "bind_failed", "adopted": False}
+    payload = await _session_uc().execute(user_id=user.id)
+    if not payload.get("owned"):
+        payload["ownership_block_reason"] = str(diag.get("reason") or "") or None
+    else:
+        payload["ownership_block_reason"] = None
+    return payload
 
 
 @router.get("/account")
 async def get_trading_account(
     user: CurrentUser, weltrade: WeltradeSvc
 ) -> dict[str, object]:
-    await weltrade.ensure_user_session_bound(
-        user_id=user.id, role=str(getattr(user, "role", "") or "")
-    )
+    await _bind_owned_session(user, weltrade)
     return await _session_uc().execute(user_id=user.id)
 
 
@@ -80,9 +108,7 @@ async def get_trading_account(
 async def get_robot_status(
     user: CurrentUser, weltrade: WeltradeSvc
 ) -> dict[str, object]:
-    await weltrade.ensure_user_session_bound(
-        user_id=user.id, role=str(getattr(user, "role", "") or "")
-    )
+    await _bind_owned_session(user, weltrade)
     return await _session_uc().execute(user_id=user.id)
 
 

@@ -17,6 +17,7 @@ import {
   RESEARCH_NOT_AUTHORIZATION,
   RESEARCH_OPPORTUNITY,
   RESEARCH_SIGNAL,
+  ownershipBlockMessage,
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
@@ -810,6 +811,25 @@ assert.equal(
       rows: [],
     }),
     "SCANNER_UNAVAILABLE",
+  );
+  const attachedButUnowned = resolveConnectionPresentation({
+    broker: "Disconnected",
+    ux_state: "NO_BROKER",
+    ownership: "none",
+    owned: false,
+  });
+  assert.equal(attachedButUnowned.connected, false);
+  assert.equal(attachedButUnowned.ownership, "none");
+  assert.equal(
+    ownershipBlockMessage("login_owned_by_other_user").includes("password"),
+    true,
+  );
+  assert.equal(ownershipBlockMessage("login=999"), "");
+  assert.equal(
+    traderFacingErrorMessage({ code: "OPEN_EXPOSURE", message: "raw" }).includes(
+      "not closed",
+    ),
+    true,
   );
 }
 
