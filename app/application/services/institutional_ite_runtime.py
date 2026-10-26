@@ -4598,6 +4598,32 @@ class InstitutionalIteRuntime:
             pvm_finalize()
         except Exception:
             logger.exception("pvm_cycle_finalize_failed")
+        # M1 is a complement. The flag-off path returns before any market
+        # read or submit, so the primary decision above is unchanged.
+        try:
+            from app.domain.institutional_trading.m1_micro.live_bridge import (
+                consider_m1_complement,
+            )
+
+            m1_note = consider_m1_complement(
+                adapter=self.mt5_adapter,
+                account=account,
+                snapshot=snapshot,
+                execution_enabled=bool(execution_enabled) and not force_shadow,
+                primary_forwarded=bool(
+                    getattr(bridge_result, "forwarded_to_oms", False)
+                ),
+                submit_market=getattr(self.guarded_submit, "submit_market", None),
+                close_position=getattr(self.guarded_manage, "close_position", None),
+                user_id=self.user_id,
+                login=getattr(account, "login", None),
+            )
+            if m1_note is not None and isinstance(
+                result.market_context_diagnostics, dict
+            ):
+                result.market_context_diagnostics["m1_micro"] = m1_note
+        except Exception:
+            logger.exception("m1_complement_failed")
         return result
 
     def _log_post_ai_execution_chain(

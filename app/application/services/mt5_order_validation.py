@@ -164,6 +164,7 @@ class MT5OrderValidationService:
                 position=int(intent.position or 0),
                 order_ticket=int(intent.order_ticket or 0),
                 oms_kind="sltp",
+                client_order_id=intent.client_order_id,
             )
         if oms == "modify_pending":
             return TradeRequest(
@@ -183,6 +184,7 @@ class MT5OrderValidationService:
                 position=0,
                 order_ticket=int(intent.order_ticket or 0),
                 oms_kind="modify_pending",
+                client_order_id=intent.client_order_id,
             )
 
         if tick is None:
@@ -234,6 +236,7 @@ class MT5OrderValidationService:
                 if intent.position > 0 and intent.order_type is OrderType.MARKET
                 else ""
             ),
+            client_order_id=intent.client_order_id,
         )
 
     def validate_symbol(

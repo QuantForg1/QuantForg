@@ -182,6 +182,12 @@ def test_missing_live_cs_uses_symbol_class_not_gold_default() -> None:
 def test_execution_engine_never_steps_gold_above_owner_max_lot() -> None:
     # SL 0.50 away at 0.01 lot = $0.50: no minimum floor any more, so it is
     # accepted at exactly 0.01 — the volume is never stepped up.
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
+    _allow_broker_submit()
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol="XAUUSD",
@@ -201,6 +207,7 @@ def test_execution_engine_never_steps_gold_above_owner_max_lot() -> None:
     )
     assert pipeline.outcome == ExecutionOutcome.SUCCESS.value
     assert intent.volume.value == Decimal("0.01")
+    reset_live_trading_controller_for_tests()
 
 
 @pytest.mark.unit
@@ -221,6 +228,12 @@ def test_execution_engine_rejects_non_gold_symbol() -> None:
 @pytest.mark.trading_core
 def test_execution_engine_allows_in_band_gold() -> None:
     # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> 3.20 / 2.10 = 1.52.
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
+    _allow_broker_submit()
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol="XAUUSD",
@@ -240,6 +253,7 @@ def test_execution_engine_allows_in_band_gold() -> None:
     )
     assert decision.decision.value == "allow"
     assert pipeline.outcome == ExecutionOutcome.SUCCESS.value
+    reset_live_trading_controller_for_tests()
 
 
 @pytest.mark.unit

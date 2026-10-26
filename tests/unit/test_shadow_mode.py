@@ -219,7 +219,14 @@ def test_owner_checks_still_apply_in_shadow_mode(
 
 
 def test_shadow_mode_off_sends_normally(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
     monkeypatch.delenv("QUANTFORG_SHADOW_MODE", raising=False)
+    _allow_broker_submit()
     _pipeline, sent, _ = _submit(monkeypatch)
+    reset_live_trading_controller_for_tests()
     assert len(sent) == 1
     assert sb.get_shadow_book().trades == []

@@ -695,7 +695,14 @@ def calculate_dynamic_lots_v2(
         if open_planned_risk_usd is not None and open_planned_risk_usd > 0
         else Decimal("0")
     )
-    remaining = agg_cap - open_usd if agg_cap > 0 else usd_budget
+    if agg_cap <= 0:
+        return _reject(
+            "aggregate_planned_risk",
+            "Aggregate planned-risk cap is unavailable; new entries blocked",
+            risk=base_risk,
+            dist=dist,
+        )
+    remaining = agg_cap - open_usd
     if remaining <= 0:
         return _reject(
             "aggregate_planned_risk",

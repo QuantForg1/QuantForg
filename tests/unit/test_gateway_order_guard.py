@@ -31,6 +31,14 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 _ROOT = Path(__file__).resolve().parents[2]
 
 
+_QUOTE: dict[str, Any] = {
+    "bid": "4102.00",
+    "ask": "4102.20",
+    "specs": {"contract_size": "100", "tick_size": "0.01", "tick_value": "1"},
+}
+_EQUITY = Decimal("1000")
+
+
 def _entry(**overrides: Any) -> dict[str, Any]:
     body: dict[str, Any] = {
         "symbol": "XAUUSD_i",
@@ -46,6 +54,14 @@ def _entry(**overrides: Any) -> dict[str, Any]:
     return body
 
 
+def _guard(body: dict[str, Any], **kwargs: Any) -> str:
+    kwargs.setdefault("positions_lookup", lambda: [])
+    kwargs.setdefault("equity", _EQUITY)
+    kwargs.setdefault("quote", _QUOTE)
+    kwargs.setdefault("registry", ClientOrderIdRegistry())
+    return enforce_order_guard(body, **kwargs)
+
+
 def _code(exc: pytest.ExceptionInfo[OrderGuardRejected]) -> str:
     return exc.value.code
 
@@ -54,12 +70,12 @@ class TestEntries:
     @pytest.mark.parametrize("symbol", ["XAUUSD_i", "XAUUSD", "xauusd", "GOLD"])
     def test_gold_entry_with_stops_passes(self, symbol: str) -> None:
         reg = ClientOrderIdRegistry()
-        assert enforce_order_guard(_entry(symbol=symbol), registry=reg) == KIND_ENTRY
+        assert _guard(_entry(symbol=symbol), registry=reg) == KIND_ENTRY
 
-    @pytest.mark.parametrize("symbol", ["EURUSD", "XAGUSD", "BTCUSD", ""])
+    @pytest.mark.parametrize("symbol", ["EURUSD", "XAGUSD", "BTCUSD", "XAUJPY", ""])
     def test_non_gold_entry_rejected(self, symbol: str) -> None:
         with pytest.raises(OrderGuardRejected) as exc:
-            enforce_order_guard(_entry(symbol=symbol), registry=ClientOrderIdRegistry())
+            _guard(_entry(symbol=symbol))
         assert _code(exc) == "GUARD_GOLD_ONLY"
 
     @pytest.mark.parametrize(
@@ -67,35 +83,87 @@ class TestEntries:
     )
     def test_missing_stop_rejected(self, field: str, code: str) -> None:
         with pytest.raises(OrderGuardRejected) as exc:
-            enforce_order_guard(_entry(**{field: 0}), registry=ClientOrderIdRegistry())
+            _guard(_entry(**{field: 0}))
         assert _code(exc) == code
 
     @pytest.mark.parametrize("volume", [0.02, 0.011, 0.1, 0, -0.01])
     def test_volume_outside_owner_cap_rejected(self, volume: float) -> None:
         with pytest.raises(OrderGuardRejected) as exc:
-            enforce_order_guard(_entry(volume=volume), registry=ClientOrderIdRegistry())
+            _guard(_entry(volume=volume))
         assert _code(exc) == "GUARD_MAX_LOT"
 
     def test_client_order_id_required(self) -> None:
         with pytest.raises(OrderGuardRejected) as exc:
-            enforce_order_guard(
-                _entry(client_order_id="  "), registry=ClientOrderIdRegistry()
-            )
+            _guard(_entry(client_order_id="  "))
         assert _code(exc) == "GUARD_CLIENT_ORDER_ID_REQUIRED"
 
     def test_duplicate_client_order_id_rejected(self) -> None:
         reg = ClientOrderIdRegistry()
-        enforce_order_guard(_entry(), registry=reg)
+        _guard(_entry(), registry=reg)
         with pytest.raises(OrderGuardRejected) as exc:
-            enforce_order_guard(_entry(), registry=reg)
+            _guard(_entry(), registry=reg)
         assert _code(exc) == "GUARD_DUPLICATE_CLIENT_ORDER_ID"
         assert exc.value.as_detail()["retcode"] == RETCODE_ORDER_GUARD_REJECTED
 
     def test_rejected_entry_does_not_burn_its_id(self) -> None:
         reg = ClientOrderIdRegistry()
         with pytest.raises(OrderGuardRejected):
-            enforce_order_guard(_entry(volume=0.02), registry=reg)
-        assert enforce_order_guard(_entry(), registry=reg) == KIND_ENTRY
+            _guard(_entry(volume=0.02), registry=reg)
+        assert _guard(_entry(), registry=reg) == KIND_ENTRY
+
+    def test_position_ticket_on_an_entry_is_rejected(self) -> None:
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(_entry(position=77, oms_kind=""))
+        assert _code(exc) == "GUARD_ENTRY_POSITION"
+
+    def test_working_gold_order_blocks_another_entry(self) -> None:
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(
+                _entry(),
+                orders_lookup=lambda: [
+                    {
+                        "ticket": 15,
+                        "symbol": "XAUUSD",
+                        "volume_current": "0.01",
+                    }
+                ],
+            )
+        assert _code(exc) == "GUARD_PENDING_EXPOSURE"
+
+    def test_unreadable_pending_orders_block_an_entry(self) -> None:
+        def _down() -> list[dict[str, Any]]:
+            raise RuntimeError("orders down")
+
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(_entry(), orders_lookup=_down)
+        assert _code(exc) == "GUARD_ORDERS_UNVERIFIED"
+
+    def test_open_gold_position_blocks_a_second_entry(self) -> None:
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(
+                _entry(),
+                positions_lookup=lambda: [
+                    {"ticket": 9, "symbol": "XAUUSD_i", "volume": "0.01"}
+                ],
+            )
+        assert _code(exc) == "GUARD_HEDGE"
+
+    def test_buy_stop_above_bid_is_rejected(self) -> None:
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(_entry(sl=4102.5))
+        assert _code(exc) == "GUARD_SL_WRONG_SIDE"
+
+    def test_exact_nine_percent_is_allowed_and_above_is_rejected(self) -> None:
+        # 0.01 lot, tick 0.01 / $1: planned loss equals the stop distance.
+        # $9.00 is exactly 9% of $100. $9.01 is over.
+        allowed = _entry(sl=4093.20, tp=4120.0, client_order_id="exact-9")
+        assert _guard(allowed, equity=Decimal("100")) == KIND_ENTRY
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(
+                _entry(sl=4093.19, tp=4120.0, client_order_id="over-9"),
+                equity=Decimal("100"),
+            )
+        assert _code(exc) == "GUARD_MAX_RISK"
 
     def test_reverse_without_position_is_an_entry(self) -> None:
         assert classify_order(_entry(oms_kind="reverse")) == KIND_ENTRY
@@ -119,8 +187,8 @@ class TestClientOrderIdRegistry:
 
 
 class TestCloses:
-    @pytest.mark.parametrize("oms_kind", ["close", "partial_close", ""])
-    def test_close_always_allowed_without_stops(self, oms_kind: str) -> None:
+    @pytest.mark.parametrize("oms_kind", ["close", "partial_close"])
+    def test_explicit_close_of_the_open_ticket_is_allowed(self, oms_kind: str) -> None:
         body = {
             "symbol": "XAUUSD",
             "action": "sell",
@@ -130,7 +198,27 @@ class TestCloses:
             "position": 77,
             "oms_kind": oms_kind,
         }
-        assert enforce_order_guard(body, registry=ClientOrderIdRegistry()) == KIND_CLOSE
+        assert (
+            enforce_order_guard(
+                body,
+                positions_lookup=lambda: [
+                    {"ticket": 77, "symbol": "XAUUSD", "volume": "0.01"}
+                ],
+            )
+            == KIND_CLOSE
+        )
+
+    def test_close_without_a_live_ticket_is_rejected(self) -> None:
+        body = {
+            "symbol": "XAUUSD",
+            "action": "sell",
+            "volume": 0.01,
+            "position": 77,
+            "oms_kind": "close",
+        }
+        with pytest.raises(OrderGuardRejected) as exc:
+            enforce_order_guard(body, positions_lookup=lambda: [])
+        assert _code(exc) == "GUARD_CLOSE_UNVERIFIED"
 
 
 class TestSlTpModify:
@@ -246,9 +334,7 @@ def test_gateway_client_sends_unique_client_order_id() -> None:
     finally:
         mod.httpx.Client = original  # type: ignore[misc]
 
-    assert len(seen) == 3
-    assert seen[0] and seen[1] and seen[0] != seen[1]
-    assert seen[2] == "fixed-id"
+    assert seen == ["", "", "fixed-id"]
 
 
 def test_gateway_ps1_files_are_ascii_or_utf8_bom() -> None:

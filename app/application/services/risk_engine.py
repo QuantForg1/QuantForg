@@ -1303,25 +1303,44 @@ class RiskEngine:
             MAX_PLANNED_SL_RISK_USD,
             MAX_TOTAL_PLANNED_RISK_USD,
         )
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            entry_book_exposure,
+        )
         from app.domain.institutional_trading.owner_live_limits import (
-            OWNER_MAX_OPEN_POSITIONS,
+            max_planned_risk_usd,
             owner_risk_cap_usd,
         )
 
-        # 9% of live equity, not the $50-reference default (owner 2026-10-23).
-        cap = owner_risk_cap_usd(
+        # One shared 9% budget for the open book plus the new entry. A looser
+        # configured dollar cap cannot raise that budget. cap <= 0 fails closed.
+        live_cap = max_planned_risk_usd(account.equity)
+        configured_cap = owner_risk_cap_usd(
             equity=account.equity,
             configured=self.config.max_total_planned_risk_usd,
             reference_default=MAX_TOTAL_PLANNED_RISK_USD,
-            positions=OWNER_MAX_OPEN_POSITIONS,
+            positions=1,
         )
-        per_trade_cap = owner_risk_cap_usd(
+        if live_cap <= 0 or configured_cap <= 0:
+            cap = Decimal("0")
+        else:
+            cap = min(live_cap, configured_cap)
+        per_trade_raw = owner_risk_cap_usd(
             equity=account.equity,
             configured=self.config.max_planned_sl_risk_usd,
             reference_default=MAX_PLANNED_SL_RISK_USD,
         )
-        open_planned = self._aggregate_planned_sl_risk(positions)
-        remaining = (cap - open_planned) if cap > 0 else None
+        if live_cap <= 0 or per_trade_raw <= 0:
+            per_trade_cap: Decimal | None = Decimal("0")
+        else:
+            per_trade_cap = min(live_cap, per_trade_raw)
+        book = entry_book_exposure(
+            positions, contract_size_for=self._contract_size
+        )
+        # QuantForg and priced external tickets share one budget. An open
+        # ticket that cannot be priced is not treated as zero exposure.
+        open_planned = book.measured_usd if not book.blocked else Decimal("0")
+        unmeasured_open = book.blocked
+        remaining = (cap - open_planned) if cap > 0 and not unmeasured_open else None
         if remaining is not None and remaining < 0:
             remaining = Decimal("0")
 
@@ -1363,17 +1382,30 @@ class RiskEngine:
 
         proposed_planned = size.dollar_risk if size.approved_lots > 0 else Decimal("0")
         total_planned = open_planned + proposed_planned
-        checks["aggregate_planned_risk"] = cap <= 0 or total_planned <= cap
-        if not checks["aggregate_planned_risk"]:
+        checks["aggregate_planned_risk"] = (
+            cap > 0 and not unmeasured_open and total_planned <= cap
+        )
+        if unmeasured_open:
+            reasons.append(
+                book.reason
+                or (
+                    "aggregate planned SL risk is unmeasured; new entries blocked "
+                    f"(open={open_planned} proposed={proposed_planned})"
+                )
+            )
+        elif cap <= 0:
+            reasons.append(
+                "aggregate planned SL risk cap is unavailable; new entries blocked"
+            )
+        elif not checks["aggregate_planned_risk"]:
             reasons.append(
                 f"aggregate planned SL risk {total_planned} exceeds "
                 f"{cap} (open={open_planned} proposed={proposed_planned})"
             )
-        checks["per_trade_planned_risk"] = (
-            proposed_planned <= 0
-            or per_trade_cap is None
-            or per_trade_cap <= 0
-            or proposed_planned <= per_trade_cap
+        checks["per_trade_planned_risk"] = proposed_planned <= 0 or (
+            per_trade_cap is not None
+            and per_trade_cap > 0
+            and proposed_planned <= per_trade_cap
         )
         if not checks["per_trade_planned_risk"]:
             reasons.append(

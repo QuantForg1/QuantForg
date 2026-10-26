@@ -573,7 +573,7 @@ def test_v_losing_position_cannot_scale_in() -> None:
 
 
 def test_w_daily_loss_at_or_below_owner_stop_is_clear() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("25.0")
+    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
     assert (
         utc_daily_loss_exceeded(
             daily_pnl=Decimal("-5.00"),

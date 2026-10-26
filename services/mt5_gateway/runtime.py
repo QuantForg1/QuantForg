@@ -32,6 +32,23 @@ class MT5CallTimeout(TimeoutError):
     """MetaTrader5 API call exceeded its bounded timeout."""
 
 
+def _explicit_volume(value: Any) -> float:
+    """Volume from the request. Missing, blank, and non-finite values are 0.
+
+    Never substitutes a broker lot. Callers reject 0 on an entry instead of
+    inventing 0.01.
+    """
+    if value is None or value == "":
+        return 0.0
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if parsed != parsed or parsed <= 0:  # NaN or non-positive
+        return 0.0
+    return parsed
+
+
 def call_mt5_bounded(
     fn: Callable[[], T],
     *,
@@ -1708,7 +1725,7 @@ class MT5GatewayRuntime:
             "sltp",
             "modify_sltp",
         }
-        volume = float(body.get("volume") or 0)
+        volume = _explicit_volume(body.get("volume"))
         if not is_sltp and volume <= 0:
             raise RuntimeError("volume must be > 0")
         # Catalogue-exact spelling (e.g. XAUUSD_i) — uppercase breaks Weltrade IPC.
@@ -1723,7 +1740,7 @@ class MT5GatewayRuntime:
             mt5,
             symbol=symbol,
             action=action,
-            volume=volume if volume > 0 else 0.01,
+            volume=volume,
             price=float(body.get("price") or 0),
             stop_loss=float(body.get("sl") or body.get("stop_loss") or 0),
             take_profit=float(body.get("tp") or body.get("take_profit") or 0),
@@ -1842,7 +1859,9 @@ class MT5GatewayRuntime:
         return payload
 
     def order_cancel(self, ticket: int) -> dict[str, Any]:
+        from app.domain.trading.gold_only import is_gold_symbol
         from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
+        from services.mt5_gateway.order_guard import OrderGuardRejected
         from services.mt5_gateway.trade import (
             TRADE_ACTION_REMOVE,
             serialize_send_result,
@@ -1851,9 +1870,40 @@ class MT5GatewayRuntime:
         if not bool(self.settings.mt5_gateway_execution_enabled):
             raise GatewayExecutionDisabled()
         self._require_connected()
-        if ticket <= 0:
-            raise RuntimeError("ticket must be > 0")
-        request = {"action": TRADE_ACTION_REMOVE, "order": int(ticket)}
+        ticket_n = int(ticket)
+        if ticket_n <= 0:
+            raise OrderGuardRejected("GUARD_CANCEL_TICKET", "ticket must be > 0")
+        # Cancel removes a working pending order. It is not a position close.
+        try:
+            pending = list(self.orders().get("items") or [])
+            open_rows = list(self.positions().get("items") or [])
+        except OrderGuardRejected:
+            raise
+        except Exception:
+            raise OrderGuardRejected(
+                "GUARD_CANCEL_UNVERIFIED",
+                "pending orders could not be read",
+            ) from None
+        if any(int(row.get("ticket") or 0) == ticket_n for row in open_rows):
+            raise OrderGuardRejected(
+                "GUARD_CANCEL_NOT_PENDING",
+                "cancel does not close an open position; use an explicit close",
+            )
+        match = next(
+            (row for row in pending if int(row.get("ticket") or 0) == ticket_n),
+            None,
+        )
+        if match is None:
+            raise OrderGuardRejected(
+                "GUARD_CANCEL_NOT_PENDING",
+                "ticket is not a working pending order",
+            )
+        if not is_gold_symbol(str(match.get("symbol") or "")):
+            raise OrderGuardRejected(
+                "GUARD_GOLD_ONLY",
+                "only an XAUUSD pending order can be cancelled",
+            )
+        request = {"action": TRADE_ACTION_REMOVE, "order": ticket_n}
         result = call_mt5_bounded(
             lambda: self.bridge.order_send(request),
             timeout_seconds=max(

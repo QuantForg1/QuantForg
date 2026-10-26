@@ -91,11 +91,15 @@ class OrderIntent:
     # Price the stop/target were planned from (scan/plan entry). Audit and
     # pre-send drift check only — never sent to the broker.
     plan_price: Decimal | None = None
+    client_order_id: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.strip().upper())
         object.__setattr__(self, "comment", self.comment.strip()[:64])
         object.__setattr__(self, "oms_kind", (self.oms_kind or "").strip().lower())
+        object.__setattr__(
+            self, "client_order_id", str(self.client_order_id or "").strip()[:64]
+        )
         require(len(self.symbol) > 0, "symbol is required")
         if self.order_type is not OrderType.MARKET and self.oms_kind not in {
             "sltp",
@@ -122,6 +126,7 @@ class OrderIntent:
             "order_ticket": self.order_ticket,
             "oms_kind": self.oms_kind,
             "plan_price": str(self.plan_price) if self.plan_price is not None else None,
+            "client_order_id": self.client_order_id,
         }
 
 

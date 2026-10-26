@@ -16,6 +16,15 @@ from services.mt5_gateway.runtime import LiveMT5Bridge, MT5GatewayRuntime
 from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
 
 
+def _is_gold_name(symbol: str) -> bool:
+    code = "".join(ch for ch in symbol.upper() if ch.isalnum())
+    return (
+        code == "GOLD"
+        or code.startswith("XAUUSD")
+        or ("XAU" in code and "USD" in code)
+    )
+
+
 class _FakeBridge(LiveMT5Bridge):
     def __init__(self, *, prelogged: bool = False) -> None:
         self._mt5 = object()
@@ -96,16 +105,20 @@ class _FakeBridge(LiveMT5Bridge):
         return [SimpleNamespace(name="EURUSD", description="Euro", digits=5)]
 
     def symbol_info_tick(self, symbol: str) -> Any:
-        _ = symbol
+        if _is_gold_name(symbol):
+            return SimpleNamespace(bid=4102.0, ask=4102.20, time=1_700_000_000)
         return SimpleNamespace(bid=1.1, ask=1.2, time=1_700_000_000)
 
     def symbol_info(self, symbol: str) -> Any:
+        gold = _is_gold_name(symbol)
         return SimpleNamespace(
             name=symbol,
-            description="Euro",
-            digits=5,
-            point=0.00001,
-            trade_contract_size=100000.0,
+            description="Gold" if gold else "Euro",
+            digits=2 if gold else 5,
+            point=0.01 if gold else 0.00001,
+            trade_contract_size=100.0 if gold else 100000.0,
+            trade_tick_size=0.01 if gold else 0.00001,
+            trade_tick_value=1.0,
             volume_min=0.01,
             volume_max=100.0,
             volume_step=0.01,
@@ -119,7 +132,7 @@ class _FakeBridge(LiveMT5Bridge):
             order_mode=127,
             visible=True,
             select=True,
-            currency_base="EUR",
+            currency_base="XAU" if gold else "EUR",
             currency_profit="USD",
             currency_margin="USD",
             swap_mode=0,
@@ -235,12 +248,18 @@ class _FakeBridge(LiveMT5Bridge):
 
 
 class _GoldBridge(_FakeBridge):
-    """Catalogue lists gold as plain XAUUSD with one open BUY (SL 4100)."""
+    """Catalogue lists gold as plain XAUUSD. Entry tests use an empty book."""
+
+    def __init__(self, *, prelogged: bool = False, open_position: bool = True) -> None:
+        super().__init__(prelogged=prelogged)
+        self.open_position = open_position
 
     def symbols_get(self) -> Any:
         return [SimpleNamespace(name="XAUUSD", description="Gold", digits=2)]
 
     def positions_get(self) -> Any:
+        if not self.open_position:
+            return []
         return [
             SimpleNamespace(
                 ticket=1,
@@ -677,17 +696,21 @@ class TestMT5Gateway:
         assert body["retcode"] == 10009
         assert body["order_ticket"] == 424242
         assert body["deal_ticket"] == 525252
-        assert float(body["price"]) == 1.2
+        assert float(body["price"]) == 4102.2
         get_gateway_settings.cache_clear()
 
     def _enable_execution(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        open_position: bool = True,
     ) -> _GoldBridge:
         monkeypatch.setenv("MT5_GATEWAY_EXECUTION_ENABLED", "true")
         get_gateway_settings.cache_clear()
         runtime = client.app.state.runtime
         runtime.settings = get_gateway_settings()
-        bridge = _GoldBridge(prelogged=True)
+        bridge = _GoldBridge(prelogged=True, open_position=open_position)
         runtime.bridge = bridge
         runtime.diagnostics.connected = True
         headers = {"Authorization": "Bearer test-gateway-token"}
@@ -715,7 +738,7 @@ class TestMT5Gateway:
     ) -> None:
         from services.mt5_gateway.order_guard import RETCODE_ORDER_GUARD_REJECTED
 
-        bridge = self._enable_execution(client, monkeypatch)
+        bridge = self._enable_execution(client, monkeypatch, open_position=False)
         res = client.post(
             "/trade/order_send",
             headers={"Authorization": "Bearer test-gateway-token"},
@@ -731,7 +754,7 @@ class TestMT5Gateway:
     def test_duplicate_client_order_id_never_reaches_mt5_twice(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        bridge = self._enable_execution(client, monkeypatch)
+        bridge = self._enable_execution(client, monkeypatch, open_position=False)
         headers = {"Authorization": "Bearer test-gateway-token"}
         body = _gold_entry("dup-router")
         first = client.post("/trade/order_send", headers=headers, json=body)
@@ -775,6 +798,209 @@ class TestMT5Gateway:
         assert widen.status_code == 403
         assert widen.json()["detail"]["code"] == "GUARD_SL_WIDEN"
         assert bridge.order_send_calls == 1
+        get_gateway_settings.cache_clear()
+
+    def test_missing_entry_volume_is_not_replaced_with_default_lot(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        from services.mt5_gateway.trade import build_mt5_trade_request
+
+        _ = gateway_env
+        bridge = _FakeBridge(prelogged=True)
+        settings = get_gateway_settings()
+        settings.mt5_gateway_execution_enabled = True
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        runtime.diagnostics.connected = True
+        seen: list[float] = []
+        real_build = build_mt5_trade_request
+
+        def _capture(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            seen.append(float(kwargs.get("volume") or 0))
+            return real_build(*args, **kwargs)
+
+        runtime_module = __import__(
+            "services.mt5_gateway.trade", fromlist=["build_mt5_trade_request"]
+        )
+        original = runtime_module.build_mt5_trade_request
+        runtime_module.build_mt5_trade_request = _capture
+        try:
+            with pytest.raises(RuntimeError, match="volume must be > 0"):
+                runtime.order_send({"symbol": "XAUUSD", "action": "buy"})
+            with pytest.raises(RuntimeError, match="volume must be > 0"):
+                runtime.order_send(
+                    {"symbol": "XAUUSD", "action": "buy", "volume": 0}
+                )
+        finally:
+            runtime_module.build_mt5_trade_request = original
+        assert seen == []
+        assert bridge.order_send_calls == 0
+
+    def test_sltp_omitted_volume_stays_zero(
+        self, gateway_env: MT5GatewaySettings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _ = gateway_env
+        bridge = _FakeBridge(prelogged=True)
+        sent: list[dict[str, Any]] = []
+
+        def _record(request: dict[str, Any]) -> Any:
+            sent.append(dict(request))
+            return _FakeBridge.order_send(bridge, request)
+
+        monkeypatch.setattr(bridge, "order_send", _record)
+        settings = get_gateway_settings()
+        settings.mt5_gateway_execution_enabled = True
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        runtime.diagnostics.connected = True
+        runtime.order_send(
+            {
+                "symbol": "XAUUSD",
+                "action": "sltp",
+                "oms_kind": "sltp",
+                "position": 1,
+                "sl": 1.05,
+                "tp": 1.30,
+            }
+        )
+        assert sent
+        assert all(float(item.get("volume") or 0) == 0.0 for item in sent)
+        assert all(float(item.get("volume") or 0) != 0.01 for item in sent)
+
+    def test_order_cancel_requires_a_token(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        res = client.post("/trade/order_cancel", json={"ticket": 55})
+        assert res.status_code == 401
+        assert bridge.order_send_calls == 0
+        get_gateway_settings.cache_clear()
+
+    def test_order_cancel_rejects_a_non_positive_ticket(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        res = client.post(
+            "/trade/order_cancel",
+            headers={"Authorization": "Bearer test-gateway-token"},
+            json={"ticket": 0},
+        )
+        assert res.status_code == 422
+        assert bridge.order_send_calls == 0
+        get_gateway_settings.cache_clear()
+
+    def test_order_cancel_does_not_close_an_open_position(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        bridge.orders_get = lambda: []  # type: ignore[method-assign]
+        res = client.post(
+            "/trade/order_cancel",
+            headers={"Authorization": "Bearer test-gateway-token"},
+            json={"ticket": 1},
+        )
+        assert res.status_code == 403
+        assert res.json()["detail"]["code"] == "GUARD_CANCEL_NOT_PENDING"
+        assert bridge.order_send_calls == 0
+        get_gateway_settings.cache_clear()
+
+    def test_order_cancel_rejects_an_unknown_or_non_gold_ticket(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        bridge.positions_get = lambda: []  # type: ignore[method-assign]
+        bridge.orders_get = lambda: []  # type: ignore[method-assign]
+        missing = client.post(
+            "/trade/order_cancel",
+            headers={"Authorization": "Bearer test-gateway-token"},
+            json={"ticket": 99},
+        )
+        assert missing.status_code == 403
+        assert missing.json()["detail"]["code"] == "GUARD_CANCEL_NOT_PENDING"
+        bridge.orders_get = lambda: [  # type: ignore[method-assign]
+            SimpleNamespace(
+                ticket=56,
+                symbol="EURUSD",
+                type=4,
+                volume_current=0.01,
+                price_open=1.1,
+                sl=1.0,
+                tp=1.2,
+                time_setup=1,
+            )
+        ]
+        non_gold = client.post(
+            "/trade/order_cancel",
+            headers={"Authorization": "Bearer test-gateway-token"},
+            json={"ticket": 56},
+        )
+        assert non_gold.status_code == 403
+        assert non_gold.json()["detail"]["code"] == "GUARD_GOLD_ONLY"
+        assert bridge.order_send_calls == 0
+        get_gateway_settings.cache_clear()
+
+    def test_order_cancel_removes_only_a_working_gold_order(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.mt5_gateway.trade import TRADE_ACTION_REMOVE
+
+        bridge = self._enable_execution(client, monkeypatch)
+        bridge.positions_get = lambda: []  # type: ignore[method-assign]
+        bridge.orders_get = lambda: [  # type: ignore[method-assign]
+            SimpleNamespace(
+                ticket=55,
+                symbol="XAUUSD",
+                type=4,
+                volume_current=0.01,
+                price_open=4100.0,
+                sl=4090.0,
+                tp=4120.0,
+                time_setup=1,
+            )
+        ]
+        res = client.post(
+            "/trade/order_cancel",
+            headers={"Authorization": "Bearer test-gateway-token"},
+            json={"ticket": 55},
+        )
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["request_raw"]["action"] == TRADE_ACTION_REMOVE
+        assert body["request_raw"]["order"] == 55
+        assert "volume" not in body["request_raw"]
+        assert bridge.order_send_calls == 1
+        get_gateway_settings.cache_clear()
+
+    def test_close_is_rejected_without_a_matching_ticket_or_volume(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bridge = self._enable_execution(client, monkeypatch)
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        missing = client.post(
+            "/trade/order_send",
+            headers=headers,
+            json={
+                "symbol": "XAUUSD",
+                "action": "sell",
+                "volume": 0.01,
+                "position": 0,
+                "oms_kind": "close",
+            },
+        )
+        assert missing.status_code == 403
+        assert missing.json()["detail"]["code"] == "GUARD_CLOSE_TICKET_REQUIRED"
+        oversized = client.post(
+            "/trade/order_send",
+            headers=headers,
+            json={
+                "symbol": "XAUUSD",
+                "action": "sell",
+                "volume": 0.02,
+                "position": 1,
+                "oms_kind": "close",
+            },
+        )
+        assert oversized.status_code == 403
+        assert oversized.json()["detail"]["code"] == "GUARD_CLOSE_VOLUME"
+        assert bridge.order_send_calls == 0
         get_gateway_settings.cache_clear()
 
 

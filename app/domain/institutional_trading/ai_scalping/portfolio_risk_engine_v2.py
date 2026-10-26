@@ -769,17 +769,28 @@ def _evaluate_portfolio_allocation_unlocked(
     open_planned = Decimal("0")
     try:
         from app.domain.institutional_trading.operations.min_lot_feasibility import (
-            aggregate_open_initial_planned_risk_usd,
+            entry_book_exposure,
         )
 
-        open_planned += aggregate_open_initial_planned_risk_usd(
+        exposure = entry_book_exposure(
             pos_list,
             contract_size_for=contract_size_for_symbol,
         )
+        if exposure.blocked:
+            return _reject(
+                exposure.reason
+                or (
+                    "OPEN_PLANNED_RISK_UNAVAILABLE: open planned risk could "
+                    "not be measured; new entries blocked"
+                )
+            )
+        open_planned += exposure.measured_usd
     except Exception:
-        from app.domain.institutional_trading.config import MAX_TOTAL_PLANNED_RISK_USD
-
-        open_planned = MAX_TOTAL_PLANNED_RISK_USD
+        logger.exception("open_planned_risk_unmeasured")
+        return _reject(
+            "OPEN_PLANNED_RISK_UNAVAILABLE: open planned risk could "
+            "not be measured; new entries blocked"
+        )
 
     sizing = calculate_dynamic_lots_v2(
         equity=book.equity,

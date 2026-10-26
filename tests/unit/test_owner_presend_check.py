@@ -159,10 +159,21 @@ def test_run_submit_sends_the_exact_checked_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Ask 2320.70 at the send tick: 3.30 / (1.70 + 0.30) = 1.65 -> sent at it.
-    pipeline, sent, _client = _run(monkeypatch, move="-0.10")
-    assert "PRESEND" not in pipeline.message
-    assert len(sent) == 1
-    assert sent[0].price == D("2320.70")
+    # The presend check is what this test covers. Authorize the controller so
+    # the orders_may_submit gate does not hide the checked request.
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
+    _allow_broker_submit()
+    try:
+        pipeline, sent, _client = _run(monkeypatch, move="-0.10")
+        assert "PRESEND" not in pipeline.message
+        assert len(sent) == 1
+        assert sent[0].price == D("2320.70")
+    finally:
+        reset_live_trading_controller_for_tests()
 
 
 def test_run_submit_fails_closed_when_the_presend_check_errors(

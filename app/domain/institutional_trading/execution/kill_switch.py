@@ -39,7 +39,7 @@ class KillSwitch:
                 if not get_phase_a_plane().halt.oms_market_submit_allowed():
                     return True
             except Exception:
-                pass
+                return True
             return bool(self.plane.kill_switch_armed)
         with self._lock:
             return self._local_enabled

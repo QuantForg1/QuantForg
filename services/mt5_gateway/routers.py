@@ -11,7 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.mt5_gateway.auth import require_gateway_token
 from services.mt5_gateway.execution_guard import GatewayExecutionDisabled
-from services.mt5_gateway.order_guard import OrderGuardRejected, enforce_order_guard
+from services.mt5_gateway.order_guard import (
+    KIND_ENTRY,
+    OrderGuardRejected,
+    classify_order,
+    enforce_order_guard,
+)
 from services.mt5_gateway.runtime import MT5CallTimeout, MT5GatewayRuntime
 from services.mt5_gateway.schemas import (
     AttachRequest,
@@ -460,9 +465,48 @@ async def trade_order_send(
     payload = body.as_runtime_dict()
 
     def _guarded_send() -> dict[str, Any]:
+        from decimal import Decimal
+
+        equity = None
+        quote = None
+        orders_lookup = None
+        if classify_order(payload) == KIND_ENTRY:
+            try:
+                account = runtime.account()
+                equity = Decimal(str((account or {}).get("equity")))
+            except OrderGuardRejected:
+                raise
+            except Exception:
+                raise OrderGuardRejected(
+                    "GUARD_EQUITY_UNAVAILABLE", "live equity unavailable"
+                ) from None
+            try:
+                quote = runtime.quote(str(payload.get("symbol") or ""))
+            except OrderGuardRejected:
+                raise
+            except Exception:
+                raise OrderGuardRejected(
+                    "GUARD_QUOTE_UNAVAILABLE", "live quote unavailable"
+                ) from None
+
+            def _pending_orders() -> list[dict[str, Any]]:
+                try:
+                    return list(runtime.orders().get("items") or [])
+                except OrderGuardRejected:
+                    raise
+                except Exception:
+                    raise OrderGuardRejected(
+                        "GUARD_ORDERS_UNVERIFIED",
+                        "pending orders could not be read",
+                    ) from None
+
+            orders_lookup = _pending_orders
         enforce_order_guard(
             payload,
             positions_lookup=lambda: list(runtime.positions().get("items") or []),
+            equity=equity,
+            quote=quote if isinstance(quote, dict) else None,
+            orders_lookup=orders_lookup,
         )
         return runtime.order_send(payload)
 
