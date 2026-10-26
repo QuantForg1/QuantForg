@@ -222,6 +222,9 @@ class PositionManagementEngine:
                 return self._local_exit(position, context, reason=plan.reason)
             return self._skip(position, context, plan.reason)
 
+        if plan.kind is ManageActionKind.RESTORE_STOP:
+            return self._restore_broker_stop(position, context, plan)
+
         assert plan.target_state is not None
         PositionStateMachine.assert_transition(position.state, plan.target_state)
 
@@ -408,6 +411,87 @@ class PositionManagementEngine:
             oms_result=oms_result,
         )
 
+    def _restore_broker_stop(
+        self,
+        position: ManagedPosition,
+        context: PositionManageContext,
+        plan: PlannedAction,
+    ) -> PositionManageResult:
+        """Install the local stop without changing lifecycle or fingerprint.
+
+        The next cycle retries until the broker row shows a positive stop.
+        A reported success is not proof the broker kept the stop.
+        """
+        t0 = time.perf_counter()
+        oms_result = self._dispatch(position, context, plan)
+        latency = (time.perf_counter() - t0) * 1000.0
+        if not oms_result.ok:
+            self.metrics.record_oms_failure()
+            outcome = self._map_failure(oms_result)
+            rec = self._record(
+                position=position,
+                context=context,
+                plan=plan,
+                outcome=outcome,
+                latency_ms=latency,
+                fingerprint="",
+                to_state=position.state,
+                comment=oms_result.message,
+                retcode=oms_result.retcode,
+                oms=oms_result,
+            )
+            return PositionManageResult(
+                position=position,
+                action=plan.kind,
+                record=rec,
+                oms_result=oms_result,
+            )
+        old_sl = position.current_stop
+        if plan.new_sl is not None:
+            position.current_stop = plan.new_sl
+        rec = PositionManageRecord(
+            ticket=position.ticket,
+            action=plan.kind,
+            from_state=position.state,
+            to_state=position.state,
+            reason=plan.reason,
+            timestamp=context.now,
+            latency_ms=latency,
+            outcome=ManageOutcome.SUCCESS,
+            old_sl=old_sl,
+            new_sl=plan.new_sl,
+            old_tp=position.current_tp,
+            new_tp=plan.new_tp if plan.new_tp is not None else position.current_tp,
+            volume=plan.volume,
+            r_multiple=signed_r(position, context.current_price),
+            retcode=oms_result.retcode,
+            comment=oms_result.message or plan.reason,
+            fingerprint="",
+            symbol=position.symbol,
+            trade_class=str(getattr(position, "trade_class", "") or ""),
+            cycle_id=str(getattr(position, "cycle_id", "") or ""),
+            position_plan_id=str(getattr(position, "position_plan_id", "") or ""),
+        )
+        logger.warning(
+            "pme_sltp_modification",
+            position_id=position.ticket,
+            old_SL=str(old_sl),
+            new_SL=str(rec.new_sl),
+            old_TP=str(position.current_tp),
+            new_TP=str(rec.new_tp),
+            reason=plan.reason,
+            trade_class=rec.trade_class,
+            cycle_id=rec.cycle_id,
+            action=plan.kind.value,
+        )
+        self.journal.append(rec)
+        return PositionManageResult(
+            position=position,
+            action=plan.kind,
+            record=rec,
+            oms_result=oms_result,
+        )
+
     def _apply_success(self, position: ManagedPosition, plan: PlannedAction) -> None:
         assert plan.target_state is not None
         PositionStateMachine.assert_transition(position.state, plan.target_state)
@@ -443,14 +527,27 @@ class PositionManagementEngine:
         comment = f"{self.config.comment_prefix}:{plan.kind.value}:{position.ticket}"
         close_side = opposite_side(position.side)
 
-        if (
-            plan.kind is ManageActionKind.BREAK_EVEN
-            or plan.kind is ManageActionKind.TRAIL
-        ):
+        if plan.kind in {
+            ManageActionKind.BREAK_EVEN,
+            ManageActionKind.TRAIL,
+            ManageActionKind.RESTORE_STOP,
+        }:
             assert plan.new_sl is not None
             preserved_tp = (
                 plan.new_tp if plan.new_tp is not None else position.current_tp
             )
+            if plan.kind is ManageActionKind.RESTORE_STOP:
+                # The broker row confirmed SL <= 0. Claim that explicitly so
+                # the kill-switch guard treats the install as risk-reducing.
+                current_stop_loss: Decimal | None = Decimal("0")
+                take_profit_changed = False
+            else:
+                current_stop_loss = (
+                    position.current_stop if position.current_stop > 0 else None
+                )
+                take_profit_changed = (
+                    plan.new_tp is not None and plan.new_tp != position.current_tp
+                )
             return self.oms.modify_sltp(
                 user_id=context.user_id,
                 request_id=rid,
@@ -462,11 +559,8 @@ class PositionManagementEngine:
                 comment=comment,
                 connected=context.connected,
                 login=context.login,
-                current_stop_loss=(
-                    position.current_stop if position.current_stop > 0 else None
-                ),
-                take_profit_changed=plan.new_tp is not None
-                and plan.new_tp != position.current_tp,
+                current_stop_loss=current_stop_loss,
+                take_profit_changed=take_profit_changed,
             )
 
         if plan.kind is ManageActionKind.PARTIAL_CLOSE:
