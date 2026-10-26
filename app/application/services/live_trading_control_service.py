@@ -293,9 +293,35 @@ def _overlay_mt5_open_position_count(out: dict[str, Any], adapter: Any) -> None:
     out["open_positions_source"] = "mt5_list_positions"
 
 
+# The probe builds the auto-trading status, whose safety evaluation runs the
+# fail-closed check, which probes again for the approved login. Without this
+# guard that loop recursed until RecursionError on every cycle while ENABLED
+# (incident 2026-10-26). A nested probe on the same thread returns the last
+# good probe instead of building the status again.
+_PROBE_GUARD = threading.local()
+_LAST_GOOD_PROBE: dict[str, Any] = {}
+
+
 def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
     """Best-effort live facts. Missing values stay false/None — never invented."""
-    out: dict[str, Any] = {
+    if getattr(_PROBE_GUARD, "active", False):
+        nested = dict(_LAST_GOOD_PROBE) or _empty_probe_facts()
+        nested["probe_reentrant"] = True
+        nested["probe_cached"] = bool(_LAST_GOOD_PROBE)
+        return nested
+    _PROBE_GUARD.active = True
+    try:
+        out = _probe_live_facts_once(enrich_account=enrich_account)
+    finally:
+        _PROBE_GUARD.active = False
+    if not out.get("probe_error"):
+        _LAST_GOOD_PROBE.clear()
+        _LAST_GOOD_PROBE.update(out)
+    return out
+
+
+def _empty_probe_facts() -> dict[str, Any]:
+    return {
         "gateway_online": False,
         "mt5_connected": False,
         "mt5_attached": False,
@@ -318,6 +344,10 @@ def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
         "ops_mode": "UNKNOWN",
         "fabricated": False,
     }
+
+
+def _probe_live_facts_once(*, enrich_account: bool = False) -> dict[str, Any]:
+    out = _empty_probe_facts()
     try:
         from app.application.services.auto_trading_status import (
             build_auto_trading_status,
@@ -1294,6 +1324,8 @@ def apply_fail_closed_from_probes(
         and ownership is None
     ):
         facts = _live_probe_facts(enrich_account=False)
+        if facts.get("probe_reentrant") and not facts.get("probe_cached"):
+            return ctrl.snapshot_state()
         gateway_online = bool(facts.get("gateway_online"))
         mt5_connected = bool(facts.get("mt5_connected"))
         mt5_attached = bool(facts.get("mt5_attached"))
@@ -1308,7 +1340,11 @@ def apply_fail_closed_from_probes(
         return _safety_pause(ctrl, reason="broker_ownership_uncertain")
     approved = approved_mt5_logins()
     if approved:
-        login = _live_probe_facts(enrich_account=False).get("account_login")
+        probe = _live_probe_facts(enrich_account=False)
+        # A nested probe with no earlier good probe knows nothing: no verdict.
+        if probe.get("probe_reentrant") and not probe.get("probe_cached"):
+            return ctrl.snapshot_state()
+        login = probe.get("account_login")
         if isinstance(login, int) and login not in approved:
             return _safety_pause(ctrl, reason="unapproved_login")
     return ctrl.snapshot_state()
