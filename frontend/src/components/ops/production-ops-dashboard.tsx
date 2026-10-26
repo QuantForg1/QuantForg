@@ -21,6 +21,7 @@ import {
   weltradeApi,
 } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
+import { adapterExecutionLabel } from "@/lib/ops/status-truth";
 import { formatNumber } from "@/lib/utils";
 import { useTradingSession } from "@/providers/trading-session-provider";
 
@@ -135,6 +136,7 @@ export function ProductionOpsDashboard() {
   const redis = findDep("redis");
   const mt = asRecord(mt5.data);
   const wt = asRecord(weltrade.data);
+  const executionLabel = adapterExecutionLabel(wt);
   const metricsBody = asRecord(asRecord(analytics.data).metrics);
   const recentJournal = asList(asRecord(journal.data).items ?? journal.data)
     .map(asRecord)
@@ -152,7 +154,7 @@ export function ProductionOpsDashboard() {
           latest ? (
             <Badge tone="success">Last fill</Badge>
           ) : (
-            <Badge tone="neutral">No fills</Badge>
+            <Badge tone="neutral">No fills yet</Badge>
           )
         }
       >
@@ -232,8 +234,8 @@ export function ProductionOpsDashboard() {
             />
             <Kpi
               label="Execution"
-              value={wt.execution_enabled ? "enabled" : "disabled"}
-              hint="Adapter flag ≡ EXECUTION_ENABLED (see strip above)"
+              value={executionLabel}
+              hint="MT5 adapter order-send gate. Deployment EXECUTION_ENABLED is the strip above."
             />
             <Kpi label="Login" value={str(mt.login ?? session.login, "—")} />
             <Kpi label="Server" value={str(mt.server ?? session.server, "—")} />
@@ -268,7 +270,9 @@ export function ProductionOpsDashboard() {
           }
         >
           {recentJournal.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">No journal rows yet.</p>
+            <p className="text-sm text-[var(--fg-muted)]">
+              No journal rows yet. An empty execution journal is not a service outage.
+            </p>
           ) : (
             <DeskTable
               columns={["Time", "Symbol", "Result", "Ticket", "Latency"]}

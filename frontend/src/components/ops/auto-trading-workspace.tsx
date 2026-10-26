@@ -31,6 +31,7 @@ import { canAccessIteOps, iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-a
 import { ApiError } from "@/lib/api/client";
 import { SNAPSHOT_QUERY_KEYS } from "@/lib/api/current-snapshot";
 import { asList, asRecord, num, str } from "@/lib/desk";
+import { railwayProcessOk } from "@/lib/ops/status-truth";
 import {
   AUTO_STRATEGY_MODULES,
   loadStrategyToggles,
@@ -1274,7 +1275,6 @@ export function AutoTradingWorkspace() {
   const obsRes = asRecord(obsResourcesQ.data);
   const obsHealth = asRecord(obsHealthQ.data);
   const obsComps = asRecord(obsHealth.components ?? obsHealth);
-  const svcHealth = asRecord(servicesHealthQ.data);
   const apiHealth = asRecord(apiHealthQ.data);
   const apiDeps = asList(apiHealth.dependencies).map(asRecord);
   const findDep = (name: string) =>
@@ -1315,12 +1315,15 @@ export function AutoTradingWorkspace() {
   const mt5HealthOk = Boolean(
     brokerLive || session.connected || asRecord(mt5Q.data).connected,
   );
-  const railwayOk =
-    asRecord(svcHealth.railway).status != null
-      ? /ok|up|healthy/i.test(str(asRecord(svcHealth.railway).status))
-      : asRecord(obsComps.api).status
-        ? /healthy|ok/i.test(str(asRecord(obsComps.api).status))
-        : apiOk;
+  const railwayOk = railwayProcessOk({
+    servicesHealth: servicesHealthQ.data,
+    servicesHealthSuccess: servicesHealthQ.isSuccess,
+    servicesHealthError: servicesHealthQ.isError,
+    observability: obsHealthQ.data,
+    apiHealth: apiHealthQ.data,
+    apiHealthError: apiHealthQ.isError,
+    apiHealthSuccess: apiHealthQ.isSuccess,
+  });
 
   const safetyBlocked = killArmed || failedReasons.length > 0;
   const safetyStatusLabel = killArmed

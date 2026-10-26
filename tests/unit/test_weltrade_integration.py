@@ -371,6 +371,32 @@ class TestWeltradeIntegration:
         assert out["weltrade_connected"] is True
         assert out["account"] is not None
         assert out["account"]["login"] == 4242
+        assert out["execution_enabled"] is False
+        assert out["configuration"]["execution_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_health_reports_adapter_execution_flag(self) -> None:
+        """Health must expose the adapter gate, including when it is closed."""
+        off = WeltradeIntegrationService(
+            adapter=MT5Adapter(client=MockMT5Client(), execution_enabled=False),
+            uow_factory=MemoryMT5UnitOfWorkFactory(),
+        )
+        off_out = await off.health(user_id=uuid4())
+        assert off_out["status"] == "offline"
+        assert off_out["execution_enabled"] is False
+        assert off_out["configuration"]["execution_enabled"] is False
+
+        client = _StubGateway()
+        assert client.attach()
+        on = WeltradeIntegrationService(
+            adapter=MT5Adapter(client=client, execution_enabled=True),
+            uow_factory=MemoryMT5UnitOfWorkFactory(),
+        )
+        on.adapter.attach()
+        on_out = await on.health(user_id=uuid4())
+        assert on_out["execution_enabled"] is True
+        assert on_out["configuration"]["execution_enabled"] is True
+        assert on_out["gateway_reachable"] is True
 
     @pytest.mark.asyncio
     async def test_ensure_binds_when_gateway_live_without_session_ref(self) -> None:
