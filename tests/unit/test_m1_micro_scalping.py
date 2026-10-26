@@ -410,3 +410,48 @@ def test_live_execution_engine_does_not_call_the_m1_module() -> None:
     source = inspect.getsource(engine)
     assert "m1_micro" not in source
     assert "evaluate_m1" not in source
+
+
+def test_primary_block_still_evaluates_m1(monkeypatch: pytest.MonkeyPatch) -> None:
+    import inspect
+    from types import SimpleNamespace
+
+    from app.application.services.institutional_ite_runtime import (
+        InstitutionalIteRuntime,
+    )
+
+    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
+    cycle = inspect.getsource(InstitutionalIteRuntime._run_cycle)
+    assert cycle.count("self._record_m1_complement(") == 3
+    after_contract = cycle.split('cycle_outcome="execution_contract"', 1)[1]
+    assert after_contract.find("self._record_m1_complement(") < after_contract.find(
+        "return result"
+    )
+
+    class _Boom:
+        def __getattr__(self, name: str) -> object:
+            raise AssertionError(name)
+
+    result = SimpleNamespace(
+        market_context_diagnostics={},
+        decision_action="NO_TRADE",
+        forwarded_to_oms=False,
+    )
+    InstitutionalIteRuntime._record_m1_complement(
+        SimpleNamespace(  # type: ignore[arg-type]
+            mt5_adapter=_Boom(),
+            guarded_submit=None,
+            guarded_manage=None,
+            user_id=None,
+        ),
+        result,
+        account=SimpleNamespace(login=1),
+        snapshot=SimpleNamespace(symbol="XAUUSD"),
+        execution_enabled=True,
+        force_shadow=False,
+        primary_forwarded=False,
+    )
+    assert result.market_context_diagnostics == {}
+    assert result.decision_action == "NO_TRADE"
+    assert result.forwarded_to_oms is False
