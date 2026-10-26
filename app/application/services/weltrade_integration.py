@@ -178,6 +178,7 @@ class WeltradeIntegrationService:
                 "gateway_online": False,
                 "mt5_connected": False,
                 "weltrade_connected": False,
+                "execution_enabled": self.adapter.execution_enabled,
                 "status": "offline",
                 "transport": {},
             }
@@ -347,6 +348,7 @@ class WeltradeIntegrationService:
             "gateway_online": gateway_reachable,
             "mt5_connected": mt5_attached,
             "weltrade_connected": bool(gateway_reachable and mt5_attached),
+            "execution_enabled": self.adapter.execution_enabled,
             "ownership_heal": ownership_heal,
             "status": (
                 "healthy"
