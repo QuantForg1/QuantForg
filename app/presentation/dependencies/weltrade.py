@@ -23,6 +23,10 @@ def get_weltrade_service() -> WeltradeIntegrationService:
         # Keep UoW wired even if a prior instance was created without it.
         if getattr(existing, "uow_factory", None) is None:
             existing.uow_factory = getattr(container, "mt5_uow_factory", None)
+        if getattr(existing, "broker_uow_factory", None) is None:
+            existing.broker_uow_factory = getattr(
+                container, "broker_uow_factory", None
+            )
         return existing  # type: ignore[no-any-return]
 
     adapter = getattr(container, "mt5_adapter", None)
@@ -32,6 +36,7 @@ def get_weltrade_service() -> WeltradeIntegrationService:
     svc = WeltradeIntegrationService(
         adapter=adapter,
         uow_factory=getattr(container, "mt5_uow_factory", None),
+        broker_uow_factory=getattr(container, "broker_uow_factory", None),
     )
     with contextlib.suppress(Exception):
         container.weltrade_integration = svc  # type: ignore[attr-defined]

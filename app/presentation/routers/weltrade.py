@@ -58,6 +58,7 @@ async def weltrade_connect(
             account_type=body.account_type,
             prefer_attach=body.prefer_attach,
             path=body.path,
+            confirm_leave_exposure=body.confirm_leave_exposure,
         )
     except Exception as exc:
         logger.warning(
@@ -78,6 +79,29 @@ async def weltrade_attach(
         raise_trader_broker_failure(exc)
 
 
+@router.post("/claim")
+async def weltrade_claim(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
+    """Claim the verified terminal for this user. Gateway-online is not enough."""
+    try:
+        return await svc.claim_live_session(
+            user_id=user.id, role=str(getattr(user, "role", "") or "")
+        )
+    except Exception as exc:
+        logger.warning("weltrade_claim_failed", error_type=type(exc).__name__)
+        raise_trader_broker_failure(exc)
+
+
+@router.get("/exposure")
+async def weltrade_exposure(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
+    try:
+        return await svc.exposure_for_user(
+            user_id=user.id, role=str(getattr(user, "role", "") or "")
+        )
+    except Exception as exc:
+        logger.warning("weltrade_exposure_failed", error_type=type(exc).__name__)
+        raise_trader_broker_failure(exc)
+
+
 @router.post("/disconnect")
 async def weltrade_disconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     return await svc.disconnect(user_id=user.id)
@@ -94,10 +118,19 @@ async def weltrade_reconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, A
 
 @router.get("/runtime-profile")
 async def weltrade_runtime_profile(
-    _user: CurrentUser, svc: WeltradeSvc
+    user: CurrentUser, svc: WeltradeSvc
 ) -> dict[str, Any]:
-    """Public broker restore profile (never includes password/ciphertext)."""
+    """Selected account for this user. Never includes a password or ciphertext."""
     profile = svc.load_persisted_broker_profile()
+    store = svc._secret_store()
+    if store is not None:
+        selected = await store.public_selection(user_id=user.id)
+        if selected is not None:
+            profile = selected
+    if isinstance(profile, dict):
+        profile.pop("password", None)
+        profile.pop("password_ciphertext", None)
+        profile.pop("password_plaintext", None)
     return {"ok": True, "profile": profile}
 
 

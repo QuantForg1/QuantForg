@@ -1072,14 +1072,32 @@ class GatewayMT5Client:
     def login(self, request: MT5LoginRequest) -> bool:
         if not self._initialized and not self.initialize(path=request.path):
             return False
-        # Never re-login over a live attached gateway session.
+        # Skip password login only when the live terminal is already this account.
+        # A connected session with no login, or a different login, is not proof.
         if self.adopt_existing_session():
+            adopted = int(self._login or 0)
+            requested = int(request.login)
+            if adopted > 1 and (requested <= 1 or adopted == requested):
+                logger.info(
+                    "gateway_login_skipped_existing_session",
+                    login=self._login,
+                    session_mode=self._session_mode,
+                )
+                return True
+            if adopted > 1:
+                logger.warning(
+                    "gateway_login_refused_different_session",
+                    adopted_login=adopted,
+                    requested_login=requested,
+                )
+                return False
             logger.info(
-                "gateway_login_skipped_existing_session",
-                login=self._login,
-                session_mode=self._session_mode,
+                "gateway_login_replacing_unverified_session",
+                requested_login=requested,
             )
-            return True
+            self.shutdown()
+            if not self.initialize(path=request.path or self._path):
+                return False
         body = {
             "login": int(request.login),
             "password": request.password,
@@ -1353,6 +1371,18 @@ class GatewayMT5Client:
             trade_mode=account_mode,
             trade_allowed=trade_allowed,
         )
+        previous_login = int(self._login or 0)
+        verified_login = int(info.login or 0)
+        if (
+            previous_login > 1
+            and verified_login > 1
+            and previous_login != verified_login
+        ):
+            self._clear_data_caches()
+        if verified_login > 1:
+            self._login = verified_login
+        if info.server:
+            self._server = str(info.server)
         self._account_cache = info
         self._account_cache_at = now
         return info

@@ -22,6 +22,10 @@ CLOUDFLARE_ORIGIN_UNREACHABLE = "CLOUDFLARE_ORIGIN_UNREACHABLE"
 ACCOUNT_SESSION_MISMATCH = "ACCOUNT_SESSION_MISMATCH"
 BROKER_NOT_CONNECTED = "BROKER_NOT_CONNECTED"
 CATALOGUE_UNAVAILABLE = "CATALOGUE_UNAVAILABLE"
+OPEN_EXPOSURE = "OPEN_EXPOSURE"
+EXPOSURE_UNVERIFIED = "EXPOSURE_UNVERIFIED"
+ACCOUNT_MODE_MISMATCH = "ACCOUNT_MODE_MISMATCH"
+OWNERSHIP_HELD = "OWNERSHIP_HELD"
 
 TRADER_BROKER_MESSAGES: dict[str, str] = {
     INVALID_CREDENTIALS: "Broker login or password was not accepted.",
@@ -36,6 +40,21 @@ TRADER_BROKER_MESSAGES: dict[str, str] = {
     ACCOUNT_SESSION_MISMATCH: "Your trading session needs to be reconnected.",
     BROKER_NOT_CONNECTED: "Connect your broker account to start.",
     CATALOGUE_UNAVAILABLE: "Connect or verify your broker and refresh market data.",
+    OPEN_EXPOSURE: (
+        "This account has open positions or pending orders. They stay at the "
+        "broker and are not closed. Confirm the switch to leave them without "
+        "management from this terminal."
+    ),
+    EXPOSURE_UNVERIFIED: (
+        "Open positions could not be read, so the account was not switched."
+    ),
+    ACCOUNT_MODE_MISMATCH: (
+        "Live or Demo does not match the account the terminal verified."
+    ),
+    OWNERSHIP_HELD: (
+        "This attached account is owned by another user. Enter the account "
+        "password to claim it. A gateway that is online does not grant ownership."
+    ),
 }
 
 
@@ -44,6 +63,22 @@ def classify_broker_connect_error(
 ) -> tuple[type[DomainError], str, str]:
     """Return (exception class, code, public message). Never returns raw exc text."""
     text = str(exc).lower()
+    if "open_exposure" in text:
+        code = OPEN_EXPOSURE
+        return ConflictError, code, TRADER_BROKER_MESSAGES[code]
+    if "exposure_unverified" in text:
+        code = EXPOSURE_UNVERIFIED
+        return ServiceUnavailableError, code, TRADER_BROKER_MESSAGES[code]
+    if "account_mode_mismatch" in text:
+        code = ACCOUNT_MODE_MISMATCH
+        return ValidationError, code, TRADER_BROKER_MESSAGES[code]
+    if (
+        "ownership_claim_failed" in text
+        or "login_owned_by_other_user" in text
+        or "role_not_privileged" in text
+    ):
+        code = OWNERSHIP_HELD
+        return ConflictError, code, TRADER_BROKER_MESSAGES[code]
     if (
         "account_session_mismatch" in text
         or ("mismatch" in text and "session" in text)

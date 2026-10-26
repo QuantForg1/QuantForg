@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.domain.entities.mt5 import MT5Connection
@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 WELTRADE_BROKER = "weltrade"
 WELTRADE_SERVERS = {
     "demo": ("Weltrade-Demo", "Weltrade-MT5"),
-    "live": ("Weltrade-MT5", "Weltrade-Demo"),
+    "live": ("Weltrade-Real", "Weltrade-MT5"),
 }
 
 
@@ -60,8 +60,10 @@ class WeltradeIntegrationService:
 
     adapter: MT5Adapter
     uow_factory: Any = None
+    broker_uow_factory: Any = None
     _last_sync_at: str | None = field(default=None, init=False)
     _connect_gate: asyncio.Lock | None = field(default=None, init=False)
+    _account_lock: asyncio.Lock | None = field(default=None, init=False)
     _connect_inflight: asyncio.Task[Any] | None = field(default=None, init=False)
     _connect_inflight_key: str | None = field(default=None, init=False)
     _auth_failed: bool = field(default=False, init=False)
@@ -71,6 +73,12 @@ class WeltradeIntegrationService:
         if self._connect_gate is None:
             self._connect_gate = asyncio.Lock()
         return self._connect_gate
+
+    def _operation_lock(self) -> asyncio.Lock:
+        """Serialise connect, claim, and account switch. Separate from task dedupe."""
+        if self._account_lock is None:
+            self._account_lock = asyncio.Lock()
+        return self._account_lock
 
     def profile(self) -> dict[str, Any]:
         return {
@@ -486,6 +494,7 @@ class WeltradeIntegrationService:
         server: str | None = None,
         path: str = "",
         session_ref: str | None = None,
+        transfer_authorized: bool = False,
     ) -> str | None:
         """Persist the live adapter session for this user (single source of truth)."""
         if self.uow_factory is None:
@@ -529,15 +538,16 @@ class WeltradeIntegrationService:
             )
             return None
 
-        resolved_login = live_login if live_login > 1 else claimed_login
-        resolved_server = live_server or claimed_server
-        if resolved_login <= 1 or not resolved_server:
+        # Never persist a login the terminal did not report.
+        if live_login <= 1 or not (live_server or claimed_server):
             logger.warning(
                 "weltrade_bind_skipped",
                 reason="unresolved_account_identity",
                 user_id=str(user_id),
             )
             return None
+        resolved_login = live_login
+        resolved_server = live_server or claimed_server
 
         build: int | None = None
         version = ""
@@ -564,20 +574,56 @@ class WeltradeIntegrationService:
             latency_ms=latency,
         )
         async with self.uow_factory() as uow:
+            if transfer_authorized:
+                finder = getattr(uow.connections, "get_connected_by_login", None)
+                foreign = await finder(resolved_login) if callable(finder) else None
+                if (
+                    foreign is not None
+                    and foreign.user_id != user_id
+                    and bool(foreign.connected)
+                ):
+                    foreign.mark_disconnected(error="ownership_transferred")
+                    await uow.connections.update(foreign)
+            elif await self._foreign_blocks_bind(
+                uow, login=resolved_login, user_id=user_id
+            ):
+                logger.info(
+                    "weltrade_bind_skipped",
+                    reason="login_owned_by_other_user",
+                    user_id=str(user_id),
+                )
+                return None
+            for other in await uow.connections.list_for_user(user_id):
+                if (
+                    bool(other.connected)
+                    and int(other.login or 0) > 1
+                    and int(other.login or 0) != resolved_login
+                ):
+                    other.mark_disconnected(error="superseded_by_verified_account")
+                    await uow.connections.update(other)
             await uow.connections.upsert_for_user(connection)
             await uow.commit()
+        self._remember_verified_login(resolved_login, resolved_server, live_ref)
         with contextlib.suppress(Exception):
             from app.application.services.institutional_ite_runtime import (
                 get_ite_runtime,
             )
 
             runtime = get_ite_runtime()
-            if runtime is not None:
-                runtime.user_id = user_id
             from app.application.services.account_execution_gate import (
                 bind_execution_account,
+                bound_execution_account,
             )
 
+            _prev_user, prev_login = bound_execution_account()
+            if (
+                runtime is not None
+                and prev_login > 1
+                and prev_login != resolved_login
+            ):
+                runtime._last_cycle = None
+            if runtime is not None:
+                runtime.user_id = user_id
             bind_execution_account(user_id=user_id, login=resolved_login)
         logger.info(
             "weltrade_session_bound",
@@ -653,14 +699,80 @@ class WeltradeIntegrationService:
         sessions = getattr(self.adapter, "_sessions", None)
         if not isinstance(sessions, dict):
             return
-        if ref in sessions and login > 1:
+        stored = sessions.get(ref)
+        stored_login = 0
+        if stored is not None:
+            stored_login = int(getattr(stored, "login", 0) or 0)
+        if stored is not None and stored_login > 1:
             return
+        resolved = login if login > 1 else stored_login
         sessions[ref] = MT5LoginRequest(
-            login=login if login > 1 else 0,
+            login=resolved if resolved > 1 else 0,
             password="",
-            server=server or "attached",
+            server=server or str(getattr(stored, "server", "") or "") or "attached",
             path="",
         )
+
+    def _remember_verified_login(self, login: int, server: str, live_ref: str) -> None:
+        """Publish the verified terminal login into the process session cache."""
+        client = cast("Any", self.adapter.client)
+        if login > 1:
+            with contextlib.suppress(Exception):
+                client._login = int(login)
+        if server:
+            with contextlib.suppress(Exception):
+                client._server = str(server)
+        self._sync_adapter_live_handle(live_ref)
+
+    async def _foreign_blocks_bind(
+        self, uow: Any, *, login: int, user_id: UUID
+    ) -> bool:
+        finder = getattr(uow.connections, "get_connected_by_login", None)
+        if not callable(finder):
+            return False
+        row = await finder(int(login))
+        return bool(
+            row is not None
+            and row.user_id != user_id
+            and bool(getattr(row, "connected", False))
+        )
+
+    def _read_exposure(self) -> dict[str, Any]:
+        """Open positions and pending orders on the terminal. Fail closed."""
+        try:
+            positions = list(self.adapter.list_positions())
+            orders = list(self.adapter.list_orders())
+        except Exception as exc:
+            raise RuntimeError(
+                "EXPOSURE_UNVERIFIED: Open positions could not be read. "
+                "The account was not switched."
+            ) from exc
+        symbols: list[str] = []
+        for item in [*positions, *orders]:
+            symbol = str(getattr(item, "symbol", "") or "")
+            if symbol and symbol not in symbols:
+                symbols.append(symbol)
+        return {
+            "open_positions": len(positions),
+            "pending_orders": len(orders),
+            "symbols": symbols,
+            "requires_confirmation": bool(positions or orders),
+        }
+
+    def _secret_store(self) -> Any:
+        if self.broker_uow_factory is None:
+            return None
+        key = str(getattr(self, "_broker_secret_key_override", "") or "")
+        if not key:
+            with contextlib.suppress(Exception):
+                from core.config.settings import get_settings
+
+                key = get_settings().secret_key.get_secret_value()
+        if len(key) < 32:
+            return None
+        from app.application.services.broker_secret_store import BrokerSecretStore
+
+        return BrokerSecretStore(self.broker_uow_factory, secret_key=key)
 
     def _ensure_process_gateway_handle(self) -> str:
         """Adopt the live Windows session into this Railway worker process.
@@ -744,6 +856,7 @@ class WeltradeIntegrationService:
             return diag
         live_login = 0
         live_server = ""
+        info = None
         try:
             info = self.adapter.account_info()
             live_login = int(getattr(info, "login", 0) or 0)
@@ -821,6 +934,20 @@ class WeltradeIntegrationService:
             path="",
             password="",
             user_id=user_id,
+        )
+        mode = str(getattr(info, "trade_mode", "") or "") if info is not None else ""
+        allowed = getattr(info, "trade_allowed", None) if info is not None else None
+        await self._persist_selected_account(
+            user_id=user_id,
+            login=live_login,
+            server=live_server,
+            account_type=self._environment_name(mode, live_server, ""),
+            currency=(
+                str(getattr(info, "currency", "") or "") if info is not None else ""
+            ),
+            account_mode=mode,
+            trade_allowed=None if allowed is None else bool(allowed),
+            password="",
         )
         diag["adopted"] = True
         diag["reason"] = "ok"
@@ -949,6 +1076,119 @@ class WeltradeIntegrationService:
         diag["reason"] = "ok" if bound else "bind_user_session_failed"
         return diag
 
+    @staticmethod
+    def _environment_name(mode: str, server: str, requested: str) -> str:
+        label = str(mode or "").strip().lower()
+        if label == "real":
+            return "live"
+        if label == "demo":
+            return "demo"
+        asked = str(requested or "").strip().lower()
+        if asked in {"live", "demo"}:
+            return asked
+        if "real" in str(server or "").lower():
+            return "live"
+        return "demo"
+
+    @staticmethod
+    def _reject_account_mode(mode: str, account_type: str) -> None:
+        label = str(mode or "").strip().lower()
+        if label == "real" and account_type == "demo":
+            raise RuntimeError(
+                "ACCOUNT_MODE_MISMATCH: The terminal account is live. "
+                "Choose Live, not Demo."
+            )
+        if label == "demo" and account_type == "live":
+            raise RuntimeError(
+                "ACCOUNT_MODE_MISMATCH: The terminal account is demo. "
+                "Choose Demo, not Live."
+            )
+
+    async def _persist_selected_account(
+        self,
+        *,
+        user_id: UUID,
+        login: int,
+        server: str,
+        account_type: str,
+        currency: str,
+        account_mode: str,
+        trade_allowed: bool | None,
+        password: str,
+    ) -> None:
+        store = self._secret_store()
+        if store is None:
+            return
+        await store.save_selection(
+            user_id=user_id,
+            login=int(login),
+            server=server,
+            environment=self._environment_name(account_mode, server, account_type),
+            currency=currency,
+            account_mode=account_mode,
+            trade_allowed=trade_allowed,
+            password=password,
+        )
+
+    async def claim_live_session(
+        self, *, user_id: UUID, role: str | None
+    ) -> dict[str, Any]:
+        """Bind the signed-in owner to the verified terminal. Not a status paint."""
+        async with self._operation_lock():
+            diag = await self.ensure_user_session_bound(user_id=user_id, role=role)
+        if not diag.get("adopted"):
+            reason = str(diag.get("reason") or "claim_failed")
+            raise RuntimeError(f"OWNERSHIP_CLAIM_FAILED:{reason}")
+        from app.domain.trading.trading_context import (
+            mask_broker_login,
+            mask_broker_server,
+        )
+
+        info = None
+        with contextlib.suppress(Exception):
+            info = self.adapter.account_info()
+        mode = str(getattr(info, "trade_mode", "") or "") if info is not None else ""
+        server = str(getattr(info, "server", "") or "") if info is not None else ""
+        login_value = getattr(info, "login", None) if info is not None else None
+        allowed = getattr(info, "trade_allowed", None) if info is not None else None
+        return {
+            "ok": True,
+            "owned": True,
+            "ownership": "owned",
+            "broker": "Connected",
+            "server": mask_broker_server(server),
+            "account": mask_broker_login(login_value),
+            "currency": str(getattr(info, "currency", "") or "") if info else "",
+            "account_mode": mode,
+            "equity": str(getattr(info, "equity", "") or "") if info else "",
+            "trade_allowed": allowed,
+            "ownership_block_reason": None,
+        }
+
+    async def exposure_for_user(
+        self, *, user_id: UUID, role: str | None
+    ) -> dict[str, Any]:
+        """Position and pending-order counts before an account switch."""
+        from app.application.services.account_execution_gate import (
+            bound_execution_account,
+        )
+
+        bound_user, _bound_login = bound_execution_account()
+        privileged = self._role_may_adopt_unbound_gateway(role)
+        if bound_user is not None and bound_user != user_id and not privileged:
+            raise RuntimeError("OWNERSHIP_CLAIM_FAILED:login_owned_by_other_user")
+        if not getattr(self.adapter.client, "is_connected", False):
+            return {
+                "open_positions": 0,
+                "pending_orders": 0,
+                "symbols": [],
+                "requires_confirmation": False,
+                "readable": True,
+            }
+        snap = self._read_exposure()
+        snap["readable"] = True
+        return snap
+
     async def connect(
         self,
         *,
@@ -959,6 +1199,7 @@ class WeltradeIntegrationService:
         account_type: str = "demo",
         prefer_attach: bool = True,
         path: str = "",
+        confirm_leave_exposure: bool = False,
     ) -> dict[str, Any]:
         account_type = (account_type or "demo").strip().lower()
         if account_type not in {"demo", "live"}:
@@ -996,6 +1237,7 @@ class WeltradeIntegrationService:
                         prefer_attach=prefer_attach,
                         path=path,
                         correlation_id=key,
+                        confirm_leave_exposure=confirm_leave_exposure,
                     ),
                     name=f"weltrade-connect-{login}",
                 )
@@ -1020,6 +1262,33 @@ class WeltradeIntegrationService:
         prefer_attach: bool,
         path: str,
         correlation_id: str,
+        confirm_leave_exposure: bool = False,
+    ) -> dict[str, Any]:
+        async with self._operation_lock():
+            return await self._connect_holding_lock(
+                user_id=user_id,
+                login=login,
+                password=password,
+                server_name=server_name,
+                account_type=account_type,
+                prefer_attach=prefer_attach,
+                path=path,
+                correlation_id=correlation_id,
+                confirm_leave_exposure=confirm_leave_exposure,
+            )
+
+    async def _connect_holding_lock(
+        self,
+        *,
+        user_id: UUID,
+        login: int,
+        password: str,
+        server_name: str,
+        account_type: str,
+        prefer_attach: bool,
+        path: str,
+        correlation_id: str,
+        confirm_leave_exposure: bool = False,
     ) -> dict[str, Any]:
         t0 = datetime.now(UTC)
         logger.info(
@@ -1035,6 +1304,11 @@ class WeltradeIntegrationService:
         )
 
         steps: list[dict[str, Any]] = []
+        authenticated_with_password = False
+        verified_mode = ""
+        verified_currency = ""
+        verified_equity = ""
+        verified_trade_allowed: bool | None = None
         gw = self._gateway()
         if gw is None:
             logger.warning(
@@ -1173,6 +1447,7 @@ class WeltradeIntegrationService:
         if attached:
             live_login = 0
             live_server = ""
+            info = None
             try:
                 info = self.adapter.account_info()
                 live_login = int(getattr(info, "login", 0) or 0)
@@ -1181,6 +1456,26 @@ class WeltradeIntegrationService:
                 live_login = int(getattr(self.adapter.client, "_login", 0) or 0)
             if live_login > 1 and live_login != int(login):
                 if password:
+                    exposure = self._read_exposure()
+                    if exposure["requires_confirmation"] and not confirm_leave_exposure:
+                        raise RuntimeError(
+                            "OPEN_EXPOSURE: This account has "
+                            f"{exposure['open_positions']} open position(s) and "
+                            f"{exposure['pending_orders']} pending order(s)"
+                            + (
+                                f" on {', '.join(exposure['symbols'])}"
+                                if exposure["symbols"]
+                                else ""
+                            )
+                            + ". They stay at the broker and this terminal will "
+                            "not manage them after the switch. Confirm to leave "
+                            "them, or stay on this account."
+                        )
+                    from app.application.services.account_execution_gate import (
+                        begin_account_switch,
+                    )
+
+                    begin_account_switch()
                     logger.info(
                         "weltrade_attach_login_mismatch_forcing_auth",
                         claimed_login=login,
@@ -1210,6 +1505,12 @@ class WeltradeIntegrationService:
             elif live_login > 1:
                 if live_server:
                     server_name = live_server
+                if info is not None:
+                    verified_mode = str(getattr(info, "trade_mode", "") or "")
+                    verified_currency = str(getattr(info, "currency", "") or "")
+                    verified_equity = str(getattr(info, "equity", "") or "")
+                    allowed = getattr(info, "trade_allowed", None)
+                    verified_trade_allowed = None if allowed is None else bool(allowed)
                 steps.append(
                     {
                         "step": "verify_live_login",
@@ -1219,6 +1520,25 @@ class WeltradeIntegrationService:
                         ),
                     }
                 )
+            else:
+                # Attach succeeded without a terminal login. Do not bind the
+                # requested login on that hollow session.
+                logger.info(
+                    "weltrade_attach_unverified",
+                    claimed_login=login,
+                    correlation_id=correlation_id,
+                )
+                steps.append(
+                    {
+                        "step": "attach",
+                        "ok": False,
+                        "detail": "Attached session did not report a verified login",
+                    }
+                )
+                with contextlib.suppress(Exception):
+                    self.adapter.shutdown()
+                attached = False
+                session_ref = ""
 
         if not attached:
             if not password:
@@ -1258,6 +1578,16 @@ class WeltradeIntegrationService:
                 )
                 raise RuntimeError(f"Weltrade authentication failed: {exc}") from exc
             self._auth_failed = False
+            authenticated_with_password = True
+            with contextlib.suppress(Exception):
+                authed = self.adapter.account_info()
+                verified_mode = str(getattr(authed, "trade_mode", "") or "")
+                verified_currency = str(getattr(authed, "currency", "") or "")
+                verified_equity = str(getattr(authed, "equity", "") or "")
+                allowed = getattr(authed, "trade_allowed", None)
+                verified_trade_allowed = None if allowed is None else bool(allowed)
+                if getattr(authed, "server", None):
+                    server_name = str(authed.server).strip() or server_name
             steps.append(
                 {
                     "step": "connect",
@@ -1269,12 +1599,14 @@ class WeltradeIntegrationService:
             # Password falls out of scope — adapter stores redacted copy for GW.
             del request
 
+        self._reject_account_mode(verified_mode, account_type)
         bound = await self.bind_user_session(
             user_id=user_id,
             login=login,
             server=server_name,
             path=path,
             session_ref=session_ref,
+            transfer_authorized=authenticated_with_password,
         )
         if not bound:
             raise RuntimeError(
@@ -1288,6 +1620,21 @@ class WeltradeIntegrationService:
             password=password,
             user_id=user_id,
         )
+        await self._persist_selected_account(
+            user_id=user_id,
+            login=int(login),
+            server=server_name,
+            account_type=account_type,
+            currency=verified_currency,
+            account_mode=verified_mode,
+            trade_allowed=verified_trade_allowed,
+            password=password if authenticated_with_password else "",
+        )
+        from app.application.services.account_execution_gate import (
+            finish_account_switch,
+        )
+
+        finish_account_switch()
         sync = await self.dashboard(user_id=user_id)
         steps.append({"step": "sync", "ok": True, "detail": "Account synchronized"})
         latency_ms = round((datetime.now(UTC) - t0).total_seconds() * 1000.0, 1)
@@ -1314,6 +1661,12 @@ class WeltradeIntegrationService:
             },
             "status": sync.get("status"),
             "state": "CONNECTED",
+            "verified": {
+                "currency": verified_currency,
+                "account_mode": verified_mode,
+                "equity": verified_equity,
+                "trade_allowed": verified_trade_allowed,
+            },
         }
 
     def _persist_broker_runtime_profile(
@@ -1373,7 +1726,24 @@ class WeltradeIntegrationService:
             store = _bps.get_broker_profile_store()
             profile = store.load()
             if profile is None or profile.login <= 0:
-                return None
+                secret_store = self._secret_store()
+                if secret_store is None:
+                    return None
+                loaded = await secret_store.load_password(user_id=user_id)
+                if loaded is None:
+                    return None
+                login_i, server_i, environment, password_i = loaded
+                chosen = (
+                    environment if environment in {"demo", "live"} else account_type
+                )
+                return await self.connect(
+                    user_id=user_id,
+                    login=login_i,
+                    password=password_i,
+                    server=server_i,
+                    account_type=chosen,
+                    prefer_attach=True,
+                )
             if self._auth_failed:
                 logger.warning(
                     "broker_auth_failed",

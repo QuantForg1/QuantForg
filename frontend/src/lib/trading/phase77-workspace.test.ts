@@ -45,6 +45,13 @@ assert.equal(signals.includes("Why this signal"), false);
 assert.match(signals, /live Gold candles/);
 
 assert.match(broker, /Connect MT5/);
+assert.match(broker, /Change account/);
+assert.match(broker, /weltradeApi\.exposure/);
+assert.match(
+  broker,
+  /A gateway session may exist, but it is not your owned broker connection/,
+);
+assert.match(broker, /Use Connect MT5 to claim ownership/);
 assert.match(broker, /Live trading/);
 assert.match(broker, /Password is never displayed/);
 assert.equal(broker.includes("password="), false);
