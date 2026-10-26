@@ -8,6 +8,7 @@ export type ConnectionDisplayState =
   | "DISCONNECTED"
   | "BROKER_NOT_CONNECTED"
   | "ACCOUNT_SESSION_MISMATCH"
+  | "OWNERSHIP_UNVERIFIED"
   | "DATA_UNAVAILABLE"
   | "CATALOGUE_UNAVAILABLE"
   | "EMPTY";
@@ -175,6 +176,22 @@ export function resolveConnectionPresentation(
       lastVerified,
       connected: false,
       ownership: "none",
+      catalogueUnavailable: true,
+      accountUnavailable: true,
+      liveBrokerCatalogue: false,
+    };
+  }
+  if (ownership !== "owned") {
+    return {
+      state: "OWNERSHIP_UNVERIFIED",
+      label: "NOT OWNED",
+      tone: "danger",
+      health: "Degraded",
+      maskedLogin,
+      server,
+      lastVerified,
+      connected: false,
+      ownership,
       catalogueUnavailable: true,
       accountUnavailable: true,
       liveBrokerCatalogue: false,
@@ -2101,6 +2118,7 @@ export function connectionShortLabel(state: ConnectionDisplayState): string {
   if (state === "CONNECTED") return "CONNECTED";
   if (state === "CONNECTING") return "CONNECTING";
   if (state === "ACCOUNT_SESSION_MISMATCH") return "SESSION MISMATCH";
+  if (state === "OWNERSHIP_UNVERIFIED") return "NOT OWNED";
   if (state === "BROKER_NOT_CONNECTED") return "BROKER NOT CONNECTED";
   if (state === "DISCONNECTED") return "DISCONNECTED";
   return "UNAVAILABLE";

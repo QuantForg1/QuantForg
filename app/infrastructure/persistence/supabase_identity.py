@@ -141,6 +141,18 @@ class SupabaseUserRepository:
         self._client.table("users").upsert(_user_to_row(user)).execute()
         return user
 
+    async def list_privileged(self) -> list[User]:
+        result = (
+            self._client.table("users")
+            .select(
+                "id,auth_user_id,email,display_name,role,status,"
+                "password_hash,last_login_at,deactivated_at,created_at,updated_at"
+            )
+            .in_("role", ["owner", "admin"])
+            .execute()
+        )
+        return [_user_from_row(row) for row in (result.data or [])]
+
 
 class SupabaseAuditLogRepository:
     def __init__(self, client: Any) -> None:

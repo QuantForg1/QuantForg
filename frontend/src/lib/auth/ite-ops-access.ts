@@ -1,17 +1,14 @@
 /**
- * ITE ops permission source — must match backend require_roles(OWNER, ADMIN).
- *
- * Backend: app/presentation/dependencies/auth.py → require_roles
- *          + public.users.role (AuthUserDTO.role / /auth/me)
- * Roles:   app/domain/enums/user.py → UserRole.OWNER|ADMIN = "owner"|"admin"
- * Ops:     app/domain/institutional_trading/operations/models.py → OPERATOR_ROLES
+ * ITE ops UI gate. The server is authoritative: only the verified designated
+ * owner keeps OWNER/ADMIN. A matching email in the browser is not a grant.
  */
 
 import { ApiError } from "@/lib/api/client";
 import type { AuthUser } from "@/lib/auth/session";
 
-/** Same strings as backend UserRole.OWNER / UserRole.ADMIN / OPERATOR_ROLES. */
-export const ITE_OPS_ROLES = ["owner", "admin"] as const;
+/** Platform owner role. Other accounts cannot become owner from the client. */
+export const DESIGNATED_OWNER_EMAIL = "p7provider@gmail.com";
+export const ITE_OPS_ROLES = ["owner"] as const;
 
 export type IteOpsRole = (typeof ITE_OPS_ROLES)[number];
 
@@ -23,12 +20,15 @@ export function normalizePlatformRole(
     .toLowerCase();
 }
 
-/** True when platform user.role is owner|admin (not org membership role). */
+/** True only for the designated platform owner identity from /auth/me. */
 export function canAccessIteOps(
-  user: Pick<AuthUser, "role"> | null | undefined,
+  user: Pick<AuthUser, "role" | "email"> | null | undefined,
 ): boolean {
   const role = normalizePlatformRole(user?.role);
-  return (ITE_OPS_ROLES as readonly string[]).includes(role);
+  const email = String(user?.email ?? "")
+    .trim()
+    .toLowerCase();
+  return role === "owner" && email === DESIGNATED_OWNER_EMAIL;
 }
 
 /**
@@ -55,7 +55,7 @@ export function iteOpsAccessDeniedMessage(
 
   if (api?.code === "insufficient_role" || api?.status === 403) {
     return (
-      `${surface} unavailable — OWNER/ADMIN required ` +
+      `${surface} unavailable — verified platform owner required ` +
       `(user=${user?.id ?? "?"} role=${actual || "unknown"} required=${required}).`
     );
   }
@@ -68,7 +68,7 @@ export function iteOpsAccessDeniedMessage(
   }
   if (user && !canAccessIteOps(user)) {
     return (
-      `${surface} unavailable — OWNER/ADMIN required ` +
+      `${surface} unavailable — verified platform owner required ` +
       `(user=${user.id} role=${role} required=${ITE_OPS_ROLES.join("|")}).`
     );
   }
@@ -85,5 +85,5 @@ export function iteOpsAccessDeniedMessage(
   if (api) {
     return `${surface} unavailable — ${api.message} (${api.code || api.status}).`;
   }
-  return `${surface} unavailable — OWNER/ADMIN required for ITE ops controls.`;
+  return `${surface} unavailable — verified platform owner required.`;
 }

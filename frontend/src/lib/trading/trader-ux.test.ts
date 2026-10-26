@@ -154,6 +154,8 @@ import {
     account: "16••06",
     server: "Wel***eal",
     connection: "Healthy",
+    ownership: "owned",
+    owned: true,
   });
   assert.equal(view.state, "CATALOGUE_UNAVAILABLE");
   assert.equal(view.label, "CONNECTED");
@@ -236,10 +238,20 @@ assert.equal(
     catalogue_source: "LIVE_BROKER",
     catalogue_unavailable: false,
     robot: "Stopped",
+    ownership: "owned",
+    owned: true,
   };
   const view = resolveConnectionPresentation(connected);
   assert.equal(view.state, "CONNECTED");
   assert.equal(view.connected, true);
+  const unowned = resolveConnectionPresentation({
+    ...connected,
+    ownership: "none",
+    owned: false,
+  });
+  assert.equal(unowned.connected, false);
+  assert.equal(unowned.label, "NOT OWNED");
+  assert.equal(unowned.state, "OWNERSHIP_UNVERIFIED");
 }
 
 {
@@ -330,6 +342,7 @@ assert.equal(
 assert.equal(
   robotDisplayState({
     broker: "Connected",
+    ownership: "owned",
     ux_state: "ROBOT_RUNNING",
     robot: "Running",
     catalogue_unavailable: false,

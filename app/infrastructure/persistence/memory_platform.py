@@ -52,6 +52,12 @@ class InMemoryUserRepository:
         self.items[user.id] = user
         return user
 
+    async def list_privileged(self) -> list[User]:
+        from app.domain.enums.user import UserRole
+
+        privileged = {UserRole.OWNER, UserRole.ADMIN}
+        return [user for user in self.items.values() if user.role in privileged]
+
 
 class InMemoryAuditLogRepository:
     def __init__(self) -> None:

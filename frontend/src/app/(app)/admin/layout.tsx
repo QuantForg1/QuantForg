@@ -46,8 +46,8 @@ export default function AdminPortalLayout({
         </p>
         <p className="mt-1 text-xs text-[var(--fg-muted)]">
           Internal operations only. Research stays advisory. Opening Admin does
-          not enable live trading. Privileged APIs enforce OWNER/ADMIN
-          server-side.
+          not enable live trading. Privileged APIs enforce the verified
+          platform owner on the server.
         </p>
       </header>
       {children}

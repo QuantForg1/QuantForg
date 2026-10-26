@@ -1770,6 +1770,21 @@ class WeltradeIntegrationService:
             logger.exception("broker_runtime_profile_restore_failed")
             return None
 
+    async def _rehydrate_owner_claim_from_database(self) -> dict[str, Any]:
+        """Bind the designated owner's persisted login when the gateway matches."""
+        from app.application.services.broker_ownership_restore import (
+            rehydrate_designated_owner_binding,
+        )
+
+        live_login = 0
+        try:
+            self._ensure_process_gateway_handle()
+            info = self.adapter.account_info()
+            live_login = int(getattr(info, "login", 0) or 0)
+        except Exception:
+            live_login = int(getattr(self.adapter.client, "_login", 0) or 0)
+        return rehydrate_designated_owner_binding(live_login)
+
     async def auto_restore_on_startup(self) -> dict[str, Any] | None:
         """Backend-owned reconnect after Railway worker/process restart.
 
@@ -1782,9 +1797,22 @@ class WeltradeIntegrationService:
 
             profile = _bps.get_broker_profile_store().load()
             if profile is None or profile.login <= 0:
+                restored = await self._rehydrate_owner_claim_from_database()
+                if restored.get("bound"):
+                    logger.info(
+                        "broker_startup_db_rehydrate",
+                        state="CONNECTED",
+                        mode="database_claim",
+                    )
+                    return {
+                        "ok": True,
+                        "broker": WELTRADE_BROKER,
+                        "state": "CONNECTED",
+                        "mode": "database_claim",
+                    }
                 logger.info(
                     "broker_connection_started",
-                    reason="no_persisted_profile",
+                    reason=str(restored.get("reason") or "no_persisted_profile"),
                     state="NOT_CONFIGURED",
                 )
                 return None
