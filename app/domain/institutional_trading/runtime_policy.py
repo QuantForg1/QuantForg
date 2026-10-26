@@ -136,8 +136,11 @@ def active_max_open_positions() -> int:
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("unavailable"):
         return OWNER_MAX_OPEN_POSITIONS
+    raw = doc.get("max_concurrent_positions")
+    if raw is None:
+        return OWNER_MAX_OPEN_POSITIONS
     try:
-        value = int(doc.get("max_concurrent_positions"))
+        value = int(raw)
     except (TypeError, ValueError):
         return OWNER_MAX_OPEN_POSITIONS
     if value < 1 or value > OWNER_MAX_OPEN_POSITIONS:

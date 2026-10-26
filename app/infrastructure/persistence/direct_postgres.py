@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 from core.logging import get_logger
 
@@ -180,7 +180,7 @@ def execute_transaction(
             return statuses
 
     try:
-        return _run(_go(), timeout=timeout)
+        return cast("list[str]", _run(_go(), timeout=timeout))
     except TransactionNoRow:
         raise
     except Exception:
