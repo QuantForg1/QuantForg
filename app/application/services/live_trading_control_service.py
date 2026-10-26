@@ -210,7 +210,10 @@ def _fill_from_adapter_account(out: dict[str, Any]) -> None:
 
     filled = False
     login_i = _pick_int_login(_field("login", "account_login"))
-    if login_i > 1 and not out.get("account_login"):
+    # Live account_info is the terminal. A stale session cache must not keep
+    # a different login once this read succeeds.
+    existing_login = _pick_int_login(out.get("account_login"))
+    if login_i > 1 and existing_login != login_i:
         out["account_login"] = login_i
         out["account_login_masked"] = mask_broker_login(login_i)
         out["account_available"] = True
@@ -351,6 +354,22 @@ def _empty_probe_facts() -> dict[str, Any]:
     }
 
 
+def _collector_health_payload() -> dict[str, Any]:
+    """Gateway /health cached on the ITE probe collector.
+
+    ``build_status_facts`` keeps that payload off the public live dict so the
+    login is not returned to browsers. The ownership probe still needs it.
+    """
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        payload = getattr(getattr(runtime, "probes", None), "last_health_payload", None)
+    except Exception:
+        return {}
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
 def _probe_live_facts_once(*, enrich_account: bool = False) -> dict[str, Any]:
     out = _empty_probe_facts()
     try:
@@ -378,6 +397,8 @@ def _probe_live_facts_once(*, enrich_account: bool = False) -> dict[str, Any]:
             if isinstance(live.get("health_payload"), dict)
             else {}
         )
+        if not health:
+            health = _collector_health_payload()
         mt5 = health.get("mt5") if isinstance(health.get("mt5"), dict) else {}
         account = _account_blob(health, mt5)
         session_mode = str(mt5.get("session_mode") or health.get("session_mode") or "")
@@ -433,17 +454,21 @@ def _probe_live_facts_once(*, enrich_account: bool = False) -> dict[str, Any]:
             _fill_from_adapter_account(out)
         login_i = int(out.get("account_login") or 0)
         bound_user, bound_login = bound_execution_account()
+        ownership_reason = ""
         if login_i > 1 and (bound_login <= 1 or bound_login != login_i):
             from app.application.services.broker_ownership_restore import (
                 rehydrate_designated_owner_binding,
             )
 
-            rehydrate_designated_owner_binding(login_i)
+            restored = rehydrate_designated_owner_binding(login_i)
+            ownership_reason = str(restored.get("reason") or "")
             bound_user, bound_login = bound_execution_account()
         if bound_login > 1 and login_i > 1 and bound_login == login_i:
             out["ownership"] = "OWNED"
+            out["ownership_reason"] = "matched"
         else:
             out["ownership"] = "NOT_OWNED"
+            out["ownership_reason"] = ownership_reason or "unbound"
         _ = bound_user
         if isinstance(health, dict) and health and not out.get("probe_source"):
             out["probe_source"] = "gateway_health"
@@ -1387,7 +1412,11 @@ def resume_live_trading_after_safe_recovery() -> LiveTradingState:
         _RECOVERY_GUARD.active = False
     failures = autonomous_resume_blockers(facts)
     if failures:
-        logger.info("live_trading_safe_recovery_blocked", failures=failures)
+        logger.info(
+            "live_trading_safe_recovery_blocked",
+            failures=failures,
+            ownership_reason=str(facts.get("ownership_reason") or ""),
+        )
         key = tuple(sorted(failures))
         if _LAST_RESUME_BLOCKERS.get("last") != key:
             _LAST_RESUME_BLOCKERS["last"] = key
