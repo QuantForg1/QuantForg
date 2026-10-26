@@ -20,6 +20,8 @@ from app.application.services.owner_identity_policy import (
     reconcile_privileged_roles,
 )
 from app.application.services.runtime_policy_store import (
+    bootstrap_owner_control_plane,
+    enforce_designated_owner_rows,
     install_cycle_policy,
     last_applied_version,
     load_runtime_policy,
@@ -295,6 +297,61 @@ def test_rehydrate_binds_only_the_designated_owner_claim(monkeypatch):
 
 
 @pytest.mark.unit
+@pytest.mark.unit
+def test_enforce_demotes_non_designated_privileged_rows(monkeypatch):
+    target = uuid4()
+    actor = uuid4()
+    executed: list[tuple] = []
+
+    def _fetch(query, *args):
+        compact = " ".join(query.split())
+        assert args == (DESIGNATED_OWNER_EMAIL,)
+        if compact.startswith("UPDATE"):
+            assert "deactivated" in compact
+            assert "owner" in compact and "admin" in compact
+            return [{"id": str(target)}]
+        return [{"id": str(actor)}]
+
+    def _execute(_query, *args):
+        executed.append(args)
+        return "INSERT 0 1"
+
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.direct_postgres.direct_postgres_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.direct_postgres.fetch",
+        _fetch,
+    )
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.direct_postgres.execute",
+        _execute,
+    )
+    assert enforce_designated_owner_rows() == 1
+    assert executed
+    message = str(executed[0][3])
+    assert message == "privileged role demoted_not_designated"
+    assert "@" not in message
+
+
+@pytest.mark.unit
+def test_bootstrap_reports_schema_failure_without_enabling_trade(monkeypatch):
+    def _boom() -> None:
+        raise RuntimeError("schema")
+
+    monkeypatch.setattr(
+        "app.application.services.runtime_policy_store.ensure_owner_schema",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "app.application.services.runtime_policy_store.enforce_designated_owner_rows",
+        lambda: 0,
+    )
+    result = bootstrap_owner_control_plane()
+    assert result == {"schema_ok": False, "demoted": 0}
+
+
 def test_unbound_gateway_is_not_treated_as_owned(monkeypatch):
     monkeypatch.setattr(
         "app.infrastructure.persistence.direct_postgres.direct_postgres_available",

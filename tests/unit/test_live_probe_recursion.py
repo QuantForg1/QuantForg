@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -78,6 +79,7 @@ class Gateway:
         svc._LAST_GOOD_PROBE.clear()
         self.up = True
         self.login = PRO_LOGIN
+        self.omit_live_health = False
         self.status_builds = 0
         self.alerts: list[str] = []
         monkeypatch.setenv("OWNER_APPROVED_MT5_LOGINS", str(PRO_LOGIN))
@@ -99,21 +101,22 @@ class Gateway:
 
     def _build_status_facts(self, plane, *, settings=None):
         self.status_builds += 1
-        live = {
-            "health_payload": {
-                "mt5": {
-                    "session_mode": "attached" if self.up else "",
-                    "connected": self.up,
+        payload = {
+            "mt5": {
+                "session_mode": "attached" if self.up else "",
+                "connected": self.up,
+                "login": self.login if self.up else None,
+                "server": "Weltrade-Real",
+                "account": {
                     "login": self.login if self.up else None,
-                    "server": "Weltrade-Real",
-                    "account": {
-                        "login": self.login if self.up else None,
-                        "equity": "27.88" if self.up else None,
-                        "balance": "27.88" if self.up else None,
-                    },
-                }
+                    "equity": "27.88" if self.up else None,
+                    "balance": "27.88" if self.up else None,
+                },
             }
         }
+        live: dict = {}
+        if not self.omit_live_health:
+            live["health_payload"] = payload
         return _facts(up=self.up), live
 
 
@@ -232,3 +235,75 @@ def test_probe_reentry_on_same_thread_is_short_circuited(gw: Gateway) -> None:
         ats.build_status_facts = gw._build_status_facts
     assert facts.get("probe_error") is None
     assert len(seen) == 1 and seen[0].get("probe_reentrant") is True
+
+
+def _paused_after_enabled_restart():
+    ctrl = _enabled()
+    payload = ctrl.persist_payload()
+    ctrl2 = reset_live_trading_controller_for_tests()
+    ctrl2.hydrate(payload)
+    return ctrl2
+
+
+def test_probe_uses_collector_health_when_status_omits_it(gw: Gateway, monkeypatch):
+    """Production status live dict does not carry the gateway health body."""
+    _paused_after_enabled_restart()
+    gw.omit_live_health = True
+    probes = SimpleNamespace(
+        last_health_payload={
+            "mt5": {
+                "session_mode": "attached",
+                "connected": True,
+                "login": PRO_LOGIN,
+                "server": "Weltrade-Real",
+                "account": {
+                    "login": PRO_LOGIN,
+                    "equity": "27.88",
+                    "balance": "27.88",
+                },
+            }
+        },
+        mt5_adapter=None,
+    )
+    runtime = SimpleNamespace(probes=probes)
+
+    monkeypatch.setattr(
+        "app.application.services.institutional_ite_runtime.get_ite_runtime",
+        lambda: runtime,
+    )
+    ats.reset_auto_trading_status_cache()
+    assert svc.resume_live_trading_after_safe_recovery() == "ENABLED"
+
+
+def test_account_info_replaces_stale_session_login(gw: Gateway, monkeypatch):
+    _paused_after_enabled_restart()
+    gw.omit_live_health = True
+
+    def _account_info():
+        return SimpleNamespace(
+            login=PRO_LOGIN,
+            equity=Decimal("27.88"),
+            balance=Decimal("27.88"),
+            server="Weltrade-Real",
+        )
+
+    probes = SimpleNamespace(
+        last_health_payload=None,
+        mt5_adapter=SimpleNamespace(account_info=_account_info),
+    )
+    runtime = SimpleNamespace(probes=probes)
+
+    monkeypatch.setattr(
+        "app.application.services.institutional_ite_runtime.get_ite_runtime",
+        lambda: runtime,
+    )
+    monkeypatch.setattr(
+        "app.application.services.mt5_session_guard._live_account_login",
+        lambda _adapter: OTHER_LOGIN,
+    )
+    ats.reset_auto_trading_status_cache()
+    assert svc.resume_live_trading_after_safe_recovery() == "ENABLED"
+    ats.reset_auto_trading_status_cache()
+    facts = svc._live_probe_facts(enrich_account=True)
+    assert facts["account_login"] == PRO_LOGIN
+    assert facts["ownership"] == "OWNED"

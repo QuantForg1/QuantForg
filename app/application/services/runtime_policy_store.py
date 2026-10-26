@@ -15,14 +15,17 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from app.domain.identity.designated_owner import DESIGNATED_OWNER_EMAIL
 from app.domain.institutional_trading.runtime_policy import (
     PolicyDecision,
     approved_baseline,
     use_runtime_policy,
     validate_policy_changes,
 )
+from core.logging import get_logger
 
 logger_name = "runtime_policy_store"
+logger = get_logger(logger_name)
 _LOCK = threading.Lock()
 _MEMORY: dict[str, Any] | None = None
 _MEMORY_VERSION = 0
@@ -155,6 +158,93 @@ def ensure_owner_schema() -> None:
     _SCHEMA_READY = True
 
 
+def enforce_designated_owner_rows() -> int:
+    """Demote every owner/admin row that is not the designated email.
+
+    Direct Postgres has no user JWT, so the self-service trigger allows this.
+    Deactivated accounts are left unchanged. Returns the number demoted.
+    """
+    available, execute, fetch = _postgres()
+    if not available():
+        return 0
+    demoted = fetch(
+        """
+        UPDATE users
+        SET role = 'trader'
+        WHERE role IN ('owner', 'admin')
+          AND lower(email) <> lower($1)
+          AND status IS DISTINCT FROM 'deactivated'
+        RETURNING id::text AS id
+        """,
+        DESIGNATED_OWNER_EMAIL,
+    )
+    if not demoted:
+        return 0
+    actor_rows = fetch(
+        """
+        SELECT id::text AS id
+        FROM users
+        WHERE lower(email) = lower($1)
+        LIMIT 1
+        """,
+        DESIGNATED_OWNER_EMAIL,
+    )
+    actor = str(actor_rows[0].get("id") or "") if actor_rows else ""
+    for row in demoted:
+        target = str(row.get("id") or "")
+        if not target:
+            continue
+        try:
+            execute(
+                """
+                INSERT INTO audit_logs (
+                    id, action, outcome, resource_type, resource_id,
+                    actor_user_id, occurred_at, ip_address, user_agent,
+                    message, metadata, created_at, updated_at
+                ) VALUES (
+                    $1, 'update', 'success', 'user_role', $2::uuid,
+                    $3::uuid, NOW(), '', '',
+                    $4, $5::jsonb, NOW(), NOW()
+                )
+                """,
+                uuid4(),
+                target,
+                actor or target,
+                "privileged role demoted_not_designated",
+                json.dumps(
+                    {
+                        "role_action": "demoted_not_designated",
+                        "role": "trader",
+                    }
+                ),
+            )
+        except Exception:
+            logger.warning("owner_role_audit_failed", error_type="insert_failed")
+    return len(demoted)
+
+
+def bootstrap_owner_control_plane() -> dict[str, int | bool]:
+    """Create the owner schema and demote non-designated privileged rows.
+
+    Does not enable trading and does not promote anyone. Promotion still
+    requires a verified authentication identity.
+    """
+    schema_ok = True
+    try:
+        ensure_owner_schema()
+    except Exception as exc:
+        schema_ok = False
+        logger.warning("owner_schema_ensure_failed", error_type=type(exc).__name__)
+    demoted = 0
+    try:
+        demoted = enforce_designated_owner_rows()
+    except Exception as exc:
+        logger.warning("owner_role_reconcile_failed", error_type=type(exc).__name__)
+    if demoted:
+        logger.info("owner_privileged_roles_reconciled", demoted=demoted)
+    return {"schema_ok": schema_ok, "demoted": demoted}
+
+
 def _command_count(status: str) -> int:
     parts = str(status or "").split()
     if not parts:
@@ -189,7 +279,8 @@ def load_runtime_policy() -> StoredPolicy:
             rows = fetch(
                 "SELECT version, document FROM trading_runtime_config WHERE id = 1"
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("runtime_policy_load_failed", error_type=type(exc).__name__)
             return StoredPolicy(
                 False, 0, None, "unavailable", error="config_read_failed"
             )
@@ -274,11 +365,7 @@ def _audit(actor_id: UUID | None, outcome: str, message: str, version: int) -> N
             json.dumps({"version": version, "target": "trading_runtime_policy"}),
         )
     except Exception:
-        from core.logging import get_logger
-
-        get_logger(logger_name).warning(
-            "runtime_policy_audit_failed", error_type="insert_failed"
-        )
+        logger.warning("runtime_policy_audit_failed", error_type="insert_failed")
 
 
 def save_runtime_policy(

@@ -524,6 +524,17 @@ class Container:
                                 uow_factory=uow,
                             )
                             self.weltrade_integration = existing
+                        try:
+                            from app.application.services.runtime_policy_store import (
+                                bootstrap_owner_control_plane,
+                            )
+
+                            bootstrap_owner_control_plane()
+                        except Exception as schema_exc:
+                            logger.warning(
+                                "owner_control_bootstrap_failed",
+                                error_type=type(schema_exc).__name__,
+                            )
                         result = await existing.auto_restore_on_startup()
                         logger.info(
                             "broker_startup_restore_finished",
