@@ -31,6 +31,7 @@ _MEMORY: dict[str, Any] | None = None
 _MEMORY_VERSION = 0
 _SCHEMA_READY = False
 _LAST_APPLIED: dict[str, Any] = {}
+_LOGGED_VERSION: dict[str, int | None] = {"version": None}
 _AUDIT: list[dict[str, Any]] = []
 
 _CREATE_TABLE = """
@@ -109,6 +110,7 @@ def reset_runtime_policy_store_for_tests() -> None:
         _MEMORY_VERSION = 0
         _SCHEMA_READY = False
         _LAST_APPLIED.clear()
+        _LOGGED_VERSION["version"] = None
         _AUDIT.clear()
     use_runtime_policy(None)
 
@@ -320,6 +322,14 @@ def install_cycle_policy() -> StoredPolicy:
     use_runtime_policy(dict(loaded.document))
     if loaded.version > 0:
         _note_applied(loaded.version)
+    if _LOGGED_VERSION.get("version") != loaded.version:
+        logger.info(
+            "runtime_policy_applied",
+            version=loaded.version,
+            source=loaded.source,
+            status="applied" if loaded.version > 0 else "approved_baseline",
+        )
+        _LOGGED_VERSION["version"] = loaded.version
     return StoredPolicy(
         True,
         loaded.version,
@@ -330,7 +340,14 @@ def install_cycle_policy() -> StoredPolicy:
     )
 
 
-def _audit(actor_id: UUID | None, outcome: str, message: str, version: int) -> None:
+def _audit(
+    actor_id: UUID | None,
+    outcome: str,
+    message: str,
+    version: int,
+    *,
+    persist: bool = True,
+) -> None:
     event = {
         "actor_user_id": str(actor_id) if actor_id else None,
         "action": "update",
@@ -342,7 +359,7 @@ def _audit(actor_id: UUID | None, outcome: str, message: str, version: int) -> N
     }
     _AUDIT.append(event)
     available, execute, _fetch = _postgres()
-    if not available() or actor_id is None:
+    if not persist or not available() or actor_id is None:
         return
     try:
         execute(
@@ -402,56 +419,83 @@ def save_runtime_policy(
             status="rejected",
         )
     new_version = expected_version + 1
-    available, execute, _fetch = _postgres()
+    available, _execute, _fetch = _postgres()
     if available():
         payload = json.dumps(decision.document)
         try:
             ensure_owner_schema()
             if expected_version == 0:
-                status = execute(
-                    """
+                write_sql = """
                     INSERT INTO trading_runtime_config
                         (id, version, document, updated_at, updated_by)
                     VALUES (1, $1, $2::jsonb, NOW(), $3)
                     ON CONFLICT (id) DO NOTHING
-                    """,
-                    new_version,
-                    payload,
-                    actor_id,
-                )
-                if _command_count(status) <= 0:
-                    _audit(actor_id, "denied", "stale policy version", new_version)
-                    return StoredPolicy(
-                        False,
-                        loaded.version,
-                        loaded.document,
-                        "conflict",
-                        error="stale_version",
-                        status="rejected",
-                    )
-            else:
-                status = execute(
                     """
+                write_args: tuple[Any, ...] = (new_version, payload, actor_id)
+            else:
+                write_sql = """
                     UPDATE trading_runtime_config
                     SET version = $1, document = $2::jsonb,
                         updated_at = NOW(), updated_by = $3
                     WHERE id = 1 AND version = $4
-                    """,
-                    new_version,
-                    payload,
-                    actor_id,
-                    expected_version,
+                    """
+                write_args = (new_version, payload, actor_id, expected_version)
+            from app.infrastructure.persistence.direct_postgres import (
+                TransactionNoRow,
+                execute_transaction,
+            )
+
+            audit_sql = """
+                INSERT INTO audit_logs (
+                    id, action, outcome, resource_type, resource_id,
+                    actor_user_id, occurred_at, ip_address, user_agent,
+                    message, metadata, created_at, updated_at
+                ) VALUES (
+                    $1, 'update', 'success', 'trading_policy', $2,
+                    $3, NOW(), '', '',
+                    $4, $5::jsonb, NOW(), NOW()
                 )
-                if _command_count(status) <= 0:
-                    _audit(actor_id, "denied", "stale policy version", expected_version)
-                    return StoredPolicy(
-                        False,
-                        loaded.version,
-                        loaded.document,
-                        "conflict",
-                        error="stale_version",
-                        status="rejected",
-                    )
+                """
+            audit_args = (
+                uuid4(),
+                actor_id,
+                actor_id,
+                "runtime policy saved",
+                json.dumps(
+                    {
+                        "version": new_version,
+                        "target": "trading_runtime_policy",
+                    }
+                ),
+            )
+            try:
+                statuses = execute_transaction(
+                    [
+                        (write_sql, write_args),
+                        (audit_sql, audit_args),
+                    ]
+                )
+            except TransactionNoRow:
+                _audit(actor_id, "denied", "stale policy version", expected_version)
+                return StoredPolicy(
+                    False,
+                    loaded.version,
+                    loaded.document,
+                    "conflict",
+                    error="stale_version",
+                    status="rejected",
+                )
+            status = statuses[0] if statuses else ""
+            if _command_count(status) <= 0:
+                _audit(actor_id, "denied", "stale policy version", expected_version)
+                return StoredPolicy(
+                    False,
+                    loaded.version,
+                    loaded.document,
+                    "conflict",
+                    error="stale_version",
+                    status="rejected",
+                )
         except Exception:
             _audit(actor_id, "failure", "policy write failed", expected_version)
             return StoredPolicy(
@@ -475,7 +519,13 @@ def save_runtime_policy(
         return StoredPolicy(
             False, 0, None, "rejected", error="config_store_unavailable"
         )
-    _audit(actor_id, "success", "runtime policy saved", new_version)
+    _audit(
+        actor_id,
+        "success",
+        "runtime policy saved",
+        new_version,
+        persist=not available(),
+    )
     use_runtime_policy(None)
     return StoredPolicy(
         True,

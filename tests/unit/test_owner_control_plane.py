@@ -25,6 +25,7 @@ from app.application.services.runtime_policy_store import (
     install_cycle_policy,
     last_applied_version,
     load_runtime_policy,
+    memory_audit_events,
     reset_runtime_policy_store_for_tests,
     save_runtime_policy,
 )
@@ -432,6 +433,57 @@ def test_m1_policy_cannot_bypass_a_disabled_deployment_flag(monkeypatch):
 
 
 @pytest.mark.unit
+def test_saved_min_lot_blocks_a_smaller_volume():
+    token = use_runtime_policy({**approved_baseline(), "min_lot": "0.01"})
+    try:
+        blocked = _quiet_entry(volume=Decimal("0.001"))
+    finally:
+        reset_runtime_policy(token)
+    assert any(item.startswith("OWNER_MIN_LOT") for item in blocked)
+
+
+@pytest.mark.unit
+def test_aggregate_cap_stays_inside_the_per_trade_cap():
+    from app.domain.institutional_trading.owner_live_limits import (
+        max_aggregate_risk_usd,
+        max_planned_risk_usd,
+    )
+
+    token = use_runtime_policy(
+        {**approved_baseline(), "max_aggregate_open_risk_pct": "4"}
+    )
+    try:
+        equity = Decimal("100")
+        assert max_aggregate_risk_usd(equity) == Decimal("4.00")
+        assert max_aggregate_risk_usd(equity) <= max_planned_risk_usd(equity)
+    finally:
+        reset_runtime_policy(token)
+
+
+@pytest.mark.unit
+def test_disabling_the_full_utc_day_blocks_entry():
+    token = use_runtime_policy({**approved_baseline(), "evaluate_full_utc_day": False})
+    try:
+        blocked = _quiet_entry()
+    finally:
+        reset_runtime_policy(token)
+    assert any(item.startswith("OWNER_SESSION_POLICY") for item in blocked)
+
+
+@pytest.mark.unit
+def test_saved_position_cap_cannot_rise_above_one():
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    token = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 5})
+    try:
+        assert active_max_open_positions() == 1
+    finally:
+        reset_runtime_policy(token)
+
+
+@pytest.mark.unit
 def test_unavailable_policy_turns_m1_off(monkeypatch):
     monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
     monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
@@ -441,3 +493,117 @@ def test_unavailable_policy_turns_m1_off(monkeypatch):
         assert m1_live_submit_enabled() is False
     finally:
         reset_runtime_policy(token)
+
+
+@pytest.mark.unit
+def test_weekly_halt_stays_off_until_the_owner_sets_it():
+    token = use_runtime_policy(approved_baseline())
+    try:
+        clear = _quiet_entry(weekly_pnl=None)
+    finally:
+        reset_runtime_policy(token)
+    assert not any(item.startswith("WEEKLY_PNL_UNAVAILABLE") for item in clear)
+    assert not any(item.startswith("OWNER_WEEKLY_LOSS") for item in clear)
+
+
+def _stub_policy_store(monkeypatch, transaction):
+    calls = {"execute": 0, "statements": []}
+
+    def available() -> bool:
+        return True
+
+    def execute(*_args, **_kwargs):
+        calls["execute"] += 1
+        return "OK"
+
+    def fetch(*_args, **_kwargs):
+        return []
+
+    def execute_transaction(statements):
+        calls["statements"].append(statements)
+        return transaction(statements)
+
+    monkeypatch.setattr(
+        "app.application.services.runtime_policy_store._postgres",
+        lambda: (available, execute, fetch),
+    )
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.direct_postgres.execute_transaction",
+        execute_transaction,
+    )
+    return calls
+
+
+@pytest.mark.unit
+def test_policy_write_and_success_audit_share_one_transaction(monkeypatch):
+    def transaction(statements):
+        assert len(statements) == 2
+        assert "trading_runtime_config" in statements[0][0]
+        assert "audit_logs" in statements[1][0]
+        return ["INSERT 0 1", "INSERT 0 1"]
+
+    calls = _stub_policy_store(monkeypatch, transaction)
+    saved = save_runtime_policy(
+        actor_id=uuid4(),
+        expected_version=0,
+        changes={"max_planned_risk_pct": "5", "weekly_loss_pct": "0"},
+    )
+    assert saved.ok is True
+    assert saved.version == 1
+    assert saved.source == "persisted"
+    assert saved.status == "saved"
+    assert len(calls["statements"]) == 1
+    # Four execute() calls are the schema setup. The success audit is the
+    # second statement inside the one transaction.
+    assert calls["execute"] == 4
+    outcomes = [event["outcome"] for event in memory_audit_events()]
+    assert outcomes == ["success"]
+
+
+@pytest.mark.unit
+def test_zero_row_policy_write_rolls_back_as_a_conflict(monkeypatch):
+    from app.infrastructure.persistence.direct_postgres import TransactionNoRow
+
+    def transaction(_statements):
+        raise TransactionNoRow("INSERT 0 0")
+
+    _stub_policy_store(monkeypatch, transaction)
+    saved = save_runtime_policy(
+        actor_id=uuid4(),
+        expected_version=0,
+        changes={"max_planned_risk_pct": "5"},
+    )
+    assert saved.ok is False
+    assert saved.error == "stale_version"
+    assert saved.source == "conflict"
+    outcomes = [event["outcome"] for event in memory_audit_events()]
+    assert outcomes == ["denied"]
+    assert "success" not in outcomes
+
+
+@pytest.mark.unit
+def test_policy_transaction_failure_does_not_report_a_save(monkeypatch):
+    def transaction(_statements):
+        raise RuntimeError("db down")
+
+    _stub_policy_store(monkeypatch, transaction)
+    saved = save_runtime_policy(
+        actor_id=uuid4(),
+        expected_version=0,
+        changes={"max_planned_risk_pct": "5"},
+    )
+    assert saved.ok is False
+    assert saved.error == "config_write_failed"
+    outcomes = [event["outcome"] for event in memory_audit_events()]
+    assert outcomes == ["failure"]
+
+
+@pytest.mark.unit
+def test_postgres_status_rowcount_uses_the_last_token():
+    from app.infrastructure.persistence.direct_postgres import _status_rowcount
+
+    assert _status_rowcount("INSERT 0 1") == 1
+    assert _status_rowcount("INSERT 0 0") == 0
+    assert _status_rowcount("UPDATE 1") == 1
+    assert _status_rowcount("UPDATE 0") == 0
+    assert _status_rowcount("") == 0

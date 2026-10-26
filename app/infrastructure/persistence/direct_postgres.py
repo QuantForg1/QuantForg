@@ -143,6 +143,51 @@ def execute(query: str, *args: Any, timeout: float = 8.0) -> str:
         raise
 
 
+class TransactionNoRow(RuntimeError):
+    """A statement matched no row, so the transaction was rolled back."""
+
+
+def _status_rowcount(status: str) -> int:
+    parts = str(status or "").split()
+    if not parts:
+        return 0
+    try:
+        return int(parts[-1])
+    except ValueError:
+        return 0
+
+
+def execute_transaction(
+    statements: Sequence[tuple[str, Sequence[Any]]], *, timeout: float = 8.0
+) -> list[str]:
+    """Run statements in one transaction. A failure rolls all of them back.
+
+    A statement that changes no row raises ``TransactionNoRow`` and rolls
+    back the statements that already ran in the same transaction.
+    """
+    if not direct_postgres_available() or not statements:
+        return []
+
+    async def _go() -> list[str]:
+        pool = await _ensure_pool()
+        async with pool.acquire() as conn, conn.transaction():
+            statuses: list[str] = []
+            for query, args in statements:
+                status = str(await conn.execute(query, *tuple(args)))
+                if _status_rowcount(status) <= 0:
+                    raise TransactionNoRow(status)
+                statuses.append(status)
+            return statuses
+
+    try:
+        return _run(_go(), timeout=timeout)
+    except TransactionNoRow:
+        raise
+    except Exception:
+        logger.warning("direct_postgres_transaction_failed")
+        raise
+
+
 def executemany(
     query: str, args_seq: Sequence[Sequence[Any]], *, timeout: float = 12.0
 ) -> int:

@@ -1307,13 +1307,17 @@ class RiskEngine:
             entry_book_exposure,
         )
         from app.domain.institutional_trading.owner_live_limits import (
+            max_aggregate_risk_usd,
             max_planned_risk_usd,
             owner_risk_cap_usd,
         )
 
-        # One shared 9% budget for the open book plus the new entry. A looser
-        # configured dollar cap cannot raise that budget. cap <= 0 fails closed.
-        live_cap = max_planned_risk_usd(account.equity)
+        # One shared budget for the open book plus the new entry. The saved
+        # aggregate cap can be stricter than 9%. It cannot be looser.
+        live_cap = min(
+            max_planned_risk_usd(account.equity),
+            max_aggregate_risk_usd(account.equity),
+        )
         configured_cap = owner_risk_cap_usd(
             equity=account.equity,
             configured=self.config.max_total_planned_risk_usd,
