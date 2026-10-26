@@ -28,7 +28,11 @@ from app.application.services.mt5_session_guard import (
     require_live_mt5_connection,
 )
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
-from app.domain.entities.execution_gateway import ExecutionAttempt, ExecutionResult
+from app.domain.entities.execution_gateway import (
+    ExecutionAttempt,
+    ExecutionResult,
+    protective_retry_allowed,
+)
 from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.enums.execution import ExecutionAuditStage, ExecutionOutcome
 from app.domain.exceptions.auth import AuthorizationError
@@ -49,6 +53,87 @@ def _submit_lock(user_id: UUID, request_id: str) -> Lock:
             lock = Lock()
             _SUBMIT_LOCKS[key] = lock
         return lock
+
+
+def _attempt_may_retry(
+    command: ExecutionSubmitCommand, attempt: ExecutionAttempt
+) -> bool:
+    """Protective close/stop only. Entries, fills, and ambiguous sends stay put."""
+    return protective_retry_allowed(
+        oms_kind=command.oms_kind,
+        position=command.position,
+        outcome=attempt.outcome,
+        order_ticket=attempt.order_ticket,
+        deal_ticket=attempt.deal_ticket,
+        message=attempt.message,
+    )
+
+
+async def _replay_stored_attempt(
+    *,
+    existing: ExecutionAttempt,
+    command: ExecutionSubmitCommand,
+    request_id: str,
+    execution_audit: ExecutionAuditService | None,
+) -> ExecutionSubmitDTO:
+    """Return the stored attempt. Does not call the broker again."""
+    replay = ExecutionAttempt.record(
+        user_id=existing.user_id,
+        request_id=existing.request_id,
+        symbol=existing.symbol,
+        side=existing.side,
+        order_type=existing.order_type,
+        volume=existing.volume,
+        result=ExecutionResult(
+            outcome=existing.outcome,
+            retcode=existing.retcode,
+            message=existing.message,
+            order_ticket=existing.order_ticket,
+            deal_ticket=existing.deal_ticket,
+            volume=existing.volume,
+            price=existing.price,
+            symbol=existing.symbol,
+            request_id=existing.request_id,
+            retryable=existing.retryable,
+        ),
+        request_snapshot=dict(existing.request_snapshot),
+        idempotent_replay=True,
+        entity_id=existing.id,
+    )
+    if execution_audit is not None:
+        try:
+            await execution_audit.record(
+                user_id=command.user_id,
+                request_id=request_id,
+                stage=ExecutionAuditStage.REPLAY,
+                symbol=existing.symbol,
+                side=existing.side,
+                volume=str(existing.volume),
+                outcome=existing.outcome.value,
+                retcode=existing.retcode,
+                order_ticket=existing.order_ticket,
+                deal_ticket=existing.deal_ticket,
+                payload_out=existing.result_snapshot,
+                related_ids={"attempt_id": str(existing.id)},
+            )
+        except Exception as exc:
+            logger.warning(
+                "execution_audit_failed",
+                stage="replay",
+                error=str(exc),
+            )
+    if existing.outcome is ExecutionOutcome.DISABLED:
+        raise AuthorizationError(
+            existing.message,
+            code="execution_disabled",
+            details={
+                "request_id": request_id,
+                "outcome": existing.outcome.value,
+                "retcode": existing.retcode,
+                "idempotent_replay": True,
+            },
+        )
+    return ExecutionSubmitDTO.from_entity(replay)
 
 
 def _release_submit_lock(user_id: UUID, request_id: str, lock: Lock) -> None:
@@ -103,6 +188,7 @@ class SubmitExecutionUseCase:
         async with self.execution_uow_factory() as uow:
             existing = await uow.attempts.get_by_request_id(command.user_id, request_id)
 
+        protective_retry = False
         if existing is not None:
             if existing.outcome is ExecutionOutcome.PREPARED:
                 raise ValidationError(
@@ -113,63 +199,14 @@ class SubmitExecutionUseCase:
                         "outcome": existing.outcome.value,
                     },
                 )
-            replay = ExecutionAttempt.record(
-                user_id=existing.user_id,
-                request_id=existing.request_id,
-                symbol=existing.symbol,
-                side=existing.side,
-                order_type=existing.order_type,
-                volume=existing.volume,
-                result=ExecutionResult(
-                    outcome=existing.outcome,
-                    retcode=existing.retcode,
-                    message=existing.message,
-                    order_ticket=existing.order_ticket,
-                    deal_ticket=existing.deal_ticket,
-                    volume=existing.volume,
-                    price=existing.price,
-                    symbol=existing.symbol,
-                    request_id=existing.request_id,
-                    retryable=existing.retryable,
-                ),
-                request_snapshot=dict(existing.request_snapshot),
-                idempotent_replay=True,
-                entity_id=existing.id,
-            )
-            if self.execution_audit is not None:
-                try:
-                    await self.execution_audit.record(
-                        user_id=command.user_id,
-                        request_id=request_id,
-                        stage=ExecutionAuditStage.REPLAY,
-                        symbol=existing.symbol,
-                        side=existing.side,
-                        volume=str(existing.volume),
-                        outcome=existing.outcome.value,
-                        retcode=existing.retcode,
-                        order_ticket=existing.order_ticket,
-                        deal_ticket=existing.deal_ticket,
-                        payload_out=existing.result_snapshot,
-                        related_ids={"attempt_id": str(existing.id)},
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "execution_audit_failed",
-                        stage="replay",
-                        error=str(exc),
-                    )
-            if existing.outcome is ExecutionOutcome.DISABLED:
-                raise AuthorizationError(
-                    existing.message,
-                    code="execution_disabled",
-                    details={
-                        "request_id": request_id,
-                        "outcome": existing.outcome.value,
-                        "retcode": existing.retcode,
-                        "idempotent_replay": True,
-                    },
+            protective_retry = _attempt_may_retry(command, existing)
+            if not protective_retry:
+                return await _replay_stored_attempt(
+                    existing=existing,
+                    command=command,
+                    request_id=request_id,
+                    execution_audit=self.execution_audit,
                 )
-            return ExecutionSubmitDTO.from_entity(replay)
 
         connected, login = await live_connection_meta(
             self.mt5_uow_factory,
@@ -181,8 +218,16 @@ class SubmitExecutionUseCase:
                 command.user_id, request_id
             )
             recent = await uow.decisions.list_recent_for_user(command.user_id)
+        if protective_retry:
+            # The prior decision rejected or retried this same request.
+            # Replaying it would skip the broker. Duplicate-window matches of
+            # this request_id are the failed attempt, not a second entry.
+            existing_decision = None
+            recent = [row for row in recent if row.request_id != request_id]
 
-        reservation_id = uuid4()
+        reservation_id = (
+            existing.id if protective_retry and existing is not None else uuid4()
+        )
         lock = _submit_lock(command.user_id, request_id)
         if not lock.acquire(blocking=False):
             raise ValidationError(
@@ -200,14 +245,23 @@ class SubmitExecutionUseCase:
                     command.user_id, request_id
                 )
                 if raced is not None:
-                    raise ValidationError(
-                        "Execution request already recorded",
-                        details={
-                            "code": "execution_duplicate",
-                            "request_id": request_id,
-                            "outcome": raced.outcome.value,
-                        },
-                    )
+                    if raced.outcome is ExecutionOutcome.PREPARED:
+                        raise ValidationError(
+                            "Execution request already in flight",
+                            details={
+                                "code": "execution_in_flight",
+                                "request_id": request_id,
+                                "outcome": raced.outcome.value,
+                            },
+                        )
+                    if not _attempt_may_retry(command, raced):
+                        return await _replay_stored_attempt(
+                            existing=raced,
+                            command=command,
+                            request_id=request_id,
+                            execution_audit=self.execution_audit,
+                        )
+                    reservation_id = raced.id
                 reservation = ExecutionAttempt(
                     id=reservation_id,
                     user_id=command.user_id,
