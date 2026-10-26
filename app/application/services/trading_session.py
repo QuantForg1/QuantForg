@@ -14,6 +14,7 @@ from uuid import UUID
 
 from app.application.services.account_execution_gate import (
     ACCOUNT_SESSION_MISMATCH,
+    SESSION_MATCHED,
     bind_execution_account,
     bound_execution_account,
     classify_account_session,
@@ -314,9 +315,16 @@ class GetTradingSessionUseCase:
             robot_status=ctx.robot_status,
             session_code=session_code,
         )
+        verified_owned = bool(owned and session_code == SESSION_MATCHED)
+        if verified_owned:
+            ownership_block_reason = None
+        elif session_code == ACCOUNT_SESSION_MISMATCH:
+            ownership_block_reason = "account_session_mismatch"
+        else:
+            ownership_block_reason = "ownership_unverified"
         lt_fields = _live_trading_session_fields()
         return {
-            "broker": "Connected" if ctx.connected else "Disconnected",
+            "broker": "Connected" if verified_owned else "Disconnected",
             "account": ctx.broker_account_id or "—",
             "server": ctx.broker_server or "—",
             "connection": (
@@ -365,12 +373,8 @@ class GetTradingSessionUseCase:
             "robot_blocked_reason": robot_blocked_reason,
             "concurrent_live_sessions_supported": False,
             "authenticated": True,
-            "owned": bool(owned and session_code != ACCOUNT_SESSION_MISMATCH),
-            "ownership": (
-                "owned"
-                if owned and session_code != ACCOUNT_SESSION_MISMATCH
-                else "none"
-            ),
+            "owned": verified_owned,
+            "ownership": "owned" if verified_owned else "none",
             "account_mode": account_mode or None,
             "trade_allowed": trade_allowed,
             "mt5_terminal": (
@@ -390,7 +394,7 @@ class GetTradingSessionUseCase:
                 and session_code != ACCOUNT_SESSION_MISMATCH
                 else "disabled"
             ),
-            "ownership_block_reason": None,
+            "ownership_block_reason": ownership_block_reason,
         }
 
 
@@ -463,7 +467,21 @@ class ControlTradingRobotUseCase:
         if runtime is not None and action_norm == "start":
             runtime.user_id = user_id
         if action_norm == "start":
-            bind_execution_account(user_id=user_id, login=int(connection.login or 0))
+            live_login = 0
+            try:
+                info = self.adapter.account_info()
+                live_login = int(getattr(info, "login", 0) or 0)
+            except Exception:
+                live_login = 0
+            conn_login = int(connection.login or 0)
+            if live_login > 1 and conn_login > 1 and live_login != conn_login:
+                raise ConflictError(
+                    "The saved broker account does not match the logged-in terminal",
+                    code="login_mismatch",
+                    details={"reason": "login_mismatch"},
+                )
+            if live_login > 1 and conn_login == live_login:
+                bind_execution_account(user_id=user_id, login=live_login)
         logger.info(
             "trading_robot_control",
             user_id=str(user_id),

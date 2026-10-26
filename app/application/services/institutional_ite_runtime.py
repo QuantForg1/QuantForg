@@ -2839,6 +2839,25 @@ class InstitutionalIteRuntime:
         t0 = time.perf_counter()
         if market_context_diagnostics is None:
             market_context_diagnostics = {}
+        try:
+            from app.application.services.runtime_policy_store import (
+                install_cycle_policy,
+            )
+
+            installed_policy = install_cycle_policy()
+            market_context_diagnostics["runtime_policy_version"] = (
+                installed_policy.version
+            )
+            market_context_diagnostics["runtime_policy_source"] = (
+                installed_policy.source
+            )
+            if not installed_policy.ok:
+                market_context_diagnostics["runtime_policy_error"] = (
+                    installed_policy.error or "unavailable"
+                )
+        except Exception:
+            logger.exception("runtime_policy_install_failed")
+            market_context_diagnostics["runtime_policy_error"] = "unavailable"
         market_context_diagnostics.setdefault("cycle_id", f"cycle-{tid[:12]}")
         market_context_diagnostics.setdefault("snapshot_id", f"snap-{tid[:12]}")
         try:  # noqa: SIM105

@@ -1063,25 +1063,44 @@ class InstitutionalExecutionEngine:
                         ]
                 if not risk_reject and not _is_manage_intent(intent):
                     # Final owner guard on the exact intent that goes to the broker.
+                    from app.application.services.runtime_policy_store import (
+                        install_cycle_policy,
+                    )
+
+                    installed = install_cycle_policy()
                     owner_min_stop = live_constraints.point * Decimal(
                         live_constraints.stops_level
                     )
-                    risk_reject = evaluate_owner_entry(
-                        symbol=intent.symbol,
-                        side=intent.side.value,
-                        volume=intent.volume.value,
-                        entry=entry,
-                        stop_loss=(
-                            intent.stop_loss.value if intent.stop_loss else None
-                        ),
-                        take_profit=(
-                            intent.take_profit.value if intent.take_profit else None
-                        ),
-                        spread=spread_val,
-                        contract_size=live_cs,
-                        equity=account.equity,
-                        min_stop_distance=owner_min_stop,
-                    )
+                    if not installed.ok:
+                        risk_reject = [
+                            "CONFIG_UNAVAILABLE: runtime trading policy "
+                            "could not be read"
+                        ]
+                    else:
+                        weekly_raw = getattr(account, "weekly_pnl", None)
+                        risk_reject = evaluate_owner_entry(
+                            symbol=intent.symbol,
+                            side=intent.side.value,
+                            volume=intent.volume.value,
+                            entry=entry,
+                            stop_loss=(
+                                intent.stop_loss.value if intent.stop_loss else None
+                            ),
+                            take_profit=(
+                                intent.take_profit.value
+                                if intent.take_profit
+                                else None
+                            ),
+                            spread=spread_val,
+                            contract_size=live_cs,
+                            equity=account.equity,
+                            min_stop_distance=owner_min_stop,
+                            weekly_pnl=(
+                                None
+                                if weekly_raw is None
+                                else Decimal(str(weekly_raw))
+                            ),
+                        )
                     owner_presend_ctx = (account.equity, live_cs, owner_min_stop)
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]

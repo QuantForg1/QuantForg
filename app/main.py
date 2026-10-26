@@ -88,6 +88,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "live_trading_control",
         "app.presentation.routers.live_trading_control",
     ),
+    ("admin_control", "app.presentation.routers.admin_control"),
     (
         "institutional_data_warehouse",
         "app.presentation.routers.institutional_data_warehouse",

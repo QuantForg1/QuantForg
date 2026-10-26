@@ -394,6 +394,17 @@ class PostgresUserRepository:
     async def update(self, user: User) -> User:
         return await self.add(user)
 
+    async def list_privileged(self) -> list[User]:
+        session = self._uow._require_session()
+        result = await session.execute(
+            text(
+                "SELECT id, auth_user_id, email, display_name, role, status, "
+                "password_hash, last_login_at, deactivated_at, created_at, "
+                "updated_at FROM users WHERE role IN ('owner', 'admin')"
+            )
+        )
+        return [_user_from_row(row) for row in result.mappings().all()]
+
 
 class PostgresProfileRepository:
     def __init__(self, uow: PostgresPlatformUnitOfWork) -> None:

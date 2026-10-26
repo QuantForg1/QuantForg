@@ -10,6 +10,7 @@ during a gateway outage must work again on the next call.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -19,6 +20,10 @@ import pytest
 from app.application.services import (
     auto_trading_status as ats,
     live_trading_control_service as svc,
+)
+from app.application.services.account_execution_gate import (
+    bind_execution_account,
+    reset_execution_binding_for_tests,
 )
 from app.domain.institutional_trading import owner_live_limits as ol
 from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
@@ -113,8 +118,13 @@ class Gateway:
 
 
 @pytest.fixture
-def gw(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Gateway:
-    return Gateway(monkeypatch, tmp_path)
+def gw(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Iterator[Gateway]:
+    """Bound login matches the fake terminal. Unbound is not treated as owned."""
+    reset_execution_binding_for_tests()
+    gateway = Gateway(monkeypatch, tmp_path)
+    bind_execution_account(user_id=uuid4(), login=PRO_LOGIN)
+    yield gateway
+    reset_execution_binding_for_tests()
 
 
 def _owner() -> OperatorIdentity:
@@ -159,6 +169,15 @@ def test_unapproved_login_still_pauses_while_enabled(gw: Gateway) -> None:
     )
     assert state == "PAUSED"
     assert ctrl.paused_for_safety and ctrl.safety_pause_reason == "unapproved_login"
+
+
+def test_resume_does_not_invent_ownership(gw: Gateway) -> None:
+    reset_execution_binding_for_tests()
+    ctrl = _enabled()
+    payload = ctrl.persist_payload()
+    ctrl2 = reset_live_trading_controller_for_tests()
+    ctrl2.hydrate(payload)
+    assert svc.resume_live_trading_after_safe_recovery() == "PAUSED"
 
 
 def test_start_inside_session_after_restart(gw: Gateway) -> None:

@@ -320,6 +320,11 @@ def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
     return out
 
 
+def read_live_probe_facts() -> dict[str, Any]:
+    """Owner overview probe. Does not arm or enable live trading."""
+    return _live_probe_facts(enrich_account=False)
+
+
 def _empty_probe_facts() -> dict[str, Any]:
     return {
         "gateway_online": False,
@@ -428,13 +433,18 @@ def _probe_live_facts_once(*, enrich_account: bool = False) -> dict[str, Any]:
             _fill_from_adapter_account(out)
         login_i = int(out.get("account_login") or 0)
         bound_user, bound_login = bound_execution_account()
-        if bound_login > 1 and login_i > 1:
-            out["ownership"] = "OWNED" if bound_login == login_i else "NOT_OWNED"
-        elif login_i > 1:
-            # Single-tenant attached terminal: OWNER/ADMIN desk owns this login.
-            # A bound mismatch above already failed closed.
+        if login_i > 1 and (bound_login <= 1 or bound_login != login_i):
+            from app.application.services.broker_ownership_restore import (
+                rehydrate_designated_owner_binding,
+            )
+
+            rehydrate_designated_owner_binding(login_i)
+            bound_user, bound_login = bound_execution_account()
+        if bound_login > 1 and login_i > 1 and bound_login == login_i:
             out["ownership"] = "OWNED"
-            _ = bound_user
+        else:
+            out["ownership"] = "NOT_OWNED"
+        _ = bound_user
         if isinstance(health, dict) and health and not out.get("probe_source"):
             out["probe_source"] = "gateway_health"
     except Exception as exc:

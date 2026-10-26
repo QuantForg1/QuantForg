@@ -95,6 +95,15 @@ async def sync_profile_from_identity(
         existing.activate()
         dirty = True
 
+    from app.application.services.owner_identity_policy import (
+        reconcile_privileged_roles,
+    )
+
+    role_changes = await reconcile_privileged_roles(uow, identity)
+    if role_changes:
+        dirty = True
+        existing = await uow.users.get_by_auth_user_id(identity.id) or existing
+
     if dirty:
         await uow.users.update(existing)
     if return_dirty:

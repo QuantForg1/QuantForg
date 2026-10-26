@@ -9,6 +9,7 @@ import pytest
 from app.application.dto.auth import AuthUserDTO
 from app.domain.enums.user import UserRole
 from app.domain.exceptions.auth import AuthorizationError
+from app.domain.identity.designated_owner import DESIGNATED_OWNER_EMAIL
 from app.presentation.dependencies.auth import require_roles
 
 
@@ -19,14 +20,29 @@ class TestRequireRoles:
         dep = require_roles(UserRole.ADMIN, UserRole.OWNER)
         user = AuthUserDTO(
             id=uuid4(),
+            email=DESIGNATED_OWNER_EMAIL,
+            display_name="Owner",
+            role=UserRole.OWNER.value,
+            status="active",
+            auth_user_id=uuid4(),
+        )
+        result = await dep(user=user)
+        assert result is user
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_designated_admin(self) -> None:
+        dep = require_roles(UserRole.ADMIN, UserRole.OWNER)
+        user = AuthUserDTO(
+            id=uuid4(),
             email="admin@quantforg.com",
             display_name="Admin",
             role=UserRole.ADMIN.value,
             status="active",
             auth_user_id=uuid4(),
         )
-        result = await dep(user=user)
-        assert result is user
+        with pytest.raises(AuthorizationError) as err:
+            await dep(user=user)
+        assert err.value.code == "insufficient_role"
 
     @pytest.mark.asyncio
     async def test_rejects_mismatched_role(self) -> None:
@@ -47,7 +63,7 @@ class TestRequireRoles:
         dep = require_roles(UserRole.OWNER, UserRole.ADMIN)
         user = AuthUserDTO(
             id=uuid4(),
-            email="owner@quantforg.com",
+            email=DESIGNATED_OWNER_EMAIL,
             display_name="Owner",
             role="OWNER",
             status="active",

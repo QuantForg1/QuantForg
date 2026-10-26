@@ -789,8 +789,10 @@ class OperatorWatch:
         )
         from app.domain.institutional_trading.owner_live_limits import (
             OWNER_DAILY_LOSS_PCT,
-            OWNER_WEEKLY_LOSS_PCT,
             daily_loss_exceeded,
+        )
+        from app.domain.institutional_trading.runtime_policy import (
+            weekly_loss_limit_pct,
         )
 
         day = utc.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -816,15 +818,16 @@ class OperatorWatch:
                 "No new entries until 00:00 UTC.",
                 key=f"daily:{day.date().isoformat()}",
             )
-        # 0 = weekly limit disabled (owner 2026-10-23: daily stop only).
-        if OWNER_WEEKLY_LOSS_PCT > 0 and balance > 0 and weekly < 0:
+        # 0 = weekly limit off until an owner save sets a percent.
+        week_cap = weekly_loss_limit_pct()
+        if week_cap > 0 and balance > 0 and weekly < 0:
             pct = (-weekly) / (balance - weekly) * 100
-            if pct > OWNER_WEEKLY_LOSS_PCT:
+            if pct > week_cap:
                 self.alerter.alert(
                     "WEEKLY STOP",
                     f"Weekly loss {_money(weekly)} ({pct.quantize(_CENT)}%) "
                     "exceeds the "
-                    f"{OWNER_WEEKLY_LOSS_PCT}% weekly stop. "
+                    f"{week_cap}% weekly stop. "
                     "No new entries until Monday 00:00 UTC.",
                     key=f"weekly:{week.date().isoformat()}",
                 )

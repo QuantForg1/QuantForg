@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from dataclasses import replace
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -127,10 +128,15 @@ def require_roles(
     async def _dependency(
         user: Annotated[AuthUserDTO, Depends(get_current_user)],
     ) -> AuthUserDTO:
+        from app.domain.identity.designated_owner import is_designated_owner_email
         from core.logging import get_logger
 
         allowed = {role.value for role in roles}
         actual = str(getattr(user, "role", "") or "").strip().lower()
+        designated = is_designated_owner_email(getattr(user, "email", ""))
+        if actual in {"owner", "admin"} and not designated:
+            user = replace(user, role=UserRole.TRADER.value)
+            actual = UserRole.TRADER.value
         if actual not in allowed:
             get_logger(__name__).warning(
                 "authorization_denied",

@@ -9,6 +9,7 @@ const ADMIN_SECTIONS = [
   {
     title: "Operations",
     items: [
+      { href: "/admin/control", label: "Control center", hint: "Owner policy, broker, risk, live authorization" },
       { href: "/admin/live-trading", label: "Live trading control", hint: "DISABLED · ARM · ENABLE · KILL" },
       { href: "/ops", label: "Execution sessions", hint: "Robot run state · control plane" },
       { href: "/admin/customer-ops", label: "Account bindings", hint: "Owned broker accounts" },

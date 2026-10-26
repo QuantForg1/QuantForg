@@ -97,12 +97,26 @@ OWNER_MIN_SL_RISK_USD = Decimal("0")
 OWNER_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_PCT
 
 
+def _active_planned_risk_pct() -> Decimal:
+    """Saved policy may be stricter than 9%. It cannot be looser."""
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_planned_risk_pct,
+    )
+
+    return active_max_planned_risk_pct()
+
+
 def max_planned_risk_usd(equity: Decimal) -> Decimal:
-    """9% of the risk reference (live equity), rounded down to the cent."""
+    """Planned-risk cap for live equity, rounded down to the cent.
+
+    The approved ceiling is 9%. An installed runtime policy may use a lower
+    percent. A missing policy uses 9%.
+    """
     eq = Decimal(str(equity or 0))
     if eq <= 0:
         return Decimal("0")
-    return (eq * OWNER_MAX_PLANNED_RISK_PCT / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
+    pct = _active_planned_risk_pct()
+    return (eq * pct / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
 
 
 # Planned-risk cap at the reference capital ($4.50 at $50) for static configs.
@@ -151,13 +165,24 @@ def planned_risk_usd(
 
 
 def daily_loss_cap_usd(
-    start_of_day_equity: Decimal, pct: Decimal = OWNER_DAILY_LOSS_PCT
+    start_of_day_equity: Decimal, pct: Decimal | None = None
 ) -> Decimal:
-    """Daily stop in USD: pct (max 19%) of the UTC day's starting equity."""
+    """Daily stop in USD: pct (max 19%) of the UTC day's starting equity.
+
+    ``pct is None`` uses the installed runtime policy, or 19% when no policy
+    is installed. An explicit percent cannot exceed 19%.
+    """
     sod = Decimal(str(start_of_day_equity or 0))
     if sod <= 0:
         return Decimal("0")
-    eff = min(Decimal(str(pct)), OWNER_DAILY_LOSS_PCT)
+    if pct is None:
+        from app.domain.institutional_trading.runtime_policy import (
+            active_daily_loss_pct,
+        )
+
+        eff = active_daily_loss_pct()
+    else:
+        eff = min(Decimal(str(pct)), OWNER_DAILY_LOSS_PCT)
     return (sod * eff / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
 
 
@@ -165,7 +190,7 @@ def daily_loss_exceeded(
     *,
     daily_pnl: Decimal,
     base_now: Decimal,
-    pct: Decimal = OWNER_DAILY_LOSS_PCT,
+    pct: Decimal | None = None,
 ) -> bool:
     """True when today's loss is strictly above the daily stop.
 
@@ -185,7 +210,7 @@ def daily_loss_cap_pct(
     *,
     daily_pnl: Decimal,
     base_now: Decimal,
-    pct: Decimal = OWNER_DAILY_LOSS_PCT,
+    pct: Decimal | None = None,
 ) -> Decimal:
     """Daily stop expressed as a percent of ``base_now``.
 
@@ -193,6 +218,12 @@ def daily_loss_cap_pct(
     """
     base = Decimal(str(base_now or 0))
     if base <= 0:
+        if pct is None:
+            from app.domain.institutional_trading.runtime_policy import (
+                active_daily_loss_pct,
+            )
+
+            return active_daily_loss_pct()
         return Decimal(str(pct))
     loss = max(-Decimal(str(daily_pnl or 0)), Decimal("0"))
     cap_usd = daily_loss_cap_usd(base + loss, pct)
@@ -315,6 +346,7 @@ def evaluate_owner_entry(
     equity: Decimal,
     min_stop_distance: Decimal = Decimal("0"),
     now: datetime | None = None,
+    weekly_pnl: Decimal | None = None,
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
@@ -325,19 +357,33 @@ def evaluate_owner_entry(
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_lot,
+        active_max_spread,
+        active_min_reward_risk,
+        policy_unavailable,
+        weekly_loss_limit_pct,
+    )
+
+    if policy_unavailable():
+        return ["CONFIG_UNAVAILABLE: runtime trading policy could not be read"]
+
     reasons: list[str] = []
     vol = Decimal(str(volume or 0))
     px = Decimal(str(entry or 0))
     cs = Decimal(str(contract_size or 0))
     eq = Decimal(str(equity or 0))
     side_u = (side or "").strip().upper()
+    lot_cap = active_max_lot()
+    spread_cap = active_max_spread()
+    rr_floor = active_min_reward_risk()
 
     # Policy violations are collected; missing inputs stop evaluation below.
     violations: list[str] = []
     if not is_gold_symbol(symbol):
         violations.append(f"OWNER_GOLD_ONLY: symbol {symbol!r} is not XAUUSD")
-    if vol > OWNER_MAX_LOT:
-        violations.append(f"OWNER_MAX_LOT: volume {vol} > {OWNER_MAX_LOT}")
+    if vol > lot_cap:
+        violations.append(f"OWNER_MAX_LOT: volume {vol} > {lot_cap}")
     if not in_owner_session(now):
         violations.append(
             "OWNER_SESSION: entry is outside "
@@ -365,8 +411,8 @@ def evaluate_owner_entry(
     sl = Decimal(str(stop_loss))
     tp = Decimal(str(take_profit))
     spr = Decimal(str(spread))
-    if spr > OWNER_MAX_SPREAD:
-        violations.append(f"OWNER_MAX_SPREAD: spread {spr} > {OWNER_MAX_SPREAD}")
+    if spr > spread_cap:
+        violations.append(f"OWNER_MAX_SPREAD: spread {spr} > {spread_cap}")
     if side_u == "BUY" and not (sl < px < tp):
         return [
             *violations,
@@ -387,7 +433,7 @@ def evaluate_owner_entry(
     if risk_usd > cap:
         violations.append(
             f"OWNER_SL_RISK: planned risk ${risk_usd} > ${cap} "
-            f"({OWNER_MAX_PLANNED_RISK_PCT}% of equity {eq})"
+            f"({_active_planned_risk_pct()}% of equity {eq})"
         )
     min_dist = Decimal(str(min_stop_distance or 0))
     if min_dist > 0 and (sl_dist < min_dist or tp_dist < min_dist):
@@ -398,11 +444,29 @@ def evaluate_owner_entry(
     rr = reward_risk_after_spread(
         tp_distance=tp_dist, stop_distance=sl_dist, spread=spr
     ) or Decimal("0")
-    if rr < OWNER_MIN_REWARD_RISK:
+    if rr < rr_floor:
         violations.append(
             f"OWNER_MIN_RR: reward:risk after spread {rr.quantize(_CENT)} "
-            f"< {OWNER_MIN_REWARD_RISK}"
+            f"< {rr_floor}"
         )
+    week_cap = weekly_loss_limit_pct()
+    if week_cap > 0:
+        if weekly_pnl is None:
+            violations.append(
+                "WEEKLY_PNL_UNAVAILABLE: weekly loss limit is configured "
+                "but weekly P/L could not be read"
+            )
+        else:
+            week = Decimal(str(weekly_pnl))
+            if week < 0 and eq > 0:
+                loss = -week
+                base = eq + loss
+                cap_usd = (base * week_cap / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
+                if loss > cap_usd:
+                    violations.append(
+                        f"OWNER_WEEKLY_LOSS: weekly loss {loss} > {cap_usd} "
+                        f"({week_cap}% of week-start equity)"
+                    )
     return violations
 
 
