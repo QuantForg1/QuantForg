@@ -100,9 +100,7 @@ def test_daily_boundary() -> None:
     assert not ol.daily_loss_exceeded(
         daily_pnl=Decimal("-9.50"), base_now=Decimal("40.50")
     )
-    assert ol.daily_loss_exceeded(
-        daily_pnl=Decimal("-9.51"), base_now=Decimal("40.49")
-    )
+    assert ol.daily_loss_exceeded(daily_pnl=Decimal("-9.51"), base_now=Decimal("40.49"))
 
 
 def test_no_independent_overall_drawdown_limit() -> None:
@@ -133,10 +131,14 @@ def test_stop_is_max_of_atr_and_structure() -> None:
     ) == Decimal("1.80")
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=Decimal("1.5")
-    ) == Decimal("1.80")  # never narrower than 1.5 x ATR
+    ) == Decimal(
+        "1.80"
+    )  # never narrower than 1.5 x ATR
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=Decimal("3.6")
-    ) == Decimal("3.6")  # beyond structure when it is further away
+    ) == Decimal(
+        "3.6"
+    )  # beyond structure when it is further away
     assert ol.owner_stop_distance(atr=None, structure_distance=Decimal("3.0")) is None
 
 
@@ -190,10 +192,12 @@ def test_volume_above_owner_max_rejected() -> None:
     assert "OWNER_MAX_LOT" in _codes(_entry(volume=Decimal("0.02")))
 
 
-def test_outside_session_rejected() -> None:
-    assert "OWNER_SESSION" in _codes(_entry(now=NIGHT))
+def test_former_desk_hours_do_not_reject() -> None:
+    assert "OWNER_SESSION" not in _codes(_entry(now=NIGHT))
+    assert _entry(now=NIGHT) == []
     assert ol.in_owner_session(datetime(2026, 10, 22, 7, 0, tzinfo=UTC))
-    assert not ol.in_owner_session(datetime(2026, 10, 22, 17, 0, tzinfo=UTC))
+    assert ol.in_owner_session(datetime(2026, 10, 22, 17, 0, tzinfo=UTC))
+    assert ol.in_owner_session(NIGHT)
 
 
 def test_spread_above_045_rejected() -> None:

@@ -342,7 +342,7 @@ export function LiveTradingControlPanel() {
                 {str(risk.planned_risk_note)} Stop loss:{" "}
                 {str(risk.owner_sl_policy, "ATR + structure")}; spread ≤{" "}
                 {str(risk.owner_max_spread, "0.45")}; entries{" "}
-                {str(risk.owner_session_utc, "07:00-17:00")} UTC.
+                {str(risk.owner_session_utc, "00:00-23:59")} UTC every day.
               </p>
             ) : null}
             <Metric label="Cycles" value={str(d.cycles, "0")} />

@@ -15,7 +15,8 @@ layer may be stricter, never looser.
 - Reward:risk after spread >= 1.50: |tp - entry| / (|entry - sl| + spread).
   TP is a real structure level: the nearest one that clears 1.50, at most
   the second level out (2026-10-23). Neither clears -> no trade.
-- Entries 07:00-17:00 UTC (London + New York), spread <= 0.45.
+- Entries any UTC hour, every day. Broker symbol session, weekend close,
+  holidays, and maintenance remain the availability gate. Spread <= 0.45.
 - Volume 0.01 (gateway max); 1 open position; 1 entry per cycle.
 - No consecutive-loss pause (owner 2026-10-23).
 
@@ -41,15 +42,6 @@ def _env_decimal(name: str, default: str) -> Decimal:
     return value if value > 0 else Decimal(default)
 
 
-def _env_hour(name: str, default: int) -> int:
-    raw = (os.environ.get(name) or "").strip()
-    try:
-        hour = int(raw) if raw else default
-    except ValueError:
-        hour = default
-    return hour if 0 <= hour <= 24 else default
-
-
 _CENT = Decimal("0.01")
 _PCT = Decimal("100")
 
@@ -72,16 +64,13 @@ OWNER_DAILY_LOSS_PCT = Decimal("19.0")
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
 OWNER_MIN_REWARD_RISK = Decimal("1.50")
-# Owner 2026-10-22: London + New York 07:00-17:00 UTC, spread <= $0.45.
+# Owner 2026-10-26: the fixed Monday-Friday 07:00-17:00 desk window is retired.
+# Eligibility is 00:00-23:59 UTC every day. Broker symbol sessions, weekend
+# closures, holidays, and maintenance stay the availability gate. A stale
+# OWNER_SESSION_* environment value cannot put the desk clock back.
 OWNER_MAX_SPREAD = _env_decimal("OWNER_MAX_SPREAD", "0.45")
-_SESSION_START_H = _env_hour("OWNER_SESSION_START_UTC_HOUR", 7)
-_SESSION_END_H = _env_hour("OWNER_SESSION_END_UTC_HOUR", 17)
-if _SESSION_END_H <= _SESSION_START_H:
-    _SESSION_START_H, _SESSION_END_H = 7, 17
-OWNER_SESSION_START_UTC = time(_SESSION_START_H, 0)
-OWNER_SESSION_END_UTC = (
-    time(23, 59, 59, 999999) if _SESSION_END_H == 24 else time(_SESSION_END_H, 0)
-)
+OWNER_SESSION_START_UTC = time(0, 0)
+OWNER_SESSION_END_UTC = time(23, 59, 59, 999999)
 # Owner 2026-10-23: 1.5 x ATR (was 2.5); structure + spread still wins when wider.
 OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "1.5")
 # TP may move to the second structure level only when the first is < 1.50 RR.
@@ -118,7 +107,6 @@ def max_planned_risk_usd(equity: Decimal) -> Decimal:
 
 # Planned-risk cap at the reference capital ($4.50 at $50) for static configs.
 OWNER_MAX_SL_RISK_USD = max_planned_risk_usd(OWNER_RISK_REFERENCE_USD)
-
 
 
 def owner_risk_cap_usd(
@@ -212,17 +200,17 @@ def daily_loss_cap_pct(
 
 
 def in_owner_session(now: datetime | None = None) -> bool:
-    """London + New York, Monday-Friday: 07:00 <= UTC time < 17:00.
+    """True for every UTC clock time, Monday through Sunday.
 
-    No entries on Saturday or Sunday UTC (owner 2026-10-23).
+    Owner 2026-10-26: 07:00-17:00 Monday-Friday is not a gate. Broker symbol
+    sessions, weekend closures, holidays, and maintenance are enforced by
+    broker session truth, not by this clock.
     """
     clock = now or _now()
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
     utc = clock.astimezone(UTC)
-    if utc.weekday() >= 5:
-        return False
-    return OWNER_SESSION_START_UTC <= utc.time() < OWNER_SESSION_END_UTC
+    return OWNER_SESSION_START_UTC <= utc.time() <= OWNER_SESSION_END_UTC
 
 
 def next_utc_day_start(now: datetime | None = None) -> datetime:
@@ -352,7 +340,8 @@ def evaluate_owner_entry(
         violations.append(f"OWNER_MAX_LOT: volume {vol} > {OWNER_MAX_LOT}")
     if not in_owner_session(now):
         violations.append(
-            "OWNER_SESSION: entries only Mon-Fri 07:00-17:00 UTC (London + New York)"
+            "OWNER_SESSION: entry is outside "
+            f"{OWNER_SESSION_START_UTC:%H:%M}-{OWNER_SESSION_END_UTC:%H:%M} UTC"
         )
     if vol <= 0:
         reasons.append("OWNER_VOLUME_INVALID: volume must be > 0")

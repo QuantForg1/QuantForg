@@ -47,18 +47,17 @@ def _reset_phase_a_plane() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def _owner_session_clock(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin the owner session clock to 10:00 UTC today (London open).
+    """Pin the owner clock to 10:00 UTC on a weekday.
 
-    The owner guard only accepts entries 07:00-17:00 UTC; without a pinned
-    clock every entry test would depend on the wall-clock hour. Session tests
-    pass explicit times and are unaffected.
+    Day-boundary helpers read this clock. The session gate itself is the full
+    UTC day; broker availability is tested with explicit broker facts.
     """
     from datetime import UTC, datetime, time, timedelta
 
     from app.domain.institutional_trading import owner_live_limits as ol
 
     day = datetime.now(UTC).date()
-    while day.weekday() >= 5:  # session is Mon-Fri: weekend runs use Friday
+    while day.weekday() >= 5:  # keep day-boundary tests on a weekday
         day -= timedelta(days=1)
     fixed = datetime.combine(day, time(10, 0), tzinfo=UTC)
     monkeypatch.setattr(ol, "_now", lambda: fixed)
