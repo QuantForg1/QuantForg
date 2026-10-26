@@ -134,6 +134,69 @@ def map_retcode_to_outcome(retcode: int) -> tuple[ExecutionOutcome, bool, str]:
     )
 
 
+_PROTECTIVE_OMS_KINDS = frozenset({"close", "partial_close", "sltp", "modify_sltp"})
+# Only a stored reject/retry with no fill may be sent again. PREPARED is
+# in-flight and must be handled by the caller before this predicate.
+_RETRYABLE_PRIOR_OUTCOMES = frozenset({ExecutionOutcome.FAILED, ExecutionOutcome.RETRY})
+
+
+def _as_int(value: object) -> int | None:
+    """Parse a ticket. None means missing. Unreadable values are not missing."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+    return None
+
+
+def _filled_ticket(value: object) -> bool:
+    """True when a broker ticket is present. Unreadable values fail closed."""
+    if value is None or isinstance(value, bool):
+        return False
+    parsed = _as_int(value)
+    if parsed is None:
+        return True
+    return parsed > 0
+
+
+def protective_retry_allowed(
+    *,
+    oms_kind: str,
+    position: object,
+    outcome: ExecutionOutcome,
+    order_ticket: object,
+    deal_ticket: object,
+    message: str,
+) -> bool:
+    """Whether a stored attempt may be sent to the broker again.
+
+    New entries stay idempotent. A close, partial close, or stop change is
+    retried only when it names an open position ticket and the prior attempt
+    is a definite non-fill: failed or retry, no order or deal ticket, and
+    not an ambiguous transport result.
+    """
+    kind = (oms_kind or "").strip().lower()
+    if kind not in _PROTECTIVE_OMS_KINDS:
+        return False
+    ticket = _as_int(position)
+    if ticket is None or ticket <= 0:
+        return False
+    if outcome not in _RETRYABLE_PRIOR_OUTCOMES:
+        return False
+    if _filled_ticket(order_ticket) or _filled_ticket(deal_ticket):
+        return False
+    text = (message or "").lower()
+    return "ambiguous" not in text and "do not auto-retry" not in text
+
+
 @dataclass(eq=False, kw_only=True)
 class ExecutionAttempt(Entity):
     """Persisted execution request + result (no credentials)."""
