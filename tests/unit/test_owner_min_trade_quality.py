@@ -1,4 +1,5 @@
-"""Owner hard floor: robot entries need AI trade quality >= 80 (2026-10-24)."""
+"""Owner hard floor: robot entries need AI trade quality >= 75 (80 on 2026-10-24,
+lowered to 75 by the owner on 2026-10-26)."""
 
 from __future__ import annotations
 
@@ -62,23 +63,23 @@ def _floor_rejects(gates) -> list[str]:
     return [r for r in gates.hard_rejects if r.startswith("OWNER_MIN_TRADE_QUALITY")]
 
 
-def test_floor_is_80() -> None:
-    assert limits.OWNER_MIN_TRADE_QUALITY == 80
+def test_floor_is_75() -> None:
+    assert limits.OWNER_MIN_TRADE_QUALITY == 75
 
 
-@pytest.mark.parametrize("quality", [0, 60, 75, 79])
-def test_quality_below_80_is_a_hard_reject(quality: int) -> None:
+@pytest.mark.parametrize("quality", [0, 60, 70, 74])
+def test_quality_below_75_is_a_hard_reject(quality: int) -> None:
     gates = _gates(quality)
     assert gates.checks["owner_min_trade_quality"] is False
     assert _floor_rejects(gates) == [
-        f"OWNER_MIN_TRADE_QUALITY: trade quality {quality} < 80"
+        f"OWNER_MIN_TRADE_QUALITY: trade quality {quality} < 75"
     ]
     assert gates.passed is False
     assert any(r.startswith("OWNER_MIN_TRADE_QUALITY") for r in gates.rejects)
 
 
-@pytest.mark.parametrize("quality", [80, 85, 100])
-def test_quality_80_and_above_passes_the_floor(quality: int) -> None:
+@pytest.mark.parametrize("quality", [75, 79, 80, 100])
+def test_quality_75_and_above_passes_the_floor(quality: int) -> None:
     gates = _gates(quality)
     assert gates.checks["owner_min_trade_quality"] is True
     assert _floor_rejects(gates) == []
@@ -118,10 +119,10 @@ def test_live_scorer_rejects_a_robot_setup_below_the_floor() -> None:
     out = _score(63)
     assert out.trade_quality == 63
     assert out.reject is True
-    assert "OWNER_MIN_TRADE_QUALITY: trade quality 63 < 80" in out.reject_reasons
+    assert "OWNER_MIN_TRADE_QUALITY: trade quality 63 < 75" in out.reject_reasons
 
 
-def test_live_scorer_does_not_apply_the_floor_at_85() -> None:
-    out = _score(85)
-    assert out.trade_quality == 85
+def test_live_scorer_does_not_apply_the_floor_at_75() -> None:
+    out = _score(75)
+    assert out.trade_quality == 75
     assert not any(r.startswith("OWNER_MIN_TRADE_QUALITY") for r in out.reject_reasons)

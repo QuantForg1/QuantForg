@@ -96,9 +96,9 @@ OWNER_MAX_ENTRIES_PER_CYCLE = 1
 OWNER_MAX_CONSECUTIVE_LOSSES = 0
 # Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
-# Hard floor on the AI trade quality of a robot entry (owner 2026-10-24).
-# Fixed on purpose: no env override can lower it.
-OWNER_MIN_TRADE_QUALITY = 80
+# Hard floor on the AI trade quality of a robot entry (owner 2026-10-24: 80;
+# lowered to 75 by the owner 2026-10-26). Fixed: no env override can lower it.
+OWNER_MIN_TRADE_QUALITY = 75
 
 # Compatibility names used by other layers (values at the reference capital).
 OWNER_SL_RISK_PCT = OWNER_MAX_PLANNED_RISK_PCT
