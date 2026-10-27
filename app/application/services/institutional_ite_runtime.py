@@ -6700,6 +6700,7 @@ class InstitutionalIteRuntime:
                     self.mt5_adapter,
                     symbol=symbol,
                     position_engine=self.position_management.engine,
+                    ite_config=self.decision_pipeline.config,
                 )
                 if ctx.ok and ctx.snapshot is not None and ctx.account is not None:
                     self._sync_and_manage_open_positions(
@@ -6720,6 +6721,7 @@ class InstitutionalIteRuntime:
                 self.mt5_adapter,
                 symbol=symbol,
                 position_engine=self.position_management.engine,
+                ite_config=self.decision_pipeline.config,
             )
             stage_timings_ms["market_context_ms"] = round(
                 float(getattr(ctx, "latency_ms", 0.0) or 0.0)
@@ -7216,6 +7218,7 @@ class InstitutionalIteRuntime:
                         self.mt5_adapter,
                         symbol=symbol,
                         position_engine=self.position_management.engine,
+                        ite_config=self.decision_pipeline.config,
                     ),
                     what="build_ite_cycle_market_context",
                 )

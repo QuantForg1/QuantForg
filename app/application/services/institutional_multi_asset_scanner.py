@@ -667,6 +667,7 @@ async def score_universe_with_budget(
     *,
     position_engine: Any | None = None,
     config: AiScalpingConfig | None = None,
+    ite_config: Any | None = None,
     budget_seconds: float = 75.0,
     per_symbol_timeout: float = 12.0,
     concurrency: int = 2,
@@ -728,6 +729,7 @@ async def score_universe_with_budget(
                     sym,
                     position_engine=position_engine,
                     config=config,
+                    ite_config=ite_config,
                 ),
                 timeout=slot,
             )
@@ -1008,6 +1010,7 @@ async def score_symbol_for_scan(
     *,
     position_engine: Any | None = None,
     config: AiScalpingConfig | None = None,
+    ite_config: Any | None = None,
 ) -> dict[str, Any]:
     """Fetch market data + run existing AI score for one symbol (no Risk/OMS)."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -1046,11 +1049,19 @@ async def score_symbol_for_scan(
             "trade_quality": 0,
         }
     try:
+        from app.domain.institutional_trading.ai_scalping.config import (
+            scalping_ite_config,
+        )
+
+        analysis_cfg = (
+            ite_config if ite_config is not None else scalping_ite_config(scalp=cfg)
+        )
         ctx = await build_ite_cycle_market_context(
             mt5_adapter,
             symbol=code,
             position_engine=position_engine,
             purpose="scan",
+            ite_config=analysis_cfg,
         )
     except Exception as exc:
         logger.exception("multi_asset_market_context_failed", symbol=code)
@@ -1239,7 +1250,7 @@ async def _run_institutional_multi_asset_scan_body(
                 scalping_ite_config,
             )
 
-            ite_config = scalping_ite_config()
+            ite_config = scalping_ite_config(scalp=cfg)
         except Exception:
             logger.exception("scanner_scalping_ite_config_failed")
     # LIVE broker catalogue → dynamic liquid universe (quality gates unchanged).
@@ -1407,6 +1418,7 @@ async def _run_institutional_multi_asset_scan_body(
                 universe,
                 position_engine=position_engine,
                 config=cfg,
+                ite_config=ite_config,
                 budget_seconds=budget,
                 per_symbol_timeout=SCAN_SYMBOL_TIMEOUT_SECONDS,
                 concurrency=conc,

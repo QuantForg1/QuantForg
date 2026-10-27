@@ -205,6 +205,7 @@ async def _score_one_research_symbol(
     )
     from app.domain.institutional_trading.ai_scalping.config import (
         DEFAULT_AI_SCALPING_CONFIG,
+        scalping_ite_config,
     )
     from app.domain.institutional_trading.ai_scalping.scoring import (
         score_scalping_setup,
@@ -229,6 +230,7 @@ async def _score_one_research_symbol(
             position_engine=None,
             reuse_cycle=False,
             research_mode=True,
+            ite_config=scalping_ite_config(scalp=DEFAULT_AI_SCALPING_CONFIG),
         )
     except Exception as exc:
         return {
