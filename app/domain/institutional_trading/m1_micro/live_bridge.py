@@ -24,7 +24,6 @@ from app.domain.institutional_trading.m1_micro.engine import evaluate_m1
 from app.domain.institutional_trading.m1_micro.signals import Bar
 from app.domain.institutional_trading.operations.min_lot_feasibility import (
     entry_book_exposure,
-    planned_sl_risk_usd,
 )
 from app.domain.institutional_trading.operations.quantforg_position_cap import (
     QUANTFORG_MAGIC,
@@ -33,7 +32,10 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_LOT,
     OWNER_MAX_PLANNED_RISK_PCT,
     max_planned_risk_usd,
+    planned_risk_usd,
+    reward_risk_after_spread,
 )
+from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
 from app.domain.institutional_trading.unified_decision import (
     NormalizedSignal,
     resolve_unified,
@@ -165,11 +167,15 @@ def consider_m1_complement(
     if decision.action == "sell" and decision.stop <= ask:
         note["reason"] = "stop_wrong_side"
         return note
-    risk = planned_sl_risk_usd(
-        volume=OWNER_MAX_LOT,
-        entry=entry,
-        stop_loss=decision.stop,
+    spread = ask - bid
+    stop_distance = abs(entry - decision.stop)
+    # Same formula OMS enforces. Stop-only dollars can sit under the cap
+    # while stop plus spread, rounded up, does not. Do not shrink the stop.
+    risk = planned_risk_usd(
+        stop_distance=stop_distance,
+        spread=spread,
         contract_size=_contract(symbol),
+        volume=OWNER_MAX_LOT,
     )
     cap = max_planned_risk_usd(equity)
     remaining = cap - book.measured_usd
@@ -207,6 +213,17 @@ def consider_m1_complement(
             if primary_forwarded
             else "live_submit_not_authorized"
         )
+        return note
+    target_distance = abs(decision.target - entry)
+    rr = reward_risk_after_spread(
+        tp_distance=target_distance,
+        stop_distance=stop_distance,
+        spread=spread,
+    )
+    # The measured M1 target stays as detected. A target that does not clear
+    # the owner reward:risk floor is withheld. It is not stretched.
+    if rr is None or rr < active_min_reward_risk():
+        note["submit_withheld"] = "OWNER_MIN_RR"
         return note
     _submit_entry(
         note,
