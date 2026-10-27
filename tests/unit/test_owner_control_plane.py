@@ -506,6 +506,153 @@ def test_weekly_halt_stays_off_until_the_owner_sets_it():
     assert not any(item.startswith("OWNER_WEEKLY_LOSS") for item in clear)
 
 
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_drawdown_halt_stays_off_until_the_owner_sets_it():
+    token = use_runtime_policy(approved_baseline())
+    try:
+        clear = _quiet_entry(peak_known=False, peak_equity=None)
+    finally:
+        reset_runtime_policy(token)
+    assert not any(item.startswith("DRAWDOWN_BASE_UNAVAILABLE") for item in clear)
+    assert not any(item.startswith("OWNER_DRAWDOWN") for item in clear)
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_configured_drawdown_fails_closed_without_a_peak():
+    token = use_runtime_policy(
+        {**approved_baseline(), "max_drawdown_pct": "10", "daily_loss_pct": "19"}
+    )
+    try:
+        blocked = _quiet_entry(peak_known=False, peak_equity=None)
+    finally:
+        reset_runtime_policy(token)
+    assert any(item.startswith("DRAWDOWN_BASE_UNAVAILABLE") for item in blocked)
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_drawdown_blocks_only_above_the_saved_percent():
+    token = use_runtime_policy(
+        {**approved_baseline(), "max_drawdown_pct": "10", "daily_loss_pct": "19"}
+    )
+    try:
+        breached = _quiet_entry(
+            equity=Decimal("89"),
+            peak_equity=Decimal("100"),
+            peak_known=True,
+            volume=Decimal("0.01"),
+            stop_loss=Decimal("2399.95"),
+            spread=Decimal("0.01"),
+        )
+        at_cap = _quiet_entry(
+            equity=Decimal("90"),
+            peak_equity=Decimal("100"),
+            peak_known=True,
+            volume=Decimal("0.01"),
+            stop_loss=Decimal("2399.95"),
+            spread=Decimal("0.01"),
+        )
+    finally:
+        reset_runtime_policy(token)
+    assert any(item.startswith("OWNER_DRAWDOWN") for item in breached)
+    assert not any(item.startswith("OWNER_DRAWDOWN") for item in at_cap)
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_drawdown_cannot_exceed_the_daily_halt():
+    base = approved_baseline()
+    too_wide = validate_policy_changes(
+        {**base, "daily_loss_pct": "10"}, {"max_drawdown_pct": "12"}
+    )
+    assert too_wide.ok is False
+    allowed = validate_policy_changes(base, {"max_drawdown_pct": "0"})
+    assert allowed.ok is True
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_presend_forwards_weekly_pnl_and_drawdown_peak():
+    from app.domain.institutional_trading.owner_live_limits import (
+        presend_owner_violations,
+    )
+
+    token = use_runtime_policy(
+        {
+            **approved_baseline(),
+            "weekly_loss_pct": "5",
+            "max_drawdown_pct": "10",
+            "daily_loss_pct": "19",
+        }
+    )
+    try:
+        blocked = presend_owner_violations(
+            symbol="XAUUSD",
+            side="BUY",
+            volume=Decimal("0.01"),
+            request_price=Decimal("2400"),
+            bid=Decimal("2399.90"),
+            ask=Decimal("2400.10"),
+            stop_loss=Decimal("2399"),
+            take_profit=Decimal("2402"),
+            plan_price=Decimal("2400"),
+            contract_size=Decimal("100"),
+            equity=Decimal("10000"),
+            weekly_pnl=None,
+            peak_equity=None,
+            peak_known=False,
+        )
+        clear = presend_owner_violations(
+            symbol="XAUUSD",
+            side="BUY",
+            volume=Decimal("0.01"),
+            request_price=Decimal("2400"),
+            bid=Decimal("2399.90"),
+            ask=Decimal("2400.10"),
+            stop_loss=Decimal("2399"),
+            take_profit=Decimal("2402"),
+            plan_price=Decimal("2400"),
+            contract_size=Decimal("100"),
+            equity=Decimal("10000"),
+            weekly_pnl=Decimal("0"),
+            peak_equity=Decimal("10000"),
+            peak_known=True,
+        )
+    finally:
+        reset_runtime_policy(token)
+    assert any("WEEKLY_PNL_UNAVAILABLE" in item for item in blocked)
+    assert any("DRAWDOWN_BASE_UNAVAILABLE" in item for item in blocked)
+    assert not any("WEEKLY_PNL_UNAVAILABLE" in item for item in clear)
+    assert not any("DRAWDOWN_BASE_UNAVAILABLE" in item for item in clear)
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_equity_peak_survives_a_lower_reading_and_fails_closed_when_down():
+    from app.application.services.equity_peak_store import (
+        force_equity_peak_unavailable_for_tests,
+        observe_equity_peak,
+        reset_equity_peak_for_tests,
+    )
+
+    reset_equity_peak_for_tests()
+    try:
+        first, trusted = observe_equity_peak(Decimal("50"))
+        second, still = observe_equity_peak(Decimal("40"))
+        assert trusted is True
+        assert still is True
+        assert first == Decimal("50")
+        assert second == Decimal("50")
+        force_equity_peak_unavailable_for_tests(True)
+        missing, outage = observe_equity_peak(Decimal("80"))
+        assert missing is None
+        assert outage is False
+    finally:
+        reset_equity_peak_for_tests()
+
+
 def _stub_policy_store(monkeypatch, transaction):
     calls = {"execute": 0, "statements": []}
 

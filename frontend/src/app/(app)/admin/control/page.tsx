@@ -41,6 +41,8 @@ const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
   max_planned_risk_pct: "Max planned risk % (ceiling 9)",
   daily_loss_pct: "Daily loss halt % (ceiling 19)",
   weekly_loss_pct: "Weekly loss halt % (0 = off until you set it)",
+  max_drawdown_pct:
+    "Overall drawdown halt % (0 = off until you set it, ceiling is the daily halt)",
   max_aggregate_open_risk_pct: "Max aggregate open risk % (ceiling 9)",
   min_lot: "Min lot (empty uses the broker minimum, ceiling 0.01)",
   max_lot: "Max lot (ceiling 0.01)",
@@ -70,7 +72,11 @@ export default function AdminControlPage() {
     const next: Record<string, string> = {};
     for (const key of POLICY_NUMERIC_KEYS) {
       const raw = doc[key];
-      next[key] = raw == null ? "" : String(raw);
+      if (key === "max_drawdown_pct" && (raw == null || raw === "")) {
+        next[key] = "0";
+      } else {
+        next[key] = raw == null ? "" : String(raw);
+      }
     }
     setDraft(next);
     setM1(m1ChoiceFromDocument(doc.m1_micro_enabled));

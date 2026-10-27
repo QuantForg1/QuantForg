@@ -157,6 +157,14 @@ def ensure_owner_schema() -> None:
     execute(_POLICY_LOCKDOWN)
     execute(_ROLE_FUNCTION)
     execute(_ROLE_TRIGGER)
+    try:
+        from app.application.services.equity_peak_store import (
+            ensure_equity_peak_schema,
+        )
+
+        ensure_equity_peak_schema()
+    except Exception as exc:
+        logger.warning("equity_peak_schema_failed", error_type=type(exc).__name__)
     _SCHEMA_READY = True
 
 

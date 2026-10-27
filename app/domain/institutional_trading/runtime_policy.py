@@ -197,6 +197,20 @@ def weekly_loss_limit_pct() -> Decimal:
     return min(value, OWNER_DAILY_LOSS_PCT)
 
 
+def drawdown_limit_pct() -> Decimal:
+    """0 means the overall drawdown halt is off until an owner save."""
+    doc = _POLICY.get()
+    if not isinstance(doc, dict) or doc.get("unavailable"):
+        return Decimal("0")
+    raw = doc.get("max_drawdown_pct")
+    if raw is None:
+        return Decimal("0")
+    value = _dec(raw)
+    if value <= 0:
+        return Decimal("0")
+    return min(value, active_daily_loss_pct(), OWNER_DAILY_LOSS_PCT)
+
+
 def m1_overlay_mode(key: str) -> str | None:
     """``None`` defers to the deployment flag. ``off`` fails closed."""
     doc = _POLICY.get()
@@ -219,6 +233,12 @@ def approved_baseline() -> dict[str, Any]:
         "weekly_loss_documented": (
             "0 means off. A weekly halt is enforced only after an owner save "
             "sets a percent. No silent weekly default is deployed."
+        ),
+        "max_drawdown_pct": "0",
+        "drawdown_documented": (
+            "0 means off. Overall drawdown is measured from the stored equity "
+            "high-water mark and is enforced only after an owner save. A missing "
+            "mark fails closed while the halt is on."
         ),
         "max_aggregate_open_risk_pct": "9.0",
         "max_concurrent_positions": OWNER_MAX_OPEN_POSITIONS,
@@ -311,6 +331,14 @@ def validate_policy_changes(
     _reject_number(
         errors,
         changes,
+        "max_drawdown_pct",
+        lo=Decimal("0"),
+        hi=OWNER_DAILY_LOSS_PCT,
+        allow_zero=True,
+    )
+    _reject_number(
+        errors,
+        changes,
         "max_aggregate_open_risk_pct",
         lo=Decimal("0.01"),
         hi=OWNER_MAX_PLANNED_RISK_PCT,
@@ -374,9 +402,14 @@ def validate_policy_changes(
             merged[key] = value
     weekly = _dec(merged.get("weekly_loss_pct") or 0)
     daily = _dec(merged.get("daily_loss_pct") or OWNER_DAILY_LOSS_PCT)
+    drawdown = _dec(merged.get("max_drawdown_pct") or 0)
     if weekly > daily:
         return PolicyDecision(
             False, None, ("weekly_loss_pct cannot exceed daily_loss_pct",)
+        )
+    if drawdown > daily:
+        return PolicyDecision(
+            False, None, ("max_drawdown_pct cannot exceed daily_loss_pct",)
         )
     saved_min_lot = merged.get("min_lot")
     saved_max_lot = merged.get("max_lot")
