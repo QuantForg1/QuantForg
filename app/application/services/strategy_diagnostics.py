@@ -193,6 +193,19 @@ def resolve_cycle_result(
     return str(cycle_outcome or "—")
 
 
+def owner_diagnostic_floor() -> int:
+    """Live desk floor. Saved policy may raise it and cannot fall below 75.
+
+    Swing ``ITEConfig`` still defaults to 80/80. That default is not the
+    hard gate the scalping worker enforces.
+    """
+    from app.domain.institutional_trading.runtime_policy import (
+        active_min_trade_quality,
+    )
+
+    return int(active_min_trade_quality())
+
+
 def extract_cycle_diagnostics(
     *,
     snapshot: MarketAnalysisSnapshot | None,
@@ -210,12 +223,14 @@ def extract_cycle_diagnostics(
     as_of: datetime | None = None,
 ) -> dict[str, Any]:
     """Build one diagnostic cycle record from existing decision artefacts."""
-    cfg = config or DEFAULT_ITE_CONFIG
+    # ``config`` remains for callers. The desk shows the owner floor,
+    # not the swing ITE default of 80.
+    _ = config
     diag = dict(market_context_diagnostics or {})
     now = as_of or datetime.now(UTC)
 
-    required_quality = int(cfg.min_trade_quality_score)
-    required_confluence = int(cfg.min_confluence_score)
+    required_quality = owner_diagnostic_floor()
+    required_confluence = owner_diagnostic_floor()
 
     session = "—"
     session_allowed: bool | None = None
@@ -894,14 +909,15 @@ def generate_smart_insights(
 
     avg_q = stats.get("average_quality")
     avg_c = stats.get("average_confluence")
+    floor = owner_diagnostic_floor()
     req_q = (
         latest.get("quality", {}).get("required") if isinstance(latest, dict) else None
-    ) or DEFAULT_ITE_CONFIG.min_trade_quality_score
+    ) or floor
     req_c = (
         latest.get("confluence", {}).get("required")
         if isinstance(latest, dict)
         else None
-    ) or DEFAULT_ITE_CONFIG.min_confluence_score
+    ) or floor
 
     if avg_q is not None and avg_q < req_q:
         gap = round(float(req_q) - float(avg_q), 1)
@@ -1219,8 +1235,8 @@ class StrategyDiagnosticsStore:
             "funnel_histograms": funnel_snapshot(),
             "smart_insights": insights,
             "thresholds": {
-                "required_quality": int(self._config.min_trade_quality_score),
-                "required_confluence": int(self._config.min_confluence_score),
+                "required_quality": owner_diagnostic_floor(),
+                "required_confluence": owner_diagnostic_floor(),
             },
             "live_execution_explain": {
                 "latest": (explained[0].get("explain") if explained else None),

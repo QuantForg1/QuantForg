@@ -91,6 +91,11 @@ class ProductionValidationRecorder:
                 self._dashboard["current_session"] = market_session
             if execution_mode:
                 self._dashboard["execution_state"] = execution_mode
+            # Order-path lights describe this attempt. A prior rejected
+            # submit must not keep OMS/MT5/broker on FAIL after zero requests.
+            self._dashboard["oms_status"] = "NOT_REACHED"
+            self._dashboard["mt5_status"] = "NOT_REACHED"
+            self._dashboard["broker_status"] = "NOT_REACHED"
         return attempt
 
     def bind_context(self, validation_id: str | None) -> Token[str | None]:

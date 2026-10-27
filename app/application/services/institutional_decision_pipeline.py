@@ -29,6 +29,7 @@ from app.domain.institutional_trading.decision_models import (
 )
 from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
 from app.domain.institutional_trading.executable_direction import (
+    quality_block_detail,
     resolve_executable_direction,
 )
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -727,17 +728,27 @@ class InstitutionalDecisionPipeline:
             )
 
         if side not in {"buy", "sell"}:
+            # A scored BUY/SELL that failed a hard gate is withheld here.
+            # Lots stay zero. The reason stays the gate text.
+            blocked = quality_block_detail(
+                executable_reason=exe.reason or "no_validated_direction",
+                reject_reason=(
+                    ai_score.reject_reason
+                    if ai_score is not None and ai_score.reject
+                    else None
+                ),
+            )
             return TradeDecisionEngine(config=cfg).decide(
                 snapshot=snapshot,
                 confluence=confluence,
                 eligibility=EligibilityResult(
                     eligible=False,
                     checks={"validated_direction": False},
-                    rejection_reasons=(exe.reason or "no_validated_direction",),
+                    rejection_reasons=(blocked,),
                 ),
                 account=account,
                 risk_score=100,
-                risk_reasons=(exe.reason or "no_validated_direction",),
+                risk_reasons=(blocked,),
                 approved_lots=Decimal("0"),
             )
 

@@ -149,10 +149,14 @@ class TestStrategyDiagnostics:
         )
         assert row["market_session"] == "london"
         assert row["quality"]["score"] == 58
-        assert row["quality"]["required"] == 80
-        assert row["quality"]["difference"] == -22
+        assert row["quality"]["required"] == 75
+        assert row["quality"]["difference"] == -17
         assert row["confluence"]["total"] == 55
-        assert row["confluence"]["required"] == 80
+        assert row["confluence"]["required"] == 75
+        from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+
+        assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80
+        assert DEFAULT_ITE_CONFIG.min_confluence_score == 80
         assert row["confluence"]["components"]["order_block"] == 20
         assert row["confluence"]["components"]["fair_value_gap"] == 25
         assert row["confluence"]["components"]["volume"] == 70
@@ -342,5 +346,6 @@ class TestStrategyDiagnostics:
         payload = store.snapshot(limit=100)
         assert payload["mutates_engines"] is False
         assert payload["statistics"]["cycles_in_window"] == 3
-        assert payload["latest"]["quality"]["difference"] == -22
+        assert payload["latest"]["quality"]["required"] == 75
+        assert payload["latest"]["quality"]["difference"] == -17
         assert len(payload["smart_insights"]) >= 1
