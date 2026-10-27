@@ -287,7 +287,7 @@ def test_live_submit_flag_off_records_a_setup_without_sending(
     assert sent == []
 
 
-def test_authorized_m1_submit_uses_the_setup_stop_once(
+def test_authorized_m1_withholds_when_measured_rr_is_below_owner_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from types import SimpleNamespace
@@ -321,13 +321,43 @@ def test_authorized_m1_submit_uses_the_setup_stop_once(
         user_id=uuid4(),
     )
     assert note is not None
-    assert note["submitted"] is True
-    assert note["broker_ticket"] is None
-    assert len(sent) == 1
-    intent = sent[0]["intent"]
-    assert intent.stop_loss is not None
-    assert str(intent.stop_loss) == note["stop"]
-    assert sent[0]["request_id"].startswith("m1-")
+    assert note["submitted"] is False
+    assert note["submit_withheld"] == "OWNER_MIN_RR"
+    assert note["reason"] == "setup_cleared_cost"
+    held_stop = note["stop"]
+    held_target = note["target"]
+    assert held_stop is not None and held_target is not None
+    assert Decimal(held_target) > Decimal(held_stop)
+    assert sent == []
+
+
+def test_spread_inclusive_risk_withholds_before_oms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domain.institutional_trading.m1_micro.live_bridge import (
+        consider_m1_complement,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    sent: list[object] = []
+    note = consider_m1_complement(
+        adapter=_m1_adapter(bid=Decimal("2305.20"), ask=Decimal("2305.30")),
+        account=SimpleNamespace(equity=Decimal("5.00"), login=1),
+        snapshot=_m1_snapshot(),
+        execution_enabled=True,
+        primary_forwarded=False,
+        submit_market=lambda **kwargs: sent.append(kwargs),
+        user_id=uuid4(),
+    )
+    assert note is not None
+    assert note["submitted"] is False
+    assert note["reason"] == "combined_planned_risk_above_9_percent"
+    assert note["stop"] is not None
+    assert sent == []
 
 
 def test_primary_forward_blocks_a_second_m1_submit(
@@ -358,7 +388,10 @@ def test_primary_forward_blocks_a_second_m1_submit(
     assert sent == []
 
 
-def _m1_adapter() -> object:
+def _m1_adapter(
+    bid: Decimal = Decimal("2306.10"),
+    ask: Decimal = Decimal("2306.30"),
+) -> object:
     from types import SimpleNamespace
 
     from app.domain.market_data.timeframe import Timeframe
@@ -384,7 +417,7 @@ def _m1_adapter() -> object:
 
         def latest_tick(self, symbol: str) -> SimpleNamespace:
             assert symbol == "XAUUSD"
-            return SimpleNamespace(bid=Decimal("2306.10"), ask=Decimal("2306.30"))
+            return SimpleNamespace(bid=bid, ask=ask)
 
         def list_positions(self) -> list[object]:
             return []
@@ -586,7 +619,7 @@ def test_blocked_same_direction_primary_still_allows_one_m1_entry(
         )
 
     note = consider_m1_complement(
-        adapter=_m1_adapter(),
+        adapter=_m1_adapter(bid=Decimal("2305.20"), ask=Decimal("2305.30")),
         account=SimpleNamespace(equity=Decimal("1000"), login=1),
         snapshot=_m1_snapshot(),
         execution_enabled=True,
@@ -599,6 +632,9 @@ def test_blocked_same_direction_primary_still_allows_one_m1_entry(
     assert note is not None
     assert note["submitted"] is True
     assert len(sent) == 1
+    assert sent[0]["intent"].stop_loss is not None
+    assert str(sent[0]["intent"].stop_loss) == note["stop"]
+    assert str(sent[0]["intent"].take_profit) == note["target"]
 
 
 def test_conflict_preview_holds_the_primary_and_cannot_send(
