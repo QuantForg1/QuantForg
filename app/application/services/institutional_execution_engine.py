@@ -37,6 +37,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     evaluate_owner_entry,
     max_planned_risk_usd,
     presend_owner_violations,
+    price_unit_value,
     stop_shrink_violation,
 )
 from app.domain.institutional_trading.shadow_book import (
@@ -267,9 +268,7 @@ def broker_submit_block_reason(intent: OrderIntent) -> str | None:
 
         allowed = orders_may_submit(get_live_trading_controller().snapshot_state())
     except Exception:
-        return (
-            "AUTO_TRADING_BLOCKED: live controller unreadable — new entries blocked"
-        )
+        return "AUTO_TRADING_BLOCKED: live controller unreadable — new entries blocked"
     if not allowed:
         return "AUTO_TRADING_BLOCKED: orders_may_submit is false — new entries blocked"
     return None
@@ -791,9 +790,7 @@ class InstitutionalExecutionEngine:
             getattr(self.gateway.adapter, "execution_enabled", False)
         ):
             t0 = time.perf_counter()
-            exec_result = ExecutionResult.disabled(
-                request_id=request_id, symbol=symbol
-            )
+            exec_result = ExecutionResult.disabled(request_id=request_id, symbol=symbol)
             blocked = humanize_reasons([exec_result.message])[0]
             self._stage(
                 stages,
@@ -828,9 +825,7 @@ class InstitutionalExecutionEngine:
                 latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
                 idempotent_replay=decision.idempotent_replay,
             )
-            result.journal_entry = self._write_journal(
-                result, intent, exec_result, uid
-            )
+            result.journal_entry = self._write_journal(result, intent, exec_result, uid)
             return result, decision
 
         # Authoritative Risk Engine — never skip on live submit path
@@ -839,9 +834,19 @@ class InstitutionalExecutionEngine:
         # Equity for the owner's dynamic 9% planned-risk cap (band check below).
         owner_band_equity: Decimal | None = None
         # (equity, contract size, stops-level distance) for the pre-send check.
-        owner_presend_ctx: tuple[
-            Decimal, Decimal, Decimal, Decimal | None, Decimal | None, bool
-        ] | None = None
+        owner_presend_ctx: (
+            tuple[
+                Decimal,
+                Decimal,
+                Decimal,
+                Decimal | None,
+                Decimal | None,
+                bool,
+                Decimal,
+                Decimal | None,
+            ]
+            | None
+        ) = None
         try:
             account = self.gateway.adapter.account_snapshot()
             owner_band_equity = account.equity
@@ -926,15 +931,11 @@ class InstitutionalExecutionEngine:
                     )
                 from app.domain.entities.risk_engine import contract_size_for_symbol
 
-                live_constraints = self.order_validation.constraints_for(
-                    intent.symbol
-                )
+                live_constraints = self.order_validation.constraints_for(intent.symbol)
                 live_cs = (
                     live_constraints.contract_size
                     if live_constraints.contract_size > 0
-                    else contract_size_for_symbol(
-                        intent.symbol, default=Decimal("0")
-                    )
+                    else contract_size_for_symbol(intent.symbol, default=Decimal("0"))
                 )
                 live_tick_size: Decimal | None = None
                 live_tick_value: Decimal | None = None
@@ -967,6 +968,22 @@ class InstitutionalExecutionEngine:
                         contract_size=live_cs,
                     )
                 )
+                point = (
+                    live_constraints.point
+                    if live_constraints.point > 0
+                    else Decimal("0")
+                )
+                slip_points = Decimal(int(intent.slippage.value or 0))
+                slip_price = (
+                    slip_points * point
+                    if point > 0 and slip_points > 0
+                    else Decimal("0")
+                )
+                fit_tick = (
+                    live_tick_size
+                    if live_tick_size is not None and live_tick_size > 0
+                    else (point if point > 0 else None)
+                )
                 assessment = live_risk.evaluate(
                     RiskCheckInput(
                         user_id=user_id,
@@ -981,6 +998,7 @@ class InstitutionalExecutionEngine:
                         contract_size=live_cs,
                         tick_size=live_tick_size,
                         tick_value=live_tick_value,
+                        slippage=slip_price,
                     ),
                     account=account,
                     positions=positions,
@@ -1051,17 +1069,13 @@ class InstitutionalExecutionEngine:
                         intent = replace(intent, volume=LotSize.of(str(approved)))
                         volume = str(intent.volume.value)
                 if not risk_reject and not _is_manage_intent(intent):
-                    intent, _post_notes = self.order_validation.normalize_intent(
-                        intent
-                    )
+                    intent, _post_notes = self.order_validation.normalize_intent(intent)
                     volume = str(intent.volume.value)
                     post_constraints = self.order_validation.constraints_for(
                         intent.symbol
                     )
-                    ok_final_vol, msg_final_vol = (
-                        self.order_validation.validate_volume(
-                            intent, post_constraints
-                        )
+                    ok_final_vol, msg_final_vol = self.order_validation.validate_volume(
+                        intent, post_constraints
                     )
                     if not ok_final_vol:
                         risk_reject = [
@@ -1085,21 +1099,24 @@ class InstitutionalExecutionEngine:
                         ]
                     else:
                         weekly_raw = getattr(account, "weekly_pnl", None)
-                        weekly_known = bool(
-                            getattr(account, "weekly_pnl_known", True)
-                        )
+                        weekly_known = bool(getattr(account, "weekly_pnl_known", True))
                         weekly_for_owner = (
                             None
                             if (not weekly_known or weekly_raw is None)
                             else Decimal(str(weekly_raw))
                         )
                         peak_raw = getattr(account, "peak_equity", None)
-                        peak_known = bool(
-                            getattr(account, "peak_equity_known", False)
-                        )
+                        peak_known = bool(getattr(account, "peak_equity_known", False))
                         peak_for_owner = (
                             None if peak_raw is None else Decimal(str(peak_raw))
                         )
+                        money_cs = price_unit_value(
+                            contract_size=live_cs,
+                            tick_size=live_tick_size,
+                            tick_value=live_tick_value,
+                        )
+                        if money_cs <= 0:
+                            money_cs = live_cs
                         risk_reject = evaluate_owner_entry(
                             symbol=intent.symbol,
                             side=intent.side.value,
@@ -1109,25 +1126,27 @@ class InstitutionalExecutionEngine:
                                 intent.stop_loss.value if intent.stop_loss else None
                             ),
                             take_profit=(
-                                intent.take_profit.value
-                                if intent.take_profit
-                                else None
+                                intent.take_profit.value if intent.take_profit else None
                             ),
                             spread=spread_val,
-                            contract_size=live_cs,
+                            contract_size=money_cs,
                             equity=account.equity,
                             min_stop_distance=owner_min_stop,
                             weekly_pnl=weekly_for_owner,
                             peak_equity=peak_for_owner,
                             peak_known=peak_known,
+                            slippage=slip_price,
+                            tick_size=fit_tick,
                         )
                         owner_presend_ctx = (
                             account.equity,
-                            live_cs,
+                            money_cs,
                             owner_min_stop,
                             weekly_for_owner,
                             peak_for_owner,
                             peak_known,
+                            slip_price,
+                            fit_tick,
                         )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
@@ -1315,9 +1334,7 @@ class InstitutionalExecutionEngine:
                             contract_size_for=lambda symbol: (
                                 contract_size_for_symbol(
                                     str(symbol or intent.symbol),
-                                    default=band_cs
-                                    if band_cs > 0
-                                    else Decimal("100"),
+                                    default=band_cs if band_cs > 0 else Decimal("100"),
                                 )
                             ),
                         )
@@ -1494,9 +1511,7 @@ class InstitutionalExecutionEngine:
                     )
                     return result, decision
             else:
-                fail_closed = (
-                    "pre_order_send missing valid initial stop — fail closed"
-                )
+                fail_closed = "pre_order_send missing valid initial stop — fail closed"
                 self._observe(
                     user_id=uid,
                     request_id=request_id,
@@ -1521,18 +1536,14 @@ class InstitutionalExecutionEngine:
                     latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
                     idempotent_replay=decision.idempotent_replay,
                 )
-                result.journal_entry = self._write_journal(
-                    result, intent, None, uid
-                )
+                result.journal_entry = self._write_journal(result, intent, None, uid)
                 return result, decision
 
         if (
             not _explicit_risk_reducing(intent)
             and not str(intent.client_order_id or "").strip()
         ):
-            intent = replace(
-                intent, client_order_id=str(request_id or "").strip()[:64]
-            )
+            intent = replace(intent, client_order_id=str(request_id or "").strip()[:64])
         t0 = time.perf_counter()
         send_request = self.gateway.prepare(intent)
         if (
@@ -1600,6 +1611,8 @@ class InstitutionalExecutionEngine:
                     p_weekly,
                     p_peak,
                     p_peak_known,
+                    p_slip,
+                    p_tick,
                 ) = owner_presend_ctx
                 presend_reject = presend_owner_violations(
                     symbol=intent.symbol,
@@ -1617,6 +1630,8 @@ class InstitutionalExecutionEngine:
                     weekly_pnl=p_weekly,
                     peak_equity=p_peak,
                     peak_known=p_peak_known,
+                    slippage=p_slip,
+                    tick_size=p_tick,
                 )
             except (
                 OSError,

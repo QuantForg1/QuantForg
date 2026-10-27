@@ -282,6 +282,66 @@ class ExecutionSafetyService:
             ["possible replay or accidental resubmit"],
         )
 
+    def _owner_planned_risk_reason(
+        self,
+        intent: OrderIntent,
+        *,
+        calculated: CalculatedRisk,
+    ) -> str | None:
+        """Dollar cap shared with ``evaluate_owner_entry``.
+
+        Returns a rejection sentence, ``""`` when the check passed, or
+        ``None`` when it does not apply (no stop, or equity could not be
+        read). A missing equity read is not a new fail-closed here: submit
+        already rejects when equity is unknown.
+        """
+        if calculated.stop_distance_points <= 0 or intent.stop_loss is None:
+            return None
+        try:
+            account = self.adapter.account_info()
+            equity = Decimal(str(account.equity))
+        except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
+            return None
+        if equity <= 0:
+            return None
+        try:
+            cons = self.order_validation.constraints_for(intent.symbol)
+        except (OSError, RuntimeError, ValueError, TypeError):
+            return None
+        point = cons.point if cons.point > 0 else Decimal("0")
+        if point <= 0 or cons.contract_size <= 0:
+            return None
+        stop_distance = calculated.stop_distance_points * point
+        slip_points = Decimal(int(intent.slippage.value or 0))
+        slippage = slip_points * point if slip_points > 0 else Decimal("0")
+        from app.domain.institutional_trading.owner_live_limits import (
+            format_owner_sl_risk,
+            max_planned_risk_usd,
+            planned_risk_usd,
+        )
+
+        risk = planned_risk_usd(
+            stop_distance=stop_distance,
+            spread=calculated.spread,
+            contract_size=cons.contract_size,
+            volume=intent.volume.value,
+            slippage=slippage,
+        )
+        cap = max_planned_risk_usd(equity)
+        if risk <= cap:
+            return ""
+        return format_owner_sl_risk(
+            risk_usd=risk,
+            cap=cap,
+            equity=equity,
+            stop_distance=stop_distance,
+            spread=calculated.spread,
+            volume=intent.volume.value,
+            contract_size=cons.contract_size,
+            slippage=slippage,
+            tick_size=point,
+        )
+
     def decide(
         self,
         *,
@@ -363,6 +423,17 @@ class ExecutionSafetyService:
         else:
             decision = ExecutionDecision.ALLOW
             reasons = []
+
+        if decision is ExecutionDecision.ALLOW:
+            owner_reason = self._owner_planned_risk_reason(
+                intent, calculated=calculated
+            )
+            if owner_reason:
+                decision = ExecutionDecision.REJECT
+                reasons.append(owner_reason)
+                all_checks["owner_planned_risk"] = False
+            elif owner_reason == "":
+                all_checks["owner_planned_risk"] = True
 
         reject_reasons = reasons if decision is not ExecutionDecision.ALLOW else []
         record = ExecutionDecisionRecord.record(

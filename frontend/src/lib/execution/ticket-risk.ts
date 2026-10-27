@@ -2,12 +2,13 @@
  * Order-ticket risk from the ticket's own numbers, checked against the owner
  * live limits (mirror of app/domain/institutional_trading/owner_live_limits.py).
  *
- * Planned risk = (|entry - SL| + spread) x contract size x lots, capped at 9%
- * of live equity. Reward:risk counts the spread once on the risk leg:
- * |TP - entry| / (|entry - SL| + spread) >= 1.5.
+ * Planned risk = (|entry - SL| + spread + slippage) x contract x lots
+ * + commission, rounded up to the cent. The 9% cap is rounded down.
+ * Risk is never rounded down to pass. Reward:risk counts the spread once
+ * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 1.5.
  *
- * 9% is a maximum PLANNED risk, not a cap on realised loss: slippage, gaps,
- * commissions and execution failures can make a loss larger.
+ * 9% is a maximum PLANNED risk, not a cap on realised loss: gaps and
+ * execution failures can make a loss larger.
  */
 
 export const OWNER_MAX_LOT = 0.01;
@@ -30,6 +31,12 @@ export type TicketRiskInput = {
   contractSize: number;
   equity: number;
   spread: number;
+  /** Order deviation in price units. Omitted means zero, not an extra spread. */
+  slippage?: number;
+  /** Known commission in account currency. Omitted means zero. */
+  commission?: number;
+  /** Price increment used to suggest a stop that fits the cap. */
+  tickSize?: number;
   /** Defaults to now; injectable for tests. */
   now?: Date;
 };
@@ -39,8 +46,50 @@ export type TicketRisk = {
   riskPctOfEquity: number | null;
   rewardRiskAfterSpread: number | null;
   maxSlRiskUsd: number;
+  slDistance: number | null;
+  tpDistance: number | null;
+  fittedStopDistance: number | null;
+  correction: string | null;
   violations: string[];
 };
+
+/** Round a monetary amount up to the cent. An exact cent stays on that cent. */
+export function moneyUp(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Number((Math.ceil(Number((value * 100).toFixed(6))) / 100).toFixed(2));
+}
+
+/** Largest stop distance whose ceiling risk is still within `cap`. */
+export function maximumAffordableStopDistance(params: {
+  cap: number;
+  spread: number;
+  contractSize: number;
+  lots: number;
+  slippage?: number;
+  commission?: number;
+  tickSize?: number;
+}): number | null {
+  const slippage = Math.max(0, params.slippage ?? 0);
+  const commission = Math.max(0, params.commission ?? 0);
+  const spread = Math.max(0, params.spread);
+  const tick = params.tickSize && params.tickSize > 0 ? params.tickSize : 0.001;
+  const per = params.contractSize * params.lots;
+  if (!(params.cap > 0) || !(per > 0)) return null;
+  const room = params.cap - commission;
+  if (room <= 0) return null;
+  const raw = room / per - (spread + slippage);
+  if (!(raw > 0)) return null;
+  let steps = Math.floor((raw + 1e-9) / tick);
+  let fitted = Number((steps * tick).toFixed(6));
+  while (
+    fitted > 0 &&
+    moneyUp((fitted + spread + slippage) * per + commission) > params.cap + 1e-9
+  ) {
+    steps -= 1;
+    fitted = Number((steps * tick).toFixed(6));
+  }
+  return fitted > 0 ? fitted : null;
+}
 
 function finitePositive(n: number): boolean {
   return Number.isFinite(n) && n > 0;
@@ -78,6 +127,10 @@ export function ticketRisk(input: TicketRiskInput): TicketRisk {
       riskPctOfEquity: null,
       rewardRiskAfterSpread: null,
       maxSlRiskUsd: cap,
+      slDistance: null,
+      tpDistance: null,
+      fittedStopDistance: null,
+      correction: null,
       violations,
     };
   }
@@ -92,21 +145,60 @@ export function ticketRisk(input: TicketRiskInput): TicketRisk {
 
   const slDist = Math.abs(entry - stopLoss);
   const tpDist = Math.abs(takeProfit - entry);
+  const slip = Number.isFinite(input.slippage) && (input.slippage ?? 0) > 0 ? (input.slippage as number) : 0;
+  const fee = Number.isFinite(input.commission) && (input.commission ?? 0) > 0 ? (input.commission as number) : 0;
+  if (!finitePositive(contractSize)) violations.push("Contract size unknown — cannot price risk");
   const riskUsd =
     finitePositive(contractSize) && finitePositive(lots) && Number.isFinite(spr)
-      ? Math.round((slDist + spr) * contractSize * lots * 100) / 100
+      ? moneyUp((slDist + spr + slip) * contractSize * lots + fee)
       : null;
   const riskPctOfEquity =
     riskUsd != null && finitePositive(equity) ? (riskUsd / equity) * 100 : null;
-  if (riskUsd != null && finitePositive(equity) && riskUsd > cap + 1e-9)
+  let fittedStopDistance: number | null = null;
+  let correction: string | null = null;
+  if (riskUsd != null && finitePositive(equity) && riskUsd > cap + 1e-9) {
+    fittedStopDistance =
+      Number.isFinite(spr)
+        ? maximumAffordableStopDistance({
+            cap,
+            spread: spr,
+            contractSize,
+            lots,
+            slippage: slip,
+            commission: fee,
+            tickSize: input.tickSize,
+          })
+        : null;
+    if (fittedStopDistance == null) {
+      const bare = moneyUp((spr + slip) * contractSize * lots + fee);
+      correction =
+        `Minimum volume ${lots} costs $${bare.toFixed(2)} before any protective stop, ` +
+        `which is above the owner cap $${cap.toFixed(2)}. No smaller lot is allowed, ` +
+        "so this order cannot be submitted.";
+    } else {
+      correction =
+        `Tighten the stop to ${fittedStopDistance} or less so planned risk fits ` +
+        `$${cap.toFixed(2)}. The lot cannot be reduced below ${lots}.`;
+    }
     violations.push(
       `Planned risk $${riskUsd.toFixed(2)} > owner cap $${cap.toFixed(2)} ` +
-        `(${OWNER_MAX_PLANNED_RISK_PCT}% of equity)`,
+        `(${OWNER_MAX_PLANNED_RISK_PCT}% of equity). ${correction}`,
     );
+  }
   const rewardRiskAfterSpread = Number.isFinite(spr) ? tpDist / (slDist + spr) : null;
   if (rewardRiskAfterSpread != null && rewardRiskAfterSpread < OWNER_MIN_REWARD_RISK)
     violations.push(
       `Reward:risk after spread ${rewardRiskAfterSpread.toFixed(2)} < ${OWNER_MIN_REWARD_RISK.toFixed(2)}`,
     );
-  return { riskUsd, riskPctOfEquity, rewardRiskAfterSpread, maxSlRiskUsd: cap, violations };
+  return {
+    riskUsd,
+    riskPctOfEquity,
+    rewardRiskAfterSpread,
+    maxSlRiskUsd: cap,
+    slDistance: slDist,
+    tpDistance: tpDist,
+    fittedStopDistance,
+    correction,
+    violations,
+  };
 }

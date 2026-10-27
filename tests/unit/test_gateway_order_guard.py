@@ -154,14 +154,38 @@ class TestEntries:
         assert _code(exc) == "GUARD_SL_WRONG_SIDE"
 
     def test_exact_nine_percent_is_allowed_and_above_is_rejected(self) -> None:
-        # 0.01 lot, tick 0.01 / $1: planned loss equals the stop distance.
-        # $9.00 is exactly 9% of $100. $9.01 is over.
-        allowed = _entry(sl=4093.20, tp=4120.0, client_order_id="exact-9")
+        # 0.01 lot, tick 0.01 / $1, and the quote spread of 0.20 counts.
+        # Distance 8.80 + spread 0.20 = $9.00, exactly 9% of $100.
+        # One further tick is $9.01 and is rejected.
+        allowed = _entry(sl=4093.40, tp=4120.0, client_order_id="exact-9")
         assert _guard(allowed, equity=Decimal("100")) == KIND_ENTRY
         with pytest.raises(OrderGuardRejected) as exc:
             _guard(
-                _entry(sl=4093.19, tp=4120.0, client_order_id="over-9"),
+                _entry(sl=4093.39, tp=4120.0, client_order_id="over-9"),
                 equity=Decimal("100"),
+            )
+        assert _code(exc) == "GUARD_MAX_RISK"
+        assert "9.01" in str(exc.value)
+
+    def test_order_slippage_counts_toward_the_cap(self) -> None:
+        quote = {
+            "bid": "4102.00",
+            "ask": "4102.20",
+            "specs": {
+                "contract_size": "100",
+                "tick_size": "0.01",
+                "tick_value": "1",
+                "point": "0.01",
+            },
+        }
+        # 8.70 + spread 0.20 + slippage 10 * 0.01 = 9.00.
+        allowed = _entry(sl=4093.50, tp=4120.0, client_order_id="slip-ok", slippage=10)
+        assert _guard(allowed, equity=Decimal("100"), quote=quote) == KIND_ENTRY
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(
+                _entry(sl=4093.49, tp=4120.0, client_order_id="slip-over", slippage=10),
+                equity=Decimal("100"),
+                quote=quote,
             )
         assert _code(exc) == "GUARD_MAX_RISK"
 

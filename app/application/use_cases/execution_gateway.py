@@ -363,14 +363,26 @@ class SubmitExecutionUseCase:
                         )
                     )
                     await uow.commit()
+                reasons = list(pipeline.rejection_reasons)
+                owner_sl = next(
+                    (
+                        reason
+                        for reason in reasons
+                        if reason.startswith("OWNER_SL_RISK:")
+                    ),
+                    None,
+                )
                 raise ValidationError(
                     pipeline.message or "Execution pipeline rejected order",
                     details={
                         "code": "execution_pipeline_rejected",
                         "request_id": request_id,
                         "outcome": pipeline.outcome,
-                        "rejection_reasons": list(pipeline.rejection_reasons),
+                        "rejection_reasons": reasons,
                         "stages": [s.to_dict() for s in pipeline.stages],
+                        **(
+                            {"owner_sl_risk": {"message": owner_sl}} if owner_sl else {}
+                        ),
                     },
                 )
 

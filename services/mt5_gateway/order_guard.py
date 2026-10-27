@@ -32,7 +32,6 @@ from app.domain.trading.gold_only import is_gold_symbol
 RETCODE_ORDER_GUARD_REJECTED = 90002
 
 OWNER_MAX_ENTRY_VOLUME = 0.01
-_CENTS = Decimal("0.01")
 CLIENT_ORDER_ID_TTL_SECONDS = 24 * 3600
 _CLIENT_ORDER_ID_MAX_TRACKED = 10_000
 _VOLUME_EPSILON = 1e-9
@@ -182,29 +181,63 @@ def _read_positions(
         raise OrderGuardRejected(code, "open positions could not be read") from None
 
 
+def _quote_spread(quote: dict[str, Any]) -> Decimal:
+    bid = _decimal(quote.get("bid"))
+    ask = _decimal(quote.get("ask"))
+    if bid is None or ask is None or ask < bid:
+        return Decimal("0")
+    return ask - bid
+
+
+def _order_slippage_price(body: dict[str, Any], quote: dict[str, Any]) -> Decimal:
+    """Deviation in price units. Points without a broker point stay unpriced."""
+    points = _decimal(body.get("slippage"))
+    if points is None or points <= 0:
+        points = _decimal(body.get("deviation"))
+    if points is None or points <= 0:
+        return Decimal("0")
+    specs = quote.get("specs") if isinstance(quote.get("specs"), dict) else {}
+    point = _decimal((specs or {}).get("point"))
+    if point is None or point <= 0:
+        point = _decimal((specs or {}).get("tick_size"))
+    if point is None or point <= 0:
+        return Decimal("0")
+    return points * point
+
+
 def _planned_loss_usd(
     *,
     volume: Decimal,
     price: Decimal,
     stop: Decimal,
     quote: dict[str, Any],
+    slippage: Decimal | None = None,
 ) -> Decimal:
+    from app.domain.institutional_trading.owner_live_limits import (
+        planned_risk_usd,
+        price_unit_value,
+    )
+
     specs = quote.get("specs") if isinstance(quote.get("specs"), dict) else {}
     tick_size = _decimal((specs or {}).get("tick_size"))
     tick_value = _decimal((specs or {}).get("tick_value"))
     contract = _decimal((specs or {}).get("contract_size"))
-    distance = abs(price - stop)
-    if (
-        tick_size is not None
-        and tick_value is not None
-        and tick_size > 0
-        and tick_value > 0
-    ):
-        return (volume * (distance / tick_size) * tick_value).quantize(_CENTS)
-    if contract is not None and contract > 0:
-        return (volume * distance * contract).quantize(_CENTS)
-    raise OrderGuardRejected(
-        "GUARD_RISK_UNAVAILABLE", "planned loss cannot be priced from the live quote"
+    per_price = price_unit_value(
+        contract_size=contract if contract is not None else Decimal("0"),
+        tick_size=tick_size,
+        tick_value=tick_value,
+    )
+    if per_price <= 0:
+        raise OrderGuardRejected(
+            "GUARD_RISK_UNAVAILABLE",
+            "planned loss cannot be priced from the live quote",
+        )
+    return planned_risk_usd(
+        stop_distance=abs(price - stop),
+        spread=_quote_spread(quote),
+        contract_size=per_price,
+        volume=volume,
+        slippage=slippage,
     )
 
 
@@ -294,14 +327,23 @@ def _check_entry(
         reference = bid
     else:
         raise OrderGuardRejected("GUARD_SIDE", "entry side must be buy or sell")
+    slip = _order_slippage_price(body, quote)
     loss = _planned_loss_usd(
-        volume=Decimal(str(volume)), price=reference, stop=stop, quote=quote
+        volume=Decimal(str(volume)),
+        price=reference,
+        stop=stop,
+        quote=quote,
+        slippage=slip,
     )
     cap = max_planned_risk_usd(equity)
     if loss > cap:
         raise OrderGuardRejected(
             "GUARD_MAX_RISK",
-            f"planned loss {loss} exceeds 9% of equity ({cap})",
+            (
+                f"planned loss {loss} exceeds 9% of equity ({cap}); "
+                f"stop distance {abs(reference - stop)} plus spread "
+                f"{_quote_spread(quote)} plus slippage {slip}"
+            ),
         )
     client_order_id = str(body.get("client_order_id") or "").strip()
     if not client_order_id:
