@@ -100,6 +100,9 @@ def first_blocking_gate_from_reasons(
         for tok in ("SAFETY_BLOCKED", "KILL_SWITCH", "AUTO_TRADING_BLOCKED")
     ):
         return SAFETY_BLOCKED
+    # The owner quality floor is its own pre-OMS gate.
+    if "OWNER_MIN_TRADE_QUALITY" in hay:
+        return "OWNER_MIN_TRADE_QUALITY"
     if "OMS" in hay and "REJECT" in hay:
         return OMS_REJECTED
     if "MT5" in hay and "REJECT" in hay:

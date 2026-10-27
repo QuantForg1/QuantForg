@@ -90,3 +90,20 @@ def resolve_executable_direction(
         reason="No validated BUY/SELL edge — NO_TRADE",
         source="none",
     )
+
+
+def quality_block_detail(
+    *,
+    executable_reason: str,
+    reject_reason: str | None,
+) -> str:
+    """Keep the hard-gate text when a scored side is withheld from OMS.
+
+    Direction stays NONE. The operator-facing reason is the gate that
+    rejected the score, not a second claim that the strategy had no side.
+    """
+    detail = (reject_reason or "").strip()
+    if detail:
+        return detail
+    fallback = (executable_reason or "").strip()
+    return fallback or "no_validated_direction"

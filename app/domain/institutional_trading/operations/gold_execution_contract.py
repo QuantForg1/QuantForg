@@ -118,6 +118,19 @@ def _reasons_indicate_min_lot(reasons: tuple[str, ...] | list[str] | None) -> bo
     )
 
 
+def _owner_quality_block_text(
+    reasons: tuple[str, ...] | list[str] | None,
+) -> str | None:
+    """Return the owner quality sentence when that gate withheld the side."""
+    for raw in reasons or ():
+        text = str(raw or "").strip()
+        if text.lower().startswith("ai_scalping_quality_reject:"):
+            text = text.split(":", 1)[1].strip()
+        if "OWNER_MIN_TRADE_QUALITY" in text.upper() and text:
+            return text
+    return None
+
+
 def _as_decimal(value: Any) -> Decimal | None:
     if value is None or value == "":
         return None
@@ -451,12 +464,17 @@ def evaluate_gold_execution_contract(
     # --- DECISION ---
     # DIRECTION_NONE only when the decision engine itself produced no side.
     # action=NO_TRADE with a proven BUY/SELL is a downstream Risk/Safety hold.
+    # A scored side withheld by the owner quality floor keeps that floor text.
     decision_fail: dict[str, Any] | None = None
     if direction not in {"BUY", "SELL"}:
+        quality_text = _owner_quality_block_text(facts.risk_reasons)
         decision_fail = _stage_fail(
             stage="DECISION",
-            code="DIRECTION_NONE",
-            reason="direction MUST be BUY or SELL — never send when direction=NONE",
+            code="OWNER_MIN_TRADE_QUALITY" if quality_text else "DIRECTION_NONE",
+            reason=(
+                quality_text
+                or "direction MUST be BUY or SELL — never send when direction=NONE"
+            ),
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
             next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
             current=direction,
@@ -721,8 +739,21 @@ def evaluate_gold_execution_contract(
         stamps["optimizer_execute_now"] = _utc_now()
 
     # --- OMS / BROKER readiness (authority still the existing OMS/Gateway) ---
+    # An earlier gate means OMS was not called. Do not mark it FAIL.
+    earlier_block = any(
+        (
+            market_fail,
+            strategy_fail,
+            decision_fail,
+            safety_fail,
+            risk_fail,
+            sizing_fail,
+            portfolio_fail,
+            optimizer_fail,
+        )
+    )
     oms_fail: dict[str, Any] | None = None
-    if facts.force_shadow:
+    if not earlier_block and facts.force_shadow:
         oms_fail = _stage_fail(
             stage="OMS",
             code="SHADOW_NO_SUBMIT",
@@ -732,7 +763,7 @@ def evaluate_gold_execution_contract(
         )
         mark("OMS", StageStatus.WAIT.value)
         failures.append(oms_fail)
-    elif not facts.oms_orders_allowed:
+    elif not earlier_block and not facts.oms_orders_allowed:
         oms_fail = _stage_fail(
             stage="OMS",
             code="OMS_NOT_READY",
@@ -742,7 +773,10 @@ def evaluate_gold_execution_contract(
         )
         mark("OMS", StageStatus.BLOCK.value)
         failures.append(oms_fail)
-    elif stages.get("OPTIMIZER") == StageStatus.PASS.value:
+    elif (
+        not earlier_block
+        and stages.get("OPTIMIZER") == StageStatus.PASS.value
+    ):
         mark("OMS", StageStatus.PASS.value)
         stamps["oms_authorized"] = _utc_now()
 

@@ -2,6 +2,9 @@
 
 import { asList, asRecord, bool, num, str } from "@/lib/desk";
 
+/** Owner hard floor. Swing ITE defaults stay 80 and are not this fallback. */
+const OWNER_MIN_TRADE_QUALITY = 75;
+
 export type TrendBoard = {
   h4: string;
   h1: string;
@@ -127,13 +130,13 @@ function parseCycle(raw: unknown): DiagnosticCycle {
     },
     quality: {
       score: scoreOrNull(quality.score),
-      required: num(quality.required, 80),
+      required: num(quality.required, OWNER_MIN_TRADE_QUALITY),
       difference: scoreOrNull(quality.difference),
       passed: quality.passed == null ? null : bool(quality.passed),
     },
     confluence: {
       total: scoreOrNull(confluence.total),
-      required: num(confluence.required, 80),
+      required: num(confluence.required, OWNER_MIN_TRADE_QUALITY),
       difference: scoreOrNull(confluence.difference),
       passed: confluence.passed == null ? null : bool(confluence.passed),
       components: {
@@ -182,8 +185,8 @@ export function buildStrategyDiagnosticsModel(
   return {
     advisoryOnly: root.advisory_only == null ? true : bool(root.advisory_only),
     thresholds: {
-      requiredQuality: num(thresholds.required_quality, 80),
-      requiredConfluence: num(thresholds.required_confluence, 80),
+      requiredQuality: num(thresholds.required_quality, OWNER_MIN_TRADE_QUALITY),
+      requiredConfluence: num(thresholds.required_confluence, OWNER_MIN_TRADE_QUALITY),
     },
     latest,
     cycles,
