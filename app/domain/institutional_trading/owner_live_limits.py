@@ -360,6 +360,8 @@ def evaluate_owner_entry(
     min_stop_distance: Decimal = Decimal("0"),
     now: datetime | None = None,
     weekly_pnl: Decimal | None = None,
+    peak_equity: Decimal | None = None,
+    peak_known: bool = True,
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
@@ -375,6 +377,7 @@ def evaluate_owner_entry(
         active_max_spread,
         active_min_lot,
         active_min_reward_risk,
+        drawdown_limit_pct,
         full_utc_day_required,
         policy_unavailable,
         weekly_loss_limit_pct,
@@ -489,6 +492,30 @@ def evaluate_owner_entry(
                         f"OWNER_WEEKLY_LOSS: weekly loss {loss} > {cap_usd} "
                         f"({week_cap}% of week-start equity)"
                     )
+    dd_cap = drawdown_limit_pct()
+    if dd_cap > 0:
+        if not peak_known or peak_equity is None:
+            violations.append(
+                "DRAWDOWN_BASE_UNAVAILABLE: overall drawdown halt is configured "
+                "but the stored equity peak could not be read"
+            )
+        else:
+            peak = Decimal(str(peak_equity))
+            if peak <= 0 or eq <= 0:
+                violations.append(
+                    "DRAWDOWN_BASE_UNAVAILABLE: overall drawdown halt is configured "
+                    "but the stored equity peak could not be read"
+                )
+            else:
+                loss = peak - eq
+                if loss < 0:
+                    loss = Decimal("0")
+                cap_usd = (peak * dd_cap / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
+                if loss > cap_usd:
+                    violations.append(
+                        f"OWNER_DRAWDOWN: equity drawdown {loss} > {cap_usd} "
+                        f"({dd_cap}% of peak equity {peak})"
+                    )
     return violations
 
 
@@ -508,6 +535,9 @@ def presend_owner_violations(
     min_stop_distance: Decimal = Decimal("0"),
     rr_buffer: Decimal = OWNER_RR_SLIPPAGE_BUFFER,
     now: datetime | None = None,
+    weekly_pnl: Decimal | None = None,
+    peak_equity: Decimal | None = None,
+    peak_known: bool = True,
 ) -> list[str]:
     """Final owner check on the exact tick the market request was built from.
 
@@ -528,6 +558,9 @@ def presend_owner_violations(
         equity=equity,
         min_stop_distance=min_stop_distance,
         now=now,
+        weekly_pnl=weekly_pnl,
+        peak_equity=peak_equity,
+        peak_known=peak_known,
     )
     drift = stop_shrink_violation(
         side=side,

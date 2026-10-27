@@ -169,6 +169,12 @@ class AccountRiskState:
     # Account-wide MT5 ticket count — observability / margin context only.
     # Never use this as the QuantForg strategy position cap.
     account_open_positions: int | None = None
+    # False when deal history did not confirm weekly P/L. The owner halt
+    # then fails closed, but only after a nonzero weekly limit is saved.
+    weekly_pnl_known: bool = True
+    # False until the durable equity peak has been read. Missing stays off
+    # until the owner saves a drawdown halt.
+    peak_equity_known: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {

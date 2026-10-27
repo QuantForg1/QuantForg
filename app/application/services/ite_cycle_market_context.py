@@ -1300,11 +1300,24 @@ async def build_ite_cycle_market_context(
     except Exception:
         diag["symbol_performance_read_failed"] = True
 
+    peak_equity_known = False
+    try:
+        from app.application.services.equity_peak_store import observe_equity_peak
+
+        stored_peak, peak_equity_known = observe_equity_peak(equity)
+        if peak_equity_known and stored_peak is not None:
+            peak_equity = stored_peak
+    except Exception as exc:
+        logger.warning("equity_peak_observe_failed", error_type=type(exc).__name__)
+        peak_equity_known = False
+
     account = AccountRiskState(
         equity=equity,
         peak_equity=peak_equity if peak_equity > 0 else equity,
         daily_pnl=daily_pnl,
         weekly_pnl=weekly_pnl,
+        weekly_pnl_known=bool(daily_pnl_trusted),
+        peak_equity_known=peak_equity_known,
         monthly_pnl=monthly_pnl,
         open_positions=open_n,
         already_in_trade=open_n > 0,

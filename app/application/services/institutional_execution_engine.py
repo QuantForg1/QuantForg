@@ -839,7 +839,9 @@ class InstitutionalExecutionEngine:
         # Equity for the owner's dynamic 9% planned-risk cap (band check below).
         owner_band_equity: Decimal | None = None
         # (equity, contract size, stops-level distance) for the pre-send check.
-        owner_presend_ctx: tuple[Decimal, Decimal, Decimal] | None = None
+        owner_presend_ctx: tuple[
+            Decimal, Decimal, Decimal, Decimal | None, Decimal | None, bool
+        ] | None = None
         try:
             account = self.gateway.adapter.account_snapshot()
             owner_band_equity = account.equity
@@ -1083,6 +1085,21 @@ class InstitutionalExecutionEngine:
                         ]
                     else:
                         weekly_raw = getattr(account, "weekly_pnl", None)
+                        weekly_known = bool(
+                            getattr(account, "weekly_pnl_known", True)
+                        )
+                        weekly_for_owner = (
+                            None
+                            if (not weekly_known or weekly_raw is None)
+                            else Decimal(str(weekly_raw))
+                        )
+                        peak_raw = getattr(account, "peak_equity", None)
+                        peak_known = bool(
+                            getattr(account, "peak_equity_known", False)
+                        )
+                        peak_for_owner = (
+                            None if peak_raw is None else Decimal(str(peak_raw))
+                        )
                         risk_reject = evaluate_owner_entry(
                             symbol=intent.symbol,
                             side=intent.side.value,
@@ -1100,13 +1117,18 @@ class InstitutionalExecutionEngine:
                             contract_size=live_cs,
                             equity=account.equity,
                             min_stop_distance=owner_min_stop,
-                            weekly_pnl=(
-                                None
-                                if weekly_raw is None
-                                else Decimal(str(weekly_raw))
-                            ),
+                            weekly_pnl=weekly_for_owner,
+                            peak_equity=peak_for_owner,
+                            peak_known=peak_known,
                         )
-                    owner_presend_ctx = (account.equity, live_cs, owner_min_stop)
+                        owner_presend_ctx = (
+                            account.equity,
+                            live_cs,
+                            owner_min_stop,
+                            weekly_for_owner,
+                            peak_for_owner,
+                            peak_known,
+                        )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
 
@@ -1571,7 +1593,14 @@ class InstitutionalExecutionEngine:
                     "sl": str(presend_request.stop_loss),
                     "tp": str(presend_request.take_profit),
                 }
-                p_equity, p_cs, p_min_stop = owner_presend_ctx
+                (
+                    p_equity,
+                    p_cs,
+                    p_min_stop,
+                    p_weekly,
+                    p_peak,
+                    p_peak_known,
+                ) = owner_presend_ctx
                 presend_reject = presend_owner_violations(
                     symbol=intent.symbol,
                     side=intent.side.value,
@@ -1585,6 +1614,9 @@ class InstitutionalExecutionEngine:
                     contract_size=p_cs,
                     equity=p_equity,
                     min_stop_distance=p_min_stop,
+                    weekly_pnl=p_weekly,
+                    peak_equity=p_peak,
+                    peak_known=p_peak_known,
                 )
             except (
                 OSError,

@@ -6,6 +6,7 @@ export const POLICY_NUMERIC_KEYS = [
   "max_planned_risk_pct",
   "daily_loss_pct",
   "weekly_loss_pct",
+  "max_drawdown_pct",
   "max_aggregate_open_risk_pct",
   "min_lot",
   "max_lot",
