@@ -16,6 +16,7 @@ from typing import Any
 from app.application.services.institutional_trading_analysis import (
     InstitutionalTradingAnalysisService,
 )
+from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.decision_models import AccountRiskState
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.institutional_trading.owner_live_limits import OWNER_SL_ATR_TIMEFRAME
@@ -151,6 +152,26 @@ _SCALP_REQUIRED_TFS: tuple[Timeframe, ...] = (
     Timeframe.M5,
     Timeframe.M1,
 )
+
+
+def _resolved_analysis_config(ite_config: ITEConfig | None) -> ITEConfig:
+    """Use the caller's strategy config. Omitted config stays the swing default."""
+    return ite_config if ite_config is not None else DEFAULT_ITE_CONFIG
+
+
+def _analysis_config_fingerprint(cfg: ITEConfig) -> str:
+    """Identity of the fields that change the quality snapshot.
+
+    Same-cycle reuse must not hand a swing snapshot to a scalping decision,
+    or the reverse. Candle timestamps are not part of this key.
+    """
+    frames = ",".join(tf.value for tf in cfg.analysis_timeframes())
+    return (
+        f"{cfg.trading_mode}|{cfg.primary_structure_tf.value}|{frames}|"
+        f"q{cfg.min_trade_quality_score}|c{cfg.min_confluence_score}|"
+        f"sf{cfg.max_spread_for_full_score}|sr{cfg.max_spread_reject}|"
+        f"sw{cfg.swing_left}/{cfg.swing_right}|n{cfg.candle_limit}"
+    )
 
 
 def _scalping_stack() -> bool:
@@ -465,6 +486,7 @@ async def build_ite_cycle_market_context(
     reuse_cycle: bool = True,
     research_mode: bool = False,
     purpose: str = "execution",
+    ite_config: ITEConfig | None = None,
 ) -> IteCycleMarketContext:
     """Load multi-TF bars + account for one cycle.
 
@@ -475,9 +497,24 @@ async def build_ite_cycle_market_context(
     ``purpose="scan"`` skips per-symbol history/position/health stampedes so
     the bounded multi-market scan can finish inside the cycle budget. The
     execution path still loads the full account bundle.
+
+    ``ite_config`` is the strategy selected by the caller. When it is omitted
+    the analysis service keeps ``DEFAULT_ITE_CONFIG`` (swing). A same-cycle
+    cache hit is reused only when that analysis configuration matches.
     """
     import time
 
+    analysis_config = _resolved_analysis_config(ite_config)
+    analysis_fp = _analysis_config_fingerprint(analysis_config)
+    logger.warning(
+        "ite_cycle_analysis_config",
+        symbol=symbol,
+        purpose=purpose,
+        trading_mode=str(analysis_config.trading_mode),
+        primary_timeframe=analysis_config.primary_structure_tf.value,
+        timeframes=[tf.value for tf in analysis_config.analysis_timeframes()],
+        requires_h4=Timeframe.H4 in analysis_config.analysis_timeframes(),
+    )
     if reuse_cycle and not research_mode:
         cached = peek_cycle_market_context(symbol)
         cached_purpose = str(
@@ -488,7 +525,26 @@ async def build_ite_cycle_market_context(
         # Scan context skips position/history sync. Execution must not reuse it
         # or Risk can see an empty book and allow a same-symbol duplicate.
         scan_reuse_blocked = want_purpose != "scan" and cached_purpose == "scan"
-        if cached is not None and cached.ok and not scan_reuse_blocked:
+        cached_fp = str(
+            (
+                (cached.diagnostics or {}).get("analysis_config_fingerprint")
+                if cached
+                else ""
+            )
+            or ""
+        )
+        # A remembered snapshot without a fingerprint is the pre-config cache
+        # (tests and any same-cycle context that did not select a strategy).
+        # An explicit strategy must not reuse that snapshot.
+        config_mismatch = (bool(cached_fp) and cached_fp != analysis_fp) or (
+            ite_config is not None and not cached_fp
+        )
+        if (
+            cached is not None
+            and cached.ok
+            and not scan_reuse_blocked
+            and not config_mismatch
+        ):
             logger.warning(
                 "ite_cycle_market_context_reused",
                 symbol=symbol,
@@ -541,6 +597,13 @@ async def build_ite_cycle_market_context(
         "leverage": None,
         "positions": None,
         "orders": None,
+        "analysis_trading_mode": str(analysis_config.trading_mode),
+        "analysis_primary_timeframe": analysis_config.primary_structure_tf.value,
+        "analysis_timeframes": [
+            tf.value for tf in analysis_config.analysis_timeframes()
+        ],
+        "analysis_config_fingerprint": analysis_fp,
+        "analysis_requires_h4": Timeframe.H4 in analysis_config.analysis_timeframes(),
     }
 
     def _fail(reason: str, **extra: Any) -> IteCycleMarketContext:
@@ -810,7 +873,9 @@ async def build_ite_cycle_market_context(
             )
 
     try:
-        snapshot = await InstitutionalTradingAnalysisService().analyze_bars(
+        snapshot = await InstitutionalTradingAnalysisService(
+            config=analysis_config
+        ).analyze_bars(
             bars_by_tf,
             as_of=datetime.now(UTC),
             spread=spread,
