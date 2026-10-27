@@ -73,6 +73,8 @@ class RiskCheckInput:
     cooldown_active: bool = False
     cooldown_remaining_minutes: int = 0
     spread: Decimal | None = None
+    # Adverse fill allowance in price units (deviation x point). Not a spread.
+    slippage: Decimal | None = None
     session_allowed: bool | None = None
     session_name: str = ""
 
@@ -290,9 +292,8 @@ class RiskEngine:
         dollar_out = dollar.quantize(Decimal("0.01"))
         if norm.estimated_risk_amount > 0:
             dollar_out = norm.estimated_risk_amount
-        if (
-            norm.sizing_status == "capped_max_lot"
-            or (requested_lots is not None and requested_lots > approved)
+        if norm.sizing_status == "capped_max_lot" or (
+            requested_lots is not None and requested_lots > approved
         ):
             capped = True
         return PositionSizeResult(
@@ -931,9 +932,11 @@ class RiskEngine:
                 if check.consecutive_losses
                 >= max(
                     1,
-                    (cfg.max_consecutive_losses - 1)
-                    if cfg.max_consecutive_losses
-                    else 1,
+                    (
+                        (cfg.max_consecutive_losses - 1)
+                        if cfg.max_consecutive_losses
+                        else 1
+                    ),
                 )
                 else "pass"
             )
@@ -1249,8 +1252,7 @@ class RiskEngine:
             if spread_limit > 0 and check.spread > spread_limit:
                 cls = asset_class_for_symbol(check.symbol)
                 reasons.append(
-                    f"spread {check.spread} exceeds max {spread_limit}"
-                    f" ({cls})"
+                    f"spread {check.spread} exceeds max {spread_limit}" f" ({cls})"
                 )
             elif spread_limit <= 0 and check.spread > 0:
                 reasons.append(
@@ -1337,9 +1339,7 @@ class RiskEngine:
             per_trade_cap: Decimal | None = Decimal("0")
         else:
             per_trade_cap = min(live_cap, per_trade_raw)
-        book = entry_book_exposure(
-            positions, contract_size_for=self._contract_size
-        )
+        book = entry_book_exposure(positions, contract_size_for=self._contract_size)
         # QuantForg and priced external tickets share one budget. An open
         # ticket that cannot be priced is not treated as zero exposure.
         open_planned = book.measured_usd if not book.blocked else Decimal("0")
@@ -1490,9 +1490,7 @@ class RiskEngine:
         # Below broker min_lot (approved=0) is NOT a "reduce" path — it is an
         # execution block. Keep the safety reject; label it clearly so Signal
         # Center does not look like a missing signal.
-        if approved <= 0 and (
-            size.capped or not checks.get("position_sizing", False)
-        ):
+        if approved <= 0 and (size.capped or not checks.get("position_sizing", False)):
             decision = RiskDecision.REJECT
             approved = Decimal("0")
             lot_code = size.block_reason or "MIN_LOT_CONSTRAINT"
@@ -1531,13 +1529,21 @@ class RiskEngine:
                     from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
                         lot_dollar_risk,
                     )
+                    from app.domain.institutional_trading.owner_live_limits import (
+                        planned_risk_usd as _owner_planned_risk,
+                        price_unit_value as _price_unit_value,
+                    )
 
-                    est_min = lot_dollar_risk(
-                        approved,
+                    est_min = _owner_planned_risk(
                         stop_distance=size.stop_distance or Decimal("0"),
-                        contract_size=contract_size,
-                        tick_size=check.tick_size,
-                        tick_value=check.tick_value,
+                        spread=check.spread,
+                        contract_size=_price_unit_value(
+                            contract_size=contract_size,
+                            tick_size=check.tick_size,
+                            tick_value=check.tick_value,
+                        ),
+                        volume=approved,
+                        slippage=check.slippage,
                     )
                     remaining_cap = remaining if remaining is not None else cap
                     if (
@@ -1625,6 +1631,54 @@ class RiskEngine:
                 approved = Decimal("0")
         else:
             checks["planned_sl_band"] = True
+
+        # Same dollar formula as evaluate_owner_entry. The band above prices
+        # the stop only; spread and slippage still have to fit the saved cap.
+        if (
+            approved > 0
+            and stop_for_actual > 0
+            and check.spread is not None
+            and account.equity > 0
+        ):
+            from app.domain.institutional_trading.owner_live_limits import (
+                format_owner_sl_risk,
+                max_planned_risk_usd,
+                planned_risk_usd,
+                price_unit_value,
+            )
+
+            money_per_price = price_unit_value(
+                contract_size=contract_size,
+                tick_size=check.tick_size,
+                tick_value=check.tick_value,
+            )
+            owner_cap = max_planned_risk_usd(account.equity)
+            owner_risk = planned_risk_usd(
+                stop_distance=stop_for_actual,
+                spread=check.spread,
+                contract_size=money_per_price,
+                volume=approved,
+                slippage=check.slippage,
+            )
+            if owner_risk > owner_cap:
+                reasons.append(
+                    format_owner_sl_risk(
+                        risk_usd=owner_risk,
+                        cap=owner_cap,
+                        equity=account.equity,
+                        stop_distance=stop_for_actual,
+                        spread=check.spread,
+                        volume=approved,
+                        contract_size=money_per_price,
+                        slippage=check.slippage or Decimal("0"),
+                        tick_size=check.tick_size,
+                    )
+                )
+                checks["owner_planned_risk"] = False
+                decision = RiskDecision.REJECT
+                approved = Decimal("0")
+            else:
+                checks["owner_planned_risk"] = True
 
         proposed_margin = (
             size.approved_lots * check.entry_price * contract_size / leverage

@@ -86,4 +86,60 @@ assert.deepEqual(
   [],
 );
 
+// Reported manual order: equity 29.86 → cap $2.68. Stop + spread 2.710 → $2.71.
+const reported = ticketRisk({
+  ...base,
+  equity: 29.86,
+  entry: 4000,
+  stopLoss: 3997.6,
+  takeProfit: 4010,
+  spread: 0.31,
+});
+assert.equal(reported.maxSlRiskUsd, 2.68);
+assert.equal(reported.riskUsd, 2.71);
+assert.ok(reported.violations.some((v) => v.includes("$2.71 > owner cap $2.68")));
+assert.equal(reported.fittedStopDistance, 2.37);
+assert.ok(reported.correction?.includes("2.37"));
+
+// 2.681 must ceiling to $2.69 and fail. It must not half-even down to $2.68.
+const raw = ticketRisk({
+  ...base,
+  equity: 29.86,
+  entry: 4000,
+  stopLoss: 3997.319,
+  takeProfit: 4010,
+  spread: 0,
+});
+assert.equal(raw.riskUsd, 2.69);
+assert.ok(raw.violations.some((v) => v.includes("owner cap $2.68")));
+
+// Exact cap still passes. One extra cent fails.
+assert.deepEqual(
+  ticketRisk({
+    ...base,
+    equity: 29.86,
+    entry: 4000,
+    stopLoss: 3997.32,
+    takeProfit: 4010,
+    spread: 0,
+  }).violations,
+  [],
+);
+assert.ok(
+  ticketRisk({
+    ...base,
+    equity: 29.86,
+    entry: 4000,
+    stopLoss: 3997.31,
+    takeProfit: 4010,
+    spread: 0,
+  }).violations.some((v) => v.startsWith("Planned risk")),
+);
+
+// Supplied slippage is included. Omitting it does not invent a charge.
+assert.equal(
+  ticketRisk({ ...base, stopLoss: 4128.8, takeProfit: 4140, spread: 0.3, slippage: 0.01 }).riskUsd,
+  4.51,
+);
+
 console.log("ticket-risk tests passed");

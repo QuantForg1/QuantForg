@@ -5,9 +5,10 @@ derived from live equity; nothing below is a fixed USD cap. Every other risk
 layer may be stricter, never looser.
 
 - Max PLANNED risk per trade: 9% of the risk reference (live equity; $4.50 at
-  $50). Planned risk = (|entry - SL| + spread) x contract size x volume. This is
-  a planned maximum, not a cap on realised loss: slippage, gaps, commissions
-  and execution failures can make a loss larger.
+  $50). Planned risk = (|entry - SL| + spread + order slippage) x contract x
+  volume + known commission, rounded up to the cent. The cap is rounded down.
+  An amount is never rounded down to pass. This is a planned maximum, not a
+  cap on realised loss: gaps and execution failures can make a loss larger.
 - Daily loss limit: 19% of the UTC day's starting equity ($9.50 at $50).
 - No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
 - Stop loss: max(1.5 x ATR(M1|M5), beyond the nearest structure + spread).
@@ -28,7 +29,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, time, timedelta
-from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from decimal import ROUND_CEILING, ROUND_DOWN, Decimal, InvalidOperation
 
 from app.domain.trading.gold_only import is_gold_symbol
 
@@ -160,21 +161,154 @@ def max_sl_risk_usd(equity: Decimal) -> Decimal:
     return max_planned_risk_usd(equity)
 
 
+def _nonneg(value: Decimal | None) -> Decimal:
+    raw = Decimal(str(value or 0))
+    return raw if raw > 0 else Decimal("0")
+
+
+def price_unit_value(
+    *,
+    contract_size: Decimal,
+    tick_size: Decimal | None = None,
+    tick_value: Decimal | None = None,
+) -> Decimal:
+    """Account-currency value of one price unit.
+
+    ``tick_value / tick_size`` when the broker published both. That is the
+    conversion used by the gateway. Otherwise the symbol contract size.
+    """
+    tick = _nonneg(tick_size)
+    value = _nonneg(tick_value)
+    if tick > 0 and value > 0:
+        return value / tick
+    return Decimal(str(contract_size or 0))
+
+
 def planned_risk_usd(
     *,
     stop_distance: Decimal,
     spread: Decimal | None,
     contract_size: Decimal,
     volume: Decimal,
+    slippage: Decimal | None = None,
+    commission: Decimal | None = None,
 ) -> Decimal:
-    """(|entry - SL| + spread) x contract size x volume, to the cent."""
-    spr = Decimal(str(spread or 0))
-    if spr < 0:
-        spr = Decimal("0")
+    """Monetary planned loss, rounded up to the cent.
+
+    ``(|entry - SL| + spread + slippage) x contract x volume + commission``.
+    Rounding up never lets an over-cap order pass. An amount that is already
+    an exact cent stays on that cent.
+    """
+    spr = _nonneg(spread)
     dist = abs(Decimal(str(stop_distance or 0)))
+    slip = _nonneg(slippage)
+    fee = _nonneg(commission)
     cs = Decimal(str(contract_size))
     vol = Decimal(str(volume))
-    return ((dist + spr) * cs * vol).quantize(_CENT)
+    return ((dist + spr + slip) * cs * vol + fee).quantize(
+        _CENT, rounding=ROUND_CEILING
+    )
+
+
+def maximum_affordable_stop_distance(
+    *,
+    cap: Decimal,
+    spread: Decimal | None,
+    contract_size: Decimal,
+    volume: Decimal,
+    slippage: Decimal | None = None,
+    commission: Decimal | None = None,
+    tick_size: Decimal | None = None,
+) -> Decimal | None:
+    """Largest stop distance whose planned risk is still within ``cap``.
+
+    ``None`` means this volume's spread, slippage, and commission already
+    exceed the cap, so no protective stop can make the order legal. The
+    distance is stepped down to the tick. Risk is never rounded down to pass.
+    """
+    budget = Decimal(str(cap or 0))
+    per = Decimal(str(contract_size)) * Decimal(str(volume))
+    if budget <= 0 or per <= 0:
+        return None
+    extra = _nonneg(spread) + _nonneg(slippage)
+    fee = _nonneg(commission)
+    room = budget - fee
+    if room <= 0:
+        return None
+    raw = (room / per) - extra
+    if raw <= 0:
+        return None
+    tick = _nonneg(tick_size) or Decimal("0.001")
+    steps = (raw / tick).to_integral_value(rounding=ROUND_DOWN)
+    fitted = steps * tick
+    while (
+        fitted > 0
+        and planned_risk_usd(
+            stop_distance=fitted,
+            spread=spread,
+            contract_size=contract_size,
+            volume=volume,
+            slippage=slippage,
+            commission=commission,
+        )
+        > budget
+    ):
+        fitted -= tick
+    return fitted if fitted > 0 else None
+
+
+def format_owner_sl_risk(
+    *,
+    risk_usd: Decimal,
+    cap: Decimal,
+    equity: Decimal,
+    stop_distance: Decimal,
+    spread: Decimal,
+    volume: Decimal,
+    contract_size: Decimal,
+    slippage: Decimal = Decimal("0"),
+    commission: Decimal = Decimal("0"),
+    tick_size: Decimal | None = None,
+    pct: Decimal | None = None,
+) -> str:
+    """Rejection text: calculated risk, cap, inputs, and the safe correction."""
+    shown_pct = _active_planned_risk_pct() if pct is None else pct
+    base = (
+        f"OWNER_SL_RISK: planned risk ${risk_usd} > ${cap} "
+        f"({shown_pct}% of equity {equity})"
+    )
+    costs = (
+        f"stop {stop_distance} + spread {spread} + slippage {slippage} "
+        f"+ commission {commission}, volume {volume}, contract {contract_size}"
+    )
+    fitted = maximum_affordable_stop_distance(
+        cap=cap,
+        spread=spread,
+        contract_size=contract_size,
+        volume=volume,
+        slippage=slippage,
+        commission=commission,
+        tick_size=tick_size,
+    )
+    if fitted is None:
+        bare = planned_risk_usd(
+            stop_distance=Decimal("0"),
+            spread=spread,
+            contract_size=contract_size,
+            volume=volume,
+            slippage=slippage,
+            commission=commission,
+        )
+        return (
+            f"{base}. {costs}. Minimum volume {volume} costs ${bare} "
+            f"before any protective stop, which is above ${cap}. "
+            "No smaller lot is allowed, so this order cannot be submitted."
+        )
+    return (
+        f"{base}. {costs}. Tighten the stop to {fitted} or less so the "
+        "planned risk fits the saved cap. The lot cannot be reduced "
+        f"below {volume}."
+    )
 
 
 def daily_loss_cap_usd(
@@ -362,11 +496,15 @@ def evaluate_owner_entry(
     weekly_pnl: Decimal | None = None,
     peak_equity: Decimal | None = None,
     peak_known: bool = True,
+    slippage: Decimal | None = None,
+    commission: Decimal | None = None,
+    tick_size: Decimal | None = None,
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
-    Planned risk includes the spread once:
-    ``(|entry - sl| + spread) x contract x volume <= 9% of equity``.
+    Planned risk includes the spread once, plus the order's slippage and any
+    known commission, rounded up to the cent:
+    ``(|entry - sl| + spread + slippage) x contract x volume + commission``.
     Reward:risk counts the spread once, on the risk leg:
     ``|tp - entry| / (|entry - sl| + spread)`` must be >= 1.50.
     ``min_stop_distance`` is the broker stops_level in price units
@@ -451,14 +589,31 @@ def evaluate_owner_entry(
 
     sl_dist = abs(px - sl)
     tp_dist = abs(tp - px)
+    slip = _nonneg(slippage)
+    fee = _nonneg(commission)
     risk_usd = planned_risk_usd(
-        stop_distance=sl_dist, spread=spr, contract_size=cs, volume=vol
+        stop_distance=sl_dist,
+        spread=spr,
+        contract_size=cs,
+        volume=vol,
+        slippage=slip,
+        commission=fee,
     )
     cap = max_planned_risk_usd(eq)
     if risk_usd > cap:
         violations.append(
-            f"OWNER_SL_RISK: planned risk ${risk_usd} > ${cap} "
-            f"({_active_planned_risk_pct()}% of equity {eq})"
+            format_owner_sl_risk(
+                risk_usd=risk_usd,
+                cap=cap,
+                equity=eq,
+                stop_distance=sl_dist,
+                spread=spr,
+                volume=vol,
+                contract_size=cs,
+                slippage=slip,
+                commission=fee,
+                tick_size=tick_size,
+            )
         )
     min_dist = Decimal(str(min_stop_distance or 0))
     if min_dist > 0 and (sl_dist < min_dist or tp_dist < min_dist):
@@ -538,12 +693,15 @@ def presend_owner_violations(
     weekly_pnl: Decimal | None = None,
     peak_equity: Decimal | None = None,
     peak_known: bool = True,
+    slippage: Decimal | None = None,
+    tick_size: Decimal | None = None,
 ) -> list[str]:
     """Final owner check on the exact tick the market request was built from.
 
     Re-runs the full owner entry check with ``request_price`` and that tick's
     spread, the stop-shrink guard against the plan price, and (when
     ``rr_buffer`` > 0) RR with the fill assumed ``rr_buffer`` worse.
+    ``slippage`` is the order deviation in price units, not an extra spread.
     """
     spread = Decimal(str(ask)) - Decimal(str(bid))
     violations = evaluate_owner_entry(
@@ -561,6 +719,8 @@ def presend_owner_violations(
         weekly_pnl=weekly_pnl,
         peak_equity=peak_equity,
         peak_known=peak_known,
+        slippage=slippage,
+        tick_size=tick_size,
     )
     drift = stop_shrink_violation(
         side=side,

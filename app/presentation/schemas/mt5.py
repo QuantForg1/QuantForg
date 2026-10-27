@@ -72,6 +72,10 @@ class MT5SymbolResponse(BaseModel):
     currency_profit: str = ""
     bid: str | None = None
     ask: str | None = None
+    volume_min: str = "0.01"
+    volume_step: str = "0.01"
+    tick_size: str | None = None
+    tick_value: str | None = None
 
 
 class MT5SymbolsPageResponse(BaseModel):

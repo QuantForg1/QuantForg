@@ -119,6 +119,10 @@ class MT5SymbolDTO:
     currency_profit: str = ""
     bid: str | None = None
     ask: str | None = None
+    volume_min: str = "0.01"
+    volume_step: str = "0.01"
+    tick_size: str | None = None
+    tick_value: str | None = None
 
     @classmethod
     def from_broker_symbol(cls, symbol: BrokerSymbolInfo) -> MT5SymbolDTO:
@@ -143,6 +147,10 @@ class MT5SymbolDTO:
             currency_profit=info.currency_profit,
             bid=str(info.bid) if info.bid is not None else None,
             ask=str(info.ask) if info.ask is not None else None,
+            volume_min=str(info.volume_min),
+            volume_step=str(info.volume_step),
+            tick_size=str(info.tick_size) if info.tick_size is not None else None,
+            tick_value=str(info.tick_value) if info.tick_value is not None else None,
         )
 
 

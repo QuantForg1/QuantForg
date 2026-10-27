@@ -8,9 +8,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
+from app.application.services.risk_engine import RiskCheckInput, RiskEngine
+from app.domain.entities.mt5_portfolio import AccountSnapshot
+from app.domain.enums.risk import PositionSizingMethod, RiskDecision
 from app.domain.institutional_trading import owner_live_limits as ol
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
@@ -80,6 +84,241 @@ def test_spread_counts_in_planned_risk() -> None:
         contract_size=Decimal("100"),
         volume=Decimal("0.01"),
     ) == Decimal("4.50")
+
+
+def test_reported_271_exceeds_268_cap() -> None:
+    """Manual BUY 0.01 lot: stop + spread 2.710 prices to $2.71 over a $2.68 cap.
+
+    Equity 29.86 at 9% floors to $2.68. The lot is already the broker minimum,
+    so the correction is a tighter stop, not a smaller volume and not a higher cap.
+    """
+    assert ol.max_planned_risk_usd(Decimal("29.86")) == Decimal("2.68")
+    assert ol.planned_risk_usd(
+        stop_distance=Decimal("2.400"),
+        spread=Decimal("0.310"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+    ) == Decimal("2.71")
+    reasons = _entry(
+        equity=Decimal("29.86"),
+        entry=Decimal("4000"),
+        stop_loss=Decimal("3997.600"),
+        take_profit=Decimal("4010"),
+        spread=Decimal("0.310"),
+    )
+    text = reasons[0]
+    assert text.startswith(
+        "OWNER_SL_RISK: planned risk $2.71 > $2.68 (9.0% of equity 29.86)"
+    )
+    assert "stop 2.400 + spread 0.310" in text
+    assert "volume 0.01" in text
+    assert "contract 100" in text
+    assert "Tighten the stop to 2.370" in text
+    assert (
+        _entry(
+            equity=Decimal("29.86"),
+            entry=Decimal("4000"),
+            stop_loss=Decimal("3997.600"),
+            take_profit=Decimal("4010"),
+            spread=Decimal("0.280"),
+        )
+        == []
+    )
+
+
+def test_risk_is_never_rounded_down_to_the_cap() -> None:
+    # 2.681 would half-even to 2.68 and pass. Ceiling keeps it at 2.69.
+    assert ol.planned_risk_usd(
+        stop_distance=Decimal("2.681"),
+        spread=Decimal("0"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+    ) == Decimal("2.69")
+    assert "OWNER_SL_RISK" in _codes(
+        _entry(
+            equity=Decimal("29.86"),
+            entry=Decimal("4000"),
+            stop_loss=Decimal("3997.319"),
+            take_profit=Decimal("4010"),
+            spread=Decimal("0"),
+        )
+    )
+
+
+def test_exact_cap_passes_and_one_cent_over_fails() -> None:
+    assert ol.planned_risk_usd(
+        stop_distance=Decimal("2.68"),
+        spread=Decimal("0"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+    ) == Decimal("2.68")
+    assert (
+        _entry(
+            equity=Decimal("29.86"),
+            entry=Decimal("4000"),
+            stop_loss=Decimal("3997.32"),
+            take_profit=Decimal("4010"),
+            spread=Decimal("0"),
+        )
+        == []
+    )
+    assert "OWNER_SL_RISK" in _codes(
+        _entry(
+            equity=Decimal("29.86"),
+            entry=Decimal("4000"),
+            stop_loss=Decimal("3997.31"),
+            take_profit=Decimal("4010"),
+            spread=Decimal("0"),
+        )
+    )
+
+
+def test_buy_and_sell_use_the_same_monetary_risk() -> None:
+    common = {
+        "equity": Decimal("29.86"),
+        "entry": Decimal("4000"),
+        "spread": Decimal("0.310"),
+        "contract_size": Decimal("100"),
+        "volume": Decimal("0.01"),
+    }
+    buy = _entry(
+        **common,
+        side="BUY",
+        stop_loss=Decimal("3997.600"),
+        take_profit=Decimal("4010"),
+    )
+    sell = _entry(
+        **common,
+        side="SELL",
+        stop_loss=Decimal("4002.400"),
+        take_profit=Decimal("3990"),
+    )
+    assert buy[0].startswith("OWNER_SL_RISK: planned risk $2.71 > $2.68")
+    assert sell[0].startswith("OWNER_SL_RISK: planned risk $2.71 > $2.68")
+
+
+def test_tick_value_matches_contract_size_100() -> None:
+    assert ol.price_unit_value(
+        contract_size=Decimal("100"),
+        tick_size=Decimal("0.001"),
+        tick_value=Decimal("0.1"),
+    ) == Decimal("100")
+    assert ol.planned_risk_usd(
+        stop_distance=Decimal("2.710"),
+        spread=Decimal("0"),
+        contract_size=ol.price_unit_value(
+            contract_size=Decimal("0"),
+            tick_size=Decimal("0.001"),
+            tick_value=Decimal("0.1"),
+        ),
+        volume=Decimal("0.01"),
+    ) == Decimal("2.71")
+
+
+def test_slippage_and_commission_count_only_when_supplied() -> None:
+    bare = ol.planned_risk_usd(
+        stop_distance=Decimal("2.40"),
+        spread=Decimal("0.28"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+    )
+    assert bare == Decimal("2.68")
+    with_slip = ol.planned_risk_usd(
+        stop_distance=Decimal("2.40"),
+        spread=Decimal("0.28"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+        slippage=Decimal("0.01"),
+    )
+    assert with_slip == Decimal("2.69")
+    with_fee = ol.planned_risk_usd(
+        stop_distance=Decimal("2.40"),
+        spread=Decimal("0.20"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+        commission=Decimal("0.05"),
+    )
+    assert with_fee == Decimal("2.65")
+
+
+def test_minimum_lot_above_the_cap_names_the_constraint() -> None:
+    reasons = _entry(
+        equity=Decimal("29.86"),
+        entry=Decimal("4000"),
+        stop_loss=Decimal("3999"),
+        take_profit=Decimal("4010"),
+        spread=Decimal("0.20"),
+        commission=Decimal("2.60"),
+    )
+    text = " ".join(reasons)
+    assert "OWNER_SL_RISK" in text
+    assert "No smaller lot is allowed" in text
+    assert (
+        ol.maximum_affordable_stop_distance(
+            cap=Decimal("2.68"),
+            spread=Decimal("0.20"),
+            contract_size=Decimal("100"),
+            volume=Decimal("0.01"),
+            commission=Decimal("2.60"),
+        )
+        is None
+    )
+
+
+def test_risk_engine_uses_the_same_spread_inclusive_cap() -> None:
+    engine = RiskEngine()
+    result = engine.evaluate(
+        RiskCheckInput(
+            user_id=uuid4(),
+            request_id="owner-sl-271",
+            symbol="XAUUSD",
+            side="buy",
+            requested_lots=Decimal("0.01"),
+            stop_loss_distance=Decimal("2.400"),
+            sizing_method=PositionSizingMethod.FIXED_LOT,
+            entry_price=Decimal("10"),
+            spread=Decimal("0.310"),
+            contract_size=Decimal("100"),
+            tick_size=Decimal("0.001"),
+            tick_value=Decimal("0.1"),
+        ),
+        account=AccountSnapshot(
+            login=1,
+            balance=Decimal("29.86"),
+            equity=Decimal("29.86"),
+            margin=Decimal("0"),
+            free_margin=Decimal("29.86"),
+            margin_level=Decimal("0"),
+            profit=Decimal("0"),
+            leverage=1000,
+        ),
+        positions=[],
+    )
+    assert result.decision is RiskDecision.REJECT
+    assert any(
+        r.startswith("OWNER_SL_RISK: planned risk $2.71 > $2.68")
+        for r in result.reasons
+    )
+    assert result.checks.get("owner_planned_risk") is False
+
+
+def test_safety_snapshot_distance_rejects_above_the_cap() -> None:
+    # Stored safety tick: distance 2.877 + spread 0.444 = 3.321 → ceiling $3.33.
+    assert ol.planned_risk_usd(
+        stop_distance=Decimal("2.877"),
+        spread=Decimal("0.444"),
+        contract_size=Decimal("100"),
+        volume=Decimal("0.01"),
+    ) == Decimal("3.33")
+    assert "OWNER_SL_RISK" in _codes(
+        _entry(
+            equity=Decimal("29.86"),
+            entry=Decimal("4000"),
+            stop_loss=Decimal("3997.123"),
+            take_profit=Decimal("4010"),
+            spread=Decimal("0.444"),
+        )
+    )
 
 
 def test_no_minimum_risk_floor() -> None:

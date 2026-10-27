@@ -38,6 +38,7 @@ import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
 import { invalidatePostTrade } from "@/lib/execution/post-trade-invalidate";
 import { protectiveStopsError } from "@/lib/execution/protective-stops";
 import {
+  OWNER_MAX_LOT,
   OWNER_MAX_PLANNED_RISK_PCT,
   OWNER_MAX_SPREAD,
   OWNER_MIN_REWARD_RISK,
@@ -54,6 +55,7 @@ import {
 import {
   contractSizeForSymbol,
   lotsFromRiskBudget,
+  normalizeLot,
   stopLossDistance,
   type SizingMode,
 } from "@/lib/execution/position-sizing";
@@ -135,6 +137,38 @@ export const ExecutionOrderTicket = forwardRef<
     staleTime: 15_000,
   });
   const equity = num(asRecord(accountQ.data).equity) || num(session.equity);
+  const specsQ = useQuery({
+    queryKey: ["mt5-symbol", symbol],
+    queryFn: () => mt5Api.symbol(symbol),
+    retry: false,
+    enabled: connected && Boolean(symbol),
+    staleTime: 60_000,
+  });
+  const specs = asRecord(specsQ.data);
+  const liveContract = num(specs.contract_size, NaN);
+  const livePoint = num(specs.point, NaN);
+  const liveTickSize = num(specs.tick_size, NaN);
+  const liveTickValue = num(specs.tick_value, NaN);
+  const specsKnown = Number.isFinite(liveContract) && liveContract > 0;
+  const contractSize =
+    Number.isFinite(liveTickSize) &&
+    liveTickSize > 0 &&
+    Number.isFinite(liveTickValue) &&
+    liveTickValue > 0
+      ? liveTickValue / liveTickSize
+      : specsKnown
+        ? liveContract
+        : contractSizeForSymbol(symbol);
+  const minLot = num(specs.volume_min, 0.01);
+  const lotStep = num(specs.volume_step, 0.01);
+  const slipPrice =
+    Number.isFinite(livePoint) && livePoint > 0 ? 10 * livePoint : 0;
+  const specsBlock =
+    connected && !specsKnown
+      ? specsQ.isError
+        ? "Broker symbol specs unavailable — order blocked until contract size loads"
+        : "Loading broker symbol specs"
+      : null;
 
   const mid =
     Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
@@ -146,35 +180,68 @@ export const ExecutionOrderTicket = forwardRef<
       : NaN;
 
   const needsPrice = orderType !== "market";
-  const entryForSize =
-    needsPrice && num(price) > 0
-      ? num(price)
-      : Number.isFinite(mid)
-        ? mid
-        : NaN;
-  const slDist = stopLossDistance(entryForSize, num(stopLoss, NaN));
-
-  // Planned risk from the ticket's own numbers vs the owner live limits.
   const quoteEntry =
-    orderType !== "market" && num(price) > 0
+    needsPrice && num(price) > 0
       ? num(price)
       : side === "buy"
         ? Number(ask)
         : Number(bid);
+  const entryForSize = quoteEntry;
+  const slDist = stopLossDistance(quoteEntry, num(stopLoss, NaN));
+  const tpDist = stopLossDistance(quoteEntry, num(takeProfit, NaN));
+  const requestedLots = num(volume, NaN);
+  const normalizedLots = normalizeLot(
+    requestedLots,
+    Number.isFinite(lotStep) && lotStep > 0 ? lotStep : 0.01,
+    Number.isFinite(minLot) && minLot > 0 ? minLot : 0.01,
+    OWNER_MAX_LOT,
+  );
+  const selectedRiskPct = Math.min(
+    num(riskPct, NaN),
+    OWNER_MAX_PLANNED_RISK_PCT,
+  );
+  const permissibleLots =
+    slDist != null && Number.isFinite(equity) && equity > 0 && Number.isFinite(selectedRiskPct)
+      ? lotsFromRiskBudget({
+          equity,
+          riskPct: selectedRiskPct,
+          stopDistance: slDist,
+          contractSize,
+          minLot: Number.isFinite(minLot) && minLot > 0 ? minLot : 0.01,
+          maxLot: OWNER_MAX_LOT,
+          lotStep: Number.isFinite(lotStep) && lotStep > 0 ? lotStep : 0.01,
+          spread: Number.isFinite(spread) ? spread : Number.NaN,
+          slippage: slipPrice,
+          maxRiskUsd: equity > 0 ? (Math.floor(equity * OWNER_MAX_PLANNED_RISK_PCT + 1e-9) / 100) : 0,
+        })
+      : null;
+
+  // Planned risk from the ticket's own numbers vs the owner live limits.
   const ownerRisk = ticketRisk({
     side,
     entry: quoteEntry,
     stopLoss: num(stopLoss, NaN),
     takeProfit: num(takeProfit, NaN),
-    lots: num(volume, NaN),
-    contractSize: contractSizeForSymbol(symbol),
+    lots: requestedLots,
+    contractSize,
     equity,
     spread: Number.isFinite(spread) ? spread : NaN,
+    slippage: slipPrice,
+    tickSize: Number.isFinite(liveTickSize) && liveTickSize > 0 ? liveTickSize : livePoint,
   });
+  const sizingBlock =
+    sizingMode === "percentage_risk" && slDist != null && permissibleLots == null
+      ? ownerRisk.correction ??
+        `Minimum lot ${minLot} does not fit ${selectedRiskPct}% of equity inside the saved ${OWNER_MAX_PLANNED_RISK_PCT}% cap. No smaller lot is allowed.`
+      : normalizedLots == null && Number.isFinite(requestedLots)
+        ? `Volume ${volume} is not a legal lot (min ${minLot}, step ${lotStep}, max ${OWNER_MAX_LOT}).`
+        : null;
   const preTradeBlocked =
     validation?.valid === false || str(lastRisk?.decision).toUpperCase() === "REJECT";
   const submitBlockReason =
+    specsBlock ??
     stopsError ??
+    sizingBlock ??
     (ownerRisk.violations[0] ? `Owner limit: ${ownerRisk.violations[0]}` : null) ??
     (preTradeBlocked ? "Pre-trade checks blocked — fix and Validate again" : null);
 
@@ -218,22 +285,13 @@ export const ExecutionOrderTicket = forwardRef<
     };
   };
 
-  /** Sync lot size from equity · risk% · SL distance (percentage_risk mode). */
+  /** Sync lot size only when the broker minimum fits the saved budget. */
   useEffect(() => {
     if (sizingMode !== "percentage_risk" || !connected) return;
-    if (slDist == null || !Number.isFinite(equity) || equity <= 0) return;
-    const pct = num(riskPct, NaN);
-    if (!Number.isFinite(pct) || pct <= 0) return;
-    const lots = lotsFromRiskBudget({
-      equity,
-      riskPct: pct,
-      stopDistance: slDist,
-      contractSize: contractSizeForSymbol(symbol),
-    });
-    if (lots == null) return;
-    const next = lots.toFixed(2);
+    if (permissibleLots == null) return;
+    const next = permissibleLots.toFixed(2);
     setVolume((prev) => (prev === next ? prev : next));
-  }, [sizingMode, connected, equity, riskPct, slDist, symbol]);
+  }, [sizingMode, connected, permissibleLots]);
 
   const refreshEstimates = async () => {
     if (!connected || !symbol) return;
@@ -490,8 +548,14 @@ export const ExecutionOrderTicket = forwardRef<
       const check = await executionApi.check(payload);
       orderCheckMs = performance.now() - tCheck;
       setLastCheck(asRecord(check));
-      if (str(asRecord(check).decision) === "reject") {
-        const err = humanExecutionError(asRecord(check), "Execution rejected");
+      const safetyDecision = str(asRecord(check).decision).toLowerCase();
+      if (safetyDecision !== "allow") {
+        const err = humanExecutionError(
+          asRecord(check),
+          safetyDecision === "retry"
+            ? "Duplicate request — wait before sending again"
+            : "Execution rejected",
+        );
         recordAudit("order_submit", "failure", "Execution rejected by safety gate", {
           symbol: payload.symbol,
           side: payload.side,
@@ -724,11 +788,43 @@ export const ExecutionOrderTicket = forwardRef<
             />
           </div>
           <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+            <Est
+              label="Entry"
+              value={
+                Number.isFinite(quoteEntry)
+                  ? `${orderType} ${formatNumber(quoteEntry, 2)}`
+                  : orderType
+              }
+            />
+            <Est label="SL dist" value={slDist != null ? formatNumber(slDist, 3) : "—"} />
+            <Est label="TP dist" value={tpDist != null ? formatNumber(tpDist, 3) : "—"} />
+            <Est
+              label="Volume"
+              value={`${volume} → ${normalizedLots != null ? normalizedLots.toFixed(2) : "—"}`}
+            />
+            <Est
+              label="Cap"
+              value={formatCurrency(ownerRisk.maxSlRiskUsd)}
+            />
+            <Est
+              label="Costs"
+              value={
+                Number.isFinite(spread) && Number.isFinite(requestedLots) && requestedLots > 0
+                  ? formatCurrency((spread + slipPrice) * contractSize * requestedLots)
+                  : "—"
+              }
+            />
             <Est label="Spread" value={Number.isFinite(spread) ? formatNumber(spread, 5) : "—"} />
             <Est label="Margin" value={margin === "—" ? "—" : formatMaybeMoney(margin)} />
             <Est
-              label="Safety"
-              value={lastCheck ? str(lastCheck.decision) : "—"}
+              label="Status"
+              value={
+                submitBlockReason
+                  ? "Blocked"
+                  : lastCheck
+                    ? str(lastCheck.decision)
+                    : "Server check required"
+              }
             />
             <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
               Owner caps: planned risk ≤ ${ownerRisk.maxSlRiskUsd.toFixed(2)} (
@@ -745,6 +841,16 @@ export const ExecutionOrderTicket = forwardRef<
             {ownerRisk.violations.length ? (
               <p className="col-span-3 text-[10px] text-[var(--danger)]" role="status">
                 {ownerRisk.violations.join(" · ")}
+              </p>
+            ) : null}
+            {sizingBlock && !ownerRisk.violations.length ? (
+              <p className="col-span-3 text-[10px] text-[var(--danger)]" role="status">
+                {sizingBlock}
+              </p>
+            ) : null}
+            {sizingMode === "percentage_risk" && permissibleLots != null ? (
+              <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
+                Permissible volume {permissibleLots.toFixed(2)} at {selectedRiskPct}% within the saved cap.
               </p>
             ) : null}
           </div>
