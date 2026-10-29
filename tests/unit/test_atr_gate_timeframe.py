@@ -22,12 +22,9 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
 from app.domain.institutional_trading.ai_scalping.volatility_gate_v2 import (
     evaluate_volatility_gate_v2,
 )
-from app.domain.institutional_trading.atr import (
-    atr_for_timeframe,
-    bar_is_time_aligned,
-    score_gate_atr,
-)
+from app.domain.institutional_trading.atr import atr_for_timeframe, score_gate_atr
 from app.domain.market_data.candle import Candle
+from app.domain.market_data.closed_bars import bar_is_time_aligned
 from app.domain.market_data.timeframe import Timeframe
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -326,3 +323,102 @@ def test_live_scorers_pass_snapshot_atr_into_the_percentage_gates() -> None:
     update_at = scanner.index("payload.update(_quote_fields_from_context")
     restore_at = scanner.index("publish_scored_atr_fields(payload, snapshot)")
     assert restore_at > update_at
+
+
+@pytest.mark.unit
+def test_bridge_percentage_gate_uses_score_gate_atr() -> None:
+    bridge = (_ROOT / "app/domain/institutional_trading/execution/bridge.py").read_text(
+        encoding="utf-8"
+    )
+    assert "atr = score_gate_atr(context.snapshot)" in bridge
+    assert 'getattr(context.snapshot, "atr", None) or getattr(' not in bridge
+    # Stop-distance fallback stays on the account series.
+    assert 'atr = getattr(context.account, "atr", None)' in bridge
+
+
+@pytest.mark.unit
+def test_optimizer_percentage_band_uses_the_gate_series() -> None:
+    from app.domain.institutional_trading.ai_scalping.execution_optimizer import (
+        _micro_volatility,
+    )
+
+    gate = Decimal("0.10")
+    stop = Decimal("0.02")
+    snapshot = SimpleNamespace(atr=gate)
+    account = SimpleNamespace(atr=stop, mid_price=100.0)
+    band = _micro_volatility(snapshot, account)
+    assert band["band"] == "thin"
+    assert band["score"] == 60
+    assert band["atr_pct"] == pytest.approx(0.10, abs=1e-6)
+
+    missing = _micro_volatility(SimpleNamespace(atr=None), account)
+    assert missing["band"] == "unknown"
+    assert missing["atr_pct"] is None
+    assert missing["score"] == 50
+
+
+@pytest.mark.unit
+def test_cycle_snapshot_shows_the_gate_atr_only() -> None:
+    from app.domain.institutional_trading.operations.decision_cycle import (
+        build_authoritative_snapshot,
+    )
+
+    shown = build_authoritative_snapshot(
+        snapshot=SimpleNamespace(symbol="XAUUSD", atr=Decimal("4.20")),
+        account=SimpleNamespace(atr=Decimal("1.10"), bid=None, ask=None),
+        diagnostics={"atr": "1.10"},
+    )
+    assert shown.atr == "4.20"
+
+    missing = build_authoritative_snapshot(
+        snapshot=SimpleNamespace(symbol="XAUUSD", atr=None),
+        account=SimpleNamespace(atr=Decimal("1.10"), bid=None, ask=None),
+        diagnostics={"atr": "1.10"},
+    )
+    assert missing.atr is None
+
+
+@pytest.mark.unit
+def test_sniper_spread_wait_uses_the_same_gate_atr_argument() -> None:
+    from app.domain.institutional_trading.ai_scalping.direction import DirectionDecision
+    from app.domain.institutional_trading.ai_scalping.sniper_entry import (
+        evaluate_sniper_entry,
+    )
+    from app.domain.institutional_trading.decision_models import TradeDirection
+
+    scoring = (
+        _ROOT / "app/domain/institutional_trading/ai_scalping/scoring.py"
+    ).read_text(encoding="utf-8")
+    assess_at = scoring.index("spread_a = assess_spread(")
+    sniper_at = scoring.index("sniper = evaluate_sniper_entry(")
+    window = scoring[assess_at:sniper_at]
+    assert "atr=atr," in window
+    sniper_call = scoring[sniper_at : sniper_at + 1400]
+    assert "atr=atr," in sniper_call
+    assert "spread_reject=bool(spread_a.reject)" in sniper_call
+    timeframe_arg = (
+        'atr_timeframe=str(getattr(cfg.entry_tf, "value", cfg.entry_tf) ' 'or "M5")'
+    )
+    assert timeframe_arg in sniper_call
+
+    gate = Decimal("4.25")
+    direction = DirectionDecision(
+        direction=TradeDirection.SELL,
+        buy_score=10,
+        sell_score=40,
+        reasons=(),
+        structure_score=40,
+        factors={},
+    )
+    out = evaluate_sniper_entry(
+        SimpleNamespace(),
+        direction=direction,
+        atr=gate,
+        atr_timeframe="M5",
+        spread_reject=True,
+    )
+    assert out.primary_reason == "WAIT_ABNORMAL_SPREAD"
+    assert out.diagnostics["atr_used"] == str(gate)
+    assert out.diagnostics["atr_timeframe"] == "M5"
+    assert out.pillars["spread_ok"] is False
+    assert out.passed is False

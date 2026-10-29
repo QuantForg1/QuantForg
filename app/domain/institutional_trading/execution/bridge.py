@@ -373,11 +373,12 @@ class ExecutionBridge:
             from app.domain.institutional_trading.ai_scalping.spread_intelligence import (  # noqa: E501
                 assess_spread,
             )
+            from app.domain.institutional_trading.atr import score_gate_atr
 
             scalp_cfg = DEFAULT_AI_SCALPING_CONFIG
-            atr = getattr(context.snapshot, "atr", None) or getattr(
-                context.account, "atr", None
-            )
+            # Percentage cap uses the closed entry-gate ATR. A missing gate
+            # ATR is not filled from the stop series on the account.
+            atr = score_gate_atr(context.snapshot)
             sym = str(
                 getattr(decision, "symbol", None)
                 or getattr(context.snapshot, "symbol", None)
@@ -1292,6 +1293,7 @@ class ExecutionBridge:
         assert decision.stop_zone is not None
         assert decision.target_zone is not None
         mid = getattr(context.account, "mid_price", None)
+        # Stop-distance fallback only. Percentage gates must not read this series.
         atr = getattr(context.account, "atr", None)
         try:
             mid_d = Decimal(str(mid)) if mid is not None else None

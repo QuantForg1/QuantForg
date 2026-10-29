@@ -27,6 +27,7 @@ from app.domain.interfaces.order_block import (
     OrderBlockRepositoryPort,
     PriceHistoryPort,
 )
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.order_block.breaker_detector import BreakerDetector
 from app.domain.order_block.detector import OrderBlockDetector
@@ -92,7 +93,11 @@ class OrderBlockEngine:
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=UTC)
 
-        candles = await self.prices.get_candles(code, tf, limit=self.candle_limit)
+        candles = closed_analysis_bars(
+            await self.prices.get_candles(code, tf, limit=self.candle_limit),
+            as_of=moment,
+            timeframe=tf,
+        )
         structure = await self.structure.get_latest_snapshot(code, tf)
         liquidity = None
         if self.liquidity is not None:

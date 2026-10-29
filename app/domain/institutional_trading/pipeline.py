@@ -28,6 +28,7 @@ from app.domain.institutional_trading.trade_quality import TradeQualityEvaluator
 from app.domain.institutional_trading.trend_engine import TrendEngine
 from app.domain.liquidity.engine import LiquidityEngine
 from app.domain.market_context.engine import MarketContextEngine
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.market_structure.engine import MarketStructureEngine
 from app.domain.market_structure.structure_analyzer import StructureAnalyzer
@@ -276,10 +277,15 @@ class InstitutionalAnalysisPipeline:
         entry_atr = stop_atr if cfg.is_scalping() else atr
         if entry_atr is None:
             entry_atr = atr
-        entry_opens = tuple(float(c.open.value) for c in entry_bars)
-        entry_highs = tuple(float(c.high.value) for c in entry_bars)
-        entry_lows = tuple(float(c.low.value) for c in entry_bars)
-        entry_closes = tuple(float(c.close.value) for c in entry_bars)
+        closed_entry = closed_analysis_bars(
+            entry_bars,
+            as_of=moment,
+            timeframe=cfg.entry_confirmation_tf,
+        )
+        entry_opens = tuple(float(c.open.value) for c in closed_entry)
+        entry_highs = tuple(float(c.high.value) for c in closed_entry)
+        entry_lows = tuple(float(c.low.value) for c in closed_entry)
+        entry_closes = tuple(float(c.close.value) for c in closed_entry)
 
         return MarketAnalysisSnapshot(
             symbol=code_str,

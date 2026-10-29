@@ -10,6 +10,8 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
+from app.domain.institutional_trading.atr import score_gate_atr
+
 _LOCK = threading.RLock()
 _DEFER_COUNTS: dict[str, dict[str, Any]] = {}
 _LAST_OPTIMIZER: dict[str, Any] | None = None
@@ -104,14 +106,14 @@ def _tick_momentum(snapshot: Any) -> dict[str, Any]:
 
 
 def _micro_volatility(snapshot: Any, account: Any) -> dict[str, Any]:
-    atr = _f(getattr(account, "atr", None), 0.0)
+    """ATR% of the entry-gate series. The stop ATR does not set this band."""
+    gate = score_gate_atr(snapshot)
     mid = _f(getattr(account, "mid_price", None), 0.0)
-    if atr <= 0 or mid <= 0:
+    if gate is None or mid <= 0:
         return {"atr_pct": None, "band": "unknown", "score": 50}
-    atr_pct = (atr / mid) * 100.0
-    # Gold scalp ATR% routinely 0.08–0.35 on Sydney/Tokyo. Treating <0.15 as
-    # "compression" scored 35 and held LIVE submits at quality 54 (DEFER forever
-    # because each cycle uses a new decision hash). Align with vol hard_min 0.08.
+    atr_pct = (float(gate) / mid) * 100.0
+    # Entry-timeframe gold ATR% routinely sits at 0.08-0.35. The 0.08 edge
+    # matches the volatility hard minimum. Do not lower it to admit quiet bars.
     if atr_pct < 0.08:
         return {"atr_pct": round(atr_pct, 6), "band": "compression", "score": 35}
     if atr_pct < 0.12:
