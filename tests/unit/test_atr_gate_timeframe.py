@@ -422,3 +422,58 @@ def test_sniper_spread_wait_uses_the_same_gate_atr_argument() -> None:
     assert out.diagnostics["atr_timeframe"] == "M5"
     assert out.pillars["spread_ok"] is False
     assert out.passed is False
+
+
+@pytest.mark.unit
+def test_gate_atr_label_follows_the_entry_timeframe() -> None:
+    from app.domain.institutional_trading.ai_scalping.config import (
+        scalping_ite_config,
+    )
+    from app.domain.institutional_trading.atr import gate_atr_timeframe_label
+    from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+
+    assert gate_atr_timeframe_label(scalping_ite_config()) == "M5"
+    assert gate_atr_timeframe_label(DEFAULT_ITE_CONFIG) == "M15"
+    assert gate_atr_timeframe_label(None) == "M15"
+    scanner = (
+        _ROOT / "app/application/services/institutional_multi_asset_scanner.py"
+    ).read_text(encoding="utf-8")
+    assert '"atr_source_timeframe": gate_atr_timeframe_label(ite_config)' in scanner
+    assert '"atr_source_timeframe": "M15"' not in scanner
+
+
+@pytest.mark.unit
+def test_current_scan_keeps_an_explicit_gate_timeframe_label() -> None:
+    from app.domain.institutional_trading.operations.fast_decision_path import (
+        build_current_scan_decision,
+    )
+
+    reason = "WAIT_INSUFFICIENT_RR"
+    payload = {
+        "as_of": "2026-10-29T13:53:40Z",
+        "best_symbol": None,
+        "atr_source_timeframe": "M5",
+        "first_blocking_gate": reason,
+        "opportunity_ranked": [
+            {
+                "symbol": "XAUUSD",
+                "opportunity_eligible": False,
+                "reject": True,
+                "reject_reason": reason,
+                "blocking_gate": reason,
+                "atr_pct": "0.1870",
+                "volatility_decision": {
+                    "passed": True,
+                    "atr_pct": "0.1870",
+                    "hard_min_pct": "0.08",
+                    "band": "normal",
+                    "reason": reason,
+                },
+            }
+        ],
+    }
+    shown = build_current_scan_decision(payload)
+    assert shown["atr_source_timeframe"] == "M5"
+    omitted = dict(payload)
+    omitted.pop("atr_source_timeframe")
+    assert build_current_scan_decision(omitted)["atr_source_timeframe"] == "M15"

@@ -1353,11 +1353,19 @@ def _volatility_fields(
     if hard_min is None:
         hard_min = thresholds.get("hard_min_pct")
     band = vol.get("band") or thresholds.get("band")
+    # A scan that names its entry-confirmation timeframe wins. Payloads that
+    # omit the field keep the historical swing label so older fixtures stay
+    # stable. The label never selects the ATR series.
+    source_tf = (
+        row.get("atr_source_timeframe")
+        or scan.get("atr_source_timeframe")
+        or SCAN_ATR_TIMEFRAME
+    )
     return {
         "atr_pct": str(atr_pct) if atr_pct is not None else None,
         "hard_min_pct": str(hard_min) if hard_min is not None else None,
         "band": str(band) if band else None,
-        "atr_source_timeframe": SCAN_ATR_TIMEFRAME,
+        "atr_source_timeframe": str(source_tf),
         "atr_source_period": SCAN_ATR_PERIOD,
         "volatility_reason": vol.get("reason") or row.get("reject_reason") or row.get("blocking_gate"),
     }

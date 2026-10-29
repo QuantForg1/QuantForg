@@ -109,3 +109,16 @@ def score_gate_atr(snapshot: object) -> Decimal | None:
     fails closed. The owner stop series is never substituted.
     """
     return _positive(getattr(snapshot, "atr", None))
+
+
+def gate_atr_timeframe_label(config: object | None) -> str:
+    """Timeframe label for the ATR that percentage gates actually score.
+
+    Swing analysis stays on its M15 entry timeframe. Scalping reports the
+    entry-confirmation timeframe (M5). This label does not select bars and
+    does not change a gate.
+    """
+    tf = getattr(config, "entry_confirmation_tf", None)
+    value = getattr(tf, "value", tf)
+    text = str(value or "").strip().upper()
+    return text or "M15"

@@ -1269,6 +1269,8 @@ async def _run_institutional_multi_asset_scan_body(
 ) -> dict[str, Any]:
     import time as _time
 
+    from app.domain.institutional_trading.atr import gate_atr_timeframe_label
+
     t_scan = _time.perf_counter()
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     if ite_config is None:
@@ -2137,7 +2139,7 @@ async def _run_institutional_multi_asset_scan_body(
         "strategy_stats": None,
         "forced_trades": False,
         "governed_by_existing_ai_and_risk": True,
-        "atr_source_timeframe": "M15",
+        "atr_source_timeframe": gate_atr_timeframe_label(ite_config),
         "atr_source_period": 14,
         "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
         "symbols_queued": int(scan_stats.get("symbols_queued") or len(universe)),
