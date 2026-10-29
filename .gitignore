@@ -274,3 +274,8 @@ backups/
 docs/production/validation/
 docs/production/reports/*_[0-9]*T[0-9]*Z.*
 docs/production/execution/execution_history.*
+
+# Machine-local files. Tracked validation reports stay tracked.
+docs/production/reports/gateway_supervisor/*.bak
+.cursor/settings.json
+/$null
