@@ -179,8 +179,9 @@ def test_hard_block_still_blocks() -> None:
 
 
 def test_leverage_policy_preserved() -> None:
-    from app.domain.trading.xauusd_specs import MAX_LEVERAGE
     from decimal import Decimal
+
+    from app.domain.trading.xauusd_specs import MAX_LEVERAGE
 
     src = (ROOT / "app/domain/trading/xauusd_specs.py").read_text(encoding="utf-8")
     assert 'MAX_LEVERAGE = Decimal("2000")' in src

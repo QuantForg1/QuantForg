@@ -23,7 +23,6 @@ from app.domain.trading.gold_only import (
 )
 from app.domain.trading.gold_unified_brain import decide_gold
 
-
 pytestmark = [pytest.mark.unit]
 
 

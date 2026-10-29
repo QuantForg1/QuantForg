@@ -831,7 +831,8 @@ def _scan_rates_payload() -> dict[str, Any]:
         hourly = snap.get("hourly")
         if isinstance(hourly, dict) and hourly:
             return hourly
-        cycles = snap.get("cycles") if isinstance(snap.get("cycles"), list) else []
+        _cycles_value = snap.get("cycles")
+        cycles = _cycles_value if isinstance(_cycles_value, list) else []
         return hourly_scan_rates(
             [c for c in cycles if isinstance(c, dict)]
         )
@@ -982,7 +983,8 @@ def _ai_scalping_payload() -> dict[str, Any]:
         )
 
         current = None
-        scan = snap.get("scan") if isinstance(snap.get("scan"), dict) else None
+        _scan_value = snap.get("scan")
+        scan = _scan_value if isinstance(_scan_value, dict) else None
         if isinstance(scan, dict) and isinstance(scan.get("current_scan"), dict):
             current = scan.get("current_scan")
         reached_optimizer = bool(

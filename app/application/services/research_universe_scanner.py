@@ -34,7 +34,8 @@ def evaluate_injected_contexts(
         if not isinstance(raw, dict):
             continue
         symbol = str(raw.get("symbol") or "")
-        score = raw.get("score") if isinstance(raw.get("score"), dict) else raw
+        _score_value = raw.get("score")
+        score = _score_value if isinstance(_score_value, dict) else raw
         buy = (
             score.get("buy_score")
             or score.get("core_buy")

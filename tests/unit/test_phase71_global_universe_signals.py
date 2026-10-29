@@ -8,12 +8,12 @@ import pytest
 
 from app.application.services import market_universe_service as mus
 from app.application.services.research_analysis_worker import _coverage_pct
+from app.domain.market_universe.classification import classify_instrument
 from app.domain.market_universe.constants import ALLOW_LIVE_PROMOTION
 from app.domain.market_universe.scheduler import (
     MAX_RESEARCH_BATCH,
     research_scan_order,
 )
-from app.domain.market_universe.classification import classify_instrument
 
 ROOT = Path(__file__).resolve().parents[2]
 

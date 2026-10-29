@@ -611,9 +611,12 @@ def classify_exit_path(trade: dict[str, Any]) -> dict[str, Any]:
 
 
 def attach_close_fields(deal: dict[str, Any], join: dict[str, Any]) -> dict[str, Any]:
-    signal = join.get("signal") if isinstance(join.get("signal"), dict) else {}
-    sub = join.get("submission") if isinstance(join.get("submission"), dict) else {}
-    features = sub.get("setup_features") if isinstance(sub.get("setup_features"), dict) else {}
+    _signal_value = join.get("signal")
+    signal = _signal_value if isinstance(_signal_value, dict) else {}
+    _sub_value = join.get("submission")
+    sub = _sub_value if isinstance(_sub_value, dict) else {}
+    _features_value = sub.get("setup_features")
+    features = _features_value if isinstance(_features_value, dict) else {}
     src = {**features, **signal, **deal}
     return {
         "ticket": join.get("ticket") or _ticket(deal.get("ticket") or deal.get("entry_ticket")),

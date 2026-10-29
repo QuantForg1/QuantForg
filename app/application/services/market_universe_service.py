@@ -339,7 +339,8 @@ def _prior_numeric_research_scores() -> list[dict[str, Any]]:
     prior = get_last_market_universe_snapshot()
     if not isinstance(prior, dict):
         return []
-    board = prior.get("opportunity_board") if isinstance(prior.get("opportunity_board"), dict) else {}
+    _board_value = prior.get("opportunity_board")
+    board = _board_value if isinstance(_board_value, dict) else {}
     candidates: list[Any] = []
     for key in ("live_ranked", "rows", "ranked"):
         block = board.get(key) if isinstance(board, dict) else None

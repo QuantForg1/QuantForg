@@ -11,6 +11,7 @@ from app.domain.enterprise_platform.api_keys import (
     rotate_api_key,
     verify_api_key,
 )
+from app.domain.enterprise_platform.organizations import isolation_scope
 from app.domain.enterprise_platform.persistence import redact
 from app.domain.enterprise_platform.rbac import (
     check_permission,
@@ -18,7 +19,6 @@ from app.domain.enterprise_platform.rbac import (
     permission_matrix_table,
     require_permission,
 )
-from app.domain.enterprise_platform.organizations import isolation_scope
 
 
 def test_redact_secrets() -> None:

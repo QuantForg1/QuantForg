@@ -8,7 +8,6 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
-
 REQUIRED_IDENTITY = (
     "strategy_id",
     "model_id",

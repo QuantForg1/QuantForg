@@ -328,7 +328,8 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
     row = next((r for r in rows if isinstance(r, dict) and r.get("symbol")), None)
     if not isinstance(row, dict):
         return
-    sniper = row.get("sniper_entry") if isinstance(row.get("sniper_entry"), dict) else {}
+    _sniper_value = row.get("sniper_entry")
+    sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
     action = str(
         row.get("signal_action") or sniper.get("action") or row.get("direction") or "WAIT"
     ).upper()
@@ -377,7 +378,8 @@ def _safe_score_int(value: Any, default: int = 0) -> int:
 
 def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
     """Normalize a score dict into NOC multi-asset table columns."""
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol_dec = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)
@@ -1601,8 +1603,10 @@ async def _run_institutional_multi_asset_scan_body(
             "blocked_by_portfolio": False,
             "note": f"portfolio_rank_failed:{type(exc).__name__}",
         }
-    ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
-    best = scan.get("best") if isinstance(scan.get("best"), dict) else None
+    _ranked_value = scan.get("ranked")
+    ranked = _ranked_value if isinstance(_ranked_value, list) else []
+    _best_value = scan.get("best")
+    best = _best_value if isinstance(_best_value, dict) else None
     from app.domain.institutional_trading.operations.scalp_eligibility import (
         explain_scalp_handoff,
         match_portfolio_row,
@@ -1872,7 +1876,7 @@ async def _run_institutional_multi_asset_scan_body(
             if isinstance(r, dict) and str(r.get("symbol") or "").strip()
         }
         prior = str(
-            (opportunity_window_snapshot().get("current_focus") or "")
+            opportunity_window_snapshot().get("current_focus") or ""
         ).upper() or None
         held, focus_why = apply_focus_hysteresis(
             current_focus=prior,

@@ -453,7 +453,8 @@ def explain_scalp_handoff(
         or sniper.get("confluence_class")
         or diagnostics.get("confluence_class")
     ) or None
-    indicators = score.get("indicators") if isinstance(score.get("indicators"), dict) else {}
+    _indicators_value = score.get("indicators")
+    indicators = _indicators_value if isinstance(_indicators_value, dict) else {}
     return ScalpEligibilityTrace(
         eligibility_status=status,
         eligibility_reason=reason,

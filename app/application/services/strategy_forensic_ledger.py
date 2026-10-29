@@ -170,7 +170,8 @@ def compact_signal_row(cycle: dict[str, Any] | None) -> dict[str, Any]:
     observation_id = signal_id or (
         f"obs:{scan_as_of or row.get('recorded_at') or _now_iso()}:{symbol}"
     )
-    handoff = row.get("execution_handoff") if isinstance(row.get("execution_handoff"), dict) else {}
+    _handoff_value = row.get("execution_handoff")
+    handoff = _handoff_value if isinstance(_handoff_value, dict) else {}
     ticket = _ticket(
         row.get("mt5_ticket")
         or row.get("ticket")
@@ -301,7 +302,8 @@ def compact_submission_row(cycle: dict[str, Any] | None) -> dict[str, Any] | Non
     if not forwarded or ticket is None:
         return None
     src = dict(cycle or {})
-    handoff = src.get("execution_handoff") if isinstance(src.get("execution_handoff"), dict) else {}
+    _handoff_value = src.get("execution_handoff")
+    handoff = _handoff_value if isinstance(_handoff_value, dict) else {}
     return {
         "record_kind": "submission",
         "advisory_only": True,

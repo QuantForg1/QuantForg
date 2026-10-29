@@ -197,8 +197,10 @@ def score_bucket(score: int | None) -> str | None:
 
 
 def _component_scores(cycle: dict[str, Any]) -> dict[str, int]:
-    breakdown = cycle.get("score_breakdown") if isinstance(cycle.get("score_breakdown"), dict) else {}
-    audit = cycle.get("opportunity_audit") if isinstance(cycle.get("opportunity_audit"), dict) else {}
+    _breakdown_value = cycle.get("score_breakdown")
+    breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else {}
+    _audit_value = cycle.get("opportunity_audit")
+    audit = _audit_value if isinstance(_audit_value, dict) else {}
     out: dict[str, int] = {}
     for key in COMPONENT_KEYS:
         raw = breakdown.get(key)
@@ -510,7 +512,8 @@ def _merge_hour(dst: dict[str, Any], hour: dict[str, Any]) -> None:
     for k, v in (hour.get("stages") or {}).items():
         dst.setdefault("stages", {s: 0 for s in FUNNEL_STAGES})
         dst["stages"][k] = int(dst["stages"].get(k) or 0) + int(v or 0)
-    src_comp = hour.get("components") if isinstance(hour.get("components"), dict) else {}
+    _src_comp_value = hour.get("components")
+    src_comp = _src_comp_value if isinstance(_src_comp_value, dict) else {}
     dst.setdefault("components", {k: _empty_counts(_SCORE_BUCKETS) for k in COMPONENT_KEYS})
     for name, buckets in src_comp.items():
         if not isinstance(buckets, dict):

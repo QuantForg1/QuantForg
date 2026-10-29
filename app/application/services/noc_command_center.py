@@ -567,10 +567,12 @@ def _oms_dashboard(
     latencies: list[float] = []
     retries = 0
     for a in attempts:
-        o = a.get("oms") if isinstance(a.get("oms"), dict) else None
+        _o_value = a.get("oms")
+        o = _o_value if isinstance(_o_value, dict) else None
         if not o:
             continue
-        resp = o.get("response") if isinstance(o.get("response"), dict) else {}
+        _resp_value = o.get("response")
+        resp = _resp_value if isinstance(_resp_value, dict) else {}
         outcome = str(resp.get("outcome") or "").lower()
         if outcome in {"success", "filled", "done"}:
             successes += 1

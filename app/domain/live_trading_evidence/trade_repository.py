@@ -58,13 +58,20 @@ def normalize_evidence_package(pkg: dict[str, Any]) -> dict[str, Any]:
 
     Missing fields stay null — never fabricated.
     """
-    ai = pkg.get("ai") if isinstance(pkg.get("ai"), dict) else {}
-    risk = pkg.get("risk") if isinstance(pkg.get("risk"), dict) else {}
-    mt5 = pkg.get("mt5") if isinstance(pkg.get("mt5"), dict) else {}
-    broker = pkg.get("broker") if isinstance(pkg.get("broker"), dict) else {}
-    trade = pkg.get("trade") if isinstance(pkg.get("trade"), dict) else {}
-    gw = pkg.get("gateway") if isinstance(pkg.get("gateway"), dict) else {}
-    oms = pkg.get("oms") if isinstance(pkg.get("oms"), dict) else {}
+    _ai_value = pkg.get("ai")
+    ai = _ai_value if isinstance(_ai_value, dict) else {}
+    _risk_value = pkg.get("risk")
+    risk = _risk_value if isinstance(_risk_value, dict) else {}
+    _mt5_value = pkg.get("mt5")
+    mt5 = _mt5_value if isinstance(_mt5_value, dict) else {}
+    _broker_value = pkg.get("broker")
+    broker = _broker_value if isinstance(_broker_value, dict) else {}
+    _trade_value = pkg.get("trade")
+    trade = _trade_value if isinstance(_trade_value, dict) else {}
+    _gw_value = pkg.get("gateway")
+    gw = _gw_value if isinstance(_gw_value, dict) else {}
+    _oms_value = pkg.get("oms")
+    oms = _oms_value if isinstance(_oms_value, dict) else {}
 
     ticket = _pick(mt5.get("ticket"), pkg.get("mt5_ticket"), pkg.get("ticket"))
     validation_id = _pick(pkg.get("validation_id"))
@@ -180,7 +187,8 @@ def sync_and_list_trades(*, limit: int = 100) -> dict[str, Any]:
         if not isinstance(pkg, dict):
             continue
         # Only archive real executions (ticket or accepted)
-        mt5 = pkg.get("mt5") if isinstance(pkg.get("mt5"), dict) else {}
+        _mt5_value = pkg.get("mt5")
+        mt5 = _mt5_value if isinstance(_mt5_value, dict) else {}
         ticket = mt5.get("ticket") or pkg.get("mt5_ticket")
         accepted = bool(pkg.get("accepted") or pkg.get("certificate_eligible"))
         if ticket is None and not accepted:

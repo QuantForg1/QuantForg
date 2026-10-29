@@ -330,7 +330,8 @@ def validate_market_data(
     )
     duplicate_tick = md.get("duplicate_tick")
     missing_candles = md.get("missing_candles")
-    ohlc = md.get("ohlc") if isinstance(md.get("ohlc"), dict) else None
+    _ohlc_value = md.get("ohlc")
+    ohlc = _ohlc_value if isinstance(_ohlc_value, dict) else None
 
     if duplicate_tick is True:
         rejected = True

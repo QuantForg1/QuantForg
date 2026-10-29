@@ -31,6 +31,7 @@ from app.domain.institutional_trading.force_first_trade import (
     maybe_override_decision,
 )
 from app.domain.institutional_trading.management.config import DEFAULT_PME_CONFIG
+from app.domain.institutional_trading.management.engine import PositionManagementEngine
 from app.domain.institutional_trading.management.models import (
     ManageActionKind,
     ManagedPosition,
@@ -43,7 +44,6 @@ from app.domain.institutional_trading.production_hardening.position_recovery imp
 from app.domain.institutional_trading.risk_lock_override import (
     risk_lock_override_enabled,
 )
-from app.domain.institutional_trading.management.engine import PositionManagementEngine
 
 OPENED = datetime(2026, 8, 4, 0, 28, tzinfo=UTC)
 

@@ -24,14 +24,16 @@ def _i(value: Any, default: int = 0) -> int:
 
 
 def _components(score: dict[str, Any]) -> tuple[dict[str, int], str, str, str]:
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)
         else {}
     )
     atr_band = "normal"
-    thresholds = score.get("thresholds") if isinstance(score.get("thresholds"), dict) else {}
+    _thresholds_value = score.get("thresholds")
+    thresholds = _thresholds_value if isinstance(_thresholds_value, dict) else {}
     if thresholds.get("band"):
         atr_band = str(thresholds.get("band"))
     elif vol.get("band"):

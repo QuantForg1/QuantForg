@@ -7,7 +7,6 @@ from typing import Any
 
 from app.domain.institutional_trading.phase_a.control_vocab import FinalControlState
 
-
 USD_MAJOR_SYMBOLS = frozenset(
     {
         "EURUSD",

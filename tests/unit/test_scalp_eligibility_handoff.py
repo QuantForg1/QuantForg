@@ -479,8 +479,8 @@ def test_no_eligible_setup_overlay_does_not_infer_risk_ready() -> None:
 
 
 def test_scalping_eligibility_engine_does_not_use_quality_80() -> None:
-    from tests.unit.test_institutional_trading_phase_c import _account, _snapshot
     from app.domain.market_structure.enums import TrendDirection
+    from tests.unit.test_institutional_trading_phase_c import _account, _snapshot
 
     snap = _snapshot(direction=TrendDirection.DOWN, quality=66)
     conf = ConfluenceResult(

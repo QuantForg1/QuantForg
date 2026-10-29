@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-
 _TRACE_ORDER: tuple[str, ...] = (
     "Market Data",
     "Scanner",
@@ -83,7 +82,8 @@ def build_institutional_execution_trace(
 ) -> dict[str, Any]:
     """Build ordered substages from live artefacts (never invents fills)."""
     score = ai_score if isinstance(ai_score, dict) else {}
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)

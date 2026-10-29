@@ -147,9 +147,7 @@ class PhaseAControlPlane:
             first_gate = first_gate or self.burst.blocking_gate_name()
 
         # Recon / UNKNOWN
-        recon_blocks = False
         if cfg.recon_gate_enabled and self.ambiguity.has_blocking_ambiguity():
-            recon_blocks = True
             first_gate = first_gate or "UNKNOWN_ORDER_RECONCILIATION"
 
         # Market data — only when quote facts are supplied (symbol alone is not enough)

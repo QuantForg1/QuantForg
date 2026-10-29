@@ -44,7 +44,7 @@ from tests.unit.test_institutional_trading_phase_c import (
     _ctx,
     _sell_decision,
 )
-from tests.unit.test_xauusd_sniper_v2_lifecycle import _dir, _sniper, _snap
+from tests.unit.test_xauusd_sniper_v2_lifecycle import _dir, _snap, _sniper
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 _LOCK = threading.Lock()
-_STORE: "ExecutionQualityAnalyticsStore | None" = None
+_STORE: ExecutionQualityAnalyticsStore | None = None
 
 
 def _iso() -> str:

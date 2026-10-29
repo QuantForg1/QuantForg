@@ -31,8 +31,8 @@ from app.domain.institutional_trading.operations.fast_decision_path import (
     reset_fast_decision_path,
     set_focus,
 )
-from app.domain.trading.execution_universe import canonical_execution_desks
 from app.domain.trading import gold_only as gold_policy
+from app.domain.trading.execution_universe import canonical_execution_desks
 from app.domain.trading.gold_only import (
     CANONICAL_GOLD_BROKER_DISPLAY,
     GOLD_SYMBOL,

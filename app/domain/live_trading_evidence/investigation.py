@@ -26,7 +26,8 @@ def investigate_trade(trade_id: str) -> dict[str, Any]:
 
     validation_id = trade.get("validation_id")
     pipeline: list[dict[str, Any]] = []
-    timeline = trade.get("timeline") if isinstance(trade.get("timeline"), list) else []
+    _timeline_value = trade.get("timeline")
+    timeline = _timeline_value if isinstance(_timeline_value, list) else []
     if timeline:
         pipeline = list(timeline)
 
@@ -100,10 +101,14 @@ def investigate_trade(trade_id: str) -> dict[str, Any]:
     except Exception:  # noqa: S110
         pass
 
-    ai = trade.get("ai") if isinstance(trade.get("ai"), dict) else {}
-    risk = trade.get("risk") if isinstance(trade.get("risk"), dict) else {}
-    oms = trade.get("oms") if isinstance(trade.get("oms"), dict) else {}
-    broker = trade.get("broker") if isinstance(trade.get("broker"), dict) else {}
+    _ai_value = trade.get("ai")
+    ai = _ai_value if isinstance(_ai_value, dict) else {}
+    _risk_value = trade.get("risk")
+    risk = _risk_value if isinstance(_risk_value, dict) else {}
+    _oms_value = trade.get("oms")
+    oms = _oms_value if isinstance(_oms_value, dict) else {}
+    _broker_value = trade.get("broker")
+    broker = _broker_value if isinstance(_broker_value, dict) else {}
     management = (
         trade.get("management_events")
         if isinstance(trade.get("management_events"), list)

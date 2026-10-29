@@ -95,7 +95,8 @@ async def ingest(
 ) -> dict[str, Any]:
     """Ingest caller-supplied rows into a warehouse domain (copies only)."""
     domain = str(payload.get("domain") or "")
-    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    _rows_value = payload.get("rows")
+    rows = _rows_value if isinstance(_rows_value, list) else []
     return ingest_domain(
         domain,
         rows,

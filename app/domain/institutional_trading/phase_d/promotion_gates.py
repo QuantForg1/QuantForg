@@ -6,7 +6,6 @@ from typing import Any
 
 from app.domain.institutional_trading.phase_d.candidate import AlphaCandidate
 
-
 MANDATORY_GATES = (
     "RESEARCH_VALIDATION",
     "OUT_OF_SAMPLE",

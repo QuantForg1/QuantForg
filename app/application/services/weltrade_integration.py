@@ -809,7 +809,7 @@ class WeltradeIntegrationService:
                 )
 
         try:
-            live_ref = ((self.adapter.attach(path="") or "")).strip()
+            live_ref = (self.adapter.attach(path="") or "").strip()
         except Exception as exc:
             logger.warning(
                 "weltrade_ensure_attach_failed",

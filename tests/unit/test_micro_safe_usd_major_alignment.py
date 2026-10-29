@@ -27,7 +27,6 @@ from app.domain.institutional_trading.atr import stop_distance_from_atr
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.institutional_trading.micro_account_mode import MicroAccountProfile
 
-
 _WELTRADE_ROWS = [
     {"code": "EURUSD_I", "trade_mode": 4, "digits": 5},
     {"code": "GBPUSD_I", "trade_mode": 4, "digits": 5},

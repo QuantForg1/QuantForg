@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 ALLOWED_CHANGE_KINDS = frozenset(
     {
         "strategy",

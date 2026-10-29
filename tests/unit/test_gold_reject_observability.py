@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import SCALPING_V1
+from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+    SCALPING_V1,
+)
 from app.domain.institutional_trading.operations.fast_decision_path import (
     CandidateAction,
     build_current_scan_decision,

@@ -102,7 +102,7 @@ class OpenAIResponsesClient:
             for attempt in range(attempts):
                 try:
                     response = await client.post(url, headers=headers, json=payload)
-                except httpx.TimeoutException as exc:
+                except httpx.TimeoutException:
                     last_exc = OpenAIProviderError(
                         "timeout",
                         "OpenAI request timed out",

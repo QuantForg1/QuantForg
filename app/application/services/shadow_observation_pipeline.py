@@ -707,7 +707,8 @@ def shadow_dataset_snapshot() -> dict[str, Any]:
     expansion_n = 0
     overlap_n = 0
     for scan in scans:
-        flags = scan.get("qualifications") if isinstance(scan.get("qualifications"), dict) else {}
+        _flags_value = scan.get("qualifications")
+        flags = _flags_value if isinstance(_flags_value, dict) else {}
         any_shadow = any(
             bool((row or {}).get("WOULD_QUALIFY_AS_SHADOW") or (row or {}).get("present"))
             for row in flags.values()

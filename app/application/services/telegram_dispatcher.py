@@ -812,6 +812,9 @@ def _emit_verified_public_notices(classified: list[dict[str, Any]]) -> None:
     Research, risk, OMS, and operational notices stay off both public
     destinations. Qualification lives in public_channel_notices only.
     """
+    from app.application.services.signal_notification_policy import (
+        filter_user_signal_notices,
+    )
     from app.application.services.telegram_events import (
         SIGNAL_CONFIRMED,
         STOP_LOSS,
@@ -821,10 +824,6 @@ def _emit_verified_public_notices(classified: list[dict[str, Any]]) -> None:
         public_channel_notices,
     )
     from app.application.services.telegram_thread_store import mark_public_status
-
-    from app.application.services.signal_notification_policy import (
-        filter_user_signal_notices,
-    )
 
     public = filter_user_signal_notices(public_channel_notices(classified))
     events = {str(n.get("event")) for n in public}

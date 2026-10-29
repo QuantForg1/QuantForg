@@ -399,7 +399,8 @@ def _probe_live_facts_once(*, enrich_account: bool = False) -> dict[str, Any]:
         )
         if not health:
             health = _collector_health_payload()
-        mt5 = health.get("mt5") if isinstance(health.get("mt5"), dict) else {}
+        _mt5_value = health.get("mt5")
+        mt5 = _mt5_value if isinstance(_mt5_value, dict) else {}
         account = _account_blob(health, mt5)
         session_mode = str(mt5.get("session_mode") or health.get("session_mode") or "")
         out["mt5_attached"] = session_mode.lower() in {
@@ -562,7 +563,8 @@ def _overlay_ite_worker_status(out: dict[str, Any]) -> None:
     ):
         if key in st:
             out[key] = st[key]
-    last = st.get("last_cycle") if isinstance(st.get("last_cycle"), dict) else {}
+    _last_value = st.get("last_cycle")
+    last = _last_value if isinstance(_last_value, dict) else {}
     if last:
         exec_status = last.get("execution_status") or st.get("execution_status")
         if exec_status:
@@ -708,7 +710,8 @@ def _signal_cards(
         direction = str(row.get("direction") or "").upper()
         if direction not in {"BUY", "SELL"}:
             continue
-        evidence = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+        _evidence_value = row.get("evidence")
+        evidence = _evidence_value if isinstance(_evidence_value, dict) else {}
         why = (
             evidence.get("WHY_THIS_DIRECTION")
             or evidence.get("WHY_NOW")

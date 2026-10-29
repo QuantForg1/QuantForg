@@ -54,7 +54,8 @@ def _read_cycle_rejections(*, limit: int = 200) -> list[dict[str, Any]]:
 
 
 def _normalize_rejection(row: dict[str, Any], *, source: str) -> dict[str, Any]:
-    reasons = row.get("reasons") if isinstance(row.get("reasons"), list) else []
+    _reasons_value = row.get("reasons")
+    reasons = _reasons_value if isinstance(_reasons_value, list) else []
     primary = (
         row.get("primary_reason")
         or row.get("reason")

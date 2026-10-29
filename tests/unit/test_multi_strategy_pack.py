@@ -15,7 +15,6 @@ from app.domain.institutional_trading.ai_scalping.strategies import (
     best_strategy_for_symbol,
     evaluate_all_strategies,
     evaluate_strategy,
-    get_strategy_stats_book,
     list_strategy_ids,
     select_global_best,
 )

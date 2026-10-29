@@ -6,7 +6,6 @@ Does not send orders, change Risk, Safety, 5% cap, or 0.01 min lot.
 from __future__ import annotations
 
 from decimal import Decimal
-from types import SimpleNamespace
 
 import pytest
 
@@ -259,8 +258,9 @@ def test_stale_shadow_cannot_execute() -> None:
 
 
 def test_observer_never_imports_order_send() -> None:
-    import app.application.services.aggressive_compounding_observer as mod
     import inspect
+
+    import app.application.services.aggressive_compounding_observer as mod
 
     src = inspect.getsource(mod)
     assert "order_send(" not in src

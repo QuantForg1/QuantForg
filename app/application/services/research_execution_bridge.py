@@ -221,7 +221,8 @@ def signal_execution_status(
     """Per-signal execution label. Never claims a fill without a ticket/position."""
     if not isinstance(row, dict):
         return "RESEARCH_ONLY"
-    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+    _pipe_value = row.get("pipeline")
+    pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
     lifecycle = str(
         pipe.get("execution_lifecycle") or row.get("execution_state") or ""
     ).strip().upper()
@@ -304,7 +305,8 @@ def signal_card_lifecycle(
             "card_status": "WAITING",
             "reason": "NO_SIGNAL_ROW",
         }
-    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+    _pipe_value = row.get("pipeline")
+    pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
     ticket = pipe.get("ticket") or row.get("ticket") or row.get("mt5_ticket")
     try:
         ticket_n = int(ticket) if ticket not in (None, "", "0", 0) else 0

@@ -266,7 +266,6 @@ def score_scalping_setup(
 
     trend = snapshot.trend
     quality = snapshot.trade_quality
-    structure = snapshot.primary_structure
 
     direction_dec = decide_scalping_direction(snapshot, config=cfg)
     reasons.extend(direction_dec.reasons)

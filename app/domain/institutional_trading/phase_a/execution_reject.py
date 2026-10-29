@@ -163,7 +163,8 @@ def classify_downstream_execution_reject(
             rc = int(retcode)
         except (TypeError, ValueError):
             rc = None
-        else:
+        # int() either produced an int or the except branch stored None.
+        if isinstance(rc, int):
             # MT5 trade retcodes. order_check TRADE_RETCODE_DONE (0) is not a send.
             mt5_retcode = 10000 <= rc < 20000
 
@@ -235,7 +236,7 @@ def execution_observability(
             rc = int(retcode)
         except (TypeError, ValueError):
             rc = None
-        else:
+        if isinstance(rc, int):
             broker_retcode = rc
             if 10000 <= rc < 20000:
                 mt5_retcode = rc

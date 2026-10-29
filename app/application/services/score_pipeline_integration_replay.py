@@ -280,7 +280,7 @@ def replay_score_pipeline_integration(
             full_after += 1
 
         bos = meta.get("bos")
-        h1 = str(((cycle.get("trend") or {}).get("h1") or "")).lower()
+        h1 = str((cycle.get("trend") or {}).get("h1") or "").lower()
         bos_opposes = bool(bos in {"up", "down"} and h1 in {"up", "down"} and bos != h1)
         if integrated_full and bos_opposes:
             fp += 1

@@ -84,7 +84,8 @@ def filter_user_signal_notices(
         event = str(notice.get("event") or "")
         if not is_user_signal_event(event):
             continue
-        fields = notice.get("fields") if isinstance(notice.get("fields"), dict) else {}
+        _fields_value = notice.get("fields")
+        fields = _fields_value if isinstance(_fields_value, dict) else {}
         symbol = fields.get("symbol") or notice.get("symbol")
         # Lifecycle replies may omit symbol if thread-bound; still require gold
         # when a symbol is present.

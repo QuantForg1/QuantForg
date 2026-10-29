@@ -23,6 +23,7 @@ from app.domain.institutional_trading.operations.gold_execution_contract import 
     evaluate_gold_execution_contract,
 )
 from app.domain.institutional_trading.phase_a.burst_latch import BurstLatch
+from app.domain.institutional_trading.phase_a.config import PhaseAConfig
 from app.domain.institutional_trading.phase_a.control_vocab import (
     FinalControlState,
     map_to_final_control_state,
@@ -40,7 +41,6 @@ from app.domain.institutional_trading.phase_a.execution_reject import (
     first_blocking_gate_from_reasons,
 )
 from app.domain.institutional_trading.phase_a.plane import PhaseAControlPlane
-from app.domain.institutional_trading.phase_a.config import PhaseAConfig
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 

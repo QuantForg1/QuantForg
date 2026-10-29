@@ -524,7 +524,8 @@ def build_acceptance_status(
 ) -> dict[str, Any]:
     """NOC Production Acceptance widget payload — never fabricates."""
     latest = load_latest_evidence(export_dir=export_dir)
-    pkg = latest.get("latest") if isinstance(latest.get("latest"), dict) else None
+    _pkg_value = latest.get("latest")
+    pkg = _pkg_value if isinstance(_pkg_value, dict) else None
     cert_ok = certificate_exists(certificate_dir=certificate_dir)
     eligible = bool(pkg and pkg.get("certificate_eligible"))
     verified = bool((latest.get("status") == "VERIFIED" or eligible) and cert_ok)
@@ -542,14 +543,18 @@ def build_acceptance_status(
             "never_fabricated": True,
         }
     lat = None
-    trade = pkg.get("trade") if isinstance(pkg.get("trade"), dict) else {}
-    gw = pkg.get("gateway") if isinstance(pkg.get("gateway"), dict) else {}
-    oms = pkg.get("oms") if isinstance(pkg.get("oms"), dict) else {}
+    _trade_value = pkg.get("trade")
+    trade = _trade_value if isinstance(_trade_value, dict) else {}
+    _gw_value = pkg.get("gateway")
+    gw = _gw_value if isinstance(_gw_value, dict) else {}
+    _oms_value = pkg.get("oms")
+    oms = _oms_value if isinstance(_oms_value, dict) else {}
     if gw.get("order_send_latency_ms") is not None:
         lat = gw.get("order_send_latency_ms")
     elif oms.get("latency_ms") is not None:
         lat = oms.get("latency_ms")
-    mt5 = pkg.get("mt5") if isinstance(pkg.get("mt5"), dict) else {}
+    _mt5_value = pkg.get("mt5")
+    mt5 = _mt5_value if isinstance(_mt5_value, dict) else {}
     cert_path = str(CERTIFICATE_PATH) if verified else None
     return {
         "status": "VERIFIED" if verified else "NOT VERIFIED",

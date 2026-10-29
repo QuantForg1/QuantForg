@@ -7,12 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from app.application.services.shadow_expansion_engine import ALLOW_LIVE_PROMOTION as ENGINE_PROMO
+from app.application.services.shadow_expansion_engine import (
+    ALLOW_LIVE_PROMOTION as ENGINE_PROMO,
+)
 from app.application.services.shadow_observation_pipeline import (
     ALLOW_LIVE_PROMOTION,
     SHADOW_VIRTUAL_TRADE,
     STRATEGY_MATCHED_LIVE_TRADE,
     WOULD_SUBMIT_ORDER,
+    ShadowPipelineBlocked,
     apply_future_bar,
     call_mt5,
     call_oms,
@@ -23,7 +26,6 @@ from app.application.services.shadow_observation_pipeline import (
     shadow_dataset_snapshot,
     submit_order,
     write_live_execution_ledger,
-    ShadowPipelineBlocked,
 )
 from app.application.services.strategy_forensic_ledger import (
     list_submissions,
@@ -38,7 +40,9 @@ from app.application.services.strategy_loss_forensics import (
     STRONGER_EVIDENCE,
     sample_status,
 )
-from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import SCALPING_V1
+from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+    SCALPING_V1,
+)
 from app.domain.institutional_trading.operations.probability_selector import (
     OPPORTUNITY_SCORE_THRESHOLD,
 )

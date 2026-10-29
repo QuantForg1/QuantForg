@@ -7,7 +7,8 @@ Never promotes a strategy from raw Sharpe alone. Never gates LIVE in Phase C.
 from __future__ import annotations
 
 import math
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 def _sharpe(returns: Sequence[float]) -> float | None:

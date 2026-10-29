@@ -683,7 +683,8 @@ def hourly_scan_rates(
             sniper_ready_n += 1
         if setup == "TAKE" or sniper == "TAKE" or bool(row.get("take")):
             sniper_take_n += 1
-        rej = row.get("rejection") if isinstance(row.get("rejection"), dict) else {}
+        _rej_value = row.get("rejection")
+        rej = _rej_value if isinstance(_rej_value, dict) else {}
         code = str(rej.get("primary") or row.get("abort_reason") or "").upper()
         if bool(row.get("rejected")) or (
             code and not bool(row.get("forwarded_to_oms"))
@@ -836,7 +837,8 @@ def compute_diagnostics_statistics(
     ]
     counter: Counter[str] = Counter()
     for r in rows:
-        rej = r.get("rejection") if isinstance(r.get("rejection"), dict) else {}
+        _rej_value = r.get("rejection")
+        rej = _rej_value if isinstance(_rej_value, dict) else {}
         code = rej.get("primary") if isinstance(rej, dict) else None
         if code:
             counter[str(code)] += 1
@@ -1062,10 +1064,11 @@ class StrategyDiagnosticsStore:
         # AI Decision Engine v2 rejection telemetry (advisory; never mutates gates)
         try:
             if cycle.get("rejected"):
+                from types import SimpleNamespace
+
                 from app.application.services.decision_v2_telemetry import (
                     record_rejection_telemetry,
                 )
-                from types import SimpleNamespace
 
                 trend = (
                     cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
@@ -1122,13 +1125,15 @@ class StrategyDiagnosticsStore:
             pass
         # M15 Trend Semantics v2 telemetry (advisory; never mutates gates)
         try:
+            import re
+
             from app.application.services.m15_semantics_telemetry import (
                 build_m15_semantics_telemetry,
                 get_m15_semantics_telemetry_store,
             )
-            import re
 
-            trend = cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
+            _trend_value = cycle.get("trend")
+            trend = _trend_value if isinstance(_trend_value, dict) else {}
             conf = (
                 cycle.get("confluence")
                 if isinstance(cycle.get("confluence"), dict)

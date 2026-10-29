@@ -430,7 +430,8 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
     )
     # Min-lot blocks are execution constraints, not "missing signals".
     min_lot_block = _is_min_lot_constraint(str(reason_early or ""))
-    sniper = score.get("sniper_entry") if isinstance(score.get("sniper_entry"), dict) else {}
+    _sniper_value = score.get("sniper_entry")
+    sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
     signal_action = str(
         score.get("signal_action")
         or (sniper.get("action") if isinstance(sniper, dict) else "")
@@ -472,7 +473,8 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         badge = "WAIT"
     elif reject and direction_out in {"BUY", "SELL"}:
         badge = f"{direction_out} BLOCKED"
-    indicators = score.get("indicators") if isinstance(score.get("indicators"), dict) else {}
+    _indicators_value = score.get("indicators")
+    indicators = _indicators_value if isinstance(_indicators_value, dict) else {}
     momentum = int(
         score.get("momentum")
         or factors.get("momentum")
@@ -1131,7 +1133,8 @@ def _attach_execution_observability(
         live_burst = get_live_health_monitor().reject_burst_observability(symbol)
     except Exception:
         live_burst = None
-    phase_a_burst = pipe.get("reject_burst") if isinstance(pipe.get("reject_burst"), dict) else None
+    _phase_a_burst_value = pipe.get("reject_burst")
+    phase_a_burst = _phase_a_burst_value if isinstance(_phase_a_burst_value, dict) else None
     if not isinstance(phase_a_burst, dict):
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
@@ -1577,7 +1580,8 @@ def _promote_pipeline_trade_levels(row: dict[str, Any]) -> dict[str, Any]:
 
     Does not invent values — copies only what the pipeline already computed.
     """
-    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+    _pipe_value = row.get("pipeline")
+    pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
     if row.get("entry") in (None, "", "UNKNOWN"):
         entry = _honest_numeric(pipe.get("entry") or pipe.get("entry_price"))
         if entry is not None:
@@ -1979,7 +1983,8 @@ def list_live_signals(
     as_of = str(scan.get("as_of") or _now_iso())
     strategy = None
     try:
-        best = scan.get("best") if isinstance(scan.get("best"), dict) else {}
+        _best_value = scan.get("best")
+        best = _best_value if isinstance(_best_value, dict) else {}
         strategy = best.get("strategy_id") or best.get("strategy")
     except Exception:
         strategy = None
@@ -2312,11 +2317,13 @@ def list_live_signals(
         scan.get("source") or ""
     ).upper() == "TEST_SYNTHETIC"
     rolling = _rolling_signal_metrics()
-    hourly = rolling.get("hourly") if isinstance(rolling.get("hourly"), dict) else {}
+    _hourly_value = rolling.get("hourly")
+    hourly = _hourly_value if isinstance(_hourly_value, dict) else {}
     last_take = None
     last_fill = None
     for item in signals:
-        pipe = item.get("pipeline") if isinstance(item.get("pipeline"), dict) else {}
+        _pipe_value = item.get("pipeline")
+        pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
         if last_take is None and str(pipe.get("final_decision") or "").upper() == "TAKE":
             last_take = {
                 "symbol": item.get("symbol"),

@@ -53,15 +53,18 @@ async def run_lab_replay(
     payload: dict[str, Any] = Body(default_factory=dict),
 ) -> dict[str, Any]:
     """Replay supplied XAUUSD bars + opportunities into the Replay lane."""
-    bars = payload.get("bars") if isinstance(payload.get("bars"), list) else []
+    _bars_value = payload.get("bars")
+    bars = _bars_value if isinstance(_bars_value, list) else []
     opps = (
         payload.get("opportunities")
         if isinstance(payload.get("opportunities"), list)
         else []
     )
     thresholds = payload.get("thresholds")
-    live = payload.get("live") if isinstance(payload.get("live"), list) else []
-    demo = payload.get("demo") if isinstance(payload.get("demo"), list) else []
+    _live_value = payload.get("live")
+    live = _live_value if isinstance(_live_value, list) else []
+    _demo_value = payload.get("demo")
+    demo = _demo_value if isinstance(_demo_value, list) else []
     research = (
         payload.get("research") if isinstance(payload.get("research"), list) else []
     )

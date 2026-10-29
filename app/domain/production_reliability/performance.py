@@ -12,7 +12,8 @@ def build_performance_monitoring(
     observability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     obs = observability or {}
-    resources = obs.get("resources") if isinstance(obs.get("resources"), dict) else {}
+    _resources_value = obs.get("resources")
+    resources = _resources_value if isinstance(_resources_value, dict) else {}
     raw_lat = obs.get("latencies_ms")
     latencies = raw_lat if isinstance(raw_lat, dict) else {}
 

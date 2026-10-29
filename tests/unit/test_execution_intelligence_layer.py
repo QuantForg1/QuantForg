@@ -6,6 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.domain.institutional_trading.ai_scalping.execution_daily_reporting import (
+    build_execution_daily_report,
+)
 from app.domain.institutional_trading.ai_scalping.execution_optimizer import (
     clear_optimizer_defers,
     evaluate_execution_moment,
@@ -26,9 +29,6 @@ from app.domain.institutional_trading.ai_scalping.smart_order_routing import (
 from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (
     LIFECYCLE_STAGES,
     get_trade_lifecycle_store,
-)
-from app.domain.institutional_trading.ai_scalping.execution_daily_reporting import (
-    build_execution_daily_report,
 )
 
 

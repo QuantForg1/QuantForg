@@ -13,7 +13,9 @@ from app.domain.institutional_trading.phase_b.config import (
 )
 from app.domain.institutional_trading.phase_b.execution_intel import ExecutionIntelStore
 from app.domain.institutional_trading.phase_b.explain_journal import ExplainJournal
-from app.domain.institutional_trading.phase_b.live_vs_research import LiveVsResearchStore
+from app.domain.institutional_trading.phase_b.live_vs_research import (
+    LiveVsResearchStore,
+)
 from app.domain.institutional_trading.phase_b.mae_mfe import LiveMaeMfeTracker
 from app.domain.institutional_trading.phase_b.model_monitor_prep import (
     ModelMonitorPrepStore,

@@ -718,14 +718,14 @@ def test_fvg_without_momentum_is_incomplete_not_silent() -> None:
 
 
 def test_scale_in_blocks_losing_leg_and_missing_pnl() -> None:
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_AI_SCALPING_CONFIG,
+    )
     from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
         may_add_scalping_trade,
     )
     from app.domain.institutional_trading.ai_scalping.dynamic_sizing_v2 import (
         adaptive_protection_scale,
-    )
-    from app.domain.institutional_trading.ai_scalping.config import (
-        DEFAULT_AI_SCALPING_CONFIG,
     )
 
     loser = may_add_scalping_trade(

@@ -19,6 +19,7 @@ from app.domain.institutional_trading.ai_scalping.config import AiScalpingConfig
 from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     may_add_scalping_trade,
 )
+from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 from app.domain.institutional_trading.config import (
     DEFAULT_ITE_CONFIG,
     MAX_DAILY_LOSS_PCT,
@@ -619,8 +620,6 @@ def test_decision_to_mt5_handoff_does_not_require_execute_now() -> None:
 
 
 def _live_safety_facts(**overrides: object) -> AutoTradeLiveFacts:
-    from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
-
     payload: dict[str, object] = {
         "gateway_connected": True,
         "broker_connected": True,
@@ -691,8 +690,8 @@ def test_daily_loss_is_global_blocker_mt5_autotrading_is_safety() -> None:
 
 def test_take_handoff_is_not_executed_without_ticket() -> None:
     from app.domain.institutional_trading.operations.execution_chain_log import (
-        build_execution_handoff,
         bridge_abort_stage,
+        build_execution_handoff,
     )
 
     handoff = build_execution_handoff(

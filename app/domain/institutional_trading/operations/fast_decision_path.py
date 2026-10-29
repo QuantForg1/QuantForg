@@ -1122,7 +1122,8 @@ def scan_ineligible_abort_reason(scan: dict[str, Any] | None) -> str:
     """
     if not isinstance(scan, dict):
         return "NO_ELIGIBLE_SETUP"
-    trace = scan.get("eligibility_trace") if isinstance(scan.get("eligibility_trace"), dict) else None
+    _trace_value = scan.get("eligibility_trace")
+    trace = _trace_value if isinstance(_trace_value, dict) else None
     if trace:
         code = str(trace.get("first_failed_code") or trace.get("eligibility_reason") or "")
         if code and code not in {NO_CURRENT_BLOCK, "NONE", "SCALP_ELIGIBLE", "PASS"}:
@@ -1346,8 +1347,10 @@ def _volatility_fields(
         row = {**row, "volatility_decision": hint.get("volatility_decision")}
     if row.get("atr_pct") is None and hint.get("atr_pct") is not None:
         row = {**row, "atr_pct": hint.get("atr_pct")}
-    vol = row.get("volatility_decision") if isinstance(row.get("volatility_decision"), dict) else {}
-    thresholds = row.get("thresholds") if isinstance(row.get("thresholds"), dict) else {}
+    _vol_value = row.get("volatility_decision")
+    vol = _vol_value if isinstance(_vol_value, dict) else {}
+    _thresholds_value = row.get("thresholds")
+    thresholds = _thresholds_value if isinstance(_thresholds_value, dict) else {}
     atr_pct = vol.get("atr_pct") if vol.get("atr_pct") is not None else row.get("atr_pct")
     hard_min = vol.get("hard_min_pct")
     if hard_min is None:

@@ -107,8 +107,10 @@ def classify_conflict_paint(cycle: dict[str, Any] | None) -> dict[str, Any]:
     painted = setup in {"CHASING", "STALE", "CONFLICT"}
     take = setup == "TAKE"
     direction_already_failed = "NO_DIRECTIONAL_EDGE" in blocker or blocker == "DIRECTION_NONE"
-    sniper = row.get("sniper_entry") if isinstance(row.get("sniper_entry"), dict) else {}
-    pillars = sniper.get("pillars") if isinstance(sniper.get("pillars"), dict) else {}
+    _sniper_value = row.get("sniper_entry")
+    sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
+    _pillars_value = sniper.get("pillars")
+    pillars = _pillars_value if isinstance(_pillars_value, dict) else {}
     diagnostics = (
         sniper.get("diagnostics") if isinstance(sniper.get("diagnostics"), dict) else {}
     )
@@ -121,8 +123,10 @@ def classify_conflict_paint(cycle: dict[str, Any] | None) -> dict[str, Any]:
     if has_sniper:
         raw_displacement = 78 if pillars.get("displacement_or_momentum") else 20
         raw_timing = 80 if entry_state in {"RETEST", "INSIDE", "CONTROLLED"} else 20
-    audit = row.get("opportunity_audit") if isinstance(row.get("opportunity_audit"), dict) else {}
-    breakdown = row.get("score_breakdown") if isinstance(row.get("score_breakdown"), dict) else {}
+    _audit_value = row.get("opportunity_audit")
+    audit = _audit_value if isinstance(_audit_value, dict) else {}
+    _breakdown_value = row.get("score_breakdown")
+    breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else {}
     effective_displacement = _nested_score(audit, "displacement")
     if effective_displacement is None:
         effective_displacement = breakdown.get("displacement")

@@ -36,10 +36,10 @@ from app.domain.institutional_trading.phase_a.market_data_firewall import (
 )
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.market_structure.enums import TrendDirection
+from app.domain.multi_agent_ai import CollaborationInput, MultiAgentSystem
 from app.domain.scalping_ai_v2.reliability import DuplicateProtection
 from app.domain.trading.gold_only import DisabledAutonomousSymbolError, require_xauusd
 from app.domain.value_objects.market import Price
-from app.domain.multi_agent_ai import CollaborationInput, MultiAgentSystem
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 

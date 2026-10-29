@@ -11,7 +11,6 @@ from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
 from app.domain.institutional_trading.ai_scalping.opportunity_ranking import (
     compute_opportunity_score,
 )
-from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.institutional_trading.compounding.models import (
     BROKER_MIN_LOT,
     HARD_MAX_RISK_PCT,
@@ -25,6 +24,7 @@ from app.domain.institutional_trading.compounding.models import (
     ScaleInAdvice,
     SizingAdvice,
 )
+from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.institutional_trading.operations.position_plan import (
     class_position_cap,
     margin_allowed_count,

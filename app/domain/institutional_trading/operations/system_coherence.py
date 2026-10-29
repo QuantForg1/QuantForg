@@ -464,8 +464,10 @@ def compose_system_snapshot(
         if contract.get("may_submit_oms") is True:
             stages["OMS"] = StageStatus.PASS.value
 
-    di_risk = di.get("risk") if isinstance(di.get("risk"), dict) else {}
-    di_safety = di.get("safety") if isinstance(di.get("safety"), dict) else {}
+    _di_risk_value = di.get("risk")
+    di_risk = _di_risk_value if isinstance(_di_risk_value, dict) else {}
+    _di_safety_value = di.get("safety")
+    di_safety = _di_safety_value if isinstance(_di_safety_value, dict) else {}
     risk_state = str(di_risk.get("state") or "")
     if risk_state in {s.value for s in StageStatus} or risk_state == "FAIL":
         stages["RISK"] = (

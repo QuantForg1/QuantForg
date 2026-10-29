@@ -22,7 +22,7 @@ LIFECYCLE_STAGES: tuple[str, ...] = (
 )
 
 _LOCK = threading.Lock()
-_STORE: "TradeLifecycleStore | None" = None
+_STORE: TradeLifecycleStore | None = None
 
 
 def _iso() -> str:

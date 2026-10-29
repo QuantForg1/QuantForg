@@ -303,7 +303,8 @@ def evaluate_opportunity(
 
 def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
     """Map an existing AI scalping score artefact onto the selector."""
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)

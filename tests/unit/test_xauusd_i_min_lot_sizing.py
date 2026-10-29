@@ -22,7 +22,6 @@ from app.domain.institutional_trading.atr import stop_distance_from_atr
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.institutional_trading.micro_account_mode import MicroAccountProfile
 
-
 # Live Weltrade XAUUSD_I (gateway /symbols/XAUUSD_I)
 _VOLUME_MIN = Decimal("0.01")
 _VOLUME_STEP = Decimal("0.01")

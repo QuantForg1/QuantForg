@@ -118,10 +118,10 @@ def test_micro_50_usd_not_tradable_or_conditional() -> None:
 
 
 def test_conflicting_directions_force_no_trade(monkeypatch) -> None:
+    import app.domain.trading.gold_unified_brain as brain
     from app.domain.institutional_trading.ai_scalping.strategies.models import (
         StrategyEvaluation,
     )
-    import app.domain.trading.gold_unified_brain as brain
 
     buy = StrategyEvaluation(
         strategy_id="smc_scalping",

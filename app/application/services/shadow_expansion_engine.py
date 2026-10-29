@@ -167,8 +167,10 @@ def candidate_present(spec: dict[str, Any], cycle: dict[str, Any]) -> bool:
     if spec.get("displacement") and not _has_token(
         cycle, "DISPLACEMENT", "IMPULSE"
     ):
-        audit = cycle.get("opportunity_audit") if isinstance(cycle.get("opportunity_audit"), dict) else {}
-        disp = audit.get("displacement") if isinstance(audit.get("displacement"), dict) else {}
+        _audit_value = cycle.get("opportunity_audit")
+        audit = _audit_value if isinstance(_audit_value, dict) else {}
+        _disp_value = audit.get("displacement")
+        disp = _disp_value if isinstance(_disp_value, dict) else {}
         try:
             if int(disp.get("score") or cycle.get("displacement_score") or 0) < 70:
                 return False
@@ -176,8 +178,10 @@ def candidate_present(spec: dict[str, Any], cycle: dict[str, Any]) -> bool:
             return False
     mtf_pair = spec.get("mtf_pair")
     if mtf_pair:
-        breakdown = cycle.get("score_breakdown") if isinstance(cycle.get("score_breakdown"), dict) else {}
-        factors = cycle.get("factors") if isinstance(cycle.get("factors"), dict) else {}
+        _breakdown_value = cycle.get("score_breakdown")
+        breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else {}
+        _factors_value = cycle.get("factors")
+        factors = _factors_value if isinstance(_factors_value, dict) else {}
         left, right = mtf_pair
         left_v = breakdown.get(left) or factors.get(left) or cycle.get(left)
         right_v = breakdown.get(right) or factors.get(right) or cycle.get(right)

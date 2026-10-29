@@ -1024,7 +1024,8 @@ def facts_from_cycle(
     if ask is None:
         ask = getattr(snapshot, "ask", None)
     ai = last_ai_score if isinstance(last_ai_score, dict) else {}
-    breakdown = ai.get("score_breakdown") if isinstance(ai.get("score_breakdown"), dict) else None
+    _breakdown_value = ai.get("score_breakdown")
+    breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else None
     return GoldExecutionFacts(
         symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "") or ""),
         direction=str(

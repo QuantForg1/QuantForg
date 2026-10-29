@@ -181,7 +181,8 @@ def _kpis_from_closed(trades: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _score_to_history_row(score: dict[str, Any], *, scan_as_of: str) -> dict[str, Any]:
     projected = _row_from_score(score)
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     return {
         "id": str(uuid4()),
         "observed_at": _now_iso(),

@@ -591,7 +591,6 @@ def bottleneck_report(
     first_blocking_gate: str | None,
     dwell_ms: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    stages = dict(readiness.get("stages") or {})
     first_block = readiness.get("first_block_stage")
     first_wait = readiness.get("first_wait_stage")
     first = first_block or first_wait or "STRATEGY"

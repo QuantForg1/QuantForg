@@ -610,11 +610,13 @@ async def build_ite_cycle_market_context(
         diag.update(extra)
         diag["snapshot"] = "FAIL"
         diag["reason"] = reason
+        bars_raw = diag.get("bars")
+        bars_loaded = bars_raw if isinstance(bars_raw, dict) else {}
         return IteCycleMarketContext(
             ok=False,
             reason=reason,
             latency_ms=(time.perf_counter() - t0) * 1000.0,
-            bars_loaded=diag.get("bars") if isinstance(diag.get("bars"), dict) else {},
+            bars_loaded=bars_loaded,
             diagnostics=diag,
             market_data_live=bool(diag.get("ticks") == "LIVE"),
             spread=(

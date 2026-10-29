@@ -7,7 +7,6 @@ Safety, or OMS. Does not convert WAIT into TAKE.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest

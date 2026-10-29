@@ -30,7 +30,7 @@ class _ArmOnLaterRead:
         self.reads += 1
         return self.reads >= 2
 
-    def bind(self, plane: object) -> "_ArmOnLaterRead":
+    def bind(self, plane: object) -> _ArmOnLaterRead:
         _ = plane
         return self
 
@@ -45,7 +45,7 @@ def test_omitted_volume_is_zero_not_the_cap() -> None:
 @pytest.mark.unit
 def test_published_hard_risk_cap_stays_nine_percent() -> None:
     assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
-    assert HARD_MAX_RISK_PCT == Decimal("9.0")
+    assert Decimal("9.0") == HARD_MAX_RISK_PCT
 
 
 @pytest.mark.unit

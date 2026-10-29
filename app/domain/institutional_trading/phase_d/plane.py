@@ -36,7 +36,9 @@ from app.domain.institutional_trading.phase_d.promotion_gates import (
 )
 from app.domain.institutional_trading.phase_d.rollback import evaluate_rollback_triggers
 from app.domain.institutional_trading.phase_d.sample_governance import classify_sample
-from app.domain.institutional_trading.phase_d.small_account import evaluate_small_account
+from app.domain.institutional_trading.phase_d.small_account import (
+    evaluate_small_account,
+)
 
 
 @dataclass

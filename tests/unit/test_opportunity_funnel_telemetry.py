@@ -8,9 +8,9 @@ import pytest
 
 from app.application.services.opportunity_funnel_telemetry import (
     classify_blocker_source,
+    funnel_snapshot,
     observe_funnel_cycle,
     reset_funnel_telemetry_for_tests,
-    funnel_snapshot,
 )
 from app.application.services.strategy_diagnostics import (
     extract_cycle_diagnostics,

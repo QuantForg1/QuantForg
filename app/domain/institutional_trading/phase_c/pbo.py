@@ -6,9 +6,9 @@ Never used as an automatic LIVE block in Phase C.
 
 from __future__ import annotations
 
-import math
+from collections.abc import Sequence
 from itertools import combinations
-from typing import Any, Sequence
+from typing import Any
 
 
 def _rank_best(rows: Sequence[Sequence[float]]) -> int:

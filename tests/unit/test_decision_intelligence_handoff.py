@@ -14,7 +14,6 @@ from app.application.services.decision_intelligence_assessment import (
 from app.domain.trading.gold_only import CANONICAL_GOLD_BROKER_DISPLAY
 from app.domain.trading.xauusd_specs import MAX_LEVERAGE
 
-
 # Risk FAIL trigger: a daily loss beyond the owner's 25% daily stop ($4,000 on
 # $10,000 now = 28.6% of day-start equity). The loss-streak pause was removed
 # (owner 2026-10-23), so 10 consecutive losses no longer fail Risk.

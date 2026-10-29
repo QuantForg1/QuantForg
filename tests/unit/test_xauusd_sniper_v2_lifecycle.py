@@ -27,7 +27,10 @@ from app.domain.institutional_trading.ai_scalping.direction import (
 from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     may_add_scalping_trade,
 )
-from app.domain.institutional_trading.ai_scalping.scoring import AiScalpingScore, score_scalping_setup
+from app.domain.institutional_trading.ai_scalping.scoring import (
+    AiScalpingScore,
+    score_scalping_setup,
+)
 from app.domain.institutional_trading.ai_scalping.sniper_entry import (
     evaluate_sniper_entry,
 )

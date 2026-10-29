@@ -22,7 +22,8 @@ def _clamp(n: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 def compute_opportunity_components(score: dict[str, Any]) -> dict[str, int]:
     """Map existing AI score / factors into named institutional components."""
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)

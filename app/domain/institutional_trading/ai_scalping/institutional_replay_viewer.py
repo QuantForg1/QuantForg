@@ -17,7 +17,8 @@ def format_institutional_replay(raw: dict[str, Any] | Any) -> dict[str, Any]:
     else:
         item = {}
 
-    frames = item.get("frames") if isinstance(item.get("frames"), list) else []
+    _frames_value = item.get("frames")
+    frames = _frames_value if isinstance(_frames_value, list) else []
     market = (
         item.get("market_snapshot")
         if isinstance(item.get("market_snapshot"), dict)
