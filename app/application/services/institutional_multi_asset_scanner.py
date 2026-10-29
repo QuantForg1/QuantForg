@@ -260,6 +260,25 @@ def _quote_fields_from_context(ctx: Any, account: Any) -> dict[str, Any]:
     }
 
 
+def publish_scored_atr_fields(
+    payload: dict[str, Any],
+    snapshot: object,
+) -> dict[str, Any]:
+    """Publish the ATR the percentage gates used.
+
+    Quote context attaches the account ATR. While scalping, that value is the
+    stop series. It must not replace the entry-confirmation ATR already used
+    to score spread and volatility.
+    """
+    from app.domain.institutional_trading.atr import score_gate_atr
+
+    gate = score_gate_atr(snapshot)
+    payload["gate_atr"] = _as_text(gate)
+    payload["atr"] = _as_text(gate)
+    payload["stop_atr"] = _as_text(getattr(snapshot, "stop_atr", None))
+    return payload
+
+
 def _publish_scan_observation(payload: dict[str, Any]) -> None:
     """Persist WAIT/BUY/SELL observation without fabricating signals."""
     try:
@@ -307,7 +326,9 @@ def _publish_scan_observation(payload: dict[str, Any]) -> None:
                 "bid": row.get("bid"),
                 "ask": row.get("ask"),
                 "spread": row.get("spread"),
-                "atr": row.get("atr") or row.get("atr_pct"),
+                "atr": row.get("gate_atr") or row.get("atr") or row.get("atr_pct"),
+                "gate_atr": row.get("gate_atr"),
+                "stop_atr": row.get("stop_atr"),
                 "bullish_score": row.get("buy_score") or row.get("bullish_score"),
                 "bearish_score": row.get("sell_score") or row.get("bearish_score"),
                 "opportunity_score": row.get("opportunity_score"),
@@ -339,7 +360,10 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
         bid=row.get("bid"),
         ask=row.get("ask"),
         spread=row.get("spread"),
-        atr=row.get("atr") or row.get("atr_pct"),
+        atr=row.get("gate_atr") or row.get("atr") or row.get("atr_pct"),
+        gate_atr=row.get("gate_atr"),
+        stop_atr=row.get("stop_atr"),
+        atr_pct=row.get("atr_pct"),
         bullish_score=row.get("buy_score") or row.get("bullish_score"),
         bearish_score=row.get("sell_score") or row.get("bearish_score"),
         opportunity_score=row.get("opportunity_score"),
@@ -1111,6 +1135,7 @@ async def score_symbol_for_scan(
             getattr(getattr(snapshot, "trend", None), "alignment_score", 0) or 0
         )
         payload.update(_quote_fields_from_context(ctx, account))
+        publish_scored_atr_fields(payload, snapshot)
         return payload
     except Exception as exc:
         logger.exception("multi_asset_score_failed", symbol=code)

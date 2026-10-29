@@ -259,6 +259,52 @@ def test_missing_analysis_atr_fails_the_volatility_gate() -> None:
     assert skipped.reject is False
 
 
+@pytest.mark.unit
+def test_scan_row_keeps_gate_atr_after_quote_context_attaches_the_stop_series() -> None:
+    from app.application.services.institutional_multi_asset_scanner import (
+        _quote_fields_from_context,
+        publish_scored_atr_fields,
+    )
+
+    snapshot = SimpleNamespace(
+        atr=Decimal("4.80"),
+        stop_atr=Decimal("1.90"),
+        entry_atr=Decimal("1.90"),
+    )
+    account = SimpleNamespace(
+        atr=Decimal("1.90"),
+        bid=None,
+        ask=None,
+        mid_price=None,
+        quote_age_seconds=0,
+    )
+    ctx = SimpleNamespace(spread=Decimal("0.40"), diagnostics={}, market_data_live=True)
+    payload = {"atr_pct": "0.1200"}
+    payload.update(_quote_fields_from_context(ctx, account))
+    assert payload["atr"] == "1.90"
+    publish_scored_atr_fields(payload, snapshot)
+    assert payload["atr"] == "4.80"
+    assert payload["gate_atr"] == "4.80"
+    assert payload["stop_atr"] == "1.90"
+    assert payload["atr_pct"] == "0.1200"
+
+
+@pytest.mark.unit
+def test_missing_gate_atr_is_not_filled_from_the_stop_series() -> None:
+    from app.application.services.institutional_multi_asset_scanner import (
+        publish_scored_atr_fields,
+    )
+
+    payload = {"atr": "1.90"}
+    publish_scored_atr_fields(
+        payload,
+        SimpleNamespace(atr=None, stop_atr=Decimal("1.90")),
+    )
+    assert payload["atr"] is None
+    assert payload["gate_atr"] is None
+    assert payload["stop_atr"] == "1.90"
+
+
 def test_live_scorers_pass_snapshot_atr_into_the_percentage_gates() -> None:
     for relative in _LIVE_CALLERS:
         text = (_ROOT / relative).read_text(encoding="utf-8")
@@ -274,3 +320,9 @@ def test_live_scorers_pass_snapshot_atr_into_the_percentage_gates() -> None:
         encoding="utf-8"
     )
     assert pipeline.count("atr_for_timeframe(") >= 2
+    scanner = (
+        _ROOT / "app/application/services/institutional_multi_asset_scanner.py"
+    ).read_text(encoding="utf-8")
+    update_at = scanner.index("payload.update(_quote_fields_from_context")
+    restore_at = scanner.index("publish_scored_atr_fields(payload, snapshot)")
+    assert restore_at > update_at
