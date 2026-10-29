@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.domain.fair_value_gap.engine import FairValueGapEngine
-from app.domain.institutional_trading.atr import compute_atr
+from app.domain.institutional_trading.atr import atr_for_timeframe
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.fingerprint import compute_input_hash
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -264,13 +264,15 @@ class InstitutionalAnalysisPipeline:
             spread=str(spread) if spread is not None else None,
         )
 
-        # Volatility ATR on entry confirmation TF. Scalp stops use the owner's
-        # stop ATR timeframe (M1 or M5, OWNER_SL_ATR_TIMEFRAME).
+        # Volatility and spread/ATR use the entry-confirmation series.
+        # The owner stop uses its own timeframe and must not replace that ATR.
         entry_bars = list(self.bars.as_mapping().get(cfg.entry_confirmation_tf, []))
-        atr = compute_atr(entry_bars)
+        atr = atr_for_timeframe(
+            entry_bars, as_of=moment, timeframe=cfg.entry_confirmation_tf
+        )
         stop_tf = Timeframe.M1 if OWNER_SL_ATR_TIMEFRAME == "M1" else Timeframe.M5
         stop_bars = list(self.bars.as_mapping().get(stop_tf, []))
-        stop_atr = compute_atr(stop_bars)
+        stop_atr = atr_for_timeframe(stop_bars, as_of=moment, timeframe=stop_tf)
         entry_atr = stop_atr if cfg.is_scalping() else atr
         if entry_atr is None:
             entry_atr = atr

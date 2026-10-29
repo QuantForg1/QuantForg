@@ -1084,9 +1084,11 @@ async def score_symbol_for_scan(
         or code
     ).upper()
     try:
+        from app.domain.institutional_trading.atr import score_gate_atr
+
         score = score_scalping_setup(
             snapshot,
-            atr=account.atr,
+            atr=score_gate_atr(snapshot),
             mid=account.mid_price,
             config=cfg,
             enforce_adaptive_cooldown=True,
