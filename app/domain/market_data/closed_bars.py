@@ -6,6 +6,7 @@ detection, and ATR must use the same closed series.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from app.domain.market_data.candle import Candle
@@ -30,7 +31,7 @@ def bar_is_time_aligned(candle: Candle, timeframe: Timeframe) -> bool:
 
 
 def closed_analysis_bars(
-    candles: list[Candle] | tuple[Candle, ...] | None,
+    candles: Sequence[Candle] | None,
     *,
     as_of: datetime | None,
     timeframe: Timeframe,
