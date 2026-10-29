@@ -1,0 +1,202 @@
+"""UTC-session daily-loss circuit breaker — latch, never raise the cap.
+
+Daily loss remains a hard new-entry lock. This module only:
+- measures realized UTC-day P/L the same way Risk Engine does
+- arms the plane latch when the current UTC day is over the cap
+- clears the latch when the current UTC day is back under the cap
+- uses ITE MAX_DAILY_LOSS_PCT as the single hard cap
+
+It does not bypass Risk or force trades.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def utc_session_day(now: datetime | None = None) -> str:
+    moment = now or datetime.now(UTC)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).date().isoformat()
+
+
+def utc_daily_loss_base(
+    *,
+    equity: Decimal,
+    balance: Decimal | None = None,
+) -> tuple[Decimal, str]:
+    """Denominator for daily-loss %. Balance if >0, else equity. Never deposits."""
+    eq = Decimal(str(equity or 0))
+    bal = Decimal(str(balance)) if balance is not None else Decimal("0")
+    if bal > 0:
+        return bal, "balance"
+    return eq, "equity"
+
+
+def utc_daily_loss_pct(
+    *,
+    daily_pnl: Decimal,
+    equity: Decimal,
+    balance: Decimal | None = None,
+) -> Decimal:
+    """Percent loss from day-start equity to current equity.
+
+    Same measurement as Risk Engine daily loss. ``utc_daily_loss_base`` remains
+    the reported balance-or-equity label; it is not the loss denominator.
+    """
+    from app.domain.institutional_trading.owner_risk_policy import daily_loss_pct
+
+    return daily_loss_pct(equity=equity, daily_pnl=daily_pnl, balance=balance)
+
+
+def utc_daily_loss_exceeded(
+    *,
+    daily_pnl: Decimal,
+    equity: Decimal,
+    balance: Decimal | None,
+    max_daily_loss_pct: Decimal,
+) -> bool:
+    cap = Decimal(str(max_daily_loss_pct or 0))
+    pct = utc_daily_loss_pct(daily_pnl=daily_pnl, equity=equity, balance=balance)
+    return pct > cap > 0
+
+
+def utc_daily_loss_resets_at(now: datetime | None = None) -> str:
+    moment = now or datetime.now(UTC)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    nxt = moment.astimezone(UTC).date() + timedelta(days=1)
+    return datetime(nxt.year, nxt.month, nxt.day, tzinfo=UTC).strftime(
+        "%Y-%m-%dT00:00:00Z"
+    )
+
+
+def sync_utc_daily_loss_lock(
+    plane: Any | None,
+    *,
+    daily_pnl: Decimal,
+    equity: Decimal,
+    balance: Decimal | None,
+    max_daily_loss_pct: Decimal,
+    trusted: bool = True,
+    now: datetime | None = None,
+    floating_pnl: Decimal | None = None,
+) -> dict[str, Any]:
+    """Arm or clear the plane latch from current UTC-day P/L.
+
+    Untrusted P/L (deals unavailable) is UNKNOWN: do not arm, do not clear,
+    and do not report daily_loss_exceeded from missing history. Callers must
+    fail-close execution via a separate unverified-P/L gate.
+    """
+    cap = Decimal(str(max_daily_loss_pct or 0))
+    pct = utc_daily_loss_pct(daily_pnl=daily_pnl, equity=equity, balance=balance)
+    session = utc_session_day(now)
+    resets = utc_daily_loss_resets_at(now)
+    measured = utc_daily_loss_exceeded(
+        daily_pnl=daily_pnl,
+        equity=equity,
+        balance=balance,
+        max_daily_loss_pct=cap,
+    )
+    prior = bool(
+        getattr(plane, "daily_loss_exceeded", False) if plane is not None else False
+    )
+    exceeded = measured if trusted else prior
+    changed = False
+    moment = now or datetime.now(UTC)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    if plane is not None:
+        if trusted and measured and not prior:
+            plane.flag_daily_loss(now=now)
+            changed = True
+            logger.warning(
+                "daily_loss_lock_armed",
+                daily_loss_pct=str(pct),
+                limit_pct=str(cap),
+                session_day=session,
+            )
+        elif trusted and not measured and prior:
+            clear = getattr(plane, "clear_daily_loss", None)
+            if callable(clear):
+                clear(now=now, reason="utc_session_under_cap")
+                changed = True
+            else:
+                plane.daily_loss_exceeded = False
+                if hasattr(plane, "daily_loss_armed_at"):
+                    plane.daily_loss_armed_at = None
+                changed = True
+            logger.warning(
+                "daily_loss_lock_cleared",
+                daily_loss_pct=str(pct),
+                limit_pct=str(cap),
+                session_day=session,
+            )
+            try:
+                from app.domain.institutional_trading.operations.decision_cycle import (
+                    note_cycle_event,
+                )
+
+                note_cycle_event("daily_loss_cleared")
+            except Exception:
+                logger.exception("daily_loss_cleared_wakeup_failed")
+            try:
+                from app.application.services.auto_trading_continuity import (
+                    ensure_auto_trading_running,
+                )
+
+                ensure_auto_trading_running(
+                    plane,
+                    reason="daily_loss_lock_cleared",
+                )
+            except Exception:
+                logger.exception("daily_loss_auto_resume_failed")
+    from app.domain.institutional_trading.owner_risk_policy import day_start_equity
+
+    base, base_name = utc_daily_loss_base(equity=equity, balance=balance)
+    day_start = day_start_equity(equity=equity, daily_pnl=daily_pnl, balance=balance)
+    armed_at = (
+        getattr(plane, "daily_loss_armed_at", None) if plane is not None else None
+    )
+    lock_age: int | None = None
+    if exceeded and isinstance(armed_at, datetime):
+        armed = armed_at if armed_at.tzinfo else armed_at.replace(tzinfo=UTC)
+        lock_age = max(0, int((moment - armed.astimezone(UTC)).total_seconds()))
+    floating = Decimal(str(floating_pnl or 0)) if floating_pnl is not None else None
+    if not trusted:
+        rearm = "UNKNOWN"
+        lock_label = "UNKNOWN"
+    else:
+        rearm = "LOCKED" if exceeded else "CLEAR"
+        lock_label = "EXCEEDED" if exceeded else "CLEAR"
+    if trusted and not exceeded and prior and changed:
+        rearm = "REARMED"
+    return {
+        "daily_loss_pct": str(pct) if trusted else None,
+        "daily_loss_limit_pct": str(cap),
+        "daily_loss_lock": lock_label,
+        "daily_loss_exceeded": bool(exceeded),
+        "daily_loss_base": base_name,
+        "daily_loss_base_value": str(base),
+        "day_start_equity": str(day_start) if trusted else None,
+        "daily_realized_pnl": str(daily_pnl) if trusted else None,
+        "daily_unrealized_pnl": str(floating) if floating is not None else None,
+        "utc_session_date": session,
+        "daily_loss_session_day": session,
+        "daily_loss_resets_at": resets,
+        "daily_pnl": str(daily_pnl) if trusted else None,
+        "daily_pnl_trusted": bool(trusted),
+        "daily_loss_source": "utc_session_deals" if trusted else "unavailable",
+        "history_confidence": "trusted" if trusted else "untrusted",
+        "lock_age": lock_age,
+        "rearm_state": rearm,
+        "lock_changed": changed,
+        "source": "utc_session_deals" if trusted else "unavailable",
+    }
