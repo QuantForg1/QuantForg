@@ -33,6 +33,39 @@ _MARGIN_CALC = {
 }
 
 
+def exposed_text(obj: Any, name: str) -> str | None:
+    """Return a stripped attribute only when the object actually has it.
+
+    Missing, blank, and ``None`` stay ``None``. Never substitutes ``"0"``.
+    """
+    if obj is None or not hasattr(obj, name):
+        return None
+    value = getattr(obj, name, None)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def exposed_commission(info: Any) -> tuple[str | None, str]:
+    """Return a symbol commission only when SymbolInfo actually carries one.
+
+    The official MetaTrader5 SymbolInfo has no commission field. A missing
+    attribute stays null with source ``not_exposed_by_symbol_info``. A present
+    numeric value, including a recorded ``0``, is returned unchanged and is
+    still not a verified account tariff by itself.
+    """
+    if info is None or not hasattr(info, "commission"):
+        return None, "not_exposed_by_symbol_info"
+    value = getattr(info, "commission", None)
+    if value is None or isinstance(value, bool):
+        return None, "not_exposed_by_symbol_info"
+    text = str(value).strip()
+    if not text:
+        return None, "not_exposed_by_symbol_info"
+    return text, "symbol_info"
+
+
 def serialize_symbol_specs(info: Any, *, tick: Any | None = None) -> dict[str, Any]:
     """Map an MT5 SymbolInfo (+ optional tick) to a JSON-safe specs payload."""
     if info is None:
@@ -91,7 +124,12 @@ def serialize_symbol_specs(info: Any, *, tick: Any | None = None) -> dict[str, A
         "session_buy_orders": int(getattr(info, "session_buy_orders", 0) or 0),
         "session_sell_orders": int(getattr(info, "session_sell_orders", 0) or 0),
         "time": int(getattr(info, "time", 0) or 0),
+        # Symbol-tree path is account-specific. Empty and absent both stay null.
+        "path": exposed_text(info, "path"),
     }
+    commission, commission_source = exposed_commission(info)
+    payload["commission"] = commission
+    payload["commission_source"] = commission_source
     if tick is not None:
         payload["bid"] = str(getattr(tick, "bid", 0) or 0)
         payload["ask"] = str(getattr(tick, "ask", 0) or 0)

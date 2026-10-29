@@ -144,6 +144,81 @@ def _safe_int(value: Any, default: int = 0) -> int:
             return default
 
 
+def _row_field(row: Any, name: str) -> tuple[bool, Any]:
+    """Return whether ``name`` is present on one rate row, and its raw value.
+
+    A missing field is ``(False, None)``. This must not substitute ``0``.
+    """
+    if isinstance(row, dict):
+        if name not in row:
+            return False, None
+        return True, row[name]
+    names = getattr(getattr(row, "dtype", None), "names", None)
+    if names is not None:
+        if name not in names:
+            return False, None
+        return True, row[name]
+    if hasattr(row, name):
+        return True, getattr(row, name)
+    getter = getattr(row, "get", None)
+    if callable(getter):
+        try:
+            present = name in row
+        except TypeError:
+            present = False
+        if not present:
+            return False, None
+        return True, getter(name)
+    return False, None
+
+
+def _recorded_spread_points(row: Any) -> int | None:
+    """Pass through a recorded MT5 spread in points, including a recorded zero.
+
+    ``None`` means the source row has no spread field. Do not call ``_safe_int``
+    here: its default of ``0`` would hide a missing cost.
+    """
+    present, value = _row_field(row, "spread")
+    if not present or value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        value = text
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def serialize_rate_bars(rates: Any) -> list[dict[str, Any]]:
+    """Serialize ``copy_rates_from_pos(start_pos=0)`` bars without dropping any.
+
+    The gateway asks for position 0, and MetaTrader5 returns that series
+    oldest-first, so the last row is the forming bar. Earlier rows are closed.
+    OHLC fields stay strings, matching the previous candle payload.
+    """
+    rows = list(rates or [])
+    last = len(rows) - 1
+    items: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        forming = index == last
+        items.append(
+            {
+                "time": _safe_int(row["time"]),
+                "open": str(row["open"]),
+                "high": str(row["high"]),
+                "low": str(row["low"]),
+                "close": str(row["close"]),
+                "spread_points": _recorded_spread_points(row),
+                "forming": forming,
+                "closed": not forming,
+            }
+        )
+    return items
+
+
 def _terminal_capability_fields(term: Any | None) -> dict[str, Any]:
     """Extract AutoTrading / DLL flags from MetaTrader5.terminal_info().
 
@@ -1320,6 +1395,8 @@ class MT5GatewayRuntime:
             trade_allowed = (
                 bool(trade_allowed_raw) if trade_allowed_raw is not None else None
             )
+            from services.mt5_gateway.symbol_specs import exposed_text
+
             return {
                 "login": _safe_int(info.login),
                 "balance": str(info.balance),
@@ -1338,6 +1415,9 @@ class MT5GatewayRuntime:
                 "trade_mode": account_mode,
                 "trade_mode_raw": trade_mode_int,
                 "trade_allowed": trade_allowed,
+                # Public AccountInfo has no group. Null means the terminal
+                # object did not carry one. Never infer a product or a tariff.
+                "group": exposed_text(info, "group"),
             }
 
         return self._run_mt5_op(_body)
@@ -1432,16 +1512,7 @@ class MT5GatewayRuntime:
                     raise RuntimeError(
                         f"candles unavailable for {symbol}: {err}"
                     )
-            items = [
-                {
-                    "time": _safe_int(r["time"]),
-                    "open": str(r["open"]),
-                    "high": str(r["high"]),
-                    "low": str(r["low"]),
-                    "close": str(r["close"]),
-                }
-                for r in rates
-            ]
+            items = serialize_rate_bars(rates)
             return {
                 "symbol": exact.upper(),
                 "timeframe": tf_key,
