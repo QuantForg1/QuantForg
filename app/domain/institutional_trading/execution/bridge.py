@@ -834,6 +834,18 @@ class ExecutionBridge:
                 self._canary_count = 0
         self._persist_hashes()
 
+        # The check above can pass, then the switch can arm while the
+        # decision hash is reserved. Recheck immediately before submit.
+        if self.kill_switch.enabled:
+            return self._abort(
+                decision=decision,
+                context=context,
+                decision_hash=d_hash,
+                reason=BridgeAbortReason.KILL_SWITCH,
+                comment="Kill switch armed — OMS receives nothing",
+                t0=t0,
+            )
+
         oms_result = self.oms.submit_market(
             user_id=context.user_id,
             request_id=request_id,

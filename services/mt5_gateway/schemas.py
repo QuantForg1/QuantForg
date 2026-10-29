@@ -41,7 +41,8 @@ class TradeRequestBody(BaseModel):
             "buy | sell | buy_limit | sell_limit | buy_stop | sell_stop | sltp"
         ),
     )
-    volume: float = Field(default=0.01, ge=0)
+    # Omitted volume stays 0. The order guard rejects it. Do not invent 0.01.
+    volume: float = Field(default=0, ge=0)
     price: float = Field(default=0, ge=0)
     sl: float = Field(default=0, ge=0)
     tp: float = Field(default=0, ge=0)
