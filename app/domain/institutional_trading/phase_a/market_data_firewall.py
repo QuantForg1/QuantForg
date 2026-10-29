@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
+
+from app.domain.institutional_trading.quote_clock import (
+    quote_age_seconds as broker_quote_age_seconds,
+)
 
 
 class MarketDataState(str, Enum):
@@ -49,6 +53,7 @@ def evaluate_market_data_firewall(
     symbol_valid: bool = True,
     candles_ok: bool = True,
     now: datetime | None = None,
+    broker_utc_offset: timedelta | None = None,
 ) -> MarketDataVerdict:
     """Hard NO_NEW_ENTRY on stale/missing/malformed quotes.
 
@@ -114,12 +119,28 @@ def evaluate_market_data_firewall(
     _ = a - b
 
     age_s: float | None = quote_age_seconds
+    clock_unaligned = age_s is not None and age_s < 0
     if age_s is None and quote_time is not None:
         moment = now or datetime.now(UTC)
-        qt = quote_time
-        if qt.tzinfo is None:
-            qt = qt.replace(tzinfo=UTC)
-        age_s = max(0.0, (moment - qt).total_seconds())
+        age_s = broker_quote_age_seconds(
+            quote_time,
+            now=moment,
+            broker_utc_offset=broker_utc_offset,
+        )
+        clock_unaligned = age_s is None
+    if clock_unaligned:
+        return MarketDataVerdict(
+            state=MarketDataState.MARKET_DATA_STALE,
+            allow_new_entry=False,
+            first_blocking_gate="QUOTE_CLOCK_UNALIGNED",
+            quote_age_ms=None,
+            required_max_age_ms=required_ms,
+            detail=(
+                "broker stamp is not a proven-fresh UTC quote; "
+                "refusing to treat it as age 0"
+            ),
+            symbol=sym,
+        )
     if age_s is None:
         return MarketDataVerdict(
             state=MarketDataState.MARKET_DATA_STALE,

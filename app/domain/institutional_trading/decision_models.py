@@ -166,6 +166,9 @@ class AccountRiskState:
     bid: Decimal | None = None
     ask: Decimal | None = None
     quote_age_seconds: float | None = None
+    # True when the tick stamp leads UTC and no broker offset proved its age.
+    # The execution bridge must not fill that unknown age with zero.
+    quote_clock_unaligned: bool = False
     # Account-wide MT5 ticket count — observability / margin context only.
     # Never use this as the QuantForg strategy position cap.
     account_open_positions: int | None = None
@@ -207,4 +210,5 @@ class AccountRiskState:
             "bid": str(self.bid) if self.bid is not None else None,
             "ask": str(self.ask) if self.ask is not None else None,
             "quote_age_seconds": self.quote_age_seconds,
+            "quote_clock_unaligned": self.quote_clock_unaligned,
         }

@@ -623,16 +623,22 @@ class ExecutionBridge:
                     mid_f = float(mid)
                     bid_f = mid_f - half
                     ask_f = mid_f + half
-            # Cycle-fresh live tick: age may be omitted on legacy contexts
-            if (
-                quote_age is None
-                and context.market_data_live is True
-                and bid_f is not None
-                and ask_f is not None
-            ):
-                quote_age = 0.0
-            # Without age/live evidence, do not invent MD inputs (skip MD gate)
-            if quote_age is None:
+            # Legacy contexts omit age on a live tick. An unaligned broker
+            # clock must not be filled with 0: age 0 passes the freshness gate.
+            from app.domain.institutional_trading.quote_clock import (
+                resolve_quoted_age_for_firewall,
+            )
+
+            clock_unaligned = bool(getattr(acct, "quote_clock_unaligned", False))
+            quote_age = resolve_quoted_age_for_firewall(
+                quote_age,
+                market_data_live=context.market_data_live is True,
+                quote_clock_unaligned=clock_unaligned,
+                has_bid_ask=bid_f is not None and ask_f is not None,
+            )
+            # Without age/live evidence, do not invent MD inputs (skip MD gate).
+            # An unaligned clock keeps bid/ask so the firewall can fail closed.
+            if quote_age is None and not clock_unaligned:
                 bid_f = None
                 ask_f = None
             gate = get_phase_a_plane().evaluate_new_entry_gate(

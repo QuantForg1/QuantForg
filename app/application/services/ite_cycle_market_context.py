@@ -811,6 +811,7 @@ async def build_ite_cycle_market_context(
     quote_bid: Decimal | None = None
     quote_ask: Decimal | None = None
     quote_age_seconds: float | None = None
+    quote_clock_unaligned = False
     try:
         tick = await _io(mt5_adapter.latest_tick, symbol)
         if tick is not None:
@@ -830,10 +831,19 @@ async def build_ite_cycle_market_context(
                 try:
                     from datetime import UTC as _UTC
 
+                    from app.domain.institutional_trading.quote_clock import (
+                        quote_age_seconds as _broker_quote_age,
+                    )
+
                     moment = datetime.now(_UTC)
                     qt = ts if ts.tzinfo is not None else ts.replace(tzinfo=_UTC)
-                    quote_age_seconds = max(0.0, (moment - qt).total_seconds())
+                    # No broker offset is available on this fetch. A stamp that
+                    # leads UTC is not age 0: that clamp hides staleness up to
+                    # the broker lead (about two hours on this terminal).
+                    quote_age_seconds = _broker_quote_age(qt, now=moment)
+                    quote_clock_unaligned = quote_age_seconds is None
                     diag["quote_age_seconds"] = quote_age_seconds
+                    diag["quote_clock_unaligned"] = quote_clock_unaligned
                 except Exception:
                     quote_age_seconds = None
             if ask > 0 and bid > 0:
@@ -1407,6 +1417,7 @@ async def build_ite_cycle_market_context(
         bid=quote_bid,
         ask=quote_ask,
         quote_age_seconds=quote_age_seconds,
+        quote_clock_unaligned=quote_clock_unaligned,
     )
 
     # Sizing diagnostics (observational) — live broker volume_min/step when available.

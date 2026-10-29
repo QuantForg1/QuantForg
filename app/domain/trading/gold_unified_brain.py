@@ -233,8 +233,21 @@ def decide_gold(
         )
 
     age = _quote_age_seconds(score)
-    stale = age is not None and age > float(max_quote_age_seconds)
+    # Age 0 is what the old UTC clamp produced for a broker stamp that still
+    # leads UTC. An explicit unaligned flag must not pass that clamp.
+    unaligned = score.get("quote_clock_unaligned") is True
+    stale = unaligned or (
+        age is not None and age > float(max_quote_age_seconds)
+    )
     if stale:
+        if unaligned:
+            stale_reason = (
+                "Broker quote clock is unaligned; refusing to treat the quote as fresh"
+            )
+        else:
+            stale_reason = (
+                f"Stale market data: quote_age_seconds={age} > {max_quote_age_seconds}"
+            )
         return UnifiedGoldDecision(
             decision="NO_TRADE",
             symbol=symbol,
@@ -243,9 +256,7 @@ def decide_gold(
             selected_strategy_name=None,
             confidence=0,
             quality=0,
-            reasons=(
-                f"Stale market data: quote_age_seconds={age} > {max_quote_age_seconds}",
-            ),
+            reasons=(stale_reason,),
             rejected_strategies=(),
             conflicting=False,
             stale_data=True,

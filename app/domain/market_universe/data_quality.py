@@ -49,10 +49,12 @@ def _age_seconds(
         return direct
     if last_ts in (None, "", UNKNOWN, 0, "0"):
         return None
+    from app.domain.institutional_trading.quote_clock import quote_age_seconds
+
     current = now or datetime.now(UTC)
     if isinstance(last_ts, datetime):
         ts = last_ts if last_ts.tzinfo else last_ts.replace(tzinfo=UTC)
-        return max(0.0, (current - ts).total_seconds())
+        return quote_age_seconds(ts, now=current)
     if isinstance(last_ts, (int, float)):
         n = float(last_ts)
         if n > 1e12:
@@ -61,7 +63,7 @@ def _age_seconds(
             ts = datetime.fromtimestamp(n, tz=UTC)
         except (OverflowError, OSError, ValueError):
             return None
-        return max(0.0, (current - ts).total_seconds())
+        return quote_age_seconds(ts, now=current)
     text = str(last_ts).strip()
     if not text:
         return None
@@ -69,7 +71,7 @@ def _age_seconds(
         ts = datetime.fromisoformat(text.replace("Z", "+00:00"))
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
-        return max(0.0, (current - ts).total_seconds())
+        return quote_age_seconds(ts, now=current)
     except ValueError:
         return None
 
@@ -203,6 +205,15 @@ def evaluate_data_quality(
     elif quote_freshness == "STALE" or bar_freshness == "STALE":
         state = "STALE"
         reason = f"quote_age={quote_age} bar_age={bar_age}"
+    elif (
+        last_quote_ts not in (None, "", UNKNOWN, 0, "0") and quote_age is None
+    ) or (last_bar_ts not in (None, "", UNKNOWN, 0, "0") and bar_age is None):
+        if last_quote_ts not in (None, "", UNKNOWN, 0, "0") and quote_age is None:
+            quote_freshness = "STALE"
+        if last_bar_ts not in (None, "", UNKNOWN, 0, "0") and bar_age is None:
+            bar_freshness = "STALE"
+        state = "STALE"
+        reason = "timestamp is not proven fresh on one clock"
     elif depth is not None and depth < MIN_HISTORY_BARS_RESEARCH:
         state = "INSUFFICIENT_HISTORY"
         reason = f"history_bars={depth} < {MIN_HISTORY_BARS_RESEARCH}"

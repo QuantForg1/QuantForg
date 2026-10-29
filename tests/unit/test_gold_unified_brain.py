@@ -76,6 +76,15 @@ def test_stale_quote_returns_no_trade() -> None:
     assert d.authorizes_trade is False
 
 
+def test_clamped_zero_age_is_not_fresh_when_broker_clock_is_unaligned() -> None:
+    d = decide_gold(
+        _base_score(quote_age_seconds=0.0, quote_clock_unaligned=True)
+    )
+    assert d.decision == "NO_TRADE"
+    assert d.stale_data is True
+    assert d.authorizes_trade is False
+
+
 def test_no_passers_returns_no_trade() -> None:
     d = decide_gold(
         _base_score(
