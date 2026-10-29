@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { MicroLiveCard } from "@/components/ops/micro-live-card";
 import { liveTradingControlApi } from "@/lib/api/endpoints";
 import { iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
 import { useAuth } from "@/providers/auth-provider";
@@ -501,6 +502,8 @@ export function LiveTradingControlPanel() {
           ) : null}
         </CardContent>
       </Card>
+
+      <MicroLiveCard data={asRecord(d.micro_live)} allowClear />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

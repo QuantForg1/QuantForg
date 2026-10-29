@@ -32,6 +32,7 @@ import {
   traderFacingErrorMessage,
   UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
+import { MicroLiveCard } from "@/components/ops/micro-live-card";
 
 type Row = Record<string, unknown>;
 
@@ -235,6 +236,7 @@ export function PortfolioWorkspace() {
 
   return (
     <div className="min-w-0 space-y-5">
+      <MicroLiveCard />
       {sessionQ.isError ? (
         <div
           role="status"

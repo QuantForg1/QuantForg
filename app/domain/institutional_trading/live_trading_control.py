@@ -1523,7 +1523,11 @@ class LiveTradingController:
             if until.tzinfo is None:
                 until = until.replace(tzinfo=UTC)
             if clock >= until:
+                # MICRO_LIVE: the pause lasts until the next UTC day, which then
+                # starts with a fresh streak (otherwise a streak at the limit
+                # would block entries forever — a win can never happen).
                 self.loss_streak_cooldown_until = None
+                self.consecutive_losses = 0
                 return False
             return True
 
@@ -1570,8 +1574,12 @@ class LiveTradingController:
                     ),
                 )
                 if until is not None:
-                    # Refresh cooldown when streak is at/above max.
-                    self.loss_streak_cooldown_until = until
+                    # Owner rule: pause until the next UTC day.
+                    from app.domain.institutional_trading.owner_live_limits import (
+                        next_utc_day,
+                    )
+
+                    self.loss_streak_cooldown_until = next_utc_day(datetime.now(UTC))
             else:
                 self.consecutive_losses = 0
                 self.last_loss_volume = None

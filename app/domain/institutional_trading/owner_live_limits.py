@@ -1,4 +1,4 @@
-"""Owner live limits (2026-10-20, LIVE_SMALL, Gold only).
+"""Owner live limits (MICRO_LIVE 2026-10-22, real account, Gold only).
 
 Single source for the owner's hard trading limits. USD caps win over percent
 caps when smaller. Every other risk layer may be stricter, never looser.
@@ -9,14 +9,15 @@ the live submit path. Closes and SL/TP management are never blocked here.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
 from app.domain.trading.gold_only import is_gold_symbol
 
 OWNER_MAX_LOT = Decimal("0.01")
-# Planned SL loss band at 0.01 lot: above $1.50 (spread ~$0.44), at most $2.00.
-OWNER_MIN_SL_RISK_USD = Decimal("1.50")
-OWNER_MAX_SL_RISK_USD = Decimal("2.00")
+# Planned SL loss band at 0.01 lot: at least $1.00, at most $3.00.
+OWNER_MIN_SL_RISK_USD = Decimal("1.00")
+OWNER_MAX_SL_RISK_USD = Decimal("3.00")
 # Percent per-trade cap only applies once equity is above this threshold.
 OWNER_SL_RISK_PCT = Decimal("2.0")
 OWNER_SL_RISK_PCT_EQUITY_THRESHOLD = Decimal("100")
@@ -30,6 +31,14 @@ OWNER_MAX_ENTRIES_PER_CYCLE = 1
 OWNER_MAX_CONSECUTIVE_LOSSES = 3
 # "Pause for the day" after the loss streak — conservative full-day cooldown.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
+# MICRO_LIVE: fixed USD stops and a hard equity floor.
+OWNER_DAILY_STOP_USD = Decimal("5.00")
+OWNER_WEEKLY_STOP_USD = Decimal("10.00")
+OWNER_EQUITY_FLOOR_USD = Decimal("40.00")
+# New entries only during London + New York (UTC hours, end exclusive).
+OWNER_SESSION_START_HOUR_UTC = 7
+OWNER_SESSION_END_HOUR_UTC = 17
+OWNER_MAX_SPREAD = Decimal("0.45")
 
 _CENT = Decimal("0.01")
 
@@ -49,15 +58,16 @@ def max_sl_risk_usd(equity: Decimal) -> Decimal:
 def daily_loss_cap_usd(
     start_of_day_equity: Decimal, pct: Decimal = OWNER_DAILY_LOSS_PCT
 ) -> Decimal:
-    """Owner daily stop in USD: max(floor, pct), capped at the ceiling pct."""
+    """Owner daily stop in USD: a fixed $5.00 (MICRO_LIVE).
+
+    ``pct`` is kept for callers that still pass a percent; it no longer
+    changes the USD stop.
+    """
+    _ = pct
     sod = Decimal(str(start_of_day_equity or 0))
     if sod <= 0:
         return Decimal("0")
-    by_pct = sod * Decimal(str(pct)) / Decimal("100")
-    ceiling = sod * OWNER_DAILY_LOSS_CEILING_PCT / Decimal("100")
-    return min(max(OWNER_DAILY_LOSS_FLOOR_USD, by_pct), ceiling).quantize(
-        _CENT, rounding=ROUND_DOWN
-    )
+    return OWNER_DAILY_STOP_USD
 
 
 def daily_loss_exceeded(
@@ -170,10 +180,10 @@ def evaluate_owner_entry(
     cap = max_sl_risk_usd(equity)
     if risk_usd > cap:
         violations.append(f"OWNER_SL_RISK: planned SL loss ${risk_usd} > ${cap}")
-    if risk_usd <= OWNER_MIN_SL_RISK_USD:
+    if risk_usd < OWNER_MIN_SL_RISK_USD:
         violations.append(
             f"OWNER_SL_RISK_BELOW_MIN: planned SL loss ${risk_usd} "
-            f"must be above ${OWNER_MIN_SL_RISK_USD}"
+            f"must be at least ${OWNER_MIN_SL_RISK_USD}"
         )
     min_dist = Decimal(str(min_stop_distance or 0))
     if min_dist > 0 and (sl_dist < min_dist or tp_dist < min_dist):
@@ -188,3 +198,91 @@ def evaluate_owner_entry(
             f"< {OWNER_MIN_REWARD_RISK}"
         )
     return violations
+
+
+def weekly_loss_exceeded(weekly_pnl: Decimal) -> bool:
+    """True when this UTC week's realized loss is strictly above $10.00."""
+    pnl = Decimal(str(weekly_pnl or 0))
+    return pnl < 0 and -pnl > OWNER_WEEKLY_STOP_USD
+
+
+def equity_floor_breached(equity: Decimal) -> bool:
+    """True at or below the $40.00 hard floor."""
+    return Decimal(str(equity or 0)) <= OWNER_EQUITY_FLOOR_USD
+
+
+def in_owner_session(now: datetime) -> bool:
+    """London + New York only: 07:00 <= UTC hour < 17:00."""
+    clock = now if now.tzinfo else now.replace(tzinfo=UTC)
+    hour = clock.astimezone(UTC).hour
+    return OWNER_SESSION_START_HOUR_UTC <= hour < OWNER_SESSION_END_HOUR_UTC
+
+
+def next_utc_day(now: datetime) -> datetime:
+    """Midnight UTC that starts the next day (loss-streak pause end)."""
+    clock = now if now.tzinfo else now.replace(tzinfo=UTC)
+    day = clock.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    return day + timedelta(days=1)
+
+
+def utc_week_start(now: datetime) -> datetime:
+    """Monday 00:00 UTC of the current week."""
+    clock = now if now.tzinfo else now.replace(tzinfo=UTC)
+    day = clock.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    return day - timedelta(days=day.weekday())
+
+
+def evaluate_micro_live_entry(
+    *,
+    now: datetime,
+    equity: Decimal | None,
+    spread: Decimal | None,
+    daily_pnl: Decimal | None,
+    weekly_pnl: Decimal | None,
+    pnl_trusted: bool,
+    equity_floor_latched: bool,
+) -> list[str]:
+    """MICRO_LIVE account gates for a NEW entry (empty list = allowed).
+
+    Closes and SL tightening never come through here. Unknown P/L or equity
+    fails closed.
+    """
+    reasons: list[str] = []
+    if equity_floor_latched:
+        reasons.append(
+            "MICRO_EQUITY_FLOOR_LATCHED: equity reached the "
+            f"${OWNER_EQUITY_FLOOR_USD} floor — owner must clear it"
+        )
+    if equity is None:
+        reasons.append("MICRO_EQUITY_UNKNOWN: cannot verify the equity floor")
+    elif equity_floor_breached(equity):
+        reasons.append(
+            f"MICRO_EQUITY_FLOOR: equity ${equity} <= ${OWNER_EQUITY_FLOOR_USD}"
+        )
+    if not in_owner_session(now):
+        reasons.append(
+            "MICRO_SESSION_CLOSED: entries only "
+            f"{OWNER_SESSION_START_HOUR_UTC:02d}:00-"
+            f"{OWNER_SESSION_END_HOUR_UTC:02d}:00 UTC"
+        )
+    if spread is None:
+        reasons.append("MICRO_SPREAD_UNKNOWN")
+    elif Decimal(str(spread)) > OWNER_MAX_SPREAD:
+        reasons.append(f"MICRO_SPREAD: {spread} > {OWNER_MAX_SPREAD}")
+    if not pnl_trusted or daily_pnl is None or weekly_pnl is None:
+        reasons.append("MICRO_PNL_UNVERIFIED: daily/weekly realized P/L unavailable")
+    else:
+        if (
+            Decimal(str(daily_pnl)) < 0
+            and -Decimal(str(daily_pnl)) > OWNER_DAILY_STOP_USD
+        ):
+            reasons.append(
+                f"MICRO_DAILY_STOP: loss ${-Decimal(str(daily_pnl))} > "
+                f"${OWNER_DAILY_STOP_USD}"
+            )
+        if weekly_loss_exceeded(Decimal(str(weekly_pnl))):
+            reasons.append(
+                f"MICRO_WEEKLY_STOP: loss ${-Decimal(str(weekly_pnl))} > "
+                f"${OWNER_WEEKLY_STOP_USD}"
+            )
+    return reasons

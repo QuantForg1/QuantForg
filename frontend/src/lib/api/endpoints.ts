@@ -1226,6 +1226,11 @@ export const liveTradingControlApi = {
         method: "POST",
         body: { reason, confirmed: true },
       }),
+    clearEquityFloor: (reason: string) =>
+      apiFetch<Record<string, unknown>>("/live-trading/equity-floor/clear", {
+        method: "POST",
+        body: { reason, confirmed: true },
+      }),
     disable: (reason: string) =>
       apiFetch<Record<string, unknown>>("/live-trading/disable", {
         method: "POST",

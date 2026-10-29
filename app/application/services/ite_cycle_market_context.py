@@ -439,6 +439,41 @@ def _ensure_gateway_session(mt5_adapter: Any, diag: dict[str, Any]) -> str | Non
     return "MT5 gateway session not connected (process flag false; adopt unavailable)"
 
 
+def weekly_realized_pnl(deals: list[Any], *, now: datetime | None = None) -> Decimal:
+    """Realized trade P/L (profit + commission + swap) since Monday 00:00 UTC."""
+    from app.application.services.live_account_risk_tracker import (
+        LiveAccountRiskTracker as Tracker,
+    )
+    from app.domain.institutional_trading.owner_live_limits import utc_week_start
+
+    start = utc_week_start(now or datetime.now(UTC))
+    total = Decimal("0")
+    seen: set[int] = set()
+    for deal in deals:
+        if not Tracker._is_trade_deal(deal):
+            continue
+        moment = Tracker._deal_time(deal)
+        if moment is None or moment < start:
+            continue
+        ticket = Tracker._deal_ticket(deal)
+        if ticket and ticket in seen:
+            continue
+        seen.add(ticket)
+        total += Tracker._deal_cash_delta(deal)
+    return total
+
+
+def _publish_micro_live_pnl(
+    daily: Decimal | None, weekly: Decimal | None, *, trusted: bool
+) -> None:
+    try:
+        from app.application.services.micro_live_state import publish_realized_pnl
+
+        publish_realized_pnl(daily=daily, weekly=weekly, trusted=trusted)
+    except Exception as exc:
+        logger.warning("micro_live_pnl_publish_failed", error=str(exc))
+
+
 def _load_history_deals(
     mt5_adapter: Any,
     *,
@@ -847,6 +882,9 @@ async def build_ite_cycle_market_context(
         else None
     )
     day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # MICRO_LIVE weekly stop needs this UTC week's deals; daily P/L still
+    # filters to the UTC day itself.
+    week_start = day_start - timedelta(days=day_start.weekday())
     health_diag_box: dict[str, Any] = {}
     skip_account_bundle = str(purpose or "execution").strip().lower() == "scan"
     bundled = await asyncio.gather(
@@ -868,7 +906,7 @@ async def build_ite_cycle_market_context(
             else _io(
                 _load_history_deals,
                 mt5_adapter,
-                date_from=day_start,
+                date_from=week_start,
                 date_to=datetime.now(UTC) + timedelta(days=1),
             )
         ),
@@ -1168,10 +1206,22 @@ async def build_ite_cycle_market_context(
         diag["peak_equity"] = str(peak_equity)
         diag["daily_pnl"] = str(daily_pnl) if daily_pnl_trusted else None
         diag["daily_pnl_trusted"] = daily_pnl_trusted
+        weekly_pnl = (
+            weekly_realized_pnl(list(deals or []))
+            if daily_pnl_trusted and deals is not None
+            else None
+        )
+        diag["weekly_pnl"] = str(weekly_pnl) if weekly_pnl is not None else None
+        _publish_micro_live_pnl(
+            daily_pnl if daily_pnl_trusted else None,
+            weekly_pnl,
+            trusted=daily_pnl_trusted,
+        )
     except Exception as exc:
         logger.warning("ite_cycle_live_risk_resolve_failed", error=str(exc))
         diag["live_risk_resolve"] = f"ERROR: {exc}"
         diag["daily_pnl_fail_closed"] = True
+        _publish_micro_live_pnl(None, None, trusted=False)
         daily_pnl = Decimal("0")
         daily_pnl_trusted = False
         diag["daily_pnl"] = None

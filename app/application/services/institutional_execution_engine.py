@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -216,6 +217,28 @@ def _ticks_from_symbol_info(info: object) -> tuple[Decimal | None, Decimal | Non
         getattr(info, "trade_tick_value", None) or getattr(info, "tick_value", None)
     )
     return tick_size, tick_value
+
+
+def _micro_live_gate(*, equity: Decimal | None, spread: Decimal | None) -> list[str]:
+    """MICRO_LIVE account gates for a new entry; latches the equity floor."""
+    from app.application.services import micro_live_state as mls
+    from app.domain.institutional_trading.owner_live_limits import (
+        equity_floor_breached,
+        evaluate_micro_live_entry,
+    )
+
+    if equity is not None and equity_floor_breached(equity):
+        mls.latch_equity_floor(equity=equity, reason="equity_at_or_below_floor")
+    daily, weekly, trusted = mls.realized_pnl_snapshot()
+    return evaluate_micro_live_entry(
+        now=datetime.now(UTC),
+        equity=equity,
+        spread=spread,
+        daily_pnl=daily,
+        weekly_pnl=weekly,
+        pnl_trusted=trusted,
+        equity_floor_latched=mls.equity_floor_latched(),
+    )
 
 
 def _is_manage_intent(intent: OrderIntent) -> bool:
@@ -990,6 +1013,10 @@ class InstitutionalExecutionEngine:
                             live_constraints.point
                             * Decimal(live_constraints.stops_level)
                         ),
+                    )
+                if not risk_reject and not _is_manage_intent(intent):
+                    risk_reject = _micro_live_gate(
+                        equity=account.equity, spread=spread_val
                     )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]

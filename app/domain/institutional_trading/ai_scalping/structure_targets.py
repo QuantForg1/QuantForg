@@ -308,7 +308,9 @@ def compute_structure_targets(
     zone_lows, zone_highs = _zone_invalidations(snapshot, side=direction)
     candidate_lows.extend(zone_lows)
     candidate_highs.extend(zone_highs)
-    prim_lows, prim_highs = _collect_swings(getattr(snapshot, "primary_structure", None))
+    prim_lows, prim_highs = _collect_swings(
+        getattr(snapshot, "primary_structure", None)
+    )
     candidate_lows.extend(prim_lows)
     candidate_highs.extend(prim_highs)
 
@@ -502,3 +504,92 @@ def compute_structure_targets(
         stop_source=source,
         stop_atr=atr_d,
     )
+
+
+_MICRO_STRUCTURE_TFS = frozenset({"M1", "M5"})
+
+
+def _tf_name(tf: Any) -> str:
+    return _upper(tf).split(".")[-1]
+
+
+def _zone_edges(item: Any) -> tuple[Decimal | None, Decimal | None]:
+    zone = getattr(item, "zone", None) or item
+    return _dec(getattr(zone, "low_price", None)), _dec(
+        getattr(zone, "high_price", None)
+    )
+
+
+def micro_live_structure_levels(
+    snapshot: MarketAnalysisSnapshot | None,
+) -> tuple[list[Decimal], list[Decimal]]:
+    """M1/M5 swing lows/highs plus order-block and FVG edges (lows, highs)."""
+    lows: list[Decimal] = []
+    highs: list[Decimal] = []
+    if snapshot is None:
+        return lows, highs
+    by_tf = getattr(snapshot, "structure_by_tf", None) or {}
+    for tf, structure in by_tf.items():
+        if _tf_name(tf) not in _MICRO_STRUCTURE_TFS:
+            continue
+        sw_lows, sw_highs = _collect_swings(structure)
+        lows.extend(sw_lows)
+        highs.extend(sw_highs)
+    for ob_snap in getattr(snapshot, "ltf_order_blocks", ()) or ():
+        if _tf_name(getattr(ob_snap, "timeframe", "")) not in _MICRO_STRUCTURE_TFS:
+            continue
+        for block in _seq(ob_snap, "order_blocks"):
+            low, high = _zone_edges(block)
+            if low is not None:
+                lows.append(low)
+            if high is not None:
+                highs.append(high)
+    for fvg_snap in getattr(snapshot, "ltf_fair_value_gaps", ()) or ():
+        if _tf_name(getattr(fvg_snap, "timeframe", "")) not in _MICRO_STRUCTURE_TFS:
+            continue
+        for gap in _seq(fvg_snap, "gaps"):
+            low, high = _zone_edges(gap)
+            if low is not None:
+                lows.append(low)
+            if high is not None:
+                highs.append(high)
+    return lows, highs
+
+
+def micro_live_structure_stop(
+    *,
+    lows: list[Decimal],
+    highs: list[Decimal],
+    direction: TradeDirection,
+    entry: Decimal,
+    spread: Decimal | None,
+    min_risk_usd: Decimal,
+    max_risk_usd: Decimal,
+    usd_per_price_unit: Decimal,
+) -> tuple[Decimal, Decimal] | None:
+    """Nearest valid M1/M5 structure stop inside the owner's USD band.
+
+    BUY: below the nearest structure low under entry, minus a spread buffer.
+    SELL: above the nearest structure high over entry, plus a spread buffer.
+    Returns (stop_distance, stop_price) or None (no valid structure -> no trade).
+    Never widens past ``max_risk_usd`` and never invents a level.
+    """
+    if entry <= 0 or usd_per_price_unit <= 0:
+        return None
+    buffer = spread if spread is not None and spread > 0 else Decimal("0")
+    min_dist = min_risk_usd / usd_per_price_unit
+    max_dist = max_risk_usd / usd_per_price_unit
+    if direction is TradeDirection.BUY:
+        candidates = sorted(entry - level + buffer for level in lows if level < entry)
+    elif direction is TradeDirection.SELL:
+        candidates = sorted(level - entry + buffer for level in highs if level > entry)
+    else:
+        return None
+    for dist in candidates:
+        if dist < min_dist:
+            continue  # inside the noise / below the owner minimum: next level out
+        if dist > max_dist:
+            return None
+        stop = entry - dist if direction is TradeDirection.BUY else entry + dist
+        return dist, stop
+    return None

@@ -581,6 +581,16 @@ def _cached_broker_spec(symbol: str) -> BrokerSymbolSpec | None:
     return spec_from_broker(symbol, info) if info is not None else None
 
 
+def _micro_live_block() -> dict[str, Any]:
+    try:
+        from app.application.services.micro_live_state import micro_live_status
+
+        return micro_live_status()
+    except Exception as exc:
+        logger.warning("micro_live_status_failed", error=str(exc))
+        return {"profile": "MICRO_LIVE", "error": "unavailable"}
+
+
 def _signal_cards(
     ctrl: LiveTradingController, facts: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -891,6 +901,7 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                 "execution_enabled_env": facts.get("execution_enabled"),
             },
             "research": _research_block(),
+            "micro_live": _micro_live_block(),
             "signals": _signal_cards(ctrl, facts),
             "audit": [e.to_dict() for e in ctrl.audit[-25:]],
             "confirmation_required": {

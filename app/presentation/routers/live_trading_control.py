@@ -187,6 +187,21 @@ def live_trading_pause(
         raise _http_exc(exc) from exc
 
 
+@router.post("/equity-floor/clear")
+def live_trading_clear_equity_floor(
+    body: ConfirmBody,
+    user: OperatorUser,
+) -> dict[str, Any]:
+    """Owner/admin only: release the MICRO_LIVE $40 equity-floor latch."""
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+    from app.application.services.micro_live_state import clear_equity_floor
+
+    actor = str(getattr(user, "email", None) or getattr(user, "id", "") or "owner")
+    cleared = clear_equity_floor(actor=f"{actor}: {body.reason}")
+    return {"ok": True, "equity_floor": cleared}
+
+
 @router.post("/disable")
 def live_trading_disable(
     body: ConfirmBody,

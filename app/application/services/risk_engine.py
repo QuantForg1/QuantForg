@@ -572,7 +572,7 @@ class RiskEngine:
         )
 
         # Owner live limits: the trade's real planned SL loss must sit inside
-        # ($1.50, cap] where cap = $2.00 (2% of equity above $100).
+        # [$1.00, cap] where cap = $3.00 (2% of equity above $100).
         from app.domain.institutional_trading.owner_live_limits import (
             OWNER_MIN_SL_RISK_USD,
             max_sl_risk_usd,
@@ -594,7 +594,7 @@ class RiskEngine:
         )
         if size.stop_distance <= 0:
             risk_st = "n/a"
-        elif planned_usd > owner_cap or planned_usd <= OWNER_MIN_SL_RISK_USD:
+        elif planned_usd > owner_cap or planned_usd < OWNER_MIN_SL_RISK_USD:
             risk_st = "fail"
         else:
             risk_st = "pass"

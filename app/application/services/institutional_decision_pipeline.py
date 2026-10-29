@@ -195,6 +195,42 @@ def _price_zone(level: Decimal) -> PriceZone:
     return PriceZone(low=level, high=level, mid=level)
 
 
+def _micro_live_stop(
+    snapshot: Any, direction: TradeDirection, entry: Decimal
+) -> tuple[Decimal, Decimal] | None:
+    """MICRO_LIVE: nearest M1/M5 structure stop inside the owner's $1-$3 band.
+
+    None keeps the strategy stop, which the owner guard then rejects when it
+    is wider than $3 — no structure stop, no trade.
+    """
+    from app.domain.entities.risk_engine import contract_size_for_symbol
+    from app.domain.institutional_trading.ai_scalping import structure_targets as st
+    from app.domain.institutional_trading.owner_live_limits import (
+        OWNER_MAX_LOT,
+        OWNER_MAX_SL_RISK_USD,
+        OWNER_MIN_SL_RISK_USD,
+    )
+
+    try:
+        contract = contract_size_for_symbol(str(snapshot.symbol), default=Decimal("0"))
+        if contract <= 0:
+            return None
+        lows, highs = st.micro_live_structure_levels(snapshot)
+        return st.micro_live_structure_stop(
+            lows=lows,
+            highs=highs,
+            direction=direction,
+            entry=entry,
+            spread=getattr(snapshot, "spread", None),
+            min_risk_usd=OWNER_MIN_SL_RISK_USD,
+            max_risk_usd=OWNER_MAX_SL_RISK_USD,
+            usd_per_price_unit=contract * OWNER_MAX_LOT,
+        )
+    except Exception as exc:
+        logger.warning("micro_live_structure_stop_failed", error=str(exc))
+        return None
+
+
 def _align_decision_to_structural_targets(
     decision: TradeDecision,
     *,
@@ -690,6 +726,13 @@ class InstitutionalDecisionPipeline:
                     stop_source = source
             except Exception:  # noqa: S110  # best-effort optional path
                 pass
+            micro = _micro_live_stop(snapshot, exe.direction, entry)
+            if micro is not None:
+                stop_distance, micro_stop = micro
+                stop_source = "micro_structure"
+                if isinstance(self._last_ai_score, dict):
+                    # Sizing and the broker SL use the same structural stop.
+                    self._last_ai_score["stop_loss"] = str(micro_stop)
         if isinstance(self._last_ai_score, dict):
             self._last_ai_score["stop_distance"] = (
                 str(stop_distance) if stop_distance is not None else None
