@@ -73,6 +73,29 @@ class TestLiveAccountRiskTracker:
         ]
         pnl = LiveAccountRiskTracker.daily_pnl_from_deals(deals, now=now)
         assert pnl == Decimal("-32")
+        known = LiveAccountRiskTracker.session_pnl_resolution(deals, now=now)
+        assert known["commission_known"] is True
+
+    def test_missing_commission_is_not_a_verified_zero(self) -> None:
+        now = datetime(2026, 7, 22, 15, 0, tzinfo=UTC)
+        deal = MT5Deal(
+            ticket=21,
+            order_ticket=21,
+            symbol="XAUUSD",
+            side="buy",
+            volume=Decimal("0.01"),
+            price=Decimal("1"),
+            profit=Decimal("-50"),
+            commission=None,
+            time=datetime(2026, 7, 22, 10, 0, tzinfo=UTC),
+            deal_type="entry_out",
+        )
+        resolved = LiveAccountRiskTracker.session_pnl_resolution([deal], now=now)
+        assert resolved["commission_known"] is False
+        assert LiveAccountRiskTracker.commission_reported(deal) is False
+        assert LiveAccountRiskTracker.commission_reported(
+            _deal(profit="-50", when=deal.time, commission="0", ticket=22)
+        ) is True
 
     def test_resolve_for_risk_uses_deals_not_floating(self, tmp_path: Path) -> None:
         tracker = LiveAccountRiskTracker(persist_path=tmp_path / "r.json")
