@@ -981,6 +981,21 @@ def evaluate_gold_execution_contract(
     return contract
 
 
+def _volatility_ok_from_ai_score(ai: dict[str, Any] | None) -> bool:
+    """Honor a recorded volatility gate. A missing decision is not a failure.
+
+    The live score stores ``volatility_decision.passed``. Hardcoding True hid
+    an ATR% failure behind the opportunity fault. Absence stays permissive so
+    cycles that never ran the gate are unchanged.
+    """
+    if not isinstance(ai, dict):
+        return True
+    decision = ai.get("volatility_decision")
+    if not isinstance(decision, dict) or "passed" not in decision:
+        return True
+    return bool(decision.get("passed"))
+
+
 def facts_from_cycle(
     *,
     snapshot: Any,
@@ -1025,6 +1040,7 @@ def facts_from_cycle(
         ask = getattr(snapshot, "ask", None)
     ai = last_ai_score if isinstance(last_ai_score, dict) else {}
     breakdown = ai.get("score_breakdown") if isinstance(ai.get("score_breakdown"), dict) else None
+    volatility_ok = _volatility_ok_from_ai_score(ai)
     return GoldExecutionFacts(
         symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "") or ""),
         direction=str(
@@ -1059,7 +1075,7 @@ def facts_from_cycle(
         ),
         risk_reward=_as_decimal(getattr(decision, "estimated_rr", None)),
         market_regime=str(getattr(snapshot, "market_regime", "") or "") or None,
-        volatility_ok=True,
+        volatility_ok=volatility_ok,
         session_quality_ok=True,
         safety_allowed=bool(safety_allowed),
         safety_reasons=tuple(str(r) for r in safety_reasons if r),
