@@ -10,10 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api/client";
 import {
+  EXPERIMENT_DEFAULTS,
+  EXPERIMENTAL_KEYS,
   POLICY_NUMERIC_KEYS,
+  buildExperimentalChanges,
   buildPolicyChanges,
   m1ChoiceFromDocument,
+  policyStateLines,
   policyStatusText,
+  validateActiveDraft,
+  validateExperimentalDraft,
   type M1Choice,
 } from "@/lib/trading/admin-policy";
 
@@ -25,6 +31,9 @@ type PolicyPayload = {
   error?: string;
   document?: Record<string, unknown> | null;
   applied_version?: number | null;
+  worker_confirmed?: boolean;
+  experimental?: Record<string, unknown> | null;
+  experimental_promoted?: boolean;
   pending_restart?: boolean;
 };
 
@@ -48,7 +57,7 @@ const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
   max_lot: "Max lot (ceiling 0.01)",
   max_spread: "Max spread (ceiling 0.45)",
   min_reward_risk:
-    "Minimum net reward:risk (0.10, 0.15, 0.20, or at least 1.50; default 1.50)",
+    "Active minimum net reward:risk (at least 1.50). 0.10, 0.15, and 0.20 stay experimental.",
   min_trade_quality: "Minimum trade quality (70 to 100; default 70)",
   stop_atr_multiplier:
     "ATR stop multiplier (1.00, 1.25, or 1.50; default 1.00). 0.75 and 0.90 are rejected",
@@ -64,6 +73,7 @@ export default function AdminControlPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [experimentalDraft, setExperimentalDraft] = useState<Record<string, string>>({});
   const [m1, setM1] = useState<M1Choice>("defer");
   const [m1Live, setM1Live] = useState<M1Choice>("defer");
   const [saving, setSaving] = useState(false);
@@ -82,6 +92,16 @@ export default function AdminControlPage() {
       }
     }
     setDraft(next);
+    const savedExperiment =
+      doc.experimental && typeof doc.experimental === "object"
+        ? (doc.experimental as Record<string, unknown>)
+        : {};
+    const experiment: Record<string, string> = { ...EXPERIMENT_DEFAULTS };
+    for (const key of EXPERIMENTAL_KEYS) {
+      const raw = savedExperiment[key];
+      if (raw != null && String(raw) !== "") experiment[key] = String(raw);
+    }
+    setExperimentalDraft(experiment);
     setM1(m1ChoiceFromDocument(doc.m1_micro_enabled));
     setM1Live(m1ChoiceFromDocument(doc.m1_live_submit));
   }, []);
@@ -107,6 +127,12 @@ export default function AdminControlPage() {
     setSaving(true);
     setError("");
     setNotice("");
+    const validation = validateActiveDraft(draft);
+    if (validation.length) {
+      setError(validation.join(" "));
+      setSaving(false);
+      return;
+    }
     const changes = buildPolicyChanges({ draft, m1, m1Live });
     try {
       const saved = await apiFetch<PolicyPayload>("/admin/control/policy", {
@@ -132,8 +158,64 @@ export default function AdminControlPage() {
     }
   }
 
+  async function saveExperimental(promote: boolean) {
+    const version = overview?.policy?.version ?? 0;
+    const validation = validateExperimentalDraft(experimentalDraft);
+    if (validation.length) {
+      setError(validation.join(" "));
+      return;
+    }
+    const confirmed = window.confirm(
+      promote
+        ? "Promote this experiment into the saved production policy? It still is not loaded until the worker confirms the new version."
+        : "Save this experiment only? It will not change the active production floor.",
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    const changes = buildExperimentalChanges(experimentalDraft);
+    if (promote) changes.promote_experimental = true;
+    try {
+      const saved = await apiFetch<PolicyPayload>("/admin/control/policy", {
+        method: "PUT",
+        body: {
+          expected_version: version,
+          reason: promote ? "promote experimental policy" : "save experimental policy",
+          changes,
+        },
+      });
+      if (!saved.ok) {
+        setError(saved.error || "Experimental policy rejected");
+      } else {
+        setNotice(
+          promote
+            ? `Promoted into saved version ${saved.version}. Worker confirmed: ${saved.worker_confirmed ? "yes" : "not yet"}.`
+            : `Experimental settings stored on version ${saved.version}. They are not the active floor.`,
+        );
+      }
+      await load();
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const broker = overview?.broker || {};
   const policy = overview?.policy;
+  const states = policy ? policyStateLines(policy) : null;
+  const experimentLabels: Record<(typeof EXPERIMENTAL_KEYS)[number], string> = {
+    max_planned_risk_pct: "Experimental planned risk % (ceiling 14)",
+    max_aggregate_open_risk_pct: "Experimental aggregate open risk % (ceiling 14)",
+    daily_loss_pct: "Experimental daily loss halt % (ceiling 19)",
+    max_lot: "Experimental max lot (ceiling 0.01)",
+    max_spread: "Experimental max spread (ceiling 0.45)",
+    min_reward_risk: "Experimental reward:risk (0.10, 0.15, or 0.20)",
+    min_trade_quality: "Experimental trade quality (70 to 100)",
+    stop_atr_multiplier: "Experimental ATR stop multiplier (1.00, 1.25, or 1.50)",
+    max_concurrent_positions: "Experimental max positions (fixed at 1)",
+  };
 
   return (
     <div className="min-w-0 space-y-4">
@@ -183,6 +265,28 @@ export default function AdminControlPage() {
             <p>Source {text(policy?.source)}</p>
             <p>Live state {text(overview?.live_trading?.state)}</p>
             <Badge tone="neutral">24h evaluation stays on</Badge>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Saved experimental settings</CardTitle></CardHeader>
+          <CardContent className="text-xs text-[var(--fg-muted)]">
+            <p>{states?.experimental || "No experimental settings are saved."}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Saved production policy</CardTitle></CardHeader>
+          <CardContent className="text-xs text-[var(--fg-muted)]">
+            <p>{states?.savedProduction || "No production policy is saved."}</p>
+            <p>XAUUSD only. This restriction stays locked.</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Loaded by the live worker</CardTitle></CardHeader>
+          <CardContent className="text-xs text-[var(--fg-muted)]">
+            <p>{states?.workerLoaded || "The worker has not confirmed a saved version."}</p>
           </CardContent>
         </Card>
       </div>
@@ -242,6 +346,50 @@ export default function AdminControlPage() {
           <Button type="button" onClick={() => void savePolicy()} disabled={saving}>
             {saving ? "Saving" : "Save policy"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Experimental policy</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-[var(--fg-muted)]">
+            This draft is not the live floor. Save experiment only stores it.
+            Promote writes it into the saved production policy. Neither step
+            shows it as loaded until the worker confirms that exact version.
+            XAUUSD only stays locked.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {EXPERIMENTAL_KEYS.map((key) => (
+              <label key={key} className="space-y-1 text-xs">
+                <span className="text-[var(--fg-muted)]">{experimentLabels[key]}</span>
+                <Input
+                  aria-label={experimentLabels[key]}
+                  value={experimentalDraft[key] || ""}
+                  onChange={(event) =>
+                    setExperimentalDraft((prev) => ({ ...prev, [key]: event.target.value }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void saveExperimental(false)}
+              disabled={saving}
+            >
+              Save experiment only
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void saveExperimental(true)}
+              disabled={saving}
+            >
+              Promote experiment
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

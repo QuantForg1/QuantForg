@@ -168,10 +168,11 @@ def active_max_spread() -> Decimal:
 
 
 def active_min_reward_risk() -> Decimal:
-    """Published default is 1.50. A saved 0.10, 0.15, or 0.20 is experimental.
+    """Published default is 1.50.
 
-    Any other value below 1.50 fails closed to 1.50. A saved value above 1.50
-    stays, because it is stricter than the published default.
+    A saved 0.10, 0.15, or 0.20 stays inactive unless this document was
+    explicitly promoted. Any other value below 1.50 fails closed to 1.50.
+    A saved value above 1.50 stays, because it is stricter.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -179,9 +180,12 @@ def active_min_reward_risk() -> Decimal:
 
     value = _active_decimal("min_reward_risk", OWNER_MIN_REWARD_RISK)
     authorized = authorized_min_reward_risk(value)
-    if authorized is None:
-        return OWNER_MIN_REWARD_RISK
-    return authorized
+    if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
+        return authorized or OWNER_MIN_REWARD_RISK
+    doc = _POLICY.get()
+    if isinstance(doc, dict) and doc.get("experimental_promoted") is True:
+        return authorized
+    return OWNER_MIN_REWARD_RISK
 
 
 def active_min_trade_quality() -> int:
@@ -327,13 +331,131 @@ def _reject_number(
         errors.append(f"{key} must be between {lo} and {hi}")
 
 
+_EXPERIMENTAL_KEYS = frozenset(
+    {
+        "max_planned_risk_pct",
+        "max_aggregate_open_risk_pct",
+        "daily_loss_pct",
+        "max_lot",
+        "max_spread",
+        "min_reward_risk",
+        "min_trade_quality",
+        "stop_atr_multiplier",
+        "max_concurrent_positions",
+    }
+)
+
+
+def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
+    """Validate a saved experiment. It is not copied onto the active floor."""
+    if not isinstance(raw, dict) or not raw:
+        return None, ["experimental must be a non-empty object"]
+    unknown = sorted(set(raw) - _EXPERIMENTAL_KEYS)
+    if unknown:
+        return None, ["unknown experimental keys: " + ", ".join(unknown)]
+    errors: list[str] = []
+    _reject_number(
+        errors,
+        raw,
+        "max_planned_risk_pct",
+        lo=Decimal("0.01"),
+        hi=OWNER_MAX_PLANNED_RISK_PCT,
+    )
+    _reject_number(
+        errors,
+        raw,
+        "max_aggregate_open_risk_pct",
+        lo=Decimal("0.01"),
+        hi=OWNER_MAX_PLANNED_RISK_PCT,
+    )
+    _reject_number(
+        errors,
+        raw,
+        "daily_loss_pct",
+        lo=Decimal("0.01"),
+        hi=OWNER_DAILY_LOSS_PCT,
+    )
+    _reject_number(errors, raw, "max_lot", lo=Decimal("0.01"), hi=OWNER_MAX_LOT)
+    _reject_number(
+        errors, raw, "max_spread", lo=Decimal("0.01"), hi=OWNER_MAX_SPREAD
+    )
+    from app.domain.institutional_trading.owner_live_limits import (
+        atr_multiplier_verdict,
+        authorized_min_reward_risk,
+        authorized_min_trade_quality,
+    )
+
+    if "min_reward_risk" not in raw:
+        errors.append("experimental min_reward_risk must be 0.10, 0.15, or 0.20")
+    else:
+        try:
+            rr = _dec(raw["min_reward_risk"])
+        except Exception:
+            errors.append("experimental min_reward_risk is not a number")
+        else:
+            authorized = authorized_min_reward_risk(rr)
+            if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
+                errors.append(
+                    "experimental min_reward_risk must be 0.10, 0.15, or 0.20"
+                )
+    if "min_trade_quality" in raw:
+        authorized_quality = authorized_min_trade_quality(raw.get("min_trade_quality"))
+        if authorized_quality is None:
+            errors.append(
+                "experimental min_trade_quality must be "
+                f"{OWNER_MIN_TRADE_QUALITY_FLOOR} to 100"
+            )
+    if "stop_atr_multiplier" in raw:
+        try:
+            multiplier = _dec(raw["stop_atr_multiplier"])
+        except Exception:
+            errors.append("experimental stop_atr_multiplier is not a number")
+        else:
+            verdict = atr_multiplier_verdict(multiplier)
+            if verdict != "accepted":
+                errors.append(
+                    "experimental stop_atr_multiplier must be 1.00, 1.25, or 1.50"
+                )
+    if (
+        "max_concurrent_positions" in raw
+        and raw["max_concurrent_positions"] != OWNER_MAX_OPEN_POSITIONS
+    ):
+        errors.append(
+            "experimental max_concurrent_positions is fixed at "
+            f"{OWNER_MAX_OPEN_POSITIONS}"
+        )
+    if errors:
+        return None, errors
+    cleaned: dict[str, Any] = {}
+    for key, value in raw.items():
+        cleaned[key] = format(value, "f") if isinstance(value, Decimal) else value
+    return cleaned, []
+
+
+def _active_rr_is_candidate(value: object) -> bool:
+    from app.domain.institutional_trading.owner_live_limits import (
+        authorized_min_reward_risk,
+    )
+
+    try:
+        rr = _dec(value)
+    except Exception:
+        return False
+    authorized = authorized_min_reward_risk(rr)
+    return authorized is not None and authorized < OWNER_MIN_REWARD_RISK
+
+
 def validate_policy_changes(
     current: dict[str, Any], changes: dict[str, Any]
 ) -> PolicyDecision:
     """Merge ``changes`` into ``current`` or reject the whole update."""
     if not isinstance(changes, dict) or not changes:
         return PolicyDecision(False, None, ("changes must be a non-empty object",))
-    unknown = sorted(set(changes) - set(approved_baseline()) - {"reason"})
+    unknown = sorted(
+        set(changes)
+        - set(approved_baseline())
+        - {"reason", "experimental", "promote_experimental"}
+    )
     forbidden = sorted(set(changes) & FORBIDDEN_KEYS)
     errors: list[str] = []
     if forbidden:
@@ -396,9 +518,12 @@ def validate_policy_changes(
         except Exception:
             errors.append("min_reward_risk is not a number")
         else:
-            if authorized_min_reward_risk(rr) is None:
+            authorized = authorized_min_reward_risk(rr)
+            if authorized is None or authorized < OWNER_MIN_REWARD_RISK:
                 errors.append(
-                    "min_reward_risk must be 0.10, 0.15, 0.20, or at least 1.50"
+                    "active min_reward_risk must be at least 1.50. "
+                    "Candidates 0.10, 0.15, and 0.20 belong under experimental "
+                    "and stay inactive until that experiment is promoted."
                 )
     if "min_trade_quality" in changes:
         try:
@@ -448,17 +573,33 @@ def validate_policy_changes(
             and not isinstance(changes[key], bool)
         ):
             errors.append(f"{key} must be true, false, or null")
+    promote = changes.get("promote_experimental") is True
+    cleaned_experimental: dict[str, Any] | None = None
+    if "experimental" in changes or promote:
+        source = changes.get("experimental", current.get("experimental"))
+        cleaned_experimental, experimental_errors = _clean_experimental(source)
+        errors.extend(experimental_errors)
     if errors:
         return PolicyDecision(False, None, tuple(errors))
 
     merged = dict(current)
     for key, value in changes.items():
-        if key == "reason":
+        if key in {"reason", "experimental", "promote_experimental"}:
             continue
         if isinstance(value, Decimal):
             merged[key] = format(value, "f")
         else:
             merged[key] = value
+    if cleaned_experimental is not None:
+        merged["experimental"] = cleaned_experimental
+        if promote:
+            for key, value in cleaned_experimental.items():
+                merged[key] = value
+            merged["experimental_promoted"] = True
+        else:
+            merged["experimental_promoted"] = False
+            if _active_rr_is_candidate(merged.get("min_reward_risk")):
+                merged["min_reward_risk"] = str(OWNER_MIN_REWARD_RISK)
     weekly = _dec(merged.get("weekly_loss_pct") or 0)
     daily = _dec(merged.get("daily_loss_pct") or OWNER_DAILY_LOSS_PCT)
     drawdown = _dec(merged.get("max_drawdown_pct") or 0)

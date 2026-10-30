@@ -381,12 +381,17 @@ class LiveTradingRiskConfig:
         # profile (e.g. 3% daily / 0.5% risk / 2-loss streak / RR 1.20 /
         # spread 1.50) can no longer show or enforce values that differ from
         # the owner limits on the manual-order check, the UI or the audit.
-        object.__setattr__(self, "risk_per_trade_pct", _ol.OWNER_MAX_PLANNED_RISK_PCT)
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_planned_risk_pct,
+            active_min_reward_risk,
+        )
+
+        object.__setattr__(self, "risk_per_trade_pct", active_max_planned_risk_pct())
         object.__setattr__(self, "max_daily_loss_pct", _ol.OWNER_DAILY_LOSS_PCT)
         object.__setattr__(
             self, "max_consecutive_losses", _ol.OWNER_MAX_CONSECUTIVE_LOSSES
         )
-        object.__setattr__(self, "min_reward_risk", _ol.OWNER_MIN_REWARD_RISK)
+        object.__setattr__(self, "min_reward_risk", active_min_reward_risk())
         object.__setattr__(self, "max_spread", _ol.OWNER_MAX_SPREAD)
         object.__setattr__(self, "max_open_positions", _ol.OWNER_MAX_OPEN_POSITIONS)
 

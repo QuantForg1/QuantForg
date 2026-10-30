@@ -101,6 +101,7 @@ class StoredPolicy:
     error: str = ""
     applied_version: int | None = None
     status: str = ""
+    worker_loaded_at: str | None = None
 
 
 def reset_runtime_policy_store_for_tests() -> None:
@@ -118,6 +119,21 @@ def reset_runtime_policy_store_for_tests() -> None:
 def last_applied_version() -> int | None:
     raw = _LAST_APPLIED.get("version")
     return int(raw) if isinstance(raw, int) else None
+
+
+def last_applied_at() -> str | None:
+    raw = _LAST_APPLIED.get("at")
+    return str(raw) if raw else None
+
+
+def _iso(raw: object) -> str | None:
+    if raw is None:
+        return None
+    isoformat = getattr(raw, "isoformat", None)
+    if callable(isoformat):
+        return str(isoformat())
+    text = str(raw).strip()
+    return text or None
 
 
 def memory_audit_events() -> list[dict[str, Any]]:
@@ -154,6 +170,13 @@ def ensure_owner_schema() -> None:
     if not available():
         return
     execute(_CREATE_TABLE)
+    execute(
+        """
+        ALTER TABLE public.trading_runtime_config
+            ADD COLUMN IF NOT EXISTS worker_applied_version INTEGER,
+            ADD COLUMN IF NOT EXISTS worker_applied_at TIMESTAMPTZ
+        """
+    )
     execute(_POLICY_LOCKDOWN)
     execute(_ROLE_FUNCTION)
     execute(_ROLE_TRIGGER)
@@ -287,7 +310,10 @@ def load_runtime_policy() -> StoredPolicy:
         try:
             ensure_owner_schema()
             rows = fetch(
-                "SELECT version, document FROM trading_runtime_config WHERE id = 1"
+                """
+                SELECT version, document, worker_applied_version, worker_applied_at
+                FROM trading_runtime_config WHERE id = 1
+                """
             )
         except Exception as exc:
             logger.warning("runtime_policy_load_failed", error_type=type(exc).__name__)
@@ -304,19 +330,30 @@ def load_runtime_policy() -> StoredPolicy:
                 False, 0, None, "unavailable", error="config_document_invalid"
             )
         version = int(rows[0].get("version") or 0)
+        acked_raw = rows[0].get("worker_applied_version")
+        acked = int(acked_raw) if acked_raw is not None else None
         return StoredPolicy(
-            True, version, document, "persisted", status=_status(version)
+            True,
+            version,
+            document,
+            "persisted",
+            status=_status(version),
+            applied_version=acked,
+            worker_loaded_at=_iso(rows[0].get("worker_applied_at")),
         )
     if _testing():
         with _LOCK:
             if _MEMORY is None:
                 return StoredPolicy(True, 0, approved_baseline(), "approved_baseline")
+            acked = last_applied_version()
             return StoredPolicy(
                 True,
                 _MEMORY_VERSION,
                 dict(_MEMORY),
                 "memory",
                 status=_status(_MEMORY_VERSION),
+                applied_version=acked,
+                worker_loaded_at=last_applied_at() if acked is not None else None,
             )
     return StoredPolicy(False, 0, None, "unavailable", error="config_store_unavailable")
 
@@ -330,6 +367,7 @@ def install_cycle_policy() -> StoredPolicy:
     use_runtime_policy(dict(loaded.document))
     if loaded.version > 0:
         _note_applied(loaded.version)
+        _persist_worker_ack(loaded.version)
     if _LOGGED_VERSION.get("version") != loaded.version:
         logger.info(
             "runtime_policy_applied",
@@ -345,7 +383,29 @@ def install_cycle_policy() -> StoredPolicy:
         loaded.source,
         status="applied" if loaded.version > 0 else "approved_baseline",
         applied_version=last_applied_version(),
+        worker_loaded_at=last_applied_at(),
     )
+
+
+def _persist_worker_ack(version: int) -> None:
+    """Record the exact version this worker installed.
+
+    A failed write stays unconfirmed.
+    """
+    available, execute, _fetch = _postgres()
+    if not available():
+        return
+    try:
+        execute(
+            """
+            UPDATE trading_runtime_config
+            SET worker_applied_version = $1, worker_applied_at = NOW()
+            WHERE id = 1 AND version = $1
+            """,
+            version,
+        )
+    except Exception:
+        logger.warning("runtime_policy_worker_ack_failed", error_type="update_failed")
 
 
 def _audit(
@@ -541,4 +601,6 @@ def save_runtime_policy(
         decision.document,
         "persisted" if available() else "memory",
         status="saved",
+        applied_version=loaded.applied_version,
+        worker_loaded_at=loaded.worker_loaded_at,
     )
