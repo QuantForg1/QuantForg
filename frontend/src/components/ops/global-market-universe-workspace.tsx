@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Globe2, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -177,15 +177,9 @@ export function GlobalMarketUniverseWorkspace() {
   const health = asRecord(data.broker_health);
   const scanner = asRecord(data.scanner_health);
   const layers = asRecord(data.layers);
-  const instruments = useMemo(
-    () => asList(data.instruments).map(asRecord),
-    [data.instruments],
-  );
-  const rows = useMemo(
-    () => asList(board.rows || board.top_opportunities).map(asRecord),
-    [board.rows, board.top_opportunities],
-  );
-  const filtered = useMemo(() => {
+  const instruments = asList(data.instruments).map(asRecord);
+  const rows = asList(board.rows || board.top_opportunities).map(asRecord);
+  const filtered = (() => {
     const oppFloor = minOpportunity.trim() === "" ? null : Number(minOpportunity);
     const edgeFloor = minEdge.trim() === "" ? null : Number(minEdge);
     return rows.filter((row) => {
@@ -224,17 +218,8 @@ export function GlobalMarketUniverseWorkspace() {
       }
       return true;
     });
-  }, [
-    rows,
-    assetFilter,
-    directionFilter,
-    dataStateFilter,
-    sessionFilter,
-    regimeFilter,
-    minOpportunity,
-    minEdge,
-  ]);
-  const selected = useMemo(() => {
+  })();
+  const selected = (() => {
     if (!selectedKey) return null;
     return (
       rows.find(
@@ -247,8 +232,8 @@ export function GlobalMarketUniverseWorkspace() {
       ) ||
       null
     );
-  }, [selectedKey, rows, instruments]);
-  const explored = useMemo(() => {
+  })();
+  const explored = (() => {
     const q = explorerQuery.trim().toUpperCase();
     if (!q) return instruments.slice(0, 40);
     return instruments
@@ -257,7 +242,7 @@ export function GlobalMarketUniverseWorkspace() {
         return hay.includes(q);
       })
       .slice(0, 40);
-  }, [instruments, explorerQuery]);
+  })();
 
   if (snapQ.isLoading && !snapQ.data) return <DeskSkeleton rows={8} />;
   if (snapQ.isError) {

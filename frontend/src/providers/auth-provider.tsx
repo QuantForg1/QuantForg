@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { authApi } from "@/lib/api/endpoints";
@@ -56,6 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [meStatus, setMeStatus] = useState<MeAttemptStatus>("idle");
   const [bootError, setBootError] = useState<string | null>(null);
+  const refreshMeRef = useRef<
+    (opts?: { background?: boolean }) => Promise<void>
+  >(async () => {});
 
   const refreshMe = useCallback(async (opts?: { background?: boolean }) => {
     const token = getAccessToken();
@@ -111,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           if (!opts?.background) {
             window.setTimeout(() => {
-              void refreshMe({ background: true });
+              void refreshMeRef.current({ background: true });
             }, SESSION_ME_RETRY_MS);
           }
           return;
@@ -133,6 +137,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setMeStatus("unauthorized");
     }
   }, []);
+
+  useEffect(() => {
+    refreshMeRef.current = refreshMe;
+  }, [refreshMe]);
 
   useEffect(() => {
     // Restore token presence only — do not mark authenticated until /auth/me settles.

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Layers } from "lucide-react";
@@ -143,8 +142,7 @@ export function PortfolioWorkspace() {
       toast.error(e instanceof ApiError ? traderFacingErrorMessage(e) : "Robot action failed"),
   });
 
-  const positionCols: DeskColumn<Row>[] = useMemo(
-    () => [
+  const positionCols: DeskColumn<Row>[] = [
       {
         id: "symbol",
         header: "Instrument",
@@ -216,9 +214,7 @@ export function PortfolioWorkspace() {
         header: "Status",
         cell: (r) => <span>{str(r.status, "Open")}</span>,
       },
-    ],
-    [currency],
-  );
+    ];
 
   if (sessionQ.isLoading && !sessionQ.data && !sessionQ.isError) {
     return (
