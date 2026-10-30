@@ -164,6 +164,17 @@ function settingList(record: Record<string, unknown> | null | undefined): string
   return parts.length ? parts.join(", ") : "none";
 }
 
+function rewardFloorNote(policy: {
+  document?: Record<string, unknown> | null;
+  enforced_min_reward_risk?: string;
+}): string {
+  const stored = policy.document?.min_reward_risk;
+  const enforced = policy.enforced_min_reward_risk;
+  if (stored == null || stored === "" || enforced == null || enforced === "") return "";
+  if (String(stored) === enforced) return "";
+  return ` Stored min_reward_risk ${String(stored)} is not the live floor. The worker enforces ${enforced}.`;
+}
+
 export function policyStateLines(policy: {
   version?: number;
   applied_version?: number | null;
@@ -171,6 +182,7 @@ export function policyStateLines(policy: {
   experimental?: Record<string, unknown> | null;
   experimental_promoted?: boolean;
   document?: Record<string, unknown> | null;
+  enforced_min_reward_risk?: string;
 }): { experimental: string; savedProduction: string; workerLoaded: string } {
   const version = policy.version ?? 0;
   const experiment = policy.experimental;
@@ -181,17 +193,18 @@ export function policyStateLines(policy: {
           : "Promotion is off, so these values are not the live floor."
       }`
     : "No experimental settings are saved.";
+  const floorNote = rewardFloorNote(policy);
   const savedProduction = version
     ? `Saved production policy version ${version}: ${settingList(policy.document)}. ${
         policy.worker_confirmed
           ? "The worker confirmed this version."
           : "Saved, not confirmed by the worker."
-      }`
+      }${floorNote}`
     : "No production policy is saved. The approved baseline is the fallback.";
   const workerLoaded = policy.worker_confirmed
-    ? `Worker loaded version ${version}: ${settingList(policy.document)}.`
+    ? `Worker loaded version ${version}: ${settingList(policy.document)}.${floorNote}`
     : `Worker has not confirmed version ${version}. Last confirmed version: ${
         policy.applied_version ?? "none"
-      }.`;
+      }.${floorNote}`;
   return { experimental, savedProduction, workerLoaded };
 }

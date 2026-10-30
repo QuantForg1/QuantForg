@@ -34,6 +34,7 @@ type PolicyPayload = {
   worker_confirmed?: boolean;
   experimental?: Record<string, unknown> | null;
   experimental_promoted?: boolean;
+  enforced_min_reward_risk?: string;
   pending_restart?: boolean;
 };
 
@@ -85,7 +86,9 @@ export default function AdminControlPage() {
     const next: Record<string, string> = {};
     for (const key of POLICY_NUMERIC_KEYS) {
       const raw = doc[key];
-      if (key === "max_drawdown_pct" && (raw == null || raw === "")) {
+      if (key === "min_reward_risk" && body.policy?.enforced_min_reward_risk) {
+        next[key] = body.policy.enforced_min_reward_risk;
+      } else if (key === "max_drawdown_pct" && (raw == null || raw === "")) {
         next[key] = "0";
       } else {
         next[key] = raw == null ? "" : String(raw);

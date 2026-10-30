@@ -134,5 +134,15 @@ const loaded = policyStateLines({
 });
 assert.match(loaded.workerLoaded, /Worker loaded version 4/);
 assert.match(loaded.savedProduction, /worker confirmed/i);
+const storedCandidate = policyStateLines({
+  version: 3,
+  applied_version: 3,
+  worker_confirmed: true,
+  document: { min_reward_risk: "0.20", max_planned_risk_pct: "14" },
+  enforced_min_reward_risk: "1.50",
+});
+assert.match(storedCandidate.workerLoaded, /not the live floor/);
+assert.match(storedCandidate.workerLoaded, /enforces 1.50/);
+assert.match(storedCandidate.savedProduction, /Stored min_reward_risk 0.20/);
 
 console.log("admin-policy.test.ts ok");
