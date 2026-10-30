@@ -147,9 +147,11 @@ def score_injected_snapshots(
         snapshot = item.get("snapshot")
         if snapshot is None:
             raise ValueError("snapshot_required")
+        from app.domain.institutional_trading.atr import score_gate_atr
+
         verdict = score_scalping_setup(
             snapshot,
-            atr=item.get("atr"),
+            atr=score_gate_atr(snapshot),
             mid=item.get("mid"),
             symbol=str(item.get("symbol") or getattr(snapshot, "symbol", "") or ""),
             bid=item.get("bid"),
@@ -266,9 +268,11 @@ async def _score_one_research_symbol(
         or code
     ).upper()
     try:
+        from app.domain.institutional_trading.atr import score_gate_atr
+
         verdict = score_scalping_setup(
             snapshot,
-            atr=account.atr,
+            atr=score_gate_atr(snapshot),
             mid=account.mid_price,
             config=DEFAULT_AI_SCALPING_CONFIG,
             enforce_adaptive_cooldown=False,

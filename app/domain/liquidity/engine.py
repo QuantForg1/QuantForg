@@ -43,6 +43,7 @@ from app.domain.liquidity.models import (
 )
 from app.domain.liquidity.sweep_detector import LiquiditySweepDetector
 from app.domain.liquidity.zone_builder import LiquidityZoneBuilder
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.value_objects.identity import SymbolCode
 
@@ -98,13 +99,18 @@ class LiquidityEngine:
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=UTC)
 
-        candles = await self.prices.get_candles(code, tf, limit=self.candle_limit)
+        candles = closed_analysis_bars(
+            await self.prices.get_candles(code, tf, limit=self.candle_limit),
+            as_of=moment,
+            timeframe=tf,
+        )
         swing_points = await self.swings.get_swings(
             code,
             tf,
             left=self.swing_left,
             right=self.swing_right,
             limit=self.candle_limit,
+            as_of=moment,
         )
 
         # Optional structure context — reserved for future enrichment; loaded

@@ -490,6 +490,7 @@ class InstitutionalDecisionPipeline:
         account: AccountRiskState,
         *,
         symbol: str | None = None,
+        gate_atr: Decimal | None = None,
     ) -> ITEConfig:
         cfg = self.config
         if not cfg.is_scalping():
@@ -502,8 +503,10 @@ class InstitutionalDecisionPipeline:
             DEFAULT_AI_SCALPING_CONFIG,
         )
 
+        # Band floors follow the entry-confirmation ATR. The M1 stop series
+        # stays on the stop path and must not select this band.
         resolved = resolve_adaptive_thresholds(
-            account.atr,
+            gate_atr,
             account.mid_price,
             config=DEFAULT_AI_SCALPING_CONFIG,
             symbol=symbol,
@@ -519,7 +522,14 @@ class InstitutionalDecisionPipeline:
         request_id: str | None = None,
     ) -> TradeDecision:
         sym = str(getattr(snapshot, "symbol", "") or "")
-        cfg = self._prepare_config(account, symbol=sym or None)
+        gate_atr = None
+        if self.config.is_scalping():
+            from app.domain.institutional_trading.atr import score_gate_atr
+
+            gate_atr = score_gate_atr(snapshot)
+        cfg = self._prepare_config(
+            account, symbol=sym or None, gate_atr=gate_atr
+        )
         rid = (request_id or f"ite_{snapshot.input_hash[:12]}").strip()
 
         daily_dd = Decimal("0")
@@ -542,7 +552,6 @@ class InstitutionalDecisionPipeline:
                 from app.domain.institutional_trading.ai_scalping.scoring import (
                     score_scalping_setup,
                 )
-
                 session_name = str(
                     getattr(snapshot.session.session, "value", snapshot.session.session)
                 )
@@ -556,7 +565,7 @@ class InstitutionalDecisionPipeline:
                     )
                 ai_score = score_scalping_setup(
                     snapshot,
-                    atr=account.atr,
+                    atr=gate_atr,
                     mid=account.mid_price,
                     historical_similarity=hist,
                     config=DEFAULT_AI_SCALPING_CONFIG,
@@ -598,7 +607,7 @@ class InstitutionalDecisionPipeline:
 
         confluence = ConfluenceEngine(config=cfg).evaluate(
             snapshot,
-            atr=account.atr,
+            atr=gate_atr if self.config.is_scalping() else account.atr,
             current_drawdown_pct=daily_dd if daily_dd > 0 else None,
         )
 

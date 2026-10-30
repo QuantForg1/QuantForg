@@ -263,6 +263,75 @@ def test_execution_contract_does_not_rewrite_risk_into_none() -> None:
     assert out.fault_code == "MIN_LOT_CONSTRAINT"
     assert out.blocking_stage == "RISK"
     assert out.decision_state == DecisionState.CANDIDATE_BLOCK.value
+    assert facts.volatility_ok is True
+
+
+def _cycle_facts(**ai: object):
+    return facts_from_cycle(
+        snapshot=SimpleNamespace(symbol="XAUUSD", spread=Decimal("0.364")),
+        account=SimpleNamespace(
+            bid=Decimal("100.10"),
+            ask=Decimal("100.464"),
+            quote_age_seconds=1.0,
+            leverage=Decimal("100"),
+            market_open=True,
+        ),
+        decision=SimpleNamespace(
+            symbol="XAUUSD",
+            direction=TradeDirection.SELL,
+            action=DecisionAction.SELL,
+            quality=80,
+            confidence=72,
+            eligibility=EligibilityResult(
+                eligible=True,
+                checks={},
+                rejection_reasons=(),
+            ),
+            risk_reasons=(),
+            approved_lots=Decimal("0.01"),
+            estimated_rr=Decimal("1.80"),
+            confluence=SimpleNamespace(factors={"structure_score": 80}),
+        ),
+        optimizer={"final_state": "EXECUTE_NOW"},
+        execution_enabled=True,
+        force_shadow=False,
+        gateway_connected=True,
+        broker_connected=True,
+        symbol_tradable=True,
+        auto_running=True,
+        kill_switch=False,
+        oms_orders_allowed=True,
+        safety_allowed=True,
+        last_ai_score={
+            "opportunity_score": 90,
+            "opportunity_threshold": 70,
+            **ai,
+        },
+    )
+
+
+def test_recorded_volatility_failure_blocks_a_high_opportunity_side() -> None:
+    facts = _cycle_facts(
+        volatility_decision={
+            "passed": False,
+            "atr_pct": "0.0388",
+            "hard_min_pct": "0.08",
+        }
+    )
+    assert facts.volatility_ok is False
+    out = evaluate_gold_execution_contract(facts)
+    assert out.direction == "SELL"
+    assert out.fault_code == "VOLATILITY_REJECT"
+    assert out.blocking_stage == "STRATEGY"
+    assert out.may_submit_oms is False
+    assert out.opportunity_score == 90
+
+
+def test_recorded_volatility_pass_does_not_invent_a_reject() -> None:
+    facts = _cycle_facts(volatility_decision={"passed": True, "atr_pct": "0.1407"})
+    assert facts.volatility_ok is True
+    out = evaluate_gold_execution_contract(facts)
+    assert out.fault_code != "VOLATILITY_REJECT"
 
 
 def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
