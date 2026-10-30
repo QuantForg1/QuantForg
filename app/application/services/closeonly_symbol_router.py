@@ -13,6 +13,8 @@ logger = get_logger(__name__)
 
 _CLOSE_ONLY = frozenset({"closeonly", "close_only", "3"})
 _DISABLED = frozenset({"disabled", "0"})
+SYMBOL_CLOSE_ONLY = "SYMBOL_CLOSE_ONLY"
+CLOSE_ONLY_ENTRY_BLOCK = "Symbol is close-only — new entries are blocked."
 
 
 def read_trade_mode(mt5_adapter: Any, symbol: str) -> str:
@@ -52,6 +54,40 @@ def read_trade_mode(mt5_adapter: Any, symbol: str) -> str:
     except Exception:  # noqa: S110  # best-effort optional path
         pass
     return raw or "unknown"
+
+
+def gold_entry_block_code(mt5_adapter: Any, symbol: str) -> str | None:
+    """Return SYMBOL_CLOSE_ONLY when the broker forbids a new entry.
+
+    Unknown, disabled, and full modes stay unlabeled here. Callers still
+    fail closed when no full-mode symbol was selected.
+    """
+    if read_trade_mode(mt5_adapter, symbol) == "closeonly":
+        return SYMBOL_CLOSE_ONLY
+    return None
+
+
+def waiting_cycle_detail(pick_abort: str) -> str:
+    """Operator text for a cycle that did not submit an order."""
+    if pick_abort == SYMBOL_CLOSE_ONLY:
+        return f"WAITING_NEXT_CYCLE — {CLOSE_ONLY_ENTRY_BLOCK}"
+    if pick_abort == "NO_EXECUTABLE_SYMBOL":
+        return "WAITING_NEXT_CYCLE — no executable symbol"
+    return f"WAITING_NEXT_CYCLE — {pick_abort}"
+
+
+def close_only_primary(
+    primary: str | None,
+    category: str | None,
+    symbol_trade_mode: str | None,
+) -> tuple[str | None, str | None]:
+    """Surface close-only only when no stricter safety blocker is already set."""
+    if primary:
+        return primary, category
+    mode = (symbol_trade_mode or "").strip().lower()
+    if mode in _CLOSE_ONLY:
+        return CLOSE_ONLY_ENTRY_BLOCK, "broker"
+    return primary, category
 
 
 def is_entry_allowed(trade_mode: str) -> bool:

@@ -6586,6 +6586,8 @@ class InstitutionalIteRuntime:
         still has capacity — continuous multi-symbol handoff without re-scoring.
         """
         from app.application.services.closeonly_symbol_router import (
+            SYMBOL_CLOSE_ONLY,
+            gold_entry_block_code,
             resolve_executable_symbol,
         )
         from app.domain.trading.gold_only import (
@@ -6625,9 +6627,7 @@ class InstitutionalIteRuntime:
                     skipped=skipped,
                     preferred=preferred or gold_desk,
                 )
-            if symbol is not None and (
-                not is_gold_symbol(symbol) or is_bare_gold_symbol(symbol)
-            ):
+            if symbol is not None and not is_gold_symbol(symbol):
                 logger.warning(
                     "GOLD_ONLY_SYMBOL_REJECTED",
                     symbol=symbol,
@@ -6635,6 +6635,19 @@ class InstitutionalIteRuntime:
                     reason="SYMBOL_ROUTING_BLOCK",
                 )
                 self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
+                return None
+            if symbol is None and (
+                gold_entry_block_code(self.mt5_adapter, preferred or gold_desk)
+                == SYMBOL_CLOSE_ONLY
+            ):
+                logger.warning(
+                    "no_full_mode_gold_symbol_available",
+                    preferred=preferred or gold_desk,
+                    skipped=skipped,
+                    selected=symbol,
+                    abort_reason=SYMBOL_CLOSE_ONLY,
+                )
+                self._remember_pick_abort(SYMBOL_CLOSE_ONLY)
                 return None
             with self._lock:
                 last = (
@@ -6728,7 +6741,8 @@ class InstitutionalIteRuntime:
                 preferred=preferred,
                 skipped=skipped,
             )
-            self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
+            block = gold_entry_block_code(self.mt5_adapter, preferred or "")
+            self._remember_pick_abort(block or "NO_EXECUTABLE_SYMBOL")
         else:
             logger.warning("Submitting Order...", symbol=symbol)
             self._remember_pick_abort(None)
@@ -6743,7 +6757,6 @@ class InstitutionalIteRuntime:
         from app.domain.trading.gold_only import (
             canonical_gold_execution_symbol,
             gold_only_enabled,
-            is_bare_gold_symbol,
             is_gold_symbol,
         )
 
@@ -6755,11 +6768,7 @@ class InstitutionalIteRuntime:
                 plane=self.plane,
                 alpha_ranking=None,
             )
-            if (
-                symbol is None
-                or not is_gold_symbol(symbol)
-                or is_bare_gold_symbol(symbol)
-            ):
+            if symbol is None or not is_gold_symbol(symbol):
                 return None
             return symbol
 
@@ -7380,6 +7389,7 @@ class InstitutionalIteRuntime:
                     logger.warning(
                         "no_executable_symbol_manage_only",
                         context_symbol=symbol,
+                        abort_reason=getattr(self, "_last_pick_abort", None),
                     )
                 logger.warning("Scanning Symbols", symbol=symbol)
                 if self._recovery_orders_blocked:
@@ -7589,15 +7599,15 @@ class InstitutionalIteRuntime:
                                 _pvm_token = None
                         except Exception:
                             logger.exception("pvm_unbind_manage_only_failed")
+                    from app.application.services.closeonly_symbol_router import (
+                        waiting_cycle_detail,
+                    )
+
                     result = ShadowCycleResult(
                         ok=True,
                         trace_id=None,
                         mode=self.plane.mode.value,
-                        detail=(
-                            "WAITING_NEXT_CYCLE — no executable symbol"
-                            if pick_abort == "NO_EXECUTABLE_SYMBOL"
-                            else f"WAITING_NEXT_CYCLE — {pick_abort}"
-                        ),
+                        detail=waiting_cycle_detail(pick_abort),
                         cycle_outcome="waiting_next_cycle",
                         abort_reason=pick_abort,
                         snapshot_present=True,

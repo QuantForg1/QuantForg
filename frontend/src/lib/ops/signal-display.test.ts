@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import {
   classifyExecutionBlocker,
+  closeOnlyEntryMessage,
   formatFirstBlocker,
   formatSignalHeadline,
   parseSignalPipeline,
@@ -289,5 +290,15 @@ assert.equal(classifyExecutionBlocker("OMS_REJECTED"), "OMS_REJECTED");
 assert.equal(classifyExecutionBlocker("BROKER_REJECTED"), "BROKER_REJECTED");
 assert.equal(classifyExecutionBlocker("MT5_REJECTED"), "MT5_REJECTED");
 assert.equal(classifyExecutionBlocker("WAIT_NO_SNIPER_TRIGGER"), null);
+assert.equal(closeOnlyEntryMessage("full"), null);
+assert.match(
+  closeOnlyEntryMessage("closeonly") || "",
+  /close-only/,
+);
+assert.match(
+  closeOnlyEntryMessage("", "Symbol is close-only — new entries are blocked.") || "",
+  /New entries are blocked/,
+);
+assert.equal(closeOnlyEntryMessage("full", "spread"), null);
 
 console.log("signal-display.test.ts: ok");

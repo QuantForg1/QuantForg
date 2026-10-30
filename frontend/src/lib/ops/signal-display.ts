@@ -357,6 +357,26 @@ export function formatFirstBlocker(code: string | null | undefined): string {
   return token ? `First blocker: ${token}` : "";
 }
 
+/** Broker close-only copy. Null when the symbol still allows new entries. */
+export function closeOnlyEntryMessage(
+  mode: string | null | undefined,
+  blocker?: string | null,
+): string | null {
+  const token = String(mode || "").trim().toLowerCase();
+  const text = String(blocker || "").toLowerCase();
+  const restricted =
+    token === "closeonly" ||
+    token === "close_only" ||
+    token === "3" ||
+    text.includes("close-only") ||
+    text.includes("close only");
+  if (!restricted) return null;
+  return (
+    "XAUUSD is close-only. New entries are blocked until the broker restores " +
+    "full trading. Existing positions are left unchanged."
+  );
+}
+
 const BLOCKER_CATEGORIES = [
   "RISK_REJECTED",
   "EXECUTION_REJECT_BURST",

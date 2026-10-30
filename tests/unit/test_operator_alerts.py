@@ -49,6 +49,9 @@ class _Adapter:
     def latest_tick(self, symbol: str) -> Any:
         return SimpleNamespace(bid=D("4100.00"), ask=D("4100.30"))
 
+    def symbol_info(self, symbol: str) -> Any:
+        return SimpleNamespace(trade_mode=getattr(self, "symbol_trade_mode", "full"))
+
     def history_deals(self, *, date_from: datetime, date_to: datetime) -> list[Any]:
         return list(self.deals)
 
@@ -109,6 +112,24 @@ def test_gateway_offline_alerts_after_two_minutes_then_recovers(setup: Any) -> N
     adapter.up = True
     watch.tick()
     assert "GATEWAY RECOVERED" in _kinds(watch)
+
+
+def test_close_only_alerts_once_and_again_only_after_full_mode(setup: Any) -> None:
+    watch, adapter, clock = setup
+    adapter.symbol_trade_mode = "closeonly"
+    watch.tick()
+    clock.t += 30
+    watch.tick()
+    assert _kinds(watch).count("BROKER CLOSE-ONLY") == 1
+    adapter.symbol_trade_mode = "full"
+    watch.tick()
+    assert _kinds(watch).count("BROKER FULL MODE") == 1
+    adapter.symbol_trade_mode = "closeonly"
+    watch.tick()
+    assert _kinds(watch).count("BROKER CLOSE-ONLY") == 2
+    assert "order_send" not in " ".join(
+        message for _kind, message in watch.alerter.history
+    )
 
 
 def test_mt5_disconnect_alerts_only_after_two_minutes(setup: Any) -> None:
