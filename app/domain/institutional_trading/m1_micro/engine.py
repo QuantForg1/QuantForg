@@ -53,7 +53,7 @@ def evaluate_m1(
     """Return a decision. ``action`` is disabled, none, buy, sell, or exit.
 
     Lot size is intentionally absent. The existing risk engine remains the
-    only sizer, and it still rejects anything above 9% of live equity.
+    only sizer, and it still rejects anything above 14% of live equity.
     """
     if not m1_micro_enabled():
         return M1Decision(
@@ -94,13 +94,13 @@ def evaluate_m1(
         return M1Decision(
             action="none",
             setup="",
-            reason="combined_planned_risk_above_9_percent",
+            reason="combined_planned_risk_above_cap",
         )
     if Decimal(str(planned_risk_pct)) > OWNER_MAX_PLANNED_RISK_PCT:
         return M1Decision(
             action="none",
             setup="",
-            reason="planned_risk_above_9_percent",
+            reason="planned_risk_above_cap",
         )
     cost = round_trip_cost(
         spread=spread,

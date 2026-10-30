@@ -36,6 +36,8 @@ SL_DIST = Decimal("23.05")
 
 def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     client = MockMT5Client()
+    # The fixture declares a known zero. Production must not invent that zero.
+    client.known_commission = Decimal("0")
     client.initialize()
     client.login(MT5LoginRequest(login=1, password="p", server="S"))
     client._positions = []
@@ -56,8 +58,8 @@ def test_manual_submit_with_23_dollar_sl_is_rejected(symbol: str) -> None:
     from dataclasses import replace
 
     engine, client = _engine()
-    # The cap is 9% of LIVE equity (owner 2026-10-23): run at the real $50.84
-    # account (cap $4.57), not the mock's $10,000.
+    # The cap is 14% of LIVE equity: run at $50.84 (cap $7.11), not the
+    # mock's $10,000. The 23.05 stop is still far above that cap.
     mock_snapshot = client.account_snapshot
     client.account_snapshot = lambda: replace(
         mock_snapshot(),
@@ -148,6 +150,7 @@ def _max_risk_rule(stop: str) -> tuple[RiskDecision, dict[str, object]]:
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("4133.05"),
             contract_size=Decimal("100"),
+            commission=Decimal("0"),
         ),
         account=_account(),
         positions=[],

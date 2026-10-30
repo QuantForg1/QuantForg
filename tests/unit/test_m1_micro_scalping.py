@@ -212,11 +212,11 @@ def test_combined_open_risk_above_nine_percent_is_rejected(
         ask=Decimal("2306.30"),
         higher_timeframe_bias="up",
         slippage_points=Decimal("0.01"),
-        planned_risk_pct=Decimal("5"),
-        open_planned_risk_pct=Decimal("5"),
+        planned_risk_pct=Decimal("8"),
+        open_planned_risk_pct=Decimal("7"),
     )
     assert decision.action == "none"
-    assert decision.reason == "combined_planned_risk_above_9_percent"
+    assert decision.reason == "combined_planned_risk_above_cap"
 
 
 def test_unknown_open_risk_blocks_a_new_m1_entry(
@@ -346,7 +346,7 @@ def test_spread_inclusive_risk_withholds_before_oms(
     sent: list[object] = []
     note = consider_m1_complement(
         adapter=_m1_adapter(bid=Decimal("2305.20"), ask=Decimal("2305.30")),
-        account=SimpleNamespace(equity=Decimal("5.00"), login=1),
+        account=SimpleNamespace(equity=Decimal("1.00"), login=1),
         snapshot=_m1_snapshot(),
         execution_enabled=True,
         primary_forwarded=False,
@@ -355,7 +355,7 @@ def test_spread_inclusive_risk_withholds_before_oms(
     )
     assert note is not None
     assert note["submitted"] is False
-    assert note["reason"] == "combined_planned_risk_above_9_percent"
+    assert note["reason"] == "combined_planned_risk_above_cap"
     assert note["stop"] is not None
     assert sent == []
 

@@ -19,6 +19,10 @@ from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Any
 
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_PLANNED_RISK_PCT,
+    OWNER_SL_ATR_MULTIPLIER,
+)
 from app.domain.trading.gold_only import GOLD_SYMBOL
 from app.domain.trading.xauusd_specs import (
     CONTRACT_SIZE,
@@ -36,8 +40,8 @@ SUPPORTED_BALANCES: tuple[Decimal, ...] = (
     Decimal("500"),
 )
 
-# Same stop geometry as RiskEngine ATR path (atr x multiplier).
-DEFAULT_ATR_STOP_MULTIPLIER = Decimal("1.5")
+# Same stop geometry as the owner ATR floor (atr x multiplier).
+DEFAULT_ATR_STOP_MULTIPLIER = OWNER_SL_ATR_MULTIPLIER
 
 # Reference ATR (USD price units) for offline feasibility when live ATR absent.
 # Typical M15 XAUUSD ATR band used for planning - not a live feed invent.
@@ -70,9 +74,9 @@ class MicroAccountProfile:
     # Recommended ceiling for "safely tradable" labelling.
     recommended_max_risk_pct: Decimal = Decimal("2.0")
     # Absolute ceiling - never exceed; never upsize past this to hit min_lot.
-    # Owner 9% planned-risk cap; owner_live_limits.max_planned_risk_usd is the
+    # Owner 14% planned-risk cap; owner_live_limits.max_planned_risk_usd is the
     # binding per-trade limit.
-    hard_max_risk_pct: Decimal = Decimal("9.0")
+    hard_max_risk_pct: Decimal = OWNER_MAX_PLANNED_RISK_PCT
     drawdown_horizon_pct: Decimal = DRAWDOWN_HORIZON_PCT
     # Broker constraints - copied from XAUUSD specs; never overridden.
     broker_min_lot: Decimal = VOLUME_MIN

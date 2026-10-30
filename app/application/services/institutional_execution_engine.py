@@ -34,6 +34,7 @@ from app.domain.execution_engine.reasons import humanize_reason, humanize_reason
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
+    declared_commission,
     evaluate_owner_entry,
     max_planned_risk_usd,
     presend_owner_violations,
@@ -831,9 +832,10 @@ class InstitutionalExecutionEngine:
         # Authoritative Risk Engine — never skip on live submit path
         t0 = time.perf_counter()
         risk_reject: list[str] = []
-        # Equity for the owner's dynamic 9% planned-risk cap (band check below).
+        # Equity for the owner's dynamic 14% planned-risk cap (band check below).
         owner_band_equity: Decimal | None = None
-        # (equity, contract size, stops-level distance) for the pre-send check.
+        known_fee: Decimal | None = None
+        # (equity, contract size, stops-level distance, ..., commission).
         owner_presend_ctx: (
             tuple[
                 Decimal,
@@ -844,11 +846,13 @@ class InstitutionalExecutionEngine:
                 bool,
                 Decimal,
                 Decimal | None,
+                Decimal | None,
             ]
             | None
         ) = None
         try:
             account = self.gateway.adapter.account_snapshot()
+            known_fee = declared_commission(getattr(account, "commission", None))
             owner_band_equity = account.equity
             positions = list(self.gateway.adapter.list_positions())
             entry = Decimal("0")
@@ -999,6 +1003,7 @@ class InstitutionalExecutionEngine:
                         tick_size=live_tick_size,
                         tick_value=live_tick_value,
                         slippage=slip_price,
+                        commission=known_fee,
                     ),
                     account=account,
                     positions=positions,
@@ -1137,6 +1142,7 @@ class InstitutionalExecutionEngine:
                             peak_known=peak_known,
                             slippage=slip_price,
                             tick_size=fit_tick,
+                            commission=known_fee,
                         )
                         owner_presend_ctx = (
                             account.equity,
@@ -1147,6 +1153,7 @@ class InstitutionalExecutionEngine:
                             peak_known,
                             slip_price,
                             fit_tick,
+                            known_fee,
                         )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
@@ -1349,7 +1356,7 @@ class InstitutionalExecutionEngine:
                         AttributeError,
                     ):
                         open_risk_unknown = True
-                    # One 9% budget for the open book plus this entry. A failed
+                    # One 14% budget for the open book plus this entry. A failed
                     # position read is not treated as zero open risk.
                     owner_cap = (
                         max_planned_risk_usd(owner_band_equity)
@@ -1633,6 +1640,7 @@ class InstitutionalExecutionEngine:
                     p_peak_known,
                     p_slip,
                     p_tick,
+                    p_fee,
                 ) = owner_presend_ctx
                 presend_reject = presend_owner_violations(
                     symbol=intent.symbol,
@@ -1652,6 +1660,7 @@ class InstitutionalExecutionEngine:
                     peak_known=p_peak_known,
                     slippage=p_slip,
                     tick_size=p_tick,
+                    commission=p_fee,
                 )
             except (
                 OSError,
@@ -1780,6 +1789,8 @@ class InstitutionalExecutionEngine:
             stage=PipelineStage.BROKER_SUBMISSION,
             reason="submitting to broker via Execution Gateway",
         )
+        if presend_request is not None and known_fee is not None:
+            presend_request = replace(presend_request, commission=known_fee)
         exec_result = self.gateway.submit(
             intent,
             user_id=user_id,

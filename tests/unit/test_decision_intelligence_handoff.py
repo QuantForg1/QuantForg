@@ -40,6 +40,8 @@ def _gold_payload(**overrides: object) -> dict[str, object]:
         "kill_switch": False,
         "market_open": True,
         "use_live_facts": False,
+        # Fixture declares a known zero. Omitting it fails the inclusive cap.
+        "commission": "0",
         "confidence_factors": {
             "signal_strength": "75",
             "structure_align": "70",
@@ -124,9 +126,9 @@ def test_risk_pass_and_safety_pass_propagate() -> None:
 
 
 def test_stop_above_owner_cap_fails_risk() -> None:
-    # $5 stop at 0.01 lot = $5 planned loss > 9% of $50 equity ($4.50).
+    # $8 stop at 0.01 lot = $8 planned loss > 14% of $50 equity ($7.00).
     _facts, risk, _safety = assess_decision_center_engines(
-        _gold_payload(stop_distance="5", equity="50"),
+        _gold_payload(stop_distance="8", equity="50"),
         use_live=False,
     )
     assert risk.state == "FAIL"

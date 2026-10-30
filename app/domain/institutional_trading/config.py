@@ -28,7 +28,7 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 MAX_DAILY_LOSS_PCT = OWNER_DAILY_LOSS_PCT
 MAX_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_CEILING_PCT
 
-# Planned SL-loss (not margin) at the reference capital: 9% ($4.50 at $50).
+# Planned SL-loss (not margin) at the reference capital: 14% ($7.00 at $50).
 # No minimum floor. TARGET is the single sizing budget. The live owner guard
 # recomputes the cap from equity on every entry (owner_live_limits).
 MIN_PLANNED_RISK_USD = OWNER_MIN_SL_RISK_USD
@@ -40,7 +40,7 @@ MAX_TOTAL_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD * OWNER_MAX_OPEN_POSITIONS
 # reject instead.
 MIN_REWARD_RISK = OWNER_MIN_REWARD_RISK
 PREFERRED_REWARD_RISK = Decimal("1.50")
-# Per-trade percent ceiling (9% of the risk reference).
+# Per-trade percent ceiling (14% of the risk reference).
 RISK_PER_TRADE_CEILING_PCT = OWNER_SL_RISK_PCT
 
 

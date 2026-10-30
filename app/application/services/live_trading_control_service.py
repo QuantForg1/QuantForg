@@ -674,9 +674,9 @@ def _owner_limits_block(equity: Any) -> dict[str, Any]:
             "disabled" if ol.OWNER_MAX_CONSECUTIVE_LOSSES <= 0 else "enabled"
         ),
         "planned_risk_note": (
-            "9% is the maximum planned risk per trade, not a cap on realised "
-            "loss: slippage, gaps, commissions and execution failures can make "
-            "a loss larger."
+            f"{ol.OWNER_MAX_PLANNED_RISK_PCT}% is the maximum planned risk per "
+            "trade, not a cap on realised loss: slippage, gaps, commissions "
+            "and execution failures can make a loss larger."
         ),
     }
 

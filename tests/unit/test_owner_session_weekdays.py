@@ -46,6 +46,7 @@ def _valid(**kw: object) -> list[str]:
         "spread": D("0.20"),
         "contract_size": D("100"),
         "equity": D("32.88"),
+        "commission": D("0"),
     }
     base.update(kw)
     return ol.evaluate_owner_entry(**base)  # type: ignore[arg-type]
@@ -96,7 +97,7 @@ def test_risk_limits_still_reject_outside_the_former_window(
 
 def test_daily_loss_cap_still_blocks_above_19_percent() -> None:
     assert D("19.0") == ol.OWNER_DAILY_LOSS_PCT
-    assert D("9.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
+    assert D("14.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
     assert ol.daily_loss_exceeded(daily_pnl=D("-9.51"), base_now=D("40.49")) is True
     assert ol.daily_loss_exceeded(daily_pnl=D("-9.50"), base_now=D("40.50")) is False
 

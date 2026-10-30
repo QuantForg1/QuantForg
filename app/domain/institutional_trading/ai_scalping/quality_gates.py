@@ -188,7 +188,7 @@ def evaluate_quality_gates(
             f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"  # noqa: E501
         )
 
-    # Owner hard floor. Unset policy stays 75. A saved policy may use 70-100.
+    # Owner hard floor. Unset policy stays 70. A saved policy may use 70-100.
     from app.domain.institutional_trading.owner_live_limits import (
         OWNER_MIN_REWARD_RISK,
     )

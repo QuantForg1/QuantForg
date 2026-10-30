@@ -367,8 +367,8 @@ def test_no_direct_order_send_on_runtime_or_scanner() -> None:
 
 def test_risk_usd_bands_immutable() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
-    assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
 
 
 def test_invalid_broker_symbol_fails_closed() -> None:

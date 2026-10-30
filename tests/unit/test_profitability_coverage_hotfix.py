@@ -59,6 +59,8 @@ from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 
 def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     client = MockMT5Client()
+    # The fixture declares a known zero. Production must not invent that zero.
+    client.known_commission = Decimal("0")
     client.initialize()
     client.login(MT5LoginRequest(login=1, password="p", server="S"))
     # Flat book: the owner limit allows only one open position.
@@ -93,8 +95,8 @@ def _fx_account(equity: Decimal = Decimal("500")) -> AccountSnapshot:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_oms_uses_fx_contract_size_not_gold_default() -> None:
-    """EURUSD 0.01 at a 500-pip SL is $50 > 9% of $500 — must REJECT; with the
-    gold CS=100 it would wrongly look like $0.05."""
+    """EURUSD 0.01 at an 800-pip SL is $80 > 14% of $500 — must REJECT; with the
+    gold CS=100 it would wrongly look like $0.08."""
     engine = RiskEngine(
         config=RiskEngineConfig(
             min_lot=Decimal("0.01"),
@@ -110,7 +112,7 @@ def test_oms_uses_fx_contract_size_not_gold_default() -> None:
             symbol="EURUSD",
             side="sell",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("0.05000"),
+            stop_loss_distance=Decimal("0.08000"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08500"),
             contract_size=Decimal("100000"),
@@ -658,12 +660,12 @@ def test_fx_002_cannot_pass_when_max_lot_blocks_step_up() -> None:
             symbol="EURUSD",
             side="buy",
             requested_lots=Decimal("0.02"),
-            stop_loss_distance=Decimal("0.00250"),
+            stop_loss_distance=Decimal("0.00400"),  # 0.02 lot = $8.00 > $7.00
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08520"),
             contract_size=Decimal("100000"),
         ),
-        account=_fx_account(Decimal("50")),  # cap 9% of $50 = $4.50
+        account=_fx_account(Decimal("50")),  # 14% of $50 = $7.00
         positions=[],
     )
     assert assessment.decision is RiskDecision.REJECT
@@ -685,7 +687,7 @@ def test_gold_over_20_planned_sl_rejected() -> None:
             entry_price=Decimal("2320.80"),
             contract_size=Decimal("100"),
         ),
-        account=_fx_account(Decimal("50")),  # cap 9% of $50 = $4.50
+        account=_fx_account(Decimal("50")),  # 14% of $50 = $7.00
         positions=[],
     )
     assert assessment.decision is RiskDecision.REJECT

@@ -201,6 +201,8 @@ class AccountSnapshot:
     leverage: int
     currency: str = "USD"
     server: str = ""
+    # Account-currency commission for a new entry. None means unknown.
+    commission: Decimal | None = None
 
     def __post_init__(self) -> None:
         require(self.login > 0, "login must be > 0")
@@ -220,6 +222,7 @@ class AccountSnapshot:
             "leverage": self.leverage,
             "currency": self.currency,
             "server": self.server,
+            "commission": (None if self.commission is None else str(self.commission)),
         }
 
 

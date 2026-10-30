@@ -393,7 +393,7 @@ class TestInitialRiskAndProtection:
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
             ),
-            account=_account(Decimal("50")),  # cap 9% of $50 = $4.50
+            account=_account(Decimal("50")),  # cap 14% of $50 = $7.00
             positions=legs,
         )
         assert result.decision is RiskDecision.REJECT
@@ -414,7 +414,7 @@ class TestInitialRiskAndProtection:
                 request_id="phase2-1-80",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("1.80"),
+                stop_loss_distance=Decimal("4.20"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -423,7 +423,7 @@ class TestInitialRiskAndProtection:
             positions=legs,
         )
         # Initial risk $3.00 still counts after SL moved to break-even:
-        # $3.00 + $1.80 > $4.50 (9% of $50, one position).
+        # $3.00 + $4.20 > $7.00 (14% of $50, one position).
         assert engine.aggregate_planned_sl_risk(legs) == Decimal("3.00")
         assert result.decision is RiskDecision.REJECT
 

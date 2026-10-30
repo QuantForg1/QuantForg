@@ -1423,7 +1423,7 @@ class InstitutionalDecisionPipeline:
                 if pos_all
                 else Decimal("0")
             )
-            # 9% of live equity, not the $50-reference default (2026-10-23).
+            # 14% of live equity, not the $50-reference default.
             per_trade_cap = owner_risk_cap_usd(
                 equity=account.equity,
                 configured=MAX_PLANNED_SL_RISK_USD,

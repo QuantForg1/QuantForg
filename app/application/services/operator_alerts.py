@@ -673,6 +673,9 @@ class OperatorWatch:
             OWNER_MAX_LOT,
             max_planned_risk_usd,
         )
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_planned_risk_pct,
+        )
         from app.domain.trading.gold_only import is_gold_symbol
 
         problems: list[str] = []
@@ -688,7 +691,8 @@ class OperatorWatch:
             cap = max_planned_risk_usd(equity)
             if entry.planned_risk_usd > cap:
                 problems.append(
-                    f"planned risk ${entry.planned_risk_usd} > 9% cap ${cap}"
+                    f"planned risk ${entry.planned_risk_usd} > "
+                    f"{active_max_planned_risk_pct()}% cap ${cap}"
                 )
         for problem in problems:
             self.alerter.alert(

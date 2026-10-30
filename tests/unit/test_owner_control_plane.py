@@ -216,6 +216,7 @@ def test_saved_policy_is_stricter_and_a_stale_version_conflicts():
             contract_size=Decimal("100"),
             equity=Decimal("100"),
             weekly_pnl=Decimal("0"),
+            commission=Decimal("0"),
         )
     finally:
         reset_runtime_policy(token)
@@ -382,6 +383,7 @@ def _quiet_entry(**overrides: object) -> list[str]:
         "contract_size": Decimal("100"),
         "equity": Decimal("10000"),
         "weekly_pnl": Decimal("0"),
+        "commission": Decimal("0"),
     }
     payload.update(overrides)
     return evaluate_owner_entry(**payload)  # type: ignore[arg-type]
@@ -603,6 +605,7 @@ def test_presend_forwards_weekly_pnl_and_drawdown_peak():
             weekly_pnl=None,
             peak_equity=None,
             peak_known=False,
+            commission=Decimal("0"),
         )
         clear = presend_owner_violations(
             symbol="XAUUSD",
@@ -619,6 +622,7 @@ def test_presend_forwards_weekly_pnl_and_drawdown_peak():
             weekly_pnl=Decimal("0"),
             peak_equity=Decimal("10000"),
             peak_known=True,
+            commission=Decimal("0"),
         )
     finally:
         reset_runtime_policy(token)

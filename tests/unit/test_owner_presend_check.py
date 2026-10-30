@@ -44,6 +44,7 @@ def _sell(
         contract_size=D("100"),
         equity=D("55"),
         rr_buffer=D(buffer),
+        commission=D("0"),
     )
 
 

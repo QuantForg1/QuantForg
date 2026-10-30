@@ -71,11 +71,11 @@ def test_min_safe_balance_ladder() -> None:
     stop = stop_distance_from_atr(Decimal("12"))
     rows = min_safe_balances_table(stop_distance=stop, specs=specs)
     assert len(rows) == len(RISK_LADDER_PCT)
-    # $18 loss at 0.01 → 1% floor = $1800
+    # 1.00 x ATR 12 = $12 at 0.01 lot. 1% floor = $1200; 2% floor = $600.
     one = next(r for r in rows if r["risk_pct"] == "1.00")
-    assert one["min_safe_balance"] == "1800.00"
+    assert one["min_safe_balance"] == "1200.00"
     two = next(r for r in rows if r["risk_pct"] == "2.00")
-    assert two["min_safe_balance"] == "900.00"
+    assert two["min_safe_balance"] == "600.00"
 
 
 @pytest.mark.unit

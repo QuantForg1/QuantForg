@@ -126,7 +126,7 @@ def active_min_lot() -> Decimal | None:
 
 
 def active_max_aggregate_open_risk_pct() -> Decimal:
-    """Saved book cap. It cannot exceed the 9% ceiling."""
+    """Saved book cap. It cannot exceed the 14% ceiling."""
     value = _active_decimal("max_aggregate_open_risk_pct", OWNER_MAX_PLANNED_RISK_PCT)
     if value <= 0 or value > OWNER_MAX_PLANNED_RISK_PCT:
         return OWNER_MAX_PLANNED_RISK_PCT
@@ -185,9 +185,9 @@ def active_min_reward_risk() -> Decimal:
 
 
 def active_min_trade_quality() -> int:
-    """Unset policy stays 75. A saved integer from 70 to 100 is used.
+    """Unset policy stays 70. A saved integer from 70 to 100 is used.
 
-    Below 70 or a non-integer fails closed to 75.
+    Below 70 or a non-integer fails closed to 70.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_trade_quality,
@@ -203,7 +203,7 @@ def active_min_trade_quality() -> int:
 
 
 def active_stop_atr_multiplier() -> Decimal:
-    """Published default is 1.5. Only 1.00, 1.25, and 1.50 may be saved.
+    """Experimental default is 1.00. Only 1.00, 1.25, and 1.50 may be saved.
 
     0.75 and 0.90 are inside one ATR of noise and fail closed to the default.
     """
@@ -263,7 +263,7 @@ def m1_overlay_mode(key: str) -> str | None:
 def approved_baseline() -> dict[str, Any]:
     """Approved live policy. Weekly halt is explicitly off."""
     return {
-        "max_planned_risk_pct": "9.0",
+        "max_planned_risk_pct": "14.0",
         "daily_loss_pct": "19.0",
         "weekly_loss_pct": "0",
         "weekly_loss_documented": (
@@ -276,14 +276,14 @@ def approved_baseline() -> dict[str, Any]:
             "high-water mark and is enforced only after an owner save. A missing "
             "mark fails closed while the halt is on."
         ),
-        "max_aggregate_open_risk_pct": "9.0",
+        "max_aggregate_open_risk_pct": "14.0",
         "max_concurrent_positions": OWNER_MAX_OPEN_POSITIONS,
         "min_lot": None,
         "max_lot": "0.01",
         "max_spread": "0.45",
         "min_reward_risk": "1.50",
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
-        "stop_atr_multiplier": "1.50",
+        "stop_atr_multiplier": "1.00",
         "gold_only": True,
         "protective_stop_required": True,
         "evaluate_full_utc_day": True,

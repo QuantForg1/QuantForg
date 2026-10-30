@@ -194,7 +194,7 @@ def resolve_cycle_result(
 
 
 def owner_diagnostic_floor() -> int:
-    """Live desk floor. Saved policy may raise it and cannot fall below 75.
+    """Live desk floor. Saved policy may raise it and cannot fall below 70.
 
     Swing ``ITEConfig`` still defaults to 80/80. That default is not the
     hard gate the scalping worker enforces.

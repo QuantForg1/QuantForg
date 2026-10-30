@@ -149,6 +149,8 @@ class TradeRequest:
     order_ticket: int = 0
     oms_kind: str = ""
     client_order_id: str = ""
+    # Known account-currency commission. None is not sent as zero.
+    commission: Decimal | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -167,6 +169,7 @@ class TradeRequest:
             "order_ticket": self.order_ticket,
             "oms_kind": self.oms_kind,
             "client_order_id": self.client_order_id,
+            "commission": (None if self.commission is None else str(self.commission)),
         }
 
 

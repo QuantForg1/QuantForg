@@ -107,6 +107,8 @@ class MockMT5Client:
     _history_orders: list[MT5HistoryOrder] = field(default_factory=list, init=False)
     _history_deals: list[MT5Deal] = field(default_factory=list, init=False)
     _next_order_ticket: int = field(default=500000, init=False)
+    # Tests set a known commission. None stays unknown and is not zero.
+    known_commission: Decimal | None = None
 
     def initialize(self, *, path: str = "") -> bool:
         if self.fail_initialize:
@@ -188,6 +190,7 @@ class MockMT5Client:
             profit=snap.profit,
             company="QuantForg Mock Broker",
             trade_mode="demo",
+            commission=snap.commission,
         )
 
     def server_info(self) -> MT5Server:
@@ -656,6 +659,7 @@ class MockMT5Client:
             leverage=100,
             currency="USD",
             server=self._server,
+            commission=self.known_commission,
         )
 
     def _seed_portfolio(self) -> None:

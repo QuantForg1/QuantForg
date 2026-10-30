@@ -294,11 +294,11 @@ class TestDynamicSizingSafety:
         assert payload["engine"] == "dynamic_sizing_v2"
 
     def test_preferred_hi_caps_never_forces_preferred_lo(self) -> None:
-        """Risk-based raw below preferred_lo must not be forced up; a $95 stop
-        at min lot is above 9% of $1000 ($90) and rejects."""
+        """Risk-based raw below preferred_lo must not be forced up; a $141 stop
+        at min lot is above 14% of $1000 ($140) and rejects."""
         d = calculate_dynamic_lots_v2(
             equity=Decimal("1000"),
-            stop_distance=Decimal("95.00"),
+            stop_distance=Decimal("141.00"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),

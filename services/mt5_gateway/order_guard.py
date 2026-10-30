@@ -3,7 +3,7 @@
 Enforced on this Windows host, independent of whatever Railway sends:
 
 - New entries: XAUUSD only, protective SL/TP on the correct side of the live
-  quote, 0 < volume <= 0.01, planned loss at or under 9% of live equity, no
+  quote, 0 < volume <= 0.01, planned loss at or under 14% of live equity, no
   second Gold position, no working Gold pending order, and a unique
   ``client_order_id``.
 - Closes / partial closes: an explicit close kind, a ticket that is open, the
@@ -212,6 +212,7 @@ def _planned_loss_usd(
     stop: Decimal,
     quote: dict[str, Any],
     slippage: Decimal | None = None,
+    commission: Decimal | None = None,
 ) -> Decimal:
     from app.domain.institutional_trading.owner_live_limits import (
         planned_risk_usd,
@@ -238,6 +239,7 @@ def _planned_loss_usd(
         contract_size=per_price,
         volume=volume,
         slippage=slippage,
+        commission=commission,
     )
 
 
@@ -327,6 +329,18 @@ def _check_entry(
         reference = bid
     else:
         raise OrderGuardRejected("GUARD_SIDE", "entry side must be buy or sell")
+    if "commission" not in body or body.get("commission") is None:
+        raise OrderGuardRejected(
+            "GUARD_COMMISSION_UNKNOWN",
+            "account commission was not supplied, so inclusive planned risk "
+            "is unverified",
+        )
+    fee = _decimal(body.get("commission"))
+    if fee is None or fee < 0:
+        raise OrderGuardRejected(
+            "GUARD_COMMISSION_INVALID",
+            "commission must be a non-negative number",
+        )
     slip = _order_slippage_price(body, quote)
     loss = _planned_loss_usd(
         volume=Decimal(str(volume)),
@@ -334,15 +348,22 @@ def _check_entry(
         stop=stop,
         quote=quote,
         slippage=slip,
+        commission=fee,
     )
     cap = max_planned_risk_usd(equity)
     if loss > cap:
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_planned_risk_pct,
+        )
+
+        pct = active_max_planned_risk_pct()
         raise OrderGuardRejected(
             "GUARD_MAX_RISK",
             (
-                f"planned loss {loss} exceeds 9% of equity ({cap}); "
+                f"planned loss {loss} exceeds {pct}% of equity ({cap}); "
                 f"stop distance {abs(reference - stop)} plus spread "
-                f"{_quote_spread(quote)} plus slippage {slip}"
+                f"{_quote_spread(quote)} plus slippage {slip} plus "
+                f"commission {fee}"
             ),
         )
     client_order_id = str(body.get("client_order_id") or "").strip()

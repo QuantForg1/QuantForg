@@ -541,10 +541,10 @@ def test_size_uses_broker_specs_not_generic_lot() -> None:
     small = size_from_broker_specs(
         equity=Decimal("33"),
         risk_pct=Decimal("0.50"),
-        stop_distance=Decimal("3.50"),
+        stop_distance=Decimal("5.00"),
         spec=spec,
     )
-    # $33 * 9% = $2.97 < $3.50 at 0.01 lot -> refuse, never upsize.
+    # $33 * 14% = $4.62 < $5.00 at 0.01 lot -> refuse, never upsize.
     assert small.accepted is False
 
 

@@ -283,6 +283,7 @@ def _gold_entry(client_order_id: str) -> dict[str, Any]:
         "sl": 4100.0,
         "tp": 4103.5,
         "client_order_id": client_order_id,
+        "commission": 0,
     }
 
 

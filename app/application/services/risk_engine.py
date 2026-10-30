@@ -75,6 +75,8 @@ class RiskCheckInput:
     spread: Decimal | None = None
     # Adverse fill allowance in price units (deviation x point). Not a spread.
     slippage: Decimal | None = None
+    # Account-currency commission. None is unknown and is not treated as zero.
+    commission: Decimal | None = None
     session_allowed: bool | None = None
     session_name: str = ""
 
@@ -572,8 +574,9 @@ class RiskEngine:
             )
         )
 
-        # Owner live limits: planned risk = (|entry - SL| + spread) x contract x
-        # lots must not exceed 9% of equity. No minimum floor.
+        # Owner live limits: planned risk includes spread, slippage, and a
+        # known commission, and must not exceed 14% of equity. Unknown
+        # commission fails this rule. No minimum floor.
         from app.domain.institutional_trading.owner_live_limits import (
             OWNER_MAX_PLANNED_RISK_PCT,
             max_planned_risk_usd,
@@ -585,24 +588,43 @@ class RiskEngine:
             if size.approved_lots > 0
             else (size.requested_lots if size.requested_lots > 0 else cfg.min_lot)
         )
-        planned_usd = planned_risk_usd(
-            stop_distance=size.stop_distance,
-            spread=check.spread,
-            contract_size=contract_size,
-            volume=lots_for_risk,
+        fee = check.commission
+        commission_known = fee is not None
+        planned_usd = (
+            planned_risk_usd(
+                stop_distance=size.stop_distance,
+                spread=check.spread,
+                contract_size=contract_size,
+                volume=lots_for_risk,
+                slippage=check.slippage,
+                commission=fee,
+            )
+            if commission_known
+            else Decimal("0")
         )
         owner_cap = max_planned_risk_usd(drawdown.equity)
         risk_pct = (
             (planned_usd / drawdown.equity * Decimal("100")).quantize(Decimal("0.01"))
-            if drawdown.equity > 0
+            if commission_known and drawdown.equity > 0
             else Decimal("0")
         )
         if size.stop_distance <= 0:
             risk_st = "n/a"
-        elif planned_usd > owner_cap:
+        elif not commission_known or planned_usd > owner_cap:
             risk_st = "fail"
         else:
             risk_st = "pass"
+        if not commission_known and size.stop_distance > 0:
+            risk_reason = (
+                "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "
+                "so inclusive planned risk is unverified"
+            )
+        else:
+            risk_reason = (
+                f"planned risk ${planned_usd} = {lots_for_risk} lots x "
+                f"({size.stop_distance} + spread {check.spread or 0}) x "
+                f"{contract_size} on equity {drawdown.equity}"
+            )
         rules.append(
             self._rule(
                 rule_id="max_risk",
@@ -613,11 +635,7 @@ class RiskEngine:
                     f"${owner_cap} = {OWNER_MAX_PLANNED_RISK_PCT}% of equity "
                     "(owner, planned)"
                 ),
-                reason=(
-                    f"planned risk ${planned_usd} = {lots_for_risk} lots x "
-                    f"({size.stop_distance} + spread {check.spread or 0}) x "
-                    f"{contract_size} on equity {drawdown.equity}"
-                ),
+                reason=risk_reason,
                 suggested_action=action_for(
                     risk_st,
                     "Tighten stop or reduce lots",
@@ -1315,7 +1333,7 @@ class RiskEngine:
         )
 
         # One shared budget for the open book plus the new entry. The saved
-        # aggregate cap can be stricter than 9%. It cannot be looser.
+        # aggregate cap can be stricter than 14%. It cannot be looser.
         live_cap = min(
             max_planned_risk_usd(account.equity),
             max_aggregate_risk_usd(account.equity),
@@ -1653,32 +1671,46 @@ class RiskEngine:
                 tick_value=check.tick_value,
             )
             owner_cap = max_planned_risk_usd(account.equity)
-            owner_risk = planned_risk_usd(
-                stop_distance=stop_for_actual,
-                spread=check.spread,
-                contract_size=money_per_price,
-                volume=approved,
-                slippage=check.slippage,
-            )
-            if owner_risk > owner_cap:
+            fee = check.commission
+            if fee is None or fee < 0:
                 reasons.append(
-                    format_owner_sl_risk(
-                        risk_usd=owner_risk,
-                        cap=owner_cap,
-                        equity=account.equity,
-                        stop_distance=stop_for_actual,
-                        spread=check.spread,
-                        volume=approved,
-                        contract_size=money_per_price,
-                        slippage=check.slippage or Decimal("0"),
-                        tick_size=check.tick_size,
-                    )
+                    "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "
+                    "so inclusive planned risk is unverified and the entry is rejected"
+                    if fee is None
+                    else "OWNER_COMMISSION_INVALID: commission cannot be negative"
                 )
                 checks["owner_planned_risk"] = False
                 decision = RiskDecision.REJECT
                 approved = Decimal("0")
             else:
-                checks["owner_planned_risk"] = True
+                owner_risk = planned_risk_usd(
+                    stop_distance=stop_for_actual,
+                    spread=check.spread,
+                    contract_size=money_per_price,
+                    volume=approved,
+                    slippage=check.slippage,
+                    commission=fee,
+                )
+                if owner_risk > owner_cap:
+                    reasons.append(
+                        format_owner_sl_risk(
+                            risk_usd=owner_risk,
+                            cap=owner_cap,
+                            equity=account.equity,
+                            stop_distance=stop_for_actual,
+                            spread=check.spread,
+                            volume=approved,
+                            contract_size=money_per_price,
+                            slippage=check.slippage or Decimal("0"),
+                            commission=fee,
+                            tick_size=check.tick_size,
+                        )
+                    )
+                    checks["owner_planned_risk"] = False
+                    decision = RiskDecision.REJECT
+                    approved = Decimal("0")
+                else:
+                    checks["owner_planned_risk"] = True
 
         proposed_margin = (
             size.approved_lots * check.entry_price * contract_size / leverage

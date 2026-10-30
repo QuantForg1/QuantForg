@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -58,6 +59,8 @@ def _wire(*, execution_enabled: bool = False) -> tuple[
     InstitutionalExecutionEngine,
 ]:
     client = MockMT5Client()
+    # The fixture declares a known zero. Production must not invent that zero.
+    client.known_commission = Decimal("0")
     adapter = MT5Adapter(client=client, execution_enabled=execution_enabled)
     validation = MT5OrderValidationService(adapter=adapter)
     gateway = ExecutionGateway(adapter=adapter, order_validation=validation)

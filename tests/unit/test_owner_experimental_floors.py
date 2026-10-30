@@ -1,9 +1,9 @@
-"""Owner experiment 2026-10-30: configurable net RR, ATR multiplier, quality.
+"""Owner experiment 2026-10-30: 14% risk, ATR 1.00, quality 70, net RR.
 
-The published defaults stay 1.50, ATR 1.5, and quality 75. A saved policy may
-select net RR 0.10, 0.15, or 0.20, quality 70-100, and an ATR multiplier of
-1.00, 1.25, or 1.50. Stops inside one ATR are rejected. Unknown commission is
-not treated as a verified zero.
+The active reward:risk default stays 1.50. A saved policy may select net RR
+0.10, 0.15, or 0.20, quality 70-100, and an ATR multiplier of 1.00, 1.25, or
+1.50. Stops inside one ATR are rejected. Unknown commission is not zero.
+The planned-risk ceiling is 14%. Daily loss stays 19%. Lot stays 0.01.
 """
 
 from __future__ import annotations
@@ -37,19 +37,21 @@ def _policy(**changes: object):
     return use_runtime_policy({**approved_baseline(), **changes})
 
 
-def test_published_defaults_stay_in_place() -> None:
+def test_experimental_defaults_are_14_percent_atr_1_and_quality_70() -> None:
     assert Decimal("1.50") == ol.OWNER_MIN_REWARD_RISK
-    assert ol.OWNER_MIN_TRADE_QUALITY == 75
-    assert Decimal("1.5") == ol.OWNER_SL_ATR_MULTIPLIER
+    assert ol.OWNER_MIN_TRADE_QUALITY == 70
+    assert Decimal("1.00") == ol.OWNER_SL_ATR_MULTIPLIER
     assert Decimal("0.01") == ol.OWNER_MAX_LOT
-    assert Decimal("9.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
+    assert Decimal("14.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
     assert Decimal("19.0") == ol.OWNER_DAILY_LOSS_PCT
     assert approved_baseline()["min_reward_risk"] == "1.50"
-    assert approved_baseline()["min_trade_quality"] == 75
-    assert approved_baseline()["stop_atr_multiplier"] == "1.50"
+    assert approved_baseline()["min_trade_quality"] == 70
+    assert approved_baseline()["stop_atr_multiplier"] == "1.00"
+    assert approved_baseline()["max_planned_risk_pct"] == "14.0"
+    assert approved_baseline()["max_aggregate_open_risk_pct"] == "14.0"
     assert active_min_reward_risk() == Decimal("1.50")
-    assert active_min_trade_quality() == 75
-    assert active_stop_atr_multiplier() == Decimal("1.50")
+    assert active_min_trade_quality() == 70
+    assert active_stop_atr_multiplier() == Decimal("1.00")
 
 
 def test_admin_accepts_only_the_authorized_experiment() -> None:
@@ -74,7 +76,9 @@ def test_admin_accepts_only_the_authorized_experiment() -> None:
     assert other.ok is False
     assert validate_policy_changes(base, {"kill_switch_bypass": True}).ok is False
     assert validate_policy_changes(base, {"max_lot": "0.02"}).ok is False
-    assert validate_policy_changes(base, {"max_planned_risk_pct": "10"}).ok is False
+    assert validate_policy_changes(base, {"max_planned_risk_pct": "14"}).ok
+    assert validate_policy_changes(base, {"max_planned_risk_pct": "14.01"}).ok is False
+    assert validate_policy_changes(base, {"daily_loss_pct": "19"}).ok
     assert validate_policy_changes(base, {"daily_loss_pct": "20"}).ok is False
 
 
@@ -86,8 +90,8 @@ def test_illegal_saved_values_fail_closed_to_the_published_default() -> None:
     )
     try:
         assert active_min_reward_risk() == Decimal("1.50")
-        assert active_min_trade_quality() == 75
-        assert active_stop_atr_multiplier() == Decimal("1.50")
+        assert active_min_trade_quality() == 70
+        assert active_stop_atr_multiplier() == Decimal("1.00")
     finally:
         reset_runtime_policy(token)
 
@@ -112,9 +116,10 @@ def test_saved_experiment_is_what_the_gates_enforce() -> None:
         reset_runtime_policy(token)
 
 
-def test_unset_quality_70_is_still_below_the_published_floor() -> None:
-    gates = _gates(70)
-    assert any("trade quality 70 < 75" in r for r in gates.hard_rejects)
+def test_unset_quality_70_passes_and_69_is_rejected() -> None:
+    assert not any("OWNER_MIN_TRADE_QUALITY" in r for r in _gates(70).hard_rejects)
+    low = _gates(69)
+    assert any("trade quality 69 < 70" in r for r in low.hard_rejects)
 
 
 def test_net_rr_includes_spread_slippage_and_known_commission_only() -> None:
@@ -170,13 +175,14 @@ def test_owner_entry_uses_the_saved_net_floor_and_slippage() -> None:
         "spread": Decimal("0.20"),
         "contract_size": Decimal("100"),
         "equity": Decimal("50"),
+        "commission": Decimal("0"),
     }
     token = _policy(min_reward_risk="0.10")
     try:
         assert ol.evaluate_owner_entry(**common) == []
         slipped = ol.evaluate_owner_entry(**common, slippage=Decimal("1"))
         assert any(r.startswith("OWNER_MIN_RR") for r in slipped)
-        priced = ol.evaluate_owner_entry(**common, commission=Decimal("0.50"))
+        priced = ol.evaluate_owner_entry(**{**common, "commission": Decimal("0.50")})
         assert any(r.startswith("OWNER_MIN_RR") for r in priced)
     finally:
         reset_runtime_policy(token)
@@ -186,7 +192,7 @@ def test_owner_entry_uses_the_saved_net_floor_and_slippage() -> None:
 
 
 def test_experimental_floor_can_select_a_structure_target_gross_rr_does_not() -> None:
-    snapshot = _snapshot(highs=("4136.00", "4137.00", "4140.00"))
+    snapshot = _snapshot(highs=("4134.50", "4135.20", "4140.00"))
     blocked = compute_structure_targets(
         snapshot,  # type: ignore[arg-type]
         direction=TradeDirection.BUY,
@@ -206,7 +212,7 @@ def test_experimental_floor_can_select_a_structure_target_gross_rr_does_not() ->
         )
     finally:
         reset_runtime_policy(token)
-    assert chosen.take_profit == Decimal("4136.00")
+    assert chosen.take_profit == Decimal("4134.50")
     assert chosen.expected_rr is not None and chosen.expected_rr <= Decimal("1")
     assert chosen.expected_net_rr is not None
     assert chosen.expected_net_rr >= Decimal("0.10")
@@ -314,6 +320,7 @@ def test_presend_slippage_buffer_uses_the_active_floor() -> None:
             contract_size=Decimal("100"),
             equity=Decimal("50"),
             rr_buffer=Decimal("0.05"),
+            commission=Decimal("0"),
         )
     finally:
         reset_runtime_policy(token)
@@ -331,5 +338,6 @@ def test_presend_slippage_buffer_uses_the_active_floor() -> None:
         plan_price=Decimal("100"),
         contract_size=Decimal("100"),
         equity=Decimal("50"),
+        commission=Decimal("0"),
     )
     assert any("OWNER_MIN_RR" in r for r in refused)

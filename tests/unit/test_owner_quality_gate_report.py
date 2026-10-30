@@ -69,8 +69,8 @@ def test_quality_reason_is_the_logged_first_gate() -> None:
     )
 
 
-def test_owner_diagnostic_floor_is_75_and_swing_default_stays_80() -> None:
-    assert owner_diagnostic_floor() == 75
+def test_owner_diagnostic_floor_is_70_and_swing_default_stays_80() -> None:
+    assert owner_diagnostic_floor() == 70
     assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80
     assert DEFAULT_ITE_CONFIG.min_confluence_score == 80
 

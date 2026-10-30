@@ -4,15 +4,18 @@ Single source for the owner's hard trading limits. Every dollar amount is
 derived from live equity; nothing below is a fixed USD cap. Every other risk
 layer may be stricter, never looser.
 
-- Max PLANNED risk per trade: 9% of the risk reference (live equity; $4.50 at
+- Max PLANNED risk per trade: 14% of the risk reference (live equity; $7.00 at
   $50). Planned risk = (|entry - SL| + spread + order slippage) x contract x
   volume + known commission, rounded up to the cent. The cap is rounded down.
-  An amount is never rounded down to pass. This is a planned maximum, not a
-  cap on realised loss: gaps and execution failures can make a loss larger.
+  An amount is never rounded down to pass. Unknown commission is not zero:
+  the entry is rejected. This is a planned maximum, not a cap on realised
+  loss: gaps and execution failures can make a loss larger.
 - Daily loss limit: 19% of the UTC day's starting equity ($9.50 at $50).
 - No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
-- Stop loss: max(1.5 x ATR(M1|M5), beyond the nearest structure + spread).
-  A stop is never shrunk to fit the budget: too wide -> no trade.
+- Stop loss: max(1.00 x ATR(M1|M5), beyond the nearest structure + spread).
+  A stop is never shrunk to fit the budget: too wide -> no trade. 1.00 is the
+  noise boundary. A structural stop wider than that is kept. A setup whose
+  1.00 x ATR stop is not a valid protective stop is rejected.
 - Published reward:risk default is 1.50 after spread:
   |tp - entry| / (|entry - sl| + spread). An owner save may set the net
   floor to 0.10, 0.15, or 0.20, or to any value at least 1.50. Net reward:risk
@@ -61,7 +64,7 @@ OWNER_MAX_LOT = Decimal("0.01")
 # Starting reference capital (configurable). Live equity is the risk reference;
 # this value is the documented starting point and the $-figures shown at rest.
 OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
-OWNER_MAX_PLANNED_RISK_PCT = Decimal("9.0")
+OWNER_MAX_PLANNED_RISK_PCT = Decimal("14.0")
 # Authoritative daily stop: 19% of the UTC day's starting equity.
 # A loss equal to the cap does not halt; a loss above the cap does.
 OWNER_DAILY_LOSS_PCT = Decimal("19.0")
@@ -86,12 +89,12 @@ OWNER_MIN_REWARD_RISK_FLOOR = Decimal("0.10")
 OWNER_MAX_SPREAD = _env_decimal("OWNER_MAX_SPREAD", "0.45")
 OWNER_SESSION_START_UTC = time(0, 0)
 OWNER_SESSION_END_UTC = time(23, 59, 59, 999999)
-# Owner 2026-10-23: 1.5 x ATR (was 2.5); structure + spread still wins when wider.
-OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "1.5")
+# Owner 2026-10-30 experiment: 1.00 x ATR. Structure + spread still wins when
+# wider. The stop is never shrunk to fit 0.01 lot.
+OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "1.00")
 # A stop of k x ATR is inside the average true range when k < 1 and the ATR
 # floor binds. 0.75 and 0.90 are rejected for that reason. 1.00 is the noise
-# boundary and may be saved, but it is not the default. 1.25 and 1.50 sit
-# outside one ATR. The code default remains 1.5.
+# boundary and is the experimental default. 1.25 and 1.50 remain savable.
 OWNER_SL_ATR_MULTIPLIERS = (
     Decimal("1.00"),
     Decimal("1.25"),
@@ -115,10 +118,10 @@ OWNER_MAX_CONSECUTIVE_LOSSES = 0
 # Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
 # Hard floor on the AI trade quality of a robot entry (owner 2026-10-24: 80;
-# lowered to 75 by the owner 2026-10-26). Unset policy stays 75. An owner
-# save may use 70-100 (2026-10-30 experiment). Below 70 fails closed to 75.
-# No environment variable can lower the unset default.
-OWNER_MIN_TRADE_QUALITY = 75
+# lowered to 75 on 2026-10-26; experimental default 70 on 2026-10-30).
+# Unset policy stays 70. A saved integer from 70 to 100 is used. Below 70
+# fails closed to 70. No environment variable can lower the unset default.
+OWNER_MIN_TRADE_QUALITY = 70
 OWNER_MIN_TRADE_QUALITY_FLOOR = 70
 
 # Compatibility names used by other layers (values at the reference capital).
@@ -129,7 +132,7 @@ OWNER_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_PCT
 
 
 def _active_planned_risk_pct() -> Decimal:
-    """Saved policy may be stricter than 9%. It cannot be looser."""
+    """Saved policy may be stricter than 14%. It cannot be looser."""
     from app.domain.institutional_trading.runtime_policy import (
         active_max_planned_risk_pct,
     )
@@ -138,7 +141,7 @@ def _active_planned_risk_pct() -> Decimal:
 
 
 def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
-    """Shared open-risk budget. Never above the per-trade cap or 9%."""
+    """Shared open-risk budget. Never above the per-trade cap of 14%."""
     eq = Decimal(str(equity or 0))
     if eq <= 0:
         return Decimal("0")
@@ -153,8 +156,8 @@ def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
 def max_planned_risk_usd(equity: Decimal) -> Decimal:
     """Planned-risk cap for live equity, rounded down to the cent.
 
-    The approved ceiling is 9%. An installed runtime policy may use a lower
-    percent. A missing policy uses 9%.
+    The approved ceiling is 14%. An installed runtime policy may use a lower
+    percent. A missing policy uses 14%.
     """
     eq = Decimal(str(equity or 0))
     if eq <= 0:
@@ -163,7 +166,7 @@ def max_planned_risk_usd(equity: Decimal) -> Decimal:
     return (eq * pct / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
 
 
-# Planned-risk cap at the reference capital ($4.50 at $50) for static configs.
+# Planned-risk cap at the reference capital ($7.00 at $50) for static configs.
 OWNER_MAX_SL_RISK_USD = max_planned_risk_usd(OWNER_RISK_REFERENCE_USD)
 
 
@@ -174,10 +177,10 @@ def owner_risk_cap_usd(
     reference_default: Decimal,
     positions: int = 1,
 ) -> Decimal:
-    """Planned-risk cap from 9% of LIVE equity (owner, 2026-10-23).
+    """Planned-risk cap from 14% of LIVE equity.
 
-    Static configs carry the cap at the $50 reference capital ($4.50); that
-    default is replaced by 9% of live equity (x ``positions`` for an
+    Static configs carry the cap at the $50 reference capital ($7.00); that
+    default is replaced by 14% of live equity (x ``positions`` for an
     aggregate cap). A stricter explicitly configured cap stays.
     """
     eq = Decimal(str(equity or 0))
@@ -194,6 +197,24 @@ def max_sl_risk_usd(equity: Decimal) -> Decimal:
 def _nonneg(value: Decimal | None) -> Decimal:
     raw = Decimal(str(value or 0))
     return raw if raw > 0 else Decimal("0")
+
+
+def declared_commission(value: object) -> Decimal | None:
+    """A supplied numeric commission, including a known zero.
+
+    ``None``, booleans, and non-numeric objects are unknown. Unknown is not
+    zero. A negative number is returned so the caller can reject it; it is
+    never used to shrink planned risk.
+    """
+    if isinstance(value, bool) or not isinstance(value, (Decimal, int, float, str)):
+        return None
+    try:
+        fee = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    if not fee.is_finite():
+        return None
+    return fee
 
 
 def price_unit_value(
@@ -486,7 +507,7 @@ def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
 
 
 def authorized_min_trade_quality(value: object) -> int | None:
-    """70-100 is savable. The unset default remains 75."""
+    """70-100 is savable. The unset default remains 70."""
     try:
         quality = int(value)
     except (TypeError, ValueError):
@@ -689,13 +710,14 @@ def evaluate_owner_entry(
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
-    Planned risk includes the spread once, plus the order's slippage and any
-    known commission, rounded up to the cent:
+    Planned risk includes the spread once, plus the order's slippage and the
+    supplied commission, rounded up to the cent:
     ``(|entry - sl| + spread + slippage) x contract x volume + commission``.
-    Reward:risk counts the spread once, on the risk leg, plus order slippage
-    and a known commission. Unknown commission is omitted and does not certify
-    net profitability. The ratio must clear the active owner floor (published
-    default 1.50; a saved experiment may be 0.10, 0.15, or 0.20).
+    ``commission is None`` rejects the entry. It is not treated as zero.
+    A known zero is included. Reward:risk counts the spread once, on the risk
+    leg, plus order slippage and a known commission. The ratio must clear the
+    active owner floor (published default 1.50; a saved experiment may be
+    0.10, 0.15, or 0.20).
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """
@@ -779,31 +801,40 @@ def evaluate_owner_entry(
     sl_dist = abs(px - sl)
     tp_dist = abs(tp - px)
     slip = _nonneg(slippage)
-    fee = _nonneg(commission)
-    risk_usd = planned_risk_usd(
-        stop_distance=sl_dist,
-        spread=spr,
-        contract_size=cs,
-        volume=vol,
-        slippage=slip,
-        commission=fee,
-    )
-    cap = max_planned_risk_usd(eq)
-    if risk_usd > cap:
+    fee = declared_commission(commission)
+    if fee is None:
         violations.append(
-            format_owner_sl_risk(
-                risk_usd=risk_usd,
-                cap=cap,
-                equity=eq,
-                stop_distance=sl_dist,
-                spread=spr,
-                volume=vol,
-                contract_size=cs,
-                slippage=slip,
-                commission=fee,
-                tick_size=tick_size,
-            )
+            "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "
+            "so inclusive planned risk is unverified and the entry is rejected"
         )
+    elif fee < 0:
+        violations.append("OWNER_COMMISSION_INVALID: commission cannot be negative")
+        fee = None
+    if fee is not None:
+        risk_usd = planned_risk_usd(
+            stop_distance=sl_dist,
+            spread=spr,
+            contract_size=cs,
+            volume=vol,
+            slippage=slip,
+            commission=fee,
+        )
+        cap = max_planned_risk_usd(eq)
+        if risk_usd > cap:
+            violations.append(
+                format_owner_sl_risk(
+                    risk_usd=risk_usd,
+                    cap=cap,
+                    equity=eq,
+                    stop_distance=sl_dist,
+                    spread=spr,
+                    volume=vol,
+                    contract_size=cs,
+                    slippage=slip,
+                    commission=fee,
+                    tick_size=tick_size,
+                )
+            )
     min_dist = Decimal(str(min_stop_distance or 0))
     if min_dist > 0 and (sl_dist < min_dist or tp_dist < min_dist):
         violations.append(
@@ -815,7 +846,7 @@ def evaluate_owner_entry(
         stop_distance=sl_dist,
         spread=spr,
         slippage=slippage,
-        commission=commission,
+        commission=fee,
         contract_size=cs,
         volume=vol,
     )
@@ -893,6 +924,7 @@ def presend_owner_violations(
     peak_known: bool = True,
     slippage: Decimal | None = None,
     tick_size: Decimal | None = None,
+    commission: Decimal | None = None,
 ) -> list[str]:
     """Final owner check on the exact tick the market request was built from.
 
@@ -919,6 +951,7 @@ def presend_owner_violations(
         peak_known=peak_known,
         slippage=slippage,
         tick_size=tick_size,
+        commission=commission,
     )
     drift = stop_shrink_violation(
         side=side,
