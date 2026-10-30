@@ -287,6 +287,30 @@ def production_reliability(_user: OperatorUser) -> dict[str, Any]:
     return build_production_reliability_dashboard()
 
 
+def _jimvio_service_row(settings: Any) -> dict[str, Any]:
+    """Operator row. The webhook cannot trade and the secret stays out."""
+    from app.application.services.jimvio_publisher import (
+        get_jimvio_publisher,
+        jimvio_operator_status,
+    )
+
+    status = jimvio_operator_status(settings, get_jimvio_publisher())
+    active = bool(status["publisher_active"])
+    return {
+        "name": "jimvio",
+        "status": "up" if active else "disabled",
+        "uptime": "process" if status["worker_running"] else "configured",
+        "heartbeat_at": None,
+        "latency_ms": None,
+        "last_successful_operation": (
+            "webhook_delivery" if status["last_delivery_ok"] else None
+        ),
+        "last_error": None,
+        "reconnect_count": 0,
+        "detail": status,
+    }
+
+
 @router.get("/services-health")
 def services_health(_user: OperatorUser) -> dict[str, Any]:
     """Per-service status / uptime / latency / last error for operator desks."""
@@ -431,6 +455,7 @@ def services_health(_user: OperatorUser) -> dict[str, Any]:
             "reconnect_count": 0,
             "execution_mode": plane.mode.value,
         },
+        _jimvio_service_row(settings),
     ]
     return {
         "as_of": now,
