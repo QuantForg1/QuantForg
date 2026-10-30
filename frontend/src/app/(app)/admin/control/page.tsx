@@ -348,7 +348,7 @@ export default function AdminControlPage() {
               <option value="off">Off</option>
             </select>
           </label>
-          <Button type="button" onClick={() => void savePolicy()} disabled={saving}>
+          <Button type="button" className="qf-btn-hot" onClick={() => void savePolicy()} disabled={saving}>
             {saving ? "Saving" : "Save policy"}
           </Button>
         </CardContent>

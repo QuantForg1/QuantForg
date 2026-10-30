@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, Fragment, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronsLeft, ChevronsRight, Menu, X } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, LifeBuoy, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   isPrimaryActive,
@@ -56,10 +56,10 @@ function PrimaryLink({
             aria-current={active ? "page" : undefined}
             aria-label={title}
             className={cn(
-              "qf-rail-link group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] text-[13px] font-medium",
-              collapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-2",
+              "qf-rail-link group relative flex items-center gap-2.5 rounded-xl text-[13px] font-medium",
+              collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
               active
-                ? "bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_3px_0_0_0_var(--accent)]"
+                ? "bg-[var(--accent)] text-white shadow-[0_8px_18px_var(--accent-glow)]"
                 : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
             )}
           >
@@ -249,14 +249,25 @@ export function Sidebar() {
   return (
     <aside
       style={{ width }}
-      className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--surface)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
+      className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
       aria-label="Workspace rail"
     >
       <Brand collapsed={chrome.collapsed} />
       <Suspense fallback={<div className="flex-1" aria-hidden />}>
         <NavBody collapsed={chrome.collapsed} />
       </Suspense>
-      <div className="flex shrink-0 items-center justify-end border-t border-[var(--border)] p-1.5">
+      <div className="shrink-0 border-t border-[var(--border)] p-2">
+        <Link
+          href="/support"
+          className={cn(
+            "mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
+            chrome.collapsed && "justify-center px-0",
+          )}
+        >
+          <LifeBuoy className="h-4 w-4 shrink-0" aria-hidden />
+          {chrome.collapsed ? <span className="sr-only">Support</span> : <span>Support</span>}
+        </Link>
+      <div className="flex shrink-0 items-center justify-end p-1.5">
         <Button
           type="button"
           size="sm"
@@ -272,6 +283,7 @@ export function Sidebar() {
             <ChevronsLeft className="h-4 w-4" aria-hidden />
           )}
         </Button>
+      </div>
       </div>
       {!chrome.collapsed ? (
         <div

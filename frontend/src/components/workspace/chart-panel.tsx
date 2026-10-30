@@ -161,12 +161,12 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#64748B",
+        textColor: "#AFC4E2",
         fontFamily: "inherit",
       },
       grid: {
-        vertLines: { color: "rgba(17, 24, 39, 0.06)" },
-        horzLines: { color: "rgba(17, 24, 39, 0.06)" },
+        vertLines: { color: "rgba(143, 184, 232, 0.12)" },
+        horzLines: { color: "rgba(143, 184, 232, 0.12)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderVisible: false },
@@ -187,11 +187,11 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       const data = candlesCache.current;
       if (chartType === "candles") {
         const s = chart.addSeries(CandlestickSeries, {
-          upColor: "#16a34a",
-          downColor: "#dc2626",
+          upColor: "#00D6B0",
+          downColor: "#FF5364",
           borderVisible: false,
-          wickUpColor: "#16a34a",
-          wickDownColor: "#dc2626",
+          wickUpColor: "#00D6B0",
+          wickDownColor: "#FF5364",
         });
         s.setData(
           data.map((c) => ({
@@ -205,16 +205,16 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         mainRef.current = s;
       } else if (chartType === "line") {
         const s = chart.addSeries(LineSeries, {
-          color: "#ff5a1f",
+          color: "#168BFF",
           lineWidth: 2,
         });
         s.setData(data.map((c) => ({ time: c.time, value: c.close })));
         mainRef.current = s;
       } else {
         const s = chart.addSeries(AreaSeries, {
-          lineColor: "#ff5a1f",
-          topColor: "rgba(255, 90, 31, 0.18)",
-          bottomColor: "rgba(255, 90, 31, 0.02)",
+          lineColor: "#168BFF",
+          topColor: "rgba(22, 139, 255, 0.22)",
+          bottomColor: "rgba(22, 139, 255, 0.02)",
           lineWidth: 2,
         });
         s.setData(data.map((c) => ({ time: c.time, value: c.close })));
@@ -234,7 +234,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             time: c.time,
             value: c.volume,
             color:
-              c.close >= c.open ? "rgba(22,163,74,0.4)" : "rgba(220,38,38,0.4)",
+              c.close >= c.open ? "rgba(0,214,176,0.45)" : "rgba(255,83,100,0.45)",
           })),
         );
         volumeRef.current = v;

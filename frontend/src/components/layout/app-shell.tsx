@@ -187,15 +187,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
       <OfflineBanner />
+      <Topbar onOpenCommand={() => setCmdOpen(true)} compact={compactChrome} />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar onOpenCommand={() => setCmdOpen(true)} compact={compactChrome} />
           <main
             id="main-content"
             data-desk={deskId(pathname)}
             className={cn(
-              "flex-1",
+              "flex min-h-0 flex-1 flex-col",
               isFullBleed
                 ? "overflow-hidden p-0"
                 : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
@@ -208,7 +208,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={pathname}
                 className={cn(
                   isFullBleed
-                    ? "h-[calc(100dvh-3.25rem-4.25rem)] w-full max-w-none lg:h-[calc(100dvh-3.25rem)] qf-motion-desk"
+                    ? "min-h-0 w-full max-w-none flex-1 qf-motion-desk"
                     : "mx-auto w-full max-w-[1600px] qf-motion-desk",
                 )}
               >

@@ -5,7 +5,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
 /* RC4 palette: accent → status → muted (no RC3 teal). */
-const COLORS = ["#ff5a1f", "#16a34a", "#f59e0b", "#dc2626", "#2563eb", "#64748b", "#94a3b8"];
+const COLORS = ["#168BFF", "#00D6B0", "#F5B942", "#FF5364", "#0866FF", "#7F9CC0", "#AFC4E2"];
 
 export const DonutChart = memo(function DonutChart({
   data,

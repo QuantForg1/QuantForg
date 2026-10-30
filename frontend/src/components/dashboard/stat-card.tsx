@@ -26,7 +26,7 @@ export const StatCard = memo(function StatCard({
 
   return (
     <Card className={cn("qf-card-interactive", className)}>
-      <CardHeader className="pb-1">
+      <CardHeader className="border-0 pb-1">
         <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
           {label}
         </CardTitle>

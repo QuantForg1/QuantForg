@@ -180,17 +180,38 @@ const TRADER_RAIL_SECTIONS: Record<
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
 /**
+ * Product rail. Keeps every trader desk, and adds the institutional
+ * destinations that already exist as routes. Admin stays off this list.
+ */
+const PRODUCT_RAIL_ORDER = [
+  "/dashboard",
+  "/intelligence",
+  "/markets",
+  "/signals",
+  "/positions",
+  "/history",
+  "/portfolio",
+  "/terminal",
+  "/broker",
+  "/research",
+  "/strategy",
+  "/risk-center",
+  "/settings",
+] as const;
+
+/**
  * Authenticated trader shell rail.
  * Admin is never shown here — operators open /admin by URL; RBAC still gates the route.
  */
 export function visiblePrimaryRail(_isOperator = false): PrimaryNavItem[] {
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
-  return TRADER_DESK_ORDER.map((href) => allowed.get(href))
+  return PRODUCT_RAIL_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
-    .map((item) => ({
-      ...item,
-      section: TRADER_RAIL_SECTIONS[item.href as (typeof TRADER_DESK_ORDER)[number]],
-    }));
+    .map((item) => {
+      const forced =
+        TRADER_RAIL_SECTIONS[item.href as (typeof TRADER_DESK_ORDER)[number]];
+      return forced ? { ...item, section: forced } : item;
+    });
 }
 
 /**
@@ -425,9 +446,9 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/risk-center",
-    label: "Risk",
+    label: "Risk Center",
     icon: Shield,
-    hint: "Pre-trade and session risk",
+    hint: "Saved policy and session risk",
     match: ["/risk-center", "/risk"],
     section: "Portfolio",
   },
@@ -581,12 +602,36 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/broker",
-    label: "Broker",
+    label: "Broker Accounts",
     icon: Building2,
     hint: "Connect MT5 · account ownership",
     match: ["/broker"],
     shortcut: "8",
     section: "Trading",
+  },
+  {
+    href: "/intelligence",
+    label: "Intelligence",
+    icon: Brain,
+    hint: "Market regime, levels, and context",
+    match: ["/intelligence", "/market-intelligence"],
+    section: "Market",
+  },
+  {
+    href: "/history",
+    label: "History",
+    icon: History,
+    hint: "Completed trades from the account",
+    match: ["/history"],
+    section: "Portfolio",
+  },
+  {
+    href: "/strategy",
+    label: "Strategies",
+    icon: Workflow,
+    hint: "Strategy catalogue and parameters",
+    match: ["/strategy", "/strategy-lab", "/strategy-research"],
+    section: "Research",
   },
   {
     href: "/logs",
