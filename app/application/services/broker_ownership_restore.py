@@ -64,5 +64,20 @@ def rehydrate_designated_owner_binding(live_login: int) -> dict[str, Any]:
     except (TypeError, ValueError):
         return {"bound": False, "reason": "claim_user_invalid"}
     bind_execution_account(user_id=user_id, login=login_i)
+    _sync_runtime_user(user_id)
     logger.info("broker_ownership_restored", reason="designated_owner_claim")
     return {"bound": True, "reason": "restored"}
+
+
+def _sync_runtime_user(user_id: UUID) -> None:
+    """Point the live cycle at the restored owner. A missing runtime is fine."""
+    try:
+        from app.application.services.institutional_ite_runtime import (
+            get_ite_runtime,
+        )
+    except Exception:
+        return
+    runtime = get_ite_runtime()
+    if runtime is None:
+        return
+    runtime.user_id = user_id

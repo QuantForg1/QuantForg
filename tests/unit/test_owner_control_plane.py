@@ -12,6 +12,7 @@ from app.application.services.account_execution_gate import (
     bind_execution_account,
     bound_execution_account,
     reset_execution_binding_for_tests,
+    submit_identity,
 )
 from app.application.services.broker_ownership_restore import (
     rehydrate_designated_owner_binding,
@@ -279,11 +280,23 @@ def test_rehydrate_binds_only_the_designated_owner_claim(monkeypatch):
         "app.infrastructure.persistence.direct_postgres.fetch",
         _fetch,
     )
+    runtime = SimpleNamespace(user_id=uuid4())
+    monkeypatch.setattr(
+        "app.application.services.institutional_ite_runtime.get_ite_runtime",
+        lambda: runtime,
+    )
     result = rehydrate_designated_owner_binding(4242)
     assert result["reason"] == "restored"
     bound_user, bound_login = bound_execution_account()
     assert bound_user == owner_id
     assert bound_login == 4242
+    assert runtime.user_id == owner_id
+    reset_execution_binding_for_tests()
+    other = uuid4()
+    assert submit_identity(other) == (other, None)
+    bind_execution_account(user_id=owner_id, login=4242)
+    assert submit_identity(other) == (owner_id, 4242)
+    reset_execution_binding_for_tests()
 
     def _other(query, login, email):
         return [{"user_id": str(uuid4()), "email": "other@example.com"}]

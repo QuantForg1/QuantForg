@@ -2807,10 +2807,14 @@ class InstitutionalIteRuntime:
         the primary cycle result. Opposite direction does not submit.
         """
         try:
+            from app.application.services.account_execution_gate import (
+                submit_identity,
+            )
             from app.domain.institutional_trading.m1_micro.live_bridge import (
                 consider_m1_complement,
             )
 
+            m1_user = submit_identity(self.user_id)[0]
             m1_note = consider_m1_complement(
                 adapter=self.mt5_adapter,
                 account=account,
@@ -2819,7 +2823,7 @@ class InstitutionalIteRuntime:
                 primary_forwarded=primary_forwarded,
                 submit_market=getattr(self.guarded_submit, "submit_market", None),
                 close_position=getattr(self.guarded_manage, "close_position", None),
-                user_id=self.user_id,
+                user_id=m1_user,
                 login=getattr(account, "login", None),
                 primary_direction=primary_direction,
                 primary_owns_order=primary_owns_order,
@@ -3672,13 +3676,17 @@ class InstitutionalIteRuntime:
         snapshot = overlay_snapshot_session(
             snapshot, broker_open=session_obs.broker_session_open
         )
+        from app.application.services.account_execution_gate import (
+            submit_identity,
+        )
 
+        ctx_user = submit_identity(self.user_id)[0]
         ctx = ExecutionBridgeContext(
             snapshot=snapshot,
             account=account,
             expected_input_hash=decision.input_hash,
             now=decision.as_of,
-            user_id=self.user_id,
+            user_id=ctx_user,
             execution_enabled=False if force_shadow else execution_enabled,
             risk_allowed=(
                 True
