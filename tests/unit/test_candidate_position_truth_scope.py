@@ -71,9 +71,10 @@ def _addon_incomplete(account: AccountRiskState) -> bool:
     )
 
 
-def test_candidate_symbol_gold_canonicalizes_to_broker_form() -> None:
-    assert candidate_position_truth_symbol("XAUUSD") == "XAUUSD_i"
+def test_candidate_symbol_gold_keeps_catalogue_spelling() -> None:
+    assert candidate_position_truth_symbol("XAUUSD") == "XAUUSD"
     assert candidate_position_truth_symbol("XAUUSD_i") == "XAUUSD_i"
+    assert candidate_position_truth_symbol("") == "XAUUSD"
 
 
 def test_candidate_symbol_non_gold_not_coerced_to_gold() -> None:

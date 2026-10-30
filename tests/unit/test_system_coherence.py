@@ -95,10 +95,13 @@ def test_older_state_cannot_overwrite_newer() -> None:
 def test_logical_canonical_symbol_coherent() -> None:
     logical, canonical = symbol_identity("XAUUSD")
     assert logical == GOLD_SYMBOL
-    assert canonical == CANONICAL_GOLD_BROKER_DISPLAY
+    assert canonical == "XAUUSD"
     logical2, canonical2 = symbol_identity("XAUUSD_i")
     assert logical2 == GOLD_SYMBOL
-    assert canonical2 == CANONICAL_GOLD_BROKER_DISPLAY
+    assert canonical2 == "XAUUSD_i"
+    alias_logical, alias_canonical = symbol_identity("GOLD")
+    assert alias_logical == GOLD_SYMBOL
+    assert alias_canonical == "XAUUSD"
 
 
 def test_current_scan_and_last_pipeline_remain_separate() -> None:

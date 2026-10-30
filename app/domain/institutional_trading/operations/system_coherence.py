@@ -16,7 +16,6 @@ from enum import StrEnum
 from typing import Any
 
 from app.domain.trading.gold_only import (
-    CANONICAL_GOLD_BROKER_DISPLAY,
     GOLD_SYMBOL,
     display_autonomous_symbol,
     is_gold_symbol,
@@ -102,12 +101,10 @@ def utc_stamp(value: datetime | None = None) -> str:
 
 
 def symbol_identity(code: str | None) -> tuple[str, str]:
-    """Return (logical_symbol, canonical_symbol). Gold-only → XAUUSD / XAUUSD_i."""
+    """Return (logical desk, caller spelling). A suffix is not invented."""
     raw = str(code or "").strip()
     if not raw or is_gold_symbol(raw):
-        return GOLD_SYMBOL, display_autonomous_symbol(
-            raw or CANONICAL_GOLD_BROKER_DISPLAY
-        )
+        return GOLD_SYMBOL, display_autonomous_symbol(raw or GOLD_SYMBOL)
     upper = raw.upper()
     return upper, raw
 
@@ -391,7 +388,7 @@ def compose_system_snapshot(
         or scan.get("symbol")
         or ""
     ).strip()
-    logical, canonical = symbol_identity(scan_symbol or CANONICAL_GOLD_BROKER_DISPLAY)
+    logical, canonical = symbol_identity(scan_symbol or GOLD_SYMBOL)
     eligible = int(scan.get("eligible_count") or 0) > 0
     direction = (
         str(

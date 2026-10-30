@@ -203,6 +203,54 @@ class TestEntries:
             _guard(_entry(sl=4102.5))
         assert _code(exc) == "GUARD_SL_WRONG_SIDE"
 
+    def test_live_shape_loss_under_20_percent_is_not_a_9_percent_reject(self) -> None:
+        # Weltrade XAUUSD: tick 0.001 / value 0.1 → $1 per price unit at 0.01.
+        # SELL reference is the bid. Stop must sit above the ask.
+        # Distance 3.650 + spread 0.344 + slippage 0.010 = 4.004 → $4.01.
+        # 20% of equity 33.52 is $6.70. The stale 9% cap was $3.01.
+        quote = {
+            "bid": "3877.656",
+            "ask": "3878.000",
+            "specs": {
+                "contract_size": "100",
+                "tick_size": "0.001",
+                "tick_value": "0.1",
+                "point": "0.001",
+            },
+        }
+        allowed = _entry(
+            symbol="XAUUSD",
+            action="sell",
+            sl=3881.306,
+            tp=3874.000,
+            client_order_id="live-under-20",
+            commission=0,
+            slippage=10,
+        )
+        assert _guard(allowed, equity=Decimal("33.52"), quote=quote) == KIND_ENTRY
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(
+                _entry(
+                    symbol="XAUUSD",
+                    action="sell",
+                    sl=3884.006,
+                    tp=3870.000,
+                    client_order_id="live-over-20",
+                    commission=0,
+                    slippage=10,
+                ),
+                equity=Decimal("33.52"),
+                quote=quote,
+            )
+        assert _code(exc) == "GUARD_MAX_RISK"
+        message = str(exc.value)
+        assert "20" in message
+        assert "9%" not in message
+        detail = exc.value.as_detail()
+        assert detail["order_ticket"] == 0
+        assert detail["deal_ticket"] == 0
+        assert detail["retcode"] == RETCODE_ORDER_GUARD_REJECTED
+
     def test_exact_20_percent_is_allowed_and_above_is_rejected(self) -> None:
         # 0.01 lot, tick 0.01 / $1, and the quote spread of 0.20 counts.
         # Distance 19.80 + spread 0.20 = $20.00, exactly 20% of $100.

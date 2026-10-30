@@ -48,12 +48,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "expects FX/crypto in execution focus",
     ),
     _G
-    + "test_gold_only_scanner_handoff.py::"
-    + "test_scanner_clamps_non_gold_out_of_universe": (
-        "gold-only",
-        "expects SYMBOL_COOLDOWN_ACTIVE reason from a non-Gold desk",
-    ),
-    _G
     + "test_market_universe.py::test_registry_discovery_is_not_capped_by_probe_limit": (
         "gold-only",
         "expects >128 discovered desks; Gold-only universe is 1",

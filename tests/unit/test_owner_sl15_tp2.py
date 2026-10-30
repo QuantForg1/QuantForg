@@ -132,6 +132,8 @@ def test_first_level_used_when_it_clears_1_5() -> None:
     assert t.take_profit == Decimal("4138.00")
     assert t.tp_level == 1
     assert t.tp_source == "swing_M1"
+    assert t.expected_net_rr is not None
+    assert t.expected_net_rr >= Decimal("0.50")
 
 
 def test_second_level_chosen_only_when_first_fails() -> None:
@@ -151,6 +153,10 @@ def test_no_tp_beyond_the_second_level() -> None:
     assert t.tp_level is None
     assert t.reason.startswith("OWNER_TP_NO_STRUCTURE_RR")
     assert "4140.00" not in t.reason
+    assert "TP not stretched" in t.reason
+    assert t.expected_net_rr is not None
+    assert t.expected_net_rr < Decimal("0.50")
+    assert "best_net=" in t.reason
 
 
 def test_no_level_beyond_entry_means_no_tp_not_atr_stretch() -> None:

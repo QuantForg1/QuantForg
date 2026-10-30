@@ -700,9 +700,9 @@ async def build_ite_cycle_market_context(
     if session_err:
         return _fail(session_err)
 
-    # Catalogue-only resolution: Weltrade exposes XAUUSD_i / EURUSD_i.
-    # Never request unsuffixed desk aliases once the catalogue has the
-    # institutional form (bare AUDUSD is 503 on this broker).
+    # Catalogue-only resolution. An exact seed hit wins, including unsuffixed
+    # XAUUSD. A suffix is used only when that spelling is in the catalogue
+    # and the seed itself is not. Never invent a suffix.
     from app.domain.institutional_trading.ai_scalping.universe_discovery import (
         catalogue_ordered_candidates,
         fetch_broker_symbol_rows,

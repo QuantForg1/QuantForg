@@ -114,7 +114,7 @@ def test_xauusd_i_is_canonical_execution_symbol() -> None:
     assert is_bare_gold_symbol("XAUUSD")
     assert not is_bare_gold_symbol("XAUUSD_i")
     assert canonical_gold_execution_symbol("XAUUSD_i") == "XAUUSD_i"
-    assert canonical_gold_execution_symbol("XAUUSD") == "XAUUSD_i"
+    assert canonical_gold_execution_symbol("XAUUSD") == "XAUUSD"
 
 
 def test_fresh_xauusd_quote_passes_firewall() -> None:
