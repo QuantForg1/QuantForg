@@ -7,6 +7,7 @@ authenticated user is the verified designated owner.
 from __future__ import annotations
 
 import os
+from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -29,6 +30,7 @@ from app.domain.identity.designated_owner import is_designated_owner_email
 from app.domain.institutional_trading.live_trading_control import (
     get_live_trading_controller,
 )
+from app.domain.institutional_trading.runtime_policy import enforced_min_reward_risk
 from app.presentation.dependencies.auth import require_roles
 
 router = APIRouter(prefix="/admin/control", tags=["admin-control"])
@@ -66,6 +68,9 @@ def _policy_view(policy: Any) -> dict[str, Any]:
         "experimental": experimental,
         "experimental_promoted": bool(
             isinstance(document, dict) and document.get("experimental_promoted") is True
+        ),
+        "enforced_min_reward_risk": format(
+            enforced_min_reward_risk(document).quantize(Decimal("0.01")), "f"
         ),
     }
 

@@ -431,6 +431,19 @@ def test_worker_applies_saved_policy_version():
     )
     assert unacked["worker_confirmed"] is False
     assert unacked["applied_version"] is None
+    candidate = _policy_view(
+        type(confirmed)(
+            True,
+            3,
+            {**approved_baseline(), "min_reward_risk": "0.20"},
+            "persisted",
+            applied_version=3,
+        )
+    )
+    assert candidate["worker_confirmed"] is True
+    assert candidate["document"]["min_reward_risk"] == "0.20"
+    assert candidate["enforced_min_reward_risk"] == "1.50"
+    assert candidate["experimental_promoted"] is False
 
 
 @pytest.mark.unit

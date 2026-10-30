@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.institutional_trading.owner_live_limits import (
@@ -167,25 +167,38 @@ def active_max_spread() -> Decimal:
     return value
 
 
-def active_min_reward_risk() -> Decimal:
-    """Published default is 1.50.
+def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
+    """Floor a document actually applies. A stored candidate is not that floor.
 
-    A saved 0.10, 0.15, or 0.20 stays inactive unless this document was
-    explicitly promoted. Any other value below 1.50 fails closed to 1.50.
-    A saved value above 1.50 stays, because it is stricter.
+    0.10, 0.15, and 0.20 stay inactive unless ``experimental_promoted`` is
+    true. Any other value below 1.50 fails closed to 1.50. A value above
+    1.50 stays, because it is stricter.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
     )
 
-    value = _active_decimal("min_reward_risk", OWNER_MIN_REWARD_RISK)
+    if not isinstance(document, dict) or document.get("unavailable"):
+        return OWNER_MIN_REWARD_RISK
+    raw = document.get("min_reward_risk")
+    if raw is None or raw == "":
+        return OWNER_MIN_REWARD_RISK
+    try:
+        value = _dec(raw)
+    except (InvalidOperation, ValueError):
+        return OWNER_MIN_REWARD_RISK
     authorized = authorized_min_reward_risk(value)
     if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
         return authorized or OWNER_MIN_REWARD_RISK
-    doc = _POLICY.get()
-    if isinstance(doc, dict) and doc.get("experimental_promoted") is True:
+    if document.get("experimental_promoted") is True:
         return authorized
     return OWNER_MIN_REWARD_RISK
+
+
+def active_min_reward_risk() -> Decimal:
+    """Published default is 1.50. See :func:`enforced_min_reward_risk`."""
+    doc = _POLICY.get()
+    return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
 
 def active_min_trade_quality() -> int:
