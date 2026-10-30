@@ -80,6 +80,18 @@ def bound_execution_account() -> tuple[UUID | None, int]:
         return _BOUND_USER_ID, _BOUND_LOGIN
 
 
+def submit_identity(fallback_user: UUID) -> tuple[UUID, int | None]:
+    """User and login an autonomous submit may claim for this process.
+
+    An unbound process keeps the caller's user and passes no login. A bound
+    terminal submits as that owner so a redeploy does not invent a second user.
+    """
+    user, login = bound_execution_account()
+    if user is None or login <= 1:
+        return fallback_user, None
+    return user, login
+
+
 def classify_account_session(
     *,
     user_id: UUID,
