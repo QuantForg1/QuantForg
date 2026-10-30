@@ -44,6 +44,7 @@ def _sell(
         contract_size=D("100"),
         equity=D("55"),
         rr_buffer=D(buffer),
+        commission=D("0"),
     )
 
 
@@ -84,10 +85,10 @@ def test_spread_comes_from_the_same_tick() -> None:
 
 
 def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
-    """BUY 0.01 at mock ask 2320.80, SL 2319.00, TP 2324.00, spread 0.30.
+    """BUY 0.01 at mock ask 2320.80, SL 2319.00, TP 2324.30, spread 0.30.
 
-    RR at the owner-guard tick: 3.20 / (1.80 + 0.30) = 1.52. After the owner
-    guard has run, the tick moves by ``move``.
+    Net RR at the owner-guard tick includes the 0.10 order slippage:
+    3.50 / (1.80 + 0.30 + 0.10) = 1.59. After that guard, the tick moves.
     """
     from tests.unit.test_manual_ticket_owner_limits import _engine
 
@@ -123,7 +124,7 @@ def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),
@@ -140,7 +141,7 @@ def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
 def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ask 2320.90 at the send tick: 3.10 / (1.90 + 0.30) = 1.41.
+    # Ask 2320.90 at the send tick: 3.40 / (1.90 + 0.30 + 0.10) = 1.48.
     pipeline, sent, client = _run(monkeypatch, move="0.10")
     assert pipeline.outcome == "rejected"
     assert "PRESEND OWNER_MIN_RR" in pipeline.message
@@ -158,7 +159,7 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
 def test_run_submit_sends_the_exact_checked_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ask 2320.70 at the send tick: 3.30 / (1.70 + 0.30) = 1.65 -> sent at it.
+    # Ask 2320.70 at the send tick: 3.60 / (1.70 + 0.30 + 0.10) = 1.71.
     # The presend check is what this test covers. Authorize the controller so
     # the orders_may_submit gate does not hide the checked request.
     from app.domain.institutional_trading.live_trading_control import (

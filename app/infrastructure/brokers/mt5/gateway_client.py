@@ -1358,6 +1358,10 @@ class GatewayMT5Client:
             account_mode = {0: "demo", 1: "contest", 2: "real"}.get(raw_i, "unknown")
         trade_allowed_raw = data.get("trade_allowed")
         trade_allowed = None if trade_allowed_raw is None else bool(trade_allowed_raw)
+        from app.domain.institutional_trading.owner_live_limits import (
+            declared_commission,
+        )
+
         info = MT5AccountInfo(
             login=int(data.get("login") or self._login),
             name=str(data.get("name") or f"Account {data.get('login', '')}"),
@@ -1373,6 +1377,7 @@ class GatewayMT5Client:
             company=str(data.get("company") or "Weltrade"),
             trade_mode=account_mode,
             trade_allowed=trade_allowed,
+            commission=declared_commission(data.get("commission")),
         )
         previous_login = int(self._login or 0)
         verified_login = int(info.login or 0)
@@ -1860,6 +1865,9 @@ class GatewayMT5Client:
             # hide a retry of the same order. An empty id is rejected by the guard.
             "client_order_id": str(getattr(request, "client_order_id", "") or "")[:64],
         }
+        fee = getattr(request, "commission", None)
+        if fee is not None:
+            json_body["commission"] = str(fee)
         try:
             data = self._request(
                 "POST",

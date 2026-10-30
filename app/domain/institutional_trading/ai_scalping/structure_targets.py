@@ -15,8 +15,8 @@ from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MIN_REWARD_RISK,
     OWNER_TP_MAX_STRUCTURE_LEVELS,
+    net_reward_risk,
     owner_stop_distance,
-    reward_risk_after_spread,
 )
 from app.domain.market_data.timeframe import Timeframe
 from core.logging import get_logger
@@ -53,6 +53,10 @@ class StructureTargets:
     # Owner TP: which structure level (1 or 2) and what kind of level it was.
     tp_level: int | None = None
     tp_source: str | None = None
+    # Net of spread (and slippage / known commission when the caller supplied
+    # them). ``expected_rr`` stays gross: |tp - entry| / stop. Do not treat
+    # the gross field as the owner gate.
+    expected_net_rr: Decimal | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,6 +77,9 @@ class StructureTargets:
             "stop_atr": str(self.stop_atr) if self.stop_atr is not None else None,
             "tp_level": self.tp_level,
             "tp_source": self.tp_source,
+            "expected_net_rr": (
+                str(self.expected_net_rr) if self.expected_net_rr is not None else None
+            ),
         }
 
 
@@ -339,6 +346,10 @@ def select_owner_structure_tp(
     spread: Decimal,
     min_rr: Decimal = OWNER_MIN_REWARD_RISK,
     max_levels: int = OWNER_TP_MAX_STRUCTURE_LEVELS,
+    slippage: Decimal | None = None,
+    commission: Decimal | None = None,
+    contract_size: Decimal | None = None,
+    volume: Decimal | None = None,
 ) -> OwnerTpChoice:
     """Nearest of the first ``max_levels`` levels with RR after spread >= min.
 
@@ -347,11 +358,15 @@ def select_owner_structure_tp(
     """
     considered: list[tuple[int, Decimal, str, Decimal | None]] = []
     for idx, (price, src) in enumerate(levels[:max_levels], start=1):
-        rr = reward_risk_after_spread(
+        rr = net_reward_risk(
             tp_distance=abs(price - entry),
             stop_distance=stop_distance,
             spread=spread,
-        )
+            slippage=slippage,
+            commission=commission,
+            contract_size=contract_size,
+            volume=volume,
+        ).ratio
         considered.append((idx, price, src, rr))
         if rr is not None and rr >= min_rr:
             return OwnerTpChoice(idx, price, src, rr, tuple(considered))
@@ -475,6 +490,15 @@ def compute_structure_targets(
             )
 
     if cfg.owner_atr_stop:
+        from dataclasses import replace
+
+        from app.domain.institutional_trading.runtime_policy import (
+            active_stop_atr_multiplier,
+        )
+
+        live_mult = active_stop_atr_multiplier()
+        if live_mult != cfg.owner_stop_atr_mult:
+            cfg = replace(cfg, owner_stop_atr_mult=live_mult)
         stop_distance = owner_stop_distance(
             atr=atr_d,
             structure_distance=raw_distance,
@@ -656,7 +680,10 @@ def _owner_targets(
     stop_source: str,
     atr: Decimal | None,
 ) -> StructureTargets:
-    """Owner TP: nearest structure level clearing 1.50 RR, at most level 2."""
+    """Owner TP: nearest structure level clearing the active net floor."""
+    from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
+
+    min_rr = active_min_reward_risk()
     if direction is TradeDirection.BUY:
         sl = entry - stop_distance
     else:
@@ -668,7 +695,11 @@ def _owner_targets(
         merge_tolerance=spread if spread > 0 else Decimal("0.01"),
     )
     choice = select_owner_structure_tp(
-        levels, entry=entry, stop_distance=stop_distance, spread=spread
+        levels,
+        entry=entry,
+        stop_distance=stop_distance,
+        spread=spread,
+        min_rr=min_rr,
     )
     tried = ", ".join(
         f"L{idx} {src} {price} RR "
@@ -684,8 +715,8 @@ def _owner_targets(
             stop_distance,
             (best / stop_distance).quantize(Decimal("0.01")) if best else None,
             "OWNER_TP_NO_STRUCTURE_RR: no structure level within "
-            f"{OWNER_TP_MAX_STRUCTURE_LEVELS} gives RR after spread >= "
-            f"{OWNER_MIN_REWARD_RISK} ({tried or 'no level beyond entry'}); "
+            f"{OWNER_TP_MAX_STRUCTURE_LEVELS} gives net RR after spread >= "
+            f"{min_rr} ({tried or 'no level beyond entry'}); "
             "TP not stretched",
             stop_source=stop_source,
             stop_atr=atr,
@@ -693,6 +724,11 @@ def _owner_targets(
     tp = choice.price
     expected_rr = (abs(tp - entry) / stop_distance).quantize(Decimal("0.01"))
     rr_after = (choice.rr_after_spread or Decimal("0")).quantize(Decimal("0.01"))
+    expected_net_rr = (
+        choice.rr_after_spread.quantize(Decimal("0.01"))
+        if choice.rr_after_spread is not None
+        else None
+    )
     reason_parts.append(
         f"TP structure level {choice.level} ({choice.source} {tp}) "
         f"RR after spread {rr_after} [{tried}]"
@@ -720,4 +756,5 @@ def _owner_targets(
         stop_atr=atr,
         tp_level=choice.level,
         tp_source=choice.source,
+        expected_net_rr=expected_net_rr,
     )

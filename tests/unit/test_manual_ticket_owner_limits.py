@@ -36,6 +36,8 @@ SL_DIST = Decimal("23.05")
 
 def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     client = MockMT5Client()
+    # The fixture declares a known zero. Production must not invent that zero.
+    client.known_commission = Decimal("0")
     client.initialize()
     client.login(MT5LoginRequest(login=1, password="p", server="S"))
     client._positions = []
@@ -56,8 +58,8 @@ def test_manual_submit_with_23_dollar_sl_is_rejected(symbol: str) -> None:
     from dataclasses import replace
 
     engine, client = _engine()
-    # The cap is 9% of LIVE equity (owner 2026-10-23): run at the real $50.84
-    # account (cap $4.57), not the mock's $10,000.
+    # The cap is 14% of LIVE equity: run at $50.84 (cap $7.11), not the
+    # mock's $10,000. The 23.05 stop is still far above that cap.
     mock_snapshot = client.account_snapshot
     client.account_snapshot = lambda: replace(
         mock_snapshot(),
@@ -90,7 +92,7 @@ def test_manual_submit_with_23_dollar_sl_is_rejected(symbol: str) -> None:
 
 @pytest.mark.parametrize("symbol", ["XAUUSD", "XAUUSD_i", "GOLD"])
 def test_manual_submit_in_band_passes_symbol_validation(symbol: str) -> None:
-    # $1.80 SL, TP 3.20 away -> RR after spread >= 1.5; no "symbol mismatch".
+    # $1.80 SL, TP 3.50 away. Net RR after spread and slippage clears 1.50.
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol=symbol,
@@ -98,7 +100,7 @@ def test_manual_submit_in_band_passes_symbol_validation(symbol: str) -> None:
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, decision = engine.run_submit(
         user_id=uuid4(),
@@ -148,6 +150,7 @@ def _max_risk_rule(stop: str) -> tuple[RiskDecision, dict[str, object]]:
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("4133.05"),
             contract_size=Decimal("100"),
+            commission=Decimal("0"),
         ),
         account=_account(),
         positions=[],

@@ -204,7 +204,10 @@ class TestExecutionSafetyService:
         assert record.checks.get("volume_limits") is False
 
     def test_owner_cap_rejects_a_stop_the_minimum_lot_cannot_afford(self) -> None:
-        adapter = MT5Adapter(client=MockMT5Client())
+        client = MockMT5Client()
+        # Known zero so the dollar cap is the rejection under test.
+        client.known_commission = Decimal("0")
+        adapter = MT5Adapter(client=client)
         adapter.initialize()
         from app.domain.interfaces.mt5_client import MT5LoginRequest
         from app.domain.value_objects.mt5_order import StopLoss, TakeProfit
@@ -212,12 +215,14 @@ class TestExecutionSafetyService:
         adapter.login(MT5LoginRequest(login=7, password="p", server="S"))
         validation = MT5OrderValidationService(adapter=adapter)
         safety = ExecutionSafetyService(adapter=adapter, order_validation=validation)
+        # Ask 2320.80, SL 900: distance 1420.80 + spread 0.30 = $1421.10.
+        # 14% of the mock $10,000 equity is $1,400.
         intent = OrderIntent(
             symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
             volume=LotSize.of("0.01"),
-            stop_loss=StopLoss.of("1000"),
+            stop_loss=StopLoss.of("900"),
             take_profit=TakeProfit.of("2400"),
             slippage=Slippage.of(0),
         )
@@ -232,6 +237,38 @@ class TestExecutionSafetyService:
         assert record.decision is ExecutionDecision.REJECT
         assert record.checks.get("owner_planned_risk") is False
         assert any(r.startswith("OWNER_SL_RISK:") for r in record.rejection_reasons)
+
+    def test_unknown_commission_rejects_before_a_dollar_pass(self) -> None:
+        adapter = MT5Adapter(client=MockMT5Client())
+        adapter.initialize()
+        from app.domain.interfaces.mt5_client import MT5LoginRequest
+        from app.domain.value_objects.mt5_order import StopLoss, TakeProfit
+
+        adapter.login(MT5LoginRequest(login=7, password="p", server="S"))
+        validation = MT5OrderValidationService(adapter=adapter)
+        safety = ExecutionSafetyService(adapter=adapter, order_validation=validation)
+        # $2.10 at 0.01 lot is inside 14% of $10,000. Unknown commission still rejects.
+        intent = OrderIntent(
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            volume=LotSize.of("0.01"),
+            stop_loss=StopLoss.of("2319.00"),
+            take_profit=TakeProfit.of("2324.30"),
+            slippage=Slippage.of(0),
+        )
+        record = safety.decide(
+            user_id=uuid4(),
+            request_id="req-commission-unknown",
+            intent=intent,
+            connected=True,
+            login=7,
+            recent=[],
+        )
+        assert record.decision is ExecutionDecision.REJECT
+        assert record.checks.get("owner_planned_risk") is False
+        assert any("OWNER_COMMISSION_UNKNOWN" in r for r in record.rejection_reasons)
+        assert not any(r.startswith("OWNER_SL_RISK:") for r in record.rejection_reasons)
 
     def test_duplicate_and_rapid_submit(self) -> None:
         adapter = MT5Adapter(client=MockMT5Client())

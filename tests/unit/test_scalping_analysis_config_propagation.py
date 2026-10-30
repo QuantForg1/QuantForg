@@ -178,6 +178,7 @@ def _entry(**overrides: object) -> list[str]:
         "contract_size": Decimal("100"),
         "equity": Decimal("1000"),
         "now": datetime(2026, 10, 27, 14, 0, tzinfo=UTC),
+        "commission": Decimal("0"),
     }
     payload.update(overrides)
     return evaluate_owner_entry(**payload)  # type: ignore[arg-type]
@@ -642,12 +643,12 @@ async def test_research_scan_uses_scalping_configuration(
     assert cfg.primary_structure_tf is Timeframe.M15
 
 
-def test_quality_below_75_is_still_rejected() -> None:
-    assert OWNER_MIN_TRADE_QUALITY == 75
-    gates = _gates(74)
+def test_quality_below_70_is_still_rejected() -> None:
+    assert OWNER_MIN_TRADE_QUALITY == 70
+    gates = _gates(69)
     assert gates.passed is False
     assert any(
-        r.startswith("OWNER_MIN_TRADE_QUALITY: trade quality 74 < 75")
+        r.startswith("OWNER_MIN_TRADE_QUALITY: trade quality 69 < 70")
         for r in gates.hard_rejects
     )
 
@@ -735,8 +736,8 @@ def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
             peak_equity=Decimal("100"),
         )
         assert any(r.startswith("OWNER_DRAWDOWN") for r in reasons)
-        assert max_planned_risk_usd(Decimal("100")) == Decimal("9.00")
-        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("9.00")
+        assert max_planned_risk_usd(Decimal("100")) == Decimal("14.00")
+        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("14.00")
     finally:
         reset_runtime_policy(token)
     halt = DurableHaltController()
@@ -769,6 +770,6 @@ def test_apply_trading_mode_selects_scalping_without_changing_the_floor() -> Non
     assert runtime.decision_pipeline.config.is_scalping()
     assert runtime.decision_pipeline.config.primary_structure_tf is Timeframe.M15
     assert Timeframe.H4 not in runtime.decision_pipeline.config.analysis_timeframes()
-    assert OWNER_MIN_TRADE_QUALITY == 75
+    assert OWNER_MIN_TRADE_QUALITY == 70
     assert DEFAULT_ITE_CONFIG.trading_mode == "swing"
     assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80

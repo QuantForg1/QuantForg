@@ -243,13 +243,15 @@ def _align_decision_to_structural_targets(
             sl = entry - stop_distance
         else:
             sl = entry + stop_distance
+    from app.domain.institutional_trading.owner_live_limits import (
+        estimated_rr_block,
+        gross_distance_rr_block,
+    )
+
     if entry is None or sl is None or tp is None:
-        if decision.estimated_rr is not None and decision.estimated_rr <= Decimal("1"):
-            reasons = [
-                *decision.risk_reasons,
-                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-                f"planned RR {decision.estimated_rr} does not exceed 1.0",
-            ]
+        block = estimated_rr_block(decision.estimated_rr)
+        if block is not None:
+            reasons = [*decision.risk_reasons, block]
             return replace(
                 decision,
                 action=DecisionAction.NO_TRADE,
@@ -260,12 +262,9 @@ def _align_decision_to_structural_targets(
         return decision
     sl_dist = abs(entry - sl)
     tp_dist = abs(tp - entry)
-    if sl_dist <= 0 or tp_dist <= sl_dist:
-        reasons = [
-            *decision.risk_reasons,
-            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-            f"planned TP {tp_dist} <= planned SL {sl_dist}",
-        ]
+    block = gross_distance_rr_block(tp_distance=tp_dist, stop_distance=sl_dist)
+    if block is not None:
+        reasons = [*decision.risk_reasons, block]
         return replace(
             decision,
             action=DecisionAction.NO_TRADE,
@@ -1448,7 +1447,7 @@ class InstitutionalDecisionPipeline:
                 if pos_all
                 else Decimal("0")
             )
-            # 9% of live equity, not the $50-reference default (2026-10-23).
+            # 14% of live equity, not the $50-reference default.
             per_trade_cap = owner_risk_cap_usd(
                 equity=account.equity,
                 configured=MAX_PLANNED_SL_RISK_USD,

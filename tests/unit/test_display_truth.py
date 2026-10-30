@@ -79,6 +79,7 @@ def test_owner_guard_rejects_screenshot_signal() -> None:
         spread=Decimal("0.424"),
         contract_size=Decimal("100"),
         equity=Decimal("50.84"),
+        commission=Decimal("0"),
     )
     joined = " ".join(reasons)
     # $11.48 at 0.01 lot (contract 100) is far above the $2.00 owner cap.

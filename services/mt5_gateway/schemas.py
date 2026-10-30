@@ -65,6 +65,8 @@ class TradeRequestBody(BaseModel):
         max_length=64,
         description="Unique per new entry; replays are rejected by the order guard",
     )
+    # Known account-currency commission. Null is unknown and is not zero.
+    commission: float | str | None = Field(default=None)
 
     def as_runtime_dict(self) -> dict:
         return {
@@ -82,6 +84,7 @@ class TradeRequestBody(BaseModel):
             "order_ticket": self.order_ticket,
             "oms_kind": self.oms_kind,
             "client_order_id": self.client_order_id,
+            "commission": self.commission,
         }
 
 

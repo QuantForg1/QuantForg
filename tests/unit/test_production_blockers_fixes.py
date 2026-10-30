@@ -222,8 +222,8 @@ class TestLotSizingLiveSpecs:
         )
         assert sized.valid is True
         assert sized.lots == Decimal("0.01")
-        # 16.40 stop = $16.40 at min lot: above 9% of $181.53 ($16.33) -> fail closed.
-        for stop in (Decimal("16.40"), Decimal("150.00")):
+        # 26.00 stop = $26 at min lot: above 14% of $181.53 ($25.41) -> fail closed.
+        for stop in (Decimal("26.00"), Decimal("150.00")):
             blocked = calculate_scalping_lots(
                 equity=Decimal("181.53"),
                 stop_distance=stop,

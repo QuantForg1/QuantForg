@@ -23,6 +23,8 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_SPREAD,
     OWNER_MIN_REWARD_RISK,
     OWNER_MIN_TRADE_QUALITY,
+    OWNER_MIN_TRADE_QUALITY_FLOOR,
+    OWNER_SL_ATR_MULTIPLIER,
     OWNER_WEEKLY_LOSS_PCT,
 )
 
@@ -124,7 +126,7 @@ def active_min_lot() -> Decimal | None:
 
 
 def active_max_aggregate_open_risk_pct() -> Decimal:
-    """Saved book cap. It cannot exceed the 9% ceiling."""
+    """Saved book cap. It cannot exceed the 14% ceiling."""
     value = _active_decimal("max_aggregate_open_risk_pct", OWNER_MAX_PLANNED_RISK_PCT)
     if value <= 0 or value > OWNER_MAX_PLANNED_RISK_PCT:
         return OWNER_MAX_PLANNED_RISK_PCT
@@ -166,21 +168,55 @@ def active_max_spread() -> Decimal:
 
 
 def active_min_reward_risk() -> Decimal:
+    """Published default is 1.50. A saved 0.10, 0.15, or 0.20 is experimental.
+
+    Any other value below 1.50 fails closed to 1.50. A saved value above 1.50
+    stays, because it is stricter than the published default.
+    """
+    from app.domain.institutional_trading.owner_live_limits import (
+        authorized_min_reward_risk,
+    )
+
     value = _active_decimal("min_reward_risk", OWNER_MIN_REWARD_RISK)
-    if value < OWNER_MIN_REWARD_RISK:
+    authorized = authorized_min_reward_risk(value)
+    if authorized is None:
         return OWNER_MIN_REWARD_RISK
-    return value
+    return authorized
 
 
 def active_min_trade_quality() -> int:
+    """Unset policy stays 70. A saved integer from 70 to 100 is used.
+
+    Below 70 or a non-integer fails closed to 70.
+    """
+    from app.domain.institutional_trading.owner_live_limits import (
+        authorized_min_trade_quality,
+    )
+
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("min_trade_quality") is None:
         return OWNER_MIN_TRADE_QUALITY
-    try:
-        value = int(doc["min_trade_quality"])
-    except (TypeError, ValueError):
+    authorized = authorized_min_trade_quality(doc.get("min_trade_quality"))
+    if authorized is None:
         return OWNER_MIN_TRADE_QUALITY
-    return max(value, OWNER_MIN_TRADE_QUALITY)
+    return authorized
+
+
+def active_stop_atr_multiplier() -> Decimal:
+    """Experimental default is 1.00. Only 1.00, 1.25, and 1.50 may be saved.
+
+    0.75 and 0.90 are inside one ATR of noise and fail closed to the default.
+    """
+    from app.domain.institutional_trading.owner_live_limits import (
+        atr_multiplier_verdict,
+    )
+
+    value = _active_decimal("stop_atr_multiplier", OWNER_SL_ATR_MULTIPLIER)
+    if atr_multiplier_verdict(value) != "accepted":
+        if atr_multiplier_verdict(OWNER_SL_ATR_MULTIPLIER) == "accepted":
+            return OWNER_SL_ATR_MULTIPLIER.quantize(Decimal("0.01"))
+        return Decimal("1.50")
+    return value.quantize(Decimal("0.01"))
 
 
 def weekly_loss_limit_pct() -> Decimal:
@@ -227,7 +263,7 @@ def m1_overlay_mode(key: str) -> str | None:
 def approved_baseline() -> dict[str, Any]:
     """Approved live policy. Weekly halt is explicitly off."""
     return {
-        "max_planned_risk_pct": "9.0",
+        "max_planned_risk_pct": "14.0",
         "daily_loss_pct": "19.0",
         "weekly_loss_pct": "0",
         "weekly_loss_documented": (
@@ -240,13 +276,14 @@ def approved_baseline() -> dict[str, Any]:
             "high-water mark and is enforced only after an owner save. A missing "
             "mark fails closed while the halt is on."
         ),
-        "max_aggregate_open_risk_pct": "9.0",
+        "max_aggregate_open_risk_pct": "14.0",
         "max_concurrent_positions": OWNER_MAX_OPEN_POSITIONS,
         "min_lot": None,
         "max_lot": "0.01",
         "max_spread": "0.45",
         "min_reward_risk": "1.50",
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
+        "stop_atr_multiplier": "1.00",
         "gold_only": True,
         "protective_stop_required": True,
         "evaluate_full_utc_day": True,
@@ -347,15 +384,21 @@ def validate_policy_changes(
     _reject_number(
         errors, changes, "max_spread", lo=Decimal("0.01"), hi=OWNER_MAX_SPREAD
     )
+    from app.domain.institutional_trading.owner_live_limits import (
+        atr_multiplier_verdict,
+        authorized_min_reward_risk,
+        authorized_min_trade_quality,
+    )
+
     if "min_reward_risk" in changes:
         try:
             rr = _dec(changes["min_reward_risk"])
         except Exception:
             errors.append("min_reward_risk is not a number")
         else:
-            if rr < OWNER_MIN_REWARD_RISK:
+            if authorized_min_reward_risk(rr) is None:
                 errors.append(
-                    f"min_reward_risk cannot be below {OWNER_MIN_REWARD_RISK}"
+                    "min_reward_risk must be 0.10, 0.15, 0.20, or at least 1.50"
                 )
     if "min_trade_quality" in changes:
         try:
@@ -363,10 +406,26 @@ def validate_policy_changes(
         except (TypeError, ValueError):
             errors.append("min_trade_quality is not an integer")
         else:
-            if quality < OWNER_MIN_TRADE_QUALITY or quality > 100:
+            if authorized_min_trade_quality(quality) is None:
                 errors.append(
-                    f"min_trade_quality must be {OWNER_MIN_TRADE_QUALITY} to 100"
+                    "min_trade_quality must be "
+                    f"{OWNER_MIN_TRADE_QUALITY_FLOOR} to 100"
                 )
+    if "stop_atr_multiplier" in changes:
+        try:
+            multiplier = _dec(changes["stop_atr_multiplier"])
+        except Exception:
+            errors.append("stop_atr_multiplier is not a number")
+        else:
+            verdict = atr_multiplier_verdict(multiplier)
+            if verdict == "inside_noise":
+                errors.append(
+                    "stop_atr_multiplier is inside normal ATR noise; "
+                    "0.75 and 0.90 are rejected. "
+                    "Allowed values are 1.00, 1.25, and 1.50"
+                )
+            elif verdict != "accepted":
+                errors.append("stop_atr_multiplier must be 1.00, 1.25, or 1.50")
     if (
         "max_concurrent_positions" in changes
         and changes["max_concurrent_positions"] != OWNER_MAX_OPEN_POSITIONS

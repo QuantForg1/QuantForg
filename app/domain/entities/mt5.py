@@ -83,6 +83,8 @@ class MT5AccountInfo:
     company: str = ""
     trade_mode: str = ""  # demo | contest | real | unknown
     trade_allowed: bool | None = None  # MT5 AccountInfo.trade_allowed
+    # Account-currency commission for a new entry. None stays unknown.
+    commission: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.login <= 0:
@@ -113,6 +115,7 @@ class MT5AccountInfo:
             "company": self.company,
             "trade_mode": self.trade_mode,
             "trade_allowed": self.trade_allowed,
+            "commission": None if self.commission is None else str(self.commission),
         }
 
 

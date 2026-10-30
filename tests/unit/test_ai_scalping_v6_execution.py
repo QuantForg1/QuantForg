@@ -484,7 +484,7 @@ def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
         contract_size=Decimal("100"),
         hard_max_risk_pct=Decimal("5.0"),
     )
-    # $6.17 at 0.01 lot > $4.50 (9% of $50) -> infeasible, stop never moved.
+    # $6.17 at 0.01 lot > 5% of $50 ($2.50) -> infeasible, stop never moved.
     assert feasible.infeasible is True
     assert feasible.stop_changed is False
 

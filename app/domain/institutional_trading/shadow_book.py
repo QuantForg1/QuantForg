@@ -8,7 +8,7 @@ spread for the closing side) and the latest tick, SL before TP when both are
 touched in one bar (conservative).
 
 Limits applied as if live: one shadow position at a time and the owner daily
-stop on shadow P/L. Gold / 0.01 lot / RR / spread / 9% / session are already
+stop on shadow P/L. Gold / 0.01 lot / RR / spread / 14% / session are already
 enforced upstream before an entry reaches the book. Never sends an order.
 """
 
@@ -174,7 +174,7 @@ class ShadowBook:
         now: datetime,
         planned_risk_usd: Decimal | None = None,
     ) -> str | None:
-        """Limits applied on shadow equity: 1 position, 9% cap, daily stop."""
+        """Limits applied on shadow equity: 1 position, 14% cap, daily stop."""
         if self.open_trade() is not None:
             return "SHADOW_POSITION_OPEN: max 1 shadow position"
         eq = self.shadow_equity(equity)

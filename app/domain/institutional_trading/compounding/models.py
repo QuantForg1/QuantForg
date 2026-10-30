@@ -28,7 +28,7 @@ DrawdownState = Literal[
 ]
 
 LIVE_ACTIVATION = "SHADOW_ONLY"
-HARD_MAX_RISK_PCT = MicroAccountProfile().hard_max_risk_pct  # owner 9% cap
+HARD_MAX_RISK_PCT = MicroAccountProfile().hard_max_risk_pct  # owner 14% cap
 BROKER_MIN_LOT = VOLUME_MIN  # 0.01
 
 

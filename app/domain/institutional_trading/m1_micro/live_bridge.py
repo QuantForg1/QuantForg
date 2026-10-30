@@ -182,11 +182,11 @@ def consider_m1_complement(
     note["planned_risk_usd"] = str(risk)
     note["remaining_risk_usd"] = str(remaining)
     if risk <= 0 or cap <= 0 or risk > cap or risk > remaining:
-        note["reason"] = "combined_planned_risk_above_9_percent"
+        note["reason"] = "combined_planned_risk_above_cap"
         return note
     risk_pct = risk / equity * _HUNDRED
     if risk_pct + open_pct > OWNER_MAX_PLANNED_RISK_PCT:
-        note["reason"] = "combined_planned_risk_above_9_percent"
+        note["reason"] = "combined_planned_risk_above_cap"
         return note
     note["entry_valid"] = True
     if _coordinated_elsewhere(

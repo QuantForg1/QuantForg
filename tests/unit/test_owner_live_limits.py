@@ -62,7 +62,7 @@ def _account(balance: str) -> AccountSnapshot:
 
 def _entry(**overrides: object) -> list[str]:
     # SELL 0.01 at 4116.43, SL 1.60 away (planned $1.98 incl. spread), TP 3.50
-    # away -> RR 3.50/1.98 = 1.77. Equity $50.84 -> 9% cap $4.57.
+    # away -> RR 3.50/1.98 = 1.77. Equity $50.84 -> 14% cap $7.11.
     args: dict[str, object] = {
         "symbol": "XAUUSD_i",
         "side": "sell",
@@ -73,6 +73,8 @@ def _entry(**overrides: object) -> list[str]:
         "spread": D("0.38"),
         "contract_size": D("100"),
         "equity": D("50.84"),
+        # Fixture declares a known zero. Unknown commission is rejected.
+        "commission": D("0"),
     }
     args.update(overrides)
     return evaluate_owner_entry(**args)  # type: ignore[arg-type]
@@ -85,11 +87,11 @@ def test_owner_constants_replace_80_percent_caps() -> None:
     assert D("19.0") == MAX_DAILY_LOSS_PCT
     assert D("19.0") == MAX_DAILY_LOSS_CEILING_PCT
     # Static values are at the $50 reference capital; live checks use equity.
-    assert D("4.50") == MAX_PLANNED_SL_RISK_USD
-    assert D("4.50") == TARGET_PLANNED_RISK_USD
+    assert D("7.00") == MAX_PLANNED_SL_RISK_USD
+    assert D("7.00") == TARGET_PLANNED_RISK_USD
     assert MIN_PLANNED_RISK_USD == D("0") < TARGET_PLANNED_RISK_USD
-    assert D("1.50") == MIN_REWARD_RISK
-    assert MicroAccountProfile().hard_max_risk_pct == D("9.0")
+    assert MIN_REWARD_RISK == D("1.50")
+    assert MicroAccountProfile().hard_max_risk_pct == D("14.0")
 
 
 def test_default_configs_respect_owner_limits() -> None:
@@ -114,8 +116,8 @@ def test_default_configs_respect_owner_limits() -> None:
     [
         ("max_daily_loss_pct", D("19.01")),
         ("max_daily_loss_pct", D("80.0")),
-        ("risk_per_trade_pct", D("9.01")),
-        ("max_planned_sl_risk_usd", D("4.51")),
+        ("risk_per_trade_pct", D("14.01")),
+        ("max_planned_sl_risk_usd", D("7.01")),
         ("max_open_trades", 2),
     ],
 )
@@ -185,12 +187,12 @@ def test_daily_loss_cap_pct_matches_usd_stop() -> None:
     assert (D("50.84") * pct / 100).quantize(D("0.01")) == D("9.65")
 
 
-# --- Per-trade planned-risk cap: 9% of equity ---
+# --- Per-trade planned-risk cap: 14% of equity ---
 
 
 def test_max_sl_risk_usd() -> None:
-    assert max_sl_risk_usd(D("50.84")) == D("4.57")
-    assert max_sl_risk_usd(D("150")) == D("13.50")
+    assert max_sl_risk_usd(D("50.84")) == D("7.11")
+    assert max_sl_risk_usd(D("150")) == D("21.00")
 
 
 # --- Final owner entry guard ---
@@ -216,14 +218,14 @@ def test_volume_002_is_rejected() -> None:
     assert any(r.startswith("OWNER_MAX_LOT") for r in _entry(volume=D("0.02")))
 
 
-def test_planned_risk_458_rejected_457_allowed() -> None:
-    # Equity 50.84 -> cap $4.57. SL 4.19 + spread 0.38 = $4.57 allowed;
-    # SL 4.20 + 0.38 = $4.58 rejected. TP far enough for RR.
+def test_planned_risk_one_cent_over_14_percent_is_rejected() -> None:
+    # Equity 50.84 -> cap $7.11. SL 6.73 + spread 0.38 = $7.11 allowed;
+    # SL 6.74 + 0.38 = $7.12 rejected. TP stays far enough for RR 1.50.
     assert any(
         r.startswith("OWNER_SL_RISK")
-        for r in _entry(stop_loss=D("4120.63"), take_profit=D("4108.00"))
+        for r in _entry(stop_loss=D("4123.17"), take_profit=D("4105.00"))
     )
-    assert _entry(stop_loss=D("4120.62"), take_profit=D("4108.00")) == []
+    assert _entry(stop_loss=D("4123.16"), take_profit=D("4105.00")) == []
 
 
 def test_reward_risk_below_1_5_after_spread_rejected() -> None:

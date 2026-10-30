@@ -164,7 +164,7 @@ def test_m1_note_without_a_valid_entry_is_not_a_signal() -> None:
     note = signal_from_m1_note(
         {
             "action": "sell",
-            "reason": "combined_planned_risk_above_9_percent",
+            "reason": "combined_planned_risk_above_cap",
             "stop": "2300",
             "entry_valid": False,
         }

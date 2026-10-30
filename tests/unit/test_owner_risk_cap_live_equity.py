@@ -1,8 +1,7 @@
-"""Per-trade planned-risk cap is 9% of LIVE equity only (owner, 2026-10-23).
+"""Per-trade planned-risk cap is 14% of LIVE equity only.
 
-The static $4.50 (9% of the $50 reference capital) refused two setups that
-9% of live equity allowed: $4.56 at 09:04Z (equity ~54.75) and $4.88 at
-12:46Z (equity ~63.65).
+The static $7.00 (14% of the $50 reference capital) is replaced by 14% of
+live equity. A stricter configured dollar cap still wins.
 """
 
 from __future__ import annotations
@@ -68,21 +67,21 @@ def _cap_reasons(assessment) -> list[str]:
 
 
 def test_12_46_setup_is_no_longer_refused_by_the_reference_cap() -> None:
-    # $4.88 at equity 63.65: 9% = $5.72 -> allowed.
+    # $4.88 at equity 63.65: 14% = $8.91 -> allowed.
     assessment = _evaluate("63.65", "4.88")
     assert _cap_reasons(assessment) == []
     assert assessment.decision is not RiskDecision.REJECT, assessment.reasons
 
 
 def test_cap_follows_live_equity_down() -> None:
-    # $4.88 at equity 50.00: 9% = $4.50 -> refused.
-    assessment = _evaluate("50.00", "4.88")
+    # $8.00 at equity 50.00: 14% = $7.00 -> refused.
+    assessment = _evaluate("50.00", "8.00")
     assert assessment.decision is RiskDecision.REJECT
-    # $3.00 at equity 30.00: 9% = $2.70 -> refused (stricter than $4.50).
-    assessment = _evaluate("30.00", "3.00")
+    # $5.00 at equity 30.00: 14% = $4.20 -> refused.
+    assessment = _evaluate("30.00", "5.00")
     assert assessment.decision is RiskDecision.REJECT
-    # $2.60 at equity 30.00 fits 9% ($2.70).
-    assert _evaluate("30.00", "2.60").decision is not RiskDecision.REJECT
+    # $4.00 at equity 30.00 fits 14% ($4.20).
+    assert _evaluate("30.00", "4.00").decision is not RiskDecision.REJECT
 
 
 def test_a_stricter_explicit_cap_still_binds() -> None:
@@ -100,11 +99,11 @@ def test_a_stricter_explicit_cap_still_binds() -> None:
 
 def test_owner_risk_cap_helper() -> None:
     ref = MAX_PLANNED_SL_RISK_USD
-    assert ref == D("4.50")
+    assert ref == D("7.00")
     kw = {"configured": ref, "reference_default": ref}
-    assert ol.owner_risk_cap_usd(equity=D("63.65"), **kw) == D("5.72")
-    assert ol.owner_risk_cap_usd(equity=D("30"), **kw) == D("2.70")
-    assert ol.owner_risk_cap_usd(equity=D("30"), positions=2, **kw) == D("5.40")
+    assert ol.owner_risk_cap_usd(equity=D("63.65"), **kw) == D("8.91")
+    assert ol.owner_risk_cap_usd(equity=D("30"), **kw) == D("4.20")
+    assert ol.owner_risk_cap_usd(equity=D("30"), positions=2, **kw) == D("8.40")
     # Unknown equity keeps the static value (other guards fail closed).
     assert ol.owner_risk_cap_usd(equity=None, **kw) == ref
     assert ol.owner_risk_cap_usd(

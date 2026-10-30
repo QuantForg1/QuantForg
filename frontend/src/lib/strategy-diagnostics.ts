@@ -3,7 +3,7 @@
 import { asList, asRecord, bool, num, str } from "@/lib/desk";
 
 /** Owner hard floor. Swing ITE defaults stay 80 and are not this fallback. */
-const OWNER_MIN_TRADE_QUALITY = 75;
+const OWNER_MIN_TRADE_QUALITY = 70;
 
 export type TrendBoard = {
   h4: string;

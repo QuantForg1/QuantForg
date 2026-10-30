@@ -347,12 +347,12 @@ def test_gold_contract_min_lot_exceeds_budget_does_not_submit() -> None:
 
 
 def test_institutional_equity_never_upsizes_past_owner_cap() -> None:
-    # $50 at min lot exceeds 9% of a $501 account ($45.09): never upsized.
+    # $50 at min lot exceeds 14% of a $300 account ($42): never upsized.
     out = _norm(
-        equity=Decimal("501.00"),
+        equity=Decimal("300.00"),
         calculated_lot=Decimal("0.002"),
         stop_distance=Decimal("50.00"),
-        risk_budget=Decimal("45.09"),
+        risk_budget=Decimal("42.00"),
         max_lot=Decimal("0.01"),
     )
     assert out.normalized_lot == Decimal("0")
@@ -390,8 +390,8 @@ def test_setup_tradeability_tight_stop_is_tradeable() -> None:
     assert out.tradeability == TRADEABLE
     assert out.feasibility.infeasible is False
     assert out.estimated_risk_at_min_lot == Decimal("1.80")
-    # 9% of $162 = $14.58 -> 14.58 price units at 0.01 lot.
-    assert Decimal("14.57") <= out.maximum_tradeable_stop_distance <= Decimal("14.58")
+    # 14% of $162 = $22.68 -> 22.68 price units at 0.01 lot.
+    assert out.maximum_tradeable_stop_distance == Decimal("22.68")
     assert out.feasibility.stop_changed is False
 
 
@@ -403,7 +403,7 @@ def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
     )
 
     out = evaluate_setup_tradeability(
-        stop_distance=Decimal("15.00"),
+        stop_distance=Decimal("23.00"),
         equity=_EQUITY,
         min_lot=_MIN,
         lot_step=_STEP,
@@ -412,21 +412,21 @@ def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
     )
     assert out.tradeability == NOT_TRADEABLE
     assert out.tradeability_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
-    assert out.estimated_risk_at_min_lot == Decimal("15.00")
-    assert out.maximum_tradeable_stop_distance <= Decimal("14.58")
+    assert out.estimated_risk_at_min_lot == Decimal("23.00")
+    assert out.maximum_tradeable_stop_distance == Decimal("22.68")
     assert out.feasibility.stop_changed is False
-    assert out.stop_distance == Decimal("15.00")
+    assert out.stop_distance == Decimal("23.00")
 
 
 def test_owner_cap_scales_with_equity() -> None:
-    """9% of equity: a $15 stop is out at $162 (cap $14.58), in at $2000."""
+    """14% of equity: a $15 stop is out at $100 (cap $14), in at $200."""
     from app.domain.institutional_trading.operations.min_lot_feasibility import (
         NOT_TRADEABLE,
         TRADEABLE,
         evaluate_setup_tradeability,
     )
 
-    expected = {Decimal("162.00"): NOT_TRADEABLE, Decimal("2000.00"): TRADEABLE}
+    expected = {Decimal("100.00"): NOT_TRADEABLE, Decimal("200.00"): TRADEABLE}
     for equity, wide_state in expected.items():
         wide = evaluate_setup_tradeability(
             stop_distance=Decimal("15.00"),
@@ -444,10 +444,10 @@ def test_owner_cap_scales_with_equity() -> None:
         assert tight.tradeability == TRADEABLE
 
 
-def test_hard_max_risk_pct_is_owner_nine() -> None:
+def test_hard_max_risk_pct_is_the_owner_ceiling() -> None:
     from app.domain.institutional_trading.micro_account_mode import MicroAccountProfile
 
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("14.0")
 
 
 def test_kill_switch_blocks_before_oms() -> None:
@@ -636,7 +636,8 @@ def test_strategy_stop_never_clamped_to_min_lot_max() -> None:
         stop_atr_mult=Decimal("1.10"),
         config=AiScalpingConfig(owner_atr_stop=False),
     )
-    # Owner policy: max(1.5 x ATR, beyond structure) - also never min-lot max.
+    # Owner policy: max(1.00 x ATR, structure). This swing is far beyond
+    # 1.5 x ATR, so the stop stays on structure and is never the min-lot max.
     owner_chosen, _owner_source = choose_strategy_stop_distance(
         snap,  # type: ignore[arg-type]
         direction=TradeDirection.SELL,
@@ -687,7 +688,7 @@ def test_structure_stop_above_owner_cap_is_not_tradeable_and_sl_unmoved() -> Non
         order_blocks=None,
         liquidity=None,
     )
-    atr = Decimal("12.00")
+    atr = Decimal("23.00")
     chosen, source = choose_strategy_stop_distance(
         snap,  # type: ignore[arg-type]
         direction=TradeDirection.SELL,
@@ -695,17 +696,17 @@ def test_structure_stop_above_owner_cap_is_not_tradeable_and_sl_unmoved() -> Non
         atr=atr,
         stop_atr_mult=Decimal("1.10"),
     )
-    # Owner policy: structure is only 4 away, so 1.5 x ATR (18.00) wins.
+    # Structure is only 4 away, so 1.00 x ATR (23.00) wins and is not shrunk.
     assert source == "owner_atr"
-    assert chosen == Decimal("18.00")
+    assert chosen == Decimal("23.00")
     trade = evaluate_setup_tradeability(
         stop_distance=chosen,
         equity=_EQUITY,
         min_lot=_MIN,
         contract_size=_CS,
     )
-    # $18 at 0.01 lot is outside 9% of $162 ($14.58): not tradeable, and the
+    # $23 at 0.01 lot is outside 14% of $162 ($22.68): not tradeable, and the
     # stop is never moved to make it fit.
-    assert chosen * _MIN * _CS > Decimal("14.58")
+    assert chosen * _MIN * _CS > Decimal("22.68")
     assert trade.tradeability == NOT_TRADEABLE
     assert trade.feasibility.stop_changed is False

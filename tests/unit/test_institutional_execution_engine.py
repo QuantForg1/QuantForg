@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -52,6 +53,8 @@ def _engine(
     *, enabled: bool = True
 ) -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     client = MockMT5Client()
+    # The fixture declares a known zero. Production must not invent that zero.
+    client.known_commission = Decimal("0")
     client.initialize()
     client.login(MT5LoginRequest(login=1, password="p", server="S"))
     adapter = MT5Adapter(client=client, execution_enabled=enabled)
@@ -82,14 +85,15 @@ def test_pipeline_market_buy_observes_stages() -> None:
     engine, client = _engine(enabled=True)
     client._positions = []  # owner limit: one open position, start flat
     _allow_broker_submit()
-    # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> RR 1.52 after spread.
+    # Mock ask 2320.80. Net RR includes spread 0.30 and slippage 0.10:
+    # TP 3.50 away -> 3.50 / 2.20 = 1.59.
     intent = parse_order_intent(
         symbol="XAUUSD",
         side="buy",
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     user_id = uuid4()
     pipeline, decision = engine.run_submit(
@@ -111,6 +115,33 @@ def test_pipeline_market_buy_observes_stages() -> None:
     assert "Broker Submission" in stage_names
     assert pipeline.journal_entry is not None
     reset_live_trading_controller_for_tests()
+
+
+@pytest.mark.unit
+def test_unknown_commission_rejects_before_send() -> None:
+    engine, client = _engine(enabled=True)
+    client.known_commission = None
+    client._positions = []
+    _allow_broker_submit()
+    intent = parse_order_intent(
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume="0.01",
+        stop_loss="2319.00",
+        take_profit="2324.30",
+    )
+    pipeline, _decision = engine.run_submit(
+        user_id=uuid4(),
+        request_id="eng-commission-unknown",
+        intent=intent,
+        connected=True,
+        login=1,
+        recent_decisions=[],
+    )
+    assert pipeline.outcome == "rejected"
+    assert "OWNER_COMMISSION_UNKNOWN" in pipeline.message
+    assert client._positions == []
 
 
 @pytest.mark.unit
@@ -137,7 +168,7 @@ def test_disabled_controller_blocks_a_new_entry_before_send() -> None:
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),
@@ -173,7 +204,7 @@ def test_deal_history_failure_blocks_a_new_entry(
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),

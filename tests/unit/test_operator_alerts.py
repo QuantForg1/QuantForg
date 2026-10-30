@@ -170,7 +170,7 @@ def test_close_waits_until_broker_history_shows_the_exit(setup: Any) -> None:
         ({"volume": D("0.02")}, "volume 0.02"),
         ({"stop_loss": D("0")}, "missing stop loss"),
         ({"take_profit": D("0")}, "missing take profit"),
-        ({"stop_loss": D("4105.00")}, "9% cap"),  # (5.00 + 0.30) = $5.30 > $4.50
+        ({"stop_loss": D("4107.00")}, "14.0% cap"),  # (7.00 + 0.30) = $7.30 > $7.00
     ],
 )
 def test_rule_violations_alert_with_pause_instruction(
