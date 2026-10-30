@@ -528,7 +528,7 @@ function ChartOverlayPanel({ symbol }: { symbol: string }) {
       height: 420,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#94a3b8",
+        textColor: "#AFC4E2",
       },
       grid: {
         vertLines: { color: "rgba(148,163,184,0.12)" },
@@ -538,11 +538,11 @@ function ChartOverlayPanel({ symbol }: { symbol: string }) {
       timeScale: { borderVisible: false },
     });
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#16a34a",
-      downColor: "#dc2626",
+      upColor: "#00D6B0",
+      downColor: "#FF5364",
       borderVisible: false,
-      wickUpColor: "#16a34a",
-      wickDownColor: "#dc2626",
+      wickUpColor: "#00D6B0",
+      wickDownColor: "#FF5364",
     });
     chartRef.current = chart;
     seriesRef.current = series;
@@ -570,7 +570,7 @@ function ChartOverlayPanel({ symbol }: { symbol: string }) {
           | "aboveBar"
           | "belowBar"
           | "inBar",
-        color: str(m.color) || "#ff5a1f",
+        color: str(m.color) || "#168BFF",
         shape: (str(m.shape) || "circle") as
           | "circle"
           | "square"

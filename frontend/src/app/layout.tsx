@@ -36,7 +36,7 @@ const SITE_URL =
       : "http://localhost:3000");
 
 export const viewport: Viewport = {
-  themeColor: "#0B1120",
+  themeColor: "#061428",
   colorScheme: "dark",
 };
 

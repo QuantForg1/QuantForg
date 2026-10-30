@@ -19,7 +19,7 @@ export function PageHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-[1.35rem] font-semibold leading-tight tracking-tight text-[var(--fg)] sm:text-[1.5rem] sm:leading-[var(--leading-title)]">
+        <h1 className="text-[1.55rem] font-semibold leading-tight tracking-tight text-[var(--fg)] sm:text-[1.85rem] sm:leading-[var(--leading-title)]">
           {title}
         </h1>
         {description ? (

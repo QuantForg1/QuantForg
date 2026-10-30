@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OwnerPolicySummary } from "@/components/execution/owner-policy-summary";
 import { RiskRulesPanel } from "@/components/execution/risk-rules-panel";
 import { riskApi } from "@/lib/api/endpoints";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
@@ -81,6 +82,7 @@ export default function RiskCenterPage() {
       />
 
       <PageMotion className="space-y-4">
+        <OwnerPolicySummary />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Equity"

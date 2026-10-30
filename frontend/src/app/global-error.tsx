@@ -40,8 +40,8 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0B1120",
-          color: "#F8FAFC",
+          background: "#061428",
+          color: "#F5F8FF",
           fontFamily: "system-ui, sans-serif",
           padding: 24,
         }}
@@ -50,9 +50,9 @@ export default function GlobalError({
           style={{
             width: "100%",
             maxWidth: 440,
-            border: "1px solid #243049",
-            borderRadius: 12,
-            background: "#151F32",
+            border: "1px solid rgba(143, 184, 232, 0.18)",
+            borderRadius: 14,
+            background: "#0A2F59",
             padding: 24,
             boxShadow: "0 24px 64px rgba(2, 6, 23, 0.55)",
           }}
@@ -68,7 +68,7 @@ export default function GlobalError({
           <h1 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600 }}>
             Something went wrong
           </h1>
-          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#94A3B8" }}>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#AFC4E2" }}>
             An unexpected error occurred. You can retry or return to the dashboard.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -78,7 +78,7 @@ export default function GlobalError({
               style={{
                 border: 0,
                 borderRadius: 8,
-                background: "linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%)",
+                background: "linear-gradient(180deg, #3c9dff 0%, #0866ff 100%)",
                 color: "#ffffff",
                 padding: "8px 14px",
                 fontWeight: 600,
@@ -93,10 +93,10 @@ export default function GlobalError({
                 window.location.href = "/dashboard";
               }}
               style={{
-                border: "1px solid #31415c",
+                border: "1px solid rgba(143, 184, 232, 0.28)",
                 borderRadius: 8,
-                background: "#182337",
-                color: "#F8FAFC",
+                background: "#103B6B",
+                color: "#F5F8FF",
                 padding: "8px 14px",
                 cursor: "pointer",
               }}
