@@ -82,8 +82,8 @@ def _inputs(**overrides: object) -> CompoundingInputs:
 def test_hard_cap_and_min_lot_owner_values() -> None:
     assert Decimal("14.0") == HARD_MAX_RISK_PCT
     assert MicroAccountProfile().hard_max_risk_pct == Decimal("14.0")
-    assert BROKER_MIN_LOT == Decimal("0.01")
-    assert VOLUME_MIN == Decimal("0.01")
+    assert Decimal("0.01") == BROKER_MIN_LOT
+    assert Decimal("0.01") == VOLUME_MIN
     obs = evaluate_compounding_shadow(_inputs())
     assert obs.live_hard_max_risk_pct == "14.0"
     assert obs.live_min_lot == "0.01"

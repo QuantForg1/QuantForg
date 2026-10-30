@@ -367,9 +367,7 @@ def _terminal_autotrading_flag(
     return None
 
 
-def _record_autotrading_flag(
-    val: bool, *, source: str, diag: dict[str, Any]
-) -> bool:
+def _record_autotrading_flag(val: bool, *, source: str, diag: dict[str, Any]) -> bool:
     diag["mt5_autotrading_enabled"] = val
     diag["mt5_trade_allowed"] = val
     diag["mt5_autotrading_known"] = True
@@ -395,9 +393,7 @@ def _note_health_account_fields(payload: dict[str, Any], diag: dict[str, Any]) -
         diag["mt5_health_probe"] = probe
 
 
-def _session_status_payload(
-    client: Any, diag: dict[str, Any]
-) -> dict[str, Any] | None:
+def _session_status_payload(client: Any, diag: dict[str, Any]) -> dict[str, Any] | None:
     """Authenticated session snapshot. /health may omit capabilities after 500ms."""
     if client is None:
         return None
@@ -487,9 +483,7 @@ def _read_mt5_autotrading_enabled(
             )
     diag["mt5_autotrading_known"] = False
     diag["mt5_trade_allowed"] = None
-    source = (
-        "health_unavailable" if payload is None else "terminal_autotrading_unknown"
-    )
+    source = "health_unavailable" if payload is None else "terminal_autotrading_unknown"
     _note_terminal_permission_change(None, source=source, diag=diag)
     return None
 

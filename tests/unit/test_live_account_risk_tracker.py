@@ -93,9 +93,12 @@ class TestLiveAccountRiskTracker:
         resolved = LiveAccountRiskTracker.session_pnl_resolution([deal], now=now)
         assert resolved["commission_known"] is False
         assert LiveAccountRiskTracker.commission_reported(deal) is False
-        assert LiveAccountRiskTracker.commission_reported(
-            _deal(profit="-50", when=deal.time, commission="0", ticket=22)
-        ) is True
+        assert (
+            LiveAccountRiskTracker.commission_reported(
+                _deal(profit="-50", when=deal.time, commission="0", ticket=22)
+            )
+            is True
+        )
 
     def test_resolve_for_risk_uses_deals_not_floating(self, tmp_path: Path) -> None:
         tracker = LiveAccountRiskTracker(persist_path=tmp_path / "r.json")

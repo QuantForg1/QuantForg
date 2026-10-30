@@ -527,9 +527,7 @@ class InstitutionalDecisionPipeline:
             from app.domain.institutional_trading.atr import score_gate_atr
 
             gate_atr = score_gate_atr(snapshot)
-        cfg = self._prepare_config(
-            account, symbol=sym or None, gate_atr=gate_atr
-        )
+        cfg = self._prepare_config(account, symbol=sym or None, gate_atr=gate_atr)
         rid = (request_id or f"ite_{snapshot.input_hash[:12]}").strip()
 
         daily_dd = Decimal("0")
@@ -552,6 +550,7 @@ class InstitutionalDecisionPipeline:
                 from app.domain.institutional_trading.ai_scalping.scoring import (
                     score_scalping_setup,
                 )
+
                 session_name = str(
                     getattr(snapshot.session.session, "value", snapshot.session.session)
                 )

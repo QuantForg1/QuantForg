@@ -508,6 +508,8 @@ def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
 
 def authorized_min_trade_quality(value: object) -> int | None:
     """70-100 is savable. The unset default remains 70."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str | Decimal):
+        return None
     try:
         quality = int(value)
     except (TypeError, ValueError):

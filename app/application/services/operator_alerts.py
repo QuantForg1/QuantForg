@@ -725,9 +725,7 @@ class OperatorWatch:
         ]
         if not outs:
             return  # broker history not visible yet; retry next tick
-        commission_known = all(
-            getattr(d, "commission", None) is not None for d in outs
-        )
+        commission_known = all(getattr(d, "commission", None) is not None for d in outs)
         pnl = Decimal("0")
         for deal in outs:
             pnl += _dec(deal.profit) + _dec(deal.swap)
@@ -739,11 +737,7 @@ class OperatorWatch:
         entry.close_price = _dec(last.price)
         entry.pnl = pnl.quantize(_CENT)
         # A missing commission is not a zero tariff, so R is withheld.
-        if (
-            commission_known
-            and entry.planned_risk_usd
-            and entry.planned_risk_usd > 0
-        ):
+        if commission_known and entry.planned_risk_usd and entry.planned_risk_usd > 0:
             entry.r_multiple = (pnl / entry.planned_risk_usd).quantize(_CENT)
         else:
             entry.r_multiple = None

@@ -82,7 +82,7 @@ def _acct(*, leverage: int) -> AccountSnapshot:
 
 
 def test_floors_are_owner_band() -> None:
-    assert MIN_PLANNED_RISK_USD == Decimal("0")
+    assert Decimal("0") == MIN_PLANNED_RISK_USD
     assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
     assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
 

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.application.dto.portfolio import DealDTO
 from app.domain.entities.mt5_portfolio import MT5Deal

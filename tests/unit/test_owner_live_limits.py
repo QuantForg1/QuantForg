@@ -90,7 +90,7 @@ def test_owner_constants_replace_80_percent_caps() -> None:
     assert D("7.00") == MAX_PLANNED_SL_RISK_USD
     assert D("7.00") == TARGET_PLANNED_RISK_USD
     assert MIN_PLANNED_RISK_USD == D("0") < TARGET_PLANNED_RISK_USD
-    assert MIN_REWARD_RISK == D("1.50")
+    assert D("1.50") == MIN_REWARD_RISK
     assert MicroAccountProfile().hard_max_risk_pct == D("14.0")
 
 
