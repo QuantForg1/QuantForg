@@ -80,7 +80,7 @@ def test_xauusd_503_does_not_win_when_xauusd_i_is_authoritative(
     assert "XAUUSD" not in {selected}
 
 
-def test_resolver_never_returns_unsuffixed_xauusd(gold_only: None) -> None:
+def test_resolver_skips_503_bare_and_keeps_listed_suffix(gold_only: None) -> None:
     selected, _skipped = select_full_mode_symbol(
         _RaisingBareGoldAdapter(),
         ["XAUUSD", "XAUUSD_i", "EURUSD"],
@@ -88,6 +88,23 @@ def test_resolver_never_returns_unsuffixed_xauusd(gold_only: None) -> None:
     )
     assert selected == "XAUUSD_i"
     assert selected != "XAUUSD"
+
+
+def test_full_mode_bare_xauusd_is_executable(gold_only: None) -> None:
+    """The live catalogue symbol is unsuffixed XAUUSD and trade_mode is full."""
+
+    class _FullBare:
+        def symbol_info(self, symbol: str) -> SimpleNamespace:
+            assert symbol.upper() == "XAUUSD"
+            return SimpleNamespace(trade_mode="full")
+
+    selected, skipped = resolve_executable_symbol(
+        _FullBare(),
+        preferred="XAUUSD",
+        direction="SELL",
+    )
+    assert selected == "XAUUSD"
+    assert "XAUUSD" not in skipped
 
 
 def test_canonical_helper_does_not_invent_a_suffix() -> None:

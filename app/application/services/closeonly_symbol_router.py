@@ -173,7 +173,9 @@ def select_full_mode_symbol(
             seen: set[str] = set()
             for raw in candidates:
                 code = str(raw or "").strip()
-                if not code or is_bare_gold_symbol(code) or not is_gold_symbol(code):
+                # Bare XAUUSD is the strategy symbol. Keep it when the
+                # catalogue uses that spelling. Drop only non-gold desks.
+                if not code or not is_gold_symbol(code):
                     if code:
                         skipped.append(code.upper())
                     continue
@@ -229,10 +231,6 @@ def select_full_mode_symbol(
                 "%s trade_mode unknown — probing as candidate",
                 sym,
             )
-        if gold_only and is_bare_gold_symbol(sym):
-            logger.warning("%s skipped (gold-only forbids unsuffixed XAUUSD)", sym)
-            skipped.append(sym)
-            continue
         logger.warning("Next opportunity: %s", sym)
         return sym, skipped
     return None, skipped
