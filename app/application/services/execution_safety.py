@@ -315,13 +315,15 @@ class ExecutionSafetyService:
         slip_points = Decimal(int(intent.slippage.value or 0))
         slippage = slip_points * point if slip_points > 0 else Decimal("0")
         from app.domain.institutional_trading.owner_live_limits import (
-            declared_commission,
             format_owner_sl_risk,
             max_planned_risk_usd,
             planned_risk_usd,
+            resolve_entry_commission,
         )
 
-        fee = declared_commission(getattr(account, "commission", None))
+        fee = resolve_entry_commission(
+            intent.symbol, getattr(account, "commission", None)
+        )
         if fee is None:
             return (
                 "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "

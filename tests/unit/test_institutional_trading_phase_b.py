@@ -354,14 +354,31 @@ class TestEligibilityAndDecision:
             passed=True,
             factors={},
         )
-        elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
+        one_open = PositionEligibilityEngine(config=ITEConfig()).evaluate(
             snapshot=snap,
             confluence=conf,
             account=_account(already_in_trade=True, open_positions=1),
             risk_allowed=True,
         )
-        assert elig.eligible is False
-        assert any("Already in trade" in r for r in elig.rejection_reasons)
+        assert one_open.eligible is True
+        full = PositionEligibilityEngine(config=ITEConfig()).evaluate(
+            snapshot=snap,
+            confluence=conf,
+            account=_account(already_in_trade=True, open_positions=5),
+            risk_allowed=True,
+        )
+        assert full.eligible is False
+        assert any("at max" in r for r in full.rejection_reasons)
+        single_slot = PositionEligibilityEngine(
+            config=ITEConfig(max_open_trades=1)
+        ).evaluate(
+            snapshot=snap,
+            confluence=conf,
+            account=_account(already_in_trade=True, open_positions=1),
+            risk_allowed=True,
+        )
+        assert single_slot.eligible is False
+        assert any("Already in trade" in r for r in single_slot.rejection_reasons)
 
     def test_news_blocked(self) -> None:
         snap = _snapshot(news_blocked=True)
@@ -462,14 +479,14 @@ class TestEligibilityAndDecision:
         elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
             snapshot=snap,
             confluence=conf,
-            account=_account(already_in_trade=True, open_positions=1),
+            account=_account(already_in_trade=True, open_positions=5),
             risk_allowed=True,
         )
         decision = TradeDecisionEngine(config=ITEConfig()).decide(
             snapshot=snap,
             confluence=conf,
             eligibility=elig,
-            account=_account(already_in_trade=True),
+            account=_account(already_in_trade=True, open_positions=5),
             risk_score=10,
         )
         assert decision.action is DecisionAction.NO_TRADE

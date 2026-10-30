@@ -80,7 +80,7 @@ def test_naive_and_offset_clocks_use_utc() -> None:
 def test_risk_limits_still_reject_outside_the_former_window(
     moment: datetime,
 ) -> None:
-    assert "OWNER_MAX_SPREAD" in _codes(_valid(now=moment, spread=D("0.46")))
+    assert "OWNER_MAX_SPREAD" in _codes(_valid(now=moment, spread=D("1.01")))
     assert "OWNER_GOLD_ONLY" in _codes(_valid(now=moment, symbol="EURUSD"))
     assert "OWNER_GOLD_ONLY" in _codes(_valid(now=moment, symbol="XAUJPY"))
     assert "OWNER_SL_REQUIRED" in _codes(_valid(now=moment, stop_loss=None))
@@ -95,11 +95,11 @@ def test_risk_limits_still_reject_outside_the_former_window(
     assert "OWNER_SL_RISK" in _codes(wide)
 
 
-def test_daily_loss_cap_still_blocks_above_19_percent() -> None:
-    assert D("19.0") == ol.OWNER_DAILY_LOSS_PCT
-    assert D("14.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
-    assert ol.daily_loss_exceeded(daily_pnl=D("-9.51"), base_now=D("40.49")) is True
-    assert ol.daily_loss_exceeded(daily_pnl=D("-9.50"), base_now=D("40.50")) is False
+def test_daily_loss_cap_still_blocks_above_48_percent() -> None:
+    assert D("48.0") == ol.OWNER_DAILY_LOSS_PCT
+    assert D("20.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
+    assert ol.daily_loss_exceeded(daily_pnl=D("-24.01"), base_now=D("25.99")) is True
+    assert ol.daily_loss_exceeded(daily_pnl=D("-24.00"), base_now=D("26.00")) is False
 
 
 def test_broker_closed_still_blocks_outside_the_former_window() -> None:

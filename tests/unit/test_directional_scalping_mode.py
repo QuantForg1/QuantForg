@@ -206,7 +206,7 @@ def test_current_snapshot_direction_is_not_stale_buy() -> None:
     assert buy.eligible is sell.eligible
 
 
-def test_scalp_plan_targets_one_owner_leg() -> None:
+def test_scalp_plan_uses_risk_and_aggregate_under_the_five_cap() -> None:
     classified = classify_trade(opportunity_score=83, direction="SELL", structure=62)
     assert classified.trade_class is TradeClass.SCALP
     plan = build_position_plan(
@@ -223,12 +223,13 @@ def test_scalp_plan_targets_one_owner_leg() -> None:
         base_input_hash="h-dir",
         risk_allowed_count=4,
     )
-    assert plan.effective_count == 1
+    # Score 83 targets 5. Risk allows 4 and 0.04 lots is four 0.01 legs.
+    assert plan.effective_count == 4
     assert plan.target_count >= plan.effective_count
     assert plan.cycle_id == "cycle-dir-1"
     assert plan.snapshot_id == "snap-dir-1"
     assert plan.position_plan_id
-    assert len(plan.legs) == 1
+    assert len(plan.legs) == 4
 
 
 def test_empty_trading_mode_applies_scalping() -> None:

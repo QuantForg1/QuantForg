@@ -14,10 +14,12 @@ from app.application.services.decision_intelligence_assessment import (
 from app.domain.trading.gold_only import CANONICAL_GOLD_BROKER_DISPLAY
 from app.domain.trading.xauusd_specs import MAX_LEVERAGE
 
-# Risk FAIL trigger: a daily loss beyond the owner's 25% daily stop ($4,000 on
-# $10,000 now = 28.6% of day-start equity). The loss-streak pause was removed
+# Risk FAIL trigger: a daily loss beyond the owner's 48% daily stop.
+# Equity $10,000 and pnl -$9,231 reconstruct day-start $19,231. 48% of that
+# start is $9,230.88, so $9,231 is over the stop. A 40% loss on the same
+# equity stays inside the stop. The loss-streak pause was removed
 # (owner 2026-10-23), so 10 consecutive losses no longer fail Risk.
-_DAILY_STOP_BREACH = "-4000"
+_DAILY_STOP_BREACH = "-9231"
 
 
 def _gold_payload(**overrides: object) -> dict[str, object]:
@@ -125,9 +127,9 @@ def test_risk_pass_and_safety_pass_propagate() -> None:
 
 
 def test_stop_above_owner_cap_fails_risk() -> None:
-    # $8 stop at 0.01 lot = $8 planned loss > 14% of $50 equity ($7.00).
+    # Stop 11.00 + spread 0.40 at 0.01 lot = $11.40, above 20% of $50 ($10).
     _facts, risk, _safety = assess_decision_center_engines(
-        _gold_payload(stop_distance="8", equity="50"),
+        _gold_payload(stop_distance="11", equity="50"),
         use_live=False,
     )
     assert risk.state == "FAIL"

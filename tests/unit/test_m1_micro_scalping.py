@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from decimal import Decimal
 
 import pytest
@@ -15,6 +16,20 @@ from app.domain.institutional_trading.m1_micro.exits import exit_reason, reentry
 from app.domain.institutional_trading.m1_micro.signals import Bar
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
+
+
+@pytest.fixture(autouse=True)
+def _verified_owner_commission() -> Iterator[None]:
+    """These paths run after a loaded tariff. Missing tariff is tested elsewhere."""
+    from app.domain.institutional_trading.runtime_policy import (
+        approved_baseline,
+        reset_runtime_policy,
+        use_runtime_policy,
+    )
+
+    token = use_runtime_policy(approved_baseline())
+    yield
+    reset_runtime_policy(token)
 
 
 def _trend_bars() -> list[Bar]:
@@ -97,14 +112,22 @@ def test_cost_blocks_a_setup_that_does_not_clear_it(
     assert decision.reason == "cost_not_cleared"
 
 
-def test_open_position_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_full_book_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
-    decision = evaluate_m1(
+    one_open = evaluate_m1(
         _trend_bars(),
         bid=Decimal("2306.10"),
         ask=Decimal("2306.30"),
         higher_timeframe_bias="up",
         open_positions=1,
+    )
+    assert one_open.reason != "shared_book_position_open"
+    decision = evaluate_m1(
+        _trend_bars(),
+        bid=Decimal("2306.10"),
+        ask=Decimal("2306.30"),
+        higher_timeframe_bias="up",
+        open_positions=5,
     )
     assert decision.reason == "shared_book_position_open"
 
@@ -202,7 +225,7 @@ def test_flag_off_ignores_open_risk_and_does_not_change_the_decision(
     assert decision.reason == "M1_MICRO_DISABLED"
 
 
-def test_combined_open_risk_above_nine_percent_is_rejected(
+def test_combined_open_risk_above_thirty_percent_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
@@ -212,8 +235,8 @@ def test_combined_open_risk_above_nine_percent_is_rejected(
         ask=Decimal("2306.30"),
         higher_timeframe_bias="up",
         slippage_points=Decimal("0.01"),
-        planned_risk_pct=Decimal("8"),
-        open_planned_risk_pct=Decimal("7"),
+        planned_risk_pct=Decimal("16"),
+        open_planned_risk_pct=Decimal("15"),
     )
     assert decision.action == "none"
     assert decision.reason == "combined_planned_risk_above_cap"
@@ -287,7 +310,7 @@ def test_live_submit_flag_off_records_a_setup_without_sending(
     assert sent == []
 
 
-def test_authorized_m1_withholds_when_measured_rr_is_below_owner_floor(
+def test_authorized_m1_submits_when_measured_rr_clears_the_owner_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from types import SimpleNamespace
@@ -296,9 +319,15 @@ def test_authorized_m1_withholds_when_measured_rr_is_below_owner_floor(
     from app.domain.institutional_trading.m1_micro.live_bridge import (
         consider_m1_complement,
     )
+    from app.domain.institutional_trading.runtime_policy import (
+        approved_baseline,
+        reset_runtime_policy,
+        use_runtime_policy,
+    )
 
     monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
     monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    token = use_runtime_policy(approved_baseline())
     sent: list[dict] = []
 
     def _submit(**kwargs: object) -> SimpleNamespace:
@@ -311,23 +340,71 @@ def test_authorized_m1_withholds_when_measured_rr_is_below_owner_floor(
             message="broker rejected",
         )
 
-    note = consider_m1_complement(
-        adapter=_m1_adapter(),
-        account=SimpleNamespace(equity=Decimal("1000"), login=1),
-        snapshot=_m1_snapshot(),
-        execution_enabled=True,
-        primary_forwarded=False,
-        submit_market=_submit,
-        user_id=uuid4(),
-    )
+    try:
+        note = consider_m1_complement(
+            adapter=_m1_adapter(),
+            account=SimpleNamespace(equity=Decimal("1000"), login=1),
+            snapshot=_m1_snapshot(),
+            execution_enabled=True,
+            primary_forwarded=False,
+            submit_market=_submit,
+            user_id=uuid4(),
+        )
+    finally:
+        reset_runtime_policy(token)
     assert note is not None
-    assert note["submitted"] is False
-    assert note["submit_withheld"] == "OWNER_MIN_RR"
+    assert note["submitted"] is True
+    assert note.get("submit_withheld") != "OWNER_MIN_RR"
     assert note["reason"] == "setup_cleared_cost"
     held_stop = note["stop"]
     held_target = note["target"]
     assert held_stop is not None and held_target is not None
     assert Decimal(held_target) > Decimal(held_stop)
+    assert len(sent) == 1
+
+
+def test_authorized_m1_withholds_when_measured_rr_is_below_owner_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from app.domain.institutional_trading.m1_micro import live_bridge
+    from app.domain.institutional_trading.runtime_policy import (
+        approved_baseline,
+        reset_runtime_policy,
+        use_runtime_policy,
+    )
+
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    monkeypatch.setattr(
+        live_bridge,
+        "reward_risk_after_spread",
+        lambda **_k: Decimal("0.49"),
+    )
+    token = use_runtime_policy(approved_baseline())
+    sent: list[dict] = []
+
+    def _submit(**kwargs: object) -> SimpleNamespace:
+        sent.append(kwargs)
+        return SimpleNamespace(outcome="rejected", retcode=10006, message="no")
+
+    try:
+        note = live_bridge.consider_m1_complement(
+            adapter=_m1_adapter(),
+            account=SimpleNamespace(equity=Decimal("1000"), login=1),
+            snapshot=_m1_snapshot(),
+            execution_enabled=True,
+            primary_forwarded=False,
+            submit_market=_submit,
+            user_id=uuid4(),
+        )
+    finally:
+        reset_runtime_policy(token)
+    assert note is not None
+    assert note.get("submitted") is not True
+    assert note["submit_withheld"] == "OWNER_MIN_RR"
     assert sent == []
 
 

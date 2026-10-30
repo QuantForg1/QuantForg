@@ -68,7 +68,7 @@ def test_owner_surfaces_not_required() -> None:
 
 def test_opportunity_70_and_daily_loss_owner_19_unchanged() -> None:
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
+    assert Decimal("48.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_take_is_not_executed_without_ticket() -> None:
@@ -268,7 +268,7 @@ def test_resource_snapshot_does_not_change_thresholds() -> None:
     assert "ram_band" in snap
     assert "disk_band" in snap
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
+    assert Decimal("48.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_railway_restart_policy_always() -> None:

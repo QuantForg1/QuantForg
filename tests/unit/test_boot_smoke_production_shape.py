@@ -61,9 +61,9 @@ runtime = build_ite_runtime(
 )
 assert runtime is not None
 plane = get_control_plane()
-assert plane.max_open_trades == 1, plane.max_open_trades
+assert plane.max_open_trades == 5, plane.max_open_trades
 assert plane.max_daily_loss_pct <= DEFAULT_ITE_CONFIG.max_daily_loss_pct
-assert DEFAULT_ITE_CONFIG.max_open_trades == 1
+assert DEFAULT_ITE_CONFIG.max_open_trades == 5
 assert adapter.execution_enabled is False
 print("BOOT_OK")
 """

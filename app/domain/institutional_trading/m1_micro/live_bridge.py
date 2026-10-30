@@ -30,9 +30,10 @@ from app.domain.institutional_trading.operations.quantforg_position_cap import (
 )
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_LOT,
-    OWNER_MAX_PLANNED_RISK_PCT,
+    max_aggregate_risk_usd,
     max_planned_risk_usd,
     planned_risk_usd,
+    resolve_entry_commission,
     reward_risk_after_spread,
 )
 from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
@@ -171,21 +172,30 @@ def consider_m1_complement(
     stop_distance = abs(entry - decision.stop)
     # Same formula OMS enforces. Stop-only dollars can sit under the cap
     # while stop plus spread, rounded up, does not. Do not shrink the stop.
+    fee = resolve_entry_commission(symbol, None)
+    if fee is None or fee < 0:
+        note["reason"] = (
+            "OWNER_COMMISSION_UNKNOWN" if fee is None else "OWNER_COMMISSION_INVALID"
+        )
+        return note
     risk = planned_risk_usd(
         stop_distance=stop_distance,
         spread=spread,
         contract_size=_contract(symbol),
         volume=OWNER_MAX_LOT,
+        commission=fee,
     )
-    cap = max_planned_risk_usd(equity)
-    remaining = cap - book.measured_usd
+    trade_cap = max_planned_risk_usd(equity)
+    book_cap = max_aggregate_risk_usd(equity)
+    remaining = book_cap - book.measured_usd
     note["planned_risk_usd"] = str(risk)
     note["remaining_risk_usd"] = str(remaining)
-    if risk <= 0 or cap <= 0 or risk > cap or risk > remaining:
+    note["commission_usd"] = format(fee, "f")
+    if risk <= 0 or trade_cap <= 0 or risk > trade_cap or risk > remaining:
         note["reason"] = "combined_planned_risk_above_cap"
         return note
     risk_pct = risk / equity * _HUNDRED
-    if risk_pct + open_pct > OWNER_MAX_PLANNED_RISK_PCT:
+    if risk_pct + open_pct > (book_cap / equity * _HUNDRED):
         note["reason"] = "combined_planned_risk_above_cap"
         return note
     note["entry_valid"] = True

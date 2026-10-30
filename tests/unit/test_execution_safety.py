@@ -215,14 +215,14 @@ class TestExecutionSafetyService:
         adapter.login(MT5LoginRequest(login=7, password="p", server="S"))
         validation = MT5OrderValidationService(adapter=adapter)
         safety = ExecutionSafetyService(adapter=adapter, order_validation=validation)
-        # Ask 2320.80, SL 900: distance 1420.80 + spread 0.30 = $1421.10.
-        # 14% of the mock $10,000 equity is $1,400.
+        # Ask 2320.80, SL 200: distance 2120.80 + spread 0.30 = $2121.10.
+        # 20% of the mock $10,000 equity is $2,000.
         intent = OrderIntent(
             symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
             volume=LotSize.of("0.01"),
-            stop_loss=StopLoss.of("900"),
+            stop_loss=StopLoss.of("200"),
             take_profit=TakeProfit.of("2400"),
             slippage=Slippage.of(0),
         )

@@ -198,7 +198,7 @@ def test_one_symbol_failure_does_not_stop_other_opportunities() -> None:
 
 
 def test_max_positions_ceiling_unchanged() -> None:
-    assert HARD_CEILING_MAX_POSITIONS == 2
+    assert HARD_CEILING_MAX_POSITIONS == 5
 
 
 def test_min_lot_exceeds_risk_budget_code_unchanged() -> None:

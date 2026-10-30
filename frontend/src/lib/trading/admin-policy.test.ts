@@ -33,7 +33,19 @@ const changes = buildPolicyChanges({
 
 assert.equal(changes.m1_micro_enabled, null);
 assert.equal(changes.m1_live_submit, null);
-assert.equal(changes.max_concurrent_positions, 1);
+assert.equal(changes.max_concurrent_positions, 5);
+assert.equal(
+  (changes.commission as { amount_usd?: string; status?: string; source?: string }).amount_usd,
+  "0.00",
+);
+assert.equal(
+  (changes.commission as { status?: string }).status,
+  "VERIFIED_BY_OWNER_SUPPORT",
+);
+assert.equal(
+  (changes.commission as { source?: string }).source,
+  "OWNER_CONFIRMED_WELTRADE_SUPPORT",
+);
 assert.equal(changes.evaluate_full_utc_day, true);
 assert.equal(changes.gold_only, true);
 assert.equal("min_lot" in changes, false);
@@ -83,8 +95,23 @@ assert.equal(rejectedReward.length, 1);
 assert.match(rejectedReward[0], /experimental/);
 const rejectedQuality = validateActiveDraft({ min_trade_quality: "69" });
 assert.match(rejectedQuality.join(" "), /70 to 100, not 75/);
-const rejectedRisk = validateActiveDraft({ max_planned_risk_pct: "14.01" });
-assert.match(rejectedRisk.join(" "), /14%/);
+const acceptedOwner = validateActiveDraft({
+  max_planned_risk_pct: "20",
+  max_aggregate_open_risk_pct: "30",
+  daily_loss_pct: "48",
+  max_spread: "1.00",
+  max_concurrent_positions: "5",
+  min_trade_quality: "70",
+  min_reward_risk: "0.50",
+});
+assert.deepEqual(acceptedOwner, []);
+const rejectedRisk = validateActiveDraft({ max_planned_risk_pct: "20.01" });
+assert.match(rejectedRisk.join(" "), /20%/);
+const rejectedBook = validateActiveDraft({
+  max_planned_risk_pct: "20",
+  max_aggregate_open_risk_pct: "30.01",
+});
+assert.match(rejectedBook.join(" "), /30%/);
 
 const experimentDraft = {
   max_planned_risk_pct: "14",

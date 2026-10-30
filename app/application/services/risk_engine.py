@@ -581,6 +581,7 @@ class RiskEngine:
             OWNER_MAX_PLANNED_RISK_PCT,
             max_planned_risk_usd,
             planned_risk_usd,
+            resolve_entry_commission,
         )
 
         lots_for_risk = (
@@ -588,8 +589,8 @@ class RiskEngine:
             if size.approved_lots > 0
             else (size.requested_lots if size.requested_lots > 0 else cfg.min_lot)
         )
-        fee = check.commission
-        commission_known = fee is not None
+        fee = resolve_entry_commission(check.symbol, check.commission)
+        commission_known = fee is not None and fee >= 0
         planned_usd = (
             planned_risk_usd(
                 stop_distance=size.stop_distance,
@@ -1332,31 +1333,29 @@ class RiskEngine:
             owner_risk_cap_usd,
         )
 
-        # One shared budget for the open book plus the new entry. The saved
-        # aggregate cap can be stricter than 14%. It cannot be looser.
-        live_cap = min(
-            max_planned_risk_usd(account.equity),
-            max_aggregate_risk_usd(account.equity),
-        )
+        # The book budget is the aggregate cap. The per-trade cap stays
+        # separate, so five positions cannot each spend the per-trade maximum.
+        live_book = max_aggregate_risk_usd(account.equity)
+        live_trade = max_planned_risk_usd(account.equity)
         configured_cap = owner_risk_cap_usd(
             equity=account.equity,
             configured=self.config.max_total_planned_risk_usd,
             reference_default=MAX_TOTAL_PLANNED_RISK_USD,
-            positions=1,
+            book=True,
         )
-        if live_cap <= 0 or configured_cap <= 0:
+        if live_book <= 0 or configured_cap <= 0:
             cap = Decimal("0")
         else:
-            cap = min(live_cap, configured_cap)
+            cap = min(live_book, configured_cap)
         per_trade_raw = owner_risk_cap_usd(
             equity=account.equity,
             configured=self.config.max_planned_sl_risk_usd,
             reference_default=MAX_PLANNED_SL_RISK_USD,
         )
-        if live_cap <= 0 or per_trade_raw <= 0:
+        if live_trade <= 0 or per_trade_raw <= 0:
             per_trade_cap: Decimal | None = Decimal("0")
         else:
-            per_trade_cap = min(live_cap, per_trade_raw)
+            per_trade_cap = min(live_trade, per_trade_raw)
         book = entry_book_exposure(positions, contract_size_for=self._contract_size)
         # QuantForg and priced external tickets share one budget. An open
         # ticket that cannot be priced is not treated as zero exposure.
@@ -1667,6 +1666,7 @@ class RiskEngine:
                 max_planned_risk_usd,
                 planned_risk_usd,
                 price_unit_value,
+                resolve_entry_commission,
             )
 
             money_per_price = price_unit_value(
@@ -1675,7 +1675,7 @@ class RiskEngine:
                 tick_value=check.tick_value,
             )
             owner_cap = max_planned_risk_usd(account.equity)
-            fee = check.commission
+            fee = resolve_entry_commission(check.symbol, check.commission)
             if fee is None or fee < 0:
                 reasons.append(
                     "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "

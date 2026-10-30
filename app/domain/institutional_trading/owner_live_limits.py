@@ -4,30 +4,32 @@ Single source for the owner's hard trading limits. Every dollar amount is
 derived from live equity; nothing below is a fixed USD cap. Every other risk
 layer may be stricter, never looser.
 
-- Max PLANNED risk per trade: 14% of the risk reference (live equity; $7.00 at
-  $50). Planned risk = (|entry - SL| + spread + order slippage) x contract x
+- Max PLANNED risk per trade: 20% of live equity. The aggregate open-risk
+  budget for every position and pending order together is 30% of live equity.
+  Five positions is the maximum count. It does not grant 20% to each one.
+  Planned risk = (|entry - SL| + spread + order slippage) x contract x
   volume + known commission, rounded up to the cent. The cap is rounded down.
   An amount is never rounded down to pass. Unknown commission is not zero:
-  the entry is rejected. This is a planned maximum, not a cap on realised
-  loss: gaps and execution failures can make a loss larger.
-- Daily loss limit: 19% of the UTC day's starting equity ($9.50 at $50).
+  the entry is rejected. A verified owner commission of 0.00 is a known zero.
+  This is a planned maximum, not a cap on realised loss: gaps and execution
+  failures can make a loss larger.
+- Daily loss limit: 48% of the UTC day's starting equity.
 - No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
 - Stop loss: max(1.00 x ATR(M1|M5), beyond the nearest structure + spread).
   A stop is never shrunk to fit the budget: too wide -> no trade. 1.00 is the
   noise boundary. A structural stop wider than that is kept. A setup whose
   1.00 x ATR stop is not a valid protective stop is rejected.
-- Published reward:risk default is 1.50 after spread:
-  |tp - entry| / (|entry - sl| + spread). Candidates 0.10, 0.15, and 0.20
-  can be saved as an experiment. They do not become the live floor unless
-  that experiment is explicitly promoted. Any other active floor must be at
-  least 1.50. Net reward:risk also includes order slippage and a known
-  commission. Unknown commission is omitted and is not a verified net. TP is
-  a real structure level: the nearest one that clears the active floor, at
-  most the second level out (2026-10-23). Neither clears -> no trade. The
-  stop is never shrunk to manufacture that floor.
+- Active reward:risk floor is 0.50 after spread, expected slippage, and a
+  confirmed commission. Candidates 0.10, 0.15, and 0.20 can be saved as an
+  experiment. They do not become the live floor unless that experiment is
+  explicitly promoted. Net reward:risk includes those costs. Unknown
+  commission is omitted and is not a verified net. TP is a real structure
+  level: the nearest one that clears the active floor, at most the second
+  level out (2026-10-23). Neither clears -> no trade. The stop is never
+  shrunk to manufacture that floor.
 - Entries any UTC hour, every day. Broker symbol session, weekend close,
-  holidays, and maintenance remain the availability gate. Spread <= 0.45.
-- Volume 0.01 (gateway max); 1 open position; 1 entry per cycle.
+  holidays, and maintenance remain the availability gate. Spread <= 1.00.
+- Volume 0.01 (gateway max); at most 5 open positions; 1 entry per cycle.
 - No consecutive-loss pause (owner 2026-10-23).
 
 ``evaluate_owner_entry`` is the final deterministic guard for NEW entries on
@@ -66,19 +68,22 @@ OWNER_MAX_LOT = Decimal("0.01")
 # Starting reference capital (configurable). Live equity is the risk reference;
 # this value is the documented starting point and the $-figures shown at rest.
 OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
-OWNER_MAX_PLANNED_RISK_PCT = Decimal("14.0")
-# Authoritative daily stop: 19% of the UTC day's starting equity.
+OWNER_MAX_PLANNED_RISK_PCT = Decimal("20.0")
+# Shared book cap. It is not the per-trade cap and it is not multiplied by
+# the position count.
+OWNER_MAX_AGGREGATE_OPEN_RISK_PCT = Decimal("30.0")
+# Authoritative daily stop: 48% of the UTC day's starting equity.
 # A loss equal to the cap does not halt; a loss above the cap does.
-OWNER_DAILY_LOSS_PCT = Decimal("19.0")
+OWNER_DAILY_LOSS_PCT = Decimal("48.0")
 # Weekly / monthly loss limits removed (0 = disabled, as for drawdown). Weekly
 # and monthly P/L are still computed for reporting (summaries, journal).
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
-OWNER_MIN_REWARD_RISK = Decimal("1.50")
-# Published default stays 1.50. These three values are the only floors below
-# 1.50 an owner may save, and only inside the experimental block. They stay
-# inactive until that experiment is promoted. Any other value below 1.50 is
-# rejected and the active floor fails closed to 1.50.
+OWNER_MIN_REWARD_RISK = Decimal("0.50")
+# Active floor is 0.50. These three values are the only floors below 0.50 an
+# owner may save, and only inside the experimental block. They stay inactive
+# until that experiment is promoted. Any other value below 0.50 is rejected
+# and the active floor fails closed to 0.50.
 OWNER_EXPERIMENTAL_REWARD_RISK = (
     Decimal("0.10"),
     Decimal("0.15"),
@@ -89,7 +94,9 @@ OWNER_MIN_REWARD_RISK_FLOOR = Decimal("0.10")
 # Eligibility is 00:00-23:59 UTC every day. Broker symbol sessions, weekend
 # closures, holidays, and maintenance stay the availability gate. A stale
 # OWNER_SESSION_* environment value cannot put the desk clock back.
-OWNER_MAX_SPREAD = _env_decimal("OWNER_MAX_SPREAD", "0.45")
+# Hard ceiling. A saved policy may be tighter. A stale environment value
+# cannot put the old 0.45 ceiling back.
+OWNER_MAX_SPREAD = Decimal("1.00")
 OWNER_SESSION_START_UTC = time(0, 0)
 OWNER_SESSION_END_UTC = time(23, 59, 59, 999999)
 # Owner 2026-10-30 experiment: 1.00 x ATR. Structure + spread still wins when
@@ -107,14 +114,15 @@ OWNER_SL_ATR_MULTIPLIERS_INSIDE_NOISE = (
     Decimal("0.75"),
     Decimal("0.90"),
 )
-# TP may move to the second structure level only when the first is < 1.50 RR.
+# TP may move to the second structure level only when the first misses the
+# active reward:risk floor.
 OWNER_TP_MAX_STRUCTURE_LEVELS = 2
 OWNER_SL_ATR_TIMEFRAME = (
     (os.environ.get("OWNER_SL_ATR_TIMEFRAME") or "M1").strip().upper()
 )
 if OWNER_SL_ATR_TIMEFRAME not in {"M1", "M5"}:
     OWNER_SL_ATR_TIMEFRAME = "M1"
-OWNER_MAX_OPEN_POSITIONS = 1
+OWNER_MAX_OPEN_POSITIONS = 5
 OWNER_MAX_ENTRIES_PER_CYCLE = 1
 # Consecutive-loss pause removed (owner 2026-10-23): 0 = disabled.
 OWNER_MAX_CONSECUTIVE_LOSSES = 0
@@ -127,6 +135,17 @@ OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
 OWNER_MIN_TRADE_QUALITY = 70
 OWNER_MIN_TRADE_QUALITY_FLOOR = 70
 
+# Owner-confirmed Weltrade tariff. This is not a broker deal record.
+# Spread, swap, and slippage stay separate costs. A missing or altered
+# block is unknown and the entry fails closed.
+COMMISSION_STATUS_VERIFIED = "VERIFIED_BY_OWNER_SUPPORT"
+COMMISSION_SOURCE_OWNER_CONFIRMED = "OWNER_CONFIRMED_WELTRADE_SUPPORT"
+COMMISSION_MODEL_FIXED_PER_ORDER = "FIXED_ACCOUNT_CURRENCY_PER_ORDER"
+COMMISSION_ACCOUNT_SCOPE = "ATTACHED_WELTRADE_REAL_HEDGE"
+COMMISSION_SYMBOL = "XAUUSD"
+COMMISSION_CURRENCY = "USD"
+COMMISSION_CONFIGURATION_VERSION = "1"
+
 # Compatibility names used by other layers (values at the reference capital).
 OWNER_SL_RISK_PCT = OWNER_MAX_PLANNED_RISK_PCT
 # No minimum planned-risk floor: the stop comes from ATR/structure, not a $ band.
@@ -135,7 +154,7 @@ OWNER_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_PCT
 
 
 def _active_planned_risk_pct() -> Decimal:
-    """Saved policy may be stricter than 14%. It cannot be looser."""
+    """Saved policy may be stricter than 20%. It cannot be looser."""
     from app.domain.institutional_trading.runtime_policy import (
         active_max_planned_risk_pct,
     )
@@ -144,7 +163,7 @@ def _active_planned_risk_pct() -> Decimal:
 
 
 def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
-    """Shared open-risk budget. Never above the per-trade cap of 14%."""
+    """Shared open-risk budget. The 30% book cap is not the 20% trade cap."""
     eq = Decimal(str(equity or 0))
     if eq <= 0:
         return Decimal("0")
@@ -152,15 +171,15 @@ def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
         active_max_aggregate_open_risk_pct,
     )
 
-    pct = min(active_max_aggregate_open_risk_pct(), _active_planned_risk_pct())
+    pct = active_max_aggregate_open_risk_pct()
     return (eq * pct / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
 
 
 def max_planned_risk_usd(equity: Decimal) -> Decimal:
     """Planned-risk cap for live equity, rounded down to the cent.
 
-    The approved ceiling is 14%. An installed runtime policy may use a lower
-    percent. A missing policy uses 14%.
+    The approved ceiling is 20%. An installed runtime policy may use a lower
+    percent. A missing policy uses 20%.
     """
     eq = Decimal(str(equity or 0))
     if eq <= 0:
@@ -179,16 +198,19 @@ def owner_risk_cap_usd(
     configured: Decimal | None,
     reference_default: Decimal,
     positions: int = 1,
+    book: bool = False,
 ) -> Decimal:
-    """Planned-risk cap from 14% of LIVE equity.
+    """Live equity cap. ``positions`` does not multiply the budget.
 
-    Static configs carry the cap at the $50 reference capital ($7.00); that
-    default is replaced by 14% of live equity (x ``positions`` for an
-    aggregate cap). A stricter explicitly configured cap stays.
+    The book cap is 30% of equity. The per-trade cap is 20%. A stricter
+    explicit dollar configuration stays. Five positions cannot spend 20% each.
     """
+    del positions
     eq = Decimal(str(equity or 0))
     if eq > 0 and (configured is None or configured == reference_default):
-        return max_planned_risk_usd(eq) * positions
+        if book:
+            return max_aggregate_risk_usd(eq)
+        return max_planned_risk_usd(eq)
     return configured if configured is not None else reference_default
 
 
@@ -200,6 +222,123 @@ def max_sl_risk_usd(equity: Decimal) -> Decimal:
 def _nonneg(value: Decimal | None) -> Decimal:
     raw = Decimal(str(value or 0))
     return raw if raw > 0 else Decimal("0")
+
+
+def owner_commission_configuration() -> dict[str, str]:
+    """Explicit tariff. Deal history is a separate record and is not written."""
+    return {
+        "symbol": COMMISSION_SYMBOL,
+        "account_scope": COMMISSION_ACCOUNT_SCOPE,
+        "amount_usd": "0.00",
+        "status": COMMISSION_STATUS_VERIFIED,
+        "source": COMMISSION_SOURCE_OWNER_CONFIRMED,
+        "model": COMMISSION_MODEL_FIXED_PER_ORDER,
+        "currency": COMMISSION_CURRENCY,
+        "configuration_version": COMMISSION_CONFIGURATION_VERSION,
+        "applies_to": "new_order_planned_risk",
+        "excludes": "spread,swap,slippage,broker_deal_history",
+    }
+
+
+def _commission_amount(value: object) -> Decimal | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    if not amount.is_finite() or amount < 0:
+        return None
+    return amount.quantize(_CENT)
+
+
+def verified_policy_commission(
+    symbol: str, document: dict[str, object] | None = None
+) -> Decimal | None:
+    """Known tariff only when the saved block matches the owner confirmation.
+
+    ``None`` means the configuration is missing or invalid. Callers fail
+    closed. A matching 0.00 is a known zero, not an invented deal.
+    """
+    if not is_gold_symbol(symbol):
+        return None
+    if document is None:
+        from app.domain.institutional_trading.runtime_policy import active_policy
+
+        loaded = active_policy()
+        document = loaded if isinstance(loaded, dict) else None
+    if not isinstance(document, dict) or document.get("unavailable"):
+        return None
+    raw = document.get("commission")
+    if not isinstance(raw, dict):
+        return None
+    expected = owner_commission_configuration()
+    if set(raw) != set(expected):
+        return None
+    for key, required in expected.items():
+        if key == "amount_usd":
+            continue
+        if raw.get(key) != required:
+            return None
+    return _commission_amount(raw.get("amount_usd"))
+
+
+def clean_commission_configuration(
+    raw: object,
+) -> tuple[dict[str, str] | None, list[str]]:
+    """Validate a save. The status and source must match the owner confirmation."""
+    expected = owner_commission_configuration()
+    if not isinstance(raw, dict):
+        return None, ["commission must be an object"]
+    errors: list[str] = []
+    unknown = sorted(set(map(str, raw)) - set(expected))
+    if unknown:
+        errors.append("unknown commission keys: " + ", ".join(unknown))
+    for key, required in expected.items():
+        if key == "amount_usd":
+            continue
+        if raw.get(key) != required:
+            errors.append(f"commission.{key} must be {required}")
+    amount = _commission_amount(raw.get("amount_usd"))
+    if amount is None:
+        errors.append("commission.amount_usd must be a non-negative amount")
+        return None, errors
+    if errors:
+        return None, errors
+    cleaned = dict(expected)
+    cleaned["amount_usd"] = format(amount, "f")
+    return cleaned, []
+
+
+def commission_audit(
+    symbol: str, document: dict[str, object] | None = None
+) -> dict[str, str]:
+    """Source and configuration version for logs and the admin view."""
+    amount = verified_policy_commission(symbol, document)
+    usable = amount is not None
+    return {
+        "commission_usd": format(amount, "f") if usable else "",
+        "commission_status": COMMISSION_STATUS_VERIFIED if usable else "UNVERIFIED",
+        "commission_source": (
+            COMMISSION_SOURCE_OWNER_CONFIRMED if usable else "MISSING_OR_INVALID"
+        ),
+        "commission_model": COMMISSION_MODEL_FIXED_PER_ORDER if usable else "",
+        "commission_configuration_version": (
+            COMMISSION_CONFIGURATION_VERSION if usable else ""
+        ),
+        "commission_usable": "true" if usable else "false",
+    }
+
+
+def resolve_entry_commission(symbol: str, supplied: object) -> Decimal | None:
+    """Use an explicit numeric tariff, otherwise the verified policy block.
+
+    A missing policy block stays unknown. This does not read broker deals.
+    """
+    fee = declared_commission(supplied)
+    if fee is not None:
+        return fee
+    return verified_policy_commission(symbol)
 
 
 def declared_commission(value: object) -> Decimal | None:
@@ -368,10 +507,10 @@ def format_owner_sl_risk(
 def daily_loss_cap_usd(
     start_of_day_equity: Decimal, pct: Decimal | None = None
 ) -> Decimal:
-    """Daily stop in USD: pct (max 19%) of the UTC day's starting equity.
+    """Daily stop in USD: pct (max 48%) of the UTC day's starting equity.
 
-    ``pct is None`` uses the installed runtime policy, or 19% when no policy
-    is installed. An explicit percent cannot exceed 19%.
+    ``pct is None`` uses the installed runtime policy, or 48% when no policy
+    is installed. An explicit percent cannot exceed 48%.
     """
     sod = Decimal(str(start_of_day_equity or 0))
     if sod <= 0:
@@ -495,7 +634,7 @@ def _quantize_cent(value: Decimal) -> Decimal:
 def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
     """Return an enforceable net floor, or None when the saved value is illegal.
 
-    Any value at least 1.50 is allowed. Below that, only 0.10, 0.15, and 0.20.
+    Any value at least 0.50 is allowed. Below that, only 0.10, 0.15, and 0.20.
     """
     try:
         rr = Decimal(str(value))
@@ -721,8 +860,8 @@ def evaluate_owner_entry(
     ``commission is None`` rejects the entry. It is not treated as zero.
     A known zero is included. Reward:risk counts the spread once, on the risk
     leg, plus order slippage and a known commission. The ratio must clear the
-    active owner floor (published default 1.50; a promoted experiment may be
-    0.10, 0.15, or 0.20). A saved but unpromoted experiment stays at 1.50.
+    active owner floor (0.50; a promoted experiment may be 0.10, 0.15, or
+    0.20). A saved but unpromoted experiment stays at 0.50.
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """
@@ -806,7 +945,7 @@ def evaluate_owner_entry(
     sl_dist = abs(px - sl)
     tp_dist = abs(tp - px)
     slip = _nonneg(slippage)
-    fee = declared_commission(commission)
+    fee = resolve_entry_commission(symbol, commission)
     if fee is None:
         violations.append(
             "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "

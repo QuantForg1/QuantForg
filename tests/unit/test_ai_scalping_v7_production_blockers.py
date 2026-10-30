@@ -84,11 +84,11 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
     one_open = AccountRiskState(
         equity=Decimal("10000"),
         daily_pnl=Decimal("0"),
-        open_positions=1,
+        open_positions=5,
     )
     snap = aggregate_portfolio_risk(one_open, config=DEFAULT_AI_SCALPING_CONFIG)
-    assert snap.exposure_pct == Decimal("0.50")
-    assert snap.max_open_positions == 1
+    assert snap.exposure_pct == Decimal("2.50")
+    assert snap.max_open_positions == 5
     full = scan_multi_asset_portfolio(
         [_opp("EURUSD", ai_confidence=95, trade_quality=95)],
         account=one_open,
@@ -115,11 +115,11 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
 
 @pytest.mark.unit
 def test_blocker2_daily_loss_from_account_owner_stop() -> None:
-    dd = portfolio_daily_loss_pct(equity=Decimal("10000"), daily_pnl=Decimal("-8001"))
-    assert dd == Decimal("80.01")
+    dd = portfolio_daily_loss_pct(equity=Decimal("10000"), daily_pnl=Decimal("-9231"))
+    assert dd == Decimal("92.31")
     account = AccountRiskState(
         equity=Decimal("10000"),
-        daily_pnl=Decimal("-8001"),
+        daily_pnl=Decimal("-9231"),
         open_positions=0,
     )
     snap = aggregate_portfolio_risk(
@@ -127,10 +127,10 @@ def test_blocker2_daily_loss_from_account_owner_stop() -> None:
         config=DEFAULT_AI_SCALPING_CONFIG,
         ite_config=DEFAULT_ITE_CONFIG,
     )
-    assert snap.daily_loss_pct == Decimal("80.01")
-    # Owner stop: max($5, 3% of start-of-day $18,001) as % of equity.
+    assert snap.daily_loss_pct == Decimal("92.31")
+    # 48% of start-of-day $19,231 is $9,230.88. A $9,231 loss blocks.
     assert snap.max_daily_loss_pct == daily_loss_cap_pct(
-        daily_pnl=Decimal("-8001"), base_now=Decimal("10000")
+        daily_pnl=Decimal("-9231"), base_now=Decimal("10000")
     )
 
     result = scan_multi_asset_portfolio(
@@ -149,7 +149,7 @@ def test_blocker2_daily_loss_from_account_owner_stop() -> None:
         ite_config=DEFAULT_ITE_CONFIG,
     )
     assert payload["blocked_by_portfolio"] is True
-    assert payload["portfolio_risk"]["daily_loss_pct"] == "80.01"
+    assert payload["portfolio_risk"]["daily_loss_pct"] == "92.31"
 
 
 @pytest.mark.unit

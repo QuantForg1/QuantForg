@@ -8,7 +8,10 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.domain.institutional_trading.owner_live_limits import OWNER_DAILY_LOSS_PCT
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_DAILY_LOSS_PCT,
+    OWNER_MAX_OPEN_POSITIONS,
+)
 from app.domain.market_universe.constants import (
     ALLOW_LIVE_PROMOTION,
     FROZEN_DIRECTIONAL_EDGE,
@@ -217,13 +220,17 @@ def build_configuration_audit() -> dict[str, Any]:
         _row(
             setting="MAX_OPEN_TRADES",
             source="SCALPING_V1.max_open_trades",
-            default=1,
+            default=int(OWNER_MAX_OPEN_POSITIONS),
             effective=max_open,
             consumer="portfolio / scalp planner",
             asset_class="ALL (live gold book)",
             live_or_research="LIVE_EFFECTIVE",
             precedence="SCALPING_V1",
-            status="LIVE_EFFECTIVE" if int(max_open) == 1 else "CONFLICTING",
+            status=(
+                "LIVE_EFFECTIVE"
+                if int(max_open) == int(OWNER_MAX_OPEN_POSITIONS)
+                else "CONFLICTING"
+            ),
             note="Research must not change this.",
         ),
         _row(
@@ -235,7 +242,7 @@ def build_configuration_audit() -> dict[str, Any]:
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
-            # Owner daily stop: 19% of the UTC day's start equity. Equal does not halt.
+            # Owner daily stop: 48% of the UTC day's start equity. Equal does not halt.
             status=(
                 "LIVE_EFFECTIVE"
                 if Decimal(str(daily_loss)) == OWNER_DAILY_LOSS_PCT

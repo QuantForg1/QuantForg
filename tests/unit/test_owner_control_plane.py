@@ -162,7 +162,7 @@ async def test_request_email_alone_does_not_promote_a_different_identity():
 @pytest.mark.unit
 def test_policy_rejects_looser_risk_and_disabled_safeguards():
     base = approved_baseline()
-    loose = validate_policy_changes(base, {"max_planned_risk_pct": "20"})
+    loose = validate_policy_changes(base, {"max_planned_risk_pct": "20.01"})
     assert loose.ok is False
     unlocked = validate_policy_changes(base, {"gold_only": False})
     assert unlocked.ok is False
@@ -442,7 +442,7 @@ def test_worker_applies_saved_policy_version():
     )
     assert candidate["worker_confirmed"] is True
     assert candidate["document"]["min_reward_risk"] == "0.20"
-    assert candidate["enforced_min_reward_risk"] == "1.50"
+    assert candidate["enforced_min_reward_risk"] == "0.50"
     assert candidate["experimental_promoted"] is False
 
 
@@ -487,21 +487,31 @@ def test_saved_min_lot_blocks_a_smaller_volume():
 
 
 @pytest.mark.unit
-def test_aggregate_cap_stays_inside_the_per_trade_cap():
+def test_book_cap_is_separate_from_the_per_trade_cap():
     from app.domain.institutional_trading.owner_live_limits import (
         max_aggregate_risk_usd,
         max_planned_risk_usd,
     )
 
-    token = use_runtime_policy(
+    equity = Decimal("100")
+    token = use_runtime_policy(approved_baseline())
+    try:
+        assert max_planned_risk_usd(equity) == Decimal("20.00")
+        assert max_aggregate_risk_usd(equity) == Decimal("30.00")
+    finally:
+        reset_runtime_policy(token)
+    tighter = use_runtime_policy(
         {**approved_baseline(), "max_aggregate_open_risk_pct": "4"}
     )
     try:
-        equity = Decimal("100")
         assert max_aggregate_risk_usd(equity) == Decimal("4.00")
         assert max_aggregate_risk_usd(equity) <= max_planned_risk_usd(equity)
     finally:
-        reset_runtime_policy(token)
+        reset_runtime_policy(tighter)
+    below_trade = validate_policy_changes(
+        approved_baseline(), {"max_aggregate_open_risk_pct": "10"}
+    )
+    assert below_trade.ok is False
 
 
 @pytest.mark.unit
@@ -515,16 +525,32 @@ def test_disabling_the_full_utc_day_blocks_entry():
 
 
 @pytest.mark.unit
-def test_saved_position_cap_cannot_rise_above_one():
+def test_saved_position_cap_accepts_five_and_keeps_a_stricter_one():
     from app.domain.institutional_trading.runtime_policy import (
         active_max_open_positions,
     )
 
-    token = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 5})
+    ceiling = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 5})
+    try:
+        assert active_max_open_positions() == 5
+    finally:
+        reset_runtime_policy(ceiling)
+    stricter = use_runtime_policy(
+        {**approved_baseline(), "max_concurrent_positions": 1}
+    )
     try:
         assert active_max_open_positions() == 1
     finally:
-        reset_runtime_policy(token)
+        reset_runtime_policy(stricter)
+    illegal = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 6})
+    try:
+        assert active_max_open_positions() == 5
+    finally:
+        reset_runtime_policy(illegal)
+    rejected = validate_policy_changes(
+        approved_baseline(), {"max_concurrent_positions": 6}
+    )
+    assert rejected.ok is False
 
 
 @pytest.mark.unit

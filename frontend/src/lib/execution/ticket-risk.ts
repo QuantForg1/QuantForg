@@ -3,24 +3,24 @@
  * live limits (mirror of app/domain/institutional_trading/owner_live_limits.py).
  *
  * Planned risk = (|entry - SL| + spread + slippage) x contract x lots
- * + commission, rounded up to the cent. The 14% cap is rounded down.
+ * + commission, rounded up to the cent. The 20% cap is rounded down.
  * Risk is never rounded down to pass. Reward:risk counts the spread once
- * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 1.5.
+ * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 0.50.
  *
- * 14% is a maximum PLANNED risk, not a cap on realised loss: gaps and
- * execution failures can make a loss larger. Omitted commission is unknown
- * and is not treated as zero.
+ * 20% is a maximum PLANNED risk per trade, not a cap on realised loss: gaps
+ * and execution failures can make a loss larger. Omitted commission is
+ * unknown and is not treated as zero.
  */
 
 export const OWNER_MAX_LOT = 0.01;
-export const OWNER_MAX_PLANNED_RISK_PCT = 14;
-export const OWNER_MIN_REWARD_RISK = 1.5;
-export const OWNER_MAX_SPREAD = 0.45;
+export const OWNER_MAX_PLANNED_RISK_PCT = 20;
+export const OWNER_MIN_REWARD_RISK = 0.5;
+export const OWNER_MAX_SPREAD = 1;
 export const OWNER_SESSION_START_UTC_HOUR = 0;
 /** 24 means the window runs through 23:59 UTC. There is no desk-hour close. */
 export const OWNER_SESSION_END_UTC_HOUR = 24;
 export const PLANNED_RISK_NOTE =
-  "14% is the maximum planned risk per trade, not a cap on realised loss: " +
+  "20% is the maximum planned risk per trade, not a cap on realised loss: " +
   "slippage, gaps, commissions and execution failures can make a loss larger.";
 
 export type TicketRiskInput = {
@@ -96,7 +96,7 @@ function finitePositive(n: number): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
-/** Per-trade planned-risk cap in USD: 14% of equity, rounded down to the cent. */
+/** Per-trade planned-risk cap in USD: 20% of equity, rounded down to the cent. */
 export function maxSlRiskUsd(equity: number): number {
   if (!finitePositive(equity)) return 0;
   return Math.floor(equity * OWNER_MAX_PLANNED_RISK_PCT + 1e-9) / 100;

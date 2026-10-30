@@ -60,7 +60,7 @@ def test_trading_mode_persisted_and_hydrated(
     plane = cp.get_control_plane()
     assert plane.mode is OpsExecutionMode.LIVE
     assert plane.trading_mode == "scalping"
-    assert plane.max_open_trades == 1
+    assert plane.max_open_trades == 5
     cp._GLOBAL_PLANE = None
 
 
@@ -83,7 +83,7 @@ def test_missing_trading_mode_restored_for_live_desk(
     cp._GLOBAL_PLANE = None
     plane = cp.get_control_plane()
     assert plane.trading_mode == "scalping"
-    assert plane.max_open_trades == 1
+    assert plane.max_open_trades == 5
     state = load_ops_state()
     assert state.get("trading_mode") == "scalping"
     cp._GLOBAL_PLANE = None

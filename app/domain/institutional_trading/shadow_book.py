@@ -174,7 +174,7 @@ class ShadowBook:
         now: datetime,
         planned_risk_usd: Decimal | None = None,
     ) -> str | None:
-        """Limits applied on shadow equity: 1 position, 14% cap, daily stop."""
+        """One shadow position, the owner risk cap, and the daily stop."""
         if self.open_trade() is not None:
             return "SHADOW_POSITION_OPEN: max 1 shadow position"
         eq = self.shadow_equity(equity)

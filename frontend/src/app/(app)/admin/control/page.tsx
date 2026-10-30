@@ -35,6 +35,7 @@ type PolicyPayload = {
   experimental?: Record<string, unknown> | null;
   experimental_promoted?: boolean;
   enforced_min_reward_risk?: string;
+  commission?: Record<string, string> | null;
   pending_restart?: boolean;
 };
 
@@ -48,17 +49,18 @@ type Overview = {
 };
 
 const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
-  max_planned_risk_pct: "Max planned risk % (ceiling 14)",
-  daily_loss_pct: "Daily loss halt % (ceiling 19)",
+  max_planned_risk_pct: "Max planned risk % (ceiling 20)",
+  daily_loss_pct: "Daily loss halt % (ceiling 48)",
   weekly_loss_pct: "Weekly loss halt % (0 = off until you set it)",
   max_drawdown_pct:
     "Overall drawdown halt % (0 = off until you set it, ceiling is the daily halt)",
-  max_aggregate_open_risk_pct: "Max aggregate open risk % (ceiling 14)",
+  max_aggregate_open_risk_pct: "Max aggregate open risk % (ceiling 30, shared across positions)",
+  max_concurrent_positions: "Max concurrent positions (1 to 5)",
   min_lot: "Min lot (empty uses the broker minimum, ceiling 0.01)",
   max_lot: "Max lot (ceiling 0.01)",
-  max_spread: "Max spread (ceiling 0.45)",
+  max_spread: "Max spread (ceiling 1.00)",
   min_reward_risk:
-    "Active minimum net reward:risk (at least 1.50). 0.10, 0.15, and 0.20 stay experimental.",
+    "Active minimum net reward:risk (at least 0.50). 0.10, 0.15, and 0.20 stay experimental.",
   min_trade_quality: "Minimum trade quality (70 to 100; default 70)",
   stop_atr_multiplier:
     "ATR stop multiplier (1.00, 1.25, or 1.50; default 1.00). 0.75 and 0.90 are rejected",
@@ -209,15 +211,15 @@ export default function AdminControlPage() {
   const policy = overview?.policy;
   const states = policy ? policyStateLines(policy) : null;
   const experimentLabels: Record<(typeof EXPERIMENTAL_KEYS)[number], string> = {
-    max_planned_risk_pct: "Experimental planned risk % (ceiling 14)",
-    max_aggregate_open_risk_pct: "Experimental aggregate open risk % (ceiling 14)",
-    daily_loss_pct: "Experimental daily loss halt % (ceiling 19)",
+    max_planned_risk_pct: "Experimental planned risk % (ceiling 20)",
+    max_aggregate_open_risk_pct: "Experimental aggregate open risk % (ceiling 30)",
+    daily_loss_pct: "Experimental daily loss halt % (ceiling 48)",
     max_lot: "Experimental max lot (ceiling 0.01)",
-    max_spread: "Experimental max spread (ceiling 0.45)",
+    max_spread: "Experimental max spread (ceiling 1.00)",
     min_reward_risk: "Experimental reward:risk (0.10, 0.15, or 0.20)",
     min_trade_quality: "Experimental trade quality (70 to 100)",
     stop_atr_multiplier: "Experimental ATR stop multiplier (1.00, 1.25, or 1.50)",
-    max_concurrent_positions: "Experimental max positions (fixed at 1)",
+    max_concurrent_positions: "Experimental max positions (1 to 5)",
   };
 
   return (

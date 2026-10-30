@@ -34,6 +34,23 @@ if not os.environ.get("QUANTFORG_PRODUCTION_DOCS_DIR"):
 
 
 @pytest.fixture(autouse=True)
+def _reset_runtime_trading_policy() -> Iterator[None]:
+    """A saved policy must not leak into the next test.
+
+    The approved baseline now carries a verified commission. A leaked document
+    would turn an unknown commission into that known zero.
+    """
+    from app.domain.institutional_trading.runtime_policy import (
+        reset_runtime_policy,
+        use_runtime_policy,
+    )
+
+    token = use_runtime_policy(None)
+    yield
+    reset_runtime_policy(token)
+
+
+@pytest.fixture(autouse=True)
 def _reset_phase_a_plane() -> Iterator[None]:
     """Phase A halt is a process singleton — a kill in one test must not leak."""
     from app.domain.institutional_trading.phase_a.plane import (

@@ -200,18 +200,18 @@ def test_zero_quantforg_gold_positions_capacity_available() -> None:
 
 
 @pytest.mark.unit
-def test_one_quantforg_gold_position_blocks_second_entry_at_owner_max() -> None:
+def test_one_quantforg_gold_position_leaves_room_under_the_five_cap() -> None:
     rows = [_pos(10, magic=QUANTFORG_MAGIC, comment="ite:v1:abc")]
     assert count_quantforg_positions(rows, symbol="XAUUSD_i") == 1
     assert capacity_available(current_count=1, configured_max=1) is False
+    assert capacity_available(current_count=1, configured_max=5) is True
     elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
         snapshot=_snapshot(),
         confluence=_conf(),
         account=_account(open_n=1, already=True),
         risk_allowed=True,
     )
-    assert elig.eligible is False
-    assert elig.checks["max_open_trades"] is False
+    assert elig.checks["max_open_trades"] is True
 
 
 @pytest.mark.unit
@@ -354,13 +354,13 @@ def test_backtest_and_live_both_use_one_open_trade() -> None:
         ).max_open_trades
         == 1
     )
-    assert DEFAULT_ITE_CONFIG.max_open_trades == 1
+    assert DEFAULT_ITE_CONFIG.max_open_trades == 5
     from app.domain.institutional_trading.ai_scalping.config import (
         DEFAULT_AI_SCALPING_CONFIG,
     )
 
-    assert live_strategy_max_open(ITEConfig()) == 1
-    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == 1
+    assert live_strategy_max_open(ITEConfig()) == 5
+    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == 5
 
 
 @pytest.mark.unit

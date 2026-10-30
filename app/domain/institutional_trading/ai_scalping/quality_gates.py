@@ -188,9 +188,6 @@ def evaluate_quality_gates(
         )
 
     # Owner hard floor. Unset policy stays 70. A saved policy may use 70-100.
-    from app.domain.institutional_trading.owner_live_limits import (
-        OWNER_MIN_REWARD_RISK,
-    )
     from app.domain.institutional_trading.runtime_policy import (
         active_min_reward_risk,
         active_min_trade_quality,
@@ -204,27 +201,16 @@ def evaluate_quality_gates(
             f"< {quality_floor}"
         )
 
+    owner_floor = active_min_reward_risk()
     min_rr = (
         min_expected_rr_override
         if min_expected_rr_override is not None
-        else cfg.min_expected_rr
+        else owner_floor
     )
-    owner_floor = active_min_reward_risk()
-    # An authorized experimental floor replaces the profile minimum. The
-    # published 1.50 default keeps the profile's own floor and the RR > 1 gate.
-    if owner_floor < OWNER_MIN_REWARD_RISK:
+    # The owner floor is authoritative. Do not raise it back to a profile
+    # constant, and do not let an override go below that floor.
+    if min_rr < owner_floor:
         min_rr = owner_floor
-    else:
-        # Never allow override below configured floor
-        if min_rr < cfg.min_expected_rr:
-            min_rr = cfg.min_expected_rr
-        # Never demand more RR than the profile's fixed TP can deliver
-        if (
-            cfg.fixed_tp_r is not None
-            and cfg.fixed_tp_r > 0
-            and min_rr > cfg.fixed_tp_r
-        ):
-            min_rr = cfg.fixed_tp_r
     rr_ok = expected_rr is not None and expected_rr >= min_rr
     checks["min_rr"] = bool(rr_ok)
     if owner_floor < Decimal("1"):

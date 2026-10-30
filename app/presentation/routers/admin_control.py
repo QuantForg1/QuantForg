@@ -30,6 +30,7 @@ from app.domain.identity.designated_owner import is_designated_owner_email
 from app.domain.institutional_trading.live_trading_control import (
     get_live_trading_controller,
 )
+from app.domain.institutional_trading.owner_live_limits import commission_audit
 from app.domain.institutional_trading.runtime_policy import enforced_min_reward_risk
 from app.presentation.dependencies.auth import require_roles
 
@@ -72,6 +73,7 @@ def _policy_view(policy: Any) -> dict[str, Any]:
         "enforced_min_reward_risk": format(
             enforced_min_reward_risk(document).quantize(Decimal("0.01")), "f"
         ),
+        "commission": commission_audit("XAUUSD", document),
     }
 
 

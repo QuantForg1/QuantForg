@@ -91,20 +91,20 @@ def test_planned_risk_cap_uses_shadow_equity() -> None:
     t = _sell(book)
     book.update(bars=[_bar(1, "4002.5", "3999.0")])  # SL: -2.00
     assert t.outcome == "SL"
-    # Shadow equity 30.88 -> 14% = $4.32: $4.33 is refused, $4.32 is allowed.
+    # Shadow equity 30.88 -> 20% floors to $6.17: $6.18 is refused, $6.17 is allowed.
     reason = book.entry_block_reason(
-        equity=D("32.88"), now=T0, planned_risk_usd=D("4.33")
+        equity=D("32.88"), now=T0, planned_risk_usd=D("6.18")
     )
     assert reason and reason.startswith("SHADOW_SL_RISK")
     assert (
-        book.entry_block_reason(equity=D("32.88"), now=T0, planned_risk_usd=D("4.32"))
+        book.entry_block_reason(equity=D("32.88"), now=T0, planned_risk_usd=D("6.17"))
         is None
     )
 
 
 def test_daily_stop_on_shadow_pnl() -> None:
     book = sb.ShadowBook()
-    for k in range(5):  # 5 x -2.00 = -10.00 > 25% of day-start 32.88 (8.22)
+    for k in range(8):  # 8 x -2.00 = -16.00 > 48% of day-start 32.88 (15.7824)
         t = _sell(book, now=T0 + timedelta(minutes=10 * k))
         book.update(bars=[_bar(10 * k + 1, "4002.5", "3999.0")])
         assert t.outcome == "SL"

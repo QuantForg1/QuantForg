@@ -16,7 +16,10 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_PLANNED_RISK_PCT,
 )
-from app.domain.institutional_trading.runtime_policy import active_max_open_positions
+from app.domain.institutional_trading.runtime_policy import (
+    active_max_aggregate_open_risk_pct,
+    active_max_open_positions,
+)
 
 _COST_MULTIPLE = Decimal("1.50")
 
@@ -90,7 +93,7 @@ def evaluate_m1(
             reason="shared_book_position_open",
         )
     combined_risk = Decimal(str(planned_risk_pct)) + Decimal(str(open_planned_risk_pct))
-    if combined_risk > OWNER_MAX_PLANNED_RISK_PCT:
+    if combined_risk > active_max_aggregate_open_risk_pct():
         return M1Decision(
             action="none",
             setup="",

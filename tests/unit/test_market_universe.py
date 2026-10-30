@@ -306,9 +306,10 @@ def test_config_audit_frozen_gates() -> None:
     by_name = {r["SETTING"]: r for r in audit["rows"]}
     assert by_name["OPPORTUNITY_SCORE_THRESHOLD"]["EFFECTIVE_VALUE"] == 70
     assert by_name["DIRECTION_EDGE_MARGIN"]["EFFECTIVE_VALUE"] == 5
-    assert by_name["MAX_DAILY_LOSS_PCT"]["EFFECTIVE_VALUE"] == "19.0"
+    assert by_name["MAX_DAILY_LOSS_PCT"]["EFFECTIVE_VALUE"] == "48.0"
     assert by_name["MAX_DAILY_LOSS_PCT"]["STATUS"] == "LIVE_EFFECTIVE"
-    assert by_name["MAX_OPEN_TRADES"]["EFFECTIVE_VALUE"] == 1
+    assert by_name["MAX_OPEN_TRADES"]["EFFECTIVE_VALUE"] == 5
+    assert by_name["MAX_OPEN_TRADES"]["STATUS"] == "LIVE_EFFECTIVE"
     assert by_name["FORCE_FIRST_TRADE"]["EFFECTIVE_VALUE"] is False
     assert by_name["ALLOW_LIVE_PROMOTION"]["EFFECTIVE_VALUE"] is False
     assert audit["silently_normalizes_conflicts"] is False

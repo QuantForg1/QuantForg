@@ -262,6 +262,27 @@ def _align_decision_to_structural_targets(
         return decision
     sl_dist = abs(entry - sl)
     tp_dist = abs(tp - entry)
+    # Absolute distances hide a target that sits on the stop side of entry.
+    # A 0.50 floor still requires the target beyond entry, in the trade direction.
+    if decision.action is DecisionAction.BUY:
+        side_ok = sl < entry < tp
+    elif decision.action is DecisionAction.SELL:
+        side_ok = tp < entry < sl
+    else:
+        side_ok = False
+    if not side_ok:
+        block = (
+            "TP_NOT_BEYOND_ENTRY: take profit must sit beyond entry "
+            f"on the profit side (entry={entry} sl={sl} tp={tp})"
+        )
+        reasons = [*decision.risk_reasons, block]
+        return replace(
+            decision,
+            action=DecisionAction.NO_TRADE,
+            approved_lots=Decimal("0"),
+            risk_reasons=tuple(reasons),
+            reasons=tuple(dict.fromkeys([*decision.reasons, *reasons])),
+        )
     block = gross_distance_rr_block(tp_distance=tp_dist, stop_distance=sl_dist)
     if block is not None:
         reasons = [*decision.risk_reasons, block]

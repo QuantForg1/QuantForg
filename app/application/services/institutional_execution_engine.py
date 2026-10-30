@@ -34,8 +34,8 @@ from app.domain.execution_engine.reasons import humanize_reason, humanize_reason
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
-    declared_commission,
     evaluate_owner_entry,
+    max_aggregate_risk_usd,
     max_planned_risk_usd,
     presend_owner_violations,
     price_unit_value,
@@ -852,7 +852,13 @@ class InstitutionalExecutionEngine:
         ) = None
         try:
             account = self.gateway.adapter.account_snapshot()
-            known_fee = declared_commission(getattr(account, "commission", None))
+            from app.domain.institutional_trading.owner_live_limits import (
+                resolve_entry_commission,
+            )
+
+            known_fee = resolve_entry_commission(
+                intent.symbol, getattr(account, "commission", None)
+            )
             owner_band_equity = account.equity
             positions = list(self.gateway.adapter.list_positions())
             entry = Decimal("0")
@@ -1360,18 +1366,24 @@ class InstitutionalExecutionEngine:
                         AttributeError,
                     ):
                         open_risk_unknown = True
-                    # One 14% budget for the open book plus this entry. A failed
-                    # position read is not treated as zero open risk.
+                    # Per-trade ceiling is 20% of equity. The open book, including
+                    # this entry, is capped at 30%. A failed position read is
+                    # not treated as zero open risk.
                     owner_cap = (
                         max_planned_risk_usd(owner_band_equity)
                         if owner_band_equity is not None and owner_band_equity > 0
                         else None
                     )
+                    book_cap = (
+                        max_aggregate_risk_usd(owner_band_equity)
+                        if owner_band_equity is not None and owner_band_equity > 0
+                        else None
+                    )
                     band_reason: str | None
-                    if open_risk_unknown or owner_cap is None:
+                    if open_risk_unknown or owner_cap is None or book_cap is None:
                         band_reason = "OPEN_PLANNED_RISK_UNAVAILABLE"
                     else:
-                        remaining_cap = max(owner_cap - open_risk, Decimal("0"))
+                        remaining_cap = max(book_cap - open_risk, Decimal("0"))
                         band_reason = actual_planned_sl_band_reason(
                             actual,
                             per_trade_max=owner_cap,

@@ -94,8 +94,8 @@ def _fx_account(equity: Decimal = Decimal("500")) -> AccountSnapshot:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_oms_uses_fx_contract_size_not_gold_default() -> None:
-    """EURUSD 0.01 at an 800-pip SL is $80 > 14% of $500 — must REJECT; with the
-    gold CS=100 it would wrongly look like $0.08."""
+    """EURUSD 0.01 at a 1001-pip SL is $100.10 > 20% of $500. Gold CS=100
+    would wrongly look like about $0.10."""
     engine = RiskEngine(
         config=RiskEngineConfig(
             min_lot=Decimal("0.01"),
@@ -111,7 +111,7 @@ def test_oms_uses_fx_contract_size_not_gold_default() -> None:
             symbol="EURUSD",
             side="sell",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("0.08000"),
+            stop_loss_distance=Decimal("0.10010"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08500"),
             contract_size=Decimal("100000"),
@@ -360,8 +360,8 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         expected_rr=Decimal("1.00"),
         atr_pct=Decimal("0.2"),
     )
-    assert equal.passed is False
-    assert any("TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in equal.hard_rejects)
+    assert equal.passed is True
+    assert not any("OWNER_MIN_RR" in r for r in equal.hard_rejects)
 
     worse = evaluate_quality_gates(
         direction=direction,
@@ -373,11 +373,11 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         thresholds=thresholds,
         confidence=80,
         trade_quality=80,
-        expected_rr=Decimal("0.80"),
+        expected_rr=Decimal("0.49"),
         atr_pct=Decimal("0.2"),
     )
     assert worse.passed is False
-    assert any("TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in worse.hard_rejects)
+    assert any("OWNER_MIN_RR" in r for r in worse.hard_rejects)
 
 
 @pytest.mark.unit
@@ -659,12 +659,12 @@ def test_fx_002_cannot_pass_when_max_lot_blocks_step_up() -> None:
             symbol="EURUSD",
             side="buy",
             requested_lots=Decimal("0.02"),
-            stop_loss_distance=Decimal("0.00400"),  # 0.02 lot = $8.00 > $7.00
+            stop_loss_distance=Decimal("0.00510"),  # 0.02 lot = $10.20 > $10.00
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08520"),
             contract_size=Decimal("100000"),
         ),
-        account=_fx_account(Decimal("50")),  # 14% of $50 = $7.00
+        account=_fx_account(Decimal("50")),  # 20% of $50 = $10.00
         positions=[],
     )
     assert assessment.decision is RiskDecision.REJECT
@@ -695,7 +695,7 @@ def test_gold_over_20_planned_sl_rejected() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_execution_engine_rejects_tp_not_greater_than_sl() -> None:
-    # Gold SELL at bid 2320.50: SL 1.80 away, TP 1.80 away -> TP profit == SL loss.
+    # Gold SELL at bid 2320.50: SL 1.80 away, TP 0.80 away -> gross RR 0.444.
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol="XAUUSD",
@@ -703,7 +703,7 @@ def test_execution_engine_rejects_tp_not_greater_than_sl() -> None:
         order_type="market",
         volume="0.01",
         stop_loss="2322.30",
-        take_profit="2318.70",
+        take_profit="2319.70",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),

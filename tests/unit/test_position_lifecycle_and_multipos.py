@@ -410,7 +410,7 @@ def test_auto_trading_policy_stays_running_after_flat() -> None:
     assert policy.to_dict()["may_open_new_trades"] is True
 
 
-def test_scalp_can_request_multiple_but_owner_allows_one() -> None:
+def test_scalp_request_is_capped_at_five() -> None:
     plan = build_position_plan(
         cycle_id="c",
         snapshot_id="s",
@@ -424,7 +424,7 @@ def test_scalp_can_request_multiple_but_owner_allows_one() -> None:
         ite_config=ITEConfig(trading_mode="scalping"),
     )
     assert 2 <= plan.target_count <= SCALP_MAX_OPEN_TRADES
-    assert plan.effective_count == 1
+    assert plan.effective_count == 5
     assert plan.per_position_lots == Decimal("0.01")
 
 
@@ -459,8 +459,9 @@ def test_broker_allowance_never_lifts_owner_cap() -> None:
         ite_config=ITEConfig(trading_mode="scalping"),
         broker_allowed_count=4,
     )
-    assert fat.effective_count == 1
-    assert any("quantforg_capacity 1" in r for r in fat.reductions)
+    assert fat.effective_count == 4
+    assert any("quantforg_capacity 5" in r for r in fat.reductions)
+    assert any("broker_allowed 4" in r for r in fat.reductions)
 
 
 def test_unrelated_symbol_and_manual_do_not_consume_capacity() -> None:

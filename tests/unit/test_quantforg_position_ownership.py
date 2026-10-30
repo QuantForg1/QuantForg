@@ -651,9 +651,10 @@ async def test_scanner_quantforg_same_symbol_blocks_duplicate(
         config=cfg,
         open_positions=1,
     )
-    # The open QuantForg gold position fills the single owner slot: no new entry.
+    # One open gold ticket is recorded. The five-slot book is not full, so the
+    # qualifying setup stays the scan winner.
     assert out.get("already_open_reason") == "QUANTFORG_SAME_SYMBOL_OPEN"
-    assert out.get("best_symbol") is None
+    assert out.get("best_symbol") == "XAUUSD"
 
 
 def test_manual_does_not_reduce_effective_count() -> None:
@@ -673,8 +674,8 @@ def test_manual_does_not_reduce_effective_count() -> None:
         broker_allowed_count=10,
         min_lot=Decimal("0.01"),
     )
-    # Manual (non-QuantForg) positions do not consume the single owner slot.
-    assert plan.effective_count == 1
+    # Manual positions are not in this call. Score 95 targets 10; the owner cap is 5.
+    assert plan.effective_count == 5
 
 
 def test_quantforg_positions_reduce_remaining_capacity() -> None:
@@ -730,10 +731,10 @@ def test_effective_count_follows_min_stack_including_owner_cap() -> None:
         broker_allowed_count=7,
         min_lot=Decimal("0.01"),
     )
-    assert plan.effective_count == 1
+    assert plan.effective_count == 2
 
 
-def test_scalp_targets_ten_but_effective_is_owner_one() -> None:
+def test_scalp_targets_ten_but_effective_is_owner_five() -> None:
     plan = build_position_plan(
         cycle_id="c1",
         snapshot_id="s1",
@@ -751,10 +752,10 @@ def test_scalp_targets_ten_but_effective_is_owner_one() -> None:
         min_lot=Decimal("0.01"),
     )
     assert plan.target_count == SCALP_MAX_OPEN_TRADES
-    assert plan.effective_count == 1
+    assert plan.effective_count == 5
 
 
-def test_hold_targets_five_but_effective_is_owner_one() -> None:
+def test_hold_target_matches_the_five_cap() -> None:
     plan = build_position_plan(
         cycle_id="c1",
         snapshot_id="s1",
@@ -772,7 +773,7 @@ def test_hold_targets_five_but_effective_is_owner_one() -> None:
         min_lot=Decimal("0.01"),
     )
     assert plan.target_count == HOLD_MAX_OPEN_TRADES
-    assert plan.effective_count == 1
+    assert plan.effective_count == 5
 
 
 def test_account_open_still_observable_for_global_risk() -> None:

@@ -39,7 +39,7 @@ def test_v71_config_preserves_quality_risk() -> None:
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.max_daily_exposure_pct == Decimal("5.00")
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")
-    assert cfg.max_open_trades == 1
+    assert cfg.max_open_trades == 5
     assert cfg.allow_martingale is False
     assert cfg.continuous_operation_enabled is True
     assert cfg.post_close_rescan_enabled is True
@@ -156,10 +156,10 @@ def test_max_open_is_owner_one_and_exposure_ceiling_still_binds() -> None:
     account = AccountRiskState(
         equity=Decimal("10000"),
         daily_pnl=Decimal("0"),
-        open_positions=4,
+        open_positions=5,
     )
     snap = aggregate_portfolio_risk(account, config=DEFAULT_AI_SCALPING_CONFIG)
-    assert snap.max_open_positions == 1
+    assert snap.max_open_positions == 5
     assert snap.max_exposure_pct == Decimal("5.00")
     assert snap.exposure_pct <= snap.max_exposure_pct
     assert snap.open_positions >= snap.max_open_positions
