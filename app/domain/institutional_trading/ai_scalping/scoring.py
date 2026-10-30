@@ -536,12 +536,25 @@ def score_scalping_setup(
         config=cfg,
     )
     # Never invent fantasy RR from fixed_tp_r when geometry cannot place a TP.
+    # ``expected_rr`` on the owner path is gross. The gate uses net when the
+    # owner saved a floor below 1. The published default still rejects gross <= 1.
     expected_rr = targets.expected_rr
-    no_valid_tp_room = (
-        targets.take_profit is None
-        or expected_rr is None
-        or expected_rr <= Decimal("1")
+    from app.domain.institutional_trading.owner_live_limits import (
+        OWNER_MIN_REWARD_RISK,
     )
+    from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
+
+    owner_floor = active_min_reward_risk()
+    net_rr = targets.expected_net_rr
+    if owner_floor < Decimal("1") and net_rr is not None:
+        no_valid_tp_room = targets.take_profit is None or net_rr < owner_floor
+        expected_rr = net_rr
+    else:
+        no_valid_tp_room = (
+            targets.take_profit is None
+            or expected_rr is None
+            or expected_rr <= Decimal("1")
+        )
     if targets.reason:
         reasons.append(targets.reason)
     if no_valid_tp_room:
@@ -557,6 +570,8 @@ def score_scalping_setup(
     geom_rr = atr_scalp_geometry_rr(cfg)
     if geom_rr is not None and geom_rr > 0:
         effective_min_rr = min(effective_min_rr, geom_rr)
+    if owner_floor < OWNER_MIN_REWARD_RISK:
+        effective_min_rr = owner_floor
 
     gates = evaluate_quality_gates(
         direction=direction_dec,

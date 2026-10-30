@@ -188,8 +188,12 @@ def evaluate_quality_gates(
             f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"  # noqa: E501
         )
 
-    # Owner hard floor. A saved policy may raise it. It cannot fall below 75.
+    # Owner hard floor. Unset policy stays 75. A saved policy may use 70-100.
+    from app.domain.institutional_trading.owner_live_limits import (
+        OWNER_MIN_REWARD_RISK,
+    )
     from app.domain.institutional_trading.runtime_policy import (
+        active_min_reward_risk,
         active_min_trade_quality,
     )
 
@@ -206,23 +210,40 @@ def evaluate_quality_gates(
         if min_expected_rr_override is not None
         else cfg.min_expected_rr
     )
-    # Never allow override below configured floor
-    if min_rr < cfg.min_expected_rr:
-        min_rr = cfg.min_expected_rr
-    # Never demand more RR than the profile's fixed TP can deliver
-    if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0 and min_rr > cfg.fixed_tp_r:
-        min_rr = cfg.fixed_tp_r
+    owner_floor = active_min_reward_risk()
+    # An authorized experimental floor replaces the profile minimum. The
+    # published 1.50 default keeps the profile's own floor and the RR > 1 gate.
+    if owner_floor < OWNER_MIN_REWARD_RISK:
+        min_rr = owner_floor
+    else:
+        # Never allow override below configured floor
+        if min_rr < cfg.min_expected_rr:
+            min_rr = cfg.min_expected_rr
+        # Never demand more RR than the profile's fixed TP can deliver
+        if (
+            cfg.fixed_tp_r is not None
+            and cfg.fixed_tp_r > 0
+            and min_rr > cfg.fixed_tp_r
+        ):
+            min_rr = cfg.fixed_tp_r
     rr_ok = expected_rr is not None and expected_rr >= min_rr
     checks["min_rr"] = bool(rr_ok)
-    profit_exceeds_loss = expected_rr is not None and expected_rr > Decimal("1")
-    checks["tp_profit_exceeds_sl_loss"] = bool(profit_exceeds_loss)
-    if expected_rr is not None and expected_rr <= Decimal("1"):
-        hard_rejects.append(
-            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned TP profit must exceed "
-            f"planned SL loss (rr={expected_rr})"
-        )
-    if not rr_ok:
-        soft_rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
+    if owner_floor < Decimal("1"):
+        checks["tp_profit_exceeds_sl_loss"] = bool(rr_ok)
+        if not rr_ok:
+            hard_rejects.append(
+                f"OWNER_MIN_RR: net reward:risk {expected_rr} < {owner_floor}"
+            )
+    else:
+        profit_exceeds_loss = expected_rr is not None and expected_rr > Decimal("1")
+        checks["tp_profit_exceeds_sl_loss"] = bool(profit_exceeds_loss)
+        if expected_rr is not None and expected_rr <= Decimal("1"):
+            hard_rejects.append(
+                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned TP profit must exceed "
+                f"planned SL loss (rr={expected_rr})"
+            )
+        if not rr_ok:
+            soft_rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
 
     pa_ok = True
     if pa_confluence is not None:

@@ -1435,11 +1435,31 @@ class InstitutionalExecutionEngine:
                         if tp_for_band > 0 and entry_for_band > 0
                         else Decimal("0")
                     )
-                    if tp_dist <= stop_for_band:
+                    from app.domain.institutional_trading.runtime_policy import (
+                        active_min_reward_risk,
+                    )
+
+                    rr_floor = active_min_reward_risk()
+                    below_floor = False
+                    if rr_floor >= Decimal("1"):
+                        below_floor = tp_dist <= stop_for_band
                         fail_closed = (
                             "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
                             f"tp_distance={tp_dist} sl_distance={stop_for_band}"
                         )
+                    else:
+                        gross = (
+                            tp_dist / stop_for_band
+                            if stop_for_band > 0
+                            else Decimal("0")
+                        )
+                        below_floor = tp_dist <= 0 or gross < rr_floor
+                        fail_closed = (
+                            "OWNER_MIN_RR: "
+                            f"tp_distance={tp_dist} sl_distance={stop_for_band} "
+                            f"floor={rr_floor}"
+                        )
+                    if below_floor:
                         self._observe(
                             user_id=uid,
                             request_id=request_id,

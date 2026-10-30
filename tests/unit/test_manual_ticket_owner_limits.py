@@ -90,7 +90,7 @@ def test_manual_submit_with_23_dollar_sl_is_rejected(symbol: str) -> None:
 
 @pytest.mark.parametrize("symbol", ["XAUUSD", "XAUUSD_i", "GOLD"])
 def test_manual_submit_in_band_passes_symbol_validation(symbol: str) -> None:
-    # $1.80 SL, TP 3.20 away -> RR after spread >= 1.5; no "symbol mismatch".
+    # $1.80 SL, TP 3.50 away. Net RR after spread and slippage clears 1.50.
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol=symbol,
@@ -98,7 +98,7 @@ def test_manual_submit_in_band_passes_symbol_validation(symbol: str) -> None:
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, decision = engine.run_submit(
         user_id=uuid4(),

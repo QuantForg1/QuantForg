@@ -150,7 +150,7 @@ def test_run_submit_refuses_a_stop_that_shrank_since_the_plan(
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
         plan_price=plan_price,
     )
     pipeline, decision = engine.run_submit(
@@ -168,4 +168,5 @@ def test_run_submit_refuses_a_stop_that_shrank_since_the_plan(
         assert client._positions == []
     else:
         assert "OWNER_PRICE_DRIFT" not in text
+        assert "OWNER_MIN_RR" not in text
         assert decision.decision.value == "allow", pipeline

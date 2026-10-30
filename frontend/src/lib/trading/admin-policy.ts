@@ -13,6 +13,7 @@ export const POLICY_NUMERIC_KEYS = [
   "max_spread",
   "min_reward_risk",
   "min_trade_quality",
+  "stop_atr_multiplier",
 ] as const;
 
 export function m1ChoiceFromDocument(value: unknown): M1Choice {

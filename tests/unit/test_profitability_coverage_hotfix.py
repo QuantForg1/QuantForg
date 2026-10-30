@@ -227,7 +227,8 @@ def test_execution_engine_rejects_non_gold_symbol() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_execution_engine_allows_in_band_gold() -> None:
-    # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> 3.20 / 2.10 = 1.52.
+    # Mock ask 2320.80. Net RR includes spread 0.30 and slippage 0.10:
+    # TP 3.50 away -> 3.50 / (1.80 + 0.30 + 0.10) = 1.59.
     from app.domain.institutional_trading.live_trading_control import (
         reset_live_trading_controller_for_tests,
     )
@@ -241,7 +242,7 @@ def test_execution_engine_allows_in_band_gold() -> None:
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, decision = engine.run_submit(
         user_id=uuid4(),

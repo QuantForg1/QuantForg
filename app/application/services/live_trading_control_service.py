@@ -634,6 +634,11 @@ def _research_block() -> dict[str, Any]:
 def _owner_limits_block(equity: Any) -> dict[str, Any]:
     """Owner live limits as enforced on every entry (dollar figures from equity)."""
     from app.domain.institutional_trading import owner_live_limits as ol
+    from app.domain.institutional_trading.runtime_policy import (
+        active_min_reward_risk,
+        active_min_trade_quality,
+        active_stop_atr_multiplier,
+    )
 
     eq = _dec(equity)
     cap = ol.max_planned_risk_usd(eq) if eq is not None and eq > 0 else None
@@ -651,6 +656,10 @@ def _owner_limits_block(equity: Any) -> dict[str, Any]:
         ),
         "owner_overall_drawdown_limit": None,
         "owner_min_reward_risk": str(ol.OWNER_MIN_REWARD_RISK),
+        "owner_min_trade_quality": ol.OWNER_MIN_TRADE_QUALITY,
+        "active_min_reward_risk": str(active_min_reward_risk()),
+        "active_min_trade_quality": active_min_trade_quality(),
+        "active_stop_atr_multiplier": str(active_stop_atr_multiplier()),
         "owner_max_spread": str(ol.OWNER_MAX_SPREAD),
         "owner_session_utc": (
             f"{ol.OWNER_SESSION_START_UTC:%H:%M}-{ol.OWNER_SESSION_END_UTC:%H:%M}"

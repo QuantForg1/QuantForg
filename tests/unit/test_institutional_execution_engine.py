@@ -84,14 +84,15 @@ def test_pipeline_market_buy_observes_stages() -> None:
     engine, client = _engine(enabled=True)
     client._positions = []  # owner limit: one open position, start flat
     _allow_broker_submit()
-    # Mock ask 2320.80: SL 1.80 away ($1.80), TP 3.20 away -> RR 1.52 after spread.
+    # Mock ask 2320.80. Net RR includes spread 0.30 and slippage 0.10:
+    # TP 3.50 away -> 3.50 / 2.20 = 1.59.
     intent = parse_order_intent(
         symbol="XAUUSD",
         side="buy",
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     user_id = uuid4()
     pipeline, decision = engine.run_submit(
@@ -139,7 +140,7 @@ def test_disabled_controller_blocks_a_new_entry_before_send() -> None:
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),
@@ -173,7 +174,7 @@ def test_deal_history_failure_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),

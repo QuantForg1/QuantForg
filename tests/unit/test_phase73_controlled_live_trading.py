@@ -949,7 +949,7 @@ def test_safe_size_accepted_when_min_lot_fits_owner_band() -> None:
             price=Decimal("2320.80"),
             entry=Decimal("2320.80"),
             stop_loss=Decimal("2319.00"),
-            take_profit=Decimal("2324.00"),
+            take_profit=Decimal("2324.20"),
             spread=Decimal("0.30"),
             equity=Decimal("50.84"),
             balance=Decimal("50.84"),

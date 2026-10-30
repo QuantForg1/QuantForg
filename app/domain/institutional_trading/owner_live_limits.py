@@ -13,9 +13,13 @@ layer may be stricter, never looser.
 - No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
 - Stop loss: max(1.5 x ATR(M1|M5), beyond the nearest structure + spread).
   A stop is never shrunk to fit the budget: too wide -> no trade.
-- Reward:risk after spread >= 1.50: |tp - entry| / (|entry - sl| + spread).
-  TP is a real structure level: the nearest one that clears 1.50, at most
-  the second level out (2026-10-23). Neither clears -> no trade.
+- Published reward:risk default is 1.50 after spread:
+  |tp - entry| / (|entry - sl| + spread). An owner save may set the net
+  floor to 0.10, 0.15, or 0.20, or to any value at least 1.50. Net reward:risk
+  also includes order slippage and a known commission. Unknown commission is
+  omitted and is not a verified net. TP is a real structure level: the nearest
+  one that clears the active floor, at most the second level out (2026-10-23).
+  Neither clears -> no trade. The stop is never shrunk to manufacture that floor.
 - Entries any UTC hour, every day. Broker symbol session, weekend close,
   holidays, and maintenance remain the availability gate. Spread <= 0.45.
 - Volume 0.01 (gateway max); 1 open position; 1 entry per cycle.
@@ -28,6 +32,7 @@ the live submit path. Closes and SL/TP management are never blocked here.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal, InvalidOperation
 
@@ -65,6 +70,15 @@ OWNER_DAILY_LOSS_PCT = Decimal("19.0")
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
 OWNER_MIN_REWARD_RISK = Decimal("1.50")
+# Published default stays 1.50. These three values are the only floors below
+# 1.50 an owner save may select (2026-10-30 experiment). Any other value
+# below 1.50 is rejected and the active floor fails closed to 1.50.
+OWNER_EXPERIMENTAL_REWARD_RISK = (
+    Decimal("0.10"),
+    Decimal("0.15"),
+    Decimal("0.20"),
+)
+OWNER_MIN_REWARD_RISK_FLOOR = Decimal("0.10")
 # Owner 2026-10-26: the fixed Monday-Friday 07:00-17:00 desk window is retired.
 # Eligibility is 00:00-23:59 UTC every day. Broker symbol sessions, weekend
 # closures, holidays, and maintenance stay the availability gate. A stale
@@ -74,6 +88,19 @@ OWNER_SESSION_START_UTC = time(0, 0)
 OWNER_SESSION_END_UTC = time(23, 59, 59, 999999)
 # Owner 2026-10-23: 1.5 x ATR (was 2.5); structure + spread still wins when wider.
 OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "1.5")
+# A stop of k x ATR is inside the average true range when k < 1 and the ATR
+# floor binds. 0.75 and 0.90 are rejected for that reason. 1.00 is the noise
+# boundary and may be saved, but it is not the default. 1.25 and 1.50 sit
+# outside one ATR. The code default remains 1.5.
+OWNER_SL_ATR_MULTIPLIERS = (
+    Decimal("1.00"),
+    Decimal("1.25"),
+    Decimal("1.50"),
+)
+OWNER_SL_ATR_MULTIPLIERS_INSIDE_NOISE = (
+    Decimal("0.75"),
+    Decimal("0.90"),
+)
 # TP may move to the second structure level only when the first is < 1.50 RR.
 OWNER_TP_MAX_STRUCTURE_LEVELS = 2
 OWNER_SL_ATR_TIMEFRAME = (
@@ -88,8 +115,11 @@ OWNER_MAX_CONSECUTIVE_LOSSES = 0
 # Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
 # Hard floor on the AI trade quality of a robot entry (owner 2026-10-24: 80;
-# lowered to 75 by the owner 2026-10-26). Fixed: no env override can lower it.
+# lowered to 75 by the owner 2026-10-26). Unset policy stays 75. An owner
+# save may use 70-100 (2026-10-30 experiment). Below 70 fails closed to 75.
+# No environment variable can lower the unset default.
 OWNER_MIN_TRADE_QUALITY = 75
+OWNER_MIN_TRADE_QUALITY_FLOOR = 70
 
 # Compatibility names used by other layers (values at the reference capital).
 OWNER_SL_RISK_PCT = OWNER_MAX_PLANNED_RISK_PCT
@@ -423,11 +453,168 @@ def owner_stop_distance(
 def reward_risk_after_spread(
     *, tp_distance: Decimal, stop_distance: Decimal, spread: Decimal
 ) -> Decimal | None:
-    """Owner RR: |tp - entry| / (|entry - sl| + spread). None when undefined."""
+    """Spread-only RR: |tp - entry| / (|entry - sl| + spread). None when undefined.
+
+    This is not the full net ratio. Use :func:`net_reward_risk` when slippage
+    or a known commission must be included.
+    """
     risk = stop_distance + max(spread, Decimal("0"))
     if risk <= 0 or tp_distance <= 0:
         return None
     return tp_distance / risk
+
+
+def _quantize_cent(value: Decimal) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
+    """Return an enforceable net floor, or None when the saved value is illegal.
+
+    Any value at least 1.50 is allowed. Below that, only 0.10, 0.15, and 0.20.
+    """
+    try:
+        rr = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    if rr >= OWNER_MIN_REWARD_RISK:
+        return rr
+    normalized = _quantize_cent(rr)
+    if normalized in OWNER_EXPERIMENTAL_REWARD_RISK and rr == normalized:
+        return normalized
+    return None
+
+
+def authorized_min_trade_quality(value: object) -> int | None:
+    """70-100 is savable. The unset default remains 75."""
+    try:
+        quality = int(value)
+    except (TypeError, ValueError):
+        return None
+    if quality < OWNER_MIN_TRADE_QUALITY_FLOOR or quality > 100:
+        return None
+    return quality
+
+
+def atr_multiplier_verdict(value: Decimal) -> str:
+    """``accepted``, ``inside_noise``, or ``rejected``.
+
+    A multiplier below 1.00 places the ATR floor inside the average true
+    range whenever that floor binds. 0.75 and 0.90 are inside that noise.
+    1.00 equals one ATR (the boundary). 1.25 and 1.50 are outside it.
+    """
+    try:
+        mult = _quantize_cent(Decimal(str(value)))
+    except (InvalidOperation, ValueError, TypeError):
+        return "rejected"
+    if mult < Decimal("1.00") or mult in {
+        _quantize_cent(item) for item in OWNER_SL_ATR_MULTIPLIERS_INSIDE_NOISE
+    }:
+        return "inside_noise"
+    if mult in {_quantize_cent(item) for item in OWNER_SL_ATR_MULTIPLIERS}:
+        return "accepted"
+    return "rejected"
+
+
+@dataclass(frozen=True, slots=True)
+class NetRewardRisk:
+    """Gross is |tp-entry|/|entry-sl|. Net adds spread, slippage, and known fees.
+
+    ``commission_included`` is False when commission is None or cannot be
+    converted to price. That ratio is not a verified net-of-commission result.
+    A None commission is never treated as zero for this flag.
+    """
+
+    ratio: Decimal | None
+    gross_ratio: Decimal | None
+    commission_included: bool
+
+
+def net_reward_risk(
+    *,
+    tp_distance: Decimal,
+    stop_distance: Decimal,
+    spread: Decimal,
+    slippage: Decimal | None = None,
+    commission: Decimal | None = None,
+    contract_size: Decimal | None = None,
+    volume: Decimal | None = None,
+) -> NetRewardRisk:
+    """Net RR. Slippage widens the risk leg, matching planned-risk dollars.
+
+    Known commission is converted with ``contract_size * volume`` and added to
+    the risk leg. Unknown commission is omitted. Reward is the target distance
+    minus that known commission in price units.
+    """
+    tp = Decimal(str(tp_distance or 0))
+    stop = Decimal(str(stop_distance or 0))
+    spr = max(Decimal(str(spread or 0)), Decimal("0"))
+    slip = _nonneg(slippage)
+    gross = (tp / stop) if stop > 0 and tp > 0 else None
+    fee_price = Decimal("0")
+    commission_included = False
+    if commission is not None and contract_size is not None and volume is not None:
+        per = Decimal(str(contract_size)) * Decimal(str(volume))
+        if per > 0:
+            fee_price = Decimal(str(commission)) / per
+            if fee_price < 0:
+                fee_price = Decimal("0")
+            commission_included = True
+    reward = tp - fee_price
+    risk = stop + spr + slip + fee_price
+    if reward <= 0 or risk <= 0:
+        return NetRewardRisk(None, gross, commission_included)
+    return NetRewardRisk(reward / risk, gross, commission_included)
+
+
+def gross_distance_rr_block(
+    *, tp_distance: Decimal, stop_distance: Decimal
+) -> str | None:
+    """Block geometry that cannot meet the active floor.
+
+    The published default still rejects a target that does not exceed the stop.
+    A saved floor below 1 compares gross reward/risk with that floor. Gross is
+    only an upper bound; the owner entry check applies spread, slippage, and
+    known commission.
+    """
+    from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
+
+    floor = active_min_reward_risk()
+    tp = Decimal(str(tp_distance or 0))
+    stop = Decimal(str(stop_distance or 0))
+    if floor >= Decimal("1"):
+        if stop <= 0 or tp <= stop:
+            return (
+                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+                f"planned TP {tp} <= planned SL {stop}"
+            )
+        return None
+    if stop <= 0 or tp <= 0 or (tp / stop) < floor:
+        return (
+            f"OWNER_MIN_RR: gross reward:risk "
+            f"{(tp / stop).quantize(_CENT) if stop > 0 else Decimal('0')} < {floor}"
+        )
+    return None
+
+
+def estimated_rr_block(estimated_rr: Decimal | None) -> str | None:
+    """Same floor as :func:`gross_distance_rr_block` when only a ratio is known."""
+    if estimated_rr is None:
+        return None
+    from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
+
+    floor = active_min_reward_risk()
+    rr = Decimal(str(estimated_rr))
+    if floor >= Decimal("1"):
+        if rr <= Decimal("1"):
+            return (
+                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+                f"planned RR {rr} does not exceed 1.0"
+            )
+        return None
+    if rr < floor:
+        return f"OWNER_MIN_RR: estimated reward:risk {rr} < {floor}"
+    return None
 
 
 # Market entries: the stop distance at the live price may shrink at most this
@@ -505,8 +692,10 @@ def evaluate_owner_entry(
     Planned risk includes the spread once, plus the order's slippage and any
     known commission, rounded up to the cent:
     ``(|entry - sl| + spread + slippage) x contract x volume + commission``.
-    Reward:risk counts the spread once, on the risk leg:
-    ``|tp - entry| / (|entry - sl| + spread)`` must be >= 1.50.
+    Reward:risk counts the spread once, on the risk leg, plus order slippage
+    and a known commission. Unknown commission is omitted and does not certify
+    net profitability. The ratio must clear the active owner floor (published
+    default 1.50; a saved experiment may be 0.10, 0.15, or 0.20).
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """
@@ -621,14 +810,23 @@ def evaluate_owner_entry(
             f"OWNER_STOPS_LEVEL: SL {sl_dist} / TP {tp_dist} closer than broker "
             f"stops_level distance {min_dist}"
         )
-    rr = reward_risk_after_spread(
-        tp_distance=tp_dist, stop_distance=sl_dist, spread=spr
-    ) or Decimal("0")
+    net = net_reward_risk(
+        tp_distance=tp_dist,
+        stop_distance=sl_dist,
+        spread=spr,
+        slippage=slippage,
+        commission=commission,
+        contract_size=cs,
+        volume=vol,
+    )
+    rr = net.ratio if net.ratio is not None else Decimal("0")
     if rr < rr_floor:
-        violations.append(
-            f"OWNER_MIN_RR: reward:risk after spread {rr.quantize(_CENT)} "
-            f"< {rr_floor}"
+        label = (
+            "net reward:risk"
+            if slip > 0 or net.commission_included
+            else "reward:risk after spread"
         )
+        violations.append(f"OWNER_MIN_RR: {label} {rr.quantize(_CENT)} < {rr_floor}")
     week_cap = weekly_loss_limit_pct()
     if week_cap > 0:
         if weekly_pnl is None:
@@ -737,9 +935,14 @@ def presend_owner_violations(
             stop_distance=abs(request_price - Decimal(str(stop_loss))) + buf,
             spread=spread,
         ) or Decimal("0")
-        if rr < OWNER_MIN_REWARD_RISK:
+        from app.domain.institutional_trading.runtime_policy import (
+            active_min_reward_risk,
+        )
+
+        rr_floor = active_min_reward_risk()
+        if rr < rr_floor:
             violations.append(
                 f"OWNER_MIN_RR_SLIPPAGE: reward:risk {rr.quantize(_CENT)} with "
-                f"{buf} slippage buffer < {OWNER_MIN_REWARD_RISK}"
+                f"{buf} slippage buffer < {rr_floor}"
             )
     return [f"PRESEND {v}" for v in violations]

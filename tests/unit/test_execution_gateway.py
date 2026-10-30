@@ -252,9 +252,9 @@ class TestSubmitExecutionUseCase:
             symbol="XAUUSD",
             side="buy",
             volume="0.01",
-            # Valid SL/TP inside the owner band ($1.80 SL, RR 1.52 after spread).
+            # Valid SL/TP. Net RR includes spread and the order slippage.
             stop_loss="2319.00",
-            take_profit="2324.00",
+            take_profit="2324.30",
         )
         # A successful send requires the live controller to be ENABLED.
         # This test checks idempotent replay, not the disabled-controller gate.

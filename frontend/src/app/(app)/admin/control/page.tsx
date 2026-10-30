@@ -47,8 +47,11 @@ const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
   min_lot: "Min lot (empty uses the broker minimum, ceiling 0.01)",
   max_lot: "Max lot (ceiling 0.01)",
   max_spread: "Max spread (ceiling 0.45)",
-  min_reward_risk: "Minimum reward:risk (floor 1.50)",
-  min_trade_quality: "Minimum trade quality (floor 75)",
+  min_reward_risk:
+    "Minimum net reward:risk (0.10, 0.15, 0.20, or at least 1.50; default 1.50)",
+  min_trade_quality: "Minimum trade quality (70 to 100; default 75)",
+  stop_atr_multiplier:
+    "ATR stop multiplier (1.00, 1.25, or 1.50; default 1.50). 0.75 and 0.90 are rejected",
 };
 
 function text(value: unknown): string {

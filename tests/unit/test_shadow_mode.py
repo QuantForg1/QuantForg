@@ -162,7 +162,7 @@ def _submit(monkeypatch: pytest.MonkeyPatch):
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _ = engine.run_submit(
         user_id=uuid4(),
@@ -183,7 +183,7 @@ def test_shadow_mode_records_and_never_sends(monkeypatch: pytest.MonkeyPatch) ->
     book = sb.get_shadow_book()
     t = book.open_trade()
     assert t is not None and t.side == "BUY" and t.entry == D("2320.80")
-    assert t.stop_loss == D("2319.00") and t.take_profit == D("2324.00")
+    assert t.stop_loss == D("2319.00") and t.take_profit == D("2324.30")
     # A second entry while the shadow position is open: refused, nothing sent.
     pipeline2, sent2, _ = _submit(monkeypatch)
     assert sent2 == [] and "SHADOW_POSITION_OPEN" in pipeline2.message
