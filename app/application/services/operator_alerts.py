@@ -725,17 +725,28 @@ class OperatorWatch:
         ]
         if not outs:
             return  # broker history not visible yet; retry next tick
-        pnl = sum(
-            (_dec(d.profit) + _dec(d.commission) + _dec(d.swap) for d in outs),
-            Decimal("0"),
+        commission_known = all(
+            getattr(d, "commission", None) is not None for d in outs
         )
+        pnl = Decimal("0")
+        for deal in outs:
+            pnl += _dec(deal.profit) + _dec(deal.swap)
+            if commission_known:
+                pnl += _dec(deal.commission)
         last = max(outs, key=lambda d: d.time)
         entry.status = "CLOSED"
         entry.closed_at = last.time
         entry.close_price = _dec(last.price)
         entry.pnl = pnl.quantize(_CENT)
-        if entry.planned_risk_usd and entry.planned_risk_usd > 0:
+        # A missing commission is not a zero tariff, so R is withheld.
+        if (
+            commission_known
+            and entry.planned_risk_usd
+            and entry.planned_risk_usd > 0
+        ):
             entry.r_multiple = (pnl / entry.planned_risk_usd).quantize(_CENT)
+        else:
+            entry.r_multiple = None
         self.journal.save(entry)
         r = f"{entry.r_multiple}R" if entry.r_multiple is not None else "n/a"
         self.alerter.alert(
@@ -743,7 +754,8 @@ class OperatorWatch:
             f"#{entry.ticket} {entry.side} {entry.volume} {entry.symbol}\n"
             f"Entry {entry.entry_price} -> exit {entry.close_price} | "
             f"SL {entry.stop_loss} | TP {entry.take_profit}\n"
-            f"P/L {_money(entry.pnl)} ({r})",
+            f"P/L {_money(entry.pnl)} ({r})"
+            + ("" if commission_known else "\ncommission unknown"),
             key=f"close:{entry.ticket}",
         )
 

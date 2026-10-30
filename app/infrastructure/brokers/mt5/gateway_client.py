@@ -2238,6 +2238,8 @@ class GatewayMT5Client:
         else:
             days = 30
 
+        from services.mt5_gateway.deals import parse_reported_commission
+
         data = self._request("GET", "/history/deals", params={"days": days})
         out: list[MT5Deal] = []
         for row in data.get("items") or []:
@@ -2291,7 +2293,7 @@ class GatewayMT5Client:
                     volume=vol,
                     price=_dec(row.get("price")),
                     profit=_dec(row.get("profit")),
-                    commission=_dec(row.get("commission")),
+                    commission=parse_reported_commission(row.get("commission")),
                     swap=_dec(row.get("swap")),
                     deal_type=deal_type,
                     time=deal_time,

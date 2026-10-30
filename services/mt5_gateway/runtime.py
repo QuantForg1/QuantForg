@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, TypeVar
 
+from services.mt5_gateway.deals import deal_commission_text
 from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
 
 logger = logging.getLogger("quantforg.mt5_gateway")
@@ -1541,7 +1542,7 @@ class MT5GatewayRuntime:
                     "price": str(getattr(d, "price", 0) or 0),
                     "profit": str(d.profit),
                     "swap": str(getattr(d, "swap", 0) or 0),
-                    "commission": str(getattr(d, "commission", 0) or 0),
+                    "commission": deal_commission_text(d),
                     "time": _safe_int(getattr(d, "time", 0)),
                     "magic": _safe_int(getattr(d, "magic", 0)),
                     "comment": str(getattr(d, "comment", "") or ""),
