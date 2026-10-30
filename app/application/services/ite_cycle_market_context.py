@@ -355,13 +355,83 @@ def _note_terminal_permission_change(
     )
 
 
+def _terminal_autotrading_flag(
+    mapping: dict[str, Any] | None,
+) -> tuple[str, bool] | None:
+    """Return the first explicit terminal AutoTrading flag. Null is not a value."""
+    if not isinstance(mapping, dict):
+        return None
+    for key in _TERMINAL_AUTOTRADING_KEYS:
+        if key in mapping and mapping.get(key) is not None:
+            return key, bool(mapping.get(key))
+    return None
+
+
+def _record_autotrading_flag(
+    val: bool, *, source: str, diag: dict[str, Any]
+) -> bool:
+    diag["mt5_autotrading_enabled"] = val
+    diag["mt5_trade_allowed"] = val
+    diag["mt5_autotrading_known"] = True
+    diag["mt5_autotrading_source"] = source
+    _note_terminal_permission_change(val, source=source, diag=diag)
+    return val
+
+
+def _note_health_account_fields(payload: dict[str, Any], diag: dict[str, Any]) -> None:
+    mt5_raw = payload.get("mt5")
+    mt5 = mt5_raw if isinstance(mt5_raw, dict) else {}
+    if "connected" in mt5:
+        diag["mt5_connected"] = mt5.get("connected")
+    if "terminal_trade_allowed" in mt5:
+        diag["mt5_terminal_trade_allowed"] = mt5.get("terminal_trade_allowed")
+    if "account_trade_allowed" in mt5:
+        diag["mt5_account_trade_allowed"] = mt5.get("account_trade_allowed")
+    elif "trade_allowed" in mt5:
+        # Observability only — account_info.trade_allowed, not AutoTrading.
+        diag["mt5_account_trade_allowed"] = mt5.get("trade_allowed")
+    probe = mt5.get("probe")
+    if probe is not None:
+        diag["mt5_health_probe"] = probe
+
+
+def _session_status_payload(
+    client: Any, diag: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Authenticated session snapshot. /health may omit capabilities after 500ms."""
+    if client is None:
+        return None
+    status_fn = getattr(client, "session_status", None)
+    if callable(status_fn):
+        try:
+            raw = status_fn()
+        except Exception as exc:
+            diag["autotrading_session_status_error"] = str(exc)
+            raw = None
+        if isinstance(raw, dict):
+            return raw
+    request = getattr(client, "_request", None)
+    if callable(request):
+        try:
+            raw = request("GET", "/session/status")
+        except Exception as exc:
+            diag["autotrading_session_status_error"] = str(exc)
+            return None
+        if isinstance(raw, dict):
+            return raw
+    return None
+
+
 def _read_mt5_autotrading_enabled(
     mt5_adapter: Any, diag: dict[str, Any]
 ) -> bool | None:
-    """Read terminal AutoTrading from gateway /health — never invent True.
+    """Read terminal AutoTrading. Never invent True.
 
-    Returns None when unknown (caller fail-closes new entries). Does not treat
-    account ``trade_allowed`` as the AutoTrading toolbar.
+    ``GET /health`` is allowed to return null capabilities when its probe hits
+    the 500ms ceiling. A null flag is not an AutoTrading-off result. The
+    authenticated ``GET /session/status`` payload waits for ``terminal_info``
+    and is the fallback. Returns None when both omit the flag (caller
+    fail-closes new entries). Account ``trade_allowed`` is not the toolbar.
     """
     client = _client_of(mt5_adapter)
     payload: dict[str, Any] | None = None
@@ -388,44 +458,39 @@ def _read_mt5_autotrading_enabled(
                     diag["autotrading_health_via"] = "public_/health"
         except Exception as exc:
             diag["autotrading_public_health_error"] = str(exc)
-    if payload is None:
-        _note_terminal_permission_change(None, source="health_unavailable", diag=diag)
-        return None
-    mt5_raw = payload.get("mt5")
-    mt5 = mt5_raw if isinstance(mt5_raw, dict) else {}
-    if "connected" in mt5:
-        diag["mt5_connected"] = mt5.get("connected")
-    if "terminal_trade_allowed" in mt5:
-        diag["mt5_terminal_trade_allowed"] = mt5.get("terminal_trade_allowed")
-    if "account_trade_allowed" in mt5:
-        diag["mt5_account_trade_allowed"] = mt5.get("account_trade_allowed")
-    elif "trade_allowed" in mt5:
-        # Observability only — account_info.trade_allowed, not AutoTrading.
-        diag["mt5_account_trade_allowed"] = mt5.get("trade_allowed")
-    for key in _TERMINAL_AUTOTRADING_KEYS:
-        if key in mt5 and mt5.get(key) is not None:
-            val = bool(mt5.get(key))
-            diag["mt5_autotrading_enabled"] = val
-            diag["mt5_trade_allowed"] = val
-            diag["mt5_autotrading_known"] = True
-            diag["mt5_autotrading_source"] = f"mt5.{key}"
-            _note_terminal_permission_change(
-                val, source=diag["mt5_autotrading_source"], diag=diag
+    if isinstance(payload, dict):
+        _note_health_account_fields(payload, diag)
+        mt5_raw = payload.get("mt5")
+        mt5 = mt5_raw if isinstance(mt5_raw, dict) else {}
+        found = _terminal_autotrading_flag(mt5)
+        source_prefix = "mt5"
+        if found is None:
+            found = _terminal_autotrading_flag(payload)
+            source_prefix = "health"
+        if found is not None:
+            key, val = found
+            return _record_autotrading_flag(
+                val, source=f"{source_prefix}.{key}", diag=diag
             )
-            return val
-        if key in payload and payload.get(key) is not None:
-            val = bool(payload.get(key))
-            diag["mt5_autotrading_enabled"] = val
-            diag["mt5_trade_allowed"] = val
-            diag["mt5_autotrading_known"] = True
-            diag["mt5_autotrading_source"] = key
-            _note_terminal_permission_change(val, source=key, diag=diag)
-            return val
+    status = _session_status_payload(client, diag)
+    if isinstance(status, dict):
+        nested = status.get("health")
+        health = nested if isinstance(nested, dict) else {}
+        found = _terminal_autotrading_flag(health)
+        if found is None:
+            found = _terminal_autotrading_flag(status)
+        if found is not None:
+            key, val = found
+            diag["autotrading_health_via"] = "session_status"
+            return _record_autotrading_flag(
+                val, source=f"session_status.{key}", diag=diag
+            )
     diag["mt5_autotrading_known"] = False
     diag["mt5_trade_allowed"] = None
-    _note_terminal_permission_change(
-        None, source="terminal_autotrading_unknown", diag=diag
+    source = (
+        "health_unavailable" if payload is None else "terminal_autotrading_unknown"
     )
+    _note_terminal_permission_change(None, source=source, diag=diag)
     return None
 
 
