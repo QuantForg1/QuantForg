@@ -99,14 +99,16 @@ class LiveVsResearchStore:
             rows = []
             for k in keys:
                 r = self.research.get(k, EvidenceBucket()).metrics()
-                l = self.live.get(k, EvidenceBucket()).metrics()
+                live_metrics = self.live.get(k, EvidenceBucket()).metrics()
                 rows.append(
                     {
                         "strategy": k,
                         "RESEARCH_EXPECTATION": r,
-                        "LIVE_REALIZATION": l,
+                        "LIVE_REALIZATION": live_metrics,
                         "state": classify_parity(
-                            research=r, live=l, min_sample=self.min_sample
+                            research=r,
+                            live=live_metrics,
+                            min_sample=self.min_sample,
                         ),
                     }
                 )

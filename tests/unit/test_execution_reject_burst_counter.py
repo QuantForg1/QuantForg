@@ -100,11 +100,14 @@ def _count(symbol: str = "XAUUSD_I") -> int:
 def test_1_wait_does_not_increment_reject_burst() -> None:
     _reset()
     latch = BurstLatch(reject_threshold=1)
-    assert burst_record_stage_for_cycle(
-        decision_action="WAIT",
-        oms_submit_called=False,
-        abort_reason=None,
-    ) is None
+    assert (
+        burst_record_stage_for_cycle(
+            decision_action="WAIT",
+            oms_submit_called=False,
+            abort_reason=None,
+        )
+        is None
+    )
     decision, snap, acct = _sell_decision()
     watch = replace(decision, action=DecisionAction.WATCH)
     oms = RecordingOmsPort()
@@ -121,11 +124,14 @@ def test_1_wait_does_not_increment_reject_burst() -> None:
 
 def test_2_opportunity_wait_does_not_increment_reject_burst() -> None:
     _reset()
-    assert burst_record_stage_for_cycle(
-        decision_action="WAIT",
-        oms_submit_called=False,
-        abort_reason="OPPORTUNITY_SCORE_BELOW_THRESHOLD",
-    ) is None
+    assert (
+        burst_record_stage_for_cycle(
+            decision_action="WAIT",
+            oms_submit_called=False,
+            abort_reason="OPPORTUNITY_SCORE_BELOW_THRESHOLD",
+        )
+        is None
+    )
     assert should_count_execution_reject(None, oms_submit_called=False) is False
     assert _count() == 0
 
@@ -138,26 +144,35 @@ def test_3_sniper_wait_does_not_increment_reject_burst() -> None:
         "WAIT_STALE_FVG",
         "SNIPER_STALE",
     ):
-        assert burst_record_stage_for_cycle(
-            decision_action="WAIT",
-            oms_submit_called=False,
-            abort_reason=abort,
-        ) is None
+        assert (
+            burst_record_stage_for_cycle(
+                decision_action="WAIT",
+                oms_submit_called=False,
+                abort_reason=abort,
+            )
+            is None
+        )
     assert _count() == 0
 
 
 def test_4_risk_block_does_not_increment_reject_burst() -> None:
     _reset()
-    assert burst_record_stage_for_cycle(
-        decision_action="SELL",
-        oms_submit_called=False,
-        abort_reason="RISK_REJECTED",
-    ) is None
-    assert should_count_execution_reject(
-        _daily_loss_oms(),
-        abort_reason=BridgeAbortReason.OMS_FAILURE,
-        oms_submit_called=True,
-    ) is False
+    assert (
+        burst_record_stage_for_cycle(
+            decision_action="SELL",
+            oms_submit_called=False,
+            abort_reason="RISK_REJECTED",
+        )
+        is None
+    )
+    assert (
+        should_count_execution_reject(
+            _daily_loss_oms(),
+            abort_reason=BridgeAbortReason.OMS_FAILURE,
+            oms_submit_called=True,
+        )
+        is False
+    )
     decision, snap, acct = _sell_decision()
     oms = RecordingOmsPort(result=_daily_loss_oms())
     integ = InstitutionalExecutionIntegration.create(
@@ -181,32 +196,44 @@ def test_4_risk_block_does_not_increment_reject_burst() -> None:
 
 def test_5_safety_block_does_not_increment_reject_burst() -> None:
     _reset()
-    assert burst_record_stage_for_cycle(
-        decision_action="SELL",
-        oms_submit_called=False,
-        abort_reason="SAFETY_BLOCKED",
-    ) is None
-    assert apply_oms_outcome_to_burst(
-        BurstLatch(reject_threshold=1),
-        abort_reason=BridgeAbortReason.KILL_SWITCH,
-        status=ExecutionAttemptStatus.ABORTED,
-        oms_result=_pre_broker_oms_reject(),
-    ) is None
+    assert (
+        burst_record_stage_for_cycle(
+            decision_action="SELL",
+            oms_submit_called=False,
+            abort_reason="SAFETY_BLOCKED",
+        )
+        is None
+    )
+    assert (
+        apply_oms_outcome_to_burst(
+            BurstLatch(reject_threshold=1),
+            abort_reason=BridgeAbortReason.KILL_SWITCH,
+            status=ExecutionAttemptStatus.ABORTED,
+            oms_result=_pre_broker_oms_reject(),
+        )
+        is None
+    )
     assert _count() == 0
 
 
 def test_6_optimizer_block_without_execution_attempt_does_not_increment() -> None:
     _reset()
-    assert burst_record_stage_for_cycle(
-        decision_action="SELL",
-        oms_submit_called=False,
-        abort_reason="EXECUTION_OPTIMIZER_DEFER",
-    ) is None
-    assert should_count_execution_reject(
-        None,
-        abort_reason="EXECUTION_OPTIMIZER_DEFER",
-        oms_submit_called=False,
-    ) is False
+    assert (
+        burst_record_stage_for_cycle(
+            decision_action="SELL",
+            oms_submit_called=False,
+            abort_reason="EXECUTION_OPTIMIZER_DEFER",
+        )
+        is None
+    )
+    assert (
+        should_count_execution_reject(
+            None,
+            abort_reason="EXECUTION_OPTIMIZER_DEFER",
+            oms_submit_called=False,
+        )
+        is False
+    )
     assert _count() == 0
 
 
@@ -265,10 +292,13 @@ def test_9_broker_genuine_rejection_increments() -> None:
 
 def test_10_mt5_genuine_rejection_increments() -> None:
     _reset()
-    assert classify_downstream_execution_reject(
-        _mt5_reject_oms(retcode=10016),
-        abort_reason="MT5_REJECTION",
-    ) == MT5_REJECTED
+    assert (
+        classify_downstream_execution_reject(
+            _mt5_reject_oms(retcode=10016),
+            abort_reason="MT5_REJECTION",
+        )
+        == MT5_REJECTED
+    )
     get_live_health_monitor().record_reject(
         symbol="XAUUSD_I",
         source=MT5_REJECTED,
@@ -382,9 +412,7 @@ def test_15_no_permanent_latch() -> None:
         [now - timedelta(seconds=s) for s in (119, 80, 40, 20, 1)]
     )
     assert mon.allow_new_entries(symbol="XAUUSD_I")[0] is False
-    mon._symbol_rejects["XAUUSD_I"] = deque(
-        [now - timedelta(seconds=121)] * 5
-    )
+    mon._symbol_rejects["XAUUSD_I"] = deque([now - timedelta(seconds=121)] * 5)
     ok, why = mon.allow_new_entries(symbol="XAUUSD_I")
     assert ok is True
     assert why == "ok"

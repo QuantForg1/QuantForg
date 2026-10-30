@@ -59,9 +59,7 @@ def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     return (
         InstitutionalExecutionEngine(
             gateway=ExecutionGateway(adapter=adapter, order_validation=validation),
-            safety=ExecutionSafetyService(
-                adapter=adapter, order_validation=validation
-            ),
+            safety=ExecutionSafetyService(adapter=adapter, order_validation=validation),
             order_validation=validation,
             intelligence=ExecutionIntelligenceService(),
             journal=ExecutionJournalStore(),
@@ -76,7 +74,7 @@ def test_max_leverage_2000_is_hardcoded_gold_desk_constant() -> None:
     assert 'MAX_LEVERAGE = Decimal("2000")' in src
     assert "os.environ" not in src
     assert "getenv" not in src
-    assert MAX_LEVERAGE == Decimal("2000")
+    assert Decimal("2000") == MAX_LEVERAGE
     policy = ExecutionPolicy()
     assert policy.max_leverage == MAX_LEVERAGE
     assert policy.max_leverage == Decimal("2000")
@@ -115,7 +113,8 @@ def test_leverage_policy_reject_is_fail_closed_hard_block() -> None:
     assert out["next_action"] == CandidateAction.FAIL_CLOSED.value
     assert out["decision_state"] == DecisionState.HARD_BLOCK.value
     halt = classify_halt_condition(
-        "Account leverage exceeds desk policy (leverage 2001 exceeds max_leverage 2000)."
+        "Account leverage exceeds desk policy (leverage 2001 exceeds max_leverage "
+        "2000)."
     )
     assert halt is HaltClass.HARD_BLOCK
 
@@ -132,7 +131,10 @@ def test_retcode_zero_is_not_broker_execution_when_send_not_reached() -> None:
         request_id="lev-1",
         action="submit",
         outcome="rejected",
-        message="Account leverage exceeds desk policy (leverage 2001 exceeds max_leverage 2000).",
+        message=(
+            "Account leverage exceeds desk policy (leverage 2001 exceeds max_leverage "
+            "2000)."
+        ),
         stages=[
             PipelineStageRecord(
                 stage="Draft", status="ok", reason="Draft accepted", elapsed_ms=1.0
@@ -238,9 +240,10 @@ def test_run_submit_leverage_reject_never_calls_order_send() -> None:
     )
     assert decision is not None
     assert decision.decision is ExecutionDecision.REJECT
-    assert any("leverage" in r.lower() and "exceeds" in r.lower() for r in (
-        decision.rejection_reasons or []
-    ))
+    assert any(
+        "leverage" in r.lower() and "exceeds" in r.lower()
+        for r in (decision.rejection_reasons or [])
+    )
     assert pipeline.outcome == "rejected"
     assert "Broker Submission" not in [s.stage for s in pipeline.stages]
     assert sends == []
@@ -252,9 +255,9 @@ def test_run_submit_leverage_reject_never_calls_order_send() -> None:
 
 @pytest.mark.unit
 def test_leverage_reject_does_not_add_order_send_retry() -> None:
-    client_src = (
-        REPO / "app/infrastructure/brokers/mt5/gateway_client.py"
-    ).read_text(encoding="utf-8")
+    client_src = (REPO / "app/infrastructure/brokers/mt5/gateway_client.py").read_text(
+        encoding="utf-8"
+    )
     engine_src = (
         REPO / "app/application/services/institutional_execution_engine.py"
     ).read_text(encoding="utf-8")

@@ -85,7 +85,9 @@ def _take_score(**overrides: object) -> dict:
 
 
 def test_1_opportunity_pass_sniper_take_reaches_eligibility() -> None:
-    trace = explain_scalp_handoff(_take_score(), universe=(_GOLD,), in_portfolio_eligible=True)
+    trace = explain_scalp_handoff(
+        _take_score(), universe=(_GOLD,), in_portfolio_eligible=True
+    )
     assert sniper_is_take(_take_score()) is True
     assert trace.should_hand_off is True
     assert trace.eligibility_status == "PASS"
@@ -215,7 +217,11 @@ def test_10_invalid_rr_is_rejected() -> None:
         reject=True,
         reject_reason="Expected RR 0.4 below minimum 1.20",
         opportunity_eligible=False,
-        sniper_entry={"passed": False, "setup_state": "WAIT", "primary_reason": "RR_TOO_LOW"},
+        sniper_entry={
+            "passed": False,
+            "setup_state": "WAIT",
+            "primary_reason": "RR_TOO_LOW",
+        },
         signal_action="WAIT",
     )
     trace = explain_scalp_handoff(row)
@@ -228,7 +234,11 @@ def test_11_invalid_stop_is_rejected() -> None:
         reject=True,
         reject_reason="WAIT_NO_INVALIDATION — stop invalid",
         opportunity_eligible=False,
-        sniper_entry={"passed": False, "setup_state": "WAIT", "primary_reason": "INVALIDATION_INVALID"},
+        sniper_entry={
+            "passed": False,
+            "setup_state": "WAIT",
+            "primary_reason": "INVALIDATION_INVALID",
+        },
         signal_action="WAIT",
     )
     trace = explain_scalp_handoff(row)
@@ -237,7 +247,9 @@ def test_11_invalid_stop_is_rejected() -> None:
 
 
 def test_12_min_lot_rejection_is_explicit() -> None:
-    row = _take_score(reject=True, reject_reason="MIN_LOT_CONSTRAINT", opportunity_eligible=False)
+    row = _take_score(
+        reject=True, reject_reason="MIN_LOT_CONSTRAINT", opportunity_eligible=False
+    )
     trace = explain_scalp_handoff(row)
     assert trace.should_hand_off is False
     assert trace.first_failed_code == "MIN_LOT_REJECTED"
@@ -389,7 +401,10 @@ def test_20_wait_never_becomes_oms_block() -> None:
 
 
 def test_missing_from_portfolio_ranked_still_hands_off_valid_scalp() -> None:
-    """Live bug: Opportunity 75 + sniper TAKE, ranked miss → generic NO_ELIGIBLE_SETUP."""
+    (
+        """Live bug: Opportunity 75 + sniper TAKE, ranked miss → generic """
+        """NO_ELIGIBLE_SETUP."""
+    )
     trace = explain_scalp_handoff(
         _take_score(),
         universe=("XAUUSD",),
@@ -479,8 +494,8 @@ def test_no_eligible_setup_overlay_does_not_infer_risk_ready() -> None:
 
 
 def test_scalping_eligibility_engine_does_not_use_quality_80() -> None:
-    from tests.unit.test_institutional_trading_phase_c import _account, _snapshot
     from app.domain.market_structure.enums import TrendDirection
+    from tests.unit.test_institutional_trading_phase_c import _account, _snapshot
 
     snap = _snapshot(direction=TrendDirection.DOWN, quality=66)
     conf = ConfluenceResult(
@@ -510,7 +525,10 @@ def test_scalping_eligibility_engine_does_not_use_quality_80() -> None:
 
 
 def test_live_like_take_not_scanner_extra_rejected_on_fresh_health_latch() -> None:
-    """Live 26d2c94 payload: Opportunity 76 + sniper TAKE, no execution_health_ok key."""
+    (
+        """Live 26d2c94 payload: Opportunity 76 + sniper TAKE, no """
+        """execution_health_ok key."""
+    )
     from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
         _row_from_score as scan_row_from_score,
         scan_multi_asset_portfolio,
@@ -544,9 +562,7 @@ def test_live_like_take_not_scanner_extra_rejected_on_fresh_health_latch() -> No
         },
     )
     assert "execution_health_ok" not in live
-    row = scan_row_from_score(
-        live, book=book, config=DEFAULT_AI_SCALPING_CONFIG
-    )
+    row = scan_row_from_score(live, book=book, config=DEFAULT_AI_SCALPING_CONFIG)
     assert row.execution_health_ok is True
     assert "execution health" not in str(row.reject_reason or "").lower()
     assert row.reject is False

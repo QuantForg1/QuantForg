@@ -208,9 +208,7 @@ def test_one_bad_symbol_does_not_stop_signal_generation() -> None:
                 "trade_quality": 84,
             },
         ],
-        config=replace(
-            DEFAULT_AI_SCALPING_CONFIG, universe=("LTCUSD", "XAUUSD")
-        ),
+        config=replace(DEFAULT_AI_SCALPING_CONFIG, universe=("LTCUSD", "XAUUSD")),
     )
     assert ranked["eligible_count"] == 1
     assert ranked["best"]["symbol"] == "XAUUSD"
@@ -275,8 +273,8 @@ def test_no_martingale_and_no_sl_widen_in_module() -> None:
 
 def test_risk_limits_and_rr_floor_are_owner_values() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
-    assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
     assert Decimal("1.50") == MIN_REWARD_RISK
     assert DEFAULT_AI_SCALPING_CONFIG.min_expected_rr >= Decimal("1")
     assert CAUTIOUS_MIN_RR_SOFT >= 1.0
@@ -323,9 +321,7 @@ def test_crypto_contract_size_does_not_inherit_gold_or_fx() -> None:
     assert contract_size_for_symbol("BTCUSD", default=Decimal("0")) == Decimal("1")
     assert contract_size_for_symbol("ETHUSD", default=Decimal("0")) == Decimal("1")
     assert contract_size_for_symbol("XAUUSD", default=Decimal("0")) == Decimal("100")
-    assert contract_size_for_symbol("EURUSD", default=Decimal("0")) == Decimal(
-        "100000"
-    )
+    assert contract_size_for_symbol("EURUSD", default=Decimal("0")) == Decimal("100000")
 
 
 def test_portfolio_limits_still_block_at_existing_ceilings() -> None:

@@ -35,7 +35,7 @@ def test_institutional_defaults_unchanged() -> None:
 
 @pytest.mark.unit
 def test_dollar_risk_at_min_lot_is_stop_distance() -> None:
-    """0.01 lot × stop × 100 contract = stop dollars."""
+    """0.01 lot x stop x 100 contract = stop dollars."""
     stop = Decimal("18.00")
     loss = dollar_risk_at_lots(
         lots=VOLUME_MIN, stop_distance=stop, contract_size=Decimal("100")
@@ -97,7 +97,7 @@ def test_equity_floor_for_2pct() -> None:
 
 @pytest.mark.unit
 def test_stop_distance_matches_institutional_multiplier() -> None:
-    assert stop_distance_from_atr(Decimal("12")) == Decimal("18.0000")
+    assert stop_distance_from_atr(Decimal("12")) == Decimal("12.0000")
 
 
 @pytest.mark.unit
@@ -113,7 +113,7 @@ def test_feasibility_report_preserves_institutional() -> None:
     assert report["institutional_unchanged"]["quality"] == 80
     assert report["institutional_unchanged"]["confluence"] == 80
     assert report["institutional_unchanged"]["risk_per_trade_pct"] == "1.0"
-    # ATR 12 -> $18 at min lot: $50 is explicitly NOT tradable under the 4% cap.
+    # ATR 12 -> $12 at min lot: $50 is explicitly NOT tradable under the 14% cap.
     assert "cannot safely trade XAUUSD" in report["summary"]["fifty_dollar_explicit"]
     assert Decimal("50") == Decimal(report["balances"][0]["equity"])
     md = report_to_markdown(report)

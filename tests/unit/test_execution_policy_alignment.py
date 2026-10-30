@@ -105,7 +105,7 @@ def test_unapproved_cross_remains_blocked(multi_symbol: None) -> None:
 
 @pytest.mark.unit
 def test_leverage_2000_vs_max_2000_passes(multi_symbol: None) -> None:
-    assert MAX_LEVERAGE == Decimal("2000")
+    assert Decimal("2000") == MAX_LEVERAGE
     policy = ExecutionPolicy()
     assert policy.max_leverage == MAX_LEVERAGE
     adapter = MT5Adapter(client=MockMT5Client())

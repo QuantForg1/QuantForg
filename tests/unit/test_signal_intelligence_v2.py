@@ -56,10 +56,10 @@ def test_observe_and_history_ops_fallback(monkeypatch) -> None:
             store["items"] = list(sh.get("items") or [])
             store["updated_at"] = sh.get("updated_at")
 
-    monkeypatch.setattr(si, "_upsert_history_postgres", lambda rows: 0)
+    monkeypatch.setattr(si, "_upsert_history_postgres", lambda _rows: 0)
     monkeypatch.setattr(si, "load_ops_state", _load)
     monkeypatch.setattr(si, "save_ops_state", _save)
-    monkeypatch.setattr(si, "_load_history_postgres", lambda **kwargs: [])
+    monkeypatch.setattr(si, "_load_history_postgres", lambda **_kwargs: [])
 
     _store_last_scan(
         {
@@ -150,7 +150,7 @@ def test_chart_markers_from_history(monkeypatch) -> None:
     monkeypatch.setattr(
         si,
         "list_signal_history",
-        lambda **kwargs: {
+        lambda **_kwargs: {
             "items": [
                 {
                     "symbol": "XAUUSD",

@@ -49,9 +49,7 @@ def build_live_ops_evidence(
     settings: Settings,
 ) -> dict[str, Any]:
     """Observe-only snapshot for operator evidence / control-center reads."""
-    readiness = build_launch_readiness(
-        plane, settings=settings, owner_authorized=True
-    )
+    readiness = build_launch_readiness(plane, settings=settings, owner_authorized=True)
     components: dict[str, Any] = {}
     try:
         from app.application.services.production_component_health import (
@@ -162,15 +160,19 @@ def build_live_ops_evidence(
     payload["scanner"] = scanner
 
     try:
-        from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
-            CLOUDFLARED_HEARTBEAT,
-            GATEWAY_HEARTBEAT,
-            MT5_HEARTBEAT,
-            heartbeat_snapshot,
-            note_heartbeat,
+        from app.domain.institutional_trading.operations import (
+            infrastructure_heartbeats as _qf_infrastructure_heartbeats,
         )
 
-        statuses = (components.get("statuses") or {}) if isinstance(components, dict) else {}
+        CLOUDFLARED_HEARTBEAT = _qf_infrastructure_heartbeats.CLOUDFLARED_HEARTBEAT
+        GATEWAY_HEARTBEAT = _qf_infrastructure_heartbeats.GATEWAY_HEARTBEAT
+        MT5_HEARTBEAT = _qf_infrastructure_heartbeats.MT5_HEARTBEAT
+        heartbeat_snapshot = _qf_infrastructure_heartbeats.heartbeat_snapshot
+        note_heartbeat = _qf_infrastructure_heartbeats.note_heartbeat
+
+        statuses = (
+            (components.get("statuses") or {}) if isinstance(components, dict) else {}
+        )
         gw = statuses.get("gateway") or {}
         mt5 = statuses.get("mt5") or {}
         gw_ok = str(gw.get("status") or "").upper() == "HEALTHY"

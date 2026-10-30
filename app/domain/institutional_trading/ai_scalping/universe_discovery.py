@@ -7,6 +7,7 @@ Never invents symbols the broker does not expose.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import threading
 import time
@@ -96,11 +97,11 @@ _CATALOGUE_TTL_S = 300.0
 def _trade_mode_int(item: Any) -> int:
     """Normalize broker trade_mode (int 4 / 'full' / raw dict) → MT5 int."""
     raw = getattr(item, "raw", None)
-    if isinstance(raw, dict) and raw.get("trade_mode") not in (None, ""):
-        try:
-            return int(raw.get("trade_mode"))
-        except Exception:
-            pass
+    if isinstance(raw, dict):
+        mode_raw = raw.get("trade_mode")
+        if mode_raw not in (None, ""):
+            with contextlib.suppress(Exception):
+                return int(mode_raw)
     mode = getattr(item, "trade_mode", None)
     if mode is None and isinstance(item, dict):
         mode = item.get("trade_mode")
@@ -136,12 +137,29 @@ def classify_broker_symbol(code: str, description: str = "") -> ScalpAssetClass:
     if c in _CRYPTO or (c.startswith(("BTC", "ETH", "LTC")) and c.endswith("USD")):
         return "crypto"
     # Exact stablecoin / base-BTC pairs only — never "USDT" substring (USDTHB, USDTRY).
-    if c.endswith("USDT") or c.endswith("USDC") or (
-        c.endswith("BTC") and not c.endswith(("USD", "EUR", "GBP", "JPY"))
+    if (
+        c.endswith("USDT")
+        or c.endswith("USDC")
+        or (c.endswith("BTC") and not c.endswith(("USD", "EUR", "GBP", "JPY")))
     ):
         return "crypto"
     if c in _INDICES or any(
-        x in c for x in ("NDX", "DJI", "SPX", "GER", "FTS", "HSI", "JPX", "AXJ", "STX", "AEX", "F40", "IBX", "IT4")
+        x in c
+        for x in (
+            "NDX",
+            "DJI",
+            "SPX",
+            "GER",
+            "FTS",
+            "HSI",
+            "JPX",
+            "AXJ",
+            "STX",
+            "AEX",
+            "F40",
+            "IBX",
+            "IT4",
+        )
     ):
         return "indices"
     if c in _COMMODITIES or c.startswith(("XTI", "XBR", "XPD", "XPT")):
@@ -182,7 +200,11 @@ def is_liquid_scalping_candidate(
     """Prefer liquid majors/crosses/metals/crypto/indices/commodities."""
     c = (code or "").strip().upper()
     desk = scalp_desk_code(c)
-    if not c or c in BROKER_UNAVAILABLE_SCALP_SYMBOLS or desk in BROKER_UNAVAILABLE_SCALP_SYMBOLS:
+    if (
+        not c
+        or c in BROKER_UNAVAILABLE_SCALP_SYMBOLS
+        or desk in BROKER_UNAVAILABLE_SCALP_SYMBOLS
+    ):
         return False
     if trade_mode is not None and int(trade_mode) != _TRADE_MODE_FULL:
         return False
@@ -316,10 +338,10 @@ def _catalogue_exact_map(
             if code:
                 mapping.setdefault(code.upper(), code)
         return mapping
-    for row in broker_symbol_rows or ():
-        if not isinstance(row, dict):
+    for broker_row in broker_symbol_rows or ():
+        if not isinstance(broker_row, dict):
             continue
-        code = str(row.get("code") or row.get("name") or "").strip()
+        code = str(broker_row.get("code") or broker_row.get("name") or "").strip()
         if code:
             mapping.setdefault(code.upper(), code)
     return mapping
@@ -463,7 +485,7 @@ def build_dynamic_scalping_universe(
 
     # Round-robin across classes so indices/commodities are not starved by FX crosses.
     class_order = ("major", "metal", "cross", "crypto", "index", "commodity", "other")
-    pointers = {k: 0 for k in class_order}
+    pointers = dict.fromkeys(class_order, 0)
     for k in class_order:
         buckets[k] = sorted(buckets[k])
     progress = True

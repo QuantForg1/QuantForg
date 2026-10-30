@@ -7,6 +7,7 @@ safety, OMS, or MT5 execution paths.
 
 from __future__ import annotations
 
+import contextlib
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -194,7 +195,7 @@ def resolve_cycle_result(
 
 
 def owner_diagnostic_floor() -> int:
-    """Live desk floor. Saved policy may raise it and cannot fall below 75.
+    """Live desk floor. Saved policy may raise it and cannot fall below 70.
 
     Swing ``ITEConfig`` still defaults to 80/80. That default is not the
     hard gate the scalping worker enforces.
@@ -251,6 +252,7 @@ def extract_cycle_diagnostics(
         session = snapshot.session.session.value
         session_allowed = bool(snapshot.session.allowed)
         t = snapshot.trend
+        trade_bias = getattr(t, "trade_bias", None)
         trend = {
             "h4": _trend_value(t.macro_bias),
             "h1": _trend_value(t.primary),
@@ -262,11 +264,7 @@ def extract_cycle_diagnostics(
             "mtf_policy": getattr(t, "mtf_policy", "v1"),
             "mtf_contributions": dict(getattr(t, "mtf_contributions", {}) or {}),
             "h4_is_context": bool(getattr(t, "h4_is_context", False)),
-            "trade_bias": (
-                t.trade_bias.value
-                if getattr(t, "trade_bias", None) is not None
-                else None
-            ),
+            "trade_bias": (trade_bias.value if trade_bias is not None else None),
             "m15_semantics": dict(getattr(t, "m15_semantics", {}) or {}),
         }
         quality_total = int(snapshot.trade_quality.total)
@@ -387,9 +385,7 @@ def extract_cycle_diagnostics(
 
     blocked_ev = diag.get("execution_blocked")
     blocked_stage = (
-        str(blocked_ev.get("stage") or "")
-        if isinstance(blocked_ev, dict)
-        else ""
+        str(blocked_ev.get("stage") or "") if isinstance(blocked_ev, dict) else ""
     )
     handoff = diag.get("execution_handoff")
     ticket_probe: dict[str, Any] = dict(diag)
@@ -566,15 +562,18 @@ def extract_cycle_diagnostics(
         "decision_hash": diag.get("decision_hash"),
         "request_id": diag.get("request_id") or trace_id,
         "timeframe": diag.get("timeframe") or diag.get("atr_timeframe"),
-        "market_regime": diag.get("market_regime")
-        or trend.get("market_regime"),
+        "market_regime": diag.get("market_regime") or trend.get("market_regime"),
         "data_age": diag.get("data_age") or diag.get("data_age_seconds"),
-        "score_breakdown": diag.get("score_breakdown")
-        if isinstance(diag.get("score_breakdown"), dict)
-        else {},
-        "opportunity_audit": diag.get("opportunity_audit")
-        if isinstance(diag.get("opportunity_audit"), dict)
-        else {},
+        "score_breakdown": (
+            diag.get("score_breakdown")
+            if isinstance(diag.get("score_breakdown"), dict)
+            else {}
+        ),
+        "opportunity_audit": (
+            diag.get("opportunity_audit")
+            if isinstance(diag.get("opportunity_audit"), dict)
+            else {}
+        ),
         "structure_score": diag.get("structure_score"),
         "liquidity_score": diag.get("liquidity_score"),
         "zone_score": diag.get("zone_score"),
@@ -668,7 +667,10 @@ def hourly_scan_rates(
                 opp_n += 1
                 if action == "BUY" or str(row.get("candidate") or "").upper() == "BUY":
                     buy_cand_n += 1
-                elif action == "SELL" or str(row.get("candidate") or "").upper() == "SELL":
+                elif (
+                    action == "SELL"
+                    or str(row.get("candidate") or "").upper() == "SELL"
+                ):
                     sell_cand_n += 1
         except (TypeError, ValueError):
             pass
@@ -683,7 +685,8 @@ def hourly_scan_rates(
             sniper_ready_n += 1
         if setup == "TAKE" or sniper == "TAKE" or bool(row.get("take")):
             sniper_take_n += 1
-        rej = row.get("rejection") if isinstance(row.get("rejection"), dict) else {}
+        _rej_value = row.get("rejection")
+        rej = _rej_value if isinstance(_rej_value, dict) else {}
         code = str(rej.get("primary") or row.get("abort_reason") or "").upper()
         if bool(row.get("rejected")) or (
             code and not bool(row.get("forwarded_to_oms"))
@@ -836,7 +839,8 @@ def compute_diagnostics_statistics(
     ]
     counter: Counter[str] = Counter()
     for r in rows:
-        rej = r.get("rejection") if isinstance(r.get("rejection"), dict) else {}
+        _rej_value = r.get("rejection")
+        rej = _rej_value if isinstance(_rej_value, dict) else {}
         code = rej.get("primary") if isinstance(rej, dict) else None
         if code:
             counter[str(code)] += 1
@@ -1041,10 +1045,8 @@ class StrategyDiagnosticsStore:
             )
         except Exception:  # noqa: S110  # best-effort evidence path
             pass
-        try:
+        with contextlib.suppress(Exception):  # best-effort funnel histogram
             observe_funnel_cycle(cycle)
-        except Exception:  # noqa: S110  # best-effort funnel histogram
-            pass
         try:
             from app.application.services.strategy_forensic_ledger import persist_signal
 
@@ -1062,29 +1064,20 @@ class StrategyDiagnosticsStore:
         # AI Decision Engine v2 rejection telemetry (advisory; never mutates gates)
         try:
             if cycle.get("rejected"):
+                from types import SimpleNamespace
+
                 from app.application.services.decision_v2_telemetry import (
                     record_rejection_telemetry,
                 )
-                from types import SimpleNamespace
 
-                trend = (
-                    cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
-                )
-                conf = (
-                    cycle.get("confluence")
-                    if isinstance(cycle.get("confluence"), dict)
-                    else {}
-                )
-                factors = (
-                    conf.get("engine_factors")
-                    if isinstance(conf.get("engine_factors"), dict)
-                    else {}
-                )
-                rejection = (
-                    cycle.get("rejection")
-                    if isinstance(cycle.get("rejection"), dict)
-                    else {}
-                )
+                trend_raw = cycle.get("trend")
+                trend = trend_raw if isinstance(trend_raw, dict) else {}
+                conf_raw = cycle.get("confluence")
+                conf = conf_raw if isinstance(conf_raw, dict) else {}
+                factors_raw = conf.get("engine_factors")
+                factors = factors_raw if isinstance(factors_raw, dict) else {}
+                rejection_raw = cycle.get("rejection")
+                rejection = rejection_raw if isinstance(rejection_raw, dict) else {}
                 trend_ns = SimpleNamespace(
                     macro_bias=trend.get("h4"),
                     primary=trend.get("h1"),
@@ -1122,28 +1115,21 @@ class StrategyDiagnosticsStore:
             pass
         # M15 Trend Semantics v2 telemetry (advisory; never mutates gates)
         try:
+            import re
+
             from app.application.services.m15_semantics_telemetry import (
                 build_m15_semantics_telemetry,
                 get_m15_semantics_telemetry_store,
             )
-            import re
 
-            trend = cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
-            conf = (
-                cycle.get("confluence")
-                if isinstance(cycle.get("confluence"), dict)
-                else {}
-            )
-            factors = (
-                conf.get("engine_factors")
-                if isinstance(conf.get("engine_factors"), dict)
-                else {}
-            )
-            rejection = (
-                cycle.get("rejection")
-                if isinstance(cycle.get("rejection"), dict)
-                else {}
-            )
+            trend_raw = cycle.get("trend")
+            trend = trend_raw if isinstance(trend_raw, dict) else {}
+            conf_raw = cycle.get("confluence")
+            conf = conf_raw if isinstance(conf_raw, dict) else {}
+            factors_raw = conf.get("engine_factors")
+            factors = factors_raw if isinstance(factors_raw, dict) else {}
+            rejection_raw = cycle.get("rejection")
+            rejection = rejection_raw if isinstance(rejection_raw, dict) else {}
             reasons = list(rejection.get("decision_reasons") or [])
             latest_bos = None
             for r in reasons:

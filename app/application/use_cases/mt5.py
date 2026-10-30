@@ -51,7 +51,7 @@ class GetMT5StatusUseCase:
                 # Stale DB row after another tenant claimed the process terminal.
                 return MT5StatusDTO.from_connection(None)
             # Heal already probed Gateway. Do not add another health()+DB write
-            # on every status poll — that stacked 8–15s under Inspector storms.
+            # on every status poll — that stacked 8-15s under Inspector storms.
             return MT5StatusDTO.from_connection(connection)
         return MT5StatusDTO.from_connection(None)
 

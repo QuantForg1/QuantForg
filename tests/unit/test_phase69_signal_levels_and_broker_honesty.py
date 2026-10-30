@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from app.application.services import signal_center_service
-from app.application.services.research_universe_scanner import evaluate_injected_contexts
+from app.application.services.research_universe_scanner import (
+    evaluate_injected_contexts,
+)
 from app.domain.market_universe.opportunity_board import project_opportunity_row
 from app.domain.market_universe.research_signals import build_research_signals
 

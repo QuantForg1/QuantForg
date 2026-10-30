@@ -23,9 +23,7 @@ _RETENTION: JsonDocumentStore | None = None
 def _retention_store() -> JsonDocumentStore:
     global _RETENTION
     if _RETENTION is None:
-        _RETENTION = JsonDocumentStore(
-            "enterprise_retention_policy.json", "policies"
-        )
+        _RETENTION = JsonDocumentStore("enterprise_retention_policy.json", "policies")
     return _RETENTION
 
 
@@ -88,9 +86,7 @@ async def build_gdpr_export(
     users = await read_users(limit=1000)
     subject = next((u for u in users if str(u.get("id")) == str(user_id)), None)
     access = await read_audit_logs(limit=200)
-    access = [
-        a for a in access if str(a.get("actor_user_id") or "") == str(user_id)
-    ]
+    access = [a for a in access if str(a.get("actor_user_id") or "") == str(user_id)]
     payload = {
         "exported_at": utc_iso(),
         "subject": subject,
@@ -117,11 +113,9 @@ def audit_integrity_check() -> dict[str, Any]:
         "as_of": utc_iso(),
         "events_checked": len(events),
         "append_only": True,
-        "immutable_flag_present": all(
-            bool(e.get("immutable")) for e in events
-        )
-        if events
-        else True,
+        "immutable_flag_present": (
+            all(bool(e.get("immutable")) for e in events) if events else True
+        ),
         "integrity": "ok",
         "fabricated": False,
     }

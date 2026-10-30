@@ -3,23 +3,24 @@
  * live limits (mirror of app/domain/institutional_trading/owner_live_limits.py).
  *
  * Planned risk = (|entry - SL| + spread + slippage) x contract x lots
- * + commission, rounded up to the cent. The 9% cap is rounded down.
+ * + commission, rounded up to the cent. The 14% cap is rounded down.
  * Risk is never rounded down to pass. Reward:risk counts the spread once
  * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 1.5.
  *
- * 9% is a maximum PLANNED risk, not a cap on realised loss: gaps and
- * execution failures can make a loss larger.
+ * 14% is a maximum PLANNED risk, not a cap on realised loss: gaps and
+ * execution failures can make a loss larger. Omitted commission is unknown
+ * and is not treated as zero.
  */
 
 export const OWNER_MAX_LOT = 0.01;
-export const OWNER_MAX_PLANNED_RISK_PCT = 9;
+export const OWNER_MAX_PLANNED_RISK_PCT = 14;
 export const OWNER_MIN_REWARD_RISK = 1.5;
 export const OWNER_MAX_SPREAD = 0.45;
 export const OWNER_SESSION_START_UTC_HOUR = 0;
 /** 24 means the window runs through 23:59 UTC. There is no desk-hour close. */
 export const OWNER_SESSION_END_UTC_HOUR = 24;
 export const PLANNED_RISK_NOTE =
-  "9% is the maximum planned risk per trade, not a cap on realised loss: " +
+  "14% is the maximum planned risk per trade, not a cap on realised loss: " +
   "slippage, gaps, commissions and execution failures can make a loss larger.";
 
 export type TicketRiskInput = {
@@ -33,7 +34,7 @@ export type TicketRiskInput = {
   spread: number;
   /** Order deviation in price units. Omitted means zero, not an extra spread. */
   slippage?: number;
-  /** Known commission in account currency. Omitted means zero. */
+  /** Known commission in account currency. Omitted is unknown, not zero. */
   commission?: number;
   /** Price increment used to suggest a stop that fits the cap. */
   tickSize?: number;
@@ -95,7 +96,7 @@ function finitePositive(n: number): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
-/** Per-trade planned-risk cap in USD: 9% of equity, rounded down to the cent. */
+/** Per-trade planned-risk cap in USD: 14% of equity, rounded down to the cent. */
 export function maxSlRiskUsd(equity: number): number {
   if (!finitePositive(equity)) return 0;
   return Math.floor(equity * OWNER_MAX_PLANNED_RISK_PCT + 1e-9) / 100;
@@ -146,10 +147,20 @@ export function ticketRisk(input: TicketRiskInput): TicketRisk {
   const slDist = Math.abs(entry - stopLoss);
   const tpDist = Math.abs(takeProfit - entry);
   const slip = Number.isFinite(input.slippage) && (input.slippage ?? 0) > 0 ? (input.slippage as number) : 0;
-  const fee = Number.isFinite(input.commission) && (input.commission ?? 0) > 0 ? (input.commission as number) : 0;
+  const commissionKnown = input.commission !== undefined && Number.isFinite(input.commission);
+  const fee = commissionKnown && (input.commission as number) > 0 ? (input.commission as number) : 0;
+  if (!commissionKnown) {
+    violations.push("Commission unknown — inclusive planned risk is unverified");
+  } else if ((input.commission as number) < 0) {
+    violations.push("Commission cannot be negative");
+  }
   if (!finitePositive(contractSize)) violations.push("Contract size unknown — cannot price risk");
   const riskUsd =
-    finitePositive(contractSize) && finitePositive(lots) && Number.isFinite(spr)
+    commissionKnown &&
+    (input.commission as number) >= 0 &&
+    finitePositive(contractSize) &&
+    finitePositive(lots) &&
+    Number.isFinite(spr)
       ? moneyUp((slDist + spr + slip) * contractSize * lots + fee)
       : null;
   const riskPctOfEquity =

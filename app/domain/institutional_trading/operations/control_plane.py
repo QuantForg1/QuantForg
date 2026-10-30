@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -192,7 +193,7 @@ class OperationsControlPlane:
         with self._lock:
             old = self.kill_switch_armed
             self.kill_switch_armed = True
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
             from app.domain.institutional_trading.phase_a.kill_state import (
                 HaltKind,
@@ -201,13 +202,11 @@ class OperationsControlPlane:
 
             get_phase_a_plane().set_halt(
                 HaltMode.HALT_ALL_TRADING,
-                actor=operator.display_name or operator.user_id,
+                actor=str(operator.display_name or operator.user_id),
                 reason=reason,
                 kind=HaltKind.OPERATOR_HALT,
             )
             get_phase_a_plane().sync_legacy_kill_flag(self)
-        except Exception:
-            pass
         self.audit.record(
             operator=operator,
             action="kill_switch_arm",
@@ -240,7 +239,7 @@ class OperationsControlPlane:
         with self._lock:
             old = self.kill_switch_armed
             self.kill_switch_armed = False
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
             from app.domain.institutional_trading.phase_a.kill_state import (
                 HaltKind,
@@ -249,13 +248,11 @@ class OperationsControlPlane:
 
             get_phase_a_plane().set_halt(
                 HaltMode.ACTIVE,
-                actor=operator.display_name or operator.user_id,
+                actor=str(operator.display_name or operator.user_id),
                 reason=reason,
                 kind=HaltKind.NONE,
             )
             get_phase_a_plane().sync_legacy_kill_flag(self)
-        except Exception:
-            pass
         self.audit.record(
             operator=operator,
             action="kill_switch_disarm",
@@ -291,7 +288,7 @@ class OperationsControlPlane:
         kind = HaltKind.NONE if target is HaltMode.ACTIVE else HaltKind.OPERATOR_HALT
         transition = get_phase_a_plane().set_halt(
             target,
-            actor=operator.display_name or operator.user_id,
+            actor=str(operator.display_name or operator.user_id),
             reason=reason,
             kind=kind,
         )
@@ -311,13 +308,11 @@ class OperationsControlPlane:
 
         OMS receives zero when kill armed, Phase A halt, or SHADOW.
         """
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
 
             if not get_phase_a_plane().halt.oms_market_submit_allowed():
                 return False
-        except Exception:
-            pass
         with self._lock:
             if self.kill_switch_armed:
                 return False
@@ -329,14 +324,12 @@ class OperationsControlPlane:
         Blocked while the kill switch is armed or Phase A is halted. Risk-
         reducing actions use ``pme_protective_allowed`` and are never blocked.
         """
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
             from app.domain.institutional_trading.phase_a.kill_state import HaltMode
 
             if get_phase_a_plane().halt.mode is not HaltMode.ACTIVE:
                 return False
-        except Exception:
-            pass
         with self._lock:
             return not self.kill_switch_armed
 
@@ -637,9 +630,11 @@ class OperationsControlPlane:
                     )
                 self.trading_mode = mode
                 if mode == "scalping" and max_open_positions is None:
-                    from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
-                        align_live_scalp_cap,
+                    from app.domain.institutional_trading.ai_scalping.profiles import (
+                        scalping_v1 as _qf_scalping_v1,
                     )
+
+                    align_live_scalp_cap = _qf_scalping_v1.align_live_scalp_cap
 
                     self.max_open_trades = align_live_scalp_cap(
                         self.max_open_trades, trading_mode="scalping"
@@ -710,9 +705,10 @@ class OperationsControlPlane:
             }
             # Start/Pause echo trading_mode in the request body; that is not an
             # operator mode choice. Only the mode-select control is explicit.
-            if trading_mode is not None and "operator set trading_mode=" in (
-                reason or ""
-            ).lower():
+            if (
+                trading_mode is not None
+                and "operator set trading_mode=" in (reason or "").lower()
+            ):
                 persist_patch["trading_mode_explicit"] = True
             save_ops_state(persist_patch)
         except Exception as exc:
@@ -870,7 +866,7 @@ class OperationsControlPlane:
                 reason=reason,
                 now=now,
             )
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.institutional_trading.live_trading_control import (
                 get_live_trading_controller,
             )
@@ -880,8 +876,6 @@ class OperationsControlPlane:
                 ctrl.emergency_disable(
                     operator, reason=reason or "emergency_stop", now=now
                 )
-        except Exception:
-            pass
 
     # --- Health / alerts ---------------------------------------------------
 
@@ -970,6 +964,7 @@ class OperationsControlPlane:
 
         Does not change max_daily_loss_pct. Does not disarm the kill switch.
         """
+        _ = now
         with self._lock:
             was = bool(self.daily_loss_exceeded)
             self.daily_loss_exceeded = False
@@ -1083,8 +1078,7 @@ class OperationsControlPlane:
                 ),
                 "execution_mode": self.mode.value,
                 "mode": self.mode.value,
-                "kill_switch": self.kill_switch_armed
-                or kill_switch_state != "ACTIVE",
+                "kill_switch": self.kill_switch_armed or kill_switch_state != "ACTIVE",
                 "kill_switch_armed": self.kill_switch_armed,
                 "kill_switch_state": kill_switch_state,
                 "phase_a": phase_a_snap,
@@ -1189,7 +1183,7 @@ def _ensure_multi_symbol_allowlist(plane: OperationsControlPlane) -> None:
         if live:
             plane.allowed_symbols = live
         return
-    try:
+    with contextlib.suppress(Exception):
         from core.config.settings import get_settings
 
         settings = get_settings()
@@ -1197,12 +1191,8 @@ def _ensure_multi_symbol_allowlist(plane: OperationsControlPlane) -> None:
             plane.alpha_engine_enabled = True
             if str(plane.trading_mode or "").strip().lower() == "swing":
                 plane.trading_mode = "alpha"
-    except Exception:
-        pass
     current = tuple(
-        str(s).strip().upper()
-        for s in (plane.allowed_symbols or ())
-        if str(s).strip()
+        str(s).strip().upper() for s in (plane.allowed_symbols or ()) if str(s).strip()
     )
     if len(current) <= 1:
         plane.allowed_symbols = _default_allowed_symbols(
@@ -1294,9 +1284,11 @@ def get_control_plane() -> OperationsControlPlane:
             ):
                 # Restart continuity: LIVE auto desk lost trading_mode on
                 # redeploy because it was never persisted — restore scalping.
-                from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
-                    align_live_scalp_cap,
+                from app.domain.institutional_trading.ai_scalping.profiles import (
+                    scalping_v1 as _qf_scalping_v1,
                 )
+
+                align_live_scalp_cap = _qf_scalping_v1.align_live_scalp_cap
 
                 plane.max_open_trades = align_live_scalp_cap(
                     plane.max_open_trades, trading_mode="scalping"
@@ -1331,23 +1323,23 @@ def get_control_plane() -> OperationsControlPlane:
                 except (TypeError, ValueError):
                     pass
             if str(plane.trading_mode or "").strip().lower() == "scalping":
-                from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
-                    align_live_scalp_cap,
+                from app.domain.institutional_trading.ai_scalping.profiles import (
+                    scalping_v1 as _qf_scalping_v1,
                 )
+
+                align_live_scalp_cap = _qf_scalping_v1.align_live_scalp_cap
 
                 aligned = align_live_scalp_cap(
                     plane.max_open_trades, trading_mode="scalping"
                 )
                 if aligned != plane.max_open_trades:
                     plane.max_open_trades = aligned
-                    try:
+                    with contextlib.suppress(Exception):
                         from app.application.services.ops_state_persistence import (
                             save_ops_state,
                         )
 
                         save_ops_state({"max_open_positions": aligned})
-                    except Exception:
-                        pass
             if "alpha_engine_enabled" in state:
                 plane.alpha_engine_enabled = bool(state.get("alpha_engine_enabled"))
             if "compounding_enabled" in state:
@@ -1361,14 +1353,12 @@ def get_control_plane() -> OperationsControlPlane:
                     plane.allowed_symbols = cleaned
             # MULTI_SYMBOL / Alpha must not remain stuck on XAUUSD after restart.
             _ensure_multi_symbol_allowlist(plane)
-            try:
+            with contextlib.suppress(Exception):
                 from app.application.services.ops_state_persistence import (
                     save_ops_state,
                 )
 
                 save_ops_state({"allowed_symbols": list(plane.allowed_symbols)})
-            except Exception:
-                pass
             # Railway restart continuity: never strand the desk in PAUSED when
             # launch locks already pass — auto-promote to RUNNING.
             try:
@@ -1436,23 +1426,19 @@ def reset_control_plane_for_tests() -> OperationsControlPlane:
     global _GLOBAL_PLANE
     _GLOBAL_PLANE = OperationsControlPlane()
     _ensure_multi_symbol_allowlist(_GLOBAL_PLANE)
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.phase_a import (
             reset_phase_a_plane_for_tests,
         )
 
         reset_phase_a_plane_for_tests()
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.phase_b import (
             reset_phase_b_plane_for_tests,
         )
 
         reset_phase_b_plane_for_tests()
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.phase_c import (
             reset_phase_c_plane_for_tests,
         )
@@ -1463,14 +1449,10 @@ def reset_control_plane_for_tests() -> OperationsControlPlane:
         )
 
         reset_phase_d_plane_for_tests()
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.live_trading_control import (
             reset_live_trading_controller_for_tests,
         )
 
         reset_live_trading_controller_for_tests()
-    except Exception:
-        pass
     return _GLOBAL_PLANE

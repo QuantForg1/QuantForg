@@ -119,9 +119,7 @@ def _credential_flags() -> dict[str, Any]:
 def _client_of(mt5_adapter: Any) -> Any | None:
     if mt5_adapter is None:
         return None
-    return getattr(mt5_adapter, "client", None) or getattr(
-        mt5_adapter, "_client", None
-    )
+    return getattr(mt5_adapter, "client", None) or getattr(mt5_adapter, "_client", None)
 
 
 def ensure_gateway_session_for_research(mt5_adapter: Any) -> dict[str, Any]:
@@ -302,9 +300,7 @@ def _scored_rows_from_live_scan() -> list[dict[str, Any]]:
     for key in ("opportunity_ranked", "ranked", "noc_rows", "rows"):
         block = payload.get(key)
         if isinstance(block, list):
-            rows.extend(
-                [r for r in block if isinstance(r, dict) and r.get("symbol")]
-            )
+            rows.extend([r for r in block if isinstance(r, dict) and r.get("symbol")])
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
     for row in rows:
@@ -326,7 +322,12 @@ def _row_has_numeric_opportunity(row: dict[str, Any]) -> bool:
 
 def _desk_key(row: dict[str, Any]) -> str:
     return canonical_desk(
-        str(row.get("canonical_symbol") or row.get("broker_symbol") or row.get("symbol") or "")
+        str(
+            row.get("canonical_symbol")
+            or row.get("broker_symbol")
+            or row.get("symbol")
+            or ""
+        )
     )
 
 
@@ -339,7 +340,8 @@ def _prior_numeric_research_scores() -> list[dict[str, Any]]:
     prior = get_last_market_universe_snapshot()
     if not isinstance(prior, dict):
         return []
-    board = prior.get("opportunity_board") if isinstance(prior.get("opportunity_board"), dict) else {}
+    _board_value = prior.get("opportunity_board")
+    board = _board_value if isinstance(_board_value, dict) else {}
     candidates: list[Any] = []
     for key in ("live_ranked", "rows", "ranked"):
         block = board.get(key) if isinstance(board, dict) else None
@@ -658,16 +660,18 @@ def _probe_codes_from_rows(rows: tuple[dict[str, Any], ...]) -> list[str]:
         by_code[code.upper()] = code
         desk = canonical_desk(code)
         by_desk[desk] = code
-        asset = str(row.get("asset_class") or classify_or_unknown(code) or "OTHER").upper()
+        asset = str(
+            row.get("asset_class") or classify_or_unknown(code) or "OTHER"
+        ).upper()
         if asset not in class_buckets:
             asset = "OTHER"
         if code not in class_buckets[asset]:
             class_buckets[asset].append(code)
     out: list[str] = []
     for hint in ("XAUUSD", *COVERAGE_OBSERVATION_HINTS):
-        code = by_desk.get(hint) or by_code.get(hint)
-        if code and code not in out:
-            out.append(code)
+        probe_code = by_desk.get(hint) or by_code.get(hint)
+        if probe_code and probe_code not in out:
+            out.append(probe_code)
         if len(out) >= MAX_HISTORY_PROBE_SYMBOLS:
             return out
     rotation = (
@@ -880,9 +884,7 @@ def _open_positions(
     return out
 
 
-def find_instrument(
-    snapshot: dict[str, Any], symbol: str
-) -> dict[str, Any] | None:
+def find_instrument(snapshot: dict[str, Any], symbol: str) -> dict[str, Any] | None:
     want = str(symbol or "").strip()
     if not want:
         return None
@@ -970,9 +972,7 @@ def build_snapshot(
             ]
     except Exception:  # noqa: S110  # policy import is best-effort
         pass
-    _attach_timeframes(
-        instruments, mt5_adapter=mt5_adapter, catalogue_source=source
-    )
+    _attach_timeframes(instruments, mt5_adapter=mt5_adapter, catalogue_source=source)
     # Score up to MAX_RESEARCH_BATCH eligible desks per cycle; prefer
     # never-analyzed then stale-analyzed. Persistence + rotation fills coverage.
     schedule = research_scan_order(
@@ -998,11 +998,7 @@ def build_snapshot(
     }
     wipe_desks.discard("")
     if wipe_desks:
-        scored = [
-            row
-            for row in scored
-            if _desk_key(row) not in wipe_desks
-        ]
+        scored = [row for row in scored if _desk_key(row) not in wipe_desks]
     scored = _merge_research_batch_scores(
         scored,
         mt5_adapter=mt5_adapter,
@@ -1068,11 +1064,14 @@ def build_snapshot(
         by_state = dict.fromkeys(by_state or ("UNKNOWN",), overlay)
     trace = connection_trace(mt5_adapter)
     trace["gateway_session"] = gateway_session
-    if gateway_session.get("error") and not catalogue.get("error"):
-        # Prefer adopt failure text when catalogue already unavailable.
-        if source in {CATALOGUE_UNAVAILABLE, CATALOGUE_ERROR, CATALOGUE_MOCK}:
-            catalogue = dict(catalogue)
-            catalogue["error"] = gateway_session.get("error")
+    # Prefer adopt failure text when catalogue already unavailable.
+    if (
+        gateway_session.get("error")
+        and not catalogue.get("error")
+        and source in {CATALOGUE_UNAVAILABLE, CATALOGUE_ERROR, CATALOGUE_MOCK}
+    ):
+        catalogue = dict(catalogue)
+        catalogue["error"] = gateway_session.get("error")
     if source == CATALOGUE_LIVE_BROKER:
         trace["catalogue_source"] = CATALOGUE_LIVE_BROKER
         trace["broker_connection_available"] = True
@@ -1088,9 +1087,7 @@ def build_snapshot(
         trace["gateway_token_configured"] = adapter_resolution.get(
             "gateway_token_configured"
         )
-        trace["gateway_available"] = bool(
-            adapter_resolution.get("gateway_available")
-        )
+        trace["gateway_available"] = bool(adapter_resolution.get("gateway_available"))
         trace["second_gateway_created"] = False
         trace["token_exposed"] = False
         trace["adapter_source"] = adapter_resolution.get("adapter_source")
@@ -1142,12 +1139,14 @@ def build_snapshot(
     universe_n = counts.get("universe")
     eligible_n = (
         schedule.get("eligible_n")
-        if source == CATALOGUE_LIVE_BROKER and isinstance(schedule.get("eligible_n"), int)
+        if source == CATALOGUE_LIVE_BROKER
+        and isinstance(schedule.get("eligible_n"), int)
         else None
     )
     skipped_n = (
         schedule.get("skipped_n")
-        if source == CATALOGUE_LIVE_BROKER and isinstance(schedule.get("skipped_n"), int)
+        if source == CATALOGUE_LIVE_BROKER
+        and isinstance(schedule.get("skipped_n"), int)
         else None
     )
     coverage_pct: float | str | None
@@ -1280,16 +1279,12 @@ def build_snapshot(
             "n": (
                 CATALOGUE_UNAVAILABLE
                 if catalogue_down
-                else (
-                    virtual.get("n") if isinstance(virtual, dict) else len(shadows)
-                )
+                else (virtual.get("n") if isinstance(virtual, dict) else len(shadows))
             ),
             "completed_n": (
                 CATALOGUE_UNAVAILABLE
                 if catalogue_down
-                else (
-                    virtual.get("completed_n") if isinstance(virtual, dict) else 0
-                )
+                else (virtual.get("completed_n") if isinstance(virtual, dict) else 0)
             ),
             "family_n": len(shadows),
             "would_submit_order": False,
@@ -1303,9 +1298,7 @@ def build_snapshot(
         "catalogue_empty": not rows,
         "scored_from_live_scan_n": len(scored),
         "scored_rows": [
-            r
-            for r in scored
-            if isinstance(r, dict) and _row_has_numeric_opportunity(r)
+            r for r in scored if isinstance(r, dict) and _row_has_numeric_opportunity(r)
         ],
         "catalogue_refresh_timestamp": as_of,
         "observability": {
@@ -1323,14 +1316,10 @@ def build_snapshot(
             "symbol_count": counts.get("universe"),
             "symbols_discovered": counts.get("universe"),
             "symbols_eligible": (
-                eligible_n
-                if source == CATALOGUE_LIVE_BROKER
-                else CATALOGUE_UNAVAILABLE
+                eligible_n if source == CATALOGUE_LIVE_BROKER else CATALOGUE_UNAVAILABLE
             ),
             "symbols_skipped": (
-                skipped_n
-                if source == CATALOGUE_LIVE_BROKER
-                else CATALOGUE_UNAVAILABLE
+                skipped_n if source == CATALOGUE_LIVE_BROKER else CATALOGUE_UNAVAILABLE
             ),
             "symbols_scored": (
                 symbols_scored_n
@@ -1340,9 +1329,7 @@ def build_snapshot(
             "coverage_pct": coverage_pct,
             "coverage_pct_catalogue": coverage_pct_catalogue,
             "coverage_basis": (
-                "eligible"
-                if source == CATALOGUE_LIVE_BROKER
-                else CATALOGUE_UNAVAILABLE
+                "eligible" if source == CATALOGUE_LIVE_BROKER else CATALOGUE_UNAVAILABLE
             ),
             "research_batch": (
                 get_last_research_batch_diag()
@@ -1383,9 +1370,7 @@ def build_snapshot(
             "shadow_virtual_trades": (
                 CATALOGUE_UNAVAILABLE
                 if catalogue_down
-                else (
-                    virtual.get("completed_n") if isinstance(virtual, dict) else 0
-                )
+                else (virtual.get("completed_n") if isinstance(virtual, dict) else 0)
             ),
             "gateway_available": bool(trace.get("gateway_available"))
             or bool(trace.get("gateway_found") and not trace.get("is_mock")),
@@ -1404,9 +1389,9 @@ def build_snapshot(
                 else CATALOGUE_UNAVAILABLE
             ),
             "rate_limit_events": 0,
-            "last_successful_refresh": as_of
-            if source == CATALOGUE_LIVE_BROKER
-            else UNKNOWN,
+            "last_successful_refresh": (
+                as_of if source == CATALOGUE_LIVE_BROKER else UNKNOWN
+            ),
             "last_error": catalogue.get("error"),
             "analysis_count": (
                 len(live_ranked)

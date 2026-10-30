@@ -1,4 +1,7 @@
-"""Phase 62 — broker-independent signals + trader workspace polish; frozen trading path."""
+(
+    """Phase 62 — broker-independent signals + trader workspace polish; frozen """
+    """trading path."""
+)
 
 from __future__ import annotations
 

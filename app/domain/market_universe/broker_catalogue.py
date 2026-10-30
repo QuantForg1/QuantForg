@@ -89,7 +89,7 @@ def _flatten_item(item: Any) -> dict[str, Any] | None:
     code = str(getattr(item, "code", None) or getattr(item, "name", "") or "").strip()
     if not code:
         return None
-    row: dict[str, Any] = {"code": code}
+    built: dict[str, Any] = {"code": code}
     for attr in (
         "description",
         "digits",
@@ -119,13 +119,13 @@ def _flatten_item(item: Any) -> dict[str, Any] | None:
         if hasattr(item, attr):
             value = getattr(item, attr)
             if value not in (None, ""):
-                row[attr] = value
+                built[attr] = value
     raw = getattr(item, "raw", None)
     if isinstance(raw, dict):
         for key, value in raw.items():
-            if row.get(key) in (None, ""):
-                row[key] = value
-    return row
+            if built.get(key) in (None, ""):
+                built[key] = value
+    return built
 
 
 def discover_live_catalogue(mt5_adapter: Any | None) -> dict[str, Any]:
@@ -294,9 +294,7 @@ def probe_timeframe_history(
                     "missing_bars": max(0, bar_cap - n) if n else UNKNOWN,
                     "continuity": "OK" if n >= bar_cap else "SHORT",
                     "error": False,
-                    "role": "CONTEXT"
-                    if name in CONTEXT_TIMEFRAMES
-                    else "RESEARCH",
+                    "role": "CONTEXT" if name in CONTEXT_TIMEFRAMES else "RESEARCH",
                 }
             except Exception as exc:
                 frames[name] = {

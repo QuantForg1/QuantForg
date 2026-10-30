@@ -15,7 +15,6 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from hashlib import sha256
 from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
@@ -24,11 +23,9 @@ from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.decision_models import (
     AccountRiskState,
     ConfluenceResult,
-    DecisionAction,
     TradeDecision,
     TradeDirection,
 )
-from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.market_structure.enums import TrendDirection
 from core.logging import get_logger
@@ -220,6 +217,7 @@ def force_first_trade_status(
     execution_enabled: bool = False,
     open_positions: int = 0,
 ) -> dict[str, Any]:
+    _ = execution_enabled
     cfg = ForceFirstTradeConfig.from_settings(settings)
     state = get_force_first_trade_state()
     remaining = max(0, cfg.max_trades - state.executed_count)
@@ -276,7 +274,6 @@ def maybe_override_decision(
         force_shadow,
     )
     return decision, False
-
 
 
 def record_forced_trade_success(

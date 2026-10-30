@@ -55,9 +55,7 @@ def _rollup(rows: list[Any]) -> dict[str, Any]:
         "losses": n - wins,
         "win_rate": round(wins / n, 4) if n else None,
         "net_pnl": round(sum(pnls_f), 4) if pnls_f else None,
-        "profit_factor": (
-            round(gross_p / gross_l, 4) if gross_l > 0 else None
-        ),
+        "profit_factor": (round(gross_p / gross_l, 4) if gross_l > 0 else None),
         "fabricated": False,
     }
 
@@ -91,9 +89,11 @@ def build_institutional_period_reports() -> dict[str, Any]:
     # Attach KPI snapshot when available (shared evidence)
     kpis: dict[str, Any] = {}
     try:
-        from app.domain.institutional_trading.ai_scalping.institutional_performance_kpis import (  # noqa: E501
-            build_institutional_performance_kpis,
+        from app.domain.institutional_trading.ai_scalping import (
+            institutional_performance_kpis as _q92,
         )
+
+        build_institutional_performance_kpis = _q92.build_institutional_performance_kpis
 
         kpis = build_institutional_performance_kpis()
     except Exception:

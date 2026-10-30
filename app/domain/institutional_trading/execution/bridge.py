@@ -100,13 +100,13 @@ class ExecutionBridge:
             if self._hashes_hydrated and not self._hashes_unverified:
                 return
             try:
-                from app.domain.institutional_trading.execution.decision_hash_store import (  # noqa: E501
-                    load_decision_hash_report,
+                from app.domain.institutional_trading.execution import (
+                    decision_hash_store as _q103,
                 )
 
-                report = load_decision_hash_report(
-                    max_hashes=self._max_executed_hashes
-                )
+                load_decision_hash_report = _q103.load_decision_hash_report
+
+                report = load_decision_hash_report(max_hashes=self._max_executed_hashes)
                 if not report.verified:
                     self._hashes_unverified = True
                     self._hashes_hydrated = True
@@ -364,20 +364,23 @@ class ExecutionBridge:
 
         # 5a. Scalping ATR% spread + live health / self-protection (new entries only)
         try:
+            from app.domain.institutional_trading.ai_scalping import (
+                spread_intelligence as _qf_spread_intelligence,
+            )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
             from app.domain.institutional_trading.ai_scalping.live_health import (
                 get_live_health_monitor,
             )
-            from app.domain.institutional_trading.ai_scalping.spread_intelligence import (  # noqa: E501
-                assess_spread,
-            )
+            from app.domain.institutional_trading.atr import score_gate_atr
+
+            assess_spread = _qf_spread_intelligence.assess_spread
 
             scalp_cfg = DEFAULT_AI_SCALPING_CONFIG
-            atr = getattr(context.snapshot, "atr", None) or getattr(
-                context.account, "atr", None
-            )
+            # Percentage cap uses the closed entry-gate ATR. A missing gate
+            # ATR is not filled from the stop series on the account.
+            atr = score_gate_atr(context.snapshot)
             sym = str(
                 getattr(decision, "symbol", None)
                 or getattr(context.snapshot, "symbol", None)
@@ -435,14 +438,12 @@ class ExecutionBridge:
                 )
                 if not allowed:
                     why_u = (why or "").upper()
-                    if any(
-                        tok in why_u
-                        for tok in ("LATENCY", "MARKET_DATA", "OMS")
-                    ) and not any(
-                        tok in why_u for tok in ("GATEWAY", "MT5", "BROKER")
-                    ):
-                        halt_reason = BridgeAbortReason.HEALTH_DEGRADED
-                    elif "DEPENDENCY" in why_u:
+                    if (
+                        any(tok in why_u for tok in ("LATENCY", "MARKET_DATA", "OMS"))
+                        and not any(
+                            tok in why_u for tok in ("GATEWAY", "MT5", "BROKER")
+                        )
+                    ) or "DEPENDENCY" in why_u:
                         halt_reason = BridgeAbortReason.HEALTH_DEGRADED
                     else:
                         halt_reason = BridgeAbortReason.SELF_PROTECTION
@@ -604,16 +605,10 @@ class ExecutionBridge:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
 
             acct = context.account
-            bid_f = (
-                float(acct.bid)
-                if getattr(acct, "bid", None) is not None
-                else None
-            )
-            ask_f = (
-                float(acct.ask)
-                if getattr(acct, "ask", None) is not None
-                else None
-            )
+            bid_raw = getattr(acct, "bid", None)
+            ask_raw = getattr(acct, "ask", None)
+            bid_f = float(bid_raw) if bid_raw is not None else None
+            ask_f = float(ask_raw) if ask_raw is not None else None
             quote_age = getattr(acct, "quote_age_seconds", None)
             if bid_f is None or ask_f is None:
                 mid = getattr(acct, "mid_price", None)
@@ -660,15 +655,15 @@ class ExecutionBridge:
                 ),
             )
             if not gate.get("allow_new_entry", False):
+                gate_label = gate.get("first_blocking_gate") or gate.get(
+                    "final_control_state"
+                )
                 return self._abort(
                     decision=decision,
                     context=context,
                     decision_hash=d_hash,
                     reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
-                    comment=(
-                        f"Phase A blocked: "
-                        f"{gate.get('first_blocking_gate') or gate.get('final_control_state')}"
-                    ),
+                    comment=f"Phase A blocked: {gate_label}",
                     t0=t0,
                 )
         except Exception:
@@ -734,12 +729,16 @@ class ExecutionBridge:
         # evidence, simulates/shadows — never order_send. Strategy/floors untouched.
         validation_intercept: dict[str, Any] | None = None
         try:
-            from app.domain.institutional_trading.rc1_production_validation.config import (  # noqa: E501
-                resolve_validation_runtime,
+            from app.domain.institutional_trading.rc1_production_validation import (
+                config as _qf_config,
             )
-            from app.domain.institutional_trading.rc1_production_validation.hooks import (  # noqa: E501
-                handle_validation_execution,
+
+            resolve_validation_runtime = _qf_config.resolve_validation_runtime
+            from app.domain.institutional_trading.rc1_production_validation import (
+                hooks as _qf_hooks,
             )
+
+            handle_validation_execution = _qf_hooks.handle_validation_execution
 
             vrt = resolve_validation_runtime()
             if vrt.blocks_broker_submit:
@@ -886,9 +885,11 @@ class ExecutionBridge:
                             "retcode": oms_result.retcode,
                         },
                     )
-                    from app.domain.institutional_trading.phase_a.execution_reject import (
-                        apply_oms_outcome_to_burst,
+                    from app.domain.institutional_trading.phase_a import (
+                        execution_reject as _q883,
                     )
+
+                    apply_oms_outcome_to_burst = _q883.apply_oms_outcome_to_burst
 
                     apply_oms_outcome_to_burst(
                         pa.burst,
@@ -899,9 +900,11 @@ class ExecutionBridge:
                     )
                     pa.persist()
                 elif pa.config.burst_latch_enabled:
-                    from app.domain.institutional_trading.phase_a.execution_reject import (
-                        apply_oms_outcome_to_burst,
+                    from app.domain.institutional_trading.phase_a import (
+                        execution_reject as _q896,
                     )
+
+                    apply_oms_outcome_to_burst = _q896.apply_oms_outcome_to_burst
 
                     apply_oms_outcome_to_burst(
                         pa.burst,
@@ -939,15 +942,17 @@ class ExecutionBridge:
         # Measure slippage before journaling so the attempt record stores it
         slip_str: str | None = None
         slip_exceeded = False
-        fill_price_obs: float | None = None
+        fill_price_obs: Decimal | None = None
         try:
+            from app.domain.institutional_trading.ai_scalping import (
+                slippage_protection as _qf_slippage_protection,
+            )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
-            from app.domain.institutional_trading.ai_scalping.slippage_protection import (  # noqa: E501
-                extract_fill_price,
-                measure_slippage,
-            )
+
+            extract_fill_price = _qf_slippage_protection.extract_fill_price
+            measure_slippage = _qf_slippage_protection.measure_slippage
 
             if status is ExecutionAttemptStatus.OMS_SUCCESS:
                 fill_price_obs = extract_fill_price(oms_result.raw)
@@ -979,6 +984,7 @@ class ExecutionBridge:
         try:
             from app.domain.institutional_trading.phase_b import get_phase_b_plane
 
+            mid_raw = getattr(context.account, "mid_price", None)
             get_phase_b_plane().execution.record(
                 symbol=str(getattr(decision, "symbol", "") or ""),
                 outcome=(
@@ -1003,11 +1009,7 @@ class ExecutionBridge:
                     if getattr(context.account, "quote_age_seconds", None) is not None
                     else None
                 ),
-                requested_price=(
-                    float(context.account.mid_price)
-                    if getattr(context.account, "mid_price", None) is not None
-                    else None
-                ),
+                requested_price=(float(mid_raw) if mid_raw is not None else None),
             )
         except Exception:
             logger.exception("phase_b_execution_observe_failed")
@@ -1097,9 +1099,11 @@ class ExecutionBridge:
                         mt5_retcode=mt5_rc,
                     )
                     try:
-                        from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
-                            get_symbol_state_book,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            symbol_state as _qf_symbol_state,
                         )
+
+                        get_symbol_state_book = _qf_symbol_state.get_symbol_state_book
 
                         sym = str(decision.symbol or "").upper()
                         if sym:
@@ -1304,6 +1308,7 @@ class ExecutionBridge:
         assert decision.stop_zone is not None
         assert decision.target_zone is not None
         mid = getattr(context.account, "mid_price", None)
+        # Stop-distance fallback only. Percentage gates must not read this series.
         atr = getattr(context.account, "atr", None)
         try:
             mid_d = Decimal(str(mid)) if mid is not None else None
@@ -1336,23 +1341,19 @@ class ExecutionBridge:
             tp = Decimal(str(decision.target_zone.high))
             if mid_d is not None and mid_d > 0:
                 if ai_sl:
-                    try:
+                    with contextlib.suppress(Exception):
                         cand = Decimal(str(ai_sl))
                         if cand < mid_d:
                             sl = cand
                             plan_price = ai_entry or mid_d
-                    except Exception:
-                        pass
                 if sl >= mid_d:
                     sl = mid_d - fallback_dist
                     plan_price = mid_d
                 if ai_tp:
-                    try:
+                    with contextlib.suppress(Exception):
                         cand = Decimal(str(ai_tp))
                         if cand > mid_d:
                             tp = cand
-                    except Exception:
-                        pass
                 if tp <= mid_d:
                     tp = mid_d + fallback_dist * Decimal("1.5")
         elif decision.action is DecisionAction.SELL:
@@ -1361,23 +1362,19 @@ class ExecutionBridge:
             tp = Decimal(str(decision.target_zone.low))
             if mid_d is not None and mid_d > 0:
                 if ai_sl:
-                    try:
+                    with contextlib.suppress(Exception):
                         cand = Decimal(str(ai_sl))
                         if cand > mid_d:
                             sl = cand
                             plan_price = ai_entry or mid_d
-                    except Exception:
-                        pass
                 if sl <= mid_d:
                     sl = mid_d + fallback_dist
                     plan_price = mid_d
                 if ai_tp:
-                    try:
+                    with contextlib.suppress(Exception):
                         cand = Decimal(str(ai_tp))
                         if cand < mid_d:
                             tp = cand
-                    except Exception:
-                        pass
                 if tp >= mid_d:
                     tp = mid_d - fallback_dist * Decimal("1.5")
         else:

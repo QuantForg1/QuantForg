@@ -130,9 +130,7 @@ def test_session_priority_prefers_london_fx() -> None:
     assert session_priority_score("EURUSD", "london") > session_priority_score(
         "AUDUSD", "london"
     )
-    ordered = prioritize_universe_for_session(
-        ("AUDUSD", "EURUSD", "XAUUSD"), "london"
-    )
+    ordered = prioritize_universe_for_session(("AUDUSD", "EURUSD", "XAUUSD"), "london")
     assert ordered[0] == "EURUSD"
 
 

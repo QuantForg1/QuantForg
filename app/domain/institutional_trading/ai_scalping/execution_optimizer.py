@@ -10,6 +10,8 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
+from app.domain.institutional_trading.atr import score_gate_atr
+
 _LOCK = threading.RLock()
 _DEFER_COUNTS: dict[str, dict[str, Any]] = {}
 _LAST_OPTIMIZER: dict[str, Any] | None = None
@@ -104,14 +106,14 @@ def _tick_momentum(snapshot: Any) -> dict[str, Any]:
 
 
 def _micro_volatility(snapshot: Any, account: Any) -> dict[str, Any]:
-    atr = _f(getattr(account, "atr", None), 0.0)
+    """ATR% of the entry-gate series. The stop ATR does not set this band."""
+    gate = score_gate_atr(snapshot)
     mid = _f(getattr(account, "mid_price", None), 0.0)
-    if atr <= 0 or mid <= 0:
+    if gate is None or mid <= 0:
         return {"atr_pct": None, "band": "unknown", "score": 50}
-    atr_pct = (atr / mid) * 100.0
-    # Gold scalp ATR% routinely 0.08–0.35 on Sydney/Tokyo. Treating <0.15 as
-    # "compression" scored 35 and held LIVE submits at quality 54 (DEFER forever
-    # because each cycle uses a new decision hash). Align with vol hard_min 0.08.
+    atr_pct = (float(gate) / mid) * 100.0
+    # Entry-timeframe gold ATR% routinely sits at 0.08-0.35. The 0.08 edge
+    # matches the volatility hard minimum. Do not lower it to admit quiet bars.
     if atr_pct < 0.08:
         return {"atr_pct": round(atr_pct, 6), "band": "compression", "score": 35}
     if atr_pct < 0.12:
@@ -161,7 +163,7 @@ def _broker_response_score() -> dict[str, Any]:
             "fill_rate": fill,
             "reject_rate": reject,
             "requote_rate": snap.get("requote_rate"),
-            "score": int(round(score)),
+            "score": round(score),
             "samples": snap.get("samples"),
         }
     except Exception:
@@ -270,11 +272,7 @@ def evaluate_execution_moment(
         or getattr(decision, "action", None)
         or ""
     ).upper()
-    key = (
-        decision_key
-        or f"{sym}:{action}"
-        or str(getattr(decision, "input_hash", None) or sym or "na")
-    )
+    key = decision_key or f"{sym}:{action}"
     spread = _spread_trend(sym)
     mom = _tick_momentum(snapshot)
     vol = _micro_volatility(snapshot, account)
@@ -299,9 +297,7 @@ def evaluate_execution_moment(
         "slippage_history": 15,
     }
     total_w = sum(weights.values()) or 1
-    quality = int(
-        round(sum(components[k] * weights[k] for k in weights) / total_w)
-    )
+    quality = round(sum(components[k] * weights[k] for k in weights) / total_w)
     defer = _defer_state(key)
 
     block_code = str(hard_block_reason or "").strip().upper() or None

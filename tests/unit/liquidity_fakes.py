@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.domain.liquidity.models import LiquiditySnapshot
 from app.domain.market_data.candle import Candle
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.market_structure.models import StructureSnapshot, SwingPoint
 from app.domain.market_structure.swing_detector import SwingDetector
@@ -120,12 +121,14 @@ class InMemorySwingProvider:
         left: int = 2,
         right: int = 2,
         limit: int = 500,
+        as_of: datetime | None = None,
     ) -> tuple[SwingPoint, ...]:
         filtered = [
             c
             for c in self._candles
             if c.symbol_code == symbol_code and c.timeframe == timeframe
         ][-limit:]
+        filtered = closed_analysis_bars(filtered, as_of=as_of, timeframe=timeframe)
         return self._detector.detect(filtered, left=left, right=right)
 
 

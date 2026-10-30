@@ -165,7 +165,8 @@ def snapshot_read_only_sources(
 
         snap = get_strategy_diagnostics_store().snapshot(limit=50)
         tl = timeline_snapshot_from_diagnostics(snap, limit=50)
-        points = tl.get("points") if isinstance(tl.get("points"), list) else []
+        _points_value = tl.get("points")
+        points = _points_value if isinstance(_points_value, list) else []
         ingested["opportunity"] = wh.ingest(
             "opportunity",
             points,

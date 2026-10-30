@@ -102,9 +102,7 @@ async def organizations(_user: OperatorUser) -> dict[str, Any]:
 
 
 @router.get("/organizations/{organization_id}/isolation")
-async def org_isolation(
-    organization_id: str, _user: OperatorUser
-) -> dict[str, Any]:
+async def org_isolation(organization_id: str, _user: OperatorUser) -> dict[str, Any]:
     denied = _gate(_user, "org.view")
     if denied:
         return denied

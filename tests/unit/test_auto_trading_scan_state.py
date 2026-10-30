@@ -21,8 +21,7 @@ from app.domain.institutional_trading.operations.fast_decision_path import (
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 _VOL_REASON = (
-    "Volatility below hard minimum ATR%=0.021 < 0.03 "
-    "(evidence dead-tape floor)"
+    "Volatility below hard minimum ATR%=0.021 < 0.03 " "(evidence dead-tape floor)"
 )
 
 
@@ -211,9 +210,7 @@ def test_atr_below_hard_minimum_normalizes_fault_code() -> None:
 
 def test_atr_at_or_above_hard_minimum_is_not_hard_min_code() -> None:
     passed = "Volatility v2 PASS standard floor=0.03 ATR%=0.031"
-    compressed = (
-        "Volatility too compressed ATR%=0.04 < exceptional floor 0.05"
-    )
+    compressed = "Volatility too compressed ATR%=0.04 < exceptional floor 0.05"
     assert blocking_gate_fault_code(passed) != "VOLATILITY_HARD_MIN"
     assert blocking_gate_fault_code(compressed) == "VOLATILITY_COMPRESSED"
     eligible = {

@@ -189,16 +189,10 @@ def project_opportunity_row(
         "asset_class": asset,
         "direction": _direction(row),
         "selected_side": _direction(row),
-        "core_buy": _score_or_unknown(
-            row.get("core_buy") or row.get("buy_score")
-        ),
-        "core_sell": _score_or_unknown(
-            row.get("core_sell") or row.get("sell_score")
-        ),
+        "core_buy": _score_or_unknown(row.get("core_buy") or row.get("buy_score")),
+        "core_sell": _score_or_unknown(row.get("core_sell") or row.get("sell_score")),
         "ltf_buy": _score_or_unknown(row.get("ltf_buy") or row.get("ltf_buy_score")),
-        "ltf_sell": _score_or_unknown(
-            row.get("ltf_sell") or row.get("ltf_sell_score")
-        ),
+        "ltf_sell": _score_or_unknown(row.get("ltf_sell") or row.get("ltf_sell_score")),
         "never_prefer_buy_only": True,
         "opportunity_score": opp,
         "directional_edge": edge,
@@ -341,9 +335,7 @@ def build_opportunity_board(
     min_rr = _as_float(filt.get("min_rr"))
     freshness = str(filt.get("data_freshness") or "").strip().upper()
     setup = str(filt.get("setup") or "").strip().upper()
-    data_status = str(
-        filt.get("data_status") or filt.get("data_state") or ""
-    ).strip()
+    data_status = str(filt.get("data_status") or filt.get("data_state") or "").strip()
     data_status = data_status.upper()
 
     def _keep(row: dict[str, Any]) -> bool:
@@ -416,9 +408,7 @@ def build_opportunity_board(
         "rows": ranked_all,
         "live_ranked": ranked,
         "discovered_not_ranked": [
-            r
-            for r in ranked_all
-            if str(r.get("data_state") or "") in UNRANKABLE_STATES
+            r for r in ranked_all if str(r.get("data_state") or "") in UNRANKABLE_STATES
         ],
         "top_opportunities": ranked[:20],
         "top_buy": buys[:20],
@@ -490,9 +480,11 @@ def global_opportunity_now(
     return {
         **base,
         "status": "BEST_CURRENT_RESEARCH_SIGNAL",
-        "value": top.get("opportunity_score")
-        if isinstance(top.get("opportunity_score"), int)
-        else UNKNOWN,
+        "value": (
+            top.get("opportunity_score")
+            if isinstance(top.get("opportunity_score"), int)
+            else UNKNOWN
+        ),
         "symbol": top.get("broker_symbol") or top.get("symbol"),
         "canonical_symbol": top.get("canonical_symbol"),
         "asset_class": top.get("asset_class"),

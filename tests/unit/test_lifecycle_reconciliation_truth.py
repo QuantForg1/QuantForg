@@ -192,9 +192,10 @@ def test_fresh_open_without_entry_out_stays_open() -> None:
     snap = record.snapshot if isinstance(record.snapshot, dict) else {}
     open_tickets = [int(p.get("ticket") or 0) for p in (snap.get("positions") or [])]
     assert 579901930 in open_tickets
-    assert pair_all_symbol_closed_trades(
-        [d.to_dict() for d in adapter.history_deals()]
-    ) == []
+    assert (
+        pair_all_symbol_closed_trades([d.to_dict() for d in adapter.history_deals()])
+        == []
+    )
 
 
 def test_get_portfolio_fresh_snapshot_orders_deals_before_positions() -> None:
@@ -215,6 +216,7 @@ def test_get_portfolio_fresh_snapshot_orders_deals_before_positions() -> None:
     assert snap.find("history_deals") < snap.find("force_refresh_positions") or (
         snap.find("hist_deals") < snap.find("force_refresh_positions")
     )
+
 
 def test_pair_entry_exit_full_close_identity() -> None:
     t0 = datetime(2026, 9, 4, 1, 49, 28, tzinfo=UTC)

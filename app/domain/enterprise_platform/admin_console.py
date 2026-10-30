@@ -27,9 +27,7 @@ async def build_enterprise_dashboard() -> dict[str, Any]:
         for u in users
         if str(u.get("status") or "").lower() in {"active", "enabled", ""}
     )
-    active_keys = sum(
-        1 for k in keys.get("keys") or [] if k.get("status") == "active"
-    )
+    active_keys = sum(1 for k in keys.get("keys") or [] if k.get("status") == "active")
     active_sessions = sum(
         1 for s in sessions if s.get("is_active") and not s.get("revoked")
     )

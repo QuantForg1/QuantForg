@@ -84,9 +84,7 @@ async def fleet(
 
 
 @router.get("/customers/{customer_id}")
-async def customer_workspace(
-    customer_id: str, _user: OperatorUser
-) -> dict[str, Any]:
+async def customer_workspace(customer_id: str, _user: OperatorUser) -> dict[str, Any]:
     return await build_customer_workspace(customer_id)
 
 

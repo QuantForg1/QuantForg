@@ -66,10 +66,8 @@ def estimate_smart_routing(
     # Execution quality score blends optimizer + fill/reject history
     hist_score = 55
     if fill_rate is not None:
-        hist_score = int(
-            max(10, min(95, fill_rate - 0.5 * float(reject_rate or 0)))
-        )
-    execution_quality_score = int(round(0.55 * quality + 0.45 * hist_score))
+        hist_score = int(max(10, min(95, fill_rate - 0.5 * float(reject_rate or 0))))
+    execution_quality_score = round(0.55 * quality + 0.45 * hist_score)
 
     poor = execution_quality_score < 55
     opt_state = str(opt.get("final_state") or "")

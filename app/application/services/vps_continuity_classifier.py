@@ -65,14 +65,17 @@ def classify_vps_continuity(facts: dict[str, Any] | None = None) -> dict[str, An
         "BROKER_CONNECTED": BROKER_CONNECTED if broker else "NOT_CONNECTED",
         "AUTOTRADING_ENABLED": AUTOTRADING_ENABLED if autotrading else "NOT_ENABLED",
         "EXECUTION_PATH_READY": EXECUTION_PATH_READY if ready else "NOT_READY",
-        "SESSION_VERIFIED": SESSION_VERIFIED if session_verified else "SESSION_UNVERIFIED",
+        "SESSION_VERIFIED": (
+            SESSION_VERIFIED if session_verified else "SESSION_UNVERIFIED"
+        ),
         "gateway_listeners": listeners,
         "gateway_listener_class": listener_class,
         "orphan_gateway_processes": int(row.get("orphan_gateway_processes") or 0),
         "watchdog": row.get("watchdog") or "UNKNOWN",
         "cloudflared": row.get("cloudflared") or "UNKNOWN",
         "decision_hash_persistence": row.get("decision_hash_persistence") or "UNKNOWN",
-        "duplicate_order_prevention": row.get("duplicate_order_prevention") or "ENABLED_CONTRACT",
+        "duplicate_order_prevention": row.get("duplicate_order_prevention")
+        or "ENABLED_CONTRACT",
         "blind_retry": "DISABLED",
         "mt5_reboot_recovery": recovery,
         "vps_autonomy_status": autonomy,

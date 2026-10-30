@@ -6,6 +6,7 @@ Sample-size labels are analytical only and never change trading gates.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
 from statistics import mean, median
 from typing import Any
@@ -144,7 +145,7 @@ def sample_status(n: int) -> str:
     """Research labels only. Never a trading gate.
 
     Win-rate display still requires n>=10 so tiny samples cannot manufacture
-    an 80–90% figure. n=1–9 is EARLY_SIGNAL; the numeric win rate stays hidden.
+    an 80-90% figure. n=1-9 is EARLY_SIGNAL; the numeric win rate stays hidden.
     """
     if n <= 0:
         return INSUFFICIENT_SAMPLE
@@ -263,17 +264,34 @@ def _metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
     if n == 0:
         return empty
 
-    pnls = [_as_float(t.get("net_pnl") if t.get("net_pnl") is not None else t.get("profit_loss")) or 0.0 for t in trades]
+    pnls = [
+        _as_float(
+            t.get("net_pnl") if t.get("net_pnl") is not None else t.get("profit_loss")
+        )
+        or 0.0
+        for t in trades
+    ]
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
     rs = [r for r in (_r_multiple(t) for t in trades) if r is not None]
     holds = [
         h
-        for h in (_as_float(t.get("holding_time") or t.get("holding_time_sec")) for t in trades)
+        for h in (
+            _as_float(t.get("holding_time") or t.get("holding_time_sec"))
+            for t in trades
+        )
         if h is not None
     ]
-    buy_n = sum(1 for t in trades if str(t.get("direction") or t.get("side") or "").upper() in {"BUY", "LONG"})
-    sell_n = sum(1 for t in trades if str(t.get("direction") or t.get("side") or "").upper() in {"SELL", "SHORT"})
+    buy_n = sum(
+        1
+        for t in trades
+        if str(t.get("direction") or t.get("side") or "").upper() in {"BUY", "LONG"}
+    )
+    sell_n = sum(
+        1
+        for t in trades
+        if str(t.get("direction") or t.get("side") or "").upper() in {"SELL", "SHORT"}
+    )
     win_n = len(wins)
     loss_n = len(losses)
     gross_win = sum(wins)
@@ -313,8 +331,22 @@ def _metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
             ts = trades[i].get("exit_time") or trades[i].get("timestamp_utc")
             turn_neg = ts or UNKNOWN
 
-    mfes = [v for v in (_as_float(t.get("MFE") or t.get("maximum_favorable_excursion")) for t in trades) if v is not None]
-    maes = [v for v in (_as_float(t.get("MAE") or t.get("maximum_adverse_excursion")) for t in trades) if v is not None]
+    mfes = [
+        v
+        for v in (
+            _as_float(t.get("MFE") or t.get("maximum_favorable_excursion"))
+            for t in trades
+        )
+        if v is not None
+    ]
+    maes = [
+        v
+        for v in (
+            _as_float(t.get("MAE") or t.get("maximum_adverse_excursion"))
+            for t in trades
+        )
+        if v is not None
+    ]
 
     def _trade_label(idx: int | None) -> Any:
         if idx is None:
@@ -323,7 +355,11 @@ def _metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
         return {
             "ticket": t.get("ticket"),
             "exit_time": t.get("exit_time"),
-            "net_pnl": t.get("net_pnl") if t.get("net_pnl") is not None else t.get("profit_loss"),
+            "net_pnl": (
+                t.get("net_pnl")
+                if t.get("net_pnl") is not None
+                else t.get("profit_loss")
+            ),
             "direction": t.get("direction") or t.get("side"),
             "setup_state": t.get("setup_state"),
         }
@@ -438,7 +474,7 @@ def _filled_segments(
     trades: list[dict[str, Any]],
     key: str,
     canonical: tuple[str, ...],
-    canonicalize,
+    canonicalize: Callable[[Any], Any],
 ) -> dict[str, Any]:
     buckets: dict[str, list[dict[str, Any]]] = {name: [] for name in canonical}
     extras: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -477,7 +513,11 @@ def _segment(trades: list[dict[str, Any]], key: str) -> dict[str, Any]:
     }
 
 
-def _bucket_numeric(trades: list[dict[str, Any]], field: str, edges: list[tuple[str, float | None, float | None]]) -> dict[str, Any]:
+def _bucket_numeric(
+    trades: list[dict[str, Any]],
+    field: str,
+    edges: list[tuple[str, float | None, float | None]],
+) -> dict[str, Any]:
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for t in trades:
         v = _as_float(t.get(field))
@@ -514,20 +554,40 @@ def hypothesis_report(matched: list[dict[str, Any]]) -> dict[str, Any]:
             "auto_changes_trading": False,
         }
     if n >= 20:
-        buy = [t for t in matched if str(t.get("direction") or "").upper() in {"BUY", "LONG"}]
-        sell = [t for t in matched if str(t.get("direction") or "").upper() in {"SELL", "SHORT"}]
-        buy_exp = mean([_as_float(t.get("net_pnl")) or 0.0 for t in buy]) if buy else None
-        sell_exp = mean([_as_float(t.get("net_pnl")) or 0.0 for t in sell]) if sell else None
+        buy = [
+            t
+            for t in matched
+            if str(t.get("direction") or "").upper() in {"BUY", "LONG"}
+        ]
+        sell = [
+            t
+            for t in matched
+            if str(t.get("direction") or "").upper() in {"SELL", "SHORT"}
+        ]
+        buy_exp = (
+            mean([_as_float(t.get("net_pnl")) or 0.0 for t in buy]) if buy else None
+        )
+        sell_exp = (
+            mean([_as_float(t.get("net_pnl")) or 0.0 for t in sell]) if sell else None
+        )
         if buy_exp is not None and sell_exp is not None:
             if buy_exp < 0 <= sell_exp:
                 out["A_BUY_BIAS"]["verdict"] = SUSPECTED if n < 50 else "NOT_PROVEN"
-                out["A_BUY_BIAS"]["evidence"] = f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
+                out["A_BUY_BIAS"][
+                    "evidence"
+                ] = f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
             elif sell_exp < 0 <= buy_exp:
                 out["B_SELL_BIAS"]["verdict"] = SUSPECTED if n < 50 else "NOT_PROVEN"
-                out["B_SELL_BIAS"]["evidence"] = f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
+                out["B_SELL_BIAS"][
+                    "evidence"
+                ] = f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
             else:
-                out["A_BUY_BIAS"]["verdict"] = "CONTRADICTED_BY_DATA" if buy_exp >= 0 else "NOT_PROVEN"
-                out["B_SELL_BIAS"]["verdict"] = "CONTRADICTED_BY_DATA" if sell_exp >= 0 else "NOT_PROVEN"
+                out["A_BUY_BIAS"]["verdict"] = (
+                    "CONTRADICTED_BY_DATA" if buy_exp >= 0 else "NOT_PROVEN"
+                )
+                out["B_SELL_BIAS"]["verdict"] = (
+                    "CONTRADICTED_BY_DATA" if sell_exp >= 0 else "NOT_PROVEN"
+                )
     return out
 
 
@@ -535,7 +595,10 @@ def classify_loss_contributors(matched: list[dict[str, Any]]) -> dict[str, Any]:
     """Per-factor labels. One or two losing trades are never PROVEN."""
     n = len(matched)
     pnls = [
-        _as_float(t.get("net_pnl") if t.get("net_pnl") is not None else t.get("profit_loss")) or 0.0
+        _as_float(
+            t.get("net_pnl") if t.get("net_pnl") is not None else t.get("profit_loss")
+        )
+        or 0.0
         for t in matched
     ]
     losses = [t for t, p in zip(matched, pnls, strict=False) if p < 0]
@@ -555,7 +618,9 @@ def classify_loss_contributors(matched: list[dict[str, Any]]) -> dict[str, Any]:
             "loss_count": loss_n,
             "loss_rate": UNKNOWN if n < 10 else round(100.0 * loss_n / n, 2),
             "average_R": UNKNOWN if not rs else round(mean(rs), 4),
-            "expectancy": UNKNOWN if n < 10 else round(mean(pnls), 4) if pnls else UNKNOWN,
+            "expectancy": (
+                UNKNOWN if n < 10 else round(mean(pnls), 4) if pnls else UNKNOWN
+            ),
             "confidence": sample_status(n),
             "classification": classification,
             "verdict": classification,
@@ -574,7 +639,11 @@ def classify_loss_contributors(matched: list[dict[str, Any]]) -> dict[str, Any]:
 
 def classify_exit_path(trade: dict[str, Any]) -> dict[str, Any]:
     """Separate gave-back-MFE losses from immediate adverse moves. Advisory only."""
-    pnl = _as_float(trade.get("net_pnl") if trade.get("net_pnl") is not None else trade.get("profit_loss"))
+    pnl = _as_float(
+        trade.get("net_pnl")
+        if trade.get("net_pnl") is not None
+        else trade.get("profit_loss")
+    )
     mae = _as_float(trade.get("MAE") or trade.get("maximum_adverse_excursion"))
     mfe = _as_float(trade.get("MFE") or trade.get("maximum_favorable_excursion"))
     if pnl is None:
@@ -611,12 +680,16 @@ def classify_exit_path(trade: dict[str, Any]) -> dict[str, Any]:
 
 
 def attach_close_fields(deal: dict[str, Any], join: dict[str, Any]) -> dict[str, Any]:
-    signal = join.get("signal") if isinstance(join.get("signal"), dict) else {}
-    sub = join.get("submission") if isinstance(join.get("submission"), dict) else {}
-    features = sub.get("setup_features") if isinstance(sub.get("setup_features"), dict) else {}
+    _signal_value = join.get("signal")
+    signal = _signal_value if isinstance(_signal_value, dict) else {}
+    _sub_value = join.get("submission")
+    sub = _sub_value if isinstance(_sub_value, dict) else {}
+    _features_value = sub.get("setup_features")
+    features = _features_value if isinstance(_features_value, dict) else {}
     src = {**features, **signal, **deal}
     return {
-        "ticket": join.get("ticket") or _ticket(deal.get("ticket") or deal.get("entry_ticket")),
+        "ticket": join.get("ticket")
+        or _ticket(deal.get("ticket") or deal.get("entry_ticket")),
         "signal_id": join.get("signal_id"),
         "decision_hash": join.get("decision_hash"),
         "request_id": join.get("request_id"),
@@ -624,7 +697,9 @@ def attach_close_fields(deal: dict[str, Any], join: dict[str, Any]) -> dict[str,
         "exit_time": deal.get("exit_time"),
         "entry_price": deal.get("entry") or deal.get("entry_price"),
         "exit_price": deal.get("exit") or deal.get("exit_price"),
-        "direction": str(deal.get("side") or deal.get("direction") or src.get("direction") or "").upper(),
+        "direction": str(
+            deal.get("side") or deal.get("direction") or src.get("direction") or ""
+        ).upper(),
         "volume": deal.get("volume"),
         "gross_pnl": _as_float(deal.get("gross_pnl") or deal.get("profit_loss")),
         "net_pnl": _as_float(deal.get("net_pnl") or deal.get("profit_loss")),
@@ -633,14 +708,24 @@ def attach_close_fields(deal: dict[str, Any], join: dict[str, Any]) -> dict[str,
         "R_multiple": _r_multiple(deal) or _as_float(src.get("rr")),
         "MFE": _as_float(deal.get("MFE") or deal.get("maximum_favorable_excursion")),
         "MAE": _as_float(deal.get("MAE") or deal.get("maximum_adverse_excursion")),
-        "maximum_adverse_excursion": _as_float(deal.get("MAE") or deal.get("maximum_adverse_excursion")),
-        "maximum_favorable_excursion": _as_float(deal.get("MFE") or deal.get("maximum_favorable_excursion")),
-        "holding_time": _as_float(deal.get("holding_time_sec") or deal.get("holding_time")),
+        "maximum_adverse_excursion": _as_float(
+            deal.get("MAE") or deal.get("maximum_adverse_excursion")
+        ),
+        "maximum_favorable_excursion": _as_float(
+            deal.get("MFE") or deal.get("maximum_favorable_excursion")
+        ),
+        "holding_time": _as_float(
+            deal.get("holding_time_sec") or deal.get("holding_time")
+        ),
         "exit_reason": _as_str(deal.get("exit_reason") or deal.get("comment")),
-        "session": _canonical_session(src.get("market_session") or deal.get("market_session"))
+        "session": _canonical_session(
+            src.get("market_session") or deal.get("market_session")
+        )
         or src.get("market_session")
         or deal.get("market_session"),
-        "regime": _canonical_regime(src.get("market_regime") or deal.get("market_regime"))
+        "regime": _canonical_regime(
+            src.get("market_regime") or deal.get("market_regime")
+        )
         or src.get("market_regime")
         or deal.get("market_regime"),
         "setup_state": src.get("setup_state"),
@@ -653,16 +738,18 @@ def attach_close_fields(deal: dict[str, Any], join: dict[str, Any]) -> dict[str,
         "slippage": _as_float(deal.get("slippage")),
         "spread": _as_float(src.get("spread") or deal.get("spread")),
         "decision_snapshot": dict(
-            sub.get("decision_snapshot")
-            or signal.get("decision_snapshot")
-            or {}
+            sub.get("decision_snapshot") or signal.get("decision_snapshot") or {}
         ),
         "original_setup_features": dict(features),
         "exit_class": classify_exit_path(
             {
                 "net_pnl": _as_float(deal.get("net_pnl") or deal.get("profit_loss")),
-                "MAE": _as_float(deal.get("MAE") or deal.get("maximum_adverse_excursion")),
-                "MFE": _as_float(deal.get("MFE") or deal.get("maximum_favorable_excursion")),
+                "MAE": _as_float(
+                    deal.get("MAE") or deal.get("maximum_adverse_excursion")
+                ),
+                "MFE": _as_float(
+                    deal.get("MFE") or deal.get("maximum_favorable_excursion")
+                ),
             }
         ),
         "classification": STRATEGY_MATCHED,
@@ -688,15 +775,21 @@ def build_loss_forensics(
             unmatched.append(
                 {
                     "classification": UNMATCHED,
-                    "ticket": join.get("ticket") or deal.get("ticket") or deal.get("entry_ticket"),
+                    "ticket": join.get("ticket")
+                    or deal.get("ticket")
+                    or deal.get("entry_ticket"),
                     "reason": join.get("reason"),
                     "excluded_from_strategy_statistics": True,
                 }
             )
 
     overall = _metrics(matched)
-    buy = [t for t in matched if str(t.get("direction") or "").upper() in {"BUY", "LONG"}]
-    sell = [t for t in matched if str(t.get("direction") or "").upper() in {"SELL", "SHORT"}]
+    buy = [
+        t for t in matched if str(t.get("direction") or "").upper() in {"BUY", "LONG"}
+    ]
+    sell = [
+        t for t in matched if str(t.get("direction") or "").upper() in {"SELL", "SHORT"}
+    ]
     return {
         "advisory_only": True,
         "mutates_engines": False,
@@ -721,7 +814,12 @@ def build_loss_forensics(
             "opportunity_bucket": _bucket_numeric(
                 matched,
                 "opportunity_score",
-                [("<70", None, 70), ("70-74", 70, 75), ("75-79", 75, 80), ("80+", 80, None)],
+                [
+                    ("<70", None, 70),
+                    ("70-74", 70, 75),
+                    ("75-79", 75, 80),
+                    ("80+", 80, None),
+                ],
             ),
             "edge_bucket": _bucket_numeric(
                 matched,
@@ -752,9 +850,7 @@ def build_loss_forensics(
         "unmatched_preview": unmatched[:50],
         "matched_preview": matched[:50],
         "first_proven_loss_cause": (
-            INSUFFICIENT_SAMPLE
-            if len(matched) < 50
-            else "NOT_PROVEN"
+            INSUFFICIENT_SAMPLE if len(matched) < 50 else "NOT_PROVEN"
         ),
         "disclaimer": DISCLAIMER,
         "code_defect_proven": False,

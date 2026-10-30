@@ -43,8 +43,7 @@ def research_board_status(
     if has_score:
         status = "ANALYZED"
     opp_ok = (
-        isinstance(opportunity, int)
-        and opportunity >= FROZEN_OPPORTUNITY_THRESHOLD
+        isinstance(opportunity, int) and opportunity >= FROZEN_OPPORTUNITY_THRESHOLD
     )
     edge_ok = isinstance(edge, int) and edge >= FROZEN_DIRECTIONAL_EDGE
     side = str(direction or "").upper()
@@ -80,10 +79,12 @@ def promotion_gate(
         "chain": list(PROMOTION_CHAIN),
         "capability_chain": list(CAPABILITY_CHAIN),
         "requires_human_authorization": True,
-        "PROMOTION_STATUS": "HUMAN_REVIEW_REQUIRED"
-        if research_status
-        in {"QUALIFIED", "SHADOW", "MEANINGFUL_RESEARCH", "PROMOTION_CANDIDATE"}
-        else research_status,
+        "PROMOTION_STATUS": (
+            "HUMAN_REVIEW_REQUIRED"
+            if research_status
+            in {"QUALIFIED", "SHADOW", "MEANINGFUL_RESEARCH", "PROMOTION_CANDIDATE"}
+            else research_status
+        ),
     }
     if lookahead or n < 20 or not oos_positive:
         blocked["PROMOTION_STATUS"] = (
@@ -92,9 +93,7 @@ def promotion_gate(
         blocked["blocker"] = (
             "LOOKAHEAD"
             if lookahead
-            else "INSUFFICIENT_SAMPLE"
-            if n < 20
-            else "OOS_NOT_POSITIVE"
+            else "INSUFFICIENT_SAMPLE" if n < 20 else "OOS_NOT_POSITIVE"
         )
         return blocked
     if not (human_authorized and risk_reviewed and safety_reviewed):

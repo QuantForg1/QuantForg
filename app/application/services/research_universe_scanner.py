@@ -34,7 +34,8 @@ def evaluate_injected_contexts(
         if not isinstance(raw, dict):
             continue
         symbol = str(raw.get("symbol") or "")
-        score = raw.get("score") if isinstance(raw.get("score"), dict) else raw
+        _score_value = raw.get("score")
+        score = _score_value if isinstance(_score_value, dict) else raw
         buy = (
             score.get("buy_score")
             or score.get("core_buy")
@@ -146,9 +147,11 @@ def score_injected_snapshots(
         snapshot = item.get("snapshot")
         if snapshot is None:
             raise ValueError("snapshot_required")
+        from app.domain.institutional_trading.atr import score_gate_atr
+
         verdict = score_scalping_setup(
             snapshot,
-            atr=item.get("atr"),
+            atr=score_gate_atr(snapshot),
             mid=item.get("mid"),
             symbol=str(item.get("symbol") or getattr(snapshot, "symbol", "") or ""),
             bid=item.get("bid"),
@@ -158,7 +161,7 @@ def score_injected_snapshots(
             highs=item.get("highs"),
             lows=item.get("lows"),
         )
-        payload = verdict.to_dict() if hasattr(verdict, "to_dict") else dict(verdict)
+        payload = verdict.to_dict()
         payload["symbol"] = str(item.get("symbol") or payload.get("symbol") or "")
         payload["layer"] = RESEARCH_SCAN_TAG
         payload["authorizes_trade"] = False
@@ -265,9 +268,11 @@ async def _score_one_research_symbol(
         or code
     ).upper()
     try:
+        from app.domain.institutional_trading.atr import score_gate_atr
+
         verdict = score_scalping_setup(
             snapshot,
-            atr=account.atr,
+            atr=score_gate_atr(snapshot),
             mid=account.mid_price,
             config=DEFAULT_AI_SCALPING_CONFIG,
             enforce_adaptive_cooldown=False,
@@ -279,7 +284,7 @@ async def _score_one_research_symbol(
             bid=getattr(account, "bid", None),
             ask=getattr(account, "ask", None),
         )
-        payload = verdict.to_dict() if hasattr(verdict, "to_dict") else dict(verdict)
+        payload = verdict.to_dict()
     except Exception as exc:
         return {
             "symbol": resolved or code,
@@ -434,10 +439,11 @@ def score_symbols_for_research(
             "symbols_requested": 0,
             "second_scanner": False,
         }
-    return _run_coro(
+    scanned: dict[str, Any] = _run_coro(
         _score_symbols_for_research_async(
             mt5_adapter,
             list(symbols or ()),
             max_workers=max_workers,
         )
     )
+    return scanned

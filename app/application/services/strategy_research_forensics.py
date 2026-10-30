@@ -106,12 +106,15 @@ def classify_conflict_paint(cycle: dict[str, Any] | None) -> dict[str, Any]:
     blocker = str(row.get("first_authoritative_blocker") or "").upper()
     painted = setup in {"CHASING", "STALE", "CONFLICT"}
     take = setup == "TAKE"
-    direction_already_failed = "NO_DIRECTIONAL_EDGE" in blocker or blocker == "DIRECTION_NONE"
-    sniper = row.get("sniper_entry") if isinstance(row.get("sniper_entry"), dict) else {}
-    pillars = sniper.get("pillars") if isinstance(sniper.get("pillars"), dict) else {}
-    diagnostics = (
-        sniper.get("diagnostics") if isinstance(sniper.get("diagnostics"), dict) else {}
+    direction_already_failed = (
+        "NO_DIRECTIONAL_EDGE" in blocker or blocker == "DIRECTION_NONE"
     )
+    _sniper_value = row.get("sniper_entry")
+    sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
+    _pillars_value = sniper.get("pillars")
+    pillars = _pillars_value if isinstance(_pillars_value, dict) else {}
+    _diagnostics_value = sniper.get("diagnostics")
+    diagnostics = _diagnostics_value if isinstance(_diagnostics_value, dict) else {}
     entry_state = str(
         sniper.get("entry_state") or diagnostics.get("entry_state") or ""
     ).upper()
@@ -121,8 +124,10 @@ def classify_conflict_paint(cycle: dict[str, Any] | None) -> dict[str, Any]:
     if has_sniper:
         raw_displacement = 78 if pillars.get("displacement_or_momentum") else 20
         raw_timing = 80 if entry_state in {"RETEST", "INSIDE", "CONTROLLED"} else 20
-    audit = row.get("opportunity_audit") if isinstance(row.get("opportunity_audit"), dict) else {}
-    breakdown = row.get("score_breakdown") if isinstance(row.get("score_breakdown"), dict) else {}
+    _audit_value = row.get("opportunity_audit")
+    audit = _audit_value if isinstance(_audit_value, dict) else {}
+    _breakdown_value = row.get("score_breakdown")
+    breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else {}
     effective_displacement = _nested_score(audit, "displacement")
     if effective_displacement is None:
         effective_displacement = breakdown.get("displacement")
@@ -142,9 +147,13 @@ def classify_conflict_paint(cycle: dict[str, Any] | None) -> dict[str, Any]:
         "paint_is_first_blocker": False,
         "paint_reason": paint_reason,
         "raw_displacement": raw_displacement,
-        "effective_displacement": effective_displacement if effective_displacement is not None else UNKNOWN,
+        "effective_displacement": (
+            effective_displacement if effective_displacement is not None else UNKNOWN
+        ),
         "raw_timing": raw_timing,
-        "effective_timing": effective_timing if effective_timing is not None else UNKNOWN,
+        "effective_timing": (
+            effective_timing if effective_timing is not None else UNKNOWN
+        ),
         "evidence": (
             "Paint runs after evaluate_sniper_entry. TAKE setup_state is not painted. "
             "Sentinel 20 is treated as absent by _smc_presence_score, so it withholds "
@@ -192,7 +201,9 @@ def current_market_panel(cycle: dict[str, Any]) -> dict[str, Any]:
         "conflict_paint": classify_conflict_paint(cycle),
         "data_age_seconds": cycle.get("data_age_seconds"),
         "market_data_valid": cycle.get("market_data_valid"),
-        "as_of": cycle.get("as_of") or cycle.get("scan_as_of") or cycle.get("recorded_at"),
+        "as_of": cycle.get("as_of")
+        or cycle.get("scan_as_of")
+        or cycle.get("recorded_at"),
         "stable_scores_are_not_frozen_scanner": True,
     }
 
@@ -241,7 +252,12 @@ def build_strategy_research_forensics(
     deal_meta: dict[str, Any] = {"attempted": False}
     if deals is not None:
         closed = pair_deals_into_closed_trades(deals)
-        deal_meta = {"attempted": True, "ok": True, "via": "injected", "raw_count": len(deals)}
+        deal_meta = {
+            "attempted": True,
+            "ok": True,
+            "via": "injected",
+            "raw_count": len(deals),
+        }
     else:
         try:
             from app.application.services.strategy_intelligence_center import (
@@ -325,9 +341,11 @@ def build_strategy_research_forensics(
         "current_market": current_market_panel(cycle),
         "current_shadow": current_shadow,
         "shadow_dataset": shadow_dataset,
-        "core_vs_expansion": shadow_dataset.get("core_vs_expansion")
-        if isinstance(shadow_dataset, dict)
-        else {},
+        "core_vs_expansion": (
+            shadow_dataset.get("core_vs_expansion")
+            if isinstance(shadow_dataset, dict)
+            else {}
+        ),
         "funnel_histograms": histograms,
         "trade_frequency_bottleneck": bottleneck,
         "forensics": forensics,
@@ -360,7 +378,8 @@ def build_strategy_research_forensics(
                 "text",
                 "NO SAFE EXPANSION PROVEN — CONTINUE COLLECTING DATA",
             ),
-            "reason": "STRATEGY_MATCHED n=0; shadow virtual outcomes remain INSUFFICIENT_SAMPLE until future prints close research entries",
+            "reason": "STRATEGY_MATCHED n=0; shadow virtual outcomes remain "
+            "INSUFFICIENT_SAMPLE until future prints close research entries",
             "win_rate_80_90_supported": False,
             "shadow_observations": (shadow_dataset or {}).get("observations"),
             "shadow_virtual_completed": (shadow_dataset or {}).get("virtual_completed"),

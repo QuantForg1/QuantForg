@@ -223,9 +223,7 @@ def decide_gold(
             selected_strategy_name=None,
             confidence=0,
             quality=0,
-            reasons=(
-                f"Non-Gold symbol rejected at analysis boundary: {raw_symbol}",
-            ),
+            reasons=(f"Non-Gold symbol rejected at analysis boundary: {raw_symbol}",),
             rejected_strategies=(),
             conflicting=False,
             stale_data=False,
@@ -296,9 +294,7 @@ def decide_gold(
             quality=0,
             reasons=(
                 "Conflicting strategy directions: "
-                + ", ".join(
-                    f"{e.strategy_id}={e.direction}" for e in passed
-                ),
+                + ", ".join(f"{e.strategy_id}={e.direction}" for e in passed),
             ),
             rejected_strategies=tuple(rejected),
             conflicting=True,

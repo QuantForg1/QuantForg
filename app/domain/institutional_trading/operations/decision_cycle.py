@@ -14,6 +14,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from app.domain.institutional_trading.atr import score_gate_atr
 from app.domain.trading.gold_only import (
     CANONICAL_GOLD_BROKER_DISPLAY,
     GOLD_SYMBOL,
@@ -142,7 +143,7 @@ class LatencyBudget:
         if self.total_execution_latency_ms <= 0:
             self.total_execution_latency_ms = round(self.total_cycle_ms, 3)
         if named:
-            key = max(named, key=named.get)
+            key = max(named, key=lambda stage: named[stage])
             self.largest_stage = key
             self.largest_stage_ms = round(float(named[key]), 3)
 
@@ -350,7 +351,8 @@ def build_authoritative_snapshot(
         or diag.get("quote_age_seconds"),
     }
     spread = getattr(snapshot, "spread", None)
-    atr = getattr(snapshot, "atr", None) or getattr(account, "atr", None)
+    # Display the entry-gate ATR only. Do not substitute the stop series.
+    atr = score_gate_atr(snapshot)
     struct = getattr(snapshot, "structure", None)
     structure_score = _as_int(
         getattr(struct, "score", None)
@@ -380,7 +382,7 @@ def build_authoritative_snapshot(
         source=source,
         quote=quote,
         spread=str(spread) if spread is not None else diag.get("spread"),
-        atr=str(atr) if atr is not None else diag.get("atr"),
+        atr=str(atr) if atr is not None else None,
         market_regime=str(
             opp.get("regime")
             or getattr(getattr(snapshot, "regime", None), "value", None)

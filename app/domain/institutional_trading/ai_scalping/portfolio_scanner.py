@@ -239,9 +239,7 @@ def _row_from_score(
     cd_eval = book.evaluate_cooldown(symbol, cd)
 
     raw_reasons = score.get("reasons")
-    reasons = (
-        tuple(raw_reasons) if isinstance(raw_reasons, (list, tuple)) else ()
-    )
+    reasons = tuple(raw_reasons) if isinstance(raw_reasons, (list, tuple)) else ()
     extra_reject: list[str] = []
     # Reject-streak latch (recent_rejects >= 5) is NOT gateway/OMS/MT5 health.
     # Hard infra pause lives in the execution bridge (live_health.allow_new_entries)

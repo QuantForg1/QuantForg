@@ -152,7 +152,7 @@ class MT5Deal:
     volume: Decimal
     price: Decimal
     profit: Decimal = Decimal("0")
-    commission: Decimal = Decimal("0")
+    commission: Decimal | None = Decimal("0")
     swap: Decimal = Decimal("0")
     deal_type: str = "deal"  # entry_in | entry_out | ...
     time: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -177,7 +177,7 @@ class MT5Deal:
             "volume": str(self.volume),
             "price": str(self.price),
             "profit": str(self.profit),
-            "commission": str(self.commission),
+            "commission": None if self.commission is None else str(self.commission),
             "swap": str(self.swap),
             "deal_type": self.deal_type,
             "time": self.time.isoformat(),
@@ -201,6 +201,8 @@ class AccountSnapshot:
     leverage: int
     currency: str = "USD"
     server: str = ""
+    # Account-currency commission for a new entry. None means unknown.
+    commission: Decimal | None = None
 
     def __post_init__(self) -> None:
         require(self.login > 0, "login must be > 0")
@@ -220,6 +222,7 @@ class AccountSnapshot:
             "leverage": self.leverage,
             "currency": self.currency,
             "server": self.server,
+            "commission": (None if self.commission is None else str(self.commission)),
         }
 
 

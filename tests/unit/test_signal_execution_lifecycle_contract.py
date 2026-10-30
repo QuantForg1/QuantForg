@@ -155,8 +155,8 @@ def test_sniper_confirmation_still_required() -> None:
 
 def test_planned_risk_floors_are_owner_band() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
-    assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
 
 
 def test_risk_rejected_take_leaves_active_signals() -> None:

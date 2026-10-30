@@ -14,6 +14,7 @@ not consume QuantForg strategy capacity.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -304,9 +305,7 @@ def live_capacity_tickets(
     """
     from decimal import Decimal
 
-    owned = filter_quantforg_positions(
-        rows, symbol=symbol, magic=execution_identity
-    )
+    owned = filter_quantforg_positions(rows, symbol=symbol, magic=execution_identity)
     seen: set[int] = set()
     tickets: list[int] = []
     for row in owned:
@@ -316,27 +315,25 @@ def live_capacity_tickets(
             ticket = 0
         if ticket <= 0 or ticket in seen:
             continue
-        state = str(
-            _row_get(row, "state", "") or _row_get(row, "order_state", "") or ""
-        ).strip().lower()
+        state = (
+            str(_row_get(row, "state", "") or _row_get(row, "order_state", "") or "")
+            .strip()
+            .lower()
+        )
         if state in {"rejected", "canceled", "cancelled", "expired"}:
             continue
         vol_raw = _row_get(row, "volume", None)
         if vol_raw is None:
             vol_raw = _row_get(row, "remaining_volume", None)
         if vol_raw is not None:
-            try:
+            with contextlib.suppress(Exception):
                 if Decimal(str(vol_raw)) <= 0:
                     continue
-            except Exception:
-                pass
         rem_raw = _row_get(row, "remaining_volume", None)
         if rem_raw is not None and vol_raw is None:
-            try:
+            with contextlib.suppress(Exception):
                 if Decimal(str(rem_raw)) <= 0:
                     continue
-            except Exception:
-                pass
         seen.add(ticket)
         tickets.append(ticket)
     return tuple(tickets)
@@ -358,7 +355,7 @@ def live_strategy_max_open(ite_config: Any | None) -> int:
     """Authoritative live cap: ITE / scalping config. Never invent a new number."""
     raw = getattr(ite_config, "max_open_trades", None)
     try:
-        value = int(raw)
+        value = 1 if raw is None else int(raw)
     except (TypeError, ValueError):
         value = 1
     mode = str(getattr(ite_config, "trading_mode", "") or "").strip().lower()
@@ -394,11 +391,9 @@ def book_facts_from_positions(
             seen.add(ticket)
         vol_raw = _row_get(row, "volume", None)
         if vol_raw is not None:
-            try:
+            with contextlib.suppress(Exception):
                 if Decimal(str(vol_raw)) <= 0:
                     continue
-            except Exception:
-                pass
         side = str(_row_get(row, "side", "") or "").strip().upper()
         if side in {"BUY", "SELL"}:
             directions.append(side)
@@ -429,9 +424,7 @@ def resolve_same_symbol_addon_book(
     Empty ``rows`` with ``global_quantforg_positions > 0`` remains fail-closed
     (unknown which symbols are open).
     """
-    owned = filter_quantforg_positions(
-        rows or [], symbol=candidate_symbol, magic=magic
-    )
+    owned = filter_quantforg_positions(rows or [], symbol=candidate_symbol, magic=magic)
     directions, entries = book_facts_from_positions(owned)
     live_tix = live_capacity_tickets(
         owned, symbol=candidate_symbol, execution_identity=magic
@@ -516,9 +509,7 @@ def snapshot_quantforg_positions(
     configured_max: int = 1,
     as_of: datetime | None = None,
 ) -> QuantForgPositionSnapshot:
-    owned = filter_quantforg_positions(
-        rows, symbol=symbol, magic=execution_identity
-    )
+    owned = filter_quantforg_positions(rows, symbol=symbol, magic=execution_identity)
     tickets = live_capacity_tickets(
         owned, symbol=symbol, execution_identity=execution_identity
     )
@@ -533,8 +524,6 @@ def snapshot_quantforg_positions(
         quantforg_count=count,
         account_count=count_account_positions(rows),
         configured_max=cap,
-        capacity_available=capacity_available(
-            current_count=count, configured_max=cap
-        ),
+        capacity_available=capacity_available(current_count=count, configured_max=cap),
         tickets=tickets,
     )

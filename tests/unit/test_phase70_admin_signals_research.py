@@ -132,12 +132,7 @@ def test_research_row_propagates_evidence_for_why_signal() -> None:
 @pytest.mark.trading_core
 def test_admin_not_in_trader_nav_config() -> None:
     nav = (
-        ROOT
-        / "frontend"
-        / "src"
-        / "components"
-        / "layout"
-        / "nav-config.ts"
+        ROOT / "frontend" / "src" / "components" / "layout" / "nav-config.ts"
     ).read_text(encoding="utf-8")
     assert "OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER" in nav
     assert (

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class FinalControlState(str, Enum):
+class FinalControlState(StrEnum):
     ALLOW = "ALLOW"
     REDUCE = "REDUCE"
     BLOCK = "BLOCK"
@@ -48,9 +48,7 @@ def map_to_final_control_state(
     return FinalControlState.ALLOW, None
 
 
-def final_control_to_dict(
-    state: FinalControlState, gate: str | None
-) -> dict[str, Any]:
+def final_control_to_dict(state: FinalControlState, gate: str | None) -> dict[str, Any]:
     return {
         "final_control_state": state.value,
         "first_blocking_gate": gate or None,

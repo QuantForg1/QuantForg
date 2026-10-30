@@ -131,7 +131,9 @@ class TestTwentyFourSevenSessions:
             "min_lot": Decimal("0.01"),
             "lot_step": Decimal("0.01"),
         }
-        base = calculate_scalping_lots(session_risk_multiplier=Decimal("1.00"), **common)
+        base = calculate_scalping_lots(
+            session_risk_multiplier=Decimal("1.00"), **common
+        )
         weak = calculate_scalping_lots(
             session_risk_multiplier=risk_multiplier_for_session("tokyo"), **common
         )

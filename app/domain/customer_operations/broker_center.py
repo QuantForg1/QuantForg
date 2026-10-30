@@ -30,7 +30,9 @@ async def build_broker_connection_center() -> dict[str, Any]:
                 "login": c.get("login_masked"),
                 "connection_health": (
                     "healthy"
-                    if c.get("connected") or str(c.get("status")).lower() in {
+                    if c.get("connected")
+                    or str(c.get("status")).lower()
+                    in {
                         "connected",
                         "ok",
                         "healthy",

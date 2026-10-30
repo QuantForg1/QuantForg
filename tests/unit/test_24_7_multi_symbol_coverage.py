@@ -121,9 +121,7 @@ def test_btc_eth_enter_universe_only_when_broker_supports_them() -> None:
 
 def test_xauusd_i_maps_when_bare_gold_is_close_only() -> None:
     discovered = discover_from_broker_rows(_WELTRADE_LIVE)
-    assert (
-        resolve_seed_to_broker_symbol("XAUUSD", discovered=discovered) == "XAUUSD_I"
-    )
+    assert resolve_seed_to_broker_symbol("XAUUSD", discovered=discovered) == "XAUUSD_I"
     assert (
         resolve_seed_to_broker_symbol("XAUUSD_I", discovered=discovered) == "XAUUSD_I"
     )
@@ -367,8 +365,8 @@ def test_no_direct_order_send_on_runtime_or_scanner() -> None:
 
 def test_risk_usd_bands_immutable() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
-    assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
 
 
 def test_invalid_broker_symbol_fails_closed() -> None:
@@ -486,7 +484,7 @@ def test_symbol_spread_skip_does_not_abort_universe() -> None:
     src = inspect.getsource(InstitutionalIteRuntime.run_auto_cycle)
     assert "symbol_skip" in src
     assert "safety_failure_scope" in src
-    assert "safety_evaluation_symbol(getattr(snapshot, \"symbol\", None))" in src
+    assert 'safety_evaluation_symbol(getattr(snapshot, "symbol", None))' in src
 
 
 def test_data_failure_releases_the_single_entry_slot() -> None:
@@ -516,9 +514,7 @@ def test_safety_diagnostics_include_symbol() -> None:
             "spread_limit": "2.00",
             "spread_unit": "usd_price",
             "spread_asset_class": "gold",
-            "safety_failed_reasons": [
-                "Spread 9.04 exceeds max 2.00 (gold usd_price)"
-            ],
+            "safety_failed_reasons": ["Spread 9.04 exceeds max 2.00 (gold usd_price)"],
         },
     )
     assert cycle["symbol"] == "XAUUSD_I"

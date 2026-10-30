@@ -16,7 +16,7 @@ Quality / confidence thresholds are never lowered here.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ from app.domain.order_block.models import OrderBlockSnapshot
 SEMANTICS_VERSION = "m15-semantics-v2.0.0"
 
 
-class M15SemanticLabel(str, Enum):
+class M15SemanticLabel(StrEnum):
     TREND_CONTINUATION = "TREND_CONTINUATION"
     PULLBACK_WITHIN_TREND = "PULLBACK_WITHIN_TREND"
     CONSOLIDATION = "CONSOLIDATION"
@@ -111,7 +111,8 @@ def _latest_choch_opposes(snap: StructureSnapshot | None, bias: TrendDirection) 
     if bias not in {TrendDirection.UP, TrendDirection.DOWN}:
         return False
     choch = snap.changes_of_character[-1]
-    # CHOCH breaks prior trend; previous_trend matching bias ⇒ character change against bias
+    # CHOCH breaks prior trend; previous_trend matching bias ⇒ character change against
+    # bias
     return choch.previous_trend == bias
 
 
@@ -200,11 +201,7 @@ def classify_m15_semantics(
         continuation_structure = (
             has_valid_bos and bos_agrees and has_valid_ob and has_valid_fvg
         )
-        label = (
-            M15SemanticLabel.TREND_CONTINUATION
-            if continuation_structure
-            else M15SemanticLabel.TREND_CONTINUATION
-        )
+        label = M15SemanticLabel.TREND_CONTINUATION
         return M15SemanticsResult(
             previous_classification=previous,
             new_classification=label,
@@ -252,7 +249,8 @@ def classify_m15_semantics(
             effective_direction=rev_dir,
             structural_bias=structural_bias,
             reason=(
-                f"Confirmed regime reversal vs structural {_dir_label(structural_bias)}: "
+                f"Confirmed regime reversal vs structural "
+                f"{_dir_label(structural_bias)}: "
                 f"CHOCH against bias + opposing BOS "
                 f"(bos={bos_direction.value if bos_direction else 'none'})"
             ),

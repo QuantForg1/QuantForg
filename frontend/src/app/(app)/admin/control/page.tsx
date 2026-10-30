@@ -38,17 +38,20 @@ type Overview = {
 };
 
 const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
-  max_planned_risk_pct: "Max planned risk % (ceiling 9)",
+  max_planned_risk_pct: "Max planned risk % (ceiling 14)",
   daily_loss_pct: "Daily loss halt % (ceiling 19)",
   weekly_loss_pct: "Weekly loss halt % (0 = off until you set it)",
   max_drawdown_pct:
     "Overall drawdown halt % (0 = off until you set it, ceiling is the daily halt)",
-  max_aggregate_open_risk_pct: "Max aggregate open risk % (ceiling 9)",
+  max_aggregate_open_risk_pct: "Max aggregate open risk % (ceiling 14)",
   min_lot: "Min lot (empty uses the broker minimum, ceiling 0.01)",
   max_lot: "Max lot (ceiling 0.01)",
   max_spread: "Max spread (ceiling 0.45)",
-  min_reward_risk: "Minimum reward:risk (floor 1.50)",
-  min_trade_quality: "Minimum trade quality (floor 75)",
+  min_reward_risk:
+    "Minimum net reward:risk (0.10, 0.15, 0.20, or at least 1.50; default 1.50)",
+  min_trade_quality: "Minimum trade quality (70 to 100; default 70)",
+  stop_atr_multiplier:
+    "ATR stop multiplier (1.00, 1.25, or 1.50; default 1.00). 0.75 and 0.90 are rejected",
 };
 
 function text(value: unknown): string {

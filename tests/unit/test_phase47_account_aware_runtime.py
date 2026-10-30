@@ -90,9 +90,12 @@ def test_session_mismatch_fails_closed_when_bound_to_other_user() -> None:
     user_a = uuid4()
     user_b = uuid4()
     bind_execution_account(user_id=user_a, login=16785006)
-    assert classify_account_session(
-        user_id=user_b, owned_login=16785006, live_login=16785006
-    ) == ACCOUNT_SESSION_MISMATCH
+    assert (
+        classify_account_session(
+            user_id=user_b, owned_login=16785006, live_login=16785006
+        )
+        == ACCOUNT_SESSION_MISMATCH
+    )
     assert submit_blocked_reason(user_id=user_b, login=16785006) == (
         ACCOUNT_SESSION_MISMATCH
     )
@@ -167,9 +170,10 @@ async def test_user_a_cannot_read_user_b_broker_account() -> None:
             password="bravo-secret",
         )
     )
-    assert await ListBrokerAccountsUseCase(uow_factory=factory).execute(
-        user_id=user_a
-    ) == []
+    assert (
+        await ListBrokerAccountsUseCase(uow_factory=factory).execute(user_id=user_a)
+        == []
+    )
     with pytest.raises(NotFoundError):
         await GetBrokerAccountUseCase(uow_factory=factory).execute(
             user_id=user_a, account_id=account_b.id
@@ -225,9 +229,9 @@ async def test_user_a_cannot_read_user_b_positions() -> None:
     ).execute(user_id=user_a)
     assert owned == []
     with pytest.raises(NotFoundError, match="No active MT5 connection"):
-        await ListPositionsUseCase(
-            mt5_uow_factory=factory, sync_service=sync
-        ).execute(user_id=user_b)
+        await ListPositionsUseCase(mt5_uow_factory=factory, sync_service=sync).execute(
+            user_id=user_b
+        )
 
 
 @pytest.mark.unit
@@ -255,9 +259,7 @@ async def test_trader_can_start_own_robot_not_foreign() -> None:
     assert bound_login == 16785006
 
     with pytest.raises(ConflictError) as exc:
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=user_b,
             role="trader",
             display_name="Trader B",
@@ -286,9 +288,9 @@ async def test_session_payload_never_includes_credentials() -> None:
     adapter = MT5Adapter(client=FakeGatewayClient())
     user_id = uuid4()
     await seed_owned_mt5_connection(factory, user_id)
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
     keys = {str(k).lower() for k in snap}
     assert "password" not in keys
     assert "ciphertext" not in keys

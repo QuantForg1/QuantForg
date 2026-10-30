@@ -56,9 +56,7 @@ def _wire() -> tuple[
 
 
 async def _connect(factory: Any, adapter: MT5Adapter, audit: Any, user_id: Any) -> None:
-    await ConnectMT5UseCase(
-        uow_factory=factory, adapter=adapter, audit=audit
-    ).execute(
+    await ConnectMT5UseCase(uow_factory=factory, adapter=adapter, audit=audit).execute(
         MT5ConnectCommand(
             user_id=user_id,
             login=3003,
@@ -75,7 +73,9 @@ class _CatalogueProbe:
         self.codes = codes
 
     def list_symbols(self, **kwargs: Any) -> list[Any]:
-        return [SimpleNamespace(code=code, name=code, description="") for code in self.codes]
+        return [
+            SimpleNamespace(code=code, name=code, description="") for code in self.codes
+        ]
 
     def symbols(self) -> list[Any]:
         return self.list_symbols()
@@ -193,8 +193,7 @@ class TestCalculationErrorWrap:
         assert err.details["failure_class"] == "A_CALCULATION"
         assert err.details["exception_type"] == "RuntimeError"
         assert (
-            err.details["calculation_function"]
-            == "MT5OrderValidationService.calculate"
+            err.details["calculation_function"] == "MT5OrderValidationService.calculate"
         )
         assert len(events) == 1
         event, fields = events[0]

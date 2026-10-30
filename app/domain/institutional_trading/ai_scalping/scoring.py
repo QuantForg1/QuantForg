@@ -64,6 +64,22 @@ from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 
 
+def _component_dict(*candidates: object) -> dict[str, Any]:
+    """Copy the first truthy mapping the same way ``dict(a or b or {})`` did."""
+    chosen: object = {}
+    for candidate in candidates:
+        if candidate:
+            chosen = candidate
+            break
+    if not isinstance(chosen, dict):
+        if chosen:
+            raise TypeError(f"cannot convert {type(chosen).__name__} to dict")
+        return {}
+    copied: dict[str, Any] = {}
+    copied.update(chosen)
+    return copied
+
+
 def _sniper_payload(sniper: Any) -> dict[str, Any]:
     payload = sniper.to_dict() if hasattr(sniper, "to_dict") else dict(sniper or {})
     payload.setdefault("signal_id", uuid4().hex)
@@ -205,15 +221,13 @@ class AiScalpingScore:
                 if isinstance(self.symbol_performance, dict)
                 else None
             ),
-            "buy_components": dict(
-                (self.sniper_entry or {}).get("buy_components")
-                or (self.factors or {}).get("buy_components")
-                or {}
+            "buy_components": _component_dict(
+                (self.sniper_entry or {}).get("buy_components"),
+                (self.factors or {}).get("buy_components"),
             ),
-            "sell_components": dict(
-                (self.sniper_entry or {}).get("sell_components")
-                or (self.factors or {}).get("sell_components")
-                or {}
+            "sell_components": _component_dict(
+                (self.sniper_entry or {}).get("sell_components"),
+                (self.factors or {}).get("sell_components"),
             ),
             "never_prefer_buy_only": True,
         }
@@ -266,7 +280,6 @@ def score_scalping_setup(
 
     trend = snapshot.trend
     quality = snapshot.trade_quality
-    structure = snapshot.primary_structure
 
     direction_dec = decide_scalping_direction(snapshot, config=cfg)
     reasons.extend(direction_dec.reasons)
@@ -536,12 +549,25 @@ def score_scalping_setup(
         config=cfg,
     )
     # Never invent fantasy RR from fixed_tp_r when geometry cannot place a TP.
+    # ``expected_rr`` on the owner path is gross. The gate uses net when the
+    # owner saved a floor below 1. The published default still rejects gross <= 1.
     expected_rr = targets.expected_rr
-    no_valid_tp_room = (
-        targets.take_profit is None
-        or expected_rr is None
-        or expected_rr <= Decimal("1")
+    from app.domain.institutional_trading.owner_live_limits import (
+        OWNER_MIN_REWARD_RISK,
     )
+    from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
+
+    owner_floor = active_min_reward_risk()
+    net_rr = targets.expected_net_rr
+    if owner_floor < Decimal("1") and net_rr is not None:
+        no_valid_tp_room = targets.take_profit is None or net_rr < owner_floor
+        expected_rr = net_rr
+    else:
+        no_valid_tp_room = (
+            targets.take_profit is None
+            or expected_rr is None
+            or expected_rr <= Decimal("1")
+        )
     if targets.reason:
         reasons.append(targets.reason)
     if no_valid_tp_room:
@@ -557,6 +583,8 @@ def score_scalping_setup(
     geom_rr = atr_scalp_geometry_rr(cfg)
     if geom_rr is not None and geom_rr > 0:
         effective_min_rr = min(effective_min_rr, geom_rr)
+    if owner_floor < OWNER_MIN_REWARD_RISK:
+        effective_min_rr = owner_floor
 
     gates = evaluate_quality_gates(
         direction=direction_dec,
@@ -728,7 +756,8 @@ def score_scalping_setup(
             atr_band=resolved.band,
             news_blocked=news_blocked,
             news_reason=str(news_reason) if news_reason else None,
-            # Pass through real MTF score; 0/missing must not become a synthetic conflict.
+            # Pass through real MTF score; 0/missing must not become a synthetic
+            # conflict.
             mtf_alignment=(
                 int(trend.alignment_score)
                 if getattr(trend, "alignment_score", None) is not None
@@ -798,7 +827,7 @@ def score_scalping_setup(
         reject_list.append(reject_reason)
         reasons.append(f"WAIT: {reject_reason}")
         fam = f" setup={setup_family}" if setup_family else ""
-        entry_reason = (
+        entry_reason: str | None = (
             f"WAIT {direction_dec.direction.value}: "
             f"opportunity_score={verdict.opportunity_score}{fam}"
         )
@@ -868,7 +897,9 @@ def score_scalping_setup(
         indicators={
             **dict(pa.indicators or {}),
             "stop_distance": (
-                str(targets.stop_distance) if targets.stop_distance is not None else None
+                str(targets.stop_distance)
+                if targets.stop_distance is not None
+                else None
             ),
             "stop_source": targets.stop_source,
             "stop_atr": str(targets.stop_atr) if targets.stop_atr is not None else None,

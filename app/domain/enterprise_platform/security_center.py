@@ -19,13 +19,7 @@ async def build_security_center() -> dict[str, Any]:
     users = await read_users(limit=200)
     audits = await read_audit_logs(limit=100)
 
-    ips = sorted(
-        {
-            str(s.get("ip"))
-            for s in sessions
-            if s.get("ip")
-        }
-    )
+    ips = sorted({str(s.get("ip")) for s in sessions if s.get("ip")})
     login_history = [
         a
         for a in audits

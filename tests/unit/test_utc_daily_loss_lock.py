@@ -19,6 +19,7 @@ from app.domain.institutional_trading.ai_scalping.config import AiScalpingConfig
 from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     may_add_scalping_trade,
 )
+from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 from app.domain.institutional_trading.config import (
     DEFAULT_ITE_CONFIG,
     MAX_DAILY_LOSS_PCT,
@@ -115,8 +116,10 @@ def test_authoritative_cap_rejects_above_owner_ceiling() -> None:
 def test_lock_arms_when_utc_day_exceeds_and_clears_when_under() -> None:
     plane = SimpleNamespace(
         daily_loss_exceeded=False,
-        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
-        clear_daily_loss=lambda now=None, reason="": (
+        flag_daily_loss=lambda now=None: setattr(  # noqa: ARG005
+            plane, "daily_loss_exceeded", True
+        ),
+        clear_daily_loss=lambda now=None, reason="": (  # noqa: ARG005
             setattr(plane, "daily_loss_exceeded", False) or True
         ),
     )
@@ -150,8 +153,8 @@ def test_lock_arms_when_utc_day_exceeds_and_clears_when_under() -> None:
 def test_untrusted_deals_fail_closed_do_not_clear() -> None:
     plane = SimpleNamespace(
         daily_loss_exceeded=True,
-        flag_daily_loss=lambda now=None: None,
-        clear_daily_loss=lambda **k: False,
+        flag_daily_loss=lambda now=None: None,  # noqa: ARG005
+        clear_daily_loss=lambda **_k: False,
     )
     out = sync_utc_daily_loss_lock(
         plane,
@@ -170,8 +173,10 @@ def test_untrusted_deals_fail_closed_do_not_clear() -> None:
 def test_untrusted_deals_do_not_arm_durable_latch() -> None:
     plane = SimpleNamespace(
         daily_loss_exceeded=False,
-        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
-        clear_daily_loss=lambda **k: False,
+        flag_daily_loss=lambda now=None: setattr(  # noqa: ARG005
+            plane, "daily_loss_exceeded", True
+        ),
+        clear_daily_loss=lambda **_k: False,
     )
     out = sync_utc_daily_loss_lock(
         plane,
@@ -191,8 +196,10 @@ def test_trusted_broker_loss_over_cap_still_blocks() -> None:
     """Loss above the 80% UTC daily-loss cap still latches."""
     plane = SimpleNamespace(
         daily_loss_exceeded=False,
-        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
-        clear_daily_loss=lambda **k: False,
+        flag_daily_loss=lambda now=None: setattr(  # noqa: ARG005
+            plane, "daily_loss_exceeded", True
+        ),
+        clear_daily_loss=lambda **_k: False,
     )
     out = sync_utc_daily_loss_lock(
         plane,
@@ -222,8 +229,10 @@ def test_trusted_broker_loss_over_cap_still_blocks() -> None:
 def test_restart_untrusted_zero_does_not_fabricate_daily_loss() -> None:
     plane = SimpleNamespace(
         daily_loss_exceeded=False,
-        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
-        clear_daily_loss=lambda **k: False,
+        flag_daily_loss=lambda now=None: setattr(  # noqa: ARG005
+            plane, "daily_loss_exceeded", True
+        ),
+        clear_daily_loss=lambda **_k: False,
     )
     out = sync_utc_daily_loss_lock(
         plane,
@@ -519,8 +528,8 @@ def test_cleared_lock_rearms_auto_without_restart(
 
     def _resume(target: object, **kwargs: object) -> dict[str, object]:
         resumed["called"] = True
-        setattr(target, "auto_trading_run_state", "running")
-        setattr(target, "auto_trading_enabled", True)
+        target.auto_trading_run_state = "running"
+        target.auto_trading_enabled = True
         return {"resumed": True, "reason": kwargs.get("reason")}
 
     monkeypatch.setattr(
@@ -619,8 +628,6 @@ def test_decision_to_mt5_handoff_does_not_require_execute_now() -> None:
 
 
 def _live_safety_facts(**overrides: object) -> AutoTradeLiveFacts:
-    from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
-
     payload: dict[str, object] = {
         "gateway_connected": True,
         "broker_connected": True,
@@ -665,8 +672,8 @@ def test_daily_loss_is_global_blocker_mt5_autotrading_is_safety() -> None:
     still_over = sync_utc_daily_loss_lock(
         SimpleNamespace(
             daily_loss_exceeded=True,
-            flag_daily_loss=lambda now=None: None,
-            clear_daily_loss=lambda **k: False,
+            flag_daily_loss=lambda now=None: None,  # noqa: ARG005
+            clear_daily_loss=lambda **_k: False,
         ),
         daily_pnl=Decimal("-80.01"),
         equity=Decimal("100"),
@@ -691,8 +698,8 @@ def test_daily_loss_is_global_blocker_mt5_autotrading_is_safety() -> None:
 
 def test_take_handoff_is_not_executed_without_ticket() -> None:
     from app.domain.institutional_trading.operations.execution_chain_log import (
-        build_execution_handoff,
         bridge_abort_stage,
+        build_execution_handoff,
     )
 
     handoff = build_execution_handoff(
@@ -856,8 +863,10 @@ def test_live_15_21_percent_does_not_lock_under_19_pct_stop() -> None:
     """-25.11 on 165.13 (15.21%) is below 19% of SOD 190.24 ($36.14)."""
     plane = SimpleNamespace(
         daily_loss_exceeded=False,
-        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
-        clear_daily_loss=lambda now=None, reason="": (
+        flag_daily_loss=lambda now=None: setattr(  # noqa: ARG005
+            plane, "daily_loss_exceeded", True
+        ),
+        clear_daily_loss=lambda now=None, reason="": (  # noqa: ARG005
             setattr(plane, "daily_loss_exceeded", False) or True
         ),
     )

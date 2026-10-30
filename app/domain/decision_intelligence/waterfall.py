@@ -193,9 +193,7 @@ def evaluate_waterfall(
             passed=inp.veto_clear,
             required=True,
             reason=(
-                "No veto conditions"
-                if inp.veto_clear
-                else "Veto system blocked trade"
+                "No veto conditions" if inp.veto_clear else "Veto system blocked trade"
             ),
         )
     )

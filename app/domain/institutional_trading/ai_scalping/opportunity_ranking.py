@@ -1,6 +1,6 @@
 """Institutional Opportunity Ranking Engine — aggregate existing AI factors only.
 
-Produces Opportunity Score 0–100 from live scalping score artefacts.
+Produces Opportunity Score 0-100 from live scalping score artefacts.
 Does not invent metrics, lower floors, or force trades.
 """
 
@@ -22,7 +22,8 @@ def _clamp(n: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 def compute_opportunity_components(score: dict[str, Any]) -> dict[str, int]:
     """Map existing AI score / factors into named institutional components."""
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)
@@ -53,9 +54,9 @@ def compute_opportunity_components(score: dict[str, Any]) -> dict[str, int]:
         rr = float(rr_raw) if rr_raw is not None else 0.0
     except Exception:
         rr = 0.0
-    # Map RR 1.0–2.5 → ~40–100
+    # Map RR 1.0-2.5 → ~40-100
     risk_reward = int(_clamp(40 + (rr - 1.0) * 40))
-    # Execution probability 0–100 from existing AI estimate when present
+    # Execution probability 0-100 from existing AI estimate when present
     raw_prob = score.get("probability")
     prob = raw_prob if isinstance(raw_prob, dict) else {}
     p_success = score.get("estimated_probability")

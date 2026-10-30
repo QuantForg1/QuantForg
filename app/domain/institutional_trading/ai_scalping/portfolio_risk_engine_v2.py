@@ -14,6 +14,7 @@ Hard safety contracts:
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -258,7 +259,9 @@ def build_portfolio_book(
             ticket = 0
         vol = _d(getattr(p, "volume", 0))
         rem_raw = getattr(p, "remaining_volume", None)
-        state = str(getattr(p, "state", "") or getattr(p, "order_state", "") or "").lower()
+        state = str(
+            getattr(p, "state", "") or getattr(p, "order_state", "") or ""
+        ).lower()
         if state in {"rejected", "canceled", "cancelled", "expired"}:
             continue
         if vol <= 0:
@@ -633,9 +636,7 @@ def _evaluate_portfolio_allocation_unlocked(
     max_per_sym = int(getattr(cfg, "max_positions_per_symbol", 2) or 2)
     sym_count = book.positions_per_symbol.get(canon, 0)
     if sym_count >= max_per_sym > 0:
-        return _reject(
-            f"MAX_POSITIONS_REACHED: {sym_count}/{max_per_sym} for {canon}"
-        )
+        return _reject(f"MAX_POSITIONS_REACHED: {sym_count}/{max_per_sym} for {canon}")
 
     # Portfolio / margin / correlation / symbol caps (override trade requests)
     # Project post-trade exposure using configured risk unit for the new leg.
@@ -706,12 +707,12 @@ def _evaluate_portfolio_allocation_unlocked(
             same_sym_profits.append(upnl)
             if pside:
                 same_sym_dirs.append(pside)
-            try:
-                pe = _d(getattr(p, "open_price", None) or getattr(p, "price_open", None))
+            with contextlib.suppress(Exception):
+                pe = _d(
+                    getattr(p, "open_price", None) or getattr(p, "price_open", None)
+                )
                 if pe > 0:
                     same_sym_entries.append(pe)
-            except Exception:
-                pass
             if dir_u and pside == dir_u:
                 same_dir_profits.append(upnl)
 
@@ -727,9 +728,9 @@ def _evaluate_portfolio_allocation_unlocked(
         pyramid_require_improve = (
             require_probability_improvement and book.open_positions > 0
         )
-        pyramid_require_profit = bool(
-            getattr(cfg, "pyramid_winners_only", True)
-        ) and book.open_positions > 0
+        pyramid_require_profit = (
+            bool(getattr(cfg, "pyramid_winners_only", True)) and book.open_positions > 0
+        )
 
     pyramid = may_add_scalping_trade(
         open_positions=book.open_positions,

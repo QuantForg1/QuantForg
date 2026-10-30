@@ -127,9 +127,11 @@ def run_backtest_suite(
     oos = out_of_sample(trades)
     if sync_live_compare:
         try:
-            from app.domain.institutional_trading.production_hardening.backtest_live import (  # noqa: E501
-                get_backtest_live_store,
+            from app.domain.institutional_trading.production_hardening import (
+                backtest_live as _qf_backtest_live,
             )
+
+            get_backtest_live_store = _qf_backtest_live.get_backtest_live_store
 
             get_backtest_live_store().upsert(
                 strategy_id,

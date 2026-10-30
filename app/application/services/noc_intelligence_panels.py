@@ -114,9 +114,11 @@ def build_intelligence_panels(
 
         base_replay = irv.list_institutional_replays(limit=25)
         try:
-            from app.domain.institutional_trading.ai_scalping.adaptive_replay_explain import (  # noqa: E501
-                enrich_replay_library,
+            from app.domain.institutional_trading.ai_scalping import (
+                adaptive_replay_explain as _qf_adaptive_replay_explain,
             )
+
+            enrich_replay_library = _qf_adaptive_replay_explain.enrich_replay_library
             from app.domain.institutional_trading.performance_lab.trade_replay import (
                 get_trade_replay_store,
             )
@@ -187,11 +189,15 @@ def build_intelligence_panels(
 
     execution_quality: dict[str, Any] = {}
     try:
+        from app.domain.institutional_trading.ai_scalping import (
+            execution_quality_analytics as _q195,
+        )
         from app.domain.institutional_trading.ai_scalping.execution_quality import (
             get_execution_quality_store,
         )
-        from app.domain.institutional_trading.ai_scalping.execution_quality_analytics import (  # noqa: E501
-            get_execution_quality_analytics_store,
+
+        get_execution_quality_analytics_store = (
+            _q195.get_execution_quality_analytics_store
         )
 
         execution_quality = {
@@ -216,9 +222,11 @@ def build_intelligence_panels(
 
     position_monitor: dict[str, Any] = {}
     try:
-        from app.domain.institutional_trading.ai_scalping.institutional_position_monitor import (  # noqa: E501
-            get_last_position_monitor,
+        from app.domain.institutional_trading.ai_scalping import (
+            institutional_position_monitor as _q221,
         )
+
+        get_last_position_monitor = _q221.get_last_position_monitor
 
         position_monitor = get_last_position_monitor() or {
             "rows": [],
@@ -230,9 +238,11 @@ def build_intelligence_panels(
 
     ops_intel: dict[str, Any] = {}
     try:
-        from app.domain.institutional_trading.ai_scalping.operational_intelligence import (  # noqa: E501
-            build_operational_intelligence,
+        from app.domain.institutional_trading.ai_scalping import (
+            operational_intelligence as _q235,
         )
+
+        build_operational_intelligence = _q235.build_operational_intelligence
 
         ops_intel = build_operational_intelligence()
     except Exception:
@@ -241,9 +251,11 @@ def build_intelligence_panels(
 
     daily_report: dict[str, Any] = {}
     try:
-        from app.domain.institutional_trading.ai_scalping.execution_daily_reporting import (  # noqa: E501
-            build_execution_daily_report,
+        from app.domain.institutional_trading.ai_scalping import (
+            execution_daily_reporting as _q246,
         )
+
+        build_execution_daily_report = _q246.build_execution_daily_report
 
         daily_report = build_execution_daily_report()
     except Exception:
@@ -257,9 +269,7 @@ def build_intelligence_panels(
                 scan.get("best_candidate") if isinstance(scan, dict) else None
             ),
             "best_eligible_candidate": (
-                scan.get("best_eligible_candidate")
-                if isinstance(scan, dict)
-                else None
+                scan.get("best_eligible_candidate") if isinstance(scan, dict) else None
             ),
             "eligible_count": (
                 scan.get("eligible_count") if isinstance(scan, dict) else 0
@@ -321,9 +331,11 @@ def build_intelligence_panels(
 
 
 def _v8_learning_dashboard() -> dict[str, Any]:
-    from app.domain.institutional_trading.ai_scalping.institutional_learning_engine import (  # noqa: E501
-        get_institutional_learning_engine,
+    from app.domain.institutional_trading.ai_scalping import (
+        institutional_learning_engine as _q324,
     )
+
+    get_institutional_learning_engine = _q324.get_institutional_learning_engine
 
     return get_institutional_learning_engine().snapshot(limit=30)
 
@@ -345,9 +357,11 @@ def _v8_adaptive_recommendations() -> dict[str, Any]:
 
 
 def _v8_institutional_kpis() -> dict[str, Any]:
-    from app.domain.institutional_trading.ai_scalping.institutional_performance_kpis import (  # noqa: E501
-        build_institutional_performance_kpis,
+    from app.domain.institutional_trading.ai_scalping import (
+        institutional_performance_kpis as _q348,
     )
+
+    build_institutional_performance_kpis = _q348.build_institutional_performance_kpis
 
     return build_institutional_performance_kpis()
 
@@ -361,8 +375,10 @@ def _v8_portfolio_forecast() -> dict[str, Any]:
 
 
 def _v8_period_reports() -> dict[str, Any]:
-    from app.domain.institutional_trading.ai_scalping.institutional_period_reports import (  # noqa: E501
-        build_institutional_period_reports,
+    from app.domain.institutional_trading.ai_scalping import (
+        institutional_period_reports as _q364,
     )
+
+    build_institutional_period_reports = _q364.build_institutional_period_reports
 
     return build_institutional_period_reports()

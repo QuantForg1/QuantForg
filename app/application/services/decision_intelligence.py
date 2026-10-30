@@ -132,9 +132,7 @@ class DecisionIntelligenceService:
                 else scan.get("opportunity_score")
             )
             result["direction"] = (
-                payload.get("direction")
-                or scan.get("direction")
-                or payload.get("side")
+                payload.get("direction") or scan.get("direction") or payload.get("side")
             )
             result["score_band"] = scan.get("score_band")
             result["score_breakdown"] = scan.get("score_breakdown") or {}

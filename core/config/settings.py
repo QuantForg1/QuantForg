@@ -454,10 +454,8 @@ class Settings(BaseSettings):
         Field(
             ge=0,
             le=2,
-            description="Bounded retries for transient OpenAI failures (0–2)",
-            validation_alias=AliasChoices(
-                "OPENAI_MAX_RETRIES", "openai_max_retries"
-            ),
+            description="Bounded retries for transient OpenAI failures (0-2)",
+            validation_alias=AliasChoices("OPENAI_MAX_RETRIES", "openai_max_retries"),
         ),
     ] = 1
 
@@ -679,9 +677,7 @@ class Settings(BaseSettings):
     phase_a_burst_latch_enabled: Annotated[
         bool,
         Field(
-            description=(
-                "Phase A: per-minute / reject-burst latch for new entries."
-            ),
+            description=("Phase A: per-minute / reject-burst latch for new entries."),
             validation_alias=AliasChoices(
                 "PHASE_A_BURST_LATCH_ENABLED",
                 "phase_a_burst_latch_enabled",

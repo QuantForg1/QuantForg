@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from app.domain.entities.mt5 import MT5Connection
@@ -252,9 +252,7 @@ async def _heal_gateway_session(
             resolved_login = int(getattr(stored, "login", 0) or 0)
             resolved_server = str(getattr(stored, "server", "") or "")
     owned_login = int(getattr(connection, "login", 0) or 0) if connection else 0
-    owned_server = (
-        str(getattr(connection, "server", "") or "") if connection else ""
-    )
+    owned_server = str(getattr(connection, "server", "") or "") if connection else ""
     if resolved_login <= 1:
         resolved_login = owned_login
     if not resolved_server:
@@ -359,9 +357,7 @@ async def require_live_mt5_connection(
 
     Session-cache misses on a healthy Gateway are healed, not mapped to 404.
     """
-    connection = await ensure_live_mt5_session_for_user(
-        uow_factory, adapter, user_id
-    )
+    connection = await ensure_live_mt5_session_for_user(uow_factory, adapter, user_id)
     if connection is None or not connection.connected:
         if _is_gateway_backed(adapter) and not _client_connected(adapter):
             raise _unavailable_for_failed_heal(adapter)
@@ -387,7 +383,7 @@ async def require_live_mt5_connection(
             "No active MT5 connection",
             details={"reason": "terminal_session_mismatch"},
         )
-    return cast("MT5Connection", connection)
+    return connection
 
 
 async def live_connection_meta(
@@ -396,9 +392,7 @@ async def live_connection_meta(
     user_id: UUID,
 ) -> tuple[bool, int | None]:
     """Return ``(connected, login)`` only for a live matching session."""
-    connection = await ensure_live_mt5_session_for_user(
-        uow_factory, adapter, user_id
-    )
+    connection = await ensure_live_mt5_session_for_user(uow_factory, adapter, user_id)
     if connection is None or not connection.connected:
         return False, None
     session_ref = (connection.session_ref or "").strip()

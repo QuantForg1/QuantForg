@@ -134,9 +134,9 @@ def candidate_research_record(row: dict[str, Any]) -> dict[str, Any]:
         or row.get("opportunity_score")
         or UNKNOWN,
         "edge": row.get("edge") or row.get("directional_edge") or UNKNOWN,
-        "hypothetical_outcome": UNKNOWN
-        if leaked
-        else (row.get("hypothetical_outcome") or UNKNOWN),
+        "hypothetical_outcome": (
+            UNKNOWN if leaked else (row.get("hypothetical_outcome") or UNKNOWN)
+        ),
         "MAE": row.get("MAE") or UNKNOWN,
         "MFE": row.get("MFE") or UNKNOWN,
         "hold_time": row.get("hold_time") or UNKNOWN,

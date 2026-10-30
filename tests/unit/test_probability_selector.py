@@ -333,8 +333,8 @@ def test_no_hidden_structure_momentum_quality_confidence_pa_floors() -> None:
     evaluate = (
         ROOT / "app/domain/institutional_trading/ai_scalping/strategies/evaluate.py"
     ).read_text(encoding="utf-8")
-    assert "filters[\"structure_floor\"] = True" in evaluate
-    assert "filters[\"momentum_floor\"] = True" in evaluate
+    assert 'filters["structure_floor"] = True' in evaluate
+    assert 'filters["momentum_floor"] = True' in evaluate
 
 
 def test_mixed_evidence_can_still_clear_threshold() -> None:

@@ -1,4 +1,7 @@
-"""Unit tests — Institutional Intelligence Layer (ranking / queue / probability / exposure)."""
+(
+    """Unit tests — Institutional Intelligence Layer (ranking / queue / probability """
+    """/ exposure)."""
+)
 
 from __future__ import annotations
 
@@ -6,6 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.domain.institutional_trading.ai_scalping import (
+    portfolio_exposure_intelligence as _qf_portfolio_exposure_intelligence,
+)
 from app.domain.institutional_trading.ai_scalping.execution_probability import (
     estimate_execution_probability,
 )
@@ -23,9 +29,8 @@ from app.domain.institutional_trading.ai_scalping.opportunity_ranking import (
 from app.domain.institutional_trading.ai_scalping.performance_analytics import (
     build_performance_analytics,
 )
-from app.domain.institutional_trading.ai_scalping.portfolio_exposure_intelligence import (
-    build_portfolio_exposure,
-)
+
+build_portfolio_exposure = _qf_portfolio_exposure_intelligence.build_portfolio_exposure
 
 
 def _eligible_score(
@@ -118,7 +123,10 @@ def test_execution_probability_from_ai_only() -> None:
     score = _eligible_score("NAS100", quality=88, confidence=86, rr=2.0)
     prob = estimate_execution_probability(score)
     assert 0.05 <= prob["probability_of_success"] <= 0.95
-    assert abs(prob["probability_of_success"] + prob["probability_of_failure"] - 1.0) < 1e-6
+    assert (
+        abs(prob["probability_of_success"] + prob["probability_of_failure"] - 1.0)
+        < 1e-6
+    )
     assert prob["estimated_rr"] == 2.0
     assert prob["expected_holding_time_minutes"] is not None
     assert "low" in prob["confidence_interval"]

@@ -71,7 +71,7 @@ def score_execution(
     spread: float | None,
     outcome: str,
 ) -> tuple[float | None, bool]:
-    """Deterministic 0–100 score; degradation flag is observational only."""
+    """Deterministic 0-100 score; degradation flag is observational only."""
     if outcome in {"reject", "failed", "timeout", "ambiguous"}:
         return 0.0, True
     if outcome not in {"success", "filled", "partial"}:
@@ -92,7 +92,9 @@ def score_execution(
 
 @dataclass
 class ExecutionIntelStore:
-    events: deque[ExecutionObservation] = field(default_factory=lambda: deque(maxlen=300))
+    events: deque[ExecutionObservation] = field(
+        default_factory=lambda: deque(maxlen=300)
+    )
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def record(self, **kwargs: Any) -> ExecutionObservation:
@@ -110,7 +112,9 @@ class ExecutionIntelStore:
         obs = ExecutionObservation(
             at=datetime.now(UTC).isoformat(),
             symbol=str(kwargs.get("symbol") or ""),
-            spread=float(kwargs["spread"]) if kwargs.get("spread") is not None else None,
+            spread=(
+                float(kwargs["spread"]) if kwargs.get("spread") is not None else None
+            ),
             quote_age_ms=(
                 float(kwargs["quote_age_ms"])
                 if kwargs.get("quote_age_ms") is not None

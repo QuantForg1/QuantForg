@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Sequence
+import logging
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 
 def evaluate_parameter_sensitivity(
@@ -36,6 +38,9 @@ def evaluate_parameter_sensitivity(
             try:
                 scores.append(float(evaluate_fn(trial)))
             except Exception:
+                logging.getLogger(__name__).debug(
+                    "parameter_trial_skipped", exc_info=True
+                )
                 continue
 
     if len(scores) < min_evals:

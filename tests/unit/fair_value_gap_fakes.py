@@ -42,7 +42,7 @@ def make_candle(
 def bullish_fvg_series() -> list[Candle]:
     """Three-candle bullish FVG then partial fill.
 
-    Bars 0–2 form bullish FVG (right.low 11.2 > left.high 10).
+    Bars 0-2 form bullish FVG (right.low 11.2 > left.high 10).
     Zone = [10, 11.2]. Bar 3 dips to 10.5 → partial fill.
     """
     rows = [

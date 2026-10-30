@@ -148,7 +148,9 @@ class BurstLatch:
         )
         return ev
 
-    def record_entry_attempt(self, *, now: float | None = None) -> BurstLatchEvent | None:
+    def record_entry_attempt(
+        self, *, now: float | None = None
+    ) -> BurstLatchEvent | None:
         import time
 
         t = now if now is not None else time.monotonic()

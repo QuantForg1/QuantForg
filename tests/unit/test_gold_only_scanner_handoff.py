@@ -51,9 +51,7 @@ def _runtime() -> InstitutionalIteRuntime:
         guarded_submit=MagicMock(),
         guarded_manage=MagicMock(),
         execution=MagicMock(),
-        position_management=SimpleNamespace(
-            engine=SimpleNamespace(_positions={})
-        ),
+        position_management=SimpleNamespace(engine=SimpleNamespace(_positions={})),
         mt5_adapter=MagicMock(),
     )
     return runtime
@@ -135,7 +133,7 @@ def _eligible_payload() -> dict:
     }
 
 
-async def _offload(fn, /, *args, **kwargs):  # noqa: ANN001
+async def _offload(fn, /, *args, **kwargs):
     return fn(*args, **kwargs)
 
 
@@ -146,7 +144,7 @@ async def test_gold_only_pick_invokes_existing_scanner(
     runtime = _runtime()
     called = {"n": 0}
 
-    async def _scan(*_a, **_k):  # noqa: ANN002, ANN003
+    async def _scan(*_a, **_k):
         called["n"] += 1
         from app.domain.institutional_trading.operations.fast_decision_path import (
             build_current_scan_decision,
@@ -184,7 +182,7 @@ async def test_rejected_gold_publishes_named_current_scan(
 ) -> None:
     runtime = _runtime()
 
-    async def _scan(*_a, **_k):  # noqa: ANN002, ANN003
+    async def _scan(*_a, **_k):
         from app.domain.institutional_trading.operations.fast_decision_path import (
             build_current_scan_decision,
             publish_current_scan_decision,
@@ -236,7 +234,7 @@ async def test_eligible_gold_becomes_best_eligible(
 ) -> None:
     runtime = _runtime()
 
-    async def _scan(*_a, **_k):  # noqa: ANN002, ANN003
+    async def _scan(*_a, **_k):
         from app.domain.institutional_trading.operations.fast_decision_path import (
             build_current_scan_decision,
             publish_current_scan_decision,
@@ -279,7 +277,7 @@ async def test_scanner_clamps_non_gold_out_of_universe(
 ) -> None:
     scored: list[str] = []
 
-    async def _fake_score(_adapter, symbol: str, **_k):  # noqa: ANN001
+    async def _fake_score(_adapter, symbol: str, **_k):
         scored.append(str(symbol).upper())
         return {
             "symbol": symbol,
@@ -355,9 +353,12 @@ def test_no_duplicate_scanner_and_no_forced_trade() -> None:
     assert runtime_src.count("run_institutional_multi_asset_scan(") == 1
     tree = ast.parse(runtime_src)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr == "order_send":
-                pytest.fail("ITE runtime must not call order_send directly")
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "order_send"
+        ):
+            pytest.fail("ITE runtime must not call order_send directly")
     pick_src = inspect.getsource(InstitutionalIteRuntime._pick_executable_symbol_async)
     assert "copy_rates_from_pos" not in pick_src
     assert "latest_tick" not in pick_src
@@ -378,12 +379,12 @@ def test_gold_only_no_longer_returns_before_scan() -> None:
 
 
 def test_safety_risk_oms_gateway_untouched() -> None:
-    gates = (
-        ROOT / "app/application/services/execution_safety.py"
-    ).read_text(encoding="utf-8")
-    gateway = (
-        ROOT / "app/infrastructure/brokers/mt5/gateway_client.py"
-    ).read_text(encoding="utf-8")
+    gates = (ROOT / "app/application/services/execution_safety.py").read_text(
+        encoding="utf-8"
+    )
+    gateway = (ROOT / "app/infrastructure/brokers/mt5/gateway_client.py").read_text(
+        encoding="utf-8"
+    )
     assert "Never retry order_send" in gateway
     assert "order_send" in gateway
     assert "class ExecutionSafetyService" in gates

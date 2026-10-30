@@ -34,44 +34,44 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
 def _ready(**overrides: object) -> GoldExecutionFacts:
-    base = dict(
-        symbol="XAUUSD_I",
-        direction="BUY",
-        action="BUY",
-        market_open=True,
-        tradable=True,
-        candles_ok=True,
-        bid=Decimal("2400.10"),
-        ask=Decimal("2400.30"),
-        quote_age_seconds=1.0,
-        spread=Decimal("0.20"),
-        structure_score=70,
-        momentum_score=65,
-        quality=80,
-        confidence=75,
-        pa_confluence=55,
-        risk_reward=Decimal("1.20"),
-        market_regime="TREND",
-        volatility_ok=True,
-        session_quality_ok=True,
-        safety_allowed=True,
-        kill_switch=False,
-        execution_enabled=True,
-        auto_running=True,
-        account_leverage=Decimal("2000"),
-        risk_eligible=True,
-        approved_lots=Decimal("0.01"),
-        min_lot_infeasible=False,
-        portfolio_allow=True,
-        optimizer_state="EXECUTE_NOW",
-        oms_orders_allowed=True,
-        gateway_connected=True,
-        broker_connected=True,
-        force_shadow=False,
-        gold_only=True,
-        opportunity_score=80,
-        opportunity_threshold=70,
-    )
+    base = {
+        "symbol": "XAUUSD_I",
+        "direction": "BUY",
+        "action": "BUY",
+        "market_open": True,
+        "tradable": True,
+        "candles_ok": True,
+        "bid": Decimal("2400.10"),
+        "ask": Decimal("2400.30"),
+        "quote_age_seconds": 1.0,
+        "spread": Decimal("0.20"),
+        "structure_score": 70,
+        "momentum_score": 65,
+        "quality": 80,
+        "confidence": 75,
+        "pa_confluence": 55,
+        "risk_reward": Decimal("1.20"),
+        "market_regime": "TREND",
+        "volatility_ok": True,
+        "session_quality_ok": True,
+        "safety_allowed": True,
+        "kill_switch": False,
+        "execution_enabled": True,
+        "auto_running": True,
+        "account_leverage": Decimal("2000"),
+        "risk_eligible": True,
+        "approved_lots": Decimal("0.01"),
+        "min_lot_infeasible": False,
+        "portfolio_allow": True,
+        "optimizer_state": "EXECUTE_NOW",
+        "oms_orders_allowed": True,
+        "gateway_connected": True,
+        "broker_connected": True,
+        "force_shadow": False,
+        "gold_only": True,
+        "opportunity_score": 80,
+        "opportunity_threshold": 70,
+    }
     base.update(overrides)
     return GoldExecutionFacts(**base)  # type: ignore[arg-type]
 
@@ -265,7 +265,7 @@ def test_min_lot_infeasible_remains_blocked() -> None:
 @pytest.mark.unit
 def test_daily_loss_uses_owner_stop_not_a_flat_percent() -> None:
     """19% of the day's start. Exact 19% of $100 does not halt; one cent over does."""
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
     assert (
         utc_daily_loss_exceeded(
             daily_pnl=Decimal("-5.01"),
@@ -308,9 +308,7 @@ def test_missing_broker_ticket_is_not_executed() -> None:
     assert over["pipeline"]["oms"] == "READY"
     assert over["pipeline"].get("execution_lifecycle") == "EXECUTING"
     assert over.get("execution_state") != "EXECUTED"
-    handoff = build_execution_handoff(
-        take=True, forwarded_to_oms=True, mt5_ticket=None
-    )
+    handoff = build_execution_handoff(take=True, forwarded_to_oms=True, mt5_ticket=None)
     assert handoff["execution_confirmed"] is False
 
 

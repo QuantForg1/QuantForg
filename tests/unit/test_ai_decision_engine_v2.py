@@ -152,9 +152,7 @@ def test_liquidity_v2_accepts_validated_ob_without_sweeps() -> None:
         quality=SimpleNamespace(displacement_ratio=Decimal("2.0")),
     )
     snapshot = SimpleNamespace(
-        liquidity=SimpleNamespace(
-            sweeps=(), pools=(), equal_highs=(), equal_lows=()
-        ),
+        liquidity=SimpleNamespace(sweeps=(), pools=(), equal_highs=(), equal_lows=()),
         order_blocks=SimpleNamespace(order_blocks=(ob_block,), mitigations=()),
         fair_value_gaps=SimpleNamespace(active_gaps=()),
     )
@@ -194,9 +192,7 @@ def test_confluence_v2_clears_mtf_and_liquidity_false_negatives() -> None:
         input_hash="abc",
         structure_by_tf={},
         primary_structure=None,
-        liquidity=SimpleNamespace(
-            sweeps=(), pools=(), equal_highs=(), equal_lows=()
-        ),
+        liquidity=SimpleNamespace(sweeps=(), pools=(), equal_highs=(), equal_lows=()),
         order_blocks=SimpleNamespace(order_blocks=(ob_block,), mitigations=()),
         fair_value_gaps=fvg,
         trend=trend,

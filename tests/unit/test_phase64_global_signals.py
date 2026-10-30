@@ -259,9 +259,9 @@ def test_account_isolation_and_mismatch_still_fail_closed() -> None:
 def test_no_oms_import_from_research_scanner_source() -> None:
     from pathlib import Path
 
-    text = Path(
-        "app/application/services/research_universe_scanner.py"
-    ).read_text(encoding="utf-8")
+    text = Path("app/application/services/research_universe_scanner.py").read_text(
+        encoding="utf-8"
+    )
     assert "order_send(" not in text
     assert "forwarded_to_oms" in text
     assert "authorizes_trade" in text

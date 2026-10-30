@@ -5,10 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-
-ALLOWED_STANCES = frozenset(
-    {"HOLD", "LEAN_LONG", "LEAN_SHORT", "NO_TRADE", "UNKNOWN"}
-)
+ALLOWED_STANCES = frozenset({"HOLD", "LEAN_LONG", "LEAN_SHORT", "NO_TRADE", "UNKNOWN"})
 
 
 @dataclass(frozen=True, slots=True)

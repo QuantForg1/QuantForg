@@ -102,9 +102,7 @@ async def test_slow_symbol_does_not_stop_other_desks(
     )
     assert "SYMBOL_TIMEOUT" in reasons.get("EURUSD_I", reasons.get("EURUSD", ""))
     timeout_rows = [
-        r
-        for r in rows
-        if str(r.get("reject_reason") or "") == "SYMBOL_TIMEOUT"
+        r for r in rows if str(r.get("reject_reason") or "") == "SYMBOL_TIMEOUT"
     ]
     assert timeout_rows
     assert all(r.get("failure_class") == "SYMBOL_FAILURE" for r in timeout_rows)

@@ -24,9 +24,7 @@ logger = get_logger(__name__)
 _BUY_SELL = frozenset({"BUY", "SELL"})
 _STALE = frozenset({"STALE", "EXPIRED", "DATA_STALE"})
 _MAX_FOCUS = 36
-_TAKE_LIFECYCLES = frozenset(
-    {"EXECUTION_READY", "EXECUTING", "ORDER_SENT", "FILLED"}
-)
+_TAKE_LIFECYCLES = frozenset({"EXECUTION_READY", "EXECUTING", "ORDER_SENT", "FILLED"})
 _WAIT_ABORTS = frozenset(
     {
         "NO_ELIGIBLE_SETUP",
@@ -166,9 +164,9 @@ def _pipeline_take_ready(pipe: dict[str, Any] | None) -> bool:
     """
     if not isinstance(pipe, dict) or not pipe:
         return False
-    blocker = str(
-        pipe.get("first_blocker") or pipe.get("abort_reason") or ""
-    ).strip().upper()
+    blocker = (
+        str(pipe.get("first_blocker") or pipe.get("abort_reason") or "").strip().upper()
+    )
     if (
         blocker.startswith("WAIT")
         or blocker in _WAIT_ABORTS
@@ -181,9 +179,9 @@ def _pipeline_take_ready(pipe: dict[str, Any] | None) -> bool:
     lifecycle = str(pipe.get("execution_lifecycle") or "").strip().upper()
     if lifecycle in _TAKE_LIFECYCLES:
         return True
-    decision = str(
-        pipe.get("final_decision") or pipe.get("setup_state") or ""
-    ).strip().upper()
+    decision = (
+        str(pipe.get("final_decision") or pipe.get("setup_state") or "").strip().upper()
+    )
     if decision != "TAKE":
         return False
     sniper = pipe.get("sniper")
@@ -204,9 +202,9 @@ def is_active_signal_card(row: dict[str, Any] | None) -> bool:
     card = str(row.get("card_status") or "").strip().upper()
     if card in _TERMINAL_CARD_STATUSES:
         return False
-    lifecycle = str(
-        row.get("signal_lifecycle") or row.get("lifecycle") or ""
-    ).strip().upper()
+    lifecycle = (
+        str(row.get("signal_lifecycle") or row.get("lifecycle") or "").strip().upper()
+    )
     return lifecycle not in _TERMINAL_CARD_STATUSES
 
 
@@ -221,10 +219,13 @@ def signal_execution_status(
     """Per-signal execution label. Never claims a fill without a ticket/position."""
     if not isinstance(row, dict):
         return "RESEARCH_ONLY"
-    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
-    lifecycle = str(
-        pipe.get("execution_lifecycle") or row.get("execution_state") or ""
-    ).strip().upper()
+    _pipe_value = row.get("pipeline")
+    pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
+    lifecycle = (
+        str(pipe.get("execution_lifecycle") or row.get("execution_state") or "")
+        .strip()
+        .upper()
+    )
     ticket = pipe.get("ticket") or row.get("ticket")
     direction = str(row.get("direction") or "").strip().upper()
     sym = str(row.get("symbol") or row.get("broker_symbol") or "").strip().upper()
@@ -240,14 +241,18 @@ def signal_execution_status(
         return "EXECUTION_BLOCKED"
     oms = str(pipe.get("oms") or row.get("oms") or "").strip().upper()
     risk = str(pipe.get("risk") or row.get("risk") or "").strip().upper()
-    abort = str(
-        pipe.get("abort_reason")
-        or row.get("abort_reason")
-        or pipe.get("first_blocker")
-        or row.get("first_blocker")
-        or row.get("reject_reason")
-        or ""
-    ).strip().upper()
+    abort = (
+        str(
+            pipe.get("abort_reason")
+            or row.get("abort_reason")
+            or pipe.get("first_blocker")
+            or row.get("first_blocker")
+            or row.get("reject_reason")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
     if risk in {"REJECT", "REJECTED", "BLOCK"} or (
         "RISK" in abort and not abort.startswith("WAIT")
     ):
@@ -304,7 +309,8 @@ def signal_card_lifecycle(
             "card_status": "WAITING",
             "reason": "NO_SIGNAL_ROW",
         }
-    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+    _pipe_value = row.get("pipeline")
+    pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
     ticket = pipe.get("ticket") or row.get("ticket") or row.get("mt5_ticket")
     try:
         ticket_n = int(ticket) if ticket not in (None, "", "0", 0) else 0
@@ -372,9 +378,11 @@ def signal_card_lifecycle(
     lifecycle = str(pipe.get("execution_lifecycle") or "").upper()
     if status == "EXECUTION_BLOCKED" or lifecycle == "EXECUTION_BLOCKED":
         return {
-            "lifecycle": "EXECUTION_ERROR"
-            if "ERROR" in abort or "TIMEOUT" in abort
-            else "FILTERED",
+            "lifecycle": (
+                "EXECUTION_ERROR"
+                if "ERROR" in abort or "TIMEOUT" in abort
+                else "FILTERED"
+            ),
             "card_status": "REJECTED",
             "reason": reason or abort or "EXECUTION_BLOCKED",
         }
@@ -472,9 +480,9 @@ def overlay_cycle_matches_row(row: dict[str, Any], last: dict[str, Any]) -> bool
     if not last_sym:
         mcd = last.get("market_context_diagnostics")
         if isinstance(mcd, dict):
-            last_sym = str(
-                mcd.get("symbol") or mcd.get("focus_symbol") or ""
-            ).strip().upper()
+            last_sym = (
+                str(mcd.get("symbol") or mcd.get("focus_symbol") or "").strip().upper()
+            )
     if not last_sym or not row_sym:
         return True
     if row_sym == last_sym:

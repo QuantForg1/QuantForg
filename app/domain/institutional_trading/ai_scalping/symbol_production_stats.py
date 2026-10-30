@@ -71,7 +71,9 @@ class SymbolProductionStats:
             age = max(0.0, time.monotonic() - float(self.demoted_at_mono))
             payload["demotion_age_seconds"] = round(age, 1)
             payload["demotion_cooldown_seconds"] = _DEMOTE_COOLDOWN_SECONDS
-            payload["demoted_at"] = (datetime.now(UTC) - timedelta(seconds=age)).isoformat()
+            payload["demoted_at"] = (
+                datetime.now(UTC) - timedelta(seconds=age)
+            ).isoformat()
         return payload
 
     @property
@@ -173,9 +175,9 @@ class SymbolStatsBook:
                     spread_count=int(row.get("spread_count") or 0),
                     atr_pct_sum=float(row.get("atr_pct_sum") or 0),
                     atr_pct_count=int(row.get("atr_pct_count") or 0),
-                    broker_hard_fails=int(row.get("broker_hard_fails") or 0)
-                    if demoted
-                    else 0,
+                    broker_hard_fails=(
+                        int(row.get("broker_hard_fails") or 0) if demoted else 0
+                    ),
                     demoted=demoted,
                     demoted_at_mono=demoted_at_mono,
                     consecutive_broker_ok=int(row.get("consecutive_broker_ok") or 0),
@@ -382,7 +384,7 @@ class SymbolStatsBook:
             return frozenset(s for s, r in self._by_symbol.items() if r.demoted)
 
     def performance_boost(self) -> dict[str, float]:
-        """Soft boost (−30..+40) for scan ordering from LIVE outcomes."""
+        """Soft boost (-30..+40) for scan ordering from LIVE outcomes."""
         with self._lock:
             self._expire_cooldown_unlocked()
             rows = list(self._by_symbol.values())
@@ -409,12 +411,14 @@ class SymbolStatsBook:
             out[r.symbol] = max(-30.0, min(40.0, score))
         return out
 
-    def ranked_symbols(self, *, top: int = 10, worst: bool = False) -> list[dict[str, Any]]:
+    def ranked_symbols(
+        self, *, top: int = 10, worst: bool = False
+    ) -> list[dict[str, Any]]:
         with self._lock:
             rows = list(self._by_symbol.values())
         boost = self.performance_boost()
 
-        def key(r: SymbolProductionStats) -> tuple:
+        def key(r: SymbolProductionStats) -> tuple[float, int, int, int]:
             return (boost.get(r.symbol, 0.0), r.accepted, r.eligible, r.scans)
 
         rows.sort(key=key, reverse=not worst)

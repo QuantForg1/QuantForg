@@ -211,9 +211,7 @@ def test_contract_sell_safety_block_keeps_sell() -> None:
 
 
 def test_contract_genuine_none_is_direction_none() -> None:
-    out = evaluate_gold_execution_contract(
-        _ready(direction="NONE", action="NO_TRADE")
-    )
+    out = evaluate_gold_execution_contract(_ready(direction="NONE", action="NO_TRADE"))
     assert out.direction == "NONE"
     assert out.fault_code == "DIRECTION_NONE"
     assert out.blocking_stage == "DECISION"
@@ -265,6 +263,75 @@ def test_execution_contract_does_not_rewrite_risk_into_none() -> None:
     assert out.fault_code == "MIN_LOT_CONSTRAINT"
     assert out.blocking_stage == "RISK"
     assert out.decision_state == DecisionState.CANDIDATE_BLOCK.value
+    assert facts.volatility_ok is True
+
+
+def _cycle_facts(**ai: object):
+    return facts_from_cycle(
+        snapshot=SimpleNamespace(symbol="XAUUSD", spread=Decimal("0.364")),
+        account=SimpleNamespace(
+            bid=Decimal("100.10"),
+            ask=Decimal("100.464"),
+            quote_age_seconds=1.0,
+            leverage=Decimal("100"),
+            market_open=True,
+        ),
+        decision=SimpleNamespace(
+            symbol="XAUUSD",
+            direction=TradeDirection.SELL,
+            action=DecisionAction.SELL,
+            quality=80,
+            confidence=72,
+            eligibility=EligibilityResult(
+                eligible=True,
+                checks={},
+                rejection_reasons=(),
+            ),
+            risk_reasons=(),
+            approved_lots=Decimal("0.01"),
+            estimated_rr=Decimal("1.80"),
+            confluence=SimpleNamespace(factors={"structure_score": 80}),
+        ),
+        optimizer={"final_state": "EXECUTE_NOW"},
+        execution_enabled=True,
+        force_shadow=False,
+        gateway_connected=True,
+        broker_connected=True,
+        symbol_tradable=True,
+        auto_running=True,
+        kill_switch=False,
+        oms_orders_allowed=True,
+        safety_allowed=True,
+        last_ai_score={
+            "opportunity_score": 90,
+            "opportunity_threshold": 70,
+            **ai,
+        },
+    )
+
+
+def test_recorded_volatility_failure_blocks_a_high_opportunity_side() -> None:
+    facts = _cycle_facts(
+        volatility_decision={
+            "passed": False,
+            "atr_pct": "0.0388",
+            "hard_min_pct": "0.08",
+        }
+    )
+    assert facts.volatility_ok is False
+    out = evaluate_gold_execution_contract(facts)
+    assert out.direction == "SELL"
+    assert out.fault_code == "VOLATILITY_REJECT"
+    assert out.blocking_stage == "STRATEGY"
+    assert out.may_submit_oms is False
+    assert out.opportunity_score == 90
+
+
+def test_recorded_volatility_pass_does_not_invent_a_reject() -> None:
+    facts = _cycle_facts(volatility_decision={"passed": True, "atr_pct": "0.1407"})
+    assert facts.volatility_ok is True
+    out = evaluate_gold_execution_contract(facts)
+    assert out.fault_code != "VOLATILITY_REJECT"
 
 
 def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
@@ -282,11 +349,11 @@ def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
 
 
 def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> None:
-    """Live 9.05 stop at 0.01 lot = $9.05 > 9% of $50 ($4.50): reject, never upsize."""
+    """Live 9.05 stop at 0.01 lot = $9.05 > 14% of $50 ($7.00): reject, never upsize."""
     min_loss = (VOLUME_MIN * CONTRACT_SIZE * _LIVE_STOP).quantize(Decimal("0.0001"))
     assert Decimal("0.01") == VOLUME_MIN
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
-    assert min_loss > Decimal("4.50")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("14.0")
+    assert min_loss > Decimal("7.00")
 
     engine = RiskEngine()
     wide = engine.size_position(
@@ -345,7 +412,7 @@ def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> N
 
 
 def test_hard_max_and_min_lot_owner_values() -> None:
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("14.0")
     assert Decimal("0.01") == VOLUME_MIN
     assert RiskEngine().config.min_lot == Decimal("0.01")
     assert RiskEngine().config.max_lot == Decimal("0.01")
@@ -376,7 +443,10 @@ def test_scalp_atr_stop_provenance_unchanged() -> None:
         Path(__file__).resolve().parents[2]
         / "app/application/services/institutional_decision_pipeline.py"
     ).read_text(encoding="utf-8")
-    assert 'stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")' in pipeline
+    assert (
+        'stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")'
+        in pipeline
+    )
     assert DEFAULT_AI_SCALPING_CONFIG.stop_atr_mult == Decimal("1.10")
     assert Decimal("9.0483") == _LIVE_STOP
     assert ITEConfig(trading_mode="scalping").is_scalping() is True
@@ -384,12 +454,16 @@ def test_scalp_atr_stop_provenance_unchanged() -> None:
 
 def test_owner_cap_overrides_strategy_targets_and_min_stack() -> None:
     """Strategy targets still rank multiple legs; owner capacity allows one."""
-    assert 2 <= strategy_target_count(
-        trade_class=TradeClass.SCALP, opportunity_score=82
-    ) <= SCALP_MAX_OPEN_TRADES
-    assert 1 <= strategy_target_count(
-        trade_class=TradeClass.HOLD, opportunity_score=86
-    ) <= HOLD_MAX_OPEN_TRADES
+    assert (
+        2
+        <= strategy_target_count(trade_class=TradeClass.SCALP, opportunity_score=82)
+        <= SCALP_MAX_OPEN_TRADES
+    )
+    assert (
+        1
+        <= strategy_target_count(trade_class=TradeClass.HOLD, opportunity_score=86)
+        <= HOLD_MAX_OPEN_TRADES
+    )
     for trade_class, mode, allowed in (
         (TradeClass.SCALP, "scalping", 10),
         (TradeClass.HOLD, "swing", 5),
@@ -433,9 +507,12 @@ def test_gold_manual_and_session_regressions() -> None:
     assert facts["already_open"] is False
     assert facts["already_open_reason"] == "MANUAL_SAME_SYMBOL_PRESENT"
     assert facts["candidate_allowed"] is True
-    assert remaining_quantforg_capacity(
-        current_count=0,
-        configured_max=10,
-        class_cap=10,
-    ) == 10
+    assert (
+        remaining_quantforg_capacity(
+            current_count=0,
+            configured_max=10,
+            class_cap=10,
+        )
+        == 10
+    )
     assert any(s.value for s in TRADABLE_SESSIONS_24_7)

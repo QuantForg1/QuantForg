@@ -32,30 +32,168 @@ EDGE_MARGIN = 5
 # Presence detectors use already-computed families / scores. They do not
 # re-run frozen direction, sniper, or OMS, and they never mark TAKE.
 CANDIDATE_SPECS: tuple[dict[str, Any], ...] = (
-    {"candidate_id": "A", "candidate_name": "continuation", "layer": "EXPANSION", "needs": ("structure",)},
-    {"candidate_id": "B", "candidate_name": "pullback_continuation", "layer": "EXPANSION", "needs": ("structure",), "setup_any": ("RETEST", "INSIDE", "CONTROLLED", "PULLBACK")},
-    {"candidate_id": "C", "candidate_name": "bos_continuation", "layer": "EXPANSION", "needs": ("structure",), "bos": True},
-    {"candidate_id": "D", "candidate_name": "choch_reversal", "layer": "EXPANSION", "needs": ("structure",), "choch": True, "setup_any": ("CHOCH", "REVERSAL")},
-    {"candidate_id": "E", "candidate_name": "sweep_bos", "layer": "EXPANSION", "needs": ("liquidity", "structure"), "bos": True},
-    {"candidate_id": "F", "candidate_name": "liquidity_sweep_ob_retest", "layer": "EXPANSION", "needs": ("liquidity", "zone"), "ob": True, "setup_any": ("RETEST", "SWEEP", "CONTROLLED")},
-    {"candidate_id": "G", "candidate_name": "fvg_retest", "layer": "EXPANSION", "needs": ("zone",), "fvg": True, "setup_any": ("RETEST", "INSIDE", "CONTROLLED")},
-    {"candidate_id": "H", "candidate_name": "ob_retest", "layer": "EXPANSION", "needs": ("zone",), "ob": True, "setup_any": ("RETEST", "INSIDE", "CONTROLLED")},
-    {"candidate_id": "I", "candidate_name": "displacement_continuation", "layer": "EXPANSION", "needs": ("structure",), "displacement": True},
-    {"candidate_id": "J", "candidate_name": "session_continuation", "layer": "EXPANSION", "needs": ("structure",), "session_any": ("sydney", "tokyo", "london", "new_york", "ny", "overlap")},
-    {"candidate_id": "K", "candidate_name": "london_setup", "layer": "EXPANSION", "session_any": ("london",)},
-    {"candidate_id": "L", "candidate_name": "london_ny_overlap", "layer": "EXPANSION", "session_any": ("london_ny_overlap", "overlap")},
-    {"candidate_id": "M", "candidate_name": "new_york_setup", "layer": "EXPANSION", "session_any": ("new_york", "ny")},
-    {"candidate_id": "N", "candidate_name": "volatility_expansion", "layer": "EXPANSION", "regime_any": ("high_volatility", "expansion", "breakout", "news_volatility")},
-    {"candidate_id": "O", "candidate_name": "compression_breakout", "layer": "EXPANSION", "setup_any": ("CONTROLLED", "BREAKOUT", "COMPRESSION"), "regime_any": ("breakout", "expansion", "low_volatility")},
-    {"candidate_id": "P", "candidate_name": "trend_continuation", "layer": "EXPANSION", "needs": ("structure",), "regime_any": ("trend", "trending")},
-    {"candidate_id": "Q", "candidate_name": "range_rejection", "layer": "EXPANSION", "regime_any": ("range", "mean_reversion", "low_volatility")},
-    {"candidate_id": "R", "candidate_name": "structure_reclaim", "layer": "EXPANSION", "needs": ("structure",), "setup_any": ("RECLAIM", "RETEST")},
-    {"candidate_id": "S", "candidate_name": "mtf_alignment", "layer": "EXPANSION", "mtf_pair": ("m1_bos", "m5_bos")},
-    {"candidate_id": "T", "candidate_name": "momentum_confirmation", "layer": "EXPANSION", "momentum_min": 70},
-    {"candidate_id": "U", "candidate_name": "confluence_expansion", "layer": "EXPANSION", "needs": ("structure", "zone")},
-    {"candidate_id": "V", "candidate_name": "high_quality_pullback", "layer": "EXPANSION", "needs": ("structure", "zone"), "setup_any": ("RETEST", "PULLBACK", "CONTROLLED")},
-    {"candidate_id": "W", "candidate_name": "reversal_confirmation", "layer": "EXPANSION", "needs": ("structure",), "setup_any": ("CHOCH", "REVERSAL", "CONTROLLED")},
-    {"candidate_id": "X", "candidate_name": "continuation_after_liquidity", "layer": "EXPANSION", "needs": ("structure", "liquidity")},
+    {
+        "candidate_id": "A",
+        "candidate_name": "continuation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+    },
+    {
+        "candidate_id": "B",
+        "candidate_name": "pullback_continuation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "setup_any": ("RETEST", "INSIDE", "CONTROLLED", "PULLBACK"),
+    },
+    {
+        "candidate_id": "C",
+        "candidate_name": "bos_continuation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "bos": True,
+    },
+    {
+        "candidate_id": "D",
+        "candidate_name": "choch_reversal",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "choch": True,
+        "setup_any": ("CHOCH", "REVERSAL"),
+    },
+    {
+        "candidate_id": "E",
+        "candidate_name": "sweep_bos",
+        "layer": "EXPANSION",
+        "needs": ("liquidity", "structure"),
+        "bos": True,
+    },
+    {
+        "candidate_id": "F",
+        "candidate_name": "liquidity_sweep_ob_retest",
+        "layer": "EXPANSION",
+        "needs": ("liquidity", "zone"),
+        "ob": True,
+        "setup_any": ("RETEST", "SWEEP", "CONTROLLED"),
+    },
+    {
+        "candidate_id": "G",
+        "candidate_name": "fvg_retest",
+        "layer": "EXPANSION",
+        "needs": ("zone",),
+        "fvg": True,
+        "setup_any": ("RETEST", "INSIDE", "CONTROLLED"),
+    },
+    {
+        "candidate_id": "H",
+        "candidate_name": "ob_retest",
+        "layer": "EXPANSION",
+        "needs": ("zone",),
+        "ob": True,
+        "setup_any": ("RETEST", "INSIDE", "CONTROLLED"),
+    },
+    {
+        "candidate_id": "I",
+        "candidate_name": "displacement_continuation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "displacement": True,
+    },
+    {
+        "candidate_id": "J",
+        "candidate_name": "session_continuation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "session_any": ("sydney", "tokyo", "london", "new_york", "ny", "overlap"),
+    },
+    {
+        "candidate_id": "K",
+        "candidate_name": "london_setup",
+        "layer": "EXPANSION",
+        "session_any": ("london",),
+    },
+    {
+        "candidate_id": "L",
+        "candidate_name": "london_ny_overlap",
+        "layer": "EXPANSION",
+        "session_any": ("london_ny_overlap", "overlap"),
+    },
+    {
+        "candidate_id": "M",
+        "candidate_name": "new_york_setup",
+        "layer": "EXPANSION",
+        "session_any": ("new_york", "ny"),
+    },
+    {
+        "candidate_id": "N",
+        "candidate_name": "volatility_expansion",
+        "layer": "EXPANSION",
+        "regime_any": ("high_volatility", "expansion", "breakout", "news_volatility"),
+    },
+    {
+        "candidate_id": "O",
+        "candidate_name": "compression_breakout",
+        "layer": "EXPANSION",
+        "setup_any": ("CONTROLLED", "BREAKOUT", "COMPRESSION"),
+        "regime_any": ("breakout", "expansion", "low_volatility"),
+    },
+    {
+        "candidate_id": "P",
+        "candidate_name": "trend_continuation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "regime_any": ("trend", "trending"),
+    },
+    {
+        "candidate_id": "Q",
+        "candidate_name": "range_rejection",
+        "layer": "EXPANSION",
+        "regime_any": ("range", "mean_reversion", "low_volatility"),
+    },
+    {
+        "candidate_id": "R",
+        "candidate_name": "structure_reclaim",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "setup_any": ("RECLAIM", "RETEST"),
+    },
+    {
+        "candidate_id": "S",
+        "candidate_name": "mtf_alignment",
+        "layer": "EXPANSION",
+        "mtf_pair": ("m1_bos", "m5_bos"),
+    },
+    {
+        "candidate_id": "T",
+        "candidate_name": "momentum_confirmation",
+        "layer": "EXPANSION",
+        "momentum_min": 70,
+    },
+    {
+        "candidate_id": "U",
+        "candidate_name": "confluence_expansion",
+        "layer": "EXPANSION",
+        "needs": ("structure", "zone"),
+    },
+    {
+        "candidate_id": "V",
+        "candidate_name": "high_quality_pullback",
+        "layer": "EXPANSION",
+        "needs": ("structure", "zone"),
+        "setup_any": ("RETEST", "PULLBACK", "CONTROLLED"),
+    },
+    {
+        "candidate_id": "W",
+        "candidate_name": "reversal_confirmation",
+        "layer": "EXPANSION",
+        "needs": ("structure",),
+        "setup_any": ("CHOCH", "REVERSAL", "CONTROLLED"),
+    },
+    {
+        "candidate_id": "X",
+        "candidate_name": "continuation_after_liquidity",
+        "layer": "EXPANSION",
+        "needs": ("structure", "liquidity"),
+    },
 )
 
 PROMOTION_STATES = (
@@ -152,23 +290,25 @@ def candidate_present(spec: dict[str, Any], cycle: dict[str, Any]) -> bool:
         regime = str(cycle.get("market_regime") or "").lower()
         if not any(r.lower() in regime for r in regime_any):
             return False
-    if spec.get("ob") and not (
-        _has_token(cycle, "OB", "ORDER_BLOCK") or "zone" in fam
+    if spec.get("ob") and not (_has_token(cycle, "OB", "ORDER_BLOCK") or "zone" in fam):
+        return False
+    # Zone family without FVG token is not enough to claim FVG reaction.
+    if (
+        spec.get("fvg")
+        and not _has_token(cycle, "FVG")
+        and "fvg" not in fam
+        and not str(cycle.get("fvg_state") or "")
     ):
         return False
-    if spec.get("fvg") and not _has_token(cycle, "FVG"):
-        # Zone family without FVG token is not enough to claim FVG reaction.
-        if "fvg" not in fam and not str(cycle.get("fvg_state") or ""):
-            return False
     if spec.get("choch") and not _has_token(cycle, "CHOCH"):
         return False
     if spec.get("bos") and not _has_token(cycle, "BOS", "BREAK_OF_STRUCTURE"):
         return False
-    if spec.get("displacement") and not _has_token(
-        cycle, "DISPLACEMENT", "IMPULSE"
-    ):
-        audit = cycle.get("opportunity_audit") if isinstance(cycle.get("opportunity_audit"), dict) else {}
-        disp = audit.get("displacement") if isinstance(audit.get("displacement"), dict) else {}
+    if spec.get("displacement") and not _has_token(cycle, "DISPLACEMENT", "IMPULSE"):
+        _audit_value = cycle.get("opportunity_audit")
+        audit = _audit_value if isinstance(_audit_value, dict) else {}
+        _disp_value = audit.get("displacement")
+        disp = _disp_value if isinstance(_disp_value, dict) else {}
         try:
             if int(disp.get("score") or cycle.get("displacement_score") or 0) < 70:
                 return False
@@ -176,8 +316,10 @@ def candidate_present(spec: dict[str, Any], cycle: dict[str, Any]) -> bool:
             return False
     mtf_pair = spec.get("mtf_pair")
     if mtf_pair:
-        breakdown = cycle.get("score_breakdown") if isinstance(cycle.get("score_breakdown"), dict) else {}
-        factors = cycle.get("factors") if isinstance(cycle.get("factors"), dict) else {}
+        _breakdown_value = cycle.get("score_breakdown")
+        breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else {}
+        _factors_value = cycle.get("factors")
+        factors = _factors_value if isinstance(_factors_value, dict) else {}
         left, right = mtf_pair
         left_v = breakdown.get(left) or factors.get(left) or cycle.get(left)
         right_v = breakdown.get(right) or factors.get(right) or cycle.get(right)
@@ -224,6 +366,7 @@ def promotion_status(
     promote_live: bool = False,
 ) -> str:
     """Research promotion labels. LIVE is unreachable without a separate task."""
+    _ = human_approved
     if lookahead:
         return "NOT_READY"
     if sample_size < 20:
@@ -254,20 +397,27 @@ def observe_shadow_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
     edge = None
     opp = None
     try:
-        edge = int(row.get("directional_edge")) if row.get("directional_edge") is not None else None
+        edge_raw = row.get("directional_edge")
+        edge = int(edge_raw) if edge_raw is not None else None
     except (TypeError, ValueError):
         edge = None
     try:
-        opp = int(row.get("opportunity_score")) if row.get("opportunity_score") is not None else None
+        opp_raw = row.get("opportunity_score")
+        opp = int(opp_raw) if opp_raw is not None else None
     except (TypeError, ValueError):
         opp = None
     would_pass_core = bool(
-        edge is not None and opp is not None and edge >= EDGE_MARGIN and opp >= OPP_THRESHOLD
+        edge is not None
+        and opp is not None
+        and edge >= EDGE_MARGIN
+        and opp >= OPP_THRESHOLD
     )
     setup = str(row.get("setup_state") or "").upper()
     first_live_blocker = str(row.get("first_authoritative_blocker") or "") or None
     would_live_take = bool(would_pass_core and setup == "TAKE")
-    why_rejected = None if would_live_take else (first_live_blocker or "LIVE_GATES_NOT_CLEARED")
+    why_rejected = (
+        None if would_live_take else (first_live_blocker or "LIVE_GATES_NOT_CLEARED")
+    )
     present_rows: list[dict[str, Any]] = []
     present_names: list[str] = []
     for spec in CANDIDATE_SPECS:
@@ -291,8 +441,12 @@ def observe_shadow_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
                 "direction": row.get("candidate") or row.get("decision_action"),
                 "entry_reason": spec["candidate_name"],
                 "hypothetical_entry": row.get("entry") or row.get("bid"),
-                "hypothetical_SL": row.get("stop") or row.get("sl") or row.get("stop_loss"),
-                "hypothetical_TP": row.get("target") or row.get("tp") or row.get("take_profit"),
+                "hypothetical_SL": row.get("stop")
+                or row.get("sl")
+                or row.get("stop_loss"),
+                "hypothetical_TP": row.get("target")
+                or row.get("tp")
+                or row.get("take_profit"),
                 "hypothetical_outcome": UNKNOWN,
                 "hypothetical_R": row.get("rr") or row.get("expected_rr") or UNKNOWN,
                 "MAE": UNKNOWN,
@@ -381,7 +535,7 @@ def classify_candidate_vs_production(
 
 def walk_forward_split(
     trades: list[dict[str, Any]],
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, Any]:
     """Time-ordered 60/20/20. Refuses to reuse the selection sample as OOS."""
     ordered = sorted(
         trades,
@@ -432,7 +586,11 @@ def _family_trades(matched: list[dict[str, Any]], name: str) -> list[dict[str, A
             str(x).lower() for x in (t.get("sell_families") or [])
         ]
         setups = str(t.get("setup_state") or "").lower()
-        if name.replace("_", " ") in setups or name in fams or name in str(t.get("shadow_families") or []):
+        if (
+            name.replace("_", " ") in setups
+            or name in fams
+            or name in str(t.get("shadow_families") or [])
+        ):
             out.append(t)
             continue
         shadow = t.get("shadow_families")
@@ -458,15 +616,18 @@ def expansion_report(
         val_m = _metrics(split["validation"])
         oos_m = _metrics(split["out_of_sample"])
         overall = _metrics(rows)
+        oos_result: Any
         if split.get("lookahead"):
             klass = "REJECT"
             oos_result = "LOOKAHEAD_REJECTED"
         else:
             klass = classify_candidate_vs_production(
                 sample_size=len(rows),
-                expectancy_r=overall.get("AVERAGE_R")
-                if overall.get("AVERAGE_R") != UNKNOWN
-                else overall.get("EXPECTANCY"),
+                expectancy_r=(
+                    overall.get("AVERAGE_R")
+                    if overall.get("AVERAGE_R") != UNKNOWN
+                    else overall.get("EXPECTANCY")
+                ),
                 profit_factor=overall.get("PROFIT_FACTOR"),
                 oos_expectancy=oos_m.get("EXPECTANCY"),
             )
@@ -479,7 +640,8 @@ def expansion_report(
         try:
             oos_ok = (
                 not split.get("lookahead")
-                and oos_result not in {None, INSUFFICIENT_SAMPLE, UNKNOWN, "LOOKAHEAD_REJECTED"}
+                and oos_result
+                not in {None, INSUFFICIENT_SAMPLE, UNKNOWN, "LOOKAHEAD_REJECTED"}
                 and float(oos_m.get("EXPECTANCY") or 0) > 0
                 and len(split["out_of_sample"]) >= 1
                 and len(rows) >= 20
@@ -491,8 +653,14 @@ def expansion_report(
             oos_positive=oos_ok,
             lookahead=bool(split.get("lookahead")),
         )
-        buy = [t for t in rows if str(t.get("direction") or "").upper() in {"BUY", "LONG"}]
-        sell = [t for t in rows if str(t.get("direction") or "").upper() in {"SELL", "SHORT"}]
+        buy = [
+            t for t in rows if str(t.get("direction") or "").upper() in {"BUY", "LONG"}
+        ]
+        sell = [
+            t
+            for t in rows
+            if str(t.get("direction") or "").upper() in {"SELL", "SHORT"}
+        ]
         candidates.append(
             {
                 "candidate_id": spec.get("candidate_id"),
@@ -514,8 +682,16 @@ def expansion_report(
                 "BUY_performance": _metrics(buy),
                 "SELL_performance": _metrics(sell),
                 "session_performance": {
-                    s: _metrics([t for t in rows if str(t.get("session") or "").lower() == s])
-                    for s in ("sydney", "tokyo", "london", "london_ny_overlap", "new_york")
+                    s: _metrics(
+                        [t for t in rows if str(t.get("session") or "").lower() == s]
+                    )
+                    for s in (
+                        "sydney",
+                        "tokyo",
+                        "london",
+                        "london_ny_overlap",
+                        "new_york",
+                    )
                 },
                 "classification": klass,
                 "promotion_status": promo,

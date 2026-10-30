@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from app.domain.liquidity.models import LiquiditySnapshot
 from app.domain.market_data.candle import Candle
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.market_structure.models import StructureSnapshot, SwingPoint
 from app.domain.market_structure.swing_detector import SwingDetector
@@ -87,8 +89,13 @@ class SwingFromBarsPort:
         left: int = 2,
         right: int = 2,
         limit: int = 500,
+        as_of: datetime | None = None,
     ) -> Sequence[SwingPoint]:
-        candles = await self.prices.get_candles(symbol_code, timeframe, limit=limit)
+        candles = closed_analysis_bars(
+            await self.prices.get_candles(symbol_code, timeframe, limit=limit),
+            as_of=as_of,
+            timeframe=timeframe,
+        )
         return self.detector.detect(
             candles, left=left or self.left, right=right or self.right
         )

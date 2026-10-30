@@ -38,9 +38,7 @@ class GetPortfolioUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        record = await asyncio.to_thread(
-            self.sync_service.synchronize, user_id=user_id
-        )
+        record = await asyncio.to_thread(self.sync_service.synchronize, user_id=user_id)
         _ = self.sync_service.drain_events()
         async with self.portfolio_uow_factory() as uow:
             await uow.syncs.add(record)
@@ -56,9 +54,7 @@ class GetPortfolioUseCase:
             adapter = self.sync_service.adapter
             refresh = getattr(adapter, "force_refresh_positions", None)
             positions = (
-                refresh()
-                if callable(refresh)
-                else self.sync_service.list_positions()
+                refresh() if callable(refresh) else self.sync_service.list_positions()
             )
             return (
                 positions,
@@ -104,9 +100,7 @@ class ListPositionsUseCase:
             refresh = getattr(adapter, "force_refresh_positions", None)
             if callable(refresh):
                 await asyncio.to_thread(refresh)
-            rows = await asyncio.to_thread(
-                self.sync_service.position_by_symbol, symbol
-            )
+            rows = await asyncio.to_thread(self.sync_service.position_by_symbol, symbol)
         else:
             refresh = getattr(adapter, "force_refresh_positions", None)
             rows = await asyncio.to_thread(

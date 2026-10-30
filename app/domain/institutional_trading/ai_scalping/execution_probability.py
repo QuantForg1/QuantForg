@@ -21,10 +21,9 @@ def estimate_execution_probability(score: dict[str, Any]) -> dict[str, Any]:
     quality = _f(score.get("trade_quality") or score.get("quality"), 0.0)
     rr = _f(score.get("expected_rr"), 0.0)
     hold = score.get("expected_hold_time") or score.get("expected_hold_minutes")
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
-    hist_raw = score.get("historical_similarity") or factors.get(
-        "historical_similar"
-    )
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
+    hist_raw = score.get("historical_similarity") or factors.get("historical_similar")
     hist = _f(hist_raw, 50.0)
 
     # Map institutional confidence/quality into [0.05, 0.95]

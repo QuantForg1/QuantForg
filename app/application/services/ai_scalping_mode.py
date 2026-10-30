@@ -137,15 +137,15 @@ def apply_trading_mode_to_runtime(
         logger.warning(
             "trading_mode_applied",
             mode=mode_l,
-            profile=getattr(scalp or DEFAULT_AI_SCALPING_CONFIG, "quality_baseline", None),
+            profile=getattr(
+                scalp or DEFAULT_AI_SCALPING_CONFIG, "quality_baseline", None
+            ),
             ite_version=ite.config_version,
             max_open=ite.max_open_trades,
             plane_max_open=getattr(plane, "max_open_trades", None),
             tfs=[t.value for t in ite.analysis_timeframes()],
-            quality=int(getattr(scalp or DEFAULT_AI_SCALPING_CONFIG, "normal_vol").quality),
-            confluence=int(
-                getattr(scalp or DEFAULT_AI_SCALPING_CONFIG, "normal_vol").confidence
-            ),
+            quality=int((scalp or DEFAULT_AI_SCALPING_CONFIG).normal_vol.quality),
+            confluence=int((scalp or DEFAULT_AI_SCALPING_CONFIG).normal_vol.confidence),
         )
 
     return {
@@ -199,9 +199,7 @@ def current_mode_snapshot(runtime: Any) -> dict[str, Any]:
             getattr(runtime, "plane", None), "trading_mode", None
         ),
         "management_profile": (
-            "scalp"
-            if getattr(ite, "is_scalping", lambda: False)()
-            else "swing"
+            "scalp" if getattr(ite, "is_scalping", lambda: False)() else "swing"
         ),
         "learning": learning,
     }

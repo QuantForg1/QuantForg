@@ -61,9 +61,7 @@ def merge_registration_summary(
         if name not in failed:
             failed.append(name)
     pending_names = [name for name, _ in remaining_pending]
-    critical_failed = sorted(
-        name for name in failed if name in CRITICAL_READY_ROUTERS
-    )
+    critical_failed = sorted(name for name in failed if name in CRITICAL_READY_ROUTERS)
     if pending_names:
         status = "pending"
     elif critical_failed:

@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.application.services import institutional_multi_asset_scanner as scanner
-from app.domain.institutional_trading.ai_scalping.config import DEFAULT_AI_SCALPING_CONFIG
+from app.domain.institutional_trading.ai_scalping.config import (
+    DEFAULT_AI_SCALPING_CONFIG,
+)
 from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
     SymbolStatsBook,
 )

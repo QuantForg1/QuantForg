@@ -18,18 +18,14 @@ _ROLE_OVERLAY: JsonDocumentStore | None = None
 def _overlay() -> JsonDocumentStore:
     global _ROLE_OVERLAY
     if _ROLE_OVERLAY is None:
-        _ROLE_OVERLAY = JsonDocumentStore(
-            "enterprise_role_overlays.json", "overlays"
-        )
+        _ROLE_OVERLAY = JsonDocumentStore("enterprise_role_overlays.json", "overlays")
     return _ROLE_OVERLAY
 
 
 async def build_organizations_center() -> dict[str, Any]:
     orgs = await read_organizations()
     members = await read_organization_members()
-    overlays = {
-        str(o.get("member_id")): o for o in _overlay().list(limit=5000)
-    }
+    overlays = {str(o.get("member_id")): o for o in _overlay().list(limit=5000)}
     by_org: dict[str, list[dict[str, Any]]] = {}
     for m in members:
         oid = str(m.get("organization_id") or "")
@@ -155,7 +151,5 @@ def filter_by_org(
     if not organization_id:
         return rows
     return [
-        r
-        for r in rows
-        if str(r.get("organization_id") or "") == str(organization_id)
+        r for r in rows if str(r.get("organization_id") or "") == str(organization_id)
     ]

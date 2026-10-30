@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-
 _TRACE_ORDER: tuple[str, ...] = (
     "Market Data",
     "Scanner",
@@ -83,12 +82,10 @@ def build_institutional_execution_trace(
 ) -> dict[str, Any]:
     """Build ordered substages from live artefacts (never invents fills)."""
     score = ai_score if isinstance(ai_score, dict) else {}
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
-    vol = (
-        score.get("volatility_decision")
-        if isinstance(score.get("volatility_decision"), dict)
-        else {}
-    )
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
+    _vol_value = score.get("volatility_decision")
+    vol = _vol_value if isinstance(_vol_value, dict) else {}
     reject = bool(score.get("reject"))
     reject_reason = str(score.get("reject_reason") or "") or None
     quality = score.get("trade_quality") or score.get("quality")
@@ -128,7 +125,11 @@ def build_institutional_execution_trace(
         ),
         _stage(
             "SMC",
-            ok=None if not score else (not reject or "structure" not in (reject_reason or "").lower()),
+            ok=(
+                None
+                if not score
+                else (not reject or "structure" not in (reject_reason or "").lower())
+            ),
             reason="structure/order-block/fvg factors",
             metrics={
                 "bos": factors.get("bos"),
@@ -136,13 +137,21 @@ def build_institutional_execution_trace(
                 "order_block": factors.get("order_block"),
                 "fvg": factors.get("fvg"),
             },
-            blocking_gate="structure" if reject and "structure" in (reject_reason or "").lower() else None,
+            blocking_gate=(
+                "structure"
+                if reject and "structure" in (reject_reason or "").lower()
+                else None
+            ),
             decision_id=decision_id,
             symbol=symbol,
         ),
         _stage(
             "MTF",
-            ok=None if not score else int(factors.get("mtf") or score.get("mtf_alignment") or 0) >= 0,
+            ok=(
+                None
+                if not score
+                else int(factors.get("mtf") or score.get("mtf_alignment") or 0) >= 0
+            ),
             metrics={
                 "mtf": factors.get("mtf") or score.get("mtf_alignment"),
                 "h1_bias": factors.get("h1_bias"),
@@ -159,7 +168,9 @@ def build_institutional_execution_trace(
         _stage(
             "Liquidity",
             ok=None if not score else True,
-            metrics={"liquidity": score.get("liquidity") or factors.get("liquidity_sweep")},
+            metrics={
+                "liquidity": score.get("liquidity") or factors.get("liquidity_sweep")
+            },
             blocking_gate=(
                 "liquidity"
                 if reject and "liquidity" in (reject_reason or "").lower()
@@ -185,7 +196,11 @@ def build_institutional_execution_trace(
             "Quality",
             ok=None if quality is None else int(quality) >= 80,
             metrics={"quality": quality, "floor": 80},
-            blocking_gate="quality" if reject and "quality" in (reject_reason or "").lower() else None,
+            blocking_gate=(
+                "quality"
+                if reject and "quality" in (reject_reason or "").lower()
+                else None
+            ),
             decision_id=decision_id,
             symbol=symbol,
         ),

@@ -89,7 +89,9 @@ def _gold(
     )
 
 
-def _alloc(*, positions: list[MT5Position] | None, open_n: int, direction: str = "SELL"):
+def _alloc(
+    *, positions: list[MT5Position] | None, open_n: int, direction: str = "SELL"
+):
     return evaluate_portfolio_allocation(
         account=_account(open_n=open_n),
         symbol="XAUUSD",
@@ -109,44 +111,44 @@ def _alloc(*, positions: list[MT5Position] | None, open_n: int, direction: str =
 
 
 def _ready(**overrides: object) -> GoldExecutionFacts:
-    base = dict(
-        symbol="XAUUSD_I",
-        direction="SELL",
-        action="SELL",
-        market_open=True,
-        tradable=True,
-        candles_ok=True,
-        bid=Decimal("2400.10"),
-        ask=Decimal("2400.30"),
-        quote_age_seconds=1.0,
-        spread=Decimal("0.20"),
-        structure_score=70,
-        momentum_score=65,
-        quality=80,
-        confidence=75,
-        pa_confluence=55,
-        risk_reward=Decimal("1.20"),
-        market_regime="TREND",
-        volatility_ok=True,
-        session_quality_ok=True,
-        safety_allowed=True,
-        kill_switch=False,
-        execution_enabled=True,
-        auto_running=True,
-        account_leverage=Decimal("2000"),
-        risk_eligible=True,
-        approved_lots=Decimal("0.01"),
-        min_lot_infeasible=False,
-        portfolio_allow=True,
-        optimizer_state="EXECUTE_NOW",
-        oms_orders_allowed=True,
-        gateway_connected=True,
-        broker_connected=True,
-        force_shadow=False,
-        gold_only=True,
-        opportunity_score=80,
-        opportunity_threshold=70,
-    )
+    base = {
+        "symbol": "XAUUSD_I",
+        "direction": "SELL",
+        "action": "SELL",
+        "market_open": True,
+        "tradable": True,
+        "candles_ok": True,
+        "bid": Decimal("2400.10"),
+        "ask": Decimal("2400.30"),
+        "quote_age_seconds": 1.0,
+        "spread": Decimal("0.20"),
+        "structure_score": 70,
+        "momentum_score": 65,
+        "quality": 80,
+        "confidence": 75,
+        "pa_confluence": 55,
+        "risk_reward": Decimal("1.20"),
+        "market_regime": "TREND",
+        "volatility_ok": True,
+        "session_quality_ok": True,
+        "safety_allowed": True,
+        "kill_switch": False,
+        "execution_enabled": True,
+        "auto_running": True,
+        "account_leverage": Decimal("2000"),
+        "risk_eligible": True,
+        "approved_lots": Decimal("0.01"),
+        "min_lot_infeasible": False,
+        "portfolio_allow": True,
+        "optimizer_state": "EXECUTE_NOW",
+        "oms_orders_allowed": True,
+        "gateway_connected": True,
+        "broker_connected": True,
+        "force_shadow": False,
+        "gold_only": True,
+        "opportunity_score": 80,
+        "opportunity_threshold": 70,
+    }
     base.update(overrides)
     return GoldExecutionFacts(**base)  # type: ignore[arg-type]
 
@@ -439,9 +441,7 @@ def test_no_martingale_or_revenge_sizing() -> None:
 
 def test_bridge_abort_maps_max_positions_to_risk() -> None:
     assert bridge_abort_stage("MAX_POSITIONS_REACHED") == "RISK"
-    assert (
-        bridge_abort_stage("Max positions per symbol (2 >= 2) for XAUUSD") == "RISK"
-    )
+    assert bridge_abort_stage("Max positions per symbol (2 >= 2) for XAUUSD") == "RISK"
 
 
 def test_execution_blocked_event_identity_fields() -> None:
@@ -462,9 +462,7 @@ def test_execution_blocked_event_identity_fields() -> None:
 
 def test_cap_unchanged_at_two() -> None:
     assert AiScalpingConfig().max_positions_per_symbol == 2
-    tickets = live_capacity_tickets(
-        [_gold(1), _gold(2)], symbol="XAUUSD_i"
-    )
+    tickets = live_capacity_tickets([_gold(1), _gold(2)], symbol="XAUUSD_i")
     assert len(tickets) == 2
     assert DecisionState.WAITING.value
 

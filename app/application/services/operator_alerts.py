@@ -552,17 +552,19 @@ class OperatorWatch:
                 f"{_money(trade.equity)}), RR {rr}",
                 key=f"shadow-open:{trade.id}",
             )
-        trade = book.open_trade()
-        if trade is None:
+        open_trade = book.open_trade()
+        if open_trade is None:
             return
         try:
             from app.domain.market_data.timeframe import Timeframe
 
             rates = list(
-                self.adapter.copy_rates_from_pos(trade.symbol, Timeframe("M1"), 0, 15)
+                self.adapter.copy_rates_from_pos(
+                    open_trade.symbol, Timeframe("M1"), 0, 15
+                )
                 or []
             )
-            tick = self.adapter.latest_tick(trade.symbol)
+            tick = self.adapter.latest_tick(open_trade.symbol)
         except Exception as exc:
             logger.warning("shadow_update_failed", error=type(exc).__name__)
             return
@@ -673,6 +675,9 @@ class OperatorWatch:
             OWNER_MAX_LOT,
             max_planned_risk_usd,
         )
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_planned_risk_pct,
+        )
         from app.domain.trading.gold_only import is_gold_symbol
 
         problems: list[str] = []
@@ -688,7 +693,8 @@ class OperatorWatch:
             cap = max_planned_risk_usd(equity)
             if entry.planned_risk_usd > cap:
                 problems.append(
-                    f"planned risk ${entry.planned_risk_usd} > 9% cap ${cap}"
+                    f"planned risk ${entry.planned_risk_usd} > "
+                    f"{active_max_planned_risk_pct()}% cap ${cap}"
                 )
         for problem in problems:
             self.alerter.alert(
@@ -719,17 +725,22 @@ class OperatorWatch:
         ]
         if not outs:
             return  # broker history not visible yet; retry next tick
-        pnl = sum(
-            (_dec(d.profit) + _dec(d.commission) + _dec(d.swap) for d in outs),
-            Decimal("0"),
-        )
+        commission_known = all(getattr(d, "commission", None) is not None for d in outs)
+        pnl = Decimal("0")
+        for deal in outs:
+            pnl += _dec(deal.profit) + _dec(deal.swap)
+            if commission_known:
+                pnl += _dec(deal.commission)
         last = max(outs, key=lambda d: d.time)
         entry.status = "CLOSED"
         entry.closed_at = last.time
         entry.close_price = _dec(last.price)
         entry.pnl = pnl.quantize(_CENT)
-        if entry.planned_risk_usd and entry.planned_risk_usd > 0:
+        # A missing commission is not a zero tariff, so R is withheld.
+        if commission_known and entry.planned_risk_usd and entry.planned_risk_usd > 0:
             entry.r_multiple = (pnl / entry.planned_risk_usd).quantize(_CENT)
+        else:
+            entry.r_multiple = None
         self.journal.save(entry)
         r = f"{entry.r_multiple}R" if entry.r_multiple is not None else "n/a"
         self.alerter.alert(
@@ -737,7 +748,8 @@ class OperatorWatch:
             f"#{entry.ticket} {entry.side} {entry.volume} {entry.symbol}\n"
             f"Entry {entry.entry_price} -> exit {entry.close_price} | "
             f"SL {entry.stop_loss} | TP {entry.take_profit}\n"
-            f"P/L {_money(entry.pnl)} ({r})",
+            f"P/L {_money(entry.pnl)} ({r})"
+            + ("" if commission_known else "\ncommission unknown"),
             key=f"close:{entry.ticket}",
         )
 

@@ -39,12 +39,8 @@ async def build_customer_workspace(customer_id: str) -> dict[str, Any]:
     users = await read_users()
     user = next((u for u in users if str(u.get("id")) == str(customer_id)), None)
     cid = str(customer_id)
-    licenses = [
-        lic for lic in await read_licenses() if str(lic.get("user_id")) == cid
-    ]
-    mt5 = [
-        c for c in await read_mt5_connections() if str(c.get("user_id")) == cid
-    ]
+    licenses = [lic for lic in await read_licenses() if str(lic.get("user_id")) == cid]
+    mt5 = [c for c in await read_mt5_connections() if str(c.get("user_id")) == cid]
     logins = await read_audit_login_history(user_id=customer_id, limit=40)
     live = live_trading_health_snapshot()
     support = [
@@ -53,9 +49,7 @@ async def build_customer_workspace(customer_id: str) -> dict[str, Any]:
         if str(t.get("customer_id")) == str(customer_id)
     ]
     devices = [
-        d
-        for d in _devices().list(limit=200)
-        if str(d.get("customer_id")) == cid
+        d for d in _devices().list(limit=200) if str(d.get("customer_id")) == cid
     ]
     notifications = [
         n

@@ -12,6 +12,7 @@ Distinct from market_context ``LiquidityProfilePort`` (session regime).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 
 from app.domain.liquidity.models import LiquiditySnapshot
@@ -57,8 +58,12 @@ class SwingProviderPort(Protocol):
         left: int = 2,
         right: int = 2,
         limit: int = 500,
+        as_of: datetime | None = None,
     ) -> Sequence[SwingPoint]:
-        """Return swings oldest→newest for the series."""
+        """Return swings oldest→newest for the series.
+
+        ``as_of`` drops a bar that is still open so it cannot confirm a swing.
+        """
         ...
 
 

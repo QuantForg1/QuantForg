@@ -148,7 +148,7 @@ class DealDTO:
     volume: str
     price: str
     profit: str
-    commission: str
+    commission: str | None
     swap: str
     deal_type: str
     time: datetime
@@ -166,7 +166,7 @@ class DealDTO:
             volume=str(deal.volume),
             price=str(deal.price),
             profit=str(deal.profit),
-            commission=str(deal.commission),
+            commission=(None if deal.commission is None else str(deal.commission)),
             swap=str(deal.swap),
             deal_type=deal.deal_type,
             time=deal.time,

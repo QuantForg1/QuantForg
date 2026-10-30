@@ -235,14 +235,17 @@ class TestPrivateReasonsAndPublicFilter:
             market_context_diagnostics={"opportunity_score": 70},
         )
         assert row["private_no_fill_reason"] is None
-        assert public_channel_notices(
-            [
-                {
-                    "event": TRADE_OPENED,
-                    "fields": _public_fields(opportunity="70", ticket=881004),
-                }
-            ]
-        ) == []
+        assert (
+            public_channel_notices(
+                [
+                    {
+                        "event": TRADE_OPENED,
+                        "fields": _public_fields(opportunity="70", ticket=881004),
+                    }
+                ]
+            )
+            == []
+        )
 
     def test_private_reason_codes_cover_approved_set(self) -> None:
         assert (
@@ -250,9 +253,7 @@ class TestPrivateReasonsAndPublicFilter:
             == "MIN_LOT_EXCEEDS_RISK"
         )
         assert (
-            classify_private_no_fill_reason(
-                abort_reason="MIN_PLANNED_RISK_NOT_REACHED"
-            )
+            classify_private_no_fill_reason(abort_reason="MIN_PLANNED_RISK_NOT_REACHED")
             == "MIN_LOT_EXCEEDS_RISK"
         )
         assert (
@@ -393,7 +394,7 @@ class TestInitialRiskAndProtection:
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
             ),
-            account=_account(Decimal("50")),  # cap 9% of $50 = $4.50
+            account=_account(Decimal("50")),  # cap 14% of $50 = $7.00
             positions=legs,
         )
         assert result.decision is RiskDecision.REJECT
@@ -414,7 +415,7 @@ class TestInitialRiskAndProtection:
                 request_id="phase2-1-80",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("1.80"),
+                stop_loss_distance=Decimal("4.20"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -423,7 +424,7 @@ class TestInitialRiskAndProtection:
             positions=legs,
         )
         # Initial risk $3.00 still counts after SL moved to break-even:
-        # $3.00 + $1.80 > $4.50 (9% of $50, one position).
+        # $3.00 + $4.20 > $7.00 (14% of $50, one position).
         assert engine.aggregate_planned_sl_risk(legs) == Decimal("3.00")
         assert result.decision is RiskDecision.REJECT
 
@@ -465,9 +466,12 @@ class TestInitialRiskAndProtection:
 class TestNotificationFailOpen:
     def test_p_public_filter_unchanged_and_empty_is_safe(self) -> None:
         assert public_channel_notices([]) == []
-        assert public_channel_notices(
-            [
-                {"event": "RISK_BLOCKED", "opportunity": "91", "direction": "BUY"},
-                {"event": "OMS_REJECTED", "opportunity": "88"},
-            ]
-        ) == []
+        assert (
+            public_channel_notices(
+                [
+                    {"event": "RISK_BLOCKED", "opportunity": "91", "direction": "BUY"},
+                    {"event": "OMS_REJECTED", "opportunity": "88"},
+                ]
+            )
+            == []
+        )

@@ -17,7 +17,9 @@ def classify_position_protection(position: Mapping[str, Any] | Any) -> dict[str,
     """Read-only classification. Does not modify the position."""
     if not isinstance(position, Mapping):
         sl = _num(getattr(position, "sl", None) or getattr(position, "stop_loss", None))
-        tp = _num(getattr(position, "tp", None) or getattr(position, "take_profit", None))
+        tp = _num(
+            getattr(position, "tp", None) or getattr(position, "take_profit", None)
+        )
         ticket = getattr(position, "ticket", None)
         symbol = getattr(position, "symbol", None)
         magic = getattr(position, "magic", None)

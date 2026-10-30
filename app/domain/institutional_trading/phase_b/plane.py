@@ -13,7 +13,9 @@ from app.domain.institutional_trading.phase_b.config import (
 )
 from app.domain.institutional_trading.phase_b.execution_intel import ExecutionIntelStore
 from app.domain.institutional_trading.phase_b.explain_journal import ExplainJournal
-from app.domain.institutional_trading.phase_b.live_vs_research import LiveVsResearchStore
+from app.domain.institutional_trading.phase_b.live_vs_research import (
+    LiveVsResearchStore,
+)
 from app.domain.institutional_trading.phase_b.mae_mfe import LiveMaeMfeTracker
 from app.domain.institutional_trading.phase_b.model_monitor_prep import (
     ModelMonitorPrepStore,
@@ -81,19 +83,13 @@ class PhaseBControlPlane:
             ),
             "regime": self.last_regime,
             "strategies": (
-                self.matrix.snapshot()
-                if self.config.strategy_matrix_enabled
-                else None
+                self.matrix.snapshot() if self.config.strategy_matrix_enabled else None
             ),
             "live_vs_research": (
-                self.parity.snapshot()
-                if self.config.live_vs_research_enabled
-                else None
+                self.parity.snapshot() if self.config.live_vs_research_enabled else None
             ),
             "explain_journal": (
-                self.explain.recent(15)
-                if self.config.explain_journal_enabled
-                else None
+                self.explain.recent(15) if self.config.explain_journal_enabled else None
             ),
             "post_trade": (
                 self.post_trade.snapshot()

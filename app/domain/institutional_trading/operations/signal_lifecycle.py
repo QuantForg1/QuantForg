@@ -191,9 +191,7 @@ def build_signal_lifecycle_record(
         closed=closed,
         managed=managed,
     )
-    hq = is_high_quality_signal(
-        direction=d, quality=quality, confidence=confidence
-    )
+    hq = is_high_quality_signal(direction=d, quality=quality, confidence=confidence)
     submitted = bool(forwarded_to_oms)
     blocker = str(fault_code or blocking_stage or "").strip()
     bu = blocker.upper()

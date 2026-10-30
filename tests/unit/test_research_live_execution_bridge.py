@@ -563,9 +563,7 @@ def test_terminal_cards_excluded_from_active_query() -> None:
     assert is_active_signal_card({"card_status": "EXPIRED"}) is False
     assert is_active_signal_card({"card_status": "CANCELLED"}) is False
     assert (
-        is_active_signal_card(
-            {"signal_lifecycle": "EXPIRED", "card_status": "WAITING"}
-        )
+        is_active_signal_card({"signal_lifecycle": "EXPIRED", "card_status": "WAITING"})
         is False
     )
 

@@ -133,4 +133,3 @@ def test_dashboard_route_requires_bearer() -> None:
     assert response.status_code == 401
     body = response.json()
     assert body["error"]["code"] == "missing_token"
-

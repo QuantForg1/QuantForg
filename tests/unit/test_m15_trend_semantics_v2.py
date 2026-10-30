@@ -10,7 +10,6 @@ from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.m15_semantics_v2 import (
     M15SemanticLabel,
     classify_m15_semantics,
-    overlay_m15_semantics_on_structure,
 )
 from app.domain.institutional_trading.mtf_v2 import evaluate_mtf_v2
 from app.domain.institutional_trading.trend_engine import TrendEngine

@@ -1,6 +1,6 @@
 """Persistent SHADOW observation pipeline — research only.
 
-Records every live scan, evaluates A–X candidates independently, and
+Records every live scan, evaluates A-X candidates independently, and
 advances a virtual-trade lifecycle with prices available at each timestamp.
 
 This is not a trade. WOULD_SUBMIT_ORDER is always false. Virtual rows are
@@ -11,6 +11,7 @@ execution ledger. CORE and SHADOW_EXPANSION stay separate. Live Opportunity
 
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 from datetime import UTC, datetime
@@ -173,7 +174,7 @@ def _ensure_loaded() -> None:
 def _flush_locked() -> None:
     global _DIRTY
     root = _data_root()
-    try:
+    with contextlib.suppress(Exception):
         root.mkdir(parents=True, exist_ok=True)
         (root / "scans.json").write_text(
             json.dumps(_SCANS[-_MAX_SCANS:], separators=(",", ":")),
@@ -184,8 +185,6 @@ def _flush_locked() -> None:
             encoding="utf-8",
         )
         _DIRTY = 0
-    except Exception:
-        pass
 
 
 def _touch_locked() -> None:
@@ -218,7 +217,8 @@ def compact_shadow_scan(cycle: dict[str, Any] | None) -> dict[str, Any]:
         "advisory_only": True,
         "would_submit_order": False,
         "ALLOW_LIVE_PROMOTION": False,
-        "timestamp": _as_str(row.get("recorded_at") or row.get("scan_as_of")) or _now_iso(),
+        "timestamp": _as_str(row.get("recorded_at") or row.get("scan_as_of"))
+        or _now_iso(),
         "symbol": _as_str(row.get("symbol")) or "XAUUSD_i",
         "buy_score": _as_int(row.get("buy_score") or row.get("bullish_score")),
         "sell_score": _as_int(row.get("sell_score") or row.get("bearish_score")),
@@ -289,7 +289,9 @@ def _entry_price(scan: dict[str, Any], direction: str) -> float | None:
     return _as_float(scan.get("bid") or scan.get("mid") or scan.get("ask"))
 
 
-def _qualify(spec: dict[str, Any], scan: dict[str, Any], cycle: dict[str, Any]) -> dict[str, Any]:
+def _qualify(
+    spec: dict[str, Any], scan: dict[str, Any], cycle: dict[str, Any]
+) -> dict[str, Any]:
     present = candidate_present(spec, cycle)
     direction = _lean(scan)
     entry = _entry_price(scan, direction) if direction else None
@@ -332,7 +334,9 @@ def _new_virtual_trade(scan: dict[str, Any], qual: dict[str, Any]) -> dict[str, 
     sl = qual["virtual_sl"]
     tp = qual["virtual_tp"]
     direction = qual["direction"]
-    risk = abs(float(entry) - float(sl)) if entry is not None and sl is not None else None
+    risk = (
+        abs(float(entry) - float(sl)) if entry is not None and sl is not None else None
+    )
     return {
         "record_kind": SHADOW_VIRTUAL_TRADE,
         "dataset": SHADOW_VIRTUAL_TRADE,
@@ -426,11 +430,13 @@ def _exit_hit(
     return None
 
 
-def _close_virtual(trade: dict[str, Any], *, reason: str, bar_ts: str, price: float) -> None:
+def _close_virtual(
+    trade: dict[str, Any], *, reason: str, bar_ts: str, price: float
+) -> None:
     entry = float(trade["virtual_entry"])
     risk = float(trade["risk"] or 0.0) or None
     direction = str(trade.get("virtual_direction") or "").upper()
-    r_mult = UNKNOWN
+    r_mult: str | float = UNKNOWN
     if risk and risk > 0:
         if direction == "BUY":
             r_mult = round((price - entry) / risk, 6)
@@ -438,7 +444,7 @@ def _close_virtual(trade: dict[str, Any], *, reason: str, bar_ts: str, price: fl
             r_mult = round((entry - price) / risk, 6)
     entry_ts = _parse_ts(trade.get("entry_time"))
     exit_ts = _parse_ts(bar_ts)
-    hold = UNKNOWN
+    hold: str | float = UNKNOWN
     if entry_ts and exit_ts:
         hold = round((exit_ts - entry_ts).total_seconds(), 3)
     trade["lifecycle"] = "OUTCOME"
@@ -543,7 +549,9 @@ def chronological_replay(
     }
 
 
-def observe_live_scan(cycle: dict[str, Any] | None, *, advance_open: bool = True) -> dict[str, Any]:
+def observe_live_scan(
+    cycle: dict[str, Any] | None, *, advance_open: bool = True
+) -> dict[str, Any]:
     """Persist one live scan as SHADOW observations. Never a fill, never OMS/MT5."""
     raw = dict(cycle or {})
     scan = compact_shadow_scan(raw)
@@ -566,7 +574,10 @@ def observe_live_scan(cycle: dict[str, Any] | None, *, advance_open: bool = True
         for qual in qualifications:
             if qual["lifecycle"] != "VIRTUAL_ENTRY":
                 continue
-            event_id = f"sh:{qual['candidate_id']}:{scan.get('timestamp')}:{scan.get('symbol')}"
+            event_id = (
+                f"sh:{qual['candidate_id']}:"
+                f"{scan.get('timestamp')}:{scan.get('symbol')}"
+            )
             exists = any(v.get("shadow_event_id") == event_id for v in _VIRTUAL)
             if exists:
                 continue
@@ -628,7 +639,13 @@ def _candidate_performance(
         lifecycle = str(flags.get("lifecycle") or "")
         if present:
             eligible += 1
-        if lifecycle in {"TRIGGERED", "VIRTUAL_ENTRY", "VIRTUAL_MANAGEMENT", "VIRTUAL_EXIT", "OUTCOME"}:
+        if lifecycle in {
+            "TRIGGERED",
+            "VIRTUAL_ENTRY",
+            "VIRTUAL_MANAGEMENT",
+            "VIRTUAL_EXIT",
+            "OUTCOME",
+        }:
             triggered += 1
         if flags.get("below_core_threshold"):
             below += 1
@@ -639,7 +656,9 @@ def _candidate_performance(
         for t in virtual
         if t.get("candidate_id") == cid or t.get("candidate_name") == name
     ]
-    completed = [t for t in trades if not t.get("open") and t.get("lifecycle") == "OUTCOME"]
+    completed = [
+        t for t in trades if not t.get("open") and t.get("lifecycle") == "OUTCOME"
+    ]
     metrics = _metrics(
         [
             {
@@ -655,7 +674,11 @@ def _candidate_performance(
     )
     n = len(completed)
     status = sample_status(n)
-    wins = sum(1 for t in completed if _as_float(t.get("virtual_R")) is not None and float(t["virtual_R"]) > 0)
+    wins = sum(
+        1
+        for t in completed
+        if _as_float(t.get("virtual_R")) is not None and float(t["virtual_R"]) > 0
+    )
     return {
         "candidate_id": cid,
         "candidate_name": name,
@@ -700,16 +723,23 @@ def shadow_dataset_snapshot() -> dict[str, Any]:
         _ensure_loaded()
         scans = list(_SCANS)
         virtual = list(_VIRTUAL)
-    completed = [t for t in virtual if not t.get("open") and t.get("lifecycle") == "OUTCOME"]
+    completed = [
+        t for t in virtual if not t.get("open") and t.get("lifecycle") == "OUTCOME"
+    ]
     open_virtual = [t for t in virtual if t.get("open")]
-    candidates = [_candidate_performance(spec, scans, virtual) for spec in CANDIDATE_SPECS]
+    candidates = [
+        _candidate_performance(spec, scans, virtual) for spec in CANDIDATE_SPECS
+    ]
     core_n = sum(1 for s in scans if s.get("core_clears_thresholds"))
     expansion_n = 0
     overlap_n = 0
     for scan in scans:
-        flags = scan.get("qualifications") if isinstance(scan.get("qualifications"), dict) else {}
+        _flags_value = scan.get("qualifications")
+        flags = _flags_value if isinstance(_flags_value, dict) else {}
         any_shadow = any(
-            bool((row or {}).get("WOULD_QUALIFY_AS_SHADOW") or (row or {}).get("present"))
+            bool(
+                (row or {}).get("WOULD_QUALIFY_AS_SHADOW") or (row or {}).get("present")
+            )
             for row in flags.values()
         )
         if any_shadow:
@@ -733,7 +763,9 @@ def shadow_dataset_snapshot() -> dict[str, Any]:
     val_m = _metrics(split.get("validation") or [])
     oos_m = _metrics(split.get("out_of_sample") or [])
     sessions = {
-        name: _metrics([t for t in completed if str(t.get("session") or "").lower() == name])
+        name: _metrics(
+            [t for t in completed if str(t.get("session") or "").lower() == name]
+        )
         for name in CANONICAL_SESSIONS
     }
     regimes = {

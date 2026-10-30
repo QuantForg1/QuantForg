@@ -10,7 +10,6 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
-
 REQUIRED_FIELDS = (
     "strategy_id",
     "model_id",
@@ -135,9 +134,7 @@ class ProvenanceStore:
             ),
             verified=verified,
             status=(
-                "VERIFIED_RESEARCH_RESULT"
-                if verified
-                else "UNVERIFIED_RESEARCH_RESULT"
+                "VERIFIED_RESEARCH_RESULT" if verified else "UNVERIFIED_RESEARCH_RESULT"
             ),
         )
         if missing:

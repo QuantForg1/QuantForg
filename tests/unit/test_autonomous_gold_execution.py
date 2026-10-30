@@ -32,44 +32,44 @@ FLOORS = scalping_v1_floors()
 
 
 def _ready(**overrides: object) -> GoldExecutionFacts:
-    base = dict(
-        symbol="XAUUSD_I",
-        direction="BUY",
-        action="BUY",
-        market_open=True,
-        tradable=True,
-        candles_ok=True,
-        bid=Decimal("2400.10"),
-        ask=Decimal("2400.30"),
-        quote_age_seconds=1.0,
-        spread=Decimal("0.20"),
-        structure_score=70,
-        momentum_score=65,
-        quality=80,
-        confidence=75,
-        pa_confluence=55,
-        risk_reward=Decimal("1.20"),
-        market_regime="TREND",
-        volatility_ok=True,
-        session_quality_ok=True,
-        safety_allowed=True,
-        kill_switch=False,
-        execution_enabled=True,
-        auto_running=True,
-        account_leverage=Decimal("2000"),
-        risk_eligible=True,
-        approved_lots=Decimal("0.01"),
-        min_lot_infeasible=False,
-        portfolio_allow=True,
-        optimizer_state="EXECUTE_NOW",
-        oms_orders_allowed=True,
-        gateway_connected=True,
-        broker_connected=True,
-        force_shadow=False,
-        gold_only=True,
-        opportunity_score=80,
-        opportunity_threshold=70,
-    )
+    base = {
+        "symbol": "XAUUSD_I",
+        "direction": "BUY",
+        "action": "BUY",
+        "market_open": True,
+        "tradable": True,
+        "candles_ok": True,
+        "bid": Decimal("2400.10"),
+        "ask": Decimal("2400.30"),
+        "quote_age_seconds": 1.0,
+        "spread": Decimal("0.20"),
+        "structure_score": 70,
+        "momentum_score": 65,
+        "quality": 80,
+        "confidence": 75,
+        "pa_confluence": 55,
+        "risk_reward": Decimal("1.20"),
+        "market_regime": "TREND",
+        "volatility_ok": True,
+        "session_quality_ok": True,
+        "safety_allowed": True,
+        "kill_switch": False,
+        "execution_enabled": True,
+        "auto_running": True,
+        "account_leverage": Decimal("2000"),
+        "risk_eligible": True,
+        "approved_lots": Decimal("0.01"),
+        "min_lot_infeasible": False,
+        "portfolio_allow": True,
+        "optimizer_state": "EXECUTE_NOW",
+        "oms_orders_allowed": True,
+        "gateway_connected": True,
+        "broker_connected": True,
+        "force_shadow": False,
+        "gold_only": True,
+        "opportunity_score": 80,
+        "opportunity_threshold": 70,
+    }
     base.update(overrides)
     return GoldExecutionFacts(**base)  # type: ignore[arg-type]
 
@@ -276,16 +276,19 @@ def test_no_forced_trade_and_no_second_path() -> None:
     assert "self.gateway.submit" in engine_src
     tree = ast.parse(runtime_src)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr == "order_send":
-                pytest.fail("ITE must not call order_send directly")
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "order_send"
+        ):
+            pytest.fail("ITE must not call order_send directly")
 
 
 @pytest.mark.unit
 def test_order_check_and_single_order_send_remain_gateway() -> None:
-    client_src = (
-        ROOT / "app/infrastructure/brokers/mt5/gateway_client.py"
-    ).read_text(encoding="utf-8")
+    client_src = (ROOT / "app/infrastructure/brokers/mt5/gateway_client.py").read_text(
+        encoding="utf-8"
+    )
     assert "Never retry order_send" in client_src
     assert "order_check" in client_src
     unknown = classify_candidate_outcome(abort_reason="ORDER_UNKNOWN")

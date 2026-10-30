@@ -191,11 +191,7 @@ def live_execution_snapshot(*, mt5_adapter: Any | None = None) -> dict[str, Any]
         except Exception:
             resolved = ""
         gold = (CANONICAL_GOLD_BROKER_DISPLAY,)
-        if (
-            resolved
-            and is_gold_symbol(resolved)
-            and not is_bare_gold_symbol(resolved)
-        ):
+        if resolved and is_gold_symbol(resolved) and not is_bare_gold_symbol(resolved):
             gold = (resolved,)
         base["catalogue_source"] = "GOLD_ONLY"
         base["symbols"] = gold
@@ -427,6 +423,4 @@ def execution_symbol_allowed(
     desk = desk_code_for_execution(symbol_u)
     if desk and desk in allowed_set:
         return True
-    return bool(desk) and any(
-        desk_code_for_execution(a) == desk for a in allowed_set
-    )
+    return bool(desk) and any(desk_code_for_execution(a) == desk for a in allowed_set)

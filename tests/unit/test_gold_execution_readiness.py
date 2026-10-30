@@ -62,7 +62,8 @@ def test_gold_only_still_invokes_scanner_when_scan_flag_off(
         "resolve_scan_universe",
         lambda *_a, **_k: (_GOLD,),
     )
-    # Import the early-return branch via source contract: gold-only must force scan_enabled.
+    # Import the early-return branch via source contract: gold-only must force
+    # scan_enabled.
     src = Path(scanner.__file__).read_text(encoding="utf-8")
     assert "if gold_only_enabled():" in src
     assert "scan_enabled = True" in src
@@ -114,7 +115,9 @@ def test_missing_scan_is_market_context_not_ready(gold_only: None) -> None:
     snap = opportunity_window_snapshot()
     assert snap["tracker_state"] == TrackerState.MARKET_CONTEXT_NOT_READY.value
     assert snap["readiness_matrix"]["stages"]["MARKET"] == StageStatus.WAIT.value
-    assert snap["readiness_matrix"]["stages"]["STRATEGY"] == StageStatus.NOT_REACHED.value
+    assert (
+        snap["readiness_matrix"]["stages"]["STRATEGY"] == StageStatus.NOT_REACHED.value
+    )
 
 
 def test_eligible_gold_readiness_and_tracker(gold_only: None) -> None:
@@ -179,12 +182,13 @@ def test_hard_block_still_blocks() -> None:
 
 
 def test_leverage_policy_preserved() -> None:
-    from app.domain.trading.xauusd_specs import MAX_LEVERAGE
     from decimal import Decimal
+
+    from app.domain.trading.xauusd_specs import MAX_LEVERAGE
 
     src = (ROOT / "app/domain/trading/xauusd_specs.py").read_text(encoding="utf-8")
     assert 'MAX_LEVERAGE = Decimal("2000")' in src
-    assert MAX_LEVERAGE == Decimal("2000")
+    assert Decimal("2000") == MAX_LEVERAGE
     inventory = production_feature_inventory()
     lev = next(r for r in inventory if r["feature"].startswith("MAX_LEVERAGE"))
     assert lev["feature"] == "MAX_LEVERAGE=2000"
@@ -221,7 +225,11 @@ def test_stale_safety_is_not_current_when_scan_rejected(gold_only: None) -> None
             "eligible_symbols": [],
             "first_blocking_gate": _STRUCT,
             "opportunity_ranked": [
-                {"symbol": _GOLD, "opportunity_eligible": False, "reject_reason": _STRUCT}
+                {
+                    "symbol": _GOLD,
+                    "opportunity_eligible": False,
+                    "reject_reason": _STRUCT,
+                }
             ],
         }
     )
@@ -231,7 +239,9 @@ def test_stale_safety_is_not_current_when_scan_rejected(gold_only: None) -> None
     assert "kill switch" not in str(snap["first_blocking_gate"]).lower()
 
 
-def test_timeout_bottleneck_when_window_expires(gold_only: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_timeout_bottleneck_when_window_expires(
+    gold_only: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import app.domain.institutional_trading.operations.fast_decision_path as fdp
 
     publish_current_scan_decision(
@@ -248,7 +258,11 @@ def test_timeout_bottleneck_when_window_expires(gold_only: None, monkeypatch: py
             "eligible_symbols": [],
             "first_blocking_gate": _STRUCT,
             "opportunity_ranked": [
-                {"symbol": _GOLD, "opportunity_eligible": False, "reject_reason": _STRUCT}
+                {
+                    "symbol": _GOLD,
+                    "opportunity_eligible": False,
+                    "reject_reason": _STRUCT,
+                }
             ],
         }
     )

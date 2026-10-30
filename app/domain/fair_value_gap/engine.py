@@ -36,6 +36,7 @@ from app.domain.interfaces.fair_value_gap import (
     OrderBlockSnapshotPort,
     PriceHistoryPort,
 )
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.value_objects.identity import SymbolCode
 
@@ -88,7 +89,11 @@ class FairValueGapEngine:
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=UTC)
 
-        candles = await self.prices.get_candles(code, tf, limit=self.candle_limit)
+        candles = closed_analysis_bars(
+            await self.prices.get_candles(code, tf, limit=self.candle_limit),
+            as_of=moment,
+            timeframe=tf,
+        )
         structure = None
         if self.structure is not None:
             structure = await self.structure.get_latest_snapshot(code, tf)

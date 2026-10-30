@@ -283,7 +283,7 @@ def build_status_facts(
     cfg = settings or get_settings()
     t0 = time.perf_counter()
     collector = _probe_collector(cfg)
-    # Status GET must not wait on the Railway self-probe (often 3–5s).
+    # Status GET must not wait on the Railway self-probe (often 3-5s).
     # Reuse the same 3.5s Gateway /health cache as trading-components.
     probes = collector.collect(
         include_platform_probes=False,

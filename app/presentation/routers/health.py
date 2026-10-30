@@ -138,7 +138,6 @@ async def liveness() -> dict[str, str]:
     return {"status": "ok"}
 
 
-
 @router.get(
     "/health/openai",
     summary="OpenAI advisor provider status",
@@ -209,9 +208,7 @@ async def trading_components_health() -> dict[str, object]:
     )
 
     # Sync httpx probes must not block the async event loop / other requests.
-    payload = await run_in_threadpool(
-        collect_trading_component_health, get_settings()
-    )
+    payload = await run_in_threadpool(collect_trading_component_health, get_settings())
     payload["status"] = "ok"
     return payload
 

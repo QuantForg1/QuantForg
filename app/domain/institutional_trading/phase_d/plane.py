@@ -36,7 +36,9 @@ from app.domain.institutional_trading.phase_d.promotion_gates import (
 )
 from app.domain.institutional_trading.phase_d.rollback import evaluate_rollback_triggers
 from app.domain.institutional_trading.phase_d.sample_governance import classify_sample
-from app.domain.institutional_trading.phase_d.small_account import evaluate_small_account
+from app.domain.institutional_trading.phase_d.small_account import (
+    evaluate_small_account,
+)
 
 
 @dataclass
@@ -91,10 +93,12 @@ class PhaseDControlPlane:
         if not change["ok"] and cand.status == "PROMOTABLE":
             cand.status = "NOT_PROMOTABLE"
             cand.why_blocked = "change_isolation: " + str(change.get("why_blocked"))
-            cand.missing_fields = cand.missing_fields + ("change_isolation",)
+            cand.missing_fields = (*cand.missing_fields, "change_isolation")
         return cand.to_dict()
 
-    def evaluate_candidate(self, candidate_id: str, **sample_kwargs: Any) -> dict[str, Any]:
+    def evaluate_candidate(
+        self, candidate_id: str, **sample_kwargs: Any
+    ) -> dict[str, Any]:
         cand = self.candidates.get(candidate_id)
         if cand is None:
             return {"result": "PROMOTION_BLOCKED", "why_blocked": "unknown_candidate"}
@@ -153,7 +157,9 @@ class PhaseDControlPlane:
             sample_kwargs.setdefault("shadow_trades", n)
             sample_kwargs.setdefault("live_matched", n)
             sample_kwargs.setdefault("regime_coverage", 1 if n else 0)
-            sample_kwargs.setdefault("symbol_coverage", len(cand.symbols) or (1 if n else 0))
+            sample_kwargs.setdefault(
+                "symbol_coverage", len(cand.symbols) or (1 if n else 0)
+            )
             sample_kwargs.setdefault("session_coverage", 1 if n else 0)
         eval_result = self.evaluate_candidate(candidate_id, **sample_kwargs)
         if eval_result.get("result") != "GATES_PASSED":
@@ -181,14 +187,26 @@ class PhaseDControlPlane:
             # Must be in CANARY_REVIEW for LIVE_APPROVED
             rec = self.canary.records[cid]
             if rec.state is CanaryState.PROMOTION_REVIEW:
-                self.canary.transition(cid, CanaryState.CANARY_APPROVED, actor=approval.approval_actor)
-                self.canary.transition(cid, CanaryState.CANARY, actor=approval.approval_actor)
-                self.canary.transition(cid, CanaryState.CANARY_REVIEW, actor=approval.approval_actor)
+                self.canary.transition(
+                    cid, CanaryState.CANARY_APPROVED, actor=approval.approval_actor
+                )
+                self.canary.transition(
+                    cid, CanaryState.CANARY, actor=approval.approval_actor
+                )
+                self.canary.transition(
+                    cid, CanaryState.CANARY_REVIEW, actor=approval.approval_actor
+                )
             elif rec.state is CanaryState.CANARY_APPROVED:
-                self.canary.transition(cid, CanaryState.CANARY, actor=approval.approval_actor)
-                self.canary.transition(cid, CanaryState.CANARY_REVIEW, actor=approval.approval_actor)
+                self.canary.transition(
+                    cid, CanaryState.CANARY, actor=approval.approval_actor
+                )
+                self.canary.transition(
+                    cid, CanaryState.CANARY_REVIEW, actor=approval.approval_actor
+                )
             elif rec.state is CanaryState.CANARY:
-                self.canary.transition(cid, CanaryState.CANARY_REVIEW, actor=approval.approval_actor)
+                self.canary.transition(
+                    cid, CanaryState.CANARY_REVIEW, actor=approval.approval_actor
+                )
             if self.canary.records[cid].state is CanaryState.CANARY_REVIEW:
                 self.canary.transition(
                     cid,

@@ -84,7 +84,7 @@ _SESSION_WEIGHTS: dict[str, dict[str, int]] = {
 
 
 def session_priority_score(symbol: str, session: str | None) -> int:
-    """0–100 soft priority for scan ordering (does not change eligibility)."""
+    """0-100 soft priority for scan ordering (does not change eligibility)."""
     from app.domain.institutional_trading.ai_scalping.asset_class import (
         desk_symbol_code,
     )

@@ -76,7 +76,8 @@ def create_support_ticket(
         after={"id": saved["id"], "subject": saved["subject"]},
         ip=ip,
     )
-    return redact(saved)
+    redacted: dict[str, Any] = redact(saved)
+    return redacted
 
 
 def update_support_ticket(

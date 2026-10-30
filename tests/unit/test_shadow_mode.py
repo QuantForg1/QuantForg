@@ -86,18 +86,18 @@ def test_one_shadow_position_at_a_time() -> None:
     assert "SHADOW_POSITION_OPEN" in book.entry_block_reason(equity=D("32.88"), now=T0)
 
 
-def test_nine_percent_cap_uses_shadow_equity() -> None:
+def test_planned_risk_cap_uses_shadow_equity() -> None:
     book = sb.ShadowBook()
     t = _sell(book)
     book.update(bars=[_bar(1, "4002.5", "3999.0")])  # SL: -2.00
     assert t.outcome == "SL"
-    # Shadow equity 30.88 -> 9% = 2.77: a 2.80 planned risk is refused.
+    # Shadow equity 30.88 -> 14% = $4.32: $4.33 is refused, $4.32 is allowed.
     reason = book.entry_block_reason(
-        equity=D("32.88"), now=T0, planned_risk_usd=D("2.80")
+        equity=D("32.88"), now=T0, planned_risk_usd=D("4.33")
     )
     assert reason and reason.startswith("SHADOW_SL_RISK")
     assert (
-        book.entry_block_reason(equity=D("32.88"), now=T0, planned_risk_usd=D("2.70"))
+        book.entry_block_reason(equity=D("32.88"), now=T0, planned_risk_usd=D("4.32"))
         is None
     )
 
@@ -162,7 +162,7 @@ def _submit(monkeypatch: pytest.MonkeyPatch):
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2324.00",
+        take_profit="2324.30",
     )
     pipeline, _ = engine.run_submit(
         user_id=uuid4(),
@@ -183,7 +183,7 @@ def test_shadow_mode_records_and_never_sends(monkeypatch: pytest.MonkeyPatch) ->
     book = sb.get_shadow_book()
     t = book.open_trade()
     assert t is not None and t.side == "BUY" and t.entry == D("2320.80")
-    assert t.stop_loss == D("2319.00") and t.take_profit == D("2324.00")
+    assert t.stop_loss == D("2319.00") and t.take_profit == D("2324.30")
     # A second entry while the shadow position is open: refused, nothing sent.
     pipeline2, sent2, _ = _submit(monkeypatch)
     assert sent2 == [] and "SHADOW_POSITION_OPEN" in pipeline2.message

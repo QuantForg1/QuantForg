@@ -59,10 +59,7 @@ def _path() -> Path:
 
 
 def _rows_from_blob(raw: Any, *, max_hashes: int) -> list[str]:
-    if isinstance(raw, dict):
-        rows = raw.get("hashes", [])
-    else:
-        rows = raw
+    rows = raw.get("hashes", []) if isinstance(raw, dict) else raw
     if not isinstance(rows, list):
         return []
     return [str(h) for h in rows if h][-max_hashes:]
@@ -93,9 +90,7 @@ def _load_file_hashes(*, max_hashes: int) -> tuple[list[str], bool, str | None]:
         return [], False, type(exc).__name__
 
 
-def load_decision_hash_report(
-    *, max_hashes: int = _DEFAULT_MAX
-) -> DecisionHashLoad:
+def load_decision_hash_report(*, max_hashes: int = _DEFAULT_MAX) -> DecisionHashLoad:
     """Load hashes with an explicit verification flag."""
     file_order, file_ok, file_err = _load_file_hashes(max_hashes=max_hashes)
     configured = False

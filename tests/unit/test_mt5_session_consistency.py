@@ -135,7 +135,9 @@ class FakeGatewayClient:
         )
 
 
-def _gateway_adapter() -> tuple[MemoryMT5UnitOfWorkFactory, MT5Adapter, FakeGatewayClient]:
+def _gateway_adapter() -> (
+    tuple[MemoryMT5UnitOfWorkFactory, MT5Adapter, FakeGatewayClient]
+):
     factory = MemoryMT5UnitOfWorkFactory()
     client = FakeGatewayClient()
     adapter = MT5Adapter(client=client)

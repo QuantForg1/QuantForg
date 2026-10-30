@@ -7,7 +7,6 @@ from typing import Any
 
 from app.domain.institutional_trading.phase_a.control_vocab import FinalControlState
 
-
 USD_MAJOR_SYMBOLS = frozenset(
     {
         "EURUSD",
@@ -35,9 +34,8 @@ def currency_factors_for_symbol(symbol: str) -> tuple[str, ...]:
         factors: list[str] = []
         if cur:
             factors.append(str(cur).upper())
-        if canon in USD_MAJOR_SYMBOLS or "USD" in canon:
-            if "USD" not in factors:
-                factors.append("USD")
+        if (canon in USD_MAJOR_SYMBOLS or "USD" in canon) and "USD" not in factors:
+            factors.append("USD")
         return tuple(factors) or ("UNKNOWN",)
     except Exception:
         if "USD" in sym:
@@ -141,11 +139,14 @@ def evaluate_incremental_risk(
         detail = "existing risk path suggested reduce"
 
     # Same-symbol duplicate visibility
-    if symbol and any(str(s).upper() == symbol.upper() for s in existing_symbols):
-        if decision == FinalControlState.ALLOW.value:
-            decision = FinalControlState.REDUCE.value
-            gate = gate or "SAME_SYMBOL_EXPOSURE"
-            detail = "same-symbol exposure already open"
+    if (
+        symbol
+        and any(str(s).upper() == symbol.upper() for s in existing_symbols)
+        and decision == FinalControlState.ALLOW.value
+    ):
+        decision = FinalControlState.REDUCE.value
+        gate = gate or "SAME_SYMBOL_EXPOSURE"
+        detail = "same-symbol exposure already open"
 
     return IncrementalRiskView(
         current_open_risk=cur,

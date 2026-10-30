@@ -44,7 +44,7 @@ from tests.unit.test_institutional_trading_phase_c import (
     _ctx,
     _sell_decision,
 )
-from tests.unit.test_xauusd_sniper_v2_lifecycle import _dir, _sniper, _snap
+from tests.unit.test_xauusd_sniper_v2_lifecycle import _dir, _snap, _sniper
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
@@ -103,7 +103,11 @@ def test_genuine_kill_switch_is_safety_block() -> None:
                 "direction": "BUY",
                 "signal_action": "BUY",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "BUY", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {
@@ -155,7 +159,11 @@ def test_latency_failure_is_execution_health_not_generic_safety() -> None:
                 "direction": "BUY",
                 "signal_action": "BUY",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "BUY", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {
@@ -186,7 +194,11 @@ def test_reject_burst_is_not_infrastructure_health() -> None:
                 "direction": "SELL",
                 "signal_action": "SELL",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "SELL", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "SELL",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {
@@ -234,7 +246,7 @@ def test_recovered_gateway_allows_without_execute_now() -> None:
 
 
 def test_daily_loss_owner_stop_still_enforced() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
     assert bridge_abort_stage("DAILY_LOSS_BLOCK") == "RISK"
 
 
@@ -253,9 +265,7 @@ def test_take_without_oms_forward_is_not_executed() -> None:
 
 
 def test_oms_forward_without_ticket_is_not_executed() -> None:
-    handoff = build_execution_handoff(
-        take=True, forwarded_to_oms=True, mt5_ticket=None
-    )
+    handoff = build_execution_handoff(take=True, forwarded_to_oms=True, mt5_ticket=None)
     assert handoff["execution_confirmed"] is False
 
 

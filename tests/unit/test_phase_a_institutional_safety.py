@@ -293,9 +293,7 @@ def test_control_vocab_mapping() -> None:
         is FinalControlState.HALT
     )
     assert map_to_final_control_state(burst_latched=True)[0] is FinalControlState.HALT
-    assert (
-        map_to_final_control_state(recon_blocking=True)[0] is FinalControlState.BLOCK
-    )
+    assert map_to_final_control_state(recon_blocking=True)[0] is FinalControlState.BLOCK
     assert (
         map_to_final_control_state(market_data_allow=False)[0]
         is FinalControlState.BLOCK
@@ -331,9 +329,7 @@ def test_continuous_ops_phase_a_halt() -> None:
     )
     from app.domain.institutional_trading.phase_a import get_phase_a_plane
 
-    get_phase_a_plane().set_halt(
-        HaltMode.HALT_NEW_ENTRIES, actor="t", reason="pause"
-    )
+    get_phase_a_plane().set_halt(HaltMode.HALT_NEW_ENTRIES, actor="t", reason="pause")
     ctrl = ContinuousOperationController()
     d = ctrl.evaluate_new_entry_pause()
     assert d.pause_new_entries is True

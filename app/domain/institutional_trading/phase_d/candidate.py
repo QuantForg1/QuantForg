@@ -8,7 +8,6 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
-
 REQUIRED_IDENTITY = (
     "strategy_id",
     "model_id",
@@ -136,9 +135,9 @@ class AlphaCandidateStore:
             change_isolation=dict(kwargs.get("change_isolation") or {}),
             status=status,
             missing_fields=tuple(missing),
-            why_blocked=("missing material evidence: " + ",".join(missing))
-            if missing
-            else None,
+            why_blocked=(
+                ("missing material evidence: " + ",".join(missing)) if missing else None
+            ),
         )
         with self._lock:
             self.candidates[cand.candidate_id] = cand

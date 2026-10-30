@@ -54,7 +54,7 @@ def test_signals_desk_is_broker_independent_and_honest() -> None:
     ux = _TRADER_UX.read_text(encoding="utf-8")
     assert "signalCenterApi" in signals
     assert "marketUniverseApi" not in signals
-    assert "actionHref=\"/broker\"" not in signals
+    assert 'actionHref="/broker"' not in signals
     assert "Connect Broker" not in signals
     assert "CATALOGUE UNAVAILABLE" not in signals
     assert "NO ACTIVE SIGNALS" in ux or "NO_ACTIVE_SIGNALS" in ux

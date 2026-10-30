@@ -789,12 +789,16 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
             "status_snapshot": snap.facts.status_snapshot,
         },
         "orchestrator": orchestrator,
-        "fast_decision": (orchestrator or {}).get("fast_decision")
-        if isinstance(orchestrator, dict)
-        else None,
-        "system_coherence": (orchestrator or {}).get("system_coherence")
-        if isinstance(orchestrator, dict)
-        else None,
+        "fast_decision": (
+            (orchestrator or {}).get("fast_decision")
+            if isinstance(orchestrator, dict)
+            else None
+        ),
+        "system_coherence": (
+            (orchestrator or {}).get("system_coherence")
+            if isinstance(orchestrator, dict)
+            else None
+        ),
         "recent_execution_attempts": recent_attempts,
         "persistence": persistence,
         "force_first_trade": _force_first_trade_payload(snap, settings),
@@ -831,10 +835,9 @@ def _scan_rates_payload() -> dict[str, Any]:
         hourly = snap.get("hourly")
         if isinstance(hourly, dict) and hourly:
             return hourly
-        cycles = snap.get("cycles") if isinstance(snap.get("cycles"), list) else []
-        return hourly_scan_rates(
-            [c for c in cycles if isinstance(c, dict)]
-        )
+        _cycles_value = snap.get("cycles")
+        cycles = _cycles_value if isinstance(_cycles_value, list) else []
+        return hourly_scan_rates([c for c in cycles if isinstance(c, dict)])
     except Exception:
         return {"sample_limited": True, "scans_per_hour": None}
 
@@ -982,7 +985,8 @@ def _ai_scalping_payload() -> dict[str, Any]:
         )
 
         current = None
-        scan = snap.get("scan") if isinstance(snap.get("scan"), dict) else None
+        _scan_value = snap.get("scan")
+        scan = _scan_value if isinstance(_scan_value, dict) else None
         if isinstance(scan, dict) and isinstance(scan.get("current_scan"), dict):
             current = scan.get("current_scan")
         reached_optimizer = bool(

@@ -23,6 +23,7 @@ from app.domain.institutional_trading.operations.gold_execution_contract import 
     evaluate_gold_execution_contract,
 )
 from app.domain.institutional_trading.phase_a.burst_latch import BurstLatch
+from app.domain.institutional_trading.phase_a.config import PhaseAConfig
 from app.domain.institutional_trading.phase_a.control_vocab import (
     FinalControlState,
     map_to_final_control_state,
@@ -40,7 +41,6 @@ from app.domain.institutional_trading.phase_a.execution_reject import (
     first_blocking_gate_from_reasons,
 )
 from app.domain.institutional_trading.phase_a.plane import PhaseAControlPlane
-from app.domain.institutional_trading.phase_a.config import PhaseAConfig
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
@@ -91,12 +91,15 @@ def test_a_wait_does_not_increment_reject_burst() -> None:
         oms_result=None,
     )
     assert stage is None
-    assert apply_oms_outcome_to_burst(
-        latch,
-        abort_reason=BridgeAbortReason.IGNORED_ACTION,
-        status=ExecutionAttemptStatus.ABORTED,
-        oms_result=None,
-    ) is None
+    assert (
+        apply_oms_outcome_to_burst(
+            latch,
+            abort_reason=BridgeAbortReason.IGNORED_ACTION,
+            status=ExecutionAttemptStatus.ABORTED,
+            oms_result=None,
+        )
+        is None
+    )
     assert latch.snapshot()["rejected_entries_last_window"] == 0
     assert latch.is_latched(now=1.0) is False
 
@@ -129,12 +132,15 @@ def test_d_risk_block_before_oms_does_not_increment() -> None:
         abort_reason="RISK_REJECTED",
     )
     assert stage is None
-    assert apply_oms_outcome_to_burst(
-        latch,
-        abort_reason=BridgeAbortReason.ELIGIBILITY_FAILED,
-        status=ExecutionAttemptStatus.ABORTED,
-        oms_result=_pre_broker_oms_reject(),
-    ) is None
+    assert (
+        apply_oms_outcome_to_burst(
+            latch,
+            abort_reason=BridgeAbortReason.ELIGIBILITY_FAILED,
+            status=ExecutionAttemptStatus.ABORTED,
+            oms_result=_pre_broker_oms_reject(),
+        )
+        is None
+    )
     assert latch.snapshot()["rejected_entries_last_window"] == 0
 
 
@@ -146,12 +152,15 @@ def test_e_safety_block_before_oms_does_not_increment() -> None:
         abort_reason=SAFETY_BLOCKED,
     )
     assert stage is None
-    assert apply_oms_outcome_to_burst(
-        latch,
-        abort_reason=BridgeAbortReason.KILL_SWITCH,
-        status=ExecutionAttemptStatus.ABORTED,
-        oms_result=_pre_broker_oms_reject(),
-    ) is None
+    assert (
+        apply_oms_outcome_to_burst(
+            latch,
+            abort_reason=BridgeAbortReason.KILL_SWITCH,
+            status=ExecutionAttemptStatus.ABORTED,
+            oms_result=_pre_broker_oms_reject(),
+        )
+        is None
+    )
     assert latch.is_latched(now=1.0) is False
 
 
@@ -166,9 +175,12 @@ def test_oms_pipeline_reject_without_order_send_does_not_increment() -> None:
     assert result is None
     assert latch.snapshot()["rejected_entries_last_window"] == 0
     assert latch.snapshot()["execution_failures_last_window"] == 0
-    assert classify_downstream_execution_reject(
-        _pre_broker_oms_reject(), abort_reason="OMS_FAILURE"
-    ) is None
+    assert (
+        classify_downstream_execution_reject(
+            _pre_broker_oms_reject(), abort_reason="OMS_FAILURE"
+        )
+        is None
+    )
 
 
 def test_f_actual_mt5_execution_rejection_increments() -> None:
@@ -184,9 +196,12 @@ def test_f_actual_mt5_execution_rejection_increments() -> None:
     assert snap["rejected_entries_last_window"] == 1
     assert snap["execution_failures_last_window"] == 1
     assert snap["reject_burst"]["last_event_stage"] == MT5_REJECTED
-    assert classify_downstream_execution_reject(
-        _oms(retcode=10006), abort_reason="MT5_REJECTION"
-    ) == MT5_REJECTED
+    assert (
+        classify_downstream_execution_reject(
+            _oms(retcode=10006), abort_reason="MT5_REJECTION"
+        )
+        == MT5_REJECTED
+    )
 
 
 def test_g_repeated_genuine_failures_activate_reject_burst() -> None:
@@ -197,7 +212,7 @@ def test_g_repeated_genuine_failures_activate_reject_burst() -> None:
         reject_window_s=120.0,
     )
     armed = None
-    for i in range(5):
+    for _i in range(5):
         armed = apply_oms_outcome_to_burst(
             latch,
             abort_reason=BridgeAbortReason.MT5_REJECTION,
@@ -278,11 +293,14 @@ def test_i_valid_take_not_blocked_by_stale_scanner_eligibility() -> None:
     )
     assert trace.should_hand_off is True
     latch = BurstLatch(reject_threshold=5)
-    assert burst_record_stage_for_cycle(
-        decision_action="SELL",
-        oms_submit_called=False,
-        abort_reason=None,
-    ) is None
+    assert (
+        burst_record_stage_for_cycle(
+            decision_action="SELL",
+            oms_submit_called=False,
+            abort_reason=None,
+        )
+        is None
+    )
     assert latch.is_latched(now=1.0) is False
 
 
@@ -337,7 +355,9 @@ def test_overlay_reject_burst_is_not_oms_or_risk_engine() -> None:
             "detail": "continuous_ops_pause_new_entries; phase_a:REJECT_BURST",
             "execution_blocked": {
                 "reason_code": "EXECUTION_REJECT_BURST",
-                "human_reason": "continuous_ops_pause_new_entries; phase_a:REJECT_BURST",
+                "human_reason": (
+                    "continuous_ops_pause_new_entries; " "phase_a:REJECT_BURST"
+                ),
                 "stage": "EXECUTION_REJECT_BURST",
             },
             "mt5_ticket": None,

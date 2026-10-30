@@ -7,6 +7,7 @@ Pauses NEW entries only on capital/broker/gateway/market/portfolio blocks.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -181,7 +182,7 @@ class ContinuousOperationController:
                 )
                 reasons.append(f"phase_a:{gate_name}")
             # Phase B explain journal — observe only
-            try:
+            with contextlib.suppress(Exception):
                 from app.domain.institutional_trading.phase_b import get_phase_b_plane
 
                 pb = get_phase_b_plane()
@@ -209,8 +210,6 @@ class ContinuousOperationController:
                     ),
                     why_ranked="UNKNOWN_REASON",
                 )
-            except Exception:
-                pass
         except Exception:
             reasons.append("phase_a:gate_unavailable")
 
@@ -271,18 +270,18 @@ class ContinuousOperationController:
         """Arm an immediate opportunity rescan — never forces a trade."""
         with self._lock:
             self.pending_rescan = True
-        try:
-            from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
-                get_daily_opportunity_tracker,
+        with contextlib.suppress(Exception):
+            from app.domain.institutional_trading.ai_scalping import (
+                daily_opportunity_target as _q274,
             )
+
+            get_daily_opportunity_tracker = _q274.get_daily_opportunity_tracker
 
             get_daily_opportunity_tracker(
                 target_trades_per_day=int(
                     getattr(self.config, "target_trades_per_day", 3) or 3
                 )
             ).note_rescan(reason)
-        except Exception:
-            pass
 
     def consume_rescan(self) -> bool:
         with self._lock:

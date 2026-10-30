@@ -53,7 +53,9 @@ runtime = build_ite_runtime(
     settings=settings,
     mt5_adapter=adapter,
     execution_gateway=ExecutionGateway(adapter=adapter, order_validation=validation),
-    execution_safety=ExecutionSafetyService(adapter=adapter, order_validation=validation),
+    execution_safety=ExecutionSafetyService(
+        adapter=adapter, order_validation=validation
+    ),
     mt5_order_validation=validation,
     supabase=None,
 )
@@ -111,7 +113,7 @@ def test_production_shaped_boot_with_stale_ops_state(tmp_path: Path) -> None:
             "PYTHONPATH": str(_ROOT),
         }
     )
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603  # fixed local boot script, not untrusted input
         [sys.executable, "-c", _BOOT_SCRIPT],
         cwd=_ROOT,
         env=env,

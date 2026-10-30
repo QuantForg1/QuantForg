@@ -97,7 +97,10 @@ class TestMT5UseCases:
 
     @pytest.mark.asyncio
     async def test_status_heals_gateway_session_without_local_handle(self) -> None:
-        """Cold Railway worker: owned connection + live gateway remaps stale session_ref."""
+        (
+            """Cold Railway worker: owned connection + live gateway remaps stale """
+            """session_ref."""
+        )
         from tests.unit.test_weltrade_integration import _StubGateway
 
         client = _StubGateway()
@@ -148,7 +151,6 @@ class TestMT5UseCases:
             uow_factory=factory, adapter=adapter
         ).execute(user_id=uuid4())
         assert status.connected is False
-
 
     @pytest.mark.asyncio
     async def test_cross_tenant_terminal_isolation(self) -> None:

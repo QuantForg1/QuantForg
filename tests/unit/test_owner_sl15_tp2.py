@@ -1,8 +1,8 @@
-"""Owner decision 2026-10-23: 1.5 x ATR stop and second-level structure TP.
+"""Owner stop: 1.00 x ATR by default, second-level structure TP.
 
-Stop = max(1.5 x ATR, beyond nearest M1/M5 structure + spread), never shrunk.
-TP = the nearest real structure level with RR after spread >= 1.50, looking
-at most two levels out; neither clears -> no TP (no trade).
+Stop = max(1.00 x ATR, beyond nearest M1/M5 structure + spread), never shrunk.
+A saved 1.50 multiplier is still honoured. TP = the nearest real structure
+level with RR after spread >= 1.50, looking at most two levels out.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ from app.domain.institutional_trading.decision_models import TradeDirection
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 ENTRY = Decimal("4133.00")
-ATR = Decimal("2.00")  # 1.5 x ATR = 3.00
-SPREAD = Decimal("0.30")  # risk after spread = 3.00 + 0.30 = 3.30
+ATR = Decimal("2.00")  # 1.00 x ATR = 2.00
+SPREAD = Decimal("0.30")  # risk after spread = 2.00 + 0.30 = 2.30
 
 
 def _swing(price: str, kind: str) -> SimpleNamespace:
@@ -74,20 +74,36 @@ def _targets(snapshot: SimpleNamespace, direction: TradeDirection = TradeDirecti
     )
 
 
-# --- 1.5 x ATR stop -----------------------------------------------------------
+# --- 1.00 x ATR stop ----------------------------------------------------------
 
 
-def test_default_multiplier_is_1_5() -> None:
-    assert Decimal("1.5") == ol.OWNER_SL_ATR_MULTIPLIER
-    assert AiScalpingConfig().owner_stop_atr_mult == Decimal("1.5")
+def test_default_multiplier_is_1_00() -> None:
+    assert Decimal("1.00") == ol.OWNER_SL_ATR_MULTIPLIER
+    assert AiScalpingConfig().owner_stop_atr_mult == Decimal("1.00")
     assert ol.OWNER_SL_ATR_TIMEFRAME == "M1"
 
 
-def test_stop_is_1_5_atr_when_structure_is_closer() -> None:
-    # Swing low 1.50 below entry + 0.30 spread = 1.80 < 1.5 x 2.00 = 3.00.
+def test_stop_is_1_00_atr_when_structure_is_closer() -> None:
+    # Swing low 1.50 below entry + 0.30 spread = 1.80 < 1.00 x 2.00 = 2.00.
     t = _targets(_snapshot(highs=("4138.00",)))
+    assert t.stop_distance == Decimal("2.000")
+    assert t.stop_loss == ENTRY - Decimal("2.00")
+    assert t.stop_source == "owner_atr"
+
+
+def test_saved_1_50_multiplier_still_uses_the_wider_floor() -> None:
+    from app.domain.institutional_trading.runtime_policy import (
+        approved_baseline,
+        reset_runtime_policy,
+        use_runtime_policy,
+    )
+
+    token = use_runtime_policy({**approved_baseline(), "stop_atr_multiplier": "1.50"})
+    try:
+        t = _targets(_snapshot(highs=("4138.00",)))
+    finally:
+        reset_runtime_policy(token)
     assert t.stop_distance == Decimal("3.000")
-    assert t.stop_loss == ENTRY - Decimal("3.00")
     assert t.stop_source == "owner_atr"
 
 
@@ -102,8 +118,8 @@ def test_stop_beyond_structure_plus_spread_when_wider_never_shrunk() -> None:
 def test_sell_stop_mirrors_buy() -> None:
     snap = _snapshot(swing_low=None, swing_high="4134.00", lows=("4127.00",))
     t = _targets(snap, TradeDirection.SELL)
-    # Swing high 1.00 above + 0.30 = 1.30 < 3.00 -> 1.5 x ATR.
-    assert t.stop_loss == ENTRY + Decimal("3.00")
+    # Swing high 1.00 above + 0.30 = 1.30 < 2.00 -> 1.00 x ATR.
+    assert t.stop_loss == ENTRY + Decimal("2.00")
     assert t.take_profit == Decimal("4127.00")  # 6.00 / 3.30 = 1.82
 
 
@@ -111,7 +127,7 @@ def test_sell_stop_mirrors_buy() -> None:
 
 
 def test_first_level_used_when_it_clears_1_5() -> None:
-    # L1 4138.00: 5.00 / 3.30 = 1.52 -> L1 even though L2 is further.
+    # L1 4138.00: 5.00 / 2.30 = 2.17 -> L1 even though L2 is further.
     t = _targets(_snapshot(highs=("4138.00", "4142.00")))
     assert t.take_profit == Decimal("4138.00")
     assert t.tp_level == 1
@@ -119,7 +135,7 @@ def test_first_level_used_when_it_clears_1_5() -> None:
 
 
 def test_second_level_chosen_only_when_first_fails() -> None:
-    # L1 4136.00: 3.00 / 3.30 = 0.91 fails; L2 4138.50: 5.50 / 3.30 = 1.67.
+    # L1 4136.00: 3.00 / 2.30 = 1.30 fails; L2 4138.50: 5.50 / 2.30 = 2.39.
     t = _targets(_snapshot(highs=("4136.00", "4138.50")))
     assert t.take_profit == Decimal("4138.50")
     assert t.tp_level == 2
@@ -128,8 +144,8 @@ def test_second_level_chosen_only_when_first_fails() -> None:
 
 
 def test_no_tp_beyond_the_second_level() -> None:
-    # L1 0.91, L2 4137.00 = 4.00 / 3.30 = 1.21; L3 4140.00 (2.12) is never used.
-    t = _targets(_snapshot(highs=("4136.00", "4137.00", "4140.00")))
+    # L1 3.00/2.30 = 1.30, L2 3.40/2.30 = 1.48; L3 4140.00 is never used.
+    t = _targets(_snapshot(highs=("4136.00", "4136.40", "4140.00")))
     assert t.take_profit is None
     assert t.tp_level is None
     assert t.reason.startswith("OWNER_TP_NO_STRUCTURE_RR")
@@ -207,6 +223,7 @@ def test_final_owner_guard_uses_same_boundary(tp: str, ok: bool) -> None:
         spread=Decimal("0.30"),
         contract_size=Decimal("100"),
         equity=Decimal("50"),
+        commission=Decimal("0"),
     )
     assert (not any(r.startswith("OWNER_MIN_RR") for r in reasons)) is ok
 

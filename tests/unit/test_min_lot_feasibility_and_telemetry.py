@@ -64,9 +64,9 @@ def test_max_allowed_stop_formula_current_account() -> None:
         min_lot=_MIN_LOT,
         contract_size=_CS,
     )
-    # 201.77 * 0.09 / (0.01 * 100) = 18.1593 (micro 9% = owner 9% cap)
-    assert max_stop == Decimal("18.1593")
-    assert _HARD == Decimal("9.0")
+    # 201.77 * 0.14 / (0.01 * 100) = 28.2478 (micro percent = owner 14% cap)
+    assert max_stop == Decimal("28.2478")
+    assert Decimal("14.0") == _HARD
 
 
 def test_stop_above_threshold_is_min_lot_infeasible() -> None:
@@ -96,7 +96,7 @@ def test_stop_within_threshold_continues_to_risk() -> None:
     assert result.risk_engine_authoritative is True
     assert result.needed_pct is not None and result.needed_pct <= _HARD
     assert _feas(stop=Decimal("8.00")).classification == CLASS_FEASIBLE
-    assert _feas(stop=Decimal("18.20")).classification == CLASS_INFEASIBLE
+    assert _feas(stop=Decimal("28.30")).classification == CLASS_INFEASIBLE
 
 
 def test_boundary_needed_pct_equals_hard_max_is_not_false_reject() -> None:

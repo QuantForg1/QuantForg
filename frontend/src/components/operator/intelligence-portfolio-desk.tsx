@@ -51,14 +51,16 @@ export function IntelligencePortfolioDesk() {
   );
 
   const drawdownData = useMemo(() => {
+    const out: { label: string; value: number }[] = [];
     let peak = 0;
-    return analytics.equityCurve.map((p) => {
+    for (const p of analytics.equityCurve) {
       peak = Math.max(peak, p.equity);
-      return {
+      out.push({
         label: new Date(p.t).toISOString().slice(5, 10),
         value: Math.max(0, peak - p.equity),
-      };
-    });
+      });
+    }
+    return out;
   }, [analytics.equityCurve]);
 
   const allocation = useMemo(() => {

@@ -194,9 +194,7 @@ def test_call_mt5_bounded_holds_ops_lock_in_worker() -> None:
         held["inside"] = lock._is_owned()  # type: ignore[attr-defined]
         return "ok"
 
-    out = call_mt5_bounded(
-        _fn, timeout_seconds=2.0, label="test", ops_lock=lock
-    )
+    out = call_mt5_bounded(_fn, timeout_seconds=2.0, label="test", ops_lock=lock)
     assert out == "ok"
     assert held["inside"] is True
 

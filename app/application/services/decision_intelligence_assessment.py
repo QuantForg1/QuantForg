@@ -94,6 +94,8 @@ class GoldAssessmentFacts:
     kill_switch: bool | None = None
     market_open: bool | None = None
     as_of: datetime | None = None
+    # Known account-currency commission. None stays unknown and fails closed.
+    commission: Decimal | None = None
 
 
 def facts_from_payload(payload: dict[str, Any]) -> GoldAssessmentFacts:
@@ -131,6 +133,7 @@ def facts_from_payload(payload: dict[str, Any]) -> GoldAssessmentFacts:
             else None
         ),
         as_of=_utc_now(),
+        commission=_as_decimal(payload.get("commission")),
     )
 
 
@@ -213,9 +216,7 @@ def collect_live_gold_facts() -> GoldAssessmentFacts | None:
         entry_price=mid,
         stop_distance=None,
         atr=(
-            _as_decimal(getattr(account, "atr", None))
-            if account is not None
-            else None
+            _as_decimal(getattr(account, "atr", None)) if account is not None else None
         ),
         consecutive_losses=(
             int(getattr(account, "consecutive_losses", 0) or 0)
@@ -382,6 +383,7 @@ def assess_risk_engine(facts: GoldAssessmentFacts) -> EngineGate:
         atr=facts.atr,
         entry_price=entry,
         spread=facts.spread,
+        commission=facts.commission,
         consecutive_losses=facts.consecutive_losses,
         cooldown_active=streak_blocked,
         session_allowed=None,

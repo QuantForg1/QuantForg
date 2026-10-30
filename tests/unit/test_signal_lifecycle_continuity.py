@@ -94,10 +94,12 @@ def test_blocked_signal_does_not_halt_worker() -> None:
     )
     assert state == RUNNING
     assert state != HALTED_BY_RISK
+
     class _Cycle:
         abort_reason = "MIN_LOT_INFEASIBLE"
         cycle_outcome = "execution_contract"
         detail = "MIN_LOT_CONSTRAINT"
+
     blocker, stage = last_blocker_from_cycle(_Cycle())
     assert blocker == "MIN_LOT_INFEASIBLE"
     assert stage == "risk"

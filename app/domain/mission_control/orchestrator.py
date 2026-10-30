@@ -225,7 +225,8 @@ class MissionControlCenter:
 
     def _risk(self, feeds: MissionFeeds) -> PanelSnapshot:
         cc = feeds.control_center or {}
-        risk = cc.get("risk") if isinstance(cc.get("risk"), dict) else None
+        _risk_value = cc.get("risk")
+        risk = _risk_value if isinstance(_risk_value, dict) else None
         if risk is None and feeds.readiness is None:
             return panel(
                 "risk_radar",
@@ -363,7 +364,8 @@ class MissionControlCenter:
     def _system_health(self, feeds: MissionFeeds) -> PanelSnapshot:
         """Executive health posture — not Monitoring execution strip."""
         cc = feeds.control_center or {}
-        health = cc.get("health") if isinstance(cc.get("health"), dict) else None
+        _health_value = cc.get("health")
+        health = _health_value if isinstance(_health_value, dict) else None
         rd = feeds.readiness or {}
         if health is None and not rd and not cc:
             return panel(

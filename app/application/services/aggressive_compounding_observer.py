@@ -81,9 +81,8 @@ def observe_aggressive_compounding_shadow(
             configured_max_open=int(configured_max_open or 10),
             exposure_pct=_dec(exposure_pct),
             free_margin=_dec(free_margin),
-            risk_approved_volume=_dec(risk_approved_volume) or _dec(
-                sig.get("approved_lot")
-            ),
+            risk_approved_volume=_dec(risk_approved_volume)
+            or _dec(sig.get("approved_lot")),
             same_symbol_blocked=bool(same_symbol_blocked),
             candidate_allowed=bool(candidate_allowed),
             min_lot_classification=str(sig.get("min_lot_feasibility") or "") or None,

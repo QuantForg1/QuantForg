@@ -48,9 +48,9 @@ async def test_no_owned_account_does_not_select_another_account() -> None:
     adapter = MT5Adapter(client=FakeGatewayClient())
     other = uuid4()
     await seed_owned_mt5_connection(factory, other)
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=uuid4())
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=uuid4()
+    )
     assert snap["broker"] == "Disconnected"
     assert snap["account"] in {"", "—"}
     assert snap["execution_permitted"] is False
@@ -92,9 +92,7 @@ async def test_robot_start_blocked_without_connection() -> None:
     factory = MemoryMT5UnitOfWorkFactory()
     adapter = MT5Adapter(client=FakeGatewayClient())
     with pytest.raises(NotFoundError) as exc:
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=uuid4(),
             role="trader",
             display_name="Trader",
@@ -109,9 +107,7 @@ async def test_robot_pause_blocked_without_connection() -> None:
     factory = MemoryMT5UnitOfWorkFactory()
     adapter = MT5Adapter(client=FakeGatewayClient())
     with pytest.raises(NotFoundError):
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=uuid4(),
             role="trader",
             display_name="Trader",
@@ -126,9 +122,9 @@ async def test_connected_session_is_safe_and_has_last_verified() -> None:
     adapter = MT5Adapter(client=FakeGatewayClient())
     user_id = uuid4()
     await seed_owned_mt5_connection(factory, user_id)
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
     assert snap["broker"] == "Connected"
     assert snap["last_verified"]
     assert "password" not in snap

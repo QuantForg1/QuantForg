@@ -1,7 +1,8 @@
 """FT-3: Gateway order guard — owner limits enforced on the Windows host.
 
-New entries need Gold, SL > 0, TP > 0, volume <= 0.01 and a unique
-client_order_id. Closes are always allowed; SL/TP modifies may only tighten.
+New entries need Gold, SL > 0, TP > 0, volume <= 0.01, a known commission,
+and a unique client_order_id. Closes are always allowed; SL/TP modifies may
+only tighten. Inclusive planned risk cannot exceed 14% of equity.
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ def _entry(**overrides: Any) -> dict[str, Any]:
         "position": 0,
         "oms_kind": "",
         "client_order_id": "cid-1",
+        "commission": 0,
     }
     body.update(overrides)
     return body
@@ -153,19 +155,19 @@ class TestEntries:
             _guard(_entry(sl=4102.5))
         assert _code(exc) == "GUARD_SL_WRONG_SIDE"
 
-    def test_exact_nine_percent_is_allowed_and_above_is_rejected(self) -> None:
+    def test_exact_14_percent_is_allowed_and_above_is_rejected(self) -> None:
         # 0.01 lot, tick 0.01 / $1, and the quote spread of 0.20 counts.
-        # Distance 8.80 + spread 0.20 = $9.00, exactly 9% of $100.
-        # One further tick is $9.01 and is rejected.
-        allowed = _entry(sl=4093.40, tp=4120.0, client_order_id="exact-9")
+        # Distance 13.80 + spread 0.20 = $14.00, exactly 14% of $100.
+        # One further tick is $14.01 and is rejected.
+        allowed = _entry(sl=4088.40, tp=4120.0, client_order_id="exact-14")
         assert _guard(allowed, equity=Decimal("100")) == KIND_ENTRY
         with pytest.raises(OrderGuardRejected) as exc:
             _guard(
-                _entry(sl=4093.39, tp=4120.0, client_order_id="over-9"),
+                _entry(sl=4088.39, tp=4120.0, client_order_id="over-14"),
                 equity=Decimal("100"),
             )
         assert _code(exc) == "GUARD_MAX_RISK"
-        assert "9.01" in str(exc.value)
+        assert "14.01" in str(exc.value)
 
     def test_order_slippage_counts_toward_the_cap(self) -> None:
         quote = {
@@ -178,16 +180,33 @@ class TestEntries:
                 "point": "0.01",
             },
         }
-        # 8.70 + spread 0.20 + slippage 10 * 0.01 = 9.00.
-        allowed = _entry(sl=4093.50, tp=4120.0, client_order_id="slip-ok", slippage=10)
+        # 13.70 + spread 0.20 + slippage 10 * 0.01 = 14.00.
+        allowed = _entry(sl=4088.50, tp=4120.0, client_order_id="slip-ok", slippage=10)
         assert _guard(allowed, equity=Decimal("100"), quote=quote) == KIND_ENTRY
         with pytest.raises(OrderGuardRejected) as exc:
             _guard(
-                _entry(sl=4093.49, tp=4120.0, client_order_id="slip-over", slippage=10),
+                _entry(sl=4088.49, tp=4120.0, client_order_id="slip-over", slippage=10),
                 equity=Decimal("100"),
                 quote=quote,
             )
         assert _code(exc) == "GUARD_MAX_RISK"
+
+    def test_unknown_commission_rejects_without_a_zero_fee_pass(self) -> None:
+        body = _entry(client_order_id="no-fee")
+        body.pop("commission")
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(body, equity=Decimal("100"))
+        assert _code(exc) == "GUARD_COMMISSION_UNKNOWN"
+
+    def test_known_commission_can_push_a_ticket_over_14_percent(self) -> None:
+        # Distance 2.20 + spread 0.20 = $2.40. Commission $12.00 makes $14.40.
+        with pytest.raises(OrderGuardRejected) as exc:
+            _guard(
+                _entry(client_order_id="fee-over", commission=12),
+                equity=Decimal("100"),
+            )
+        assert _code(exc) == "GUARD_MAX_RISK"
+        assert "14.40" in str(exc.value)
 
     def test_reverse_without_position_is_an_entry(self) -> None:
         assert classify_order(_entry(oms_kind="reverse")) == KIND_ENTRY

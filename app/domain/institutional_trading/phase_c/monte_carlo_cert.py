@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 
 def run_monte_carlo_certification(
@@ -48,8 +49,10 @@ def run_monte_carlo_certification(
         for r in order:
             if rng.random() < miss_trade_prob:
                 continue
-            noise = 1.0 - abs(rng.gauss(0, slippage_noise)) - abs(
-                rng.gauss(0, spread_noise)
+            noise = (
+                1.0
+                - abs(rng.gauss(0, slippage_noise))
+                - abs(rng.gauss(0, spread_noise))
             )
             delay = 1.0 - abs(rng.gauss(0, delay_noise))
             adj = r * max(0.0, noise) * max(0.0, delay)
@@ -67,7 +70,7 @@ def run_monte_carlo_certification(
         s = sorted(xs)
         if not s:
             return 0.0
-        i = min(len(s) - 1, max(0, int(round((p / 100.0) * (len(s) - 1)))))
+        i = min(len(s) - 1, max(0, round((p / 100.0) * (len(s) - 1))))
         return s[i]
 
     wins = [x for x in base if x > 0]

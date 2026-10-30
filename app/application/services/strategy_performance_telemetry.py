@@ -198,15 +198,18 @@ class StrategyPerformanceTelemetry:
             "ticket": life["ticket"],
             "stale_ticket_reused": False,
             "signal": sig,
-            **{k: life[k] for k in (
-                "final_state",
-                "final_blocker",
-                "high_quality",
-                "direction",
-                "cycle_id",
-                "trace_id",
-                "freshness",
-            )},
+            **{
+                k: life[k]
+                for k in (
+                    "final_state",
+                    "final_blocker",
+                    "high_quality",
+                    "direction",
+                    "cycle_id",
+                    "trace_id",
+                    "freshness",
+                )
+            },
         }
         bucket = blocked_bucket(str(life["final_state"]))
         with self._lock:
@@ -341,13 +344,9 @@ class StrategyPerformanceTelemetry:
                 "closed_at": datetime.now(UTC).isoformat(),
                 "planned_risk_usd": _f(planned_risk_usd),
                 "planned_reward_usd": _f(planned_reward_usd),
-                "be_reached": (
-                    bool(be_reached) if be_reached is not None else None
-                ),
+                "be_reached": (bool(be_reached) if be_reached is not None else None),
                 "trailing_activated": (
-                    bool(trailing_activated)
-                    if trailing_activated is not None
-                    else None
+                    bool(trailing_activated) if trailing_activated is not None else None
                 ),
                 "intelligence_alignment": (
                     str(intelligence_alignment)
@@ -355,9 +354,7 @@ class StrategyPerformanceTelemetry:
                     else None
                 ),
                 "opportunity_score": (
-                    int(opportunity_score)
-                    if opportunity_score is not None
-                    else None
+                    int(opportunity_score) if opportunity_score is not None else None
                 ),
                 "setup_family": (
                     str(setup_family) if setup_family not in (None, "") else None
@@ -411,9 +408,7 @@ class StrategyPerformanceTelemetry:
                 if t.get("realized_r") is not None
             ]
             win_rs = [
-                float(t["realized_r"])
-                for t in wins
-                if t.get("realized_r") is not None
+                float(t["realized_r"]) for t in wins if t.get("realized_r") is not None
             ]
             loss_rs = [
                 abs(float(t["realized_r"]))
@@ -492,9 +487,7 @@ class StrategyPerformanceTelemetry:
                     else None
                 ),
                 "recent_lifecycle": list(reversed(list(self._lifecycle)[-50:])),
-                "high_quality_near_misses": list(
-                    reversed(list(self._near_miss)[-50:])
-                ),
+                "high_quality_near_misses": list(reversed(list(self._near_miss)[-50:])),
                 "cycle_efficiency": {
                     "scanner_cycles": self.scanner_cycles,
                     "scanner_cycles_then_infeasible": (

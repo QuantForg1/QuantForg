@@ -204,9 +204,7 @@ def test_four_manual_zero_quantforg_count() -> None:
 
 def test_manual_does_not_consume_quantforg_capacity() -> None:
     remaining = remaining_quantforg_capacity(
-        current_count=count_quantforg_positions(
-            [_mt5(1, magic=0)], symbol="XAUUSD_i"
-        ),
+        current_count=count_quantforg_positions([_mt5(1, magic=0)], symbol="XAUUSD_i"),
         configured_max=10,
         class_cap=10,
     )
@@ -495,9 +493,7 @@ async def test_scanner_manual_same_symbol_keeps_buy_eligible(
         "app.application.services.institutional_multi_asset_scanner.resolve_scan_universe",
         lambda *_a, **_k: ("XAUUSD",),
     )
-    engine = SimpleNamespace(
-        _positions={1: _managed(1, magic=0, symbol="XAUUSD")}
-    )
+    engine = SimpleNamespace(_positions={1: _managed(1, magic=0, symbol="XAUUSD")})
     cfg = replace(
         DEFAULT_AI_SCALPING_CONFIG,
         universe=("XAUUSD",),

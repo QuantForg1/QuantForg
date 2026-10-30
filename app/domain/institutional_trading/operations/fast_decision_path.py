@@ -9,6 +9,7 @@ Does not force trades. Does not retry order_send. Does not mutate SL/TP/volume.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 from collections import deque
@@ -178,13 +179,11 @@ def _is_valid_wait_focus(symbol: str | None) -> bool:
     focus = str(symbol or "").strip().upper() or None
     if not focus:
         return False
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
         if gold_only_enabled():
             return bool(is_gold_symbol(focus))
-    except Exception:
-        pass
     return True
 
 
@@ -359,7 +358,10 @@ def classify_candidate_outcome(
             "decision_state": DecisionState.HARD_BLOCK.value,
             "fault_class": FaultClass.HARD_BLOCK.value,
             "fault_code": abort.strip().upper() or "NO_MARKET_CONTEXT",
-            "fault_reason": abort or "; ".join(reasons) or outcome or "NO_MARKET_CONTEXT",
+            "fault_reason": abort
+            or "; ".join(reasons)
+            or outcome
+            or "NO_MARKET_CONTEXT",
             "retryable": False,
             "candidate_action": CandidateAction.FAIL_CLOSED.value,
             "next_action": CandidateAction.FAIL_CLOSED.value,
@@ -384,21 +386,11 @@ def classify_candidate_outcome(
         }
 
     system_wide = any(n in hay for n in _SYSTEM_NEEDLES)
-    if (
-        any(n in hay for n in _ROTATE_NEEDLES)
-        and not system_wide
-    ):
+    if any(n in hay for n in _ROTATE_NEEDLES) and not system_wide:
         code = "CANDIDATE_BLOCK"
-        if (
-            "min_lot_exceeds_risk_budget" in hay
-            or "min lot exceeds risk" in hay
-        ):
+        if "min_lot_exceeds_risk_budget" in hay or "min lot exceeds risk" in hay:
             code = "MIN_LOT_EXCEEDS_RISK_BUDGET"
-        elif (
-            "min_lot_constraint" in hay
-            or "min lot" in hay
-            or "minimum lot" in hay
-        ):
+        elif "min_lot_constraint" in hay or "min lot" in hay or "minimum lot" in hay:
             code = "MIN_LOT_CONSTRAINT"
         elif "tradable" in hay or "closeonly" in hay or "allowlist" in hay:
             code = "SYMBOL_NOT_TRADEABLE"
@@ -408,13 +400,11 @@ def classify_candidate_outcome(
             code = abort or (reasons[0] if reasons else "CANDIDATE_BLOCK")
         rotate = CandidateAction.ROTATE_FOCUS.value
         wait_same = CandidateAction.WAIT_SAME_FOCUS.value
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import gold_only_enabled
 
             if gold_only_enabled():
                 rotate = wait_same
-        except Exception:
-            pass
         return {
             "decision_state": DecisionState.CANDIDATE_BLOCK.value,
             "fault_class": FaultClass.CANDIDATE_BLOCK.value,
@@ -423,14 +413,16 @@ def classify_candidate_outcome(
             "retryable": False,
             "candidate_action": rotate,
             "next_action": rotate,
-            "blocking_stage": "RISK"
-            if (
-                "min_lot_exceeds_risk_budget" in hay
-                or "min_lot_constraint" in hay
-                or "min lot" in hay
-                or "minimum lot" in hay
-            )
-            else "ELIGIBILITY",
+            "blocking_stage": (
+                "RISK"
+                if (
+                    "min_lot_exceeds_risk_budget" in hay
+                    or "min_lot_constraint" in hay
+                    or "min lot" in hay
+                    or "minimum lot" in hay
+                )
+                else "ELIGIBILITY"
+            ),
             "skip_idle_sleep": True,
             "release_entry_budget": True,
         }
@@ -444,12 +436,16 @@ def classify_candidate_outcome(
         if "reconcil" in hay:
             stage = "RECONCILIATION"
         return {
-            "decision_state": DecisionState.SYSTEM_BLOCK.value
-            if any(n in hay for n in ("gateway", "mt5", "cycle exception"))
-            else DecisionState.HARD_BLOCK.value,
-            "fault_class": FaultClass.SYSTEM_BLOCK.value
-            if "gateway" in hay or "mt5 disconnected" in hay
-            else FaultClass.HARD_BLOCK.value,
+            "decision_state": (
+                DecisionState.SYSTEM_BLOCK.value
+                if any(n in hay for n in ("gateway", "mt5", "cycle exception"))
+                else DecisionState.HARD_BLOCK.value
+            ),
+            "fault_class": (
+                FaultClass.SYSTEM_BLOCK.value
+                if "gateway" in hay or "mt5 disconnected" in hay
+                else FaultClass.HARD_BLOCK.value
+            ),
             "fault_code": abort or (reasons[0] if reasons else "HARD_BLOCK"),
             "fault_reason": abort or "; ".join(reasons) or outcome,
             "retryable": False,
@@ -461,11 +457,16 @@ def classify_candidate_outcome(
         }
 
     if any(n in hay for n in _WAIT_NEEDLES) or action in {"NO_TRADE", "WATCH", ""}:
-        setup = "no eligible" in hay or "setup not ready" in hay or action in {
-            "NO_TRADE",
-            "WATCH",
-            "",
-        }
+        setup = (
+            "no eligible" in hay
+            or "setup not ready" in hay
+            or action
+            in {
+                "NO_TRADE",
+                "WATCH",
+                "",
+            }
+        )
         spread_wait = "spread" in hay
         next_action = (
             CandidateAction.WAIT_SAME_FOCUS.value
@@ -473,15 +474,21 @@ def classify_candidate_outcome(
             else CandidateAction.NO_EXECUTABLE_FOCUS.value
         )
         fault_code = abort or (reasons[0] if reasons else "")
-        if not fault_code or is_ignored_action_value(fault_code) or fault_code == "WAIT_SAME_FOCUS":
+        if (
+            not fault_code
+            or is_ignored_action_value(fault_code)
+            or fault_code == "WAIT_SAME_FOCUS"
+        ):
             fault_code = "NO_ELIGIBLE_SETUP" if setup else NO_CURRENT_BLOCK
         fault_reason = abort or "; ".join(reasons) or outcome or action or "NO_TRADE"
         if is_ignored_action_value(fault_reason):
             fault_reason = NO_CURRENT_BLOCKING_GATE
         return {
-            "decision_state": DecisionState.SETUP_NOT_READY.value
-            if setup and not spread_wait
-            else DecisionState.WAITING.value,
+            "decision_state": (
+                DecisionState.SETUP_NOT_READY.value
+                if setup and not spread_wait
+                else DecisionState.WAITING.value
+            ),
             "fault_class": FaultClass.WAIT.value,
             "fault_code": fault_code,
             "fault_reason": fault_reason,
@@ -528,7 +535,7 @@ def apply_focus_hysteresis(
     eligible = [str(s).strip().upper() for s in eligible_symbols if str(s).strip()]
     hold = str(current_focus or "").strip().upper() or None
     nxt = str(proposed or "").strip().upper() or None
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.trading.gold_only import (
             filter_autonomous_symbols,
             gold_only_enabled,
@@ -548,8 +555,6 @@ def apply_focus_hysteresis(
             if eligible:
                 return eligible[0], "FOCUS_SELECTED"
             return None, "NO_EXECUTABLE_FOCUS"
-    except Exception:
-        pass
     if hold and hold in eligible:
         hold_score = float(scores.get(hold) or 0.0)
         new_score = float(scores.get(nxt or "") or 0.0) if nxt else 0.0
@@ -582,7 +587,9 @@ class _WindowState:
     execution_ready: int = 0
     orders_submitted: int = 0
     unknown_orders: int = 0
-    cycle_ms: deque[float] = field(default_factory=lambda: deque(maxlen=_LATENCY_SAMPLES))
+    cycle_ms: deque[float] = field(
+        default_factory=lambda: deque(maxlen=_LATENCY_SAMPLES)
+    )
     blocker_counts: dict[str, int] = field(default_factory=dict)
     cycle_id: int = 0
     last_tracker_state: str | None = None
@@ -606,14 +613,12 @@ def reset_fast_decision_path() -> None:
     global _WINDOW
     with _LOCK:
         _WINDOW = _WindowState()
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.operations.system_coherence import (
             reset_system_coherence,
         )
 
         reset_system_coherence()
-    except Exception:
-        pass
 
 
 def ensure_opportunity_window(*, now_mono: float | None = None) -> None:
@@ -629,7 +634,7 @@ def set_focus(symbol: str | None, *, reason: str) -> None:
         prev = _WINDOW.focus_symbol
         nxt = str(symbol or "").strip().upper() or None
         why = str(reason or "")
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import (
                 gold_only_enabled,
                 is_gold_symbol,
@@ -638,8 +643,6 @@ def set_focus(symbol: str | None, *, reason: str) -> None:
             if gold_only_enabled() and nxt and not is_gold_symbol(nxt):
                 nxt = None
                 why = "NO_EXECUTABLE_FOCUS"
-        except Exception:
-            pass
         _WINDOW.focus_symbol = nxt
         _WINDOW.focus_reason = why
         if prev and nxt and prev != nxt:
@@ -662,7 +665,9 @@ def record_cycle_classification(
         _WINDOW.candidates_evaluated += 1
         code = str(classification.get("fault_code") or "NONE")
         if _should_count_as_blocker(code):
-            _WINDOW.blocker_counts[code] = int(_WINDOW.blocker_counts.get(code) or 0) + 1
+            _WINDOW.blocker_counts[code] = (
+                int(_WINDOW.blocker_counts.get(code) or 0) + 1
+            )
         fc = str(classification.get("fault_class") or "")
         if fc == FaultClass.HARD_BLOCK.value or fc == FaultClass.SYSTEM_BLOCK.value:
             _WINDOW.hard_blocks += 1
@@ -724,7 +729,7 @@ def _percentile(samples: list[float], p: float) -> float | None:
     ordered = sorted(samples)
     if len(ordered) == 1:
         return round(ordered[0], 1)
-    idx = min(len(ordered) - 1, max(0, int(round((p / 100.0) * (len(ordered) - 1)))))
+    idx = min(len(ordered) - 1, max(0, round((p / 100.0) * (len(ordered) - 1))))
     return round(ordered[idx], 1)
 
 
@@ -752,7 +757,10 @@ def _window_setup_state(
         FaultClass.SYSTEM_BLOCK.value,
     }:
         return DecisionState.HARD_BLOCK.value
-    if _is_valid_wait_focus(current_focus) and nxt == CandidateAction.WAIT_SAME_FOCUS.value:
+    if (
+        _is_valid_wait_focus(current_focus)
+        and nxt == CandidateAction.WAIT_SAME_FOCUS.value
+    ):
         return DecisionState.WAITING.value
     if int(eligible_count or 0) == 0 or not current_focus:
         return DecisionState.SETUP_NOT_READY.value
@@ -772,24 +780,34 @@ def _cohere_opportunity_fields(
     gate = sanitize_blocking_gate(blocking_gate or fault_reason)
     code = sanitize_fault_code(fault_code, blocking_gate=gate)
     reason = sanitize_blocking_gate(fault_reason, fallback=gate)
-    if is_ignored_action_value(code) or is_ignored_action_value(nxt) or is_ignored_action_value(gate):
+    if (
+        is_ignored_action_value(code)
+        or is_ignored_action_value(nxt)
+        or is_ignored_action_value(gate)
+    ):
         code = NO_CURRENT_BLOCK
         gate = NO_CURRENT_BLOCKING_GATE
         reason = NO_CURRENT_BLOCKING_GATE
-        if nxt == CandidateAction.WAIT_SAME_FOCUS.value and not _is_valid_wait_focus(focus):
+        if nxt == CandidateAction.WAIT_SAME_FOCUS.value and not _is_valid_wait_focus(
+            focus
+        ):
             nxt = CandidateAction.NO_EXECUTABLE_FOCUS.value
-    if gate == NO_CURRENT_BLOCKING_GATE and code == NO_CURRENT_BLOCK:
-        if nxt not in {
+    if (
+        gate == NO_CURRENT_BLOCKING_GATE
+        and code == NO_CURRENT_BLOCK
+        and nxt
+        not in {
             CandidateAction.FAIL_CLOSED.value,
             CandidateAction.RECONCILE.value,
             CandidateAction.WAIT_SAME_FOCUS.value,
             CandidateAction.HOLD_FOCUS.value,
             CandidateAction.MARKET_CONTEXT_NOT_READY.value,
-        }:
-            nxt = coherent_next_action(
-                current_focus=focus,
-                next_action=nxt or CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            )
+        }
+    ):
+        nxt = coherent_next_action(
+            current_focus=focus,
+            next_action=nxt or CandidateAction.NO_EXECUTABLE_FOCUS.value,
+        )
     return {
         "current_focus": focus,
         "next_action": nxt,
@@ -866,49 +884,56 @@ def opportunity_window_snapshot(
 
     current = (
         dict(current_scan)
-        if isinstance(current_scan, dict) and current_scan.get("label") == "CURRENT_SCAN"
+        if isinstance(current_scan, dict)
+        and current_scan.get("label") == "CURRENT_SCAN"
         else stored_scan
     )
     has_current_scan = bool(current)
     if has_current_scan:
-        symbol = str(current.get("symbol") or current.get("current_scan_symbol") or "").strip().upper() or None
-        try:
+        symbol = (
+            str(current.get("symbol") or current.get("current_scan_symbol") or "")
+            .strip()
+            .upper()
+            or None
+        )
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
             if gold_only_enabled() and symbol and not is_gold_symbol(symbol):
                 symbol = None
-        except Exception:
-            pass
         if "executable_focus" in current:
             focus = current.get("executable_focus")
         else:
             focus = focus_symbol
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
             if gold_only_enabled() and focus and not is_gold_symbol(str(focus)):
                 focus = None
-        except Exception:
-            pass
         eligible_count = int(current.get("eligible_count") or 0)
         best = current.get("best_candidate")
         if isinstance(best, dict):
             best_symbol = str(best.get("symbol") or "").strip().upper() or None
         else:
-            best_symbol = str(current.get("current_scan_symbol") or symbol or "").strip().upper() or None
-        try:
+            best_symbol = (
+                str(current.get("current_scan_symbol") or symbol or "").strip().upper()
+                or None
+            )
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
             if gold_only_enabled() and best_symbol and not is_gold_symbol(best_symbol):
                 best_symbol = None
-        except Exception:
-            pass
         coherent = _cohere_opportunity_fields(
             current_focus=str(focus or "").strip().upper() or None,
             next_action=str(current.get("next_action") or ""),
             fault_code=str(current.get("fault_code") or ""),
-            fault_reason=str(current.get("fault_reason") or current.get("first_blocking_gate") or ""),
-            blocking_gate=str(current.get("first_blocking_gate") or current.get("fault_reason") or ""),
+            fault_reason=str(
+                current.get("fault_reason") or current.get("first_blocking_gate") or ""
+            ),
+            blocking_gate=str(
+                current.get("first_blocking_gate") or current.get("fault_reason") or ""
+            ),
         )
         execution_ready = bool(current.get("execution_ready"))
         safety_state = str(current.get("safety_state") or SAFETY_NOT_REACHED)
@@ -977,21 +1002,28 @@ def opportunity_window_snapshot(
     scan_age = parse_as_of_age_seconds(as_of if has_current_scan else None)
     named_reject = None
     if has_current_scan:
-        named_reject = str(
-            current.get("fault_reason")
-            or current.get("first_blocking_gate")
-            or coherent["fault_reason"]
-            or ""
-        ).strip() or None
+        named_reject = (
+            str(
+                current.get("fault_reason")
+                or current.get("first_blocking_gate")
+                or coherent["fault_reason"]
+                or ""
+            ).strip()
+            or None
+        )
         if named_reject in {NO_CURRENT_BLOCKING_GATE, NO_CURRENT_BLOCK, "NONE"}:
             named_reject = None
     last_cls = {}
     with _LOCK:
-        last_cls = dict(_WINDOW.last_classification) if _WINDOW.last_classification else {}
+        last_cls = (
+            dict(_WINDOW.last_classification) if _WINDOW.last_classification else {}
+        )
         last_tracker = _WINDOW.last_tracker_state
         last_tracker_mono = _WINDOW.last_tracker_mono
     overlay_cls = last_cls if eligible_count > 0 else {}
-    forwarded = bool(overlay_cls.get("decision_state") == DecisionState.ORDER_SUBMITTED.value)
+    forwarded = bool(
+        overlay_cls.get("decision_state") == DecisionState.ORDER_SUBMITTED.value
+    )
     readiness = build_readiness_matrix(
         has_current_scan=has_current_scan,
         eligible_count=eligible_count,
@@ -1020,7 +1052,8 @@ def opportunity_window_snapshot(
         forwarded_to_oms=forwarded,
     )
     now_mono = ts
-    dwell = dict(window_meta.get("dwell_ms") or {})
+    dwell_raw = window_meta.get("dwell_ms")
+    dwell = dict(dwell_raw) if isinstance(dwell_raw, dict) else {}
     with _LOCK:
         if last_tracker_mono is not None:
             elapsed = max(0.0, (now_mono - float(last_tracker_mono)) * 1000.0)
@@ -1031,7 +1064,9 @@ def opportunity_window_snapshot(
         _WINDOW.last_tracker_mono = now_mono
     window_meta["dwell_ms"] = dwell
     bottleneck = None
-    if (not window_meta.get("active") and window_meta.get("started")) or tracker_state == "TIMEOUT_NO_TRADE":
+    if (
+        not window_meta.get("active") and window_meta.get("started")
+    ) or tracker_state == "TIMEOUT_NO_TRADE":
         bottleneck = bottleneck_report(
             tracker_state=tracker_state,
             readiness=readiness,
@@ -1122,9 +1157,12 @@ def scan_ineligible_abort_reason(scan: dict[str, Any] | None) -> str:
     """
     if not isinstance(scan, dict):
         return "NO_ELIGIBLE_SETUP"
-    trace = scan.get("eligibility_trace") if isinstance(scan.get("eligibility_trace"), dict) else None
+    _trace_value = scan.get("eligibility_trace")
+    trace = _trace_value if isinstance(_trace_value, dict) else None
     if trace:
-        code = str(trace.get("first_failed_code") or trace.get("eligibility_reason") or "")
+        code = str(
+            trace.get("first_failed_code") or trace.get("eligibility_reason") or ""
+        )
         if code and code not in {NO_CURRENT_BLOCK, "NONE", "SCALP_ELIGIBLE", "PASS"}:
             return str(code)
     current = scan.get("current_scan")
@@ -1290,7 +1328,10 @@ def _merge_scan_rows(*rows: Any) -> dict[str, Any]:
 def _find_gold_scan_row(
     scan: dict[str, Any], preferred: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    """Locate a scored Gold row even when catalogue spelling differs (XAUUSD vs XAUUSD_I)."""
+    (
+        """Locate a scored Gold row even when catalogue spelling differs (XAUUSD vs """
+        """XAUUSD_I)."""
+    )
     try:
         from app.domain.trading.gold_only import is_gold_symbol
     except Exception:
@@ -1346,20 +1387,34 @@ def _volatility_fields(
         row = {**row, "volatility_decision": hint.get("volatility_decision")}
     if row.get("atr_pct") is None and hint.get("atr_pct") is not None:
         row = {**row, "atr_pct": hint.get("atr_pct")}
-    vol = row.get("volatility_decision") if isinstance(row.get("volatility_decision"), dict) else {}
-    thresholds = row.get("thresholds") if isinstance(row.get("thresholds"), dict) else {}
-    atr_pct = vol.get("atr_pct") if vol.get("atr_pct") is not None else row.get("atr_pct")
+    _vol_value = row.get("volatility_decision")
+    vol = _vol_value if isinstance(_vol_value, dict) else {}
+    _thresholds_value = row.get("thresholds")
+    thresholds = _thresholds_value if isinstance(_thresholds_value, dict) else {}
+    atr_pct = (
+        vol.get("atr_pct") if vol.get("atr_pct") is not None else row.get("atr_pct")
+    )
     hard_min = vol.get("hard_min_pct")
     if hard_min is None:
         hard_min = thresholds.get("hard_min_pct")
     band = vol.get("band") or thresholds.get("band")
+    # A scan that names its entry-confirmation timeframe wins. Payloads that
+    # omit the field keep the historical swing label so older fixtures stay
+    # stable. The label never selects the ATR series.
+    source_tf = (
+        row.get("atr_source_timeframe")
+        or scan.get("atr_source_timeframe")
+        or SCAN_ATR_TIMEFRAME
+    )
     return {
         "atr_pct": str(atr_pct) if atr_pct is not None else None,
         "hard_min_pct": str(hard_min) if hard_min is not None else None,
         "band": str(band) if band else None,
-        "atr_source_timeframe": SCAN_ATR_TIMEFRAME,
+        "atr_source_timeframe": str(source_tf),
         "atr_source_period": SCAN_ATR_PERIOD,
-        "volatility_reason": vol.get("reason") or row.get("reject_reason") or row.get("blocking_gate"),
+        "volatility_reason": vol.get("reason")
+        or row.get("reject_reason")
+        or row.get("blocking_gate"),
     }
 
 
@@ -1371,7 +1426,7 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     """
     payload = dict(scan or {})
     eligible = _scan_eligible_symbols(payload)
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.trading.gold_only import (
             filter_autonomous_symbols,
             gold_only_enabled,
@@ -1380,13 +1435,11 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         if gold_only_enabled():
             eligible = list(filter_autonomous_symbols(eligible))
             payload["eligible_symbols"] = eligible
-    except Exception:
-        pass
     best_row = _best_candidate_row(payload)
     scan_symbol = _row_symbol(best_row)
     if scan_symbol:
         best_row = _merge_scan_rows(best_row, _row_for_symbol(payload, scan_symbol))
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
         if gold_only_enabled():
@@ -1397,8 +1450,6 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             elif scan_symbol and not is_gold_symbol(scan_symbol):
                 scan_symbol = None
                 best_row = {}
-    except Exception:
-        pass
     named = named_reject_reasons(
         best_row,
         payload.get("reject_reasons"),
@@ -1425,7 +1476,8 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     prior_focus = None
     try:
         prior_focus = (
-            str(opportunity_window_snapshot().get("current_focus") or "").upper() or None
+            str(opportunity_window_snapshot().get("current_focus") or "").upper()
+            or None
         )
     except Exception:
         prior_focus = None
@@ -1476,17 +1528,18 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
                 else CandidateAction.HOLD_FOCUS.value
             )
         )
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import gold_only_enabled
 
-            if gold_only_enabled() and next_action == CandidateAction.ROTATE_FOCUS.value:
+            if (
+                gold_only_enabled()
+                and next_action == CandidateAction.ROTATE_FOCUS.value
+            ):
                 next_action = (
                     CandidateAction.WAIT_SAME_FOCUS.value
                     if _is_valid_wait_focus(executable_focus)
                     else CandidateAction.NO_EXECUTABLE_FOCUS.value
                 )
-        except Exception:
-            pass
         next_action = coherent_next_action(
             current_focus=executable_focus,
             next_action=next_action,
@@ -1520,8 +1573,9 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             symbol_identity,
         )
     except Exception:
-        def symbol_identity(sym: str) -> tuple[str, str]:
-            u = str(sym or "").upper()
+
+        def symbol_identity(code: str | None) -> tuple[str, str]:
+            u = str(code or "").upper()
             return u, u
 
     if scan_symbol:
@@ -1529,14 +1583,10 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     else:
         logical, canonical = "", ""
     opp_score = best_row.get("opportunity_score") if best_row else None
-    opp_threshold = (
-        best_row.get("opportunity_threshold") if best_row else None
-    ) or 70
+    opp_threshold = (best_row.get("opportunity_threshold") if best_row else None) or 70
     score_band = best_row.get("score_band") if best_row else None
     score_breakdown = (
-        best_row.get("score_breakdown")
-        or best_row.get("opportunity_components")
-        or {}
+        best_row.get("score_breakdown") or best_row.get("opportunity_components") or {}
     )
     direction = (best_row.get("direction") if best_row else None) or None
     row_eligible = bool(
@@ -1581,7 +1631,7 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             decision_state = DecisionState.FOCUS_FORMING.value
     trade_class = "NO_TRADE"
     trade_class_reason = "No classified opportunity on this scan."
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.operations.trade_classifier import (
             classify_trade,
         )
@@ -1602,16 +1652,12 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             risk_reward=best_row.get("expected_rr") if best_row else None,
             regime=best_row.get("market_regime") if best_row else None,
             mtf_alignment=best_row.get("mtf") if best_row else None,
-            execution_quality=(
-                best_row.get("spread_score") if best_row else None
-            ),
+            execution_quality=(best_row.get("spread_score") if best_row else None),
             cycle_id=str(payload.get("cycle_id") or "") or None,
             snapshot_id=str(payload.get("snapshot_id") or "") or None,
         )
         trade_class = trade_classified.trade_class.value
         trade_class_reason = trade_classified.reason
-    except Exception:
-        pass
     return {
         "label": "CURRENT_SCAN",
         "state": state,
@@ -1628,31 +1674,37 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "opportunity_score": opp_i,
         "opportunity_threshold": int(opp_threshold),
         "score_band": score_band,
-        "score_breakdown": dict(score_breakdown) if isinstance(score_breakdown, dict) else {},
+        "score_breakdown": (
+            dict(score_breakdown) if isinstance(score_breakdown, dict) else {}
+        ),
         "eligible": bool(row_eligible and eligible),
-        "best_candidate": {
-            "symbol": scan_symbol,
-            "eligible": bool(row_eligible),
-            "blocking_gate": gate,
-            "reject_reasons": list(all_reasons),
-            "direction": direction,
-            "quality": (
-                (best_row.get("quality") or best_row.get("trade_quality"))
-                if best_row
-                else None
-            ),
-            "confidence": (
-                (best_row.get("confidence") or best_row.get("ai_confidence"))
-                if best_row
-                else None
-            ),
-            "opportunity_score": opp_i,
-            "opportunity_threshold": int(opp_threshold),
-            "score_band": score_band,
-            "score_breakdown": dict(score_breakdown) if isinstance(score_breakdown, dict) else {},
-        }
-        if scan_symbol
-        else None,
+        "best_candidate": (
+            {
+                "symbol": scan_symbol,
+                "eligible": bool(row_eligible),
+                "blocking_gate": gate,
+                "reject_reasons": list(all_reasons),
+                "direction": direction,
+                "quality": (
+                    (best_row.get("quality") or best_row.get("trade_quality"))
+                    if best_row
+                    else None
+                ),
+                "confidence": (
+                    (best_row.get("confidence") or best_row.get("ai_confidence"))
+                    if best_row
+                    else None
+                ),
+                "opportunity_score": opp_i,
+                "opportunity_threshold": int(opp_threshold),
+                "score_band": score_band,
+                "score_breakdown": (
+                    dict(score_breakdown) if isinstance(score_breakdown, dict) else {}
+                ),
+            }
+            if scan_symbol
+            else None
+        ),
         "best_eligible": best_eligible,
         "eligible_count": len(eligible),
         "eligible_symbols": list(eligible),
@@ -1660,7 +1712,9 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "focus_reason": focus_why,
         "first_blocking_gate": gate,
         "all_reject_reasons": list(all_reasons),
-        "blocking_stage": blocking_stage or classified.get("blocking_stage") or "SCANNER",
+        "blocking_stage": blocking_stage
+        or classified.get("blocking_stage")
+        or "SCANNER",
         "fault_class": fault_class,
         "fault_code": fault_code,
         "fault_reason": gate,
@@ -1679,12 +1733,10 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "execution_ready": bool(eligible) and bool(payload.get("best_symbol")),
         "eligibility_trace": dict(trace) if trace else payload.get("eligibility_trace"),
         "eligibility_status": (
-            (trace or {}).get("eligibility_status")
-            or payload.get("eligibility_status")
+            (trace or {}).get("eligibility_status") or payload.get("eligibility_status")
         ),
         "eligibility_reason": (
-            (trace or {}).get("eligibility_reason")
-            or payload.get("eligibility_reason")
+            (trace or {}).get("eligibility_reason") or payload.get("eligibility_reason")
         ),
         "failed_predicates": list(
             (trace or {}).get("failed_predicates")
@@ -1720,10 +1772,16 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> dict[str, Any]:
+def publish_current_scan_decision(
+    scan_or_decision: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Push CURRENT SCAN into the observability window. Never order_send."""
     blob = dict(scan_or_decision or {})
-    decision = blob if blob.get("label") == "CURRENT_SCAN" else build_current_scan_decision(blob)
+    decision = (
+        blob
+        if blob.get("label") == "CURRENT_SCAN"
+        else build_current_scan_decision(blob)
+    )
     classification = {
         "decision_state": decision.get("decision_state") or decision.get("state"),
         "fault_class": decision.get("fault_class"),
@@ -1738,14 +1796,16 @@ def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> di
         "skip_idle_sleep": False,
         "release_entry_budget": True,
     }
-    set_focus(decision.get("executable_focus"), reason=str(decision.get("focus_reason") or ""))
+    set_focus(
+        decision.get("executable_focus"), reason=str(decision.get("focus_reason") or "")
+    )
     with _LOCK:
         _WINDOW.snapshot_seq += 1
         _WINDOW.snapshot_id = f"current-scan-{_WINDOW.snapshot_seq}"
         _WINDOW.current_scan = dict(decision)
         _WINDOW.current_scan["snapshot_id"] = _WINDOW.snapshot_id
         _WINDOW.scan_published_mono = time.monotonic()
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.operations.system_coherence import (
             Plane,
             get_coherence_store,
@@ -1783,13 +1843,13 @@ def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> di
                         "next_action": decision["next_action"],
                     }
                 )
-    except Exception:
-        pass
     record_cycle_classification(classification)
     return decision
 
 
-def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str, Any] | None:
+def build_last_pipeline_snapshot(
+    last_cycle: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     """LAST COMPLETED ITE CYCLE — separate from CURRENT SCAN.
 
     Does not mutate Safety / Risk / OMS. Read-only projection.
@@ -1869,14 +1929,14 @@ def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str,
         "as_of": diag.get("as_of") or last_cycle.get("timestamp"),
         "detail": last_cycle.get("detail"),
     }
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.operations.system_coherence import (
             Plane,
             get_coherence_store,
             symbol_identity,
         )
 
-        logical, canonical = symbol_identity(snap.get("symbol"))
+        logical, canonical = symbol_identity(symbol if autonomous_valid else None)
         snap["logical_symbol"] = logical
         snap["canonical_symbol"] = canonical
         get_coherence_store().publish(
@@ -1885,6 +1945,4 @@ def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str,
             source="fast_decision_path.last_pipeline",
             event_type="LAST_COMPLETED_ITE_CYCLE",
         )
-    except Exception:
-        pass
     return snap

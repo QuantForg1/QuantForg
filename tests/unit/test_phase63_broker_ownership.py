@@ -53,6 +53,7 @@ class _FakeAdapter:
                 "adopt_existing_session": lambda self=None: self,  # placeholder
             },
         )()
+
         # Bind adopt to mutate client token like GatewayMT5Client.
         def _adopt() -> bool:
             self.client.session_token = "sess-live"  # type: ignore[attr-defined]

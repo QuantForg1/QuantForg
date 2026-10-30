@@ -960,9 +960,7 @@ class TestPublicTelegramChannel:
 
         disp = _dispatcher(sender)
         cycle, decision, bridge = _filled_cycle()
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
         await disp.flush()
         notify_pme(_pme_success(action=ManageActionKind.BREAK_EVEN))
         await disp.flush()
@@ -986,9 +984,7 @@ class TestPublicTelegramChannel:
 
         disp = _dispatcher(sender)
         cycle, decision, bridge = _filled_cycle()
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
         await disp.flush()
         root_id = 31
         notify_pme(
@@ -1051,12 +1047,8 @@ class TestPublicTelegramChannel:
 
         disp = _dispatcher(sender)
         cycle, decision, bridge = _filled_cycle()
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
         await disp.flush()
         opened = [row for row in captured if "TRADE ACTIVE" in row["text"]]
         assert len(opened) == 1
@@ -1071,16 +1063,12 @@ class TestPublicTelegramChannel:
 
         disp = _dispatcher(sender)
         cycle, decision, bridge = _filled_cycle()
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
         await disp.flush()
         first = len(captured)
         drop_telegram_threads_cache()
         disp2 = _dispatcher(sender)
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
         await disp2.flush()
         assert len(captured) == first
 
@@ -1094,9 +1082,7 @@ class TestPublicTelegramChannel:
 
         disp = _dispatcher(sender)
         cycle, decision, bridge = _filled_cycle()
-        notify_cycle(
-            cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline()
-        )
+        notify_cycle(cycle, decision=decision, bridge=bridge, pipeline=_exec_pipeline())
         notify_cycle(
             _Cycle(abort_reason="MAX_POSITIONS_REACHED", decision_action="BUY"),
             decision=_Decision(),
@@ -1120,9 +1106,7 @@ class TestPublicTelegramChannel:
                 cycle=cycle,
                 decision=decision,
                 bridge=_Bridge(
-                    journal_entry=_Journal(
-                        mt5_ticket=100 + len(symbol), retcode=10009
-                    )
+                    journal_entry=_Journal(mt5_ticket=100 + len(symbol), retcode=10009)
                 ),
                 pipeline=_exec_pipeline(symbol=symbol),
             )

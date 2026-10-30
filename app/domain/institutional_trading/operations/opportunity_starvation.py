@@ -96,11 +96,7 @@ def opportunity_starvation_snapshot(
     above = [s for s in rows if (s.get("opportunity_score") or 0) >= threshold]
     candidates = [s for s in rows if s.get("eligible")]
     hard = [s for s in rows if s.get("hard_block")]
-    soft = [
-        s
-        for s in rows
-        if not s.get("hard_block") and not s.get("eligible")
-    ]
+    soft = [s for s in rows if not s.get("hard_block") and not s.get("eligible")]
     ready = [s for s in rows if s.get("execution_ready")]
     first_hard = None
     for sample in rows:
@@ -111,9 +107,7 @@ def opportunity_starvation_snapshot(
         "window_seconds": window_seconds,
         "sample_count": len(rows),
         "best_score": max(scores) if scores else None,
-        "average_score": (
-            round(sum(scores) / len(scores), 2) if scores else None
-        ),
+        "average_score": (round(sum(scores) / len(scores), 2) if scores else None),
         "max_score": max(scores) if scores else None,
         "time_above_70": len(above),
         "candidate_count": len(candidates),

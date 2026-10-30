@@ -177,9 +177,7 @@ class TestAutoTradeSafetyGate:
             ),
         )
         assert result.allowed is False
-        assert any(
-            "Maximum daily loss exceeded" in r for r in result.failed_reasons
-        )
+        assert any("Maximum daily loss exceeded" in r for r in result.failed_reasons)
 
     def test_allowlist_xauusd_recognizes_broker_xauusd_i(self) -> None:
         """Desk-aware: configured XAUUSD authorizes catalogue XAUUSD_I."""
@@ -405,7 +403,7 @@ class TestAutoTradeOpsControls:
             )
         with pytest.raises(ValueError, match="risk_per_trade_pct"):
             plane.update_auto_trade_controls(
-                op, risk_per_trade_pct=Decimal("9.5"), reason="above owner ceiling"
+                op, risk_per_trade_pct=Decimal("14.5"), reason="above owner ceiling"
             )
         policy = plane.update_auto_trade_controls(
             op,

@@ -153,6 +153,34 @@ def test_open_and_close_are_journaled_with_pnl_and_r(setup: Any) -> None:
     assert "P/L +$5.93 (1.80R)" in closed[0]
 
 
+def test_unknown_commission_does_not_publish_an_r_multiple(setup: Any) -> None:
+    watch, adapter, clock = setup
+    adapter.positions = [_pos()]
+    watch.tick()
+    adapter.positions = []
+    adapter.deals = [
+        SimpleNamespace(
+            position_id=101,
+            deal_type="entry_out",
+            profit=D("6.00"),
+            commission=None,
+            swap=D("0"),
+            price=D("1"),
+            time=T0 + timedelta(minutes=20),
+        )
+    ]
+    clock.t += 30
+    watch.tick()
+    entry = watch.journal.entries[101]
+    assert entry.status == "CLOSED"
+    assert entry.r_multiple is None
+    assert entry.pnl == D("6.00")
+    closed = [m for k, m in watch.alerter.history if k == "ORDER CLOSED"]
+    assert len(closed) == 1
+    assert "commission unknown" in closed[0]
+    assert "1.80R" not in closed[0]
+
+
 def test_close_waits_until_broker_history_shows_the_exit(setup: Any) -> None:
     watch, adapter, _clock = setup
     adapter.positions = [_pos()]
@@ -170,7 +198,7 @@ def test_close_waits_until_broker_history_shows_the_exit(setup: Any) -> None:
         ({"volume": D("0.02")}, "volume 0.02"),
         ({"stop_loss": D("0")}, "missing stop loss"),
         ({"take_profit": D("0")}, "missing take profit"),
-        ({"stop_loss": D("4105.00")}, "9% cap"),  # (5.00 + 0.30) = $5.30 > $4.50
+        ({"stop_loss": D("4107.00")}, "14.0% cap"),  # (7.00 + 0.30) = $7.30 > $7.00
     ],
 )
 def test_rule_violations_alert_with_pause_instruction(

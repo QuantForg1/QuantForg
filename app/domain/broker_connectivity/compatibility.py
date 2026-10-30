@@ -62,7 +62,8 @@ def run_compatibility_suite(
     health = invoke("mt5", "health")
     connected = _status_from_result(health) == "compatible"
     server = ""
-    health_data = health.get("data") if isinstance(health.get("data"), dict) else {}
+    _health_data_value = health.get("data")
+    health_data = _health_data_value if isinstance(_health_data_value, dict) else {}
     if isinstance(health_data, dict):
         server = str(health_data.get("server") or "")
 
@@ -241,7 +242,8 @@ def _build_checks(
     # Matched live session — probe real MT5 results only.
     balances = live_probe_cache.get("balances", {})
     bal_status = _status_from_result(balances)
-    bal_data = balances.get("data") if isinstance(balances.get("data"), dict) else {}
+    _bal_data_value = balances.get("data")
+    bal_data = _bal_data_value if isinstance(_bal_data_value, dict) else {}
 
     checks = [
         _check_row(

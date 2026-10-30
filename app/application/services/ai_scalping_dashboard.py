@@ -47,9 +47,11 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
     except Exception:  # noqa: S110
         pass
     try:
-        from app.domain.institutional_trading.production_hardening.backtest_live import (  # noqa: E501
-            get_backtest_live_store,
+        from app.domain.institutional_trading.production_hardening import (
+            backtest_live as _qf_backtest_live,
         )
+
+        get_backtest_live_store = _qf_backtest_live.get_backtest_live_store
 
         bt = get_backtest_live_store().snapshot()
         if isinstance(bt, dict):

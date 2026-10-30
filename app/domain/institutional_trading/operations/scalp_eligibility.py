@@ -24,7 +24,7 @@ SCALPING_PROFILE = "SCALPING_V1"
 SWING_PROFILE = "SWING_ITE"
 CONFIG_NOT_APPLICABLE = "N/A"
 
-ELIGIBILITY_PASS = "PASS"
+ELIGIBILITY_PASS = "PASS"  # noqa: S105  # eligibility status, not a credential
 ELIGIBILITY_FAIL = "FAIL"
 OPTIMIZER_NOT_REACHED = "NOT_REACHED"
 OPTIMIZER_SKIPPED = "SKIPPED"
@@ -205,9 +205,10 @@ def explain_scalp_handoff(
     symbol = _text(score.get("symbol") or port.get("symbol")).upper() or None
     direction = _direction(score)
     opp = _i(score.get("opportunity_score"), 0) or 0
-    threshold = _i(
-        score.get("opportunity_threshold"), opportunity_threshold
-    ) or opportunity_threshold
+    threshold = (
+        _i(score.get("opportunity_threshold"), opportunity_threshold)
+        or opportunity_threshold
+    )
     score_reject = bool(score.get("reject"))
     port_reject = bool(port.get("reject")) if port else False
     extra_reason = ""
@@ -220,7 +221,7 @@ def explain_scalp_handoff(
             extra_reason = port_reasons
     take = sniper_is_take(score)
     opp_pass = opp >= int(threshold)
-    gold_ok = bool(symbol) and is_gold_symbol(symbol)
+    gold_ok = symbol is not None and is_gold_symbol(symbol)
     gold_only = False
     try:
         from app.domain.trading.gold_only import gold_only_enabled
@@ -296,7 +297,9 @@ def explain_scalp_handoff(
             actual=(
                 "TAKE"
                 if take
-                else _text(sniper.get("setup_state") or sniper.get("primary_reason") or "WAIT")
+                else _text(
+                    sniper.get("setup_state") or sniper.get("primary_reason") or "WAIT"
+                )
             ),
             required="TAKE",
             source="sniper_entry.evaluate_sniper_entry",
@@ -335,7 +338,8 @@ def explain_scalp_handoff(
             name="no_swing_quality_80",
             passed=not swing_quality_applied,
             actual=quality,
-            required=f"scalp quality floor {int(SCALPING_V1.normal_vol.quality)} — not swing {QUALITY_80_SWING}",
+            required=f"scalp quality floor {int(SCALPING_V1.normal_vol.quality)} — not "
+            f"swing {QUALITY_80_SWING}",
             source="ITEConfig.is_scalping / PositionEligibilityEngine",
             timeframe=None,
             hard=True,
@@ -347,7 +351,10 @@ def explain_scalp_handoff(
             name="no_swing_confluence_80",
             passed=not swing_confluence_applied,
             actual=confluence,
-            required=f"scalp confidence floor {int(SCALPING_V1.normal_vol.confidence)} — not swing {CONFLUENCE_80_SWING}",
+            required=(
+                f"scalp confidence floor {int(SCALPING_V1.normal_vol.confidence)} — "
+                f"not swing {CONFLUENCE_80_SWING}"
+            ),
             source="ITEConfig.is_scalping / PositionEligibilityEngine",
             timeframe=None,
             hard=True,
@@ -381,7 +388,8 @@ def explain_scalp_handoff(
         ),
         _predicate(
             name="portfolio_eligible_membership",
-            passed=in_portfolio_eligible or (
+            passed=in_portfolio_eligible
+            or (
                 opp_pass
                 and take
                 and not score_reject
@@ -408,9 +416,8 @@ def explain_scalp_handoff(
     if extra_reason:
         first_code = _reject_code(extra_reason) or "PORTFOLIO_EXTRA_REJECT"
     elif score_reject:
-        first_code = (
-            _reject_code(str(score.get("reject_reason") or ""))
-            or str(score.get("reject_reason") or "SCORE_REJECTED")
+        first_code = _reject_code(str(score.get("reject_reason") or "")) or str(
+            score.get("reject_reason") or "SCORE_REJECTED"
         )
     elif blocked_by_portfolio:
         first_code = "CAPACITY_REJECTED"
@@ -434,26 +441,29 @@ def explain_scalp_handoff(
         reason = first_code or "NO_ELIGIBLE_SETUP"
 
     signal_id = _text(score.get("signal_id") or sniper.get("signal_id")) or None
-    setup_id = _text(
-        score.get("setup_id")
-        or sniper.get("setup_id")
-        or score.get("setup_family")
-        or sniper.get("setup_family")
-    ) or None
-    audit = (
-        score.get("opportunity_audit")
-        if isinstance(score.get("opportunity_audit"), dict)
-        else {}
+    setup_id = (
+        _text(
+            score.get("setup_id")
+            or sniper.get("setup_id")
+            or score.get("setup_family")
+            or sniper.get("setup_family")
+        )
+        or None
     )
-    diagnostics = (
-        sniper.get("diagnostics") if isinstance(sniper.get("diagnostics"), dict) else {}
+    _audit_value = score.get("opportunity_audit")
+    audit = _audit_value if isinstance(_audit_value, dict) else {}
+    _diagnostics_value = sniper.get("diagnostics")
+    diagnostics = _diagnostics_value if isinstance(_diagnostics_value, dict) else {}
+    confluence_class = (
+        _text(
+            audit.get("confluence")
+            or sniper.get("confluence_class")
+            or diagnostics.get("confluence_class")
+        )
+        or None
     )
-    confluence_class = _text(
-        audit.get("confluence")
-        or sniper.get("confluence_class")
-        or diagnostics.get("confluence_class")
-    ) or None
-    indicators = score.get("indicators") if isinstance(score.get("indicators"), dict) else {}
+    _indicators_value = score.get("indicators")
+    indicators = _indicators_value if isinstance(_indicators_value, dict) else {}
     return ScalpEligibilityTrace(
         eligibility_status=status,
         eligibility_reason=reason,
@@ -465,7 +475,8 @@ def explain_scalp_handoff(
         candidate_setup_id=setup_id,
         candidate_confluence=confluence_class,
         candidate_score=opp,
-        candidate_rr=_text(score.get("expected_rr") or sniper.get("expected_rr")) or None,
+        candidate_rr=_text(score.get("expected_rr") or sniper.get("expected_rr"))
+        or None,
         candidate_stop_distance=_text(indicators.get("stop_distance")) or None,
         candidate_lots=_text(score.get("approved_lots") or score.get("lots")) or None,
         candidate_risk=_text(score.get("risk_pct") or score.get("risk")) or None,

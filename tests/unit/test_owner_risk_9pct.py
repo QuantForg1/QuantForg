@@ -1,6 +1,7 @@
-"""Owner risk settings (2026-10-22 final): 9% planned risk, 19% daily, no DD.
+"""Owner risk settings: 14% planned risk, 19% daily, no DD.
 
-Planned risk = (|entry - SL| + spread) x contract x volume <= 9% of equity.
+Planned risk = (|entry - SL| + spread + slippage) x contract x volume
++ known commission <= 14% of equity. Unknown commission is rejected.
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ def _entry(**kw: object) -> list[str]:
         "contract_size": Decimal("100"),
         "equity": Decimal("50"),
         "now": LONDON,
+        # The fixture declares a known zero. Unknown commission is rejected.
+        "commission": Decimal("0"),
     }
     base.update(kw)
     return ol.evaluate_owner_entry(**base)  # type: ignore[arg-type]
@@ -44,31 +47,48 @@ def _codes(reasons: list[str]) -> set[str]:
     return {r.split(":", 1)[0] for r in reasons}
 
 
-# --- 9% planned-risk boundary ----------------------------------------------
+# --- 14% planned-risk boundary ---------------------------------------------
 
 
-def test_450_accepted_at_50_equity() -> None:
-    # SL 4.20 + spread 0.30 = 4.50 x 100 x 0.01 = $4.50 = 9% of $50.
-    assert _entry() == []
+def test_exact_14_percent_of_50_is_allowed() -> None:
+    # SL 6.70 + spread 0.30 = $7.00 = 14% of $50. Reward 10.50 clears 1.50.
+    assert _entry(stop_loss=Decimal("4126.30"), take_profit=Decimal("4143.50")) == []
 
 
-def test_451_rejected_at_50_equity() -> None:
-    reasons = _entry(stop_loss=Decimal("4128.79"))
+def test_one_cent_over_14_percent_is_rejected() -> None:
+    reasons = _entry(stop_loss=Decimal("4126.29"), take_profit=Decimal("4144.00"))
     assert "OWNER_SL_RISK" in _codes(reasons)
-    assert "$4.51 > $4.50" in " ".join(reasons)
+    assert "$7.01 > $7.00" in " ".join(reasons)
+
+
+def test_unknown_commission_rejects_without_a_zero_fee_pass() -> None:
+    reasons = _entry(commission=None)
+    assert "OWNER_COMMISSION_UNKNOWN" in _codes(reasons)
+    assert "OWNER_SL_RISK" not in _codes(reasons)
+
+
+def test_known_commission_can_push_a_ticket_over_14_percent() -> None:
+    # Exact $7.00 geometry plus $0.50 commission ceilings above the cap.
+    reasons = _entry(
+        stop_loss=Decimal("4126.30"),
+        take_profit=Decimal("4143.50"),
+        commission=Decimal("0.50"),
+    )
+    assert "OWNER_SL_RISK" in _codes(reasons)
+    assert "$7.50 > $7.00" in " ".join(reasons)
 
 
 @pytest.mark.parametrize(
     ("equity", "cap"),
-    [("50", "4.50"), ("80", "7.20"), ("33.33", "2.99"), ("120", "10.80")],
+    [("50", "7.00"), ("80", "11.20"), ("33.33", "4.66"), ("120", "16.80")],
 )
 def test_cap_recomputes_from_equity(equity: str, cap: str) -> None:
     assert ol.max_planned_risk_usd(Decimal(equity)) == Decimal(cap)
 
 
 def test_cap_dynamic_at_80_equity() -> None:
-    # $6.00 planned risk: rejected at $50 equity, accepted at $80 equity.
-    wide = {"stop_loss": Decimal("4127.30"), "take_profit": Decimal("4142.00")}
+    # $8.00 planned risk: rejected at $50 equity, accepted at $80 equity.
+    wide = {"stop_loss": Decimal("4125.30"), "take_profit": Decimal("4145.00")}
     assert "OWNER_SL_RISK" in _codes(_entry(**wide))
     assert _entry(**wide, equity=Decimal("80")) == []
 
@@ -86,41 +106,40 @@ def test_spread_counts_in_planned_risk() -> None:
     ) == Decimal("4.50")
 
 
-def test_reported_271_exceeds_268_cap() -> None:
-    """Manual BUY 0.01 lot: stop + spread 2.710 prices to $2.71 over a $2.68 cap.
+def test_reported_geometry_above_the_14_percent_cap() -> None:
+    """Equity 29.86 at 14% floors to $4.18. The lot is already the minimum.
 
-    Equity 29.86 at 9% floors to $2.68. The lot is already the broker minimum,
-    so the correction is a tighter stop, not a smaller volume and not a higher cap.
+    The correction is a tighter stop, not a smaller volume and not a higher cap.
     """
-    assert ol.max_planned_risk_usd(Decimal("29.86")) == Decimal("2.68")
+    assert ol.max_planned_risk_usd(Decimal("29.86")) == Decimal("4.18")
     assert ol.planned_risk_usd(
-        stop_distance=Decimal("2.400"),
+        stop_distance=Decimal("4.000"),
         spread=Decimal("0.310"),
         contract_size=Decimal("100"),
         volume=Decimal("0.01"),
-    ) == Decimal("2.71")
+    ) == Decimal("4.31")
     reasons = _entry(
         equity=Decimal("29.86"),
         entry=Decimal("4000"),
-        stop_loss=Decimal("3997.600"),
+        stop_loss=Decimal("3996.000"),
         take_profit=Decimal("4010"),
         spread=Decimal("0.310"),
     )
     text = reasons[0]
     assert text.startswith(
-        "OWNER_SL_RISK: planned risk $2.71 > $2.68 (9.0% of equity 29.86)"
+        "OWNER_SL_RISK: planned risk $4.31 > $4.18 (14.0% of equity 29.86)"
     )
-    assert "stop 2.400 + spread 0.310" in text
+    assert "stop 4.000 + spread 0.310" in text
     assert "volume 0.01" in text
     assert "contract 100" in text
-    assert "Tighten the stop to 2.370" in text
+    assert "Tighten the stop to 3.870" in text
     assert (
         _entry(
             equity=Decimal("29.86"),
             entry=Decimal("4000"),
-            stop_loss=Decimal("3997.600"),
+            stop_loss=Decimal("3996.200"),
             take_profit=Decimal("4010"),
-            spread=Decimal("0.280"),
+            spread=Decimal("0.310"),
         )
         == []
     )
@@ -138,7 +157,7 @@ def test_risk_is_never_rounded_down_to_the_cap() -> None:
         _entry(
             equity=Decimal("29.86"),
             entry=Decimal("4000"),
-            stop_loss=Decimal("3997.319"),
+            stop_loss=Decimal("3995.819"),
             take_profit=Decimal("4010"),
             spread=Decimal("0"),
         )
@@ -156,7 +175,7 @@ def test_exact_cap_passes_and_one_cent_over_fails() -> None:
         _entry(
             equity=Decimal("29.86"),
             entry=Decimal("4000"),
-            stop_loss=Decimal("3997.32"),
+            stop_loss=Decimal("3995.82"),
             take_profit=Decimal("4010"),
             spread=Decimal("0"),
         )
@@ -166,7 +185,7 @@ def test_exact_cap_passes_and_one_cent_over_fails() -> None:
         _entry(
             equity=Decimal("29.86"),
             entry=Decimal("4000"),
-            stop_loss=Decimal("3997.31"),
+            stop_loss=Decimal("3995.81"),
             take_profit=Decimal("4010"),
             spread=Decimal("0"),
         )
@@ -184,17 +203,17 @@ def test_buy_and_sell_use_the_same_monetary_risk() -> None:
     buy = _entry(
         **common,
         side="BUY",
-        stop_loss=Decimal("3997.600"),
+        stop_loss=Decimal("3996.000"),
         take_profit=Decimal("4010"),
     )
     sell = _entry(
         **common,
         side="SELL",
-        stop_loss=Decimal("4002.400"),
+        stop_loss=Decimal("4004.000"),
         take_profit=Decimal("3990"),
     )
-    assert buy[0].startswith("OWNER_SL_RISK: planned risk $2.71 > $2.68")
-    assert sell[0].startswith("OWNER_SL_RISK: planned risk $2.71 > $2.68")
+    assert buy[0].startswith("OWNER_SL_RISK: planned risk $4.31 > $4.18")
+    assert sell[0].startswith("OWNER_SL_RISK: planned risk $4.31 > $4.18")
 
 
 def test_tick_value_matches_contract_size_100() -> None:
@@ -248,18 +267,18 @@ def test_minimum_lot_above_the_cap_names_the_constraint() -> None:
         stop_loss=Decimal("3999"),
         take_profit=Decimal("4010"),
         spread=Decimal("0.20"),
-        commission=Decimal("2.60"),
+        commission=Decimal("4.20"),
     )
     text = " ".join(reasons)
     assert "OWNER_SL_RISK" in text
     assert "No smaller lot is allowed" in text
     assert (
         ol.maximum_affordable_stop_distance(
-            cap=Decimal("2.68"),
+            cap=Decimal("4.18"),
             spread=Decimal("0.20"),
             contract_size=Decimal("100"),
             volume=Decimal("0.01"),
-            commission=Decimal("2.60"),
+            commission=Decimal("4.20"),
         )
         is None
     )
@@ -274,13 +293,14 @@ def test_risk_engine_uses_the_same_spread_inclusive_cap() -> None:
             symbol="XAUUSD",
             side="buy",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("2.400"),
+            stop_loss_distance=Decimal("4.000"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("10"),
             spread=Decimal("0.310"),
             contract_size=Decimal("100"),
             tick_size=Decimal("0.001"),
             tick_value=Decimal("0.1"),
+            commission=Decimal("0"),
         ),
         account=AccountSnapshot(
             login=1,
@@ -296,10 +316,43 @@ def test_risk_engine_uses_the_same_spread_inclusive_cap() -> None:
     )
     assert result.decision is RiskDecision.REJECT
     assert any(
-        r.startswith("OWNER_SL_RISK: planned risk $2.71 > $2.68")
+        r.startswith("OWNER_SL_RISK: planned risk $4.31 > $4.18")
         for r in result.reasons
     )
     assert result.checks.get("owner_planned_risk") is False
+
+
+def test_risk_engine_rejects_unknown_commission_before_a_dollar_pass() -> None:
+    engine = RiskEngine()
+    result = engine.evaluate(
+        RiskCheckInput(
+            user_id=uuid4(),
+            request_id="owner-fee-unknown",
+            symbol="XAUUSD",
+            side="buy",
+            requested_lots=Decimal("0.01"),
+            stop_loss_distance=Decimal("1.000"),
+            sizing_method=PositionSizingMethod.FIXED_LOT,
+            entry_price=Decimal("4000"),
+            spread=Decimal("0.20"),
+            contract_size=Decimal("100"),
+            commission=None,
+        ),
+        account=AccountSnapshot(
+            login=1,
+            balance=Decimal("50"),
+            equity=Decimal("50"),
+            margin=Decimal("0"),
+            free_margin=Decimal("50"),
+            margin_level=Decimal("0"),
+            profit=Decimal("0"),
+            leverage=1000,
+        ),
+        positions=[],
+    )
+    assert result.decision is RiskDecision.REJECT
+    assert any("OWNER_COMMISSION_UNKNOWN" in r for r in result.reasons)
+    assert not any(r.startswith("OWNER_SL_RISK") for r in result.reasons)
 
 
 def test_safety_snapshot_distance_rejects_above_the_cap() -> None:
@@ -314,7 +367,7 @@ def test_safety_snapshot_distance_rejects_above_the_cap() -> None:
         _entry(
             equity=Decimal("29.86"),
             entry=Decimal("4000"),
-            stop_loss=Decimal("3997.123"),
+            stop_loss=Decimal("3996.000"),
             take_profit=Decimal("4010"),
             spread=Decimal("0.444"),
         )
@@ -367,12 +420,12 @@ def test_weekly_and_monthly_limits_are_disabled() -> None:
 def test_stop_is_max_of_atr_and_structure() -> None:
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=None
-    ) == Decimal("1.80")
+    ) == Decimal("1.20")
     assert ol.owner_stop_distance(
-        atr=Decimal("1.2"), structure_distance=Decimal("1.5")
+        atr=Decimal("1.2"), structure_distance=Decimal("1.0")
     ) == Decimal(
-        "1.80"
-    )  # never narrower than 1.5 x ATR
+        "1.20"
+    )  # never narrower than 1.00 x ATR
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=Decimal("3.6")
     ) == Decimal(
@@ -402,7 +455,7 @@ def test_structure_targets_place_stop_beyond_m1_structure_plus_spread() -> None:
         entry=Decimal("4133.00"),
         atr=Decimal("1.2"),
     )
-    # Structure 4.00 below entry + 0.30 spread = 4.30 > 1.5 x 1.2 = 1.80.
+    # Structure 4.00 below entry + 0.30 spread = 4.30 > 1.00 x 1.2 = 1.20.
     assert targets.stop_distance == Decimal("4.30")
     assert targets.stop_loss == Decimal("4128.70")
 
@@ -498,7 +551,7 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
         "max_consecutive_losses": 2,
     }
     cfg = LiveTradingRiskConfig.from_dict(stale)
-    assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("9.0")
+    assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("14.0")
     assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("19.0")
     assert cfg.max_consecutive_losses == 0  # no loss-streak pause
     assert cfg.min_reward_risk == Decimal("1.50")
@@ -508,4 +561,4 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
     assert cfg.min_score == Decimal("70")
     shown = cfg.to_dict()
     assert shown["max_daily_loss_pct"] == "19.0"
-    assert shown["risk_per_trade_pct"] == "9.0"
+    assert shown["risk_per_trade_pct"] == "14.0"

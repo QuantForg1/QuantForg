@@ -20,9 +20,11 @@ def build_portfolio_intelligence_v2(
     warnings: list[dict[str, Any]] = []
     exposure: dict[str, Any] = {}
     try:
-        from app.domain.institutional_trading.ai_scalping.portfolio_exposure_intelligence import (  # noqa: E501
-            build_portfolio_exposure,
+        from app.domain.institutional_trading.ai_scalping import (
+            portfolio_exposure_intelligence as _q23,
         )
+
+        build_portfolio_exposure = _q23.build_portfolio_exposure
 
         if positions is None:
             try:

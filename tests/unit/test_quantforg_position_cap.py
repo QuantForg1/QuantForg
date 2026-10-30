@@ -342,12 +342,18 @@ def test_unknown_order_still_requires_reconciliation() -> None:
 
 @pytest.mark.unit
 def test_backtest_and_live_both_use_one_open_trade() -> None:
-    assert RunBacktestCommand(
-        user_id=uuid4(), request_id="b", symbol="XAUUSD"
-    ).max_open_trades == 1
-    assert BacktestRunInput(
-        user_id=uuid4(), request_id="b", symbol="XAUUSD"
-    ).max_open_trades == 1
+    assert (
+        RunBacktestCommand(
+            user_id=uuid4(), request_id="b", symbol="XAUUSD"
+        ).max_open_trades
+        == 1
+    )
+    assert (
+        BacktestRunInput(
+            user_id=uuid4(), request_id="b", symbol="XAUUSD"
+        ).max_open_trades
+        == 1
+    )
     assert DEFAULT_ITE_CONFIG.max_open_trades == 1
     from app.domain.institutional_trading.ai_scalping.config import (
         DEFAULT_AI_SCALPING_CONFIG,

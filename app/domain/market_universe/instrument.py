@@ -100,9 +100,11 @@ class InstrumentRecord:
             "research_enabled": self.research_eligible,
             "live_execution_enabled": bool(self.extra.get("live_execution_enabled")),
             "live_execution_eligible": False,
-            "data_age_seconds": dq.get("quote_age_seconds")
-            if dq.get("quote_age_seconds") not in (None, "")
-            else UNKNOWN,
+            "data_age_seconds": (
+                dq.get("quote_age_seconds")
+                if dq.get("quote_age_seconds") not in (None, "")
+                else UNKNOWN
+            ),
             "bid": _u(self.extra.get("bid")),
             "ask": _u(self.extra.get("ask")),
             "quote_timestamp": _u(self.last_quote_timestamp),

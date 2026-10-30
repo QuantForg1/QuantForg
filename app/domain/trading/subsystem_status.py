@@ -26,7 +26,8 @@ def classify_gateway_reachability(
             "label": "Gateway not configured",
             "detail": (
                 "MT5_GATEWAY_BASE_URL is not set on the API. "
-                "Broker connect and live Gold catalogue require a reachable Windows Gateway."
+                "Broker connect and live Gold catalogue require a reachable "
+                "Windows Gateway."
             ),
         }
     if online:
@@ -56,10 +57,15 @@ def classify_gateway_reachability(
         detail = "Gateway refused connection — local Gateway process may be stopped"
         label = "Gateway Offline"
     elif "401" in err or "token" in err or "forbidden" in err or "403" in err:
-        detail = "Gateway rejected the caller token — check token match (never log the token)"
+        detail = (
+            "Gateway rejected the caller token — check token match (never log the "
+            "token)"
+        )
         label = "Gateway auth failed"
     elif err:
-        detail = "Gateway unreachable — see operator diagnostics for the safe error class"
+        detail = (
+            "Gateway unreachable — see operator diagnostics for the safe error class"
+        )
         label = "Gateway Offline"
     else:
         detail = "Gateway unreachable — broker market catalogue cannot refresh"
@@ -113,7 +119,8 @@ def classify_research_plane(
             "label": "Research Degraded",
             "detail": (
                 last_error
-                or "Broker Gold catalogue unavailable — Gateway offline or not attached. "
+                or "Broker Gold catalogue unavailable — Gateway offline or not "
+                "attached. "
                 "Research cannot score XAUUSD without live broker market data."
             ),
             "broker_catalogue_required": True,

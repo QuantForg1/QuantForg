@@ -6,7 +6,6 @@ from typing import Any
 
 from app.domain.institutional_trading.phase_d.candidate import AlphaCandidate
 
-
 MANDATORY_GATES = (
     "RESEARCH_VALIDATION",
     "OUT_OF_SAMPLE",
@@ -33,7 +32,7 @@ def evaluate_promotion_gates(candidate: AlphaCandidate) -> dict[str, Any]:
         return {
             "result": "PROMOTION_BLOCKED",
             "why_blocked": candidate.why_blocked or "NOT_PROMOTABLE",
-            "gates": {g: "FAIL" for g in MANDATORY_GATES},
+            "gates": dict.fromkeys(MANDATORY_GATES, "FAIL"),
             "auto_promoted": False,
         }
 
@@ -96,7 +95,9 @@ def evaluate_promotion_gates(candidate: AlphaCandidate) -> dict[str, Any]:
     )
     gates["RISK_REVIEW"] = (
         "PASS"
-        if _pass(rk.get("risk_impact"), ok_tokens={"ACCEPTABLE", "PASS", "PASSED", "OK"})
+        if _pass(
+            rk.get("risk_impact"), ok_tokens={"ACCEPTABLE", "PASS", "PASSED", "OK"}
+        )
         and _pass(
             rk.get("drawdown_impact"),
             ok_tokens={"ACCEPTABLE", "PASS", "PASSED", "OK"},

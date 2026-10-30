@@ -68,7 +68,7 @@ def _clamp_int(value: Any, default: int | None = None) -> int | None:
 
 
 def _smc_presence_score(raw: Any, *, absent_max: int = 30) -> int:
-    """Map scoring sentinels (20/25 = absent) to 0; keep real 70–85 presence."""
+    """Map scoring sentinels (20/25 = absent) to 0; keep real 70-85 presence."""
     n = _clamp_int(raw, 0)
     if n is None or n <= absent_max:
         return 0
@@ -76,10 +76,10 @@ def _smc_presence_score(raw: Any, *, absent_max: int = 30) -> int:
 
 
 def _ltf_mtf_alignment(factors: Mapping[str, Any]) -> int:
-    """Map M1/M5/M15 BOS presence to a 0–100 MTF score.
+    """Map M1/M5/M15 BOS presence to a 0-100 MTF score.
 
     ``factors['mtf']`` is a sum of small direction credits (10/12/14) and is
-    not a 0–100 quality score. Using it as mtf_alignment silently discarded
+    not a 0-100 quality score. Using it as mtf_alignment silently discarded
     genuine M1/M5 structure in favour of H1 alignment (~52).
     """
     m1 = _smc_presence_score(factors.get("m1_bos"))
@@ -268,9 +268,7 @@ def evaluate_opportunity(
     if score < threshold:
         blocking_stage = "PROBABILITY"
         fault_code = "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
-        fault_reason = (
-            f"opportunity_score {score} < threshold {threshold} - WAIT"
-        )
+        fault_reason = f"opportunity_score {score} < threshold {threshold} - WAIT"
         next_action = "WAIT"
     elif not direction_ok:
         blocking_stage = "DECISION"
@@ -303,7 +301,8 @@ def evaluate_opportunity(
 
 def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
     """Map an existing AI scalping score artefact onto the selector."""
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    _factors_value = score.get("factors")
+    factors = _factors_value if isinstance(_factors_value, dict) else {}
     vol = (
         score.get("volatility_decision")
         if isinstance(score.get("volatility_decision"), dict)
@@ -323,12 +322,11 @@ def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
         if smc or factors.get("bos") is not None or factors.get("choch") is not None:
             structure = smc
     elif smc:
-        # Do not ignore live FVG/OB/BOS presence when structure_score is range/alignment.
+        # Do not ignore live FVG/OB/BOS presence when structure_score is
+        # range/alignment.
         structure = max(structure, smc)
     pa = _clamp_int(
-        score.get("pa_confluence")
-        or factors.get("pa_confluence")
-        or factors.get("rsi")
+        score.get("pa_confluence") or factors.get("pa_confluence") or factors.get("rsi")
     )
     liquidity = _clamp_int(score.get("liquidity") or factors.get("liquidity_sweep"))
     if fvg_q or ob_q:
@@ -350,7 +348,7 @@ def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
     if credit_sum is not None and credit_sum <= 40:
         credit_sum = None
     ltf_mtf = _ltf_mtf_alignment(factors)
-    mtf_alignment = max(
+    mtf_alignment: int | None = max(
         raw_mtf or 0,
         credit_sum or 0,
         ltf_mtf,

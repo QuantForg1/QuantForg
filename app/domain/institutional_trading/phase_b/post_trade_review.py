@@ -64,8 +64,10 @@ def build_post_trade_review(**kwargs: Any) -> PostTradeReview:
     mae = kwargs.get("mae_r")
     mfe = kwargs.get("mfe_r")
     exec_q = kwargs.get("execution_quality_score")
-    outcome = "WIN" if (realized is not None and float(realized) > 0) else (
-        "LOSS" if realized is not None else "UNKNOWN"
+    outcome = (
+        "WIN"
+        if (realized is not None and float(realized) > 0)
+        else ("LOSS" if realized is not None else "UNKNOWN")
     )
     # Entry: captured MFE relative to target when known
     entry_q = "UNKNOWN"
@@ -92,7 +94,9 @@ def build_post_trade_review(**kwargs: Any) -> PostTradeReview:
         exit_quality=exit_q,
         outcome=outcome,
         entry_risk=(
-            float(kwargs["entry_risk"]) if kwargs.get("entry_risk") is not None else None
+            float(kwargs["entry_risk"])
+            if kwargs.get("entry_risk") is not None
+            else None
         ),
         initial_r_target=(
             float(kwargs["initial_r_target"])

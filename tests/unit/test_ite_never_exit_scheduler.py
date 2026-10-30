@@ -537,9 +537,10 @@ async def test_soak_100_cycles_no_halt_no_stale_reuse_no_mutation() -> None:
         )
         == WAITING_SESSION
     )
-    assert derive_scheduler_state(
-        running=True, stalled=False, broker_session_open=False
-    ) != SCHEDULER_STALLED
+    assert (
+        derive_scheduler_state(running=True, stalled=False, broker_session_open=False)
+        != SCHEDULER_STALLED
+    )
 
 
 def test_observability_fields_present_on_status_shape() -> None:

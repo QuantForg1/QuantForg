@@ -5,6 +5,7 @@ Never modifies production strategy. Intelligence only.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,7 +23,9 @@ def _f(value: Any) -> float | None:
         return None
 
 
-def _bucket_stats(rows: list[Any], key_fn) -> dict[str, dict[str, Any]]:
+def _bucket_stats(
+    rows: list[Any], key_fn: Callable[[Any], Any]
+) -> dict[str, dict[str, Any]]:
     buckets: dict[str, dict[str, Any]] = {}
     for r in rows:
         key = key_fn(r)
@@ -115,33 +118,33 @@ def build_pattern_intelligence() -> dict[str, Any]:
         lambda r: _range_bucket(_f(getattr(r, "atr_pct", None)), vol_edges),
     )
     q_edges = [
-        (0, 70, "q_<70"),
-        (70, 80, "q_70_80"),
-        (80, 88, "q_80_88"),
-        (88, 95, "q_88_95"),
-        (95, 101, "q_95_plus"),
+        (0.0, 70.0, "q_<70"),
+        (70.0, 80.0, "q_70_80"),
+        (80.0, 88.0, "q_80_88"),
+        (88.0, 95.0, "q_88_95"),
+        (95.0, 101.0, "q_95_plus"),
     ]
     by_quality = _bucket_stats(
         rows,
         lambda r: _range_bucket(float(getattr(r, "quality", 0) or 0), q_edges),
     )
     c_edges = [
-        (0, 70, "c_<70"),
-        (70, 80, "c_70_80"),
-        (80, 88, "c_80_88"),
-        (88, 95, "c_88_95"),
-        (95, 101, "c_95_plus"),
+        (0.0, 70.0, "c_<70"),
+        (70.0, 80.0, "c_70_80"),
+        (80.0, 88.0, "c_80_88"),
+        (88.0, 95.0, "c_88_95"),
+        (95.0, 101.0, "c_95_plus"),
     ]
     by_confidence = _bucket_stats(
         rows,
         lambda r: _range_bucket(float(getattr(r, "confidence", 0) or 0), c_edges),
     )
     hold_edges = [
-        (0, 5, "hold_<5m"),
-        (5, 15, "hold_5_15m"),
-        (15, 45, "hold_15_45m"),
-        (45, 120, "hold_45_120m"),
-        (120, 1e9, "hold_>120m"),
+        (0.0, 5.0, "hold_<5m"),
+        (5.0, 15.0, "hold_5_15m"),
+        (15.0, 45.0, "hold_15_45m"),
+        (45.0, 120.0, "hold_45_120m"),
+        (120.0, 1e9, "hold_>120m"),
     ]
     by_hold = _bucket_stats(
         rows,

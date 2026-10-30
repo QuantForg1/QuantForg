@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -166,9 +167,9 @@ def persist_pme_state(engine: Any) -> None:
 def _overlay_metadata(pos: Any, meta: dict[str, Any]) -> None:
     cls = proven_trade_class(meta.get("trade_class"))
     current = proven_trade_class(getattr(pos, "trade_class", ""))
-    if current == TRADE_CLASS_UNKNOWN and cls in {"SCALP", "HOLD"}:
-        pos.trade_class = cls
-    elif not str(getattr(pos, "trade_class", "") or "").strip():
+    if (current == TRADE_CLASS_UNKNOWN and cls in {"SCALP", "HOLD"}) or not str(
+        getattr(pos, "trade_class", "") or ""
+    ).strip():
         pos.trade_class = cls
     for field_name in ("cycle_id", "snapshot_id", "position_plan_id", "comment"):
         current_val = str(getattr(pos, field_name, "") or "")
@@ -178,10 +179,8 @@ def _overlay_metadata(pos: Any, meta: dict[str, Any]) -> None:
     if getattr(pos, "opportunity_score", None) is None and meta.get(
         "opportunity_score"
     ) not in {None, ""}:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             pos.opportunity_score = int(meta["opportunity_score"])
-        except (TypeError, ValueError):
-            pass
     if not str(getattr(pos, "management_profile", "") or ""):
         pos.management_profile = str(
             meta.get("management_profile")
@@ -253,9 +252,7 @@ def recover_positions_from_mt5(
         for row in live_rows
         if int(getattr(row, "ticket", 0) or 0) > 0
     }
-    stale_disk = [
-        ticket for ticket in snapshot_by_ticket if ticket not in live_tickets
-    ]
+    stale_disk = [ticket for ticket in snapshot_by_ticket if ticket not in live_tickets]
     if stale_disk:
         logger.warning(
             "pme_stale_disk_tickets_ignored",
@@ -325,11 +322,15 @@ def recover_positions_from_mt5(
             be_offset = Decimal("0.2")
             be_already = False
             # Broker SL on the profit side of entry ⇒ BE (or better) already applied.
-            if broker_sl > 0 and entry > 0:
-                if side == "sell" and broker_sl < entry:
-                    be_already = True
-                elif side == "buy" and broker_sl > entry:
-                    be_already = True
+            if (
+                broker_sl > 0
+                and entry > 0
+                and (
+                    (side == "sell" and broker_sl < entry)
+                    or (side == "buy" and broker_sl > entry)
+                )
+            ):
+                be_already = True
 
             if be_already and broker_sl > 0:
                 # Reconstruct original 1R from BE geometry: BE ≈ entry ± 0.2R
@@ -357,17 +358,17 @@ def recover_positions_from_mt5(
                 )
                 risk = abs(entry - initial_sl) or Decimal("1")
                 if side == "sell":
-                    current_sl = (
-                        min(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
-                    )
+                    current_sl = min(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
                 else:
-                    current_sl = (
-                        max(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
-                    )
+                    current_sl = max(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
             elif snap_sl > 0:
                 initial_sl = snap_initial if snap_initial > 0 else snap_sl
                 current_sl = snap_sl
-                risk = snap_risk if snap_risk > 0 else (abs(entry - initial_sl) or Decimal("1"))
+                risk = (
+                    snap_risk
+                    if snap_risk > 0
+                    else (abs(entry - initial_sl) or Decimal("1"))
+                )
             else:
                 initial_sl = (
                     entry * Decimal("0.99")

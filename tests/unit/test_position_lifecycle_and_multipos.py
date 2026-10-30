@@ -171,9 +171,7 @@ def test_scalp_class_survives_recovery(pme_path: Path) -> None:
     engine = PositionManagementEngine(oms=_CapturingOms())  # type: ignore[arg-type]
     comment = encode_execution_comment("ite:v1", "efe330dd625e", "SCALP")
     live = _mt5_row(557892348, comment=comment)
-    engine.register(
-        _pos(trade_class="SCALP", ticket=557892348)
-    )
+    engine.register(_pos(trade_class="SCALP", ticket=557892348))
     persist_pme_state(engine)
     fresh = PositionManagementEngine(oms=_CapturingOms())  # type: ignore[arg-type]
     mt5 = SimpleNamespace(list_positions=lambda: [live])
@@ -310,9 +308,7 @@ def test_broker_flat_releases_quantforg_capacity() -> None:
         already_in_trade=True,
         account_open_positions=1,
     )
-    sync = force_sync_positions(
-        adapter, symbol="XAUUSD_i", position_engine=engine
-    )
+    sync = force_sync_positions(adapter, symbol="XAUUSD_i", position_engine=engine)
     assert sync.quantforg_positions == 0
     updated = apply_mt5_position_truth(account, sync)
     assert updated.open_positions == 0

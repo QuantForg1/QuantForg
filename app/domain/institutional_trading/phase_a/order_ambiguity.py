@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
 from typing import Any
 from uuid import uuid4
 
 
-class AmbiguityState(str, Enum):
+class AmbiguityState(StrEnum):
     CLEAR = "CLEAR"
     UNKNOWN = "UNKNOWN"
     RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED"
@@ -132,9 +132,7 @@ class OrderAmbiguityGate:
             if rec is None:
                 return None
             rec.state = (
-                AmbiguityState.CLEAR
-                if outcome is AmbiguityState.CLEAR
-                else outcome
+                AmbiguityState.CLEAR if outcome is AmbiguityState.CLEAR else outcome
             )
             rec.updated_at = datetime.now(UTC).isoformat()
             if evidence:
@@ -204,7 +202,9 @@ class OrderAmbiguityGate:
                 if not isinstance(raw, dict):
                     continue
                 try:
-                    st = AmbiguityState(str(raw.get("state") or "RECONCILIATION_REQUIRED"))
+                    st = AmbiguityState(
+                        str(raw.get("state") or "RECONCILIATION_REQUIRED")
+                    )
                 except Exception:
                     st = AmbiguityState.RECONCILIATION_REQUIRED
                 if st not in {
@@ -221,10 +221,16 @@ class OrderAmbiguityGate:
                     side=str(raw.get("side") or ""),
                     state=st,
                     reason=str(raw.get("reason") or ""),
-                    created_at=str(raw.get("created_at") or datetime.now(UTC).isoformat()),
-                    updated_at=str(raw.get("updated_at") or datetime.now(UTC).isoformat()),
-                    evidence=dict(raw.get("evidence") or {})
-                    if isinstance(raw.get("evidence"), dict)
-                    else {},
+                    created_at=str(
+                        raw.get("created_at") or datetime.now(UTC).isoformat()
+                    ),
+                    updated_at=str(
+                        raw.get("updated_at") or datetime.now(UTC).isoformat()
+                    ),
+                    evidence=(
+                        dict(raw.get("evidence") or {})
+                        if isinstance(raw.get("evidence"), dict)
+                        else {}
+                    ),
                 )
                 self.open[oid] = rec

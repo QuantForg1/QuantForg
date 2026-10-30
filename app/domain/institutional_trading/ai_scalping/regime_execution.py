@@ -160,13 +160,12 @@ def build_regime_execution_profile(
         min_rr = cfg.min_expected_rr
     # Never demand RR above the profile TP (fixed_tp_r) — otherwise
     # expected_rr from fixed TP can never clear the regime-bumped floor.
-    if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0:
-        if min_rr > cfg.fixed_tp_r:
-            reasons.append(
-                f"RR floor capped to fixed_tp_r={cfg.fixed_tp_r} "
-                f"(was {min_rr} after regime/vol bumps)"
-            )
-            min_rr = cfg.fixed_tp_r
+    if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0 and min_rr > cfg.fixed_tp_r:
+        reasons.append(
+            f"RR floor capped to fixed_tp_r={cfg.fixed_tp_r} "
+            f"(was {min_rr} after regime/vol bumps)"
+        )
+        min_rr = cfg.fixed_tp_r
     # Structure targets do not stretch to preferred R. ATR TP / ATR-capped SL
     # is the achievable geometry; do not demand more than that.
     geom_rr = atr_scalp_geometry_rr(cfg)

@@ -448,9 +448,7 @@ def test_leverage_policy_source_is_backend_max_leverage() -> None:
 
 
 def test_stale_scan_is_wait_not_market_fail() -> None:
-    old = (datetime.now(UTC) - timedelta(seconds=400)).strftime(
-        "%Y-%m-%dT%H:%M:%S.%fZ"
-    )
+    old = (datetime.now(UTC) - timedelta(seconds=400)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     published = publish_current_scan_decision(_scan(as_of=old))
     view = compose_system_snapshot(current_scan=published, last_pipeline=None)
     assert view["stages"]["MARKET"] in {"WAIT", "PASS"}

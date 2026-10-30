@@ -120,7 +120,8 @@ def fetch(query: str, *args: Any, timeout: float = 8.0) -> list[dict[str, Any]]:
             return [dict(r) for r in rows]
 
     try:
-        return _run(_go(), timeout=timeout)
+        fetched: list[dict[str, Any]] = _run(_go(), timeout=timeout)
+        return fetched
     except Exception:
         logger.warning("direct_postgres_fetch_failed", query=query[:80])
         raise
@@ -137,7 +138,8 @@ def execute(query: str, *args: Any, timeout: float = 8.0) -> str:
             return str(await conn.execute(query, *args))
 
     try:
-        return _run(_go(), timeout=timeout)
+        status: str = _run(_go(), timeout=timeout)
+        return status
     except Exception:
         logger.warning("direct_postgres_execute_failed", query=query[:80])
         raise
@@ -202,7 +204,8 @@ def executemany(
             return len(args_seq)
 
     try:
-        return _run(_go(), timeout=timeout)
+        attempts: int = _run(_go(), timeout=timeout)
+        return attempts
     except Exception:
         logger.warning("direct_postgres_executemany_failed", query=query[:80])
         raise

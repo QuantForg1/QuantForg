@@ -67,9 +67,10 @@ def test_worker_waiting_session_is_not_halt() -> None:
         stalled=False,
     )
     assert state == WAITING_SESSION
-    assert derive_scheduler_state(
-        running=True, stalled=False, broker_session_open=False
-    ) == WAITING_SESSION
+    assert (
+        derive_scheduler_state(running=True, stalled=False, broker_session_open=False)
+        == WAITING_SESSION
+    )
 
 
 def test_broker_closed_blocks_new_entries_only() -> None:

@@ -71,9 +71,7 @@ def phase_c_config_from_settings(settings: Any | None = None) -> PhaseCConfig:
         pbo_enabled=_b("phase_c_pbo_enabled", True),
         dsr_enabled=_b("phase_c_dsr_enabled", True),
         monte_carlo_enabled=_b("phase_c_monte_carlo_enabled", True),
-        parameter_sensitivity_enabled=_b(
-            "phase_c_parameter_sensitivity_enabled", True
-        ),
+        parameter_sensitivity_enabled=_b("phase_c_parameter_sensitivity_enabled", True),
         champion_challenger_enabled=_b("phase_c_champion_challenger_enabled", True),
         drift_enabled=_b("phase_c_drift_enabled", True),
         calibration_enabled=_b("phase_c_calibration_enabled", True),

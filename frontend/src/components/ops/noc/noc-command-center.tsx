@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { useNocCommandCenter } from "@/hooks/use-noc-command-center";
 import { useAuth } from "@/providers/auth-provider";
@@ -328,7 +328,7 @@ export function NocCommandCenter() {
   const execState = asRecord(data.execution_state);
   const sizing = asRecord(data.sizing || data.position_sizing);
 
-  const health = useMemo(() => {
+  const health = (() => {
     return [...healthRaw]
       .map((row) => {
         const c = asRecord(row);
@@ -342,9 +342,9 @@ export function NocCommandCenter() {
         };
       })
       .sort((a, b) => healthPriority(a.label) - healthPriority(b.label));
-  }, [healthRaw]);
+  })();
 
-  const filteredHistory = useMemo(() => {
+  const filteredHistory = (() => {
     const q = historyFilter.trim().toLowerCase();
     if (!q) return history;
     return history.filter((row) => {
@@ -363,9 +363,9 @@ export function NocCommandCenter() {
         .join(" ");
       return blob.includes(q);
     });
-  }, [history, historyFilter]);
+  })();
 
-  const filteredEvents = useMemo(() => {
+  const filteredEvents = (() => {
     return events.filter((e) => {
       const r = asRecord(e);
       return matchLogFilter(
@@ -374,9 +374,9 @@ export function NocCommandCenter() {
         logFilter,
       );
     });
-  }, [events, logFilter]);
+  })();
 
-  const pnlSeries = useMemo(() => {
+  const pnlSeries = (() => {
     const out: number[] = [];
     for (const row of closed) {
       const r = asRecord(row);
@@ -384,9 +384,9 @@ export function NocCommandCenter() {
       if (Number.isFinite(p)) out.push(p);
     }
     return out.slice(-48);
-  }, [closed]);
+  })();
 
-  const latencySeries = useMemo(() => {
+  const latencySeries = (() => {
     const out: number[] = [];
     for (const row of history) {
       const r = asRecord(row);
@@ -394,7 +394,7 @@ export function NocCommandCenter() {
       if (Number.isFinite(p)) out.push(p);
     }
     return out.slice(-48);
-  }, [history]);
+  })();
 
   const decision = str(ai.decision, "—").toUpperCase().replace("_", " ");
   const blocker = str(
@@ -402,7 +402,7 @@ export function NocCommandCenter() {
     "—",
   );
 
-  const floatingPl = useMemo(() => {
+  const floatingPl = (() => {
     let sum = 0;
     let any = false;
     for (const p of positions) {
@@ -414,16 +414,16 @@ export function NocCommandCenter() {
       }
     }
     return any ? sum : null;
-  }, [positions]);
+  })();
 
-  const marginLevel = useMemo(() => {
+  const marginLevel = (() => {
     const margin = num(broker.margin);
     const equity = num(broker.equity);
     if (!Number.isFinite(margin) || !Number.isFinite(equity) || margin <= 0) {
       return null;
     }
     return (equity / margin) * 100;
-  }, [broker.equity, broker.margin]);
+  })();
 
   const signalsToday = num(perfToday.signals);
   const rejectedToday = num(perfToday.rejected);

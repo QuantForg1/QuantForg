@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Sequence
-
+from typing import Any
 
 DRIFT_KINDS = (
     "DATA_DRIFT",
@@ -46,10 +46,10 @@ def classify_drift(
             "future_critical_block_new_entries": False,
         }
     b = _mean(baseline)
-    l = _mean(live)
-    assert b is not None and l is not None
+    live_mean = _mean(live)
+    assert b is not None and live_mean is not None
     denom = abs(b) if abs(b) > 1e-9 else 1.0
-    rel = abs(l - b) / denom
+    rel = abs(live_mean - b) / denom
     if rel >= significant:
         state, response = "ALERT", "ALERT"
     elif rel >= mild:
@@ -60,7 +60,7 @@ def classify_drift(
         "state": state,
         "response": response,  # OBSERVE | WARN | ALERT only in Phase C
         "baseline_mean": round(b, 6),
-        "live_mean": round(l, 6),
+        "live_mean": round(live_mean, 6),
         "relative_delta": round(rel, 6),
         "auto_disable": False,
         "auto_retrain": False,
@@ -93,13 +93,15 @@ class DriftMonitorStore:
             rows = []
             for k in keys:
                 b = list(self.baselines.get(k, ()))
-                l = list(self.live.get(k, ()))
+                live_values = list(self.live.get(k, ()))
                 # Rolling windows where sample permits
                 windows = {}
                 for w in (20, 50, 100):
-                    if len(l) >= w and len(b) >= min(w, self.min_sample):
+                    if len(live_values) >= w and len(b) >= min(w, self.min_sample):
                         windows[str(w)] = classify_drift(
-                            baseline=b[-w:], live=l[-w:], min_sample=min(w, self.min_sample)
+                            baseline=b[-w:],
+                            live=live_values[-w:],
+                            min_sample=min(w, self.min_sample),
                         )
                     else:
                         windows[str(w)] = {
@@ -111,7 +113,9 @@ class DriftMonitorStore:
                         "kind": k,
                         "windows": windows,
                         "latest": classify_drift(
-                            baseline=b, live=l, min_sample=self.min_sample
+                            baseline=b,
+                            live=live_values,
+                            min_sample=self.min_sample,
                         ),
                     }
                 )
@@ -141,8 +145,6 @@ def regime_specific_drift(
         "regime": regime,
         "direction": direction,
     }
-    result = classify_drift(
-        baseline=baseline_r, live=live_r, min_sample=min_sample
-    )
+    result = classify_drift(baseline=baseline_r, live=live_r, min_sample=min_sample)
     result["cell"] = cell
     return result

@@ -174,12 +174,8 @@ def _metrics(outcomes: list[ClosedOutcome]) -> dict[str, Any]:
     wins = [row for row in outcomes if row.won]
     losses = [row for row in outcomes if not row.won]
     win_rate = (len(wins) / n) if n else None
-    avg_win = (
-        sum(row.pnl for row in wins) / len(wins) if wins else None
-    )
-    avg_loss_mag = (
-        abs(sum(row.pnl for row in losses) / len(losses)) if losses else None
-    )
+    avg_win = sum(row.pnl for row in wins) / len(wins) if wins else None
+    avg_loss_mag = abs(sum(row.pnl for row in losses) / len(losses)) if losses else None
     net = sum(row.pnl for row in outcomes)
     payoff = None
     if avg_win is not None and avg_loss_mag and avg_loss_mag > 0:

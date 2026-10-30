@@ -315,17 +315,27 @@ class ExecutionSafetyService:
         slip_points = Decimal(int(intent.slippage.value or 0))
         slippage = slip_points * point if slip_points > 0 else Decimal("0")
         from app.domain.institutional_trading.owner_live_limits import (
+            declared_commission,
             format_owner_sl_risk,
             max_planned_risk_usd,
             planned_risk_usd,
         )
 
+        fee = declared_commission(getattr(account, "commission", None))
+        if fee is None:
+            return (
+                "OWNER_COMMISSION_UNKNOWN: account commission was not supplied, "
+                "so inclusive planned risk is unverified and the entry is rejected"
+            )
+        if fee < 0:
+            return "OWNER_COMMISSION_INVALID: commission cannot be negative"
         risk = planned_risk_usd(
             stop_distance=stop_distance,
             spread=calculated.spread,
             contract_size=cons.contract_size,
             volume=intent.volume.value,
             slippage=slippage,
+            commission=fee,
         )
         cap = max_planned_risk_usd(equity)
         if risk <= cap:

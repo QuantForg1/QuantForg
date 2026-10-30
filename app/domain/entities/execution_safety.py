@@ -86,9 +86,7 @@ class ExecutionPolicy:
 
             # Empty LIVE_BROKER / invalid-mode universe is fail-closed, never
             # "allow every symbol".
-            return not (
-                broker_discovered_enabled() or execution_universe_fail_closed()
-            )
+            return not (broker_discovered_enabled() or execution_universe_fail_closed())
         from app.domain.trading.execution_universe import execution_symbol_allowed
 
         return execution_symbol_allowed(symbol, self.symbol_whitelist)

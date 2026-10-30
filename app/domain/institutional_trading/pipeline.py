@@ -8,9 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from app.domain.fair_value_gap.engine import FairValueGapEngine
-from app.domain.institutional_trading.atr import compute_atr
+from app.domain.institutional_trading.atr import atr_for_timeframe
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.fingerprint import compute_input_hash
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -28,6 +29,7 @@ from app.domain.institutional_trading.trade_quality import TradeQualityEvaluator
 from app.domain.institutional_trading.trend_engine import TrendEngine
 from app.domain.liquidity.engine import LiquidityEngine
 from app.domain.market_context.engine import MarketContextEngine
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.market_structure.engine import MarketStructureEngine
 from app.domain.market_structure.structure_analyzer import StructureAnalyzer
@@ -189,8 +191,8 @@ class InstitutionalAnalysisPipeline:
         )
         fvg_result = await fvg_engine.analyze(code, primary_tf, as_of=moment)
 
-        ltf_obs: list = []
-        ltf_fvgs: list = []
+        ltf_obs: list[Any] = []
+        ltf_fvgs: list[Any] = []
         bars_by_tf = self.bars.as_mapping()
         for tf in scalp_ltf_zone_timeframes(cfg):
             if not bars_by_tf.get(tf):
@@ -264,20 +266,27 @@ class InstitutionalAnalysisPipeline:
             spread=str(spread) if spread is not None else None,
         )
 
-        # Volatility ATR on entry confirmation TF. Scalp stops use the owner's
-        # stop ATR timeframe (M1 or M5, OWNER_SL_ATR_TIMEFRAME).
+        # Volatility and spread/ATR use the entry-confirmation series.
+        # The owner stop uses its own timeframe and must not replace that ATR.
         entry_bars = list(self.bars.as_mapping().get(cfg.entry_confirmation_tf, []))
-        atr = compute_atr(entry_bars)
+        atr = atr_for_timeframe(
+            entry_bars, as_of=moment, timeframe=cfg.entry_confirmation_tf
+        )
         stop_tf = Timeframe.M1 if OWNER_SL_ATR_TIMEFRAME == "M1" else Timeframe.M5
         stop_bars = list(self.bars.as_mapping().get(stop_tf, []))
-        stop_atr = compute_atr(stop_bars)
+        stop_atr = atr_for_timeframe(stop_bars, as_of=moment, timeframe=stop_tf)
         entry_atr = stop_atr if cfg.is_scalping() else atr
         if entry_atr is None:
             entry_atr = atr
-        entry_opens = tuple(float(c.open.value) for c in entry_bars)
-        entry_highs = tuple(float(c.high.value) for c in entry_bars)
-        entry_lows = tuple(float(c.low.value) for c in entry_bars)
-        entry_closes = tuple(float(c.close.value) for c in entry_bars)
+        closed_entry = closed_analysis_bars(
+            entry_bars,
+            as_of=moment,
+            timeframe=cfg.entry_confirmation_tf,
+        )
+        entry_opens = tuple(float(c.open.value) for c in closed_entry)
+        entry_highs = tuple(float(c.high.value) for c in closed_entry)
+        entry_lows = tuple(float(c.low.value) for c in closed_entry)
+        entry_closes = tuple(float(c.close.value) for c in closed_entry)
 
         return MarketAnalysisSnapshot(
             symbol=code_str,

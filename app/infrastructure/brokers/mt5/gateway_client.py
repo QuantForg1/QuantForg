@@ -220,7 +220,11 @@ def classify_gateway_failure(
         return "404 Endpoint"
     if status_code == 429:
         return "Cloudflare rate limited"
-    if status_code == 530 or "error code: 1033" in err + body or "error code 1033" in err + body:
+    if (
+        status_code == 530
+        or "error code: 1033" in err + body
+        or "error code 1033" in err + body
+    ):
         return "CLOUDFLARE_ORIGIN_UNREACHABLE"
     if status_code in {502, 504}:
         return "CLOUD_EDGE_ORIGIN_ERROR"
@@ -698,9 +702,11 @@ class GatewayMT5Client:
                     )
                     # No silent reconnect — log every transport retry.
                     try:
-                        from app.domain.institutional_trading.reliability.platform import (  # noqa: E501
-                            get_reliability_platform,
+                        from app.domain.institutional_trading.reliability import (
+                            platform as _qf_platform,
                         )
+
+                        get_reliability_platform = _qf_platform.get_reliability_platform
 
                         get_reliability_platform().network.log_reconnect_attempt(
                             component="gateway",
@@ -736,9 +742,7 @@ class GatewayMT5Client:
             assert response is not None
         except httpx.TooManyRedirects as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            gateway_metrics.record_request(
-                latency_ms=latency_ms, error=True, path=path
-            )
+            gateway_metrics.record_request(latency_ms=latency_ms, error=True, path=path)
             detail = f"Redirect loop calling {method} {url}: {exc}"
             label = classify_gateway_failure(
                 error=detail,
@@ -772,9 +776,7 @@ class GatewayMT5Client:
             raise RuntimeError(f"{label}: {detail}") from exc
         except httpx.TimeoutException as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            gateway_metrics.record_request(
-                latency_ms=latency_ms, error=True, path=path
-            )
+            gateway_metrics.record_request(latency_ms=latency_ms, error=True, path=path)
             detail = (
                 f"Gateway timeout calling {method} {url} "
                 f"(timeout={self.timeout_seconds}s): {exc}"
@@ -812,9 +814,7 @@ class GatewayMT5Client:
             raise RuntimeError(f"{label}: {detail}") from exc
         except httpx.HTTPError as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            gateway_metrics.record_request(
-                latency_ms=latency_ms, error=True, path=path
-            )
+            gateway_metrics.record_request(latency_ms=latency_ms, error=True, path=path)
             detail = f"Gateway unreachable calling {method} {url}: {exc}"
             label = classify_gateway_failure(
                 error=detail,
@@ -1013,7 +1013,7 @@ class GatewayMT5Client:
     def gateway_health(self) -> dict[str, Any]:
         now = time.monotonic()
         cached = self._gw_health_cache
-        if self._cycle_cache_valid(
+        if cached is not None and self._cycle_cache_valid(
             cached, self._gw_health_at, ttl=self._health_snapshot_ttl_seconds
         ):
             return dict(cached)
@@ -1334,9 +1334,12 @@ class GatewayMT5Client:
     def account_info(self) -> MT5AccountInfo:
         self._require_connected()
         now = time.monotonic()
-        if self._cycle_cache_valid(self._account_cache, self._account_cache_at):
+        cached_account = self._account_cache
+        if cached_account is not None and self._cycle_cache_valid(
+            cached_account, self._account_cache_at
+        ):
             gateway_metrics.record_cache(hit=True)
-            return self._account_cache
+            return cached_account
         gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/account")
         # Prefer gateway-mapped account_mode / trade_mode_raw from MT5.
@@ -1355,6 +1358,10 @@ class GatewayMT5Client:
             account_mode = {0: "demo", 1: "contest", 2: "real"}.get(raw_i, "unknown")
         trade_allowed_raw = data.get("trade_allowed")
         trade_allowed = None if trade_allowed_raw is None else bool(trade_allowed_raw)
+        from app.domain.institutional_trading.owner_live_limits import (
+            declared_commission,
+        )
+
         info = MT5AccountInfo(
             login=int(data.get("login") or self._login),
             name=str(data.get("name") or f"Account {data.get('login', '')}"),
@@ -1370,6 +1377,7 @@ class GatewayMT5Client:
             company=str(data.get("company") or "Weltrade"),
             trade_mode=account_mode,
             trade_allowed=trade_allowed,
+            commission=declared_commission(data.get("commission")),
         )
         previous_login = int(self._login or 0)
         verified_login = int(info.login or 0)
@@ -1466,7 +1474,7 @@ class GatewayMT5Client:
     def health(self) -> MT5HealthSnapshot:
         now = time.monotonic()
         cached = self._health_snapshot_cache
-        if self._cycle_cache_valid(
+        if cached is not None and self._cycle_cache_valid(
             cached, self._health_snapshot_at, ttl=self._health_snapshot_ttl_seconds
         ):
             return cached
@@ -1612,9 +1620,7 @@ class GatewayMT5Client:
                         description=meta.description if meta else code,
                         digits=meta.digits if meta else 5,
                         point=_dec(tick_payload.get("point"), "0.00001"),
-                        contract_size=(
-                            meta.contract_size if meta else Decimal("0")
-                        ),
+                        contract_size=(meta.contract_size if meta else Decimal("0")),
                         selected=True,
                         trade_mode="full",
                         bid=_dec(tick_payload.get("bid")),
@@ -1859,6 +1865,9 @@ class GatewayMT5Client:
             # hide a retry of the same order. An empty id is rejected by the guard.
             "client_order_id": str(getattr(request, "client_order_id", "") or "")[:64],
         }
+        fee = getattr(request, "commission", None)
+        if fee is not None:
+            json_body["commission"] = str(fee)
         try:
             data = self._request(
                 "POST",
@@ -1881,12 +1890,14 @@ class GatewayMT5Client:
                 ticket=0,
             )
             try:
-                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                    ValidationStage,
-                    record_gateway,
-                    record_mt5,
-                    stage as pvm_stage,
+                from app.domain.institutional_trading import (
+                    production_validation_mode as _qf_production_validation_mode,
                 )
+
+                ValidationStage = _qf_production_validation_mode.ValidationStage
+                record_gateway = _qf_production_validation_mode.record_gateway
+                record_mt5 = _qf_production_validation_mode.record_mt5
+                pvm_stage = _qf_production_validation_mode.stage
 
                 order_send_ms = round((time.perf_counter() - order_send_t0) * 1000.0, 2)
                 upstream = getattr(self, "_last_upstream", None) or {}
@@ -2053,9 +2064,12 @@ class GatewayMT5Client:
     def list_positions(self) -> list[MT5Position]:
         self._require_connected()
         now = time.monotonic()
-        if self._cycle_cache_valid(self._positions_cache, self._positions_cache_at):
+        cached_positions = self._positions_cache
+        if cached_positions is not None and self._cycle_cache_valid(
+            cached_positions, self._positions_cache_at
+        ):
             gateway_metrics.record_cache(hit=True)
-            return list(self._positions_cache)
+            return list(cached_positions)
         gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/positions")
         out: list[MT5Position] = []
@@ -2105,9 +2119,12 @@ class GatewayMT5Client:
     def list_orders(self) -> list[MT5PendingOrder]:
         self._require_connected()
         now = time.monotonic()
-        if self._cycle_cache_valid(self._orders_cache, self._orders_cache_at):
+        cached_orders = self._orders_cache
+        if cached_orders is not None and self._cycle_cache_valid(
+            cached_orders, self._orders_cache_at
+        ):
             gateway_metrics.record_cache(hit=True)
-            return list(self._orders_cache)
+            return list(cached_orders)
         gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/orders")
         out: list[MT5PendingOrder] = []
@@ -2221,6 +2238,8 @@ class GatewayMT5Client:
         else:
             days = 30
 
+        from services.mt5_gateway.deals import parse_reported_commission
+
         data = self._request("GET", "/history/deals", params={"days": days})
         out: list[MT5Deal] = []
         for row in data.get("items") or []:
@@ -2274,7 +2293,7 @@ class GatewayMT5Client:
                     volume=vol,
                     price=_dec(row.get("price")),
                     profit=_dec(row.get("profit")),
-                    commission=_dec(row.get("commission")),
+                    commission=parse_reported_commission(row.get("commission")),
                     swap=_dec(row.get("swap")),
                     deal_type=deal_type,
                     time=deal_time,

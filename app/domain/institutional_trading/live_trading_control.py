@@ -62,7 +62,7 @@ MappingLike = dict[str, Any]
 # Micro-account hard ceiling — configuration cannot exceed these.
 # ITE MAX_DAILY_LOSS_PCT (3%, $5 floor, 10% ceiling) is the global engine cap;
 # this overlay is strictly tighter for real-money live authorization.
-HARD_CEILING_RISK_PER_TRADE_PCT = Decimal("9.00")
+HARD_CEILING_RISK_PER_TRADE_PCT = _ol.OWNER_MAX_PLANNED_RISK_PCT
 HARD_CEILING_DAILY_LOSS_PCT = Decimal("19.00")
 HARD_CEILING_MAX_POSITIONS = 2
 HARD_CEILING_CONSECUTIVE_LOSSES = 3
@@ -73,7 +73,7 @@ HARD_CEILING_MAX_SLIPPAGE = Decimal("1.00")
 HARD_CEILING_QUOTE_AGE_S = Decimal("5.00")
 
 # Conservative defaults for a ~$33 real-money account (capital preservation).
-DEFAULT_RISK_PER_TRADE_PCT = Decimal("9.00")
+DEFAULT_RISK_PER_TRADE_PCT = _ol.OWNER_MAX_PLANNED_RISK_PCT
 DEFAULT_DAILY_LOSS_PCT = Decimal("19.00")
 DEFAULT_MAX_POSITIONS = 1
 DEFAULT_CONSECUTIVE_LOSSES = 3
@@ -149,7 +149,7 @@ def normalize_state(value: Any) -> LiveTradingState:
     if raw in _STATE_ALIASES:
         return _STATE_ALIASES[raw]
     if raw in STATES:
-        return raw  # type: ignore[return-value]
+        return raw
     return "DISABLED"
 
 
@@ -852,13 +852,30 @@ def evaluate_signal_quality(
     # Prices are the truth: a model RR (req.reward_risk) only counts when the
     # order's own entry/SL/TP cannot produce one.
     price_rr = price_reward_risk(direction, entry, sl, tp)
+    from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
+
+    floor = active_min_reward_risk()
     rr = price_rr if price_rr is not None else req.reward_risk
+    if price_rr is not None and entry is not None and sl is not None and tp is not None:
+        net = _ol.net_reward_risk(
+            tp_distance=abs(tp - entry),
+            stop_distance=abs(entry - sl),
+            spread=req.spread if req.spread is not None else Decimal("0"),
+            slippage=req.slippage,
+        )
+        if net.ratio is not None:
+            rr = net.ratio
     profit_exceeds_loss = False
     if sl_ok and tp_ok and entry is not None and sl is not None and tp is not None:
         risk_dist = abs(entry - sl)
         reward_dist = abs(tp - entry)
         profit_exceeds_loss = risk_dist > 0 and reward_dist > risk_dist
-    rr_ok = profit_exceeds_loss and rr is not None and rr >= cfg.min_rr_or_default()
+    # Published default still requires the target to exceed the stop. An
+    # authorized floor below 1 compares the net ratio only.
+    if floor >= Decimal("1"):
+        rr_ok = profit_exceeds_loss and rr is not None and rr >= floor
+    else:
+        rr_ok = rr is not None and rr >= floor
     regime_ok = bool(str(req.regime or "").strip())
     fresh = req.analysis_age_seconds is None or req.analysis_age_seconds <= Decimal(
         "180"
@@ -1031,6 +1048,8 @@ def evaluate_live_order(
     if (
         req.spec is not None
         and req.equity is not None
+        and entry is not None
+        and sl is not None
         and finite_positive(entry)
         and finite_positive(sl)
     ):
@@ -1147,7 +1166,7 @@ class LiveTradingAuditEntry:
     request_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return strip_secrets(
+        body: dict[str, Any] = strip_secrets(
             {
                 "timestamp": self.timestamp,
                 "operator_id": self.operator_id,
@@ -1163,6 +1182,7 @@ class LiveTradingAuditEntry:
                 "request_metadata": self.request_metadata,
             }
         )
+        return body
 
 
 @dataclass
@@ -1187,7 +1207,8 @@ class ExecutionRecord:
     reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return strip_secrets(asdict(self))
+        body: dict[str, Any] = strip_secrets(asdict(self))
+        return body
 
 
 @dataclass
@@ -1247,7 +1268,7 @@ class LiveTradingController:
     def persist_payload(self) -> dict[str, Any]:
         with self._lock:
             durable = self.durable_authorization_state()
-            return strip_secrets(
+            body: dict[str, Any] = strip_secrets(
                 {
                     "live_trading_state": durable,
                     "live_trading_runtime_state": self.state,
@@ -1269,6 +1290,7 @@ class LiveTradingController:
                     "live_trading_audit": [e.to_dict() for e in self.audit[-50:]],
                 }
             )
+            return body
 
     def hydrate(
         self, payload: MappingLike | None, *, persist_recovery: bool = True

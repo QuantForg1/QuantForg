@@ -121,7 +121,11 @@ def classify_broker_session_open(
         return False
     if mode in _OPEN_MODES and trade_allowed is True:
         return True
-    if mode in _OPEN_MODES and market_data_live is True and trade_allowed is not False:
+    # Earlier `is False` returns already handled a closed flag. Keep the
+    # identity check on object so a future widening of the parameter still
+    # fails closed, without mypy deleting the comparison as redundant.
+    allowed_flag: object = trade_allowed
+    if mode in _OPEN_MODES and market_data_live is True and allowed_flag is not False:
         return True
     if trade_allowed is True and market_data_live is True and not mode:
         return True
@@ -206,9 +210,7 @@ def build_broker_session_snapshot(
         reason=reason,
         broker_server_time=broker_server_time,
         local_time=moment.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        next_expected_open=_next_expected_open_utc(
-            broker_open=broker_open, now=moment
-        ),
+        next_expected_open=_next_expected_open_utc(broker_open=broker_open, now=moment),
         session_age_ms=age_ms,
         last_session_transition=last_tr,
         trade_mode=str(trade_mode or ""),
@@ -228,10 +230,7 @@ def note_broker_session(broker_open: bool | None) -> str | None:
     event: str | None = None
     with _LOCK:
         prev = _LAST_BROKER
-        if (
-            prev in {BROKER_SESSION_CLOSED, UNKNOWN}
-            and state == BROKER_SESSION_OPEN
-        ):
+        if prev in {BROKER_SESSION_CLOSED, UNKNOWN} and state == BROKER_SESSION_OPEN:
             event = SESSION_OPEN_DETECTED
             _LAST_TRANSITION = event
             _LAST_TRANSITION_MONO = time.monotonic()
@@ -334,9 +333,7 @@ def resolve_from_diagnostics(
 ) -> BrokerSessionSnapshot:
     diag = dict(diagnostics or {})
     explicit = diag.get("broker_session_open")
-    trade_mode = str(
-        diag.get("symbol_trade_mode") or diag.get("trade_mode") or ""
-    )
+    trade_mode = str(diag.get("symbol_trade_mode") or diag.get("trade_mode") or "")
     raw_allowed = diag.get("symbol_trade_allowed")
     if raw_allowed is None:
         raw_allowed = diag.get("trade_allowed")

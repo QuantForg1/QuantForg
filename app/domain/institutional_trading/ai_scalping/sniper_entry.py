@@ -200,7 +200,9 @@ def _zone_is_stale(
     return (now - ts) > _STALE_MAX_AGE
 
 
-def _iter_zone_snapshots(snapshot: Any, primary_attr: str, extra_attr: str) -> list[Any]:
+def _iter_zone_snapshots(
+    snapshot: Any, primary_attr: str, extra_attr: str
+) -> list[Any]:
     """Primary M15 snapshot plus optional LTF (M1/M5) snapshots."""
     snaps: list[Any] = []
     primary = getattr(snapshot, primary_attr, None)
@@ -297,9 +299,7 @@ def _collect_aligned_zones(
     now: datetime,
 ) -> list[_AlignedZone]:
     out: list[_AlignedZone] = []
-    for ob_snap in _iter_zone_snapshots(
-        snapshot, "order_blocks", "ltf_order_blocks"
-    ):
+    for ob_snap in _iter_zone_snapshots(snapshot, "order_blocks", "ltf_order_blocks"):
         _append_ob_zones(out, ob_snap, side, now=now)
     for fvg_snap in _iter_zone_snapshots(
         snapshot, "fair_value_gaps", "ltf_fair_value_gaps"
@@ -319,7 +319,7 @@ def _chase_distance(
     """Return (distance, extension, is_chase, entry_state).
 
     INSIDE / RETEST / EARLY are never chase. EXTENDED is chase only beyond
-    1.5× zone-timeframe ATR.
+    1.5x zone-timeframe ATR.
     """
     zone_atr = _atr_for_zone(
         atr,
@@ -412,9 +412,9 @@ def _evidence_families(
     if standing_levels and "liquidity" not in families:
         eqh = _seq(liq, "equal_highs")
         eql = _seq(liq, "equal_lows")
-        if side is TradeDirection.SELL and eqh:
-            families.append("liquidity")
-        elif side is TradeDirection.BUY and eql:
+        if (side is TradeDirection.SELL and eqh) or (
+            side is TradeDirection.BUY and eql
+        ):
             families.append("liquidity")
     if any(not z.stale for z in _collect_aligned_zones(snapshot, side, now=now)):
         families.append("zone")
@@ -570,7 +570,9 @@ def evaluate_sniper_entry(
             return _wait("WAIT_NO_DIRECTIONAL_EDGE", setup_state="CONFLICT")
         if buy_fams or sell_fams:
             diagnostics["confluence_class"] = _confluence_class(
-                take=False, independent=buy_fams or sell_fams, setup_state="SETUP_FORMING"
+                take=False,
+                independent=buy_fams or sell_fams,
+                setup_state="SETUP_FORMING",
             )
             return _wait("WAIT_NO_DIRECTIONAL_EDGE", setup_state="SETUP_FORMING")
         diagnostics["confluence_class"] = "INVALID"
@@ -643,9 +645,7 @@ def evaluate_sniper_entry(
             reasons.append("Equal lows — bullish liquidity")
 
     displacement_ok = False
-    for ob_snap in _iter_zone_snapshots(
-        snapshot, "order_blocks", "ltf_order_blocks"
-    ):
+    for ob_snap in _iter_zone_snapshots(snapshot, "order_blocks", "ltf_order_blocks"):
         for block in _seq(ob_snap, "order_blocks")[:24]:
             state = _upper(getattr(block, "state", None))
             if state and state not in {"ACTIVE", "VALIDATED", ""}:
@@ -718,12 +718,7 @@ def evaluate_sniper_entry(
     if used_stale_only:
         diagnostics["stale_fvg_present"] = True
 
-    if (
-        ref is not None
-        and atr is not None
-        and atr > 0
-        and chase_zones
-    ):
+    if ref is not None and atr is not None and atr > 0 and chase_zones:
         nearest = _nearest_zone(chase_zones, side=side, ref=ref)
         if nearest is not None:
             distance, extension, chasing, entry_state = _chase_distance(
@@ -752,9 +747,10 @@ def evaluate_sniper_entry(
                 str(nearest.high) if side is TradeDirection.BUY else str(nearest.low)
             )
             diagnostics["fvg_age_bars"] = nearest.freshness_bars
-            diagnostics["zone_timeframe"] = str(
-                getattr(nearest.timeframe, "value", nearest.timeframe) or ""
-            ) or None
+            diagnostics["zone_timeframe"] = (
+                str(getattr(nearest.timeframe, "value", nearest.timeframe) or "")
+                or None
+            )
             diagnostics["zone_source"] = nearest.source
             diagnostics["zone_atr"] = str(zone_atr)
             diagnostics["zone_created_at"] = (

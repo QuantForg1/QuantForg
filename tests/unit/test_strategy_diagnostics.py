@@ -149,10 +149,10 @@ class TestStrategyDiagnostics:
         )
         assert row["market_session"] == "london"
         assert row["quality"]["score"] == 58
-        assert row["quality"]["required"] == 75
-        assert row["quality"]["difference"] == -17
+        assert row["quality"]["required"] == 70
+        assert row["quality"]["difference"] == -12
         assert row["confluence"]["total"] == 55
-        assert row["confluence"]["required"] == 75
+        assert row["confluence"]["required"] == 70
         from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 
         assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80
@@ -291,9 +291,7 @@ class TestStrategyDiagnostics:
                 "rejection": {"primary": "WAIT_CHASE"},
             },
         ]
-        rates = hourly_scan_rates(
-            cycles, now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC)
-        )
+        rates = hourly_scan_rates(cycles, now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC))
         assert rates["scans"] == 2
         assert rates["candidate_setups"] == 1
         assert rates["take_count"] == 1
@@ -346,6 +344,6 @@ class TestStrategyDiagnostics:
         payload = store.snapshot(limit=100)
         assert payload["mutates_engines"] is False
         assert payload["statistics"]["cycles_in_window"] == 3
-        assert payload["latest"]["quality"]["required"] == 75
-        assert payload["latest"]["quality"]["difference"] == -17
+        assert payload["latest"]["quality"]["required"] == 70
+        assert payload["latest"]["quality"]["difference"] == -12
         assert len(payload["smart_insights"]) >= 1

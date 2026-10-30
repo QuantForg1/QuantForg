@@ -5,7 +5,7 @@ adaptive model:
 
 * Standard setups → keep 0.20% floor (never looser than v1 for weak tape).
 * Exceptional institutional strength → floor may ease to hard_min (0.08%).
-* Absolute hard minimum → 0.08% for XAUUSD (production ATR%≈0.082–0.115
+* Absolute hard minimum → 0.08% for XAUUSD (production ATR%≈0.082-0.115
   deadlocked under 0.10/0.15; weak setups still require 0.20 standard).
 * Multi-symbol: FX / index ATR% is not comparable to gold — use asset-class
   floors so MULTI_SYMBOL_ENABLED is not silently gold-calibrated.
@@ -275,9 +275,7 @@ def evaluate_volatility_gate_v2(
             f"ATR%={atr_pct} (standard={standard}; all strength gates clear)"
         )
     elif passed:
-        reason = (
-            f"Volatility v2 PASS standard floor={applied} ATR%={atr_pct}"
-        )
+        reason = f"Volatility v2 PASS standard floor={applied} ATR%={atr_pct}"
     elif eligible:
         reason = (
             f"Volatility too compressed ATR%={atr_pct} < exceptional floor {applied}"

@@ -206,9 +206,7 @@ class LiveAccountRiskTracker:
     @staticmethod
     def _is_trade_deal(deal: Any) -> bool:
         """True for market buy/sell fills. Balance/credit/deposit never count."""
-        dtype = str(
-            LiveAccountRiskTracker._deal_value(deal, "deal_type", "type") or ""
-        )
+        dtype = str(LiveAccountRiskTracker._deal_value(deal, "deal_type", "type") or "")
         low = dtype.lower()
         if any(
             tok in low
@@ -262,6 +260,7 @@ class LiveAccountRiskTracker:
         seen_dep: set[int] = set()
         trades: list[tuple[datetime, int, Decimal]] = []
         deposits: list[tuple[datetime, int, Any]] = []
+        commission_known = True
         for deal in deals:
             ticket = LiveAccountRiskTracker._deal_ticket(deal)
             moment = LiveAccountRiskTracker._deal_time(deal)
@@ -278,6 +277,8 @@ class LiveAccountRiskTracker:
                 continue
             if not LiveAccountRiskTracker._is_trade_deal(deal):
                 continue
+            if not LiveAccountRiskTracker.commission_reported(deal):
+                commission_known = False
             if ticket > 0:
                 if ticket in seen_trade:
                     continue
@@ -334,7 +335,13 @@ class LiveAccountRiskTracker:
             "post_deposit_trade_pnl": post if cutoff is not None else session_trade,
             "new_capital_detected": cutoff is not None,
             "capital_baseline": baseline,
+            "commission_known": commission_known,
         }
+
+    @staticmethod
+    def commission_reported(deal: Any) -> bool:
+        """False when the broker field is missing. Numeric zero is reported."""
+        return LiveAccountRiskTracker._deal_value(deal, "commission") is not None
 
     @staticmethod
     def _balance_around_deals(

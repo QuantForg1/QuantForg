@@ -135,4 +135,3 @@ def test_signal_center_marks_test_synthetic_source() -> None:
     assert xau["direction"] == "SELL"
     assert xau["test_synthetic"] is True
     assert xau["badge"].startswith("TEST")
-

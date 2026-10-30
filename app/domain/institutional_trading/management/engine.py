@@ -5,6 +5,7 @@ Never opens trades. Never modifies OMS / Phase A / B / C.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import time
 from dataclasses import dataclass, field
@@ -122,7 +123,7 @@ class PositionManagementEngine:
             for ticket in stale:
                 if self._positions.pop(ticket, None) is not None:
                     removed += 1
-                    try:
+                    with contextlib.suppress(Exception):
                         from core.logging import get_logger
 
                         get_logger(__name__).warning(
@@ -131,8 +132,6 @@ class PositionManagementEngine:
                             reason="missing_from_mt5_book",
                             symbol=target or "",
                         )
-                    except Exception:
-                        pass
         return removed
 
     def evaluate(

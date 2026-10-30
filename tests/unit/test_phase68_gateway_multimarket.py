@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -93,7 +94,11 @@ def test_merge_requests_all_live_non_gold_unknown_stubs() -> None:
     assert by_sym["XAUUSD"]["opportunity_score"] == 73
     assert by_sym["BTCUSD"]["opportunity_score"] == 60
     assert by_sym["EURUSD"]["opportunity_score"] == 62
-    assert all(r.get("authorizes_trade") is False for r in merged if r.get("symbol") != "XAUUSD")
+    assert all(
+        r.get("authorizes_trade") is False
+        for r in merged
+        if r.get("symbol") != "XAUUSD"
+    )
 
 
 @pytest.mark.unit
@@ -147,10 +152,10 @@ async def test_pipeline_keeps_non_gold_inferred_under_gold_only(
     captured: list[str] = []
 
     class _FakeEngine:
-        def __init__(self, **kwargs):  # noqa: ANN003
+        def __init__(self, **kwargs):
             pass
 
-        async def analyze(self, code, tf, as_of=None):  # noqa: ANN001
+        async def analyze(self, code, tf, as_of=None):
             captured.append(str(getattr(code, "value", code)))
             snap = MagicMock()
             snap.symbol_code = code
@@ -183,9 +188,7 @@ async def test_pipeline_keeps_non_gold_inferred_under_gold_only(
     )
     pipe = InstitutionalAnalysisPipeline(bars=MultiTimeframeBarStore())
     monkeypatch.setattr(pipe, "_infer_symbol_from_bars", lambda: "EURUSD")
-    try:
+    with contextlib.suppress(Exception):
         await pipe.analyze(symbol="XAUUSD", as_of=datetime.now(UTC))
-    except Exception:
-        pass
     assert "EURUSD" in captured
     assert "XAUUSD" not in captured

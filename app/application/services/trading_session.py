@@ -278,9 +278,7 @@ class GetTradingSessionUseCase:
                 catalogue_source = "UNAVAILABLE"
                 catalogue_unavailable = True
                 catalogue_last_error = "catalogue_diagnostics_failed"
-        owned = connection is not None and bool(
-            getattr(connection, "connected", False)
-        )
+        owned = connection is not None and bool(getattr(connection, "connected", False))
         ux = _ux_state(
             owned=owned,
             session_code=session_code,
@@ -297,9 +295,7 @@ class GetTradingSessionUseCase:
                     stamp.isoformat() if hasattr(stamp, "isoformat") else str(stamp)
                 )
         account_unavailable = bool(
-            owned
-            and session_code != ACCOUNT_SESSION_MISMATCH
-            and balance is None
+            owned and session_code != ACCOUNT_SESSION_MISMATCH and balance is None
         )
         if session_code == ACCOUNT_SESSION_MISMATCH:
             robot_blocked_reason = ACCOUNT_SESSION_MISMATCH
@@ -331,9 +327,11 @@ class GetTradingSessionUseCase:
                 "Healthy"
                 if ctx.connection_status in {"CONNECTED", "RUNNING"}
                 and session_code != ACCOUNT_SESSION_MISMATCH
-                else "Disconnected"
-                if ctx.connection_status == "NOT_CONNECTED"
-                else "Degraded"
+                else (
+                    "Disconnected"
+                    if ctx.connection_status == "NOT_CONNECTED"
+                    else "Degraded"
+                )
             ),
             "robot": ctx.robot_status,
             "trading": (
@@ -353,9 +351,9 @@ class GetTradingSessionUseCase:
             "connection_status": ctx.connection_status,
             "execution_permitted": ctx.execution_permitted
             and session_code != ACCOUNT_SESSION_MISMATCH,
-            "broker_connection_id": str(ctx.broker_connection_id)
-            if ctx.broker_connection_id
-            else None,
+            "broker_connection_id": (
+                str(ctx.broker_connection_id) if ctx.broker_connection_id else None
+            ),
             "balance": balance,
             "equity": equity,
             "margin": margin,
@@ -379,9 +377,7 @@ class GetTradingSessionUseCase:
             "trade_allowed": trade_allowed,
             "mt5_terminal": (
                 "connected"
-                if owned
-                and session_code != ACCOUNT_SESSION_MISMATCH
-                and live_login > 1
+                if owned and session_code != ACCOUNT_SESSION_MISMATCH and live_login > 1
                 else "disconnected"
             ),
             "broker_authenticated": bool(
@@ -390,7 +386,9 @@ class GetTradingSessionUseCase:
                 and balance is not None
             ),
             "trading_authorization": (
-                "enabled" if lt_fields["orders_may_submit"] and ctx.execution_permitted
+                "enabled"
+                if lt_fields["orders_may_submit"]
+                and ctx.execution_permitted
                 and session_code != ACCOUNT_SESSION_MISMATCH
                 else "disabled"
             ),

@@ -27,6 +27,7 @@ from app.domain.interfaces.market_structure import (
     SwingDetectorPort,
     TrendAnalyzerPort,
 )
+from app.domain.market_data.closed_bars import closed_analysis_bars
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.market_structure.models import StructureSnapshot
 from app.domain.market_structure.structure_analyzer import StructureAnalyzer
@@ -77,10 +78,14 @@ class MarketStructureEngine:
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=UTC)
 
-        candles = await self.prices.get_candles(
-            code,
-            tf,
-            limit=self.candle_limit,
+        candles = closed_analysis_bars(
+            await self.prices.get_candles(
+                code,
+                tf,
+                limit=self.candle_limit,
+            ),
+            as_of=moment,
+            timeframe=tf,
         )
         swing_points = self.swings.detect(
             candles,

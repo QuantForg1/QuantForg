@@ -27,7 +27,10 @@ from app.domain.institutional_trading.ai_scalping.direction import (
 from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     may_add_scalping_trade,
 )
-from app.domain.institutional_trading.ai_scalping.scoring import AiScalpingScore, score_scalping_setup
+from app.domain.institutional_trading.ai_scalping.scoring import (
+    AiScalpingScore,
+    score_scalping_setup,
+)
 from app.domain.institutional_trading.ai_scalping.sniper_entry import (
     evaluate_sniper_entry,
 )
@@ -62,7 +65,9 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 MIN_RR = Decimal("1.20")
 
 
-def _struct(*, bos: list[object] | None = None, choch: list[object] | None = None) -> MagicMock:
+def _struct(
+    *, bos: list[object] | None = None, choch: list[object] | None = None
+) -> MagicMock:
     structure = MagicMock()
     structure.breaks_of_structure = list(bos or [])
     structure.changes_of_character = list(choch or [])
@@ -195,44 +200,44 @@ def _sniper(snap: MagicMock, direction: DirectionDecision, **kwargs: object) -> 
 
 
 def _ready(**overrides: object) -> GoldExecutionFacts:
-    base = dict(
-        symbol="XAUUSD_I",
-        direction="BUY",
-        action="BUY",
-        market_open=True,
-        tradable=True,
-        candles_ok=True,
-        bid=Decimal("2400.10"),
-        ask=Decimal("2400.30"),
-        quote_age_seconds=1.0,
-        spread=Decimal("0.20"),
-        structure_score=70,
-        momentum_score=65,
-        quality=80,
-        confidence=75,
-        pa_confluence=55,
-        risk_reward=Decimal("1.20"),
-        market_regime="TREND",
-        volatility_ok=True,
-        session_quality_ok=True,
-        safety_allowed=True,
-        kill_switch=False,
-        execution_enabled=True,
-        auto_running=True,
-        account_leverage=Decimal("2000"),
-        risk_eligible=True,
-        approved_lots=Decimal("0.01"),
-        min_lot_infeasible=False,
-        portfolio_allow=True,
-        optimizer_state="EXECUTE_NOW",
-        oms_orders_allowed=True,
-        gateway_connected=True,
-        broker_connected=True,
-        force_shadow=False,
-        gold_only=True,
-        opportunity_score=80,
-        opportunity_threshold=70,
-    )
+    base = {
+        "symbol": "XAUUSD_I",
+        "direction": "BUY",
+        "action": "BUY",
+        "market_open": True,
+        "tradable": True,
+        "candles_ok": True,
+        "bid": Decimal("2400.10"),
+        "ask": Decimal("2400.30"),
+        "quote_age_seconds": 1.0,
+        "spread": Decimal("0.20"),
+        "structure_score": 70,
+        "momentum_score": 65,
+        "quality": 80,
+        "confidence": 75,
+        "pa_confluence": 55,
+        "risk_reward": Decimal("1.20"),
+        "market_regime": "TREND",
+        "volatility_ok": True,
+        "session_quality_ok": True,
+        "safety_allowed": True,
+        "kill_switch": False,
+        "execution_enabled": True,
+        "auto_running": True,
+        "account_leverage": Decimal("2000"),
+        "risk_eligible": True,
+        "approved_lots": Decimal("0.01"),
+        "min_lot_infeasible": False,
+        "portfolio_allow": True,
+        "optimizer_state": "EXECUTE_NOW",
+        "oms_orders_allowed": True,
+        "gateway_connected": True,
+        "broker_connected": True,
+        "force_shadow": False,
+        "gold_only": True,
+        "opportunity_score": 80,
+        "opportunity_threshold": 70,
+    }
     base.update(overrides)
     return GoldExecutionFacts(**base)  # type: ignore[arg-type]
 
@@ -258,7 +263,9 @@ def test_b_m5_trigger_m15_confirmation_is_take() -> None:
         m5=_struct(bos=[_bos("UP")]),
         fvgs=[_fvg(side="BULLISH", high="2612", low="2608")],
     )
-    out = _sniper(snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65)
+    out = _sniper(
+        snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65
+    )
     assert out.passed is True
     assert out.action == "BUY"
     assert out.diagnostics["setup_state"] == "TAKE"
@@ -472,7 +479,11 @@ def test_n_oms_rejection_is_not_executed() -> None:
                 "direction": "BUY",
                 "signal_action": "BUY",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "BUY", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {
@@ -492,7 +503,11 @@ def test_o_mt5_rejection_is_not_executed() -> None:
                 "direction": "BUY",
                 "signal_action": "BUY",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "BUY", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {
@@ -512,9 +527,7 @@ def test_p_real_ticket_is_executed() -> None:
 
 
 def test_q_no_ticket_is_not_executed() -> None:
-    handoff = build_execution_handoff(
-        take=True, forwarded_to_oms=True, mt5_ticket=None
-    )
+    handoff = build_execution_handoff(take=True, forwarded_to_oms=True, mt5_ticket=None)
     assert handoff["execution_confirmed"] is False
 
 
@@ -573,7 +586,7 @@ def test_v_losing_position_cannot_scale_in() -> None:
 
 
 def test_w_daily_loss_at_or_below_owner_stop_is_clear() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
     assert (
         utc_daily_loss_exceeded(
             daily_pnl=Decimal("-5.00"),
@@ -787,7 +800,9 @@ def test_ob_retest_is_valid_with_independent_structure() -> None:
         m5=_struct(bos=[_bos("UP")]),
         obs=[_ob(bias="BUY")],
     )
-    out = _sniper(snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65)
+    out = _sniper(
+        snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65
+    )
     assert out.passed is True
     assert out.action == "BUY"
     assert "zone" in out.diagnostics["independent_evidence"]
@@ -927,7 +942,10 @@ def test_stale_timing_does_not_receive_retest_points() -> None:
     stale = evaluate_from_score_dict(
         _live_like_opportunity(timing_retest=20, displacement=20)
     )
-    assert with_timing.score_breakdown["price_action"] > stale.score_breakdown["price_action"]
+    assert (
+        with_timing.score_breakdown["price_action"]
+        > stale.score_breakdown["price_action"]
+    )
     assert stale.score_breakdown["price_action"] == 50
 
 

@@ -61,6 +61,7 @@ class InstitutionalOmsManageAdapter:
         current_stop_loss: Decimal | None = None,
         take_profit_changed: bool = False,
     ) -> OmsManageResult:
+        _ = (current_stop_loss, take_profit_changed)
         intent = parse_order_intent(
             symbol=symbol,
             side=side,

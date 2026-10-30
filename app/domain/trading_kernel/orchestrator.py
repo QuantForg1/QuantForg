@@ -458,6 +458,8 @@ def _input_from_dict(data: dict[str, Any]) -> KernelCycleInput:
         except Exception:
             return None
 
+    alpha_raw = data.get("alpha")
+    alpha = alpha_raw if isinstance(alpha_raw, dict) else None
     return KernelCycleInput(
         side=str(data.get("side") or "buy"),
         spread=_dec(data.get("spread")),
@@ -475,7 +477,7 @@ def _input_from_dict(data: dict[str, Any]) -> KernelCycleInput:
         execution_mode=(
             str(data["execution_mode"]) if data.get("execution_mode") else None
         ),
-        alpha=data.get("alpha") if isinstance(data.get("alpha"), dict) else None,
+        alpha=alpha,
         risk_engine_passed=(
             data.get("risk_engine_passed")
             if isinstance(data.get("risk_engine_passed"), bool)

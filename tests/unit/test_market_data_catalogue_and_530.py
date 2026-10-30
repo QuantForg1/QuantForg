@@ -181,9 +181,7 @@ async def test_market_context_uses_canonical_and_keeps_logical(
     tick_symbols = [str(c.args[0]) for c in adapter.latest_tick.call_args_list]
     assert tick_symbols
     assert all(s.upper() == "AUDUSD_I" for s in tick_symbols)
-    info_symbols = [
-        str(c.args[0]) for c in adapter.client.symbol_info.call_args_list
-    ]
+    info_symbols = [str(c.args[0]) for c in adapter.client.symbol_info.call_args_list]
     if info_symbols:
         assert all(s.upper() == "AUDUSD_I" for s in info_symbols)
 

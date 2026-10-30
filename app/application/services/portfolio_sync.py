@@ -98,9 +98,7 @@ class PortfolioSyncService:
         hist_deals = self.history_deals(date_from=date_from, date_to=date_to)
         # Authoritative open book: bypass cycle/TTL position pin after deals.
         refresh = getattr(self.adapter, "force_refresh_positions", None)
-        positions = (
-            refresh() if callable(refresh) else self.list_positions()
-        )
+        positions = refresh() if callable(refresh) else self.list_positions()
 
         state = PortfolioState(
             account=account,

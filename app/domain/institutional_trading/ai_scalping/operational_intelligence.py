@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -58,7 +59,7 @@ def build_operational_intelligence() -> dict[str, Any]:
         )
 
     # Live health / gateway signals
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.ai_scalping.live_health import (
             get_live_health_monitor,
         )
@@ -93,8 +94,6 @@ def build_operational_intelligence() -> dict[str, Any]:
                     "value": reasons,
                 }
             )
-    except Exception:
-        pass
 
     return {
         "as_of": _iso(),

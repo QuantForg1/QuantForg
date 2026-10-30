@@ -60,11 +60,14 @@ def test_fifty_dollar_min_lot_exceeds_conservative_risk() -> None:
     risk_pct = Decimal("1.00")
     dollar = min_lot_risk_dollars(stop_distance=stop)
     assert dollar == Decimal("18.00")  # 0.01 * 100 * 18
-    assert min_lot_fits_equity_risk(
-        equity=equity,
-        risk_pct=risk_pct,
-        stop_distance=stop,
-    ) is False
+    assert (
+        min_lot_fits_equity_risk(
+            equity=equity,
+            risk_pct=risk_pct,
+            stop_distance=stop,
+        )
+        is False
+    )
     out = assess_gold_opportunity(min_lot_fits_risk=False)
     assert out.tradable is False
     assert any("min lot" in r.lower() for r in out.skip_reasons)

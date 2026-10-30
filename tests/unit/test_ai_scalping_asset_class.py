@@ -116,7 +116,7 @@ def test_index_broker_candidates() -> None:
 
 @pytest.mark.unit
 def test_spread_limits_fx() -> None:
-    reject, full, atr_pct, floor = resolve_spread_limits(
+    reject, _full, atr_pct, floor = resolve_spread_limits(
         "EURUSD",
         max_spread_reject=Decimal("1.50"),
         max_spread_for_full_score=Decimal("0.40"),

@@ -35,7 +35,7 @@ class TestSupabaseEgressRecovery:
         src = (root / "app/presentation/routers/live_trading_control.py").read_text(
             encoding="utf-8"
         )
-        assert "@router.post(\"/enable\")" in src
+        assert '@router.post("/enable")' in src
         assert "OperatorUser" in src
         assert "require_roles(UserRole.OWNER, UserRole.ADMIN)" in src
         assert "FORCE_LIVE" not in src
@@ -43,11 +43,11 @@ class TestSupabaseEgressRecovery:
 
     def test_single_mt5_order_send_path(self) -> None:
         root = Path(__file__).resolve().parents[2]
-        text = (
-            root / "app/infrastructure/brokers/mt5/gateway_client.py"
-        ).read_text(encoding="utf-8")
+        text = (root / "app/infrastructure/brokers/mt5/gateway_client.py").read_text(
+            encoding="utf-8"
+        )
         assert "POST /trade/order_send → MetaTrader5.order_send" in text
-        assert 'def order_send(' in text
+        assert "def order_send(" in text
 
     def test_history_queries_are_bounded(self) -> None:
         from app.application.services import signal_intelligence_service as si

@@ -567,10 +567,12 @@ def _oms_dashboard(
     latencies: list[float] = []
     retries = 0
     for a in attempts:
-        o = a.get("oms") if isinstance(a.get("oms"), dict) else None
+        _o_value = a.get("oms")
+        o = _o_value if isinstance(_o_value, dict) else None
         if not o:
             continue
-        resp = o.get("response") if isinstance(o.get("response"), dict) else {}
+        _resp_value = o.get("response")
+        resp = _resp_value if isinstance(_resp_value, dict) else {}
         outcome = str(resp.get("outcome") or "").lower()
         if outcome in {"success", "filled", "done"}:
             successes += 1
@@ -976,7 +978,8 @@ def _execution_trace_panel(
                 last.get("validation_id") or pvm.get("last_validation_id") or ""
             )
             or None,
-            ai_score=ai_score or {
+            ai_score=ai_score
+            or {
                 "trade_quality": last.get("quality_score"),
                 "ai_confidence": last.get("ai_confidence"),
                 "reject": str(last.get("ai_action") or "").upper()
@@ -990,9 +993,11 @@ def _execution_trace_panel(
             },
             scanner=runtime_scan,
             decision_action=str(last.get("ai_action") or latest.get("decision_action")),
-            market_ok=bool(latest.get("snapshot_present"))
-            if latest.get("snapshot_present") is not None
-            else None,
+            market_ok=(
+                bool(latest.get("snapshot_present"))
+                if latest.get("snapshot_present") is not None
+                else None
+            ),
         )
     except Exception:
         logger.exception("noc_execution_trace_failed")

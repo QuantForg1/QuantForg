@@ -53,9 +53,7 @@ PUBLIC_LEAK_MARKERS = (
     "execution ticket",
 )
 
-_FX = frozenset(
-    {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD", "SGD", "HKD"}
-)
+_FX = frozenset({"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD", "SGD", "HKD"})
 
 
 def _clean(value: object) -> str | None:
@@ -520,9 +518,7 @@ def render_contextual_reply(
     return _join(lines).rstrip()
 
 
-def canonical_parity(
-    telegram_text: str, jimvio_message: str
-) -> list[str]:
+def canonical_parity(telegram_text: str, jimvio_message: str) -> list[str]:
     if telegram_text.strip() != str(jimvio_message or "").strip():
         return ["telegram_jimvio_message_mismatch"]
     return audit_public_message(telegram_text) + audit_public_message(jimvio_message)

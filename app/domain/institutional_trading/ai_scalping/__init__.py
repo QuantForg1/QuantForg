@@ -138,11 +138,6 @@ from app.domain.institutional_trading.ai_scalping.sizing import (
     LotSizingResult,
     calculate_scalping_lots,
 )
-from app.domain.institutional_trading.ai_scalping.volatility_gate_v2 import (
-    VolatilityDecision,
-    evaluate_volatility_gate_v1_compat,
-    evaluate_volatility_gate_v2,
-)
 from app.domain.institutional_trading.ai_scalping.slippage_protection import (
     SlippageAssessment,
     measure_slippage,
@@ -162,6 +157,11 @@ from app.domain.institutional_trading.ai_scalping.symbol_state import (
 )
 from app.domain.institutional_trading.ai_scalping.validation import (
     compare_backtest_vs_live,
+)
+from app.domain.institutional_trading.ai_scalping.volatility_gate_v2 import (
+    VolatilityDecision,
+    evaluate_volatility_gate_v1_compat,
+    evaluate_volatility_gate_v2,
 )
 
 __all__ = [

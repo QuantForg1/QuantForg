@@ -119,9 +119,11 @@ class BrokerProfileStore:
         elif preserve_existing_password:
             if prior is not None and prior.password_ciphertext:
                 ciphertext = prior.password_ciphertext
-        resolved_user = (user_id or "").strip() or (
-            (prior.user_id or "").strip() if prior is not None else ""
-        ) or None
+        resolved_user = (
+            (user_id or "").strip()
+            or ((prior.user_id or "").strip() if prior is not None else "")
+            or None
+        )
         profile = BrokerRuntimeProfile(
             broker=str(broker or "").strip(),
             server=str(server or "").strip(),

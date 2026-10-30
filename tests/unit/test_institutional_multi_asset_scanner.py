@@ -675,9 +675,10 @@ async def test_scan_body_survives_quote_spread_overlay(
         assert usdchf["direction"] == "SELL"
         xau = next(r for r in out["noc_rows"] if r["symbol"] == "XAUUSD")
         assert xau["reject"] is True
-        assert "TIMEOUT" in str(
-            xau.get("reject_reason") or xau.get("blocking_gate") or ""
-        ).upper()
+        assert (
+            "TIMEOUT"
+            in str(xau.get("reject_reason") or xau.get("blocking_gate") or "").upper()
+        )
         eligible = {str(s).upper() for s in (out.get("eligible_symbols") or [])}
         assert "EURUSD" in eligible
         assert "USDCHF" in eligible

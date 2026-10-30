@@ -115,7 +115,9 @@ class LiveMaeMfeTracker:
             entry_price=float(entry_price),
             entry_timestamp=entry_timestamp or datetime.now(UTC).isoformat(),
             initial_stop=float(initial_stop) if initial_stop is not None else None,
-            initial_target=float(initial_target) if initial_target is not None else None,
+            initial_target=(
+                float(initial_target) if initial_target is not None else None
+            ),
             risk_distance=risk,
             telemetry_complete=risk is not None,
             incomplete_reason=None if risk is not None else "missing_stop_or_risk",
@@ -163,7 +165,9 @@ class LiveMaeMfeTracker:
             rec.last_mark = px
             rec.last_update = moment.isoformat()
             try:
-                entry_dt = datetime.fromisoformat(rec.entry_timestamp.replace("Z", "+00:00"))
+                entry_dt = datetime.fromisoformat(
+                    rec.entry_timestamp.replace("Z", "+00:00")
+                )
                 age_s = max(0.0, (moment - entry_dt).total_seconds())
             except Exception:
                 age_s = 0.0
@@ -174,10 +178,9 @@ class LiveMaeMfeTracker:
                 rec.extreme_adverse_price = px
                 rec.time_to_mae = age_s
             else:
-                if side in {"buy", "long"} and px < rec.extreme_adverse_price:
-                    rec.extreme_adverse_price = px
-                    rec.time_to_mae = age_s
-                elif side not in {"buy", "long"} and px > rec.extreme_adverse_price:
+                if (side in {"buy", "long"} and px < rec.extreme_adverse_price) or (
+                    side not in {"buy", "long"} and px > rec.extreme_adverse_price
+                ):
                     rec.extreme_adverse_price = px
                     rec.time_to_mae = age_s
             # Favorable extreme
@@ -185,16 +188,18 @@ class LiveMaeMfeTracker:
                 rec.extreme_favorable_price = px
                 rec.time_to_mfe = age_s
             else:
-                if side in {"buy", "long"} and px > rec.extreme_favorable_price:
-                    rec.extreme_favorable_price = px
-                    rec.time_to_mfe = age_s
-                elif side not in {"buy", "long"} and px < rec.extreme_favorable_price:
+                if (side in {"buy", "long"} and px > rec.extreme_favorable_price) or (
+                    side not in {"buy", "long"} and px < rec.extreme_favorable_price
+                ):
                     rec.extreme_favorable_price = px
                     rec.time_to_mfe = age_s
 
             if rec.risk_distance and rec.risk_distance > 0:
                 rec.mae_r = _r_adverse(
-                    rec.direction, rec.entry_price, rec.extreme_adverse_price, rec.risk_distance
+                    rec.direction,
+                    rec.entry_price,
+                    rec.extreme_adverse_price,
+                    rec.risk_distance,
                 )
                 rec.mfe_r = _r_favorable(
                     rec.direction,
@@ -225,22 +230,24 @@ class LiveMaeMfeTracker:
             rec.closed = True
             rec.exit_reason = exit_reason
             try:
-                entry_dt = datetime.fromisoformat(rec.entry_timestamp.replace("Z", "+00:00"))
+                entry_dt = datetime.fromisoformat(
+                    rec.entry_timestamp.replace("Z", "+00:00")
+                )
                 rec.holding_time_s = max(0.0, (moment - entry_dt).total_seconds())
             except Exception:
                 rec.holding_time_s = None
             rec.final_mae_r = rec.mae_r
             rec.final_mfe_r = rec.mfe_r
-            if (
-                exit_price is not None
-                and rec.risk_distance
-                and rec.risk_distance > 0
-            ):
+            if exit_price is not None and rec.risk_distance and rec.risk_distance > 0:
                 side = rec.direction.lower()
                 if side in {"buy", "long"}:
-                    rec.realized_r = (float(exit_price) - rec.entry_price) / rec.risk_distance
+                    rec.realized_r = (
+                        float(exit_price) - rec.entry_price
+                    ) / rec.risk_distance
                 else:
-                    rec.realized_r = (rec.entry_price - float(exit_price)) / rec.risk_distance
+                    rec.realized_r = (
+                        rec.entry_price - float(exit_price)
+                    ) / rec.risk_distance
             elif rec.realized_r is None:
                 rec.telemetry_complete = False
                 rec.incomplete_reason = rec.incomplete_reason or "missing_exit_or_risk"

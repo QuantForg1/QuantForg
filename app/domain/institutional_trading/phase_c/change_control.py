@@ -59,9 +59,10 @@ class ModelChangeControlStore:
     def propose(self, **kwargs: Any) -> ModelChangeRecord:
         status = str(kwargs.get("approval_status") or "PROPOSED")
         # Never silently mark approved without actor evidence
-        if status in {"APPROVED", "APPROVED_FOR_LIVE", "DEPLOYED"}:
-            if not kwargs.get("approval_actor"):
-                status = "PROPOSED"
+        if status in {"APPROVED", "APPROVED_FOR_LIVE", "DEPLOYED"} and not kwargs.get(
+            "approval_actor"
+        ):
+            status = "PROPOSED"
         rec = ModelChangeRecord(
             change_id=str(kwargs.get("change_id") or uuid4()),
             old_commit=str(kwargs.get("old_commit") or ""),

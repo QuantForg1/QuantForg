@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
 from typing import Any
 from uuid import uuid4
 
 
-class CanaryState(str, Enum):
+class CanaryState(StrEnum):
     SHADOW = "SHADOW"
     PROMOTION_REVIEW = "PROMOTION_REVIEW"
     CANARY_APPROVED = "CANARY_APPROVED"
@@ -152,7 +152,9 @@ class CanaryStore:
             symbols=tuple(symbols or ()),
             max_exposure_pct=float(max_exposure_pct),
             max_duration_hours=int(max_duration_hours),
-            history=[{"to": CanaryState.SHADOW.value, "at": datetime.now(UTC).isoformat()}],
+            history=[
+                {"to": CanaryState.SHADOW.value, "at": datetime.now(UTC).isoformat()}
+            ],
         )
         with self._lock:
             self.records[rec.candidate_id] = rec

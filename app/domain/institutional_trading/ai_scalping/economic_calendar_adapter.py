@@ -107,12 +107,12 @@ def build_configured_news_calendar() -> EconomicCalendarNewsAdapter | None:
         )
         from core.config.settings import get_settings
 
-        url = str(getattr(get_settings(), "economic_calendar_feed_url", "") or "").strip()
+        url = str(
+            getattr(get_settings(), "economic_calendar_feed_url", "") or ""
+        ).strip()
         if not url:
             return None
-        return EconomicCalendarNewsAdapter(
-            feed=ConfiguredHttpEconomicCalendar(url=url)
-        )
+        return EconomicCalendarNewsAdapter(feed=ConfiguredHttpEconomicCalendar(url=url))
     except Exception:
         logger.exception("build_configured_news_calendar_failed")
         return None

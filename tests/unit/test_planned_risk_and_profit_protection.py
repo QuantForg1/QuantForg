@@ -141,7 +141,7 @@ class TestPositionSizingUsdTarget:
         assert TARGET_PLANNED_RISK_USD == TARGET_RISK_PER_TRADE_USD
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
         assert Decimal("0") == MIN_PLANNED_RISK_USD
-        assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
+        assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
         assert Decimal("1.50") == PREFERRED_REWARD_RISK
 
     def test_tight_gold_stop_is_not_upsized_past_owner_max_lot(self) -> None:
@@ -176,7 +176,7 @@ class TestPositionSizingUsdTarget:
         assert sized.volume * per_lot == Decimal("1.80")
 
     def test_xauusd_min_lot_above_owner_cap_is_rejected(self) -> None:
-        # $10 at min lot > 9% of $50 ($4.50).
+        # $10 at min lot > 14% of $50 ($7.00).
         sized = size_from_broker_specs(
             equity=Decimal("50"),
             risk_pct=Decimal("1.0"),
@@ -190,15 +190,15 @@ class TestPositionSizingUsdTarget:
         assert sized.volume == Decimal("0")
 
     def test_xauusd_rejects_when_min_lot_exceeds_per_trade_cap(self) -> None:
-        # $25 at min lot > 9% of $200 ($18).
+        # $29 at min lot > 14% of $200 ($28).
         sized = size_from_broker_specs(
             equity=Decimal("200"),
             risk_pct=Decimal("1.0"),
-            stop_distance=Decimal("25.00"),
+            stop_distance=Decimal("29.00"),
             spec=_gold_spec(),
             max_risk_amount=TARGET_PLANNED_RISK_USD,
         )
-        min_loss = Decimal("0.01") * Decimal("100") * Decimal("25.00")
+        min_loss = Decimal("0.01") * Decimal("100") * Decimal("29.00")
         assert min_loss > MAX_PLANNED_SL_RISK_USD
         assert sized.accepted is False
         assert sized.volume == Decimal("0")
@@ -250,7 +250,7 @@ class TestPositionSizingUsdTarget:
             assert sized.accepted is True
             assert sized.volume == Decimal("0.01")
             assert sized.monetary_loss_at_sl == Decimal("1.80")
-            assert MIN_PLANNED_RISK_USD < sized.monetary_loss_at_sl
+            assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
             assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
 
     def test_volume_min_rejected_when_next_step_exceeds_remaining(self) -> None:
@@ -304,7 +304,7 @@ class TestPositionSizingUsdTarget:
 
 class TestAggregatePlannedRisk:
     def test_open_leg_plus_new_leg_above_aggregate_is_rejected(self) -> None:
-        # $50 account: aggregate = 9% x 1 position = $4.50. Open $3.00 + $1.80.
+        # $50 account: aggregate = 14% x 1 position = $7.00. Open $3.00 + $4.20.
         engine = _agg_engine()
         open_leg = _pos_mt5(
             ticket=11,
@@ -319,7 +319,7 @@ class TestAggregatePlannedRisk:
                 request_id="agg-2",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("1.80"),
+                stop_loss_distance=Decimal("4.20"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -328,7 +328,7 @@ class TestAggregatePlannedRisk:
             positions=[open_leg],
         )
         assert second.decision is RiskDecision.REJECT
-        assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+        assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
 
     def test_daily_loss_protection_still_rejects(
         self, monkeypatch: pytest.MonkeyPatch
@@ -490,7 +490,7 @@ class TestInitialPlannedRiskAccounting:
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
             ),
-            account=_account(Decimal("50")),  # cap 9% of $50 = $4.50
+            account=_account(Decimal("50")),  # cap 14% of $50 = $7.00
             positions=open_legs,
         )
         assert fifth.decision is RiskDecision.REJECT
@@ -521,7 +521,7 @@ class TestInitialPlannedRiskAccounting:
                 request_id="agg-1-80-plus",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("1.80"),
+                stop_loss_distance=Decimal("4.20"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -530,7 +530,7 @@ class TestInitialPlannedRiskAccounting:
             positions=open_legs,
         )
         # Initial risk ($3.00) counts even after the SL moved to break-even:
-        # $3.00 + $1.80 > $4.50 (9% of $50, one position).
+        # $3.00 + $4.20 > $7.00 (14% of $50, one position).
         assert engine.aggregate_planned_sl_risk(open_legs) == Decimal("3.00")
         assert nxt.decision is RiskDecision.REJECT
         assert nxt.approved_lots == Decimal("0")

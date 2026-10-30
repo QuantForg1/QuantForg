@@ -133,15 +133,16 @@ def test_config_preserves_quality_confidence_floors() -> None:
 
 @pytest.mark.unit
 def test_v1_compat_fixed_floor() -> None:
-    assert evaluate_volatility_gate_v1_compat(
-        atr_pct=Decimal("0.19"), band="low"
-    ) is False
-    assert evaluate_volatility_gate_v1_compat(
-        atr_pct=Decimal("0.20"), band="low"
-    ) is True
-    assert evaluate_volatility_gate_v1_compat(
-        atr_pct=Decimal("0.10"), band="normal"
-    ) is True
+    assert (
+        evaluate_volatility_gate_v1_compat(atr_pct=Decimal("0.19"), band="low") is False
+    )
+    assert (
+        evaluate_volatility_gate_v1_compat(atr_pct=Decimal("0.20"), band="low") is True
+    )
+    assert (
+        evaluate_volatility_gate_v1_compat(atr_pct=Decimal("0.10"), band="normal")
+        is True
+    )
 
 
 @pytest.mark.unit
@@ -166,7 +167,7 @@ def test_exceptional_setup_allows_evidence_band() -> None:
 
 @pytest.mark.unit
 def test_production_atr_exceptional_clears_prior_hard_deadlock() -> None:
-    # Live ATR% ≈ 0.082–0.115 previously failed hard_min 0.10/0.15 forever.
+    # Live ATR% ≈ 0.082-0.115 previously failed hard_min 0.10/0.15 forever.
     d = evaluate_volatility_gate_v2(atr_pct=Decimal("0.082"), **_strong_kwargs())
     assert d.passed is True
     assert d.exceptional_eligible is True
@@ -179,8 +180,10 @@ def test_hard_min_blocks_even_exceptional() -> None:
     d = evaluate_volatility_gate_v2(atr_pct=Decimal("0.07"), **_strong_kwargs())
     assert d.passed is False
     assert d.applied_floor_pct == Decimal("0.08")
-    assert "hard minimum" in d.reason.lower() or "hard min" in d.reason.lower() or (
-        "0.08" in d.reason
+    assert (
+        "hard minimum" in d.reason.lower()
+        or "hard min" in d.reason.lower()
+        or ("0.08" in d.reason)
     )
 
 
@@ -248,7 +251,9 @@ def test_quality_gates_weak_atr_band_still_fail() -> None:
     )
     assert gates.checks["valid_volatility"] is False
     assert gates.passed is True
-    assert any("compressed" in r.lower() or "Volatility" in r for r in gates.soft_rejects)
+    assert any(
+        "compressed" in r.lower() or "Volatility" in r for r in gates.soft_rejects
+    )
     assert not any("compressed" in r.lower() for r in gates.rejects)
 
 
@@ -285,10 +290,8 @@ def test_before_after_replay_no_false_positive_increase() -> None:
             assert weak is False
 
     assert weak_new_accepts == 0
-    # Exceptional recovers 0.08–0.20 (0.08 + 0.125 + 0.175 buckets); weak never
-    assert strong_new_accepts == pytest.approx(
-        0.0257 + 0.2718 + 0.3465, abs=0.001
-    )
+    # Exceptional recovers 0.08-0.20 (0.08 + 0.125 + 0.175 buckets); weak never
+    assert strong_new_accepts == pytest.approx(0.0257 + 0.2718 + 0.3465, abs=0.001)
     assert both_accept == pytest.approx(0.2906 + 0.0653, abs=0.001)
 
 

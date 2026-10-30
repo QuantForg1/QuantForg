@@ -540,8 +540,8 @@ def normalize_lots_against_broker(
         if max_planned_sl_risk is not None
         else MAX_PLANNED_SL_RISK_USD
     )
-    # Owner cap is 9% of live equity: the static reference-capital default
-    # ($4.50 at $50) is recomputed from equity; a stricter explicit cap stays.
+    # Owner cap is 14% of live equity: the static reference-capital default
+    # ($7.00 at $50) is recomputed from equity; a stricter explicit cap stays.
     if equity > 0:
         from app.domain.institutional_trading.owner_live_limits import (
             OWNER_MAX_OPEN_POSITIONS,
@@ -762,7 +762,6 @@ def normalize_lots_against_broker(
             needed=needed,
         )
     return _ok(lot=quantized, est=est, status=status, needed=needed)
-
 
 
 TRADEABLE = "TRADEABLE"
@@ -990,8 +989,7 @@ def classify_private_no_fill_reason(
         ]
     ).upper()
     if any(
-        token in blob
-        for token in ("KILL", "SAFETY", "AUTOTRADING", "SELF_PROTECTION")
+        token in blob for token in ("KILL", "SAFETY", "AUTOTRADING", "SELF_PROTECTION")
     ):
         return PRIVATE_NO_FILL_SAFETY_BLOCKED
     if any(
@@ -1224,7 +1222,7 @@ def entry_book_exposure(
     """Price the whole open book. Unmeasured exposure blocks a new entry.
 
     QuantForg and external tickets that can be priced are both included, so a
-    9% entry cannot ignore overlapping exposure. A ticket with no measurable
+    A 14% entry cannot ignore overlapping exposure. A ticket with no measurable
     stop, volume, entry, or contract size is identified and blocks.
     """
     from app.domain.institutional_trading.operations.quantforg_position_cap import (

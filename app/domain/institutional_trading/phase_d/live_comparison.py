@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from app.domain.institutional_trading.phase_d.champion_candidate import (
     compare_champion_candidate,

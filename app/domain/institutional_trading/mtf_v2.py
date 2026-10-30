@@ -159,7 +159,6 @@ def evaluate_mtf_v2(
         "m5_timing_bonus": (
             10 if bias in {TrendDirection.UP, TrendDirection.DOWN} and m5 == bias else 0
         ),
-        "h4_context": h4.value,
     }
     # Directional lock score is H1+M15 only (weights sum 100).
     score = int(contributions["h1"]) + int(contributions["m15"])
@@ -185,7 +184,7 @@ def evaluate_mtf_v2(
         bias=bias,
         alignment_score=int(score_with_timing),
         aligned=aligned,
-        contributions={k: v for k, v in contributions.items() if k != "h4_context"},
+        contributions=contributions,
         why=why,
         h4_is_context=True,
     )

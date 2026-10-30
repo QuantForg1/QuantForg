@@ -6,9 +6,15 @@ Matches the simple TR-window average used by production replay validation.
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
 from app.domain.market_data.candle import Candle
+from app.domain.market_data.closed_bars import as_utc, closed_analysis_bars
+from app.domain.market_data.timeframe import Timeframe
+
+# A series older than this many closed bars is not a fresh volatility input.
+_MAX_STALE_BARS = 2
 
 DEFAULT_ATR_PERIOD = 14
 
@@ -51,3 +57,68 @@ def stop_distance_from_atr(
     if atr is None or atr <= 0:
         return None
     return (atr * multiplier).quantize(Decimal("0.0001"))
+
+
+def _positive(value: object) -> Decimal | None:
+    if isinstance(value, Decimal):
+        dec = value
+    else:
+        try:
+            dec = Decimal(str(value))
+        except Exception:
+            return None
+    if not dec.is_finite() or dec <= 0:
+        return None
+    return dec
+
+
+def atr_for_timeframe(
+    candles: list[Candle] | tuple[Candle, ...],
+    *,
+    as_of: datetime | None,
+    timeframe: Timeframe,
+) -> Decimal | None:
+    """ATR of closed, aligned bars. None when that series is stale.
+
+    Percentage gates and the owner stop must each call this with their own
+    timeframe. A bar that is still open at ``as_of`` is excluded. A series
+    whose newest close is older than two bars is rejected when the candle
+    clock and ``as_of`` are comparable.
+    """
+    series = list(candles or [])
+    if len(series) < 2:
+        return None
+    if as_of is None:
+        return compute_atr(series)
+    usable = closed_analysis_bars(series, as_of=as_of, timeframe=timeframe)
+    if len(usable) < 2:
+        return None
+    moment = as_utc(as_of)
+    newest = max(as_utc(c.close_time) for c in series)
+    if newest <= moment + timeframe.duration:
+        age = moment - max(as_utc(c.close_time) for c in usable)
+        if age > timeframe.duration * _MAX_STALE_BARS:
+            return None
+    return compute_atr(usable)
+
+
+def score_gate_atr(snapshot: object) -> Decimal | None:
+    """ATR for the spread/ATR cap, the volatility band, and sniper distance.
+
+    This is ``snapshot.atr`` (entry-confirmation timeframe). A missing value
+    fails closed. The owner stop series is never substituted.
+    """
+    return _positive(getattr(snapshot, "atr", None))
+
+
+def gate_atr_timeframe_label(config: object | None) -> str:
+    """Timeframe label for the ATR that percentage gates actually score.
+
+    Swing analysis stays on its M15 entry timeframe. Scalping reports the
+    entry-confirmation timeframe (M5). This label does not select bars and
+    does not change a gate.
+    """
+    tf = getattr(config, "entry_confirmation_tf", None)
+    value = getattr(tf, "value", tf)
+    text = str(value or "").strip().upper()
+    return text or "M15"
