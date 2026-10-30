@@ -402,6 +402,35 @@ def test_worker_applies_saved_policy_version():
     assert installed.version == saved.version == 1
     assert installed.status == "applied"
     assert last_applied_version() == 1
+    from app.presentation.routers.admin_control import _policy_view
+
+    confirmed = load_runtime_policy()
+    assert confirmed.applied_version == 1
+    assert _policy_view(confirmed)["worker_confirmed"] is True
+    second = save_runtime_policy(
+        actor_id=actor,
+        expected_version=1,
+        changes={"max_planned_risk_pct": "4"},
+    )
+    assert second.ok is True
+    assert second.version == 2
+    assert second.applied_version == 1
+    pending = load_runtime_policy()
+    view = _policy_view(pending)
+    assert pending.version == 2
+    assert pending.applied_version == 1
+    assert view["worker_confirmed"] is False
+    unacked = _policy_view(
+        type(confirmed)(
+            True,
+            2,
+            confirmed.document,
+            "persisted",
+            applied_version=None,
+        )
+    )
+    assert unacked["worker_confirmed"] is False
+    assert unacked["applied_version"] is None
 
 
 @pytest.mark.unit
@@ -704,9 +733,10 @@ def test_policy_write_and_success_audit_share_one_transaction(monkeypatch):
     assert saved.source == "persisted"
     assert saved.status == "saved"
     assert len(calls["statements"]) == 1
-    # Four execute() calls are the schema setup. The success audit is the
-    # second statement inside the one transaction.
-    assert calls["execute"] == 4
+    # Five execute() calls are the schema setup, including the worker-ack
+    # columns. The success audit is the second statement inside the one
+    # transaction.
+    assert calls["execute"] == 5
     outcomes = [event["outcome"] for event in memory_audit_events()]
     assert outcomes == ["success"]
 

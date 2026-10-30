@@ -19,7 +19,6 @@ from app.application.services.live_trading_control_service import (
     read_live_probe_facts,
 )
 from app.application.services.runtime_policy_store import (
-    last_applied_version,
     load_runtime_policy,
     memory_audit_events,
     save_runtime_policy,
@@ -41,6 +40,34 @@ class PolicyUpdate(BaseModel):
     expected_version: int = Field(ge=0)
     changes: dict[str, Any]
     reason: str = Field(min_length=3, max_length=500)
+
+
+def _policy_view(policy: Any) -> dict[str, Any]:
+    """Saved document, experimental block, and the version the worker confirmed.
+
+    Confirmation comes only from the stored worker ack. Process memory is not
+    a substitute when that ack is missing.
+    """
+    confirmed = policy.applied_version
+    document = policy.document if isinstance(policy.document, dict) else None
+    experimental = None
+    if isinstance(document, dict) and isinstance(document.get("experimental"), dict):
+        experimental = document.get("experimental")
+    return {
+        "ok": policy.ok,
+        "version": policy.version,
+        "source": policy.source,
+        "status": policy.status or ("saved" if policy.version else "baseline"),
+        "applied_version": confirmed,
+        "worker_loaded_at": getattr(policy, "worker_loaded_at", None),
+        "worker_confirmed": bool(policy.version and confirmed == policy.version),
+        "error": policy.error,
+        "document": document,
+        "experimental": experimental,
+        "experimental_promoted": bool(
+            isinstance(document, dict) and document.get("experimental_promoted") is True
+        ),
+    }
 
 
 def _commit_sha() -> str:
@@ -130,15 +157,7 @@ async def admin_overview(user: OwnerUser) -> dict[str, Any]:
             "state": controller.snapshot_state(),
             "kill_switch_independent": True,
         },
-        "policy": {
-            "ok": policy.ok,
-            "version": policy.version,
-            "source": policy.source,
-            "status": policy.status or ("saved" if policy.version else "baseline"),
-            "applied_version": last_applied_version(),
-            "error": policy.error,
-            "document": policy.document,
-        },
+        "policy": _policy_view(policy),
         "audit": _audit_rows(),
     }
 
@@ -146,16 +165,9 @@ async def admin_overview(user: OwnerUser) -> dict[str, Any]:
 @router.get("/policy")
 async def get_policy(_user: OwnerUser) -> dict[str, Any]:
     policy = load_runtime_policy()
-    return {
-        "ok": policy.ok,
-        "version": policy.version,
-        "source": policy.source,
-        "status": policy.status or ("saved" if policy.version else "baseline"),
-        "applied_version": last_applied_version(),
-        "error": policy.error,
-        "document": policy.document,
-        "pending_restart": False,
-    }
+    payload = _policy_view(policy)
+    payload["pending_restart"] = False
+    return payload
 
 
 @router.put("/policy")
@@ -170,16 +182,9 @@ async def put_policy(body: PolicyUpdate, user: OwnerUser) -> dict[str, Any]:
         expected_version=body.expected_version,
         changes=body.changes,
     )
-    return {
-        "ok": saved.ok,
-        "version": saved.version,
-        "source": saved.source,
-        "status": saved.status or saved.source,
-        "error": saved.error,
-        "document": saved.document,
-        "applied_version": last_applied_version(),
-        "pending_restart": False,
-    }
+    payload = _policy_view(saved)
+    payload["pending_restart"] = False
+    return payload
 
 
 @router.get("/audit")
