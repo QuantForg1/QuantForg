@@ -416,6 +416,31 @@ def group_failed_reasons(safety: AutoTradeSafetyResult) -> dict[str, list[str]]:
     return {k: v for k, v in groups.items() if v}
 
 
+def last_cycle_symbol_trade_mode() -> str | None:
+    """Close-only or full from the last finished cycle. None when unknown."""
+    try:
+        last = getattr(get_ite_runtime(), "_last_cycle", None)
+    except Exception:
+        return None
+    from app.application.services.closeonly_symbol_router import SYMBOL_CLOSE_ONLY
+
+    abort = str(getattr(last, "abort_reason", "") or "").strip()
+    if abort == SYMBOL_CLOSE_ONLY:
+        return "closeonly"
+    diag = getattr(last, "market_context_diagnostics", None)
+    if isinstance(diag, dict):
+        mode = (
+            str(diag.get("symbol_trade_mode") or diag.get("trade_mode") or "")
+            .strip()
+            .lower()
+        )
+        if mode in {"closeonly", "close_only", "3"}:
+            return "closeonly"
+        if mode in {"full", "4"}:
+            return "full"
+    return None
+
+
 def resolve_primary_blocker(
     safety: AutoTradeSafetyResult,
 ) -> tuple[str | None, str | None]:
@@ -515,6 +540,10 @@ def build_auto_trading_status(
     facts, live = build_status_facts(plane, settings=settings)
     safety = plane.evaluate_auto_trading(facts)
     primary, category = resolve_primary_blocker(safety)
+    symbol_mode = last_cycle_symbol_trade_mode()
+    from app.application.services.closeonly_symbol_router import close_only_primary
+
+    primary, category = close_only_primary(primary, category, symbol_mode)
     execution_state = build_execution_state(
         plane,
         facts=facts,
@@ -522,6 +551,8 @@ def build_auto_trading_status(
         primary_blocker=primary,
         blocking_category=category,
     )
+    if symbol_mode:
+        execution_state["symbol_trade_mode"] = symbol_mode
     snap = AutoTradingStatusSnapshot(
         facts=facts,
         safety=safety,

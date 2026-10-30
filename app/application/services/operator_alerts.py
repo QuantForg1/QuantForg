@@ -446,6 +446,7 @@ class OperatorWatch:
     now_utc: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     _gateway: _Down = field(default_factory=_Down)
     _mt5: _Down = field(default_factory=_Down)
+    _close_only_alerted: bool = False
     _stops_checked_at: float = -1e9
     _summary_marks: dict[str, str] = field(default_factory=dict)
     _shadow_seen: set[str] = field(default_factory=set)
@@ -510,6 +511,8 @@ class OperatorWatch:
                 "MT5 terminal is not connected to the broker. New entries are blocked."
             ),
         )
+        if mt5_ok:
+            self._broker_entry_mode()
         equity = _dec(getattr(account, "equity", None))
         balance = _dec(getattr(account, "balance", None))
         positions = list(self.adapter.list_positions() or [])
@@ -585,6 +588,30 @@ class OperatorWatch:
             f"({closed.r_multiple}R). Not a real trade.",
             key=f"shadow-close:{closed.id}",
         )
+
+    def _broker_entry_mode(self) -> None:
+        """Alert once when XAUUSD becomes close-only, and once when entries resume."""
+        from app.application.services.closeonly_symbol_router import read_trade_mode
+        from app.domain.trading.gold_only import GOLD_SYMBOL
+
+        mode = read_trade_mode(self.adapter, GOLD_SYMBOL)
+        if mode == "closeonly":
+            if self._close_only_alerted:
+                return
+            self._close_only_alerted = True
+            self.alerter.alert(
+                "BROKER CLOSE-ONLY",
+                f"{GOLD_SYMBOL} is close-only. New entries are blocked until the "
+                "broker restores full trading. Existing positions are left unchanged.",
+            )
+            return
+        if self._close_only_alerted and mode in {"full", "longonly", "shortonly"}:
+            self._close_only_alerted = False
+            self.alerter.alert(
+                "BROKER FULL MODE",
+                f"{GOLD_SYMBOL} allows new entries again. Signal evaluation resumes "
+                "on the next cycle.",
+            )
 
     def _track(
         self, d: _Down, *, ok: bool, now: float, down_kind: str, up_kind: str, what: str

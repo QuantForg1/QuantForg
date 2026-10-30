@@ -8,6 +8,7 @@ import { iteOpsApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 import { firstBlockingLock, isExecutionBlockingLock } from "@/lib/ops/launch-locks";
+import { closeOnlyEntryMessage } from "@/lib/ops/signal-display";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { ApiError } from "@/lib/api/client";
@@ -55,6 +56,10 @@ export function ExecutionStateStrip({
   const gateway = Boolean(raw.gateway_connected);
   const broker = Boolean(raw.broker_connected);
   const primary = str(raw.primary_blocker || fromRoot.primary_blocker, "");
+  const closeOnlyText = closeOnlyEntryMessage(
+    str(raw.symbol_trade_mode, ""),
+    primary,
+  );
   const kill = Boolean(raw.kill_switch_armed ?? fromRoot.emergency_stop);
 
   const launch = asRecord(launchQ.data);
@@ -142,9 +147,15 @@ export function ExecutionStateStrip({
             </Badge>
           </>
         ) : null}
+        {closeOnlyText ? <Badge tone="warning">XAUUSD close-only</Badge> : null}
       </div>
 
-      {launchReady ? (
+      {closeOnlyText ? (
+        <div className="mt-2 text-xs text-[var(--warning)]">
+          <p className="font-medium">Broker close-only</p>
+          <p>{closeOnlyText}</p>
+        </div>
+      ) : launchReady ? (
         <div className="mt-2 text-xs text-[var(--success)]">
           <p className="font-medium">Launch Ready</p>
           <p>Gate Enabled · Execution Ready</p>

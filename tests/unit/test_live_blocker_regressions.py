@@ -372,3 +372,108 @@ def test_mock_gateway_fill_requires_a_deal_and_keeps_stops() -> None:
     assert filled.request is not None
     assert filled.request.stop_loss == Decimal("3881.306")
     assert filled.request.take_profit == Decimal("3874.000")
+
+
+class _TradeMode:
+    def __init__(self, mode: str) -> None:
+        self.mode = mode
+        self.info_calls: list[str] = []
+
+    def symbol_info(self, symbol: str) -> Any:
+        self.info_calls.append(symbol)
+        return type("Spec", (), {"trade_mode": self.mode})()
+
+
+async def _call_sync(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+    return fn(*args, **kwargs)
+
+
+def _pick_runtime(mode: str) -> Any:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app.application.services.institutional_ite_runtime import (
+        InstitutionalIteRuntime,
+    )
+
+    runtime = InstitutionalIteRuntime(
+        plane=MagicMock(),
+        reliability=MagicMock(),
+        probes=MagicMock(),
+        guarded_submit=MagicMock(),
+        guarded_manage=MagicMock(),
+        execution=MagicMock(),
+        position_management=SimpleNamespace(engine=SimpleNamespace(_positions={})),
+        mt5_adapter=_TradeMode(mode),
+    )
+    runtime._offload_blocking_io = _call_sync  # type: ignore[method-assign]
+
+    async def _preferred() -> str:
+        return "XAUUSD"
+
+    runtime._multi_asset_preferred_symbol = _preferred  # type: ignore[method-assign]
+    runtime._last_multi_asset_scan = {
+        "as_of": "2026-10-30T20:45:00Z",
+        "enabled": True,
+        "eligible_symbols": ["XAUUSD"],
+        "eligible_count": 1,
+        "note": "scan_complete",
+    }
+    return runtime
+
+
+@pytest.fixture
+def gold_only_pick(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: True,
+    )
+    from app.application.services.market_closed_cooldown import clear_market_closed
+
+    clear_market_closed("XAUUSD")
+
+
+@pytest.mark.asyncio
+async def test_full_mode_bare_xauusd_stays_executable(
+    gold_only_pick: None,
+) -> None:
+    runtime = _pick_runtime("full")
+    chosen = await runtime._pick_executable_symbol_async()
+    assert chosen == "XAUUSD"
+    assert runtime._last_pick_abort is None
+    runtime.guarded_submit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_close_only_xauusd_blocks_without_a_generic_abort(
+    gold_only_pick: None,
+) -> None:
+    from app.application.services.closeonly_symbol_router import (
+        CLOSE_ONLY_ENTRY_BLOCK,
+        SYMBOL_CLOSE_ONLY,
+        waiting_cycle_detail,
+    )
+
+    runtime = _pick_runtime("closeonly")
+    chosen = await runtime._pick_executable_symbol_async()
+    assert chosen is None
+    assert runtime._last_pick_abort == SYMBOL_CLOSE_ONLY
+    assert CLOSE_ONLY_ENTRY_BLOCK in waiting_cycle_detail(SYMBOL_CLOSE_ONLY)
+    runtime.guarded_submit.assert_not_called()
+
+
+def test_close_only_does_not_hide_a_stricter_blocker() -> None:
+    from app.application.services.closeonly_symbol_router import (
+        CLOSE_ONLY_ENTRY_BLOCK,
+        close_only_primary,
+    )
+
+    assert close_only_primary(None, None, "closeonly") == (
+        CLOSE_ONLY_ENTRY_BLOCK,
+        "broker",
+    )
+    assert close_only_primary("Kill switch armed", "operator", "closeonly") == (
+        "Kill switch armed",
+        "operator",
+    )
+    assert close_only_primary(None, None, "full") == (None, None)
