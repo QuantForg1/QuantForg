@@ -118,7 +118,7 @@ def select_scalp_stop_distance(
 ) -> tuple[Decimal | None, str]:
     """Choose a scalp stop that is structural when tight, ATR-capped when wide.
 
-    Never enlarges risk past ``stop_atr_mult × ATR``. Never uses a stop inside
+    Never enlarges risk past ``stop_atr_mult x ATR``. Never uses a stop inside
     the noise floor. Does not change Risk / min-lot math.
     """
     if atr is None or atr <= 0:
@@ -504,12 +504,12 @@ def compute_structure_targets(
         )
     if source == "atr_cap":
         reason_parts.append(
-            f"SL capped to ATR×{cfg.stop_atr_mult} (structure stop too wide for scalp)"
+            f"SL capped to ATRx{cfg.stop_atr_mult} (structure stop too wide for scalp)"
         )
     elif source == "noise_floor":
         reason_parts.append("SL lifted to noise floor")
     elif source == "atr_fallback":
-        reason_parts.append(f"SL ATR×{cfg.stop_atr_mult}")
+        reason_parts.append(f"SL ATRx{cfg.stop_atr_mult}")
 
     if cfg.owner_atr_stop:
         return _owner_targets(

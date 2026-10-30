@@ -220,9 +220,9 @@ class AutonomousExecutionContext:
             "active_execution_symbol": self.active_execution_symbol,
             "terminal_symbol": self.terminal_symbol,
             "execution_symbol": self.symbol,
-            "position_symbol": self.position_symbols[0]
-            if self.position_symbols
-            else None,
+            "position_symbol": (
+                self.position_symbols[0] if self.position_symbols else None
+            ),
             "position_symbols": list(self.position_symbols),
             "open_position_count": self.open_position_count,
             "unresolved_order_count": self.unresolved_order_count,
@@ -263,9 +263,9 @@ def build_autonomous_execution_context(
             broker_connected = live_d.get("mt5_connected")
 
     mt5_status = _classify_mt5_status(
-        gateway_connected=None
-        if gateway_connected is None
-        else bool(gateway_connected),
+        gateway_connected=(
+            None if gateway_connected is None else bool(gateway_connected)
+        ),
         broker_connected=None if broker_connected is None else bool(broker_connected),
     )
 

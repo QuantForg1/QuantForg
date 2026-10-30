@@ -181,9 +181,7 @@ async def test_viewer_cannot_start_robot() -> None:
     await require_live_mt5_connection(factory, adapter, user_id)
 
     with pytest.raises(AuthorizationError):
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=user_id,
             role="viewer",
             display_name="Viewer",
@@ -198,9 +196,7 @@ async def test_robot_start_requires_owned_connection() -> None:
     client = FakeGatewayClient()
     adapter = MT5Adapter(client=client)
     with pytest.raises(NotFoundError, match="No active"):
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=uuid4(),
             role="owner",
             display_name="Owner",
@@ -215,9 +211,9 @@ async def test_trading_session_status_hides_foreign_robot() -> None:
     client = FakeGatewayClient()
     adapter = MT5Adapter(client=client)
     user_b = uuid4()
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_b)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_b
+    )
     assert snap["broker"] == "Disconnected"
     assert snap["robot"] == "Stopped"
     assert snap["execution_permitted"] is False

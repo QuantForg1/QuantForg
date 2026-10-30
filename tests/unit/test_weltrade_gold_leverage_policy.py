@@ -51,9 +51,7 @@ def _engine() -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     return (
         InstitutionalExecutionEngine(
             gateway=ExecutionGateway(adapter=adapter, order_validation=validation),
-            safety=ExecutionSafetyService(
-                adapter=adapter, order_validation=validation
-            ),
+            safety=ExecutionSafetyService(adapter=adapter, order_validation=validation),
             order_validation=validation,
             intelligence=ExecutionIntelligenceService(),
             journal=ExecutionJournalStore(),
@@ -85,9 +83,9 @@ def test_policy_ceiling_is_single_source_2000() -> None:
     src = (REPO / "app/domain/trading/xauusd_specs.py").read_text(encoding="utf-8")
     assert src.count('MAX_LEVERAGE = Decimal("2000")') == 1
     assert 'MAX_LEVERAGE = Decimal("1000")' not in src
-    assert MAX_LEVERAGE == Decimal("2000")
+    assert Decimal("2000") == MAX_LEVERAGE
     assert ExecutionPolicy().max_leverage == MAX_LEVERAGE
-    assert EXPOSURE_LEVERAGE_FALLBACK == Decimal("1000")
+    assert Decimal("1000") == EXPOSURE_LEVERAGE_FALLBACK
     assert EXPOSURE_LEVERAGE_FALLBACK != MAX_LEVERAGE
 
 
@@ -137,11 +135,11 @@ def test_account_leverage_above_2000_hard_blocks(account_leverage: Decimal) -> N
 
 @pytest.mark.unit
 def test_leverage_check_remains_authoritative_fail_closed() -> None:
-    safety_src = (
-        REPO / "app/application/services/execution_safety.py"
-    ).read_text(encoding="utf-8")
+    safety_src = (REPO / "app/application/services/execution_safety.py").read_text(
+        encoding="utf-8"
+    )
     assert "ok_lev = leverage <= self.policy.max_leverage" in safety_src
-    assert "checks[\"leverage_limit\"] = ok_lev" in safety_src
+    assert 'checks["leverage_limit"] = ok_lev' in safety_src
     fast_src = (
         REPO / "app/domain/institutional_trading/operations/fast_decision_path.py"
     ).read_text(encoding="utf-8")
@@ -214,7 +212,9 @@ def test_run_submit_above_2000_never_calls_order_send() -> None:
         "leverage" in r.lower() and "exceeds" in r.lower()
         for r in (decision.rejection_reasons or [])
     )
-    assert any(f"max_leverage {MAX_LEVERAGE}" in r for r in (decision.rejection_reasons or []))
+    assert any(
+        f"max_leverage {MAX_LEVERAGE}" in r for r in (decision.rejection_reasons or [])
+    )
     assert pipeline.outcome == "rejected"
     assert "Broker Submission" not in [s.stage for s in pipeline.stages]
     assert sends == []

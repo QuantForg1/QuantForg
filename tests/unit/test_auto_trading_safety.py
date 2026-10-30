@@ -177,9 +177,7 @@ class TestAutoTradeSafetyGate:
             ),
         )
         assert result.allowed is False
-        assert any(
-            "Maximum daily loss exceeded" in r for r in result.failed_reasons
-        )
+        assert any("Maximum daily loss exceeded" in r for r in result.failed_reasons)
 
     def test_allowlist_xauusd_recognizes_broker_xauusd_i(self) -> None:
         """Desk-aware: configured XAUUSD authorizes catalogue XAUUSD_I."""

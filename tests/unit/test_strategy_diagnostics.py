@@ -291,9 +291,7 @@ class TestStrategyDiagnostics:
                 "rejection": {"primary": "WAIT_CHASE"},
             },
         ]
-        rates = hourly_scan_rates(
-            cycles, now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC)
-        )
+        rates = hourly_scan_rates(cycles, now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC))
         assert rates["scans"] == 2
         assert rates["candidate_setups"] == 1
         assert rates["take_count"] == 1

@@ -37,9 +37,7 @@ def prefer_allowlisted_handoff(
     ordered = [str(s).strip().upper() for s in symbols if str(s).strip()]
     if not ordered:
         return []
-    allowed_set = {
-        str(a).strip().upper() for a in (allowed or ()) if str(a).strip()
-    }
+    allowed_set = {str(a).strip().upper() for a in (allowed or ()) if str(a).strip()}
     if not allowed_set:
         return ordered
     primary: list[str] = []
@@ -132,9 +130,9 @@ def _scan_row_is_execution_ready(row: dict[str, Any]) -> bool:
     action = str(row.get("signal_action") or "").strip().upper()
     sniper_action = str(sniper_d.get("action") or "").strip().upper()
     direction = str(row.get("direction") or "").strip().upper()
-    setup = str(
-        row.get("setup_state") or sniper_d.get("setup_state") or ""
-    ).strip().upper()
+    setup = (
+        str(row.get("setup_state") or sniper_d.get("setup_state") or "").strip().upper()
+    )
     side = (
         action
         if action in {"BUY", "SELL"}
@@ -168,9 +166,11 @@ def collect_scan_ready_symbols(scan: dict[str, Any] | None) -> list[str]:
         for row in block:
             if not _scan_row_is_execution_ready(row if isinstance(row, dict) else {}):
                 continue
-            sym = str(
-                (row or {}).get("symbol") or (row or {}).get("broker_symbol") or ""
-            ).strip().upper()
+            sym = (
+                str((row or {}).get("symbol") or (row or {}).get("broker_symbol") or "")
+                .strip()
+                .upper()
+            )
             if not sym or sym in seen:
                 continue
             ready.append(sym)
@@ -312,9 +312,7 @@ class AutoTradePolicy:
         if execution_universe_fail_closed():
             object.__setattr__(self, "allowed_symbols", ())
         elif gold_only_enabled() or broker_discovered_enabled():
-            object.__setattr__(
-                self, "allowed_symbols", autonomous_execution_symbols()
-            )
+            object.__setattr__(self, "allowed_symbols", autonomous_execution_symbols())
         else:
             cleaned = tuple(
                 s.strip().upper() for s in self.allowed_symbols if s and str(s).strip()
@@ -792,11 +790,7 @@ def evaluate_auto_trade_safety(
         "daily_pnl_verified",
         "Daily P/L verified",
         bool(facts.daily_pnl_verified),
-        (
-            "Daily P/L unavailable — verifying"
-            if not facts.daily_pnl_verified
-            else ""
-        ),
+        ("Daily P/L unavailable — verifying" if not facts.daily_pnl_verified else ""),
     )
     opens_ok = facts.open_positions < policy.max_open_positions
     add(
@@ -836,9 +830,7 @@ def evaluate_auto_trade_safety(
             )
         elif facts.broker_session_open is False:
             session_ok = False
-            session_detail = (
-                f"BROKER_SESSION_CLOSED (utc='{session_key or '—'}')"
-            )
+            session_detail = f"BROKER_SESSION_CLOSED (utc='{session_key or '—'}')"
         else:
             session_ok = session_key in allowed_sessions if allowed_sessions else False
             session_detail = (
@@ -889,11 +881,7 @@ def evaluate_auto_trade_safety(
             "live_trading_state",
             "Live trading ENABLED",
             live_ok,
-            (
-                f"LIVE TRADING is {lt_state} — new orders blocked"
-                if not live_ok
-                else ""
-            ),
+            (f"LIVE TRADING is {lt_state} — new orders blocked" if not live_ok else ""),
         )
 
     failed_reasons = tuple(

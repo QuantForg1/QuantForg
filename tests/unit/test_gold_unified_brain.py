@@ -152,7 +152,7 @@ def test_conflicting_directions_force_no_trade(monkeypatch) -> None:
     monkeypatch.setattr(
         brain,
         "evaluate_all_strategies",
-        lambda *a, **k: (buy, sell),
+        lambda *_a, **_k: (buy, sell),
     )
     d = decide_gold(_base_score())
     assert d.decision == "NO_TRADE"

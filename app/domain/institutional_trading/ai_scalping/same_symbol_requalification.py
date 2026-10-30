@@ -82,16 +82,22 @@ def structure_signature(snapshot: Any) -> str | None:
         bos_sig: str | None = None
         choch_sig: str | None = None
         for struct in iter_scalp_structures(snapshot):
-            bos_sig = _latest_event_sig(
-                getattr(struct, "breaks_of_structure", None),
-                price_attr="break_price",
-                time_attr="broken_at",
-            ) or bos_sig
-            choch_sig = _latest_event_sig(
-                getattr(struct, "changes_of_character", None),
-                price_attr="break_price",
-                time_attr="broken_at",
-            ) or choch_sig
+            bos_sig = (
+                _latest_event_sig(
+                    getattr(struct, "breaks_of_structure", None),
+                    price_attr="break_price",
+                    time_attr="broken_at",
+                )
+                or bos_sig
+            )
+            choch_sig = (
+                _latest_event_sig(
+                    getattr(struct, "changes_of_character", None),
+                    price_attr="break_price",
+                    time_attr="broken_at",
+                )
+                or choch_sig
+            )
         if bos_sig:
             parts.append(f"bos={bos_sig}")
         if choch_sig:
@@ -193,11 +199,7 @@ def fresh_setup_evidence(
         and previous.structure_sig != current.structure_sig
     ):
         reasons.append("structure_changed")
-    if (
-        previous.regime
-        and current.regime
-        and previous.regime != current.regime
-    ):
+    if previous.regime and current.regime and previous.regime != current.regime:
         reasons.append("regime_changed")
     if (
         previous.opportunity_score is not None

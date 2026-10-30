@@ -123,9 +123,7 @@ class WeltradeIntegrationService:
             "execution_enabled": self.adapter.execution_enabled,
         }
 
-    async def health(
-        self, *, user_id: UUID, role: str | None = None
-    ) -> dict[str, Any]:
+    async def health(self, *, user_id: UUID, role: str | None = None) -> dict[str, Any]:
         """Production health probe for tunnel + gateway + MT5 session."""
         cfg = self._configuration()
         gw = self._gateway()
@@ -618,11 +616,7 @@ class WeltradeIntegrationService:
             )
 
             _prev_user, prev_login = bound_execution_account()
-            if (
-                runtime is not None
-                and prev_login > 1
-                and prev_login != resolved_login
-            ):
+            if runtime is not None and prev_login > 1 and prev_login != resolved_login:
                 runtime._last_cycle = None
             if runtime is not None:
                 runtime.user_id = user_id
@@ -675,7 +669,8 @@ class WeltradeIntegrationService:
             if callable(finder):
                 row = await finder(login)
                 if row is not None and row.user_id != user_id and row.connected:
-                    return row.user_id
+                    owner_id: UUID | None = row.user_id
+                    return owner_id
                 return None
             # Memory / minimal repos: scan list_for_user is insufficient — walk items.
             items = getattr(uow.connections, "items", None)
@@ -686,7 +681,8 @@ class WeltradeIntegrationService:
                         and bool(getattr(conn, "connected", False))
                         and getattr(conn, "user_id", None) != user_id
                     ):
-                        return conn.user_id
+                        owner_id = conn.user_id
+                        return owner_id
         return None
 
     def _sync_adapter_live_handle(self, live_ref: str) -> None:
@@ -879,9 +875,8 @@ class WeltradeIntegrationService:
             # ANY non-empty ref as live for remap — compare the process live
             # handle exactly so stale foreign claims can be cleared.
             live_handle = (
-                (getattr(self.adapter, "_live_session_ref", None) or "").strip()
-                or (getattr(client, "session_token", "") or "").strip()
-            )
+                getattr(self.adapter, "_live_session_ref", None) or ""
+            ).strip() or (getattr(client, "session_token", "") or "").strip()
             async with self.uow_factory() as uow:
                 finder = getattr(uow.connections, "get_connected_by_login", None)
                 row = await finder(live_login) if callable(finder) else None
@@ -1246,7 +1241,8 @@ class WeltradeIntegrationService:
                 self._connect_inflight = task
                 self._connect_inflight_key = key
         try:
-            return await task
+            result: dict[str, Any] = await task
+            return result
         finally:
             async with self._gate():
                 if self._connect_inflight is task and task.done():

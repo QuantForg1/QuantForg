@@ -14,6 +14,7 @@ fakes lots, never overrides broker ``VOLUME_MIN``, and never forces execution.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -324,7 +325,7 @@ def evaluate_balance(
         )
 
     # Phase B — small-account observability (never changes ceilings / sizing)
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.phase_b import get_phase_b_plane
         from app.domain.institutional_trading.phase_b.small_account_observe import (
             observe_small_account_xau_block,
@@ -337,12 +338,12 @@ def evaluate_balance(
             hard_max_risk_pct=float(profile.hard_max_risk_pct),
             blocked_by_min_lot=tradability is MicroTradability.NOT_TRADABLE,
             block_reason=(
-                reasons[0] if tradability is MicroTradability.NOT_TRADABLE and reasons else None
+                reasons[0]
+                if tradability is MicroTradability.NOT_TRADABLE and reasons
+                else None
             ),
         )
         get_phase_b_plane().last_small_account = snap
-    except Exception:
-        pass
 
     return MicroBalanceFeasibility(
         equity=equity,

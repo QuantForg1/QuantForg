@@ -20,6 +20,7 @@ Score policy (no inflation vs prior ceilings):
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -62,6 +63,9 @@ def _ob_displacement_qualified(ob_snap: Any) -> bool:
             if Decimal(str(ratio)) >= _MIN_DISPLACEMENT_RATIO:
                 return True
         except Exception:
+            logging.getLogger(__name__).debug(
+                "order_block_displacement_unparsed", exc_info=True
+            )
             continue
     return False
 

@@ -125,7 +125,6 @@ def _direct_save_payload(state: dict[str, Any]) -> bool:
     return True
 
 
-
 def resolve_persisted_trading_mode(
     state: Mapping[str, Any] | None,
 ) -> tuple[str, str]:
@@ -211,8 +210,8 @@ def load_postgres_state_strict() -> tuple[bool, bool, dict[str, Any], str | None
         return True, False, {}, type(exc).__name__
     if not isinstance(rows, list) or not rows:
         return True, True, {}, None
-    payload = rows[0].get("payload") if isinstance(rows[0], dict) else None
-    result = payload if isinstance(payload, dict) else {}
+    rest_payload = rows[0].get("payload") if isinstance(rows[0], dict) else None
+    result = rest_payload if isinstance(rest_payload, dict) else {}
     return True, True, dict(result), None
 
 

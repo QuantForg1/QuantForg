@@ -109,15 +109,17 @@ def normalize_evidence_package(pkg: dict[str, Any]) -> dict[str, Any]:
         "latency": latency,
         "session": _pick(ai.get("session"), pkg.get("session")),
         "market_regime": _pick(pkg.get("market_regime"), ai.get("regime")),
-        "management_events": pkg.get("management_events")
-        if isinstance(pkg.get("management_events"), list)
-        else [],
+        "management_events": (
+            pkg.get("management_events")
+            if isinstance(pkg.get("management_events"), list)
+            else []
+        ),
         "close_reason": _pick(trade.get("close_reason"), pkg.get("close_reason")),
         "pnl": _pick(trade.get("net_pnl"), trade.get("gross_pnl")),
         "duration": _pick(trade.get("duration")),
-        "timeline": pkg.get("timeline")
-        if isinstance(pkg.get("timeline"), list)
-        else [],
+        "timeline": (
+            pkg.get("timeline") if isinstance(pkg.get("timeline"), list) else []
+        ),
         "oms": oms,
         "gateway": gw,
         "mt5": mt5,

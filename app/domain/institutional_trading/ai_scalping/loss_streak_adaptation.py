@@ -80,9 +80,7 @@ def resolve_loss_streak_adaptation(
         mode = MODE_TIGHTENED
         soft_rr = max(float(base_min_rr), 1.25)
         boost = 0.15
-        reason = (
-            f"{losses} consecutive losses — TIGHTENED selection / ranking bias"
-        )
+        reason = f"{losses} consecutive losses — TIGHTENED selection / ranking bias"
     else:
         mode = MODE_NORMAL
         soft_rr = float(base_min_rr)

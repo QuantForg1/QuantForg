@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class MarketDataState(str, Enum):
+class MarketDataState(StrEnum):
     MARKET_DATA_VALID = "MARKET_DATA_VALID"
     MARKET_DATA_DEGRADED = "MARKET_DATA_DEGRADED"
     MARKET_DATA_STALE = "MARKET_DATA_STALE"

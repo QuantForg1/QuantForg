@@ -10,19 +10,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
 from typing import Any
 from uuid import uuid4
 
 
-class HaltMode(str, Enum):
+class HaltMode(StrEnum):
     ACTIVE = "ACTIVE"
     HALT_NEW_ENTRIES = "HALT_NEW_ENTRIES"
     HALT_ALL_TRADING = "HALT_ALL_TRADING"
 
 
-class HaltKind(str, Enum):
+class HaltKind(StrEnum):
     """Who owns the halt — mechanical HaltMode still gates OMS."""
 
     NONE = "NONE"

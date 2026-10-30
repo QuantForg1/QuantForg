@@ -7,7 +7,7 @@ unavailable. Never treats missing data as opportunity=0.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from app.domain.institutional_trading.ai_scalping.universe_discovery import (
     discover_from_broker_rows,
@@ -137,6 +137,13 @@ def build_instrument(
         "LIVE",
         "INSUFFICIENT_HISTORY",
     }
+    digits_raw = row.get("digits")
+    if digits_raw in (None, ""):
+        digits_field: int | str = UNKNOWN
+    elif isinstance(digits_raw, int | str):
+        digits_field = digits_raw
+    else:
+        digits_field = cast("int | str", digits_raw)
     return InstrumentRecord(
         identity=identity,
         classification=classification,
@@ -147,7 +154,7 @@ def build_instrument(
             _row_get(row, "contract_size", "trade_contract_size") or UNKNOWN
         ),
         point=str(_row_get(row, "point") or UNKNOWN),
-        digits=row.get("digits") if row.get("digits") not in (None, "") else UNKNOWN,
+        digits=digits_field,
         tick_size=str(_row_get(row, "tick_size", "trade_tick_size") or UNKNOWN),
         tick_value=str(_row_get(row, "tick_value", "trade_tick_value") or UNKNOWN),
         min_volume=str(_row_get(row, "volume_min", "min_volume") or UNKNOWN),
@@ -187,9 +194,11 @@ def build_instrument(
             "swap": _row_get(row, "swap_mode", "swap"),
             "visible": _row_get(row, "visible"),
             "trade_allowed": _row_get(row, "trade_allowed"),
-            "timeframe_quality": q.get("timeframe_quality")
-            if isinstance(q.get("timeframe_quality"), dict)
-            else {},
+            "timeframe_quality": (
+                q.get("timeframe_quality")
+                if isinstance(q.get("timeframe_quality"), dict)
+                else {}
+            ),
             "bid": _row_get(q, "bid", default=row.get("bid")),
             "ask": _row_get(q, "ask", default=row.get("ask")),
             "last_error": _row_get(q, "reason", default=row.get("fetch_error")),

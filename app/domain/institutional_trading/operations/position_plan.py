@@ -345,15 +345,11 @@ def build_position_plan(
         else None
     )
     broker_n = (
-        max(0, int(broker_allowed_count))
-        if broker_allowed_count is not None
-        else None
+        max(0, int(broker_allowed_count)) if broker_allowed_count is not None else None
     )
 
     if remaining < target:
-        reductions.append(
-            f"quantforg_capacity {remaining} < target {target}"
-        )
+        reductions.append(f"quantforg_capacity {remaining} < target {target}")
     n = min(target, remaining)
     if risk_n < n:
         reductions.append(f"risk_allowed {risk_n} < {n}")
@@ -463,9 +459,9 @@ def build_position_plan(
         margin_avail = str(_dec(free_margin))
 
     plan_id = f"plan-{uuid4().hex[:16]}"
-    idem = hashlib.sha256(
-        f"{cycle_id}|{snapshot_id}|{plan_id}".encode()
-    ).hexdigest()[:24]
+    idem = hashlib.sha256(f"{cycle_id}|{snapshot_id}|{plan_id}".encode()).hexdigest()[
+        :24
+    ]
     legs: list[PositionLeg] = []
     for i in range(n):
         h = leg_input_hash(base_input_hash or idem, plan_id, i)
@@ -530,9 +526,7 @@ def cycle_already_executed(cycle_id: str, snapshot_id: str) -> str | None:
         return _EXECUTED_CYCLES.get(key)
 
 
-def mark_cycle_executed(
-    cycle_id: str, snapshot_id: str, plan_id: str
-) -> bool:
+def mark_cycle_executed(cycle_id: str, snapshot_id: str, plan_id: str) -> bool:
     """True when this cycle/snapshot is newly reserved (not a duplicate)."""
     key = f"{cycle_id}:{snapshot_id}"
     with _LOCK:

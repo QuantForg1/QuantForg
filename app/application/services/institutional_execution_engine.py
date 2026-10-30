@@ -1225,11 +1225,13 @@ class InstitutionalExecutionEngine:
 
         if not _is_manage_intent(intent) and intent.volume.value > 0:
             from app.domain.entities.risk_engine import contract_size_for_symbol
-            from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
-                actual_planned_sl_band_reason,
-                format_planned_sl_reject_detail,
-                lot_dollar_risk,
+            from app.domain.institutional_trading.operations import (
+                min_lot_feasibility as _q1228,
             )
+
+            actual_planned_sl_band_reason = _q1228.actual_planned_sl_band_reason
+            format_planned_sl_reject_detail = _q1228.format_planned_sl_reject_detail
+            lot_dollar_risk = _q1228.lot_dollar_risk
 
             stop_for_band = Decimal("0")
             entry_for_band = Decimal("0")
@@ -1321,9 +1323,11 @@ class InstitutionalExecutionEngine:
                         tick_size=band_tick_size,
                         tick_value=band_tick_value,
                     )
-                    from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
-                        entry_book_exposure,
+                    from app.domain.institutional_trading.operations import (
+                        min_lot_feasibility as _qf_min_lot_feasibility,
                     )
+
+                    entry_book_exposure = _qf_min_lot_feasibility.entry_book_exposure
 
                     open_risk_unknown = False
                     open_risk = Decimal("0")
@@ -1983,7 +1987,10 @@ class InstitutionalExecutionEngine:
             ),
         )
         result.journal_entry = self._write_journal(result, intent, exec_result, uid)
-        send_reached = exec_result.outcome is not ExecutionOutcome.DISABLED
+        # DISABLED is excluded by the local outcome type. Compare through
+        # object so a runtime DISABLED value still withholds the send.
+        outcome_flag: object = exec_result.outcome
+        send_reached = outcome_flag is not ExecutionOutcome.DISABLED
         self._record_order_attempt(
             intent=intent,
             request=request,

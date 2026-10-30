@@ -587,9 +587,7 @@ def _overlay_ite_worker_status(out: dict[str, Any]) -> None:
                 "maximum_tradeable_stop_distance"
             )
         ticket = (
-            last.get("mt5_ticket")
-            or last.get("broker_ticket")
-            or last.get("ticket")
+            last.get("mt5_ticket") or last.get("broker_ticket") or last.get("ticket")
         )
         if ticket not in (None, "", 0, "0"):
             out["broker_ticket"] = ticket
@@ -776,12 +774,12 @@ def _signal_cards(
                 "price": str(req.price) if req.price is not None else None,
                 "entry": str(req.entry) if req.entry is not None else None,
                 "stop_loss": str(req.stop_loss) if req.stop_loss is not None else None,
-                "take_profit": str(req.take_profit)
-                if req.take_profit is not None
-                else None,
-                "risk_reward": str(round(price_rr, 2))
-                if price_rr is not None
-                else None,
+                "take_profit": (
+                    str(req.take_profit) if req.take_profit is not None else None
+                ),
+                "risk_reward": (
+                    str(round(price_rr, 2)) if price_rr is not None else None
+                ),
                 "model_risk_reward": str(model_rr) if model_rr is not None else None,
                 "score": str(req.score) if req.score is not None else None,
                 "edge": str(req.edge) if req.edge is not None else None,
@@ -917,9 +915,9 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
             "orders_may_submit": orders_may_submit(state),
             "safety_gates": _safety_gates(facts),
             "broker": {
-                "status": "CONNECTED"
-                if facts.get("broker_connected")
-                else "DISCONNECTED",
+                "status": (
+                    "CONNECTED" if facts.get("broker_connected") else "DISCONNECTED"
+                ),
                 "server": facts.get("broker_server_masked")
                 or facts.get("broker_server"),
                 "login_masked": facts.get("account_login_masked"),
@@ -935,12 +933,12 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                 "status": facts.get("ownership") or "NOT_OWNED",
             },
             "account": {
-                "balance": str(facts["balance"])
-                if facts.get("balance") is not None
-                else None,
-                "equity": str(facts["equity"])
-                if facts.get("equity") is not None
-                else None,
+                "balance": (
+                    str(facts["balance"]) if facts.get("balance") is not None else None
+                ),
+                "equity": (
+                    str(facts["equity"]) if facts.get("equity") is not None else None
+                ),
                 "free_margin": (
                     str(facts["free_margin"])
                     if facts.get("free_margin") is not None
@@ -965,9 +963,7 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                 ),
                 "daily_pnl_trusted": facts.get("daily_pnl_trusted"),
                 "daily_pnl_status": facts.get("daily_pnl_status")
-                or (
-                    "UNAVAILABLE" if facts.get("daily_pnl") is None else None
-                ),
+                or ("UNAVAILABLE" if facts.get("daily_pnl") is None else None),
                 "new_capital_detected": facts.get("new_capital_detected"),
                 "capital_baseline": facts.get("capital_baseline"),
                 "pre_deposit_trade_pnl": facts.get("pre_deposit_trade_pnl"),
@@ -1020,12 +1016,13 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
         }
     )
     _overlay_ite_worker_status(payload)
-    return payload
+    status_body: dict[str, Any] = payload
+    return status_body
 
 
 def confirmation_preview(*, user: AuthUserDTO) -> dict[str, Any]:
     status = build_live_trading_status(user=user)
-    return strip_secrets(
+    preview: dict[str, Any] = strip_secrets(
         {
             "requires_confirmation": True,
             "confirmation_phrase": _CONFIRM_PHRASE,
@@ -1037,12 +1034,15 @@ def confirmation_preview(*, user: AuthUserDTO) -> dict[str, Any]:
             "broker": status.get("broker"),
             "account": status.get("account"),
             "risk": status.get("risk"),
-            "positions": status.get("account", {}).get("open_positions")
-            if isinstance(status.get("account"), dict)
-            else 0,
+            "positions": (
+                status.get("account", {}).get("open_positions")
+                if isinstance(status.get("account"), dict)
+                else 0
+            ),
             "live_trading_state": status.get("live_trading_state"),
         }
     )
+    return preview
 
 
 def _persist_or_block(ctrl: LiveTradingController) -> None:
@@ -1139,17 +1139,13 @@ def enable_live_trading(
             if runtime is not None:
                 runtime.user_id = operator.user_id
         except Exception as bind_exc:
-            logger.warning(
-                "live_trading_runtime_user_bind_failed", error=str(bind_exc)
-            )
+            logger.warning("live_trading_runtime_user_bind_failed", error=str(bind_exc))
         try:
             login_i = int(facts.get("account_login") or 0)
             if login_i > 1:
                 bind_execution_account(user_id=operator.user_id, login=login_i)
         except Exception as bind_exc:
-            logger.warning(
-                "live_trading_execution_bind_failed", error=str(bind_exc)
-            )
+            logger.warning("live_trading_execution_bind_failed", error=str(bind_exc))
     except Exception as exc:
         logger.warning("live_trading_enable_auto_trade_sync_failed", error=str(exc))
     _persist_or_block(ctrl)
@@ -1336,7 +1332,8 @@ def _safety_pause(ctrl: Any, *, reason: str) -> LiveTradingState:
             "session checks all pass.",
             key=f"autopause:{reason}:{utc_now().isoformat(timespec='minutes')}",
         )
-    return after
+    paused: LiveTradingState = after
+    return paused
 
 
 def apply_fail_closed_from_probes(

@@ -82,13 +82,13 @@ def _entry(**overrides: object) -> list[str]:
 
 
 def test_owner_constants_replace_80_percent_caps() -> None:
-    assert MAX_DAILY_LOSS_PCT == D("19.0")
-    assert MAX_DAILY_LOSS_CEILING_PCT == D("19.0")
+    assert D("19.0") == MAX_DAILY_LOSS_PCT
+    assert D("19.0") == MAX_DAILY_LOSS_CEILING_PCT
     # Static values are at the $50 reference capital; live checks use equity.
-    assert MAX_PLANNED_SL_RISK_USD == D("4.50")
-    assert TARGET_PLANNED_RISK_USD == D("4.50")
+    assert D("4.50") == MAX_PLANNED_SL_RISK_USD
+    assert D("4.50") == TARGET_PLANNED_RISK_USD
     assert MIN_PLANNED_RISK_USD == D("0") < TARGET_PLANNED_RISK_USD
-    assert MIN_REWARD_RISK == D("1.50")
+    assert D("1.50") == MIN_REWARD_RISK
     assert MicroAccountProfile().hard_max_risk_pct == D("9.0")
 
 
@@ -172,9 +172,7 @@ def test_utc_lock_uses_owner_daily_stop() -> None:
 
 def test_risk_engine_drawdown_blocks_above_owner_daily_stop() -> None:
     engine = RiskEngine()
-    _s, reasons, _w = engine.evaluate_drawdown(
-        _account("38.12"), daily_pnl=D("-12.72")
-    )
+    _s, reasons, _w = engine.evaluate_drawdown(_account("38.12"), daily_pnl=D("-12.72"))
     assert any("owner daily stop" in r for r in reasons)
     _s, reasons_ok, _w = engine.evaluate_drawdown(
         _account("49.24"), daily_pnl=D("-1.60")
@@ -265,7 +263,7 @@ def test_non_gold_symbol_rejected() -> None:
 def test_no_minimum_planned_risk_floor() -> None:
     # The old $1.50 floor is gone: SL 0.50 away ($0.88 incl. spread) is valid.
     assert _entry(stop_loss=D("4116.93"), take_profit=D("4108.00")) == []
-    assert MIN_PLANNED_RISK_USD == D("0")
+    assert D("0") == MIN_PLANNED_RISK_USD
 
 
 def test_stops_level_distance_enforced() -> None:

@@ -109,10 +109,7 @@ def holding_pillars(
         found.append("regime")
     if mtf_alignment is not None and int(mtf_alignment) >= _HOLD_MTF_MIN:
         found.append("mtf")
-    if (
-        execution_quality is not None
-        and int(execution_quality) >= _HOLD_EXEC_MIN
-    ):
+    if execution_quality is not None and int(execution_quality) >= _HOLD_EXEC_MIN:
         found.append("execution_quality")
     return tuple(found)
 
@@ -147,9 +144,7 @@ def classify_trade(
     )
 
     if hard_market_invalid:
-        reason = hard_invalid_reason or (
-            "Hard market invalidity — no trade."
-        )
+        reason = hard_invalid_reason or ("Hard market invalidity — no trade.")
         return TradeClassification(
             trade_class=TradeClass.NO_TRADE,
             reason=reason,
@@ -175,8 +170,7 @@ def classify_trade(
         return TradeClassification(
             trade_class=TradeClass.NO_TRADE,
             reason=(
-                f"Insufficient opportunity "
-                f"(score {score} < {int(threshold)})."
+                f"Insufficient opportunity " f"(score {score} < {int(threshold)})."
             ),
             opportunity_score=score,
             direction=side,
@@ -208,8 +202,7 @@ def classify_trade(
     return TradeClassification(
         trade_class=TradeClass.SCALP,
         reason=(
-            "Opportunity is tradable but holding-quality evidence "
-            "is insufficient."
+            "Opportunity is tradable but holding-quality evidence " "is insufficient."
         ),
         opportunity_score=score,
         direction=side,

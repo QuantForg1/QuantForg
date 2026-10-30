@@ -145,7 +145,10 @@ async def async_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
 
 
 def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
-    """Apply the tracked known-failure list as strict xfails (tests/known_failures.py)."""
+    (
+        """Apply the tracked known-failure list as strict xfails """
+        """(tests/known_failures.py)."""
+    )
     from tests.known_failures import GROUP_ISSUES, KNOWN_FAILURES
 
     for item in items:

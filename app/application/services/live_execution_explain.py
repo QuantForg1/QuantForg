@@ -233,7 +233,7 @@ def _evaluate_stages(cycle: dict[str, Any]) -> list[dict[str, Any]]:
     outcome = str(cycle.get("cycle_outcome") or "").lower()
     rejection = _as_dict(cycle.get("rejection"))
     primary_code = str(rejection.get("primary") or "").upper()
-    all_codes = {
+    safety_codes = {
         str(c).upper()
         for c in (rejection.get("all_codes") or cycle.get("rejected_codes") or [])
     }
@@ -247,9 +247,9 @@ def _evaluate_stages(cycle: dict[str, Any]) -> list[dict[str, Any]]:
     safety_blocked = (
         outcome in {"safety_blocked"}
         or primary_code in safety_fail_codes
-        or bool(safety_fail_codes & all_codes)
+        or bool(safety_fail_codes & safety_codes)
         or any(token.lower() in abort.lower() for token in safety_fail_codes if abort)
-        or any(c in {str(x).lower() for x in all_codes} for c in ("news_blackout",))
+        or any(c in {str(x).lower() for x in safety_codes} for c in ("news_blackout",))
     )
     if safety_blocked:
         reasons = rejection.get("decision_reasons") or cycle.get(
@@ -259,7 +259,7 @@ def _evaluate_stages(cycle: dict[str, Any]) -> list[dict[str, Any]]:
             detail = "; ".join(str(r) for r in reasons if str(r).strip())
         else:
             detail = abort or "Safety FAILED"
-        if "NEWS_BLACKOUT" in all_codes or "news_blackout" in {
+        if "NEWS_BLACKOUT" in safety_codes or "news_blackout" in {
             str(c).lower() for c in (rejection.get("all_codes") or [])
         }:
             detail = "Safety FAILED (news blackout)"
@@ -330,8 +330,7 @@ def _risk_or_safety_blocked(
         return True
     abort = str(cycle.get("abort_reason") or "").upper()
     if any(
-        token in abort
-        for token in ("RISK", "SAFETY", "KILL", "DAILY_LOSS", "MIN_LOT")
+        token in abort for token in ("RISK", "SAFETY", "KILL", "DAILY_LOSS", "MIN_LOT")
     ):
         return True
     rejection = _as_dict(cycle.get("rejection"))

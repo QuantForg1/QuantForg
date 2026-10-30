@@ -211,9 +211,7 @@ def test_contract_sell_safety_block_keeps_sell() -> None:
 
 
 def test_contract_genuine_none_is_direction_none() -> None:
-    out = evaluate_gold_execution_contract(
-        _ready(direction="NONE", action="NO_TRADE")
-    )
+    out = evaluate_gold_execution_contract(_ready(direction="NONE", action="NO_TRADE"))
     assert out.direction == "NONE"
     assert out.fault_code == "DIRECTION_NONE"
     assert out.blocking_stage == "DECISION"
@@ -376,7 +374,10 @@ def test_scalp_atr_stop_provenance_unchanged() -> None:
         Path(__file__).resolve().parents[2]
         / "app/application/services/institutional_decision_pipeline.py"
     ).read_text(encoding="utf-8")
-    assert 'stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")' in pipeline
+    assert (
+        'stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")'
+        in pipeline
+    )
     assert DEFAULT_AI_SCALPING_CONFIG.stop_atr_mult == Decimal("1.10")
     assert Decimal("9.0483") == _LIVE_STOP
     assert ITEConfig(trading_mode="scalping").is_scalping() is True
@@ -384,12 +385,16 @@ def test_scalp_atr_stop_provenance_unchanged() -> None:
 
 def test_owner_cap_overrides_strategy_targets_and_min_stack() -> None:
     """Strategy targets still rank multiple legs; owner capacity allows one."""
-    assert 2 <= strategy_target_count(
-        trade_class=TradeClass.SCALP, opportunity_score=82
-    ) <= SCALP_MAX_OPEN_TRADES
-    assert 1 <= strategy_target_count(
-        trade_class=TradeClass.HOLD, opportunity_score=86
-    ) <= HOLD_MAX_OPEN_TRADES
+    assert (
+        2
+        <= strategy_target_count(trade_class=TradeClass.SCALP, opportunity_score=82)
+        <= SCALP_MAX_OPEN_TRADES
+    )
+    assert (
+        1
+        <= strategy_target_count(trade_class=TradeClass.HOLD, opportunity_score=86)
+        <= HOLD_MAX_OPEN_TRADES
+    )
     for trade_class, mode, allowed in (
         (TradeClass.SCALP, "scalping", 10),
         (TradeClass.HOLD, "swing", 5),
@@ -433,9 +438,12 @@ def test_gold_manual_and_session_regressions() -> None:
     assert facts["already_open"] is False
     assert facts["already_open_reason"] == "MANUAL_SAME_SYMBOL_PRESENT"
     assert facts["candidate_allowed"] is True
-    assert remaining_quantforg_capacity(
-        current_count=0,
-        configured_max=10,
-        class_cap=10,
-    ) == 10
+    assert (
+        remaining_quantforg_capacity(
+            current_count=0,
+            configured_max=10,
+            class_cap=10,
+        )
+        == 10
+    )
     assert any(s.value for s in TRADABLE_SESSIONS_24_7)

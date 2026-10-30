@@ -581,9 +581,9 @@ def test_research_shadow_cannot_submit(broker_mode: None) -> None:
 
 
 def test_no_second_gateway_scanner_or_engine() -> None:
-    ite = (
-        ROOT / "app/application/services/institutional_ite_runtime.py"
-    ).read_text(encoding="utf-8")
+    ite = (ROOT / "app/application/services/institutional_ite_runtime.py").read_text(
+        encoding="utf-8"
+    )
     scanner = (
         ROOT / "app/application/services/institutional_multi_asset_scanner.py"
     ).read_text(encoding="utf-8")
@@ -600,9 +600,9 @@ def test_no_second_gateway_scanner_or_engine() -> None:
 
 
 def test_no_hardcoded_execution_allowlist_in_broker_mode(broker_mode: None) -> None:
-    src = (
-        ROOT / "app/domain/trading/execution_universe.py"
-    ).read_text(encoding="utf-8")
+    src = (ROOT / "app/domain/trading/execution_universe.py").read_text(
+        encoding="utf-8"
+    )
     live_fn = inspect.getsource(live_execution_symbols)
     assert "DEFAULT_SCALPING_UNIVERSE" not in live_fn
     assert "EURUSD" not in live_fn
@@ -634,9 +634,10 @@ def test_research_authorizes_trade_false() -> None:
 
     snap = build_snapshot(broker_rows=list(_LIVE_ROWS))
     assert snap["authorizes_trade"] is False
-    assert snap["catalogue_source"] != CATALOGUE_LIVE_BROKER or snap.get(
-        "authorizes_trade"
-    ) is False
+    assert (
+        snap["catalogue_source"] != CATALOGUE_LIVE_BROKER
+        or snap.get("authorizes_trade") is False
+    )
 
 
 def test_catalogue_source_must_be_live_broker_for_execution(broker_mode: None) -> None:

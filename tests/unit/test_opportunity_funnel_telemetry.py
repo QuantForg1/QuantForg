@@ -23,7 +23,9 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 @pytest.mark.unit
 def test_blocker_source_maps_directional_edge() -> None:
     assert classify_blocker_source("WAIT_NO_DIRECTIONAL_EDGE") == "DIRECTION"
-    assert classify_blocker_source("opportunity_score 64 < threshold 70") == "OPPORTUNITY"
+    assert (
+        classify_blocker_source("opportunity_score 64 < threshold 70") == "OPPORTUNITY"
+    )
     assert classify_blocker_source("WAIT_CHASE") == "SNIPER"
     assert classify_blocker_source("RISK_BLOCK") == "RISK"
     assert classify_blocker_source("") == "NONE"

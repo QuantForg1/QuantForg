@@ -605,9 +605,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                             runtime._watchdog_restarts = restarts
                             runtime._watchdog_state = "BACKOFF"
                             if not getattr(runtime, "_watchdog_restart_reason", None):
-                                runtime._watchdog_restart_reason = (
-                                    "orchestrator_exited"
-                                )
+                                runtime._watchdog_restart_reason = "orchestrator_exited"
                         delay = min(30.0, 2.0 * (2 ** min(restarts - 1, 4)))
                         try:
                             note = getattr(runtime, "note_scheduler_stalled", None)

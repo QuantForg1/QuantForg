@@ -275,11 +275,7 @@ def test_execution_universe_modes_have_no_static_invent_fallback_flag() -> None:
 @pytest.mark.unit
 def test_trading_session_provider_connected_is_ownership_aware() -> None:
     text = (
-        ROOT
-        / "frontend"
-        / "src"
-        / "providers"
-        / "trading-session-provider.tsx"
+        ROOT / "frontend" / "src" / "providers" / "trading-session-provider.tsx"
     ).read_text(encoding="utf-8")
     assert "const connectedFlag = statusConnected;" in text
     assert "Ownership-aware only" in text

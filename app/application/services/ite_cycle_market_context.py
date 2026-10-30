@@ -7,6 +7,7 @@ If market data cannot be loaded, returns an explicit failure reason.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -123,7 +124,7 @@ async def _offload_sync(
 
     LIVE ITE / scanner work uses the bounded ITE I/O pool.
     Research-mode scoring uses ``asyncio.to_thread`` so a multi-symbol
-    research batch cannot saturate the 5-worker ITE pool (4 symbols × 5
+    research batch cannot saturate the 5-worker ITE pool (4 symbols x 5
     timeframes) and leave LIVE non-gold desks stuck as UNKNOWN stubs.
     """
     import asyncio
@@ -137,6 +138,7 @@ async def _offload_sync(
     from app.application.services.blocking_io_offload import offload_blocking
 
     return await offload_blocking(fn, *args, **kwargs)
+
 
 _TF_COUNTS: tuple[tuple[Timeframe, int], ...] = (
     (Timeframe.H4, 180),
@@ -191,11 +193,9 @@ def _tf_plan() -> tuple[
     tuple[tuple[Timeframe, int], ...],
 ]:
     """Required vs optional candle fetches. One optional TF must not fail the desk."""
-    by_tf = {tf: n for tf, n in _TF_COUNTS}
+    by_tf = dict(_TF_COUNTS)
     if _scalping_stack():
-        required = tuple(
-            (tf, by_tf[tf]) for tf in _SCALP_REQUIRED_TFS if tf in by_tf
-        )
+        required = tuple((tf, by_tf[tf]) for tf in _SCALP_REQUIRED_TFS if tf in by_tf)
         optional = (
             ((Timeframe.H4, by_tf[Timeframe.H4]),) if Timeframe.H4 in by_tf else ()
         )
@@ -208,6 +208,8 @@ def _symbol_context_not_ready(code: str, detail: str) -> str:
     if extra:
         return f"SYMBOL_CONTEXT_NOT_READY:{code}:{extra}"
     return f"SYMBOL_CONTEXT_NOT_READY:{code}"
+
+
 # Cap concurrent candle fetches below TRADING_READ_LIMIT (6).
 _TF_GATE_LIMIT = 4
 _tf_fetch_gate: asyncio.Semaphore | None = None
@@ -350,9 +352,7 @@ def _note_terminal_permission_change(
             _LAST_PERMISSION_CHANGE_AT = now
         if _LAST_PERMISSION_CHANGE_AT:
             diag["mt5_last_permission_change"] = _LAST_PERMISSION_CHANGE_AT
-    diag["mt5_permission_failure_reason"] = (
-        None if value is True else source
-    )
+    diag["mt5_permission_failure_reason"] = None if value is True else source
 
 
 def _read_mt5_autotrading_enabled(
@@ -517,10 +517,14 @@ async def build_ite_cycle_market_context(
     )
     if reuse_cycle and not research_mode:
         cached = peek_cycle_market_context(symbol)
-        cached_purpose = str(
-            ((cached.diagnostics or {}).get("context_purpose") if cached else "")
-            or ""
-        ).strip().lower()
+        cached_purpose = (
+            str(
+                ((cached.diagnostics or {}).get("context_purpose") if cached else "")
+                or ""
+            )
+            .strip()
+            .lower()
+        )
         want_purpose = str(purpose or "execution").strip().lower()
         # Scan context skips position/history sync. Execution must not reuse it
         # or Risk can see an empty book and allow a same-symbol duplicate.
@@ -631,9 +635,7 @@ async def build_ite_cycle_market_context(
         )
 
     async def _io(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
-        return await _offload_sync(
-            fn, *args, research_io=bool(research_mode), **kwargs
-        )
+        return await _offload_sync(fn, *args, research_io=bool(research_mode), **kwargs)
 
     session_err = await _io(_ensure_gateway_session, mt5_adapter, diag)
     if session_err:
@@ -769,21 +771,15 @@ async def build_ite_cycle_market_context(
             logical_symbol=logical_symbol,
             canonical_broker_symbol=canonical_symbol,
         )
-        tf_code = (
-            failed_required_tf.value if failed_required_tf is not None else "BARS"
-        )
+        tf_code = failed_required_tf.value if failed_required_tf is not None else "BARS"
         if "Insufficient" in err_text:
-            reason = _symbol_context_not_ready(
-                f"INSUFFICIENT_{tf_code}_DATA", err_text
-            )
+            reason = _symbol_context_not_ready(f"INSUFFICIENT_{tf_code}_DATA", err_text)
         elif md_fields.get("failure_class"):
             reason = _symbol_context_not_ready(
                 str(md_fields.get("failure_class")), f"{tf_code}:{err_text}"
             )
         else:
-            reason = _symbol_context_not_ready(
-                f"MISSING_TIMEFRAME_{tf_code}", err_text
-            )
+            reason = _symbol_context_not_ready(f"MISSING_TIMEFRAME_{tf_code}", err_text)
         logger.warning(
             "ite_cycle_bars_load_failed",
             error=err_text,
@@ -955,11 +951,7 @@ async def build_ite_cycle_market_context(
             if skip_account_bundle
             else _io(_read_mt5_autotrading_enabled, mt5_adapter, health_diag_box)
         ),
-        (
-            _io(specs_fn, symbol)
-            if callable(specs_fn)
-            else _io(lambda: None)
-        ),
+        (_io(specs_fn, symbol) if callable(specs_fn) else _io(lambda: None)),
         return_exceptions=True,
     )
     pre_info, pre_sync, pre_deals, pre_orders, pre_health, pre_specs = bundled
@@ -1071,7 +1063,11 @@ async def build_ite_cycle_market_context(
         diag["capacity_label"] = (
             "FULL"
             if cap_used >= cap_max
-            else (f"{max(0, cap_max - cap_used)} SLOT" if cap_max - cap_used == 1 else f"{max(0, cap_max - cap_used)} SLOTS")
+            else (
+                f"{max(0, cap_max - cap_used)} SLOT"
+                if cap_max - cap_used == 1
+                else f"{max(0, cap_max - cap_used)} SLOTS"
+            )
         )
         diag["position_cap_identity"] = 260720
         book_rows = list(getattr(sync, "rows", ()) or ())
@@ -1146,6 +1142,7 @@ async def build_ite_cycle_market_context(
 
                 profits.append(_Dec(str(getattr(row, "profit", 0) or 0)))
             except Exception:
+                logger.debug("owned_profit_unparsed", exc_info=True)
                 continue
         cap_left = int(diag.get("capacity_available") or 0)
         all_winners = bool(profits) and all(p > 0 for p in profits)
@@ -1187,8 +1184,10 @@ async def build_ite_cycle_market_context(
         deals: list[Any] | None = None
         deals_fetch_ok = False
         try:
-            if isinstance(pre_deals, Exception):
-                raise pre_deals
+            if isinstance(pre_deals, BaseException):
+                if isinstance(pre_deals, Exception):
+                    raise pre_deals
+                raise TypeError("history deals payload is not a tuple")
             deals_fetch_ok, deals, deals_note = pre_deals
             if deals_note:
                 diag["history_deals"] = deals_note
@@ -1221,15 +1220,9 @@ async def build_ite_cycle_market_context(
                     ending_balance=balance,
                 )
                 diag["session_trade_pnl"] = str(resolved["session_trade_pnl"])
-                diag["pre_deposit_trade_pnl"] = str(
-                    resolved["pre_deposit_trade_pnl"]
-                )
-                diag["post_deposit_trade_pnl"] = str(
-                    resolved["post_deposit_trade_pnl"]
-                )
-                diag["new_capital_detected"] = bool(
-                    resolved["new_capital_detected"]
-                )
+                diag["pre_deposit_trade_pnl"] = str(resolved["pre_deposit_trade_pnl"])
+                diag["post_deposit_trade_pnl"] = str(resolved["post_deposit_trade_pnl"])
+                diag["new_capital_detected"] = bool(resolved["new_capital_detected"])
                 if resolved.get("capital_baseline"):
                     diag["capital_baseline"] = resolved["capital_baseline"]
             except Exception as exc:
@@ -1290,8 +1283,10 @@ async def build_ite_cycle_market_context(
         logger.warning("ite_cycle_daily_loss_lock_sync_failed", error=str(exc))
 
     try:
-        if isinstance(pre_orders, Exception):
-            raise pre_orders
+        if isinstance(pre_orders, BaseException):
+            if isinstance(pre_orders, Exception):
+                raise pre_orders
+            raise TypeError("orders payload is not sized")
         if pre_orders == "N/A":
             diag["orders"] = "N/A"
         else:
@@ -1313,7 +1308,7 @@ async def build_ite_cycle_market_context(
     except Exception:
         atr = None
     atr_dec = Decimal(str(atr)) if atr is not None else None
-    try:
+    with contextlib.suppress(Exception):
         entry_atr = getattr(snapshot, "entry_atr", None)
         analysis_atr = getattr(snapshot, "atr", None)
         if entry_atr is not None:
@@ -1328,8 +1323,6 @@ async def build_ite_cycle_market_context(
             diag["stop_atr_timeframe"] = OWNER_SL_ATR_TIMEFRAME
         elif atr_dec is not None:
             diag["stop_atr"] = str(atr_dec)
-    except Exception:
-        pass
 
     open_n = open_positions if isinstance(open_positions, int) else 0
     # Incomplete book with opens: clear sides so pipeline fail-closes add-ons
@@ -1431,17 +1424,13 @@ async def build_ite_cycle_market_context(
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
     sizing_symbol = str(canonical_symbol or logical_symbol or symbol or "")
-    contract_size = contract_size_for_symbol(
-        sizing_symbol, default=Decimal("0")
-    )
+    contract_size = contract_size_for_symbol(sizing_symbol, default=Decimal("0"))
     lot_step = VOLUME_STEP
     min_lot = VOLUME_MIN
     max_lot = VOLUME_MAX
     tick_size = None
     tick_value = None
-    specs_source = (
-        "symbol_class_fallback" if contract_size > 0 else "specs_unavailable"
-    )
+    specs_source = "symbol_class_fallback" if contract_size > 0 else "specs_unavailable"
     try:
         spec = None if isinstance(pre_specs, Exception) else pre_specs
         if spec is not None:

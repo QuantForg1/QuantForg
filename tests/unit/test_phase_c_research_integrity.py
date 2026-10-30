@@ -109,10 +109,8 @@ def test_pbo_insufficient_and_reproducible() -> None:
     assert thin["state"] == "INSUFFICIENT_DATA"
     assert thin["live_block"] is False if "live_block" in thin else True
 
-    # 8 configs × 6 splits
-    matrix = [
-        [0.1 + 0.01 * i + 0.02 * j for j in range(6)] for i in range(8)
-    ]
+    # 8 configs x 6 splits
+    matrix = [[0.1 + 0.01 * i + 0.02 * j for j in range(6)] for i in range(8)]
     a = estimate_pbo(matrix, min_trials=8)
     b = estimate_pbo(matrix, min_trials=8)
     assert a["PBO"] == b["PBO"]

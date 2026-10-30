@@ -75,7 +75,10 @@ def test_cloudflare_530_is_origin_unreachable_not_auth() -> None:
     )
     assert cls is ServiceUnavailableError
     assert code == CLOUDFLARE_ORIGIN_UNREACHABLE
-    assert "authentication" in message.lower() or "not an authentication" in message.lower()
+    assert (
+        "authentication" in message.lower()
+        or "not an authentication" in message.lower()
+    )
     assert "token" not in message.lower()
     assert "password" not in message.lower()
     assert message == TRADER_BROKER_MESSAGES[CLOUDFLARE_ORIGIN_UNREACHABLE]
@@ -115,9 +118,7 @@ async def test_robot_start_uses_broker_not_connected_code() -> None:
     factory = MemoryMT5UnitOfWorkFactory()
     adapter = MT5Adapter(client=FakeGatewayClient())
     with pytest.raises(NotFoundError) as exc:
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=uuid4(),
             role="trader",
             display_name="Trader",
@@ -135,9 +136,9 @@ async def test_session_payload_has_no_secrets_or_live_broker_claim() -> None:
     adapter = MT5Adapter(client=FakeGatewayClient())
     user_id = uuid4()
     await seed_owned_mt5_connection(factory, user_id)
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
     blob = str(snap)
     assert "password" not in blob.lower()
     assert "ciphertext" not in blob.lower()

@@ -345,9 +345,11 @@ def _upsert_history_postgres(rows: list[dict[str, Any]]) -> int:
                 "reject": bool(r.get("reject")),
                 "blocking_gate": r.get("blocking_gate"),
                 "rr": r.get("rr"),
-                "expected_hold": str(r["expected_hold"])
-                if r.get("expected_hold") is not None
-                else None,
+                "expected_hold": (
+                    str(r["expected_hold"])
+                    if r.get("expected_hold") is not None
+                    else None
+                ),
                 "factors": r.get("factors") or {},
                 "raw_score": r.get("raw_score") or {},
                 "source": r.get("source") or "live_multi_asset_scan",
@@ -456,9 +458,11 @@ def _load_history_postgres(
             if resp.status_code >= 400:
                 return []
             rows = resp.json()
-            return [
-                r for r in rows if isinstance(r, dict)
-            ] if isinstance(rows, list) else []
+            return (
+                [r for r in rows if isinstance(r, dict)]
+                if isinstance(rows, list)
+                else []
+            )
     except Exception as exc:
         logger.warning("signal_history_load_failed", error=str(exc))
         return []
@@ -707,7 +711,7 @@ def build_symbol_analytics(*, days: int = 30) -> dict[str, Any]:
 
     rows.sort(
         key=lambda r: (
-            -(float(r["win_rate"]) if r.get("win_rate") is not None else -1),
+            -(float(raw_wr) if (raw_wr := r.get("win_rate")) is not None else -1),
             -(int(r.get("closed_trades") or 0)),
             r["symbol"],
         )
@@ -834,8 +838,10 @@ def chart_markers(symbol: str, *, limit: int = 50) -> dict[str, Any]:
                 "time": int(ts.timestamp()),
                 "position": "belowBar" if direction == "BUY" else "aboveBar",
                 "color": color,
-                "shape": "arrowUp" if direction == "BUY" else (
-                    "arrowDown" if direction == "SELL" else "circle"
+                "shape": (
+                    "arrowUp"
+                    if direction == "BUY"
+                    else ("arrowDown" if direction == "SELL" else "circle")
                 ),
                 "text": f"{direction} Q{row.get('quality')} C{row.get('confidence')}",
                 "symbol": code,

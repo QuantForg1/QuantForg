@@ -100,7 +100,8 @@ def collect_execution_worker_status(
             blockers.append("ite_runtime_absent")
         elif not worker_running:
             blockers.append(
-                f"ite_worker_not_running watchdog={watchdog_state} run_state={run_state}"
+                f"ite_worker_not_running watchdog={watchdog_state} "
+                f"run_state={run_state}"
             )
         if ops_mode and ops_mode not in {"LIVE", "CANARY"}:
             blockers.append(f"ops_mode={ops_mode} required=LIVE|CANARY")
@@ -110,10 +111,12 @@ def collect_execution_worker_status(
             blockers.append("daily_loss_exceeded")
 
         try:
-            from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
-                RAILWAY_ITE_HEARTBEAT,
-                heartbeat_snapshot,
+            from app.domain.institutional_trading.operations import (
+                infrastructure_heartbeats as _qf_infrastructure_heartbeats,
             )
+
+            RAILWAY_ITE_HEARTBEAT = _qf_infrastructure_heartbeats.RAILWAY_ITE_HEARTBEAT
+            heartbeat_snapshot = _qf_infrastructure_heartbeats.heartbeat_snapshot
 
             snap = heartbeat_snapshot()
             beats = snap.get("heartbeats") if isinstance(snap, dict) else None
@@ -151,7 +154,8 @@ def collect_execution_worker_status(
                     )
                 else:
                     blocker = (
-                        "live_trading_state=PAUSED (operator) — explicit resume required"
+                        "live_trading_state=PAUSED (operator) — explicit resume "
+                        "required"
                     )
             elif state == "ARMED":
                 blocker = "live_trading_state=ARMED — ENABLE required before orders"
@@ -184,14 +188,16 @@ def collect_execution_worker_status(
 
         st = build_openai_advisor_from_settings(settings).provider_status().to_dict()
         last_err = last_openai_provider_error()
-        degraded = bool(
-            last_err
-            and last_err.get("code")
-            in {"insufficient_quota", "rate_limited", "auth_failed", "provider_outage"}
-        )
+        err_code = last_err.get("code") if last_err is not None else None
+        degraded = err_code in {
+            "insufficient_quota",
+            "rate_limited",
+            "auth_failed",
+            "provider_outage",
+        }
         if degraded:
             blockers.append(
-                f"openai_degraded code={last_err.get('code')} "
+                f"openai_degraded code={err_code} "
                 "(advisory only — does not block OMS)"
             )
         payload["openai"] = {
@@ -209,11 +215,7 @@ def collect_execution_worker_status(
     payload["continuous_trading_authorized"] = authorized and worker_ok and exec_on
     payload["orders_path_healthy"] = exec_on and worker_ok
     # OpenAI degradation is advisory — strip from hard blockers for path health.
-    hard = [
-        b
-        for b in blockers
-        if not str(b).startswith("openai_degraded")
-    ]
+    hard = [b for b in blockers if not str(b).startswith("openai_degraded")]
     payload["blockers"] = hard
     payload["advisory_blockers"] = [b for b in blockers if b not in hard]
     if hard:

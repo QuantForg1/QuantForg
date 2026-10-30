@@ -64,9 +64,7 @@ def test_handoff_queue_stops_after_one_entry_per_cycle() -> None:
 @pytest.mark.unit
 def test_handoff_scale_in_candidate_when_quantforg_same_symbol_open() -> None:
     open_pos = {
-        "1": SimpleNamespace(
-            symbol="XAUUSD", side="sell", volume=0.01, magic=260720
-        ),
+        "1": SimpleNamespace(symbol="XAUUSD", side="sell", volume=0.01, magic=260720),
     }
     rt = InstitutionalIteRuntime(
         plane=MagicMock(),
@@ -75,7 +73,9 @@ def test_handoff_scale_in_candidate_when_quantforg_same_symbol_open() -> None:
         guarded_submit=MagicMock(),
         guarded_manage=MagicMock(),
         execution=MagicMock(),
-        position_management=SimpleNamespace(engine=SimpleNamespace(_positions=open_pos)),
+        position_management=SimpleNamespace(
+            engine=SimpleNamespace(_positions=open_pos)
+        ),
     )
     rt._eligible_handoff_queue = ["XAUUSD", "EURUSD", "BTCUSD"]
     rt._eligible_consumed = set()
@@ -87,9 +87,7 @@ def test_handoff_scale_in_candidate_when_quantforg_same_symbol_open() -> None:
 @pytest.mark.unit
 def test_handoff_does_not_skip_manual_same_symbol() -> None:
     open_pos = {
-        "1": SimpleNamespace(
-            symbol="XAUUSD", side="sell", volume=0.01, magic=0
-        ),
+        "1": SimpleNamespace(symbol="XAUUSD", side="sell", volume=0.01, magic=0),
     }
     rt = InstitutionalIteRuntime(
         plane=MagicMock(),
@@ -98,7 +96,9 @@ def test_handoff_does_not_skip_manual_same_symbol() -> None:
         guarded_submit=MagicMock(),
         guarded_manage=MagicMock(),
         execution=MagicMock(),
-        position_management=SimpleNamespace(engine=SimpleNamespace(_positions=open_pos)),
+        position_management=SimpleNamespace(
+            engine=SimpleNamespace(_positions=open_pos)
+        ),
     )
     rt._eligible_handoff_queue = ["XAUUSD", "EURUSD"]
     rt._eligible_consumed = set()

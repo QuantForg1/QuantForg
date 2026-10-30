@@ -764,7 +764,6 @@ def normalize_lots_against_broker(
     return _ok(lot=quantized, est=est, status=status, needed=needed)
 
 
-
 TRADEABLE = "TRADEABLE"
 NOT_TRADEABLE = "NOT_TRADEABLE"
 
@@ -990,8 +989,7 @@ def classify_private_no_fill_reason(
         ]
     ).upper()
     if any(
-        token in blob
-        for token in ("KILL", "SAFETY", "AUTOTRADING", "SELF_PROTECTION")
+        token in blob for token in ("KILL", "SAFETY", "AUTOTRADING", "SELF_PROTECTION")
     ):
         return PRIVATE_NO_FILL_SAFETY_BLOCKED
     if any(

@@ -76,9 +76,9 @@ def observe_oms_outcome(
             record_lifecycle(
                 stage="GATEWAY_ORDER_REQUEST",
                 status="ok" if success else "failed",
-                detail=(message or ("gateway accepted" if success else "gateway failed"))[
-                    :240
-                ],
+                detail=(
+                    message or ("gateway accepted" if success else "gateway failed")
+                )[:240],
                 trace_id=trace_id,
                 symbol=symbol,
                 ticket=ticket_s,
@@ -193,10 +193,12 @@ def store_trade_explanation(
     extras: dict[str, Any] | None = None,
 ) -> None:
     try:
-        from app.domain.institutional_trading.production_hardening.explainability import (  # noqa: E501
-            build_explanation,
-            get_explainability_store,
+        from app.domain.institutional_trading.production_hardening import (
+            explainability as _qf_explainability,
         )
+
+        build_explanation = _qf_explainability.build_explanation
+        get_explainability_store = _qf_explainability.get_explainability_store
 
         conf = getattr(decision, "confidence", None)
         confluence = getattr(decision, "confluence", None)

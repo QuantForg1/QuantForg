@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
 from typing import Any
 from uuid import uuid4
 
 
-class PromotionState(str, Enum):
+class PromotionState(StrEnum):
     RESEARCH = "RESEARCH"
     VALIDATION_FAILED = "VALIDATION_FAILED"
     VALIDATION_PASSED = "VALIDATION_PASSED"
@@ -132,8 +132,7 @@ class PromotionStateMachine:
                     raise RuntimeError("auto_approve_for_live is forbidden in Phase C")
                 if actor in {"system", "auto", ""}:
                     cand.blocking_reason = (
-                        blocking_reason
-                        or "EXPLICIT_APPROVAL_REQUIRED"
+                        blocking_reason or "EXPLICIT_APPROVAL_REQUIRED"
                     )
                     raise PermissionError(
                         "APPROVED_FOR_LIVE / DEPLOYED requires explicit approval actor"

@@ -63,7 +63,7 @@ def build_learning_review() -> dict[str, Any]:
         )
 
         store = get_strategy_diagnostics_store()
-        hist = []
+        hist: list[Any] = []
         if hasattr(store, "list_recent"):
             hist = store.list_recent(limit=50) or []
         elif hasattr(store, "history"):

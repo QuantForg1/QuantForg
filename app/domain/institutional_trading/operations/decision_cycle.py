@@ -142,7 +142,7 @@ class LatencyBudget:
         if self.total_execution_latency_ms <= 0:
             self.total_execution_latency_ms = round(self.total_cycle_ms, 3)
         if named:
-            key = max(named, key=named.get)
+            key = max(named, key=lambda stage: named[stage])
             self.largest_stage = key
             self.largest_stage_ms = round(float(named[key]), 3)
 

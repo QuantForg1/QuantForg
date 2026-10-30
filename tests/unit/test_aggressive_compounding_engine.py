@@ -57,33 +57,33 @@ def _score(*, quality: int = 92, confidence: int = 90, rr: float = 2.0) -> dict:
 
 
 def _inputs(**overrides: object) -> CompoundingInputs:
-    base = dict(
-        symbol="XAUUSD_i",
-        direction="BUY",
-        trade_class="SCALP",
-        score=_score(),
-        confidence=90,
-        quality=92,
-        expected_rr=Decimal("2.0"),
-        equity=Decimal("208.86"),
-        daily_pnl=Decimal("1.50"),
-        daily_loss_pct=Decimal("0"),
-        open_positions=0,
-        remaining_capacity=10,
-        configured_max_open=10,
-        risk_approved_volume=Decimal("0.01"),
-        candidate_allowed=True,
-        min_lot=VOLUME_MIN,
-    )
+    base = {
+        "symbol": "XAUUSD_i",
+        "direction": "BUY",
+        "trade_class": "SCALP",
+        "score": _score(),
+        "confidence": 90,
+        "quality": 92,
+        "expected_rr": Decimal("2.0"),
+        "equity": Decimal("208.86"),
+        "daily_pnl": Decimal("1.50"),
+        "daily_loss_pct": Decimal("0"),
+        "open_positions": 0,
+        "remaining_capacity": 10,
+        "configured_max_open": 10,
+        "risk_approved_volume": Decimal("0.01"),
+        "candidate_allowed": True,
+        "min_lot": VOLUME_MIN,
+    }
     base.update(overrides)
     return CompoundingInputs(**base)  # type: ignore[arg-type]
 
 
 def test_hard_cap_and_min_lot_owner_values() -> None:
-    assert HARD_MAX_RISK_PCT == Decimal("9.0")
+    assert Decimal("9.0") == HARD_MAX_RISK_PCT
     assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
-    assert BROKER_MIN_LOT == Decimal("0.01")
-    assert VOLUME_MIN == Decimal("0.01")
+    assert Decimal("0.01") == BROKER_MIN_LOT
+    assert Decimal("0.01") == VOLUME_MIN
     obs = evaluate_compounding_shadow(_inputs())
     assert obs.live_hard_max_risk_pct == "9.0"
     assert obs.live_min_lot == "0.01"
@@ -139,9 +139,10 @@ def test_losses_never_increase_exposure() -> None:
     loss = evaluate_compounding_shadow(
         _inputs(daily_pnl=Decimal("-2.00"), daily_loss_pct=Decimal("1.0"))
     )
-    assert compounding_bias(
-        drawdown_state=loss.drawdown_state, daily_pnl=Decimal("-2.00")
-    ) == "DE_RISK"
+    assert (
+        compounding_bias(drawdown_state=loss.drawdown_state, daily_pnl=Decimal("-2.00"))
+        == "DE_RISK"
+    )
     assert loss.compounding_bias == "DE_RISK"
 
 

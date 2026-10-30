@@ -69,9 +69,7 @@ class ExecutionQualityAnalyticsStore:
             rows = list(self._events)
         recent = list(reversed(rows[-limit:]))
         slips = [float(r["slippage"]) for r in rows if r.get("slippage") is not None]
-        lats = [
-            float(r["latency_ms"]) for r in rows if r.get("latency_ms") is not None
-        ]
+        lats = [float(r["latency_ms"]) for r in rows if r.get("latency_ms") is not None]
         scores = [
             int(r["execution_score"])
             for r in rows

@@ -136,9 +136,7 @@ def build_gold_brain_status() -> dict[str, Any]:
         "activation_workflow": activation_workflow_document(),
         "notification_policy": notification_policy_diagnostics(),
         "live_trading": worker.get("live_trading"),
-        "continuous_trading_authorized": worker.get(
-            "continuous_trading_authorized"
-        ),
+        "continuous_trading_authorized": worker.get("continuous_trading_authorized"),
         "blockers": worker.get("blockers"),
         "advisory_blockers": worker.get("advisory_blockers"),
         "openai": worker.get("openai"),

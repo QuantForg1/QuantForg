@@ -37,7 +37,10 @@ def _full_evidence() -> dict:
             "correlation_impact": "ACCEPTABLE",
             "execution_impact": "ACCEPTABLE",
         },
-        "change_isolation": {"kinds": ["parameter"], "includes_unrelated_refactor": False},
+        "change_isolation": {
+            "kinds": ["parameter"],
+            "includes_unrelated_refactor": False,
+        },
     }
 
 

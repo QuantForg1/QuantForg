@@ -364,9 +364,9 @@ def test_no_safety_risk_oms_gateway_order_send_changes() -> None:
         if path.name == "gateway_client.py":
             assert "Never retry order_send" in text
             assert "order_send" in text
-    runtime = (ROOT / "app/application/services/institutional_ite_runtime.py").read_text(
-        encoding="utf-8"
-    )
+    runtime = (
+        ROOT / "app/application/services/institutional_ite_runtime.py"
+    ).read_text(encoding="utf-8")
     assert "OrderSend" not in runtime
     path_src = (
         ROOT / "app/domain/institutional_trading/operations/fast_decision_path.py"

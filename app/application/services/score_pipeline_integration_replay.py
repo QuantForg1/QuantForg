@@ -11,7 +11,7 @@ from collections import Counter
 from statistics import mean, pstdev
 from typing import Any
 
-from app.application.services.score_calibration_audit import (
+from app.application.services.score_calibration_audit import (  # type: ignore[import-untyped]
     CONFIDENCE_WEIGHTS,
     QUALITY_WEIGHTS,
     _histogram,
@@ -92,10 +92,7 @@ def integrate_quality_components(
         trend_score = max(trend_score, 75)
 
     # Liquidity v2: OB/FVG → 65; sweeps would be 85 (not observed in window)
-    if has_ob or has_fvg:
-        liq = 65
-    else:
-        liq = 20
+    liq = 65 if has_ob or has_fvg else 20
 
     active_ob = _parse_active_obs(reasons)
     ob = 75 if (active_ob and active_ob > 0) or has_ob else 20
@@ -203,7 +200,7 @@ def integrate_confidence_components(
         "liquidity": dedup("liquidity", liq_obs, has_ob or has_fvg, 65),
         "order_block": dedup("order_block", ob_obs, has_ob, 70),
         "fvg": dedup("fair_value_gap", fvg_obs, has_fvg, 70),
-        "quality": 100 if quality_passed else int(round(quality_total)),
+        "quality": 100 if quality_passed else round(quality_total),
         "session": int(factors.get("session") or 100),
         "news": int(factors.get("news") or 100),
         "spread": int(factors.get("spread") or 50),

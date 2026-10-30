@@ -11,7 +11,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def _platform_session():
+async def _platform_session() -> Any:
     try:
         from core.di.container import get_container
 
@@ -36,15 +36,13 @@ async def read_users(*, limit: int = 500) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, email, display_name, role, status,
                        last_login_at, created_at, updated_at, deactivated_at
                 FROM users
                 ORDER BY COALESCE(updated_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         rows = []
@@ -90,15 +88,13 @@ async def read_licenses(*, limit: int = 500) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, user_id, tier, status, seats, issued_at,
                        expires_at, revoked_at, notes, created_at, updated_at
                 FROM licenses
                 ORDER BY COALESCE(updated_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         rows = []
@@ -150,16 +146,14 @@ async def read_mt5_connections(*, limit: int = 500) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, user_id, login, server, status, session_ref,
                        latency_ms, last_heartbeat_at, connected, login_status,
                        last_error, created_at, updated_at
                 FROM mt5_connections
                 ORDER BY COALESCE(updated_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         rows = []
@@ -177,9 +171,8 @@ async def read_mt5_connections(*, limit: int = 500) -> list[dict[str, Any]]:
                         "broker": None,
                         "server": r.get("server"),
                         "login_masked": masked,
-                        "status": r.get("status") or (
-                            "connected" if r.get("connected") else "disconnected"
-                        ),
+                        "status": r.get("status")
+                        or ("connected" if r.get("connected") else "disconnected"),
                         "connected": bool(r.get("connected")),
                         "login_status": r.get("login_status"),
                         "last_heartbeat": (
@@ -217,8 +210,7 @@ async def read_audit_login_history(
         session = uow._require_session()
         if user_id:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT id, action, actor_user_id, occurred_at, ip_address,
                            message, created_at
                     FROM audit_logs
@@ -226,21 +218,18 @@ async def read_audit_login_history(
                        OR (metadata::text ILIKE :uid_like)
                     ORDER BY COALESCE(occurred_at, created_at) DESC
                     LIMIT :limit
-                    """
-                ),
+                    """),
                 {"uid": user_id, "uid_like": f"%{user_id}%", "limit": limit},
             )
         else:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT id, action, actor_user_id, occurred_at, ip_address,
                            message, created_at
                     FROM audit_logs
                     ORDER BY COALESCE(occurred_at, created_at) DESC
                     LIMIT :limit
-                    """
-                ),
+                    """),
                 {"limit": limit},
             )
         rows = []
@@ -320,4 +309,5 @@ def live_trading_health_snapshot() -> dict[str, Any]:
         logger.debug("cop_gateway_settings_unavailable", exc_info=True)
         out["gateway"] = "unknown"
 
-    return redact(out)
+    redacted: dict[str, Any] = redact(out)
+    return redacted

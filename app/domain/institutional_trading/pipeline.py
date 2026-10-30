@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from app.domain.fair_value_gap.engine import FairValueGapEngine
 from app.domain.institutional_trading.atr import compute_atr
@@ -189,8 +190,8 @@ class InstitutionalAnalysisPipeline:
         )
         fvg_result = await fvg_engine.analyze(code, primary_tf, as_of=moment)
 
-        ltf_obs: list = []
-        ltf_fvgs: list = []
+        ltf_obs: list[Any] = []
+        ltf_fvgs: list[Any] = []
         bars_by_tf = self.bars.as_mapping()
         for tf in scalp_ltf_zone_timeframes(cfg):
             if not bars_by_tf.get(tf):

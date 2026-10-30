@@ -69,7 +69,17 @@ DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
 
 # Broker-dead index aliases — never score even if ops plane still lists them.
 BROKER_UNAVAILABLE_SCALP_SYMBOLS: frozenset[str] = frozenset(
-    {"NAS100", "US30", "GER40", "NDX100", "WALLSTREET30", "DEU40", "USTEC", "DJ30", "DE40"}
+    {
+        "NAS100",
+        "US30",
+        "GER40",
+        "NDX100",
+        "WALLSTREET30",
+        "DEU40",
+        "USTEC",
+        "DJ30",
+        "DE40",
+    }
 )
 
 
@@ -144,7 +154,7 @@ class AiScalpingConfig:
 
     # Volatility Gate v2 — adaptive floors.
     # Standard = legacy atr_low_pct/2; exceptional only when all pillars strong.
-    # Hard min 0.08: LIVE Sydney/Tokyo gold ATR%≈0.082–0.115 repeatedly
+    # Hard min 0.08: LIVE Sydney/Tokyo gold ATR%≈0.082-0.115 repeatedly
     # deadlocked under 0.10/0.15 (Railway multi_asset_scan valid_volatility).
     # Weak setups still require the 0.20 standard floor unless exceptional.
     atr_compression_floor_pct: Decimal = Decimal("0.20")
@@ -225,7 +235,7 @@ class AiScalpingConfig:
     max_planned_sl_risk_usd: Decimal = MAX_PLANNED_SL_RISK_USD
     max_total_planned_risk_usd: Decimal = MAX_TOTAL_PLANNED_RISK_USD
     compounding_enabled: bool = False
-    # Micro desk (~$180): broker min_lot on gold is ~2.3–2.9% equity risk.
+    # Micro desk (~$180): broker min_lot on gold is ~2.3-2.9% equity risk.
     # Prior 2.00 daily / 1.00 symbol caps were BELOW one min-lot fill, so after
     # the first ORDER ACCEPTED the portfolio gate blocked all further entries
     # until flat — swing cadence, not continuous scalping. Align with
@@ -353,9 +363,12 @@ class AiScalpingConfig:
             object.__setattr__(self, "risk_per_trade_pct", Decimal("0.75"))
         # Internal consistency: never demand RR above the profile TP target.
         # (SCALPING_V1 bug: fixed_tp_r=1.20 with institutional min_rr=1.3/1.4.)
-        if self.fixed_tp_r is not None and self.fixed_tp_r > 0:
-            if self.min_expected_rr > self.fixed_tp_r:
-                object.__setattr__(self, "min_expected_rr", self.fixed_tp_r)
+        if (
+            self.fixed_tp_r is not None
+            and self.fixed_tp_r > 0
+            and self.min_expected_rr > self.fixed_tp_r
+        ):
+            object.__setattr__(self, "min_expected_rr", self.fixed_tp_r)
         # Never loosen hold beyond absolute max
         if self.absolute_max_hold_minutes < self.typical_hold_max_minutes:
             object.__setattr__(
@@ -405,7 +418,9 @@ class AiScalpingConfig:
             "continuous_operation_enabled": self.continuous_operation_enabled,
             "post_close_rescan_enabled": self.post_close_rescan_enabled,
             "target_trades_per_day": self.target_trades_per_day,
-            "opportunity_review_interval_seconds": self.opportunity_review_interval_seconds,
+            "opportunity_review_interval_seconds": (
+                self.opportunity_review_interval_seconds
+            ),
             "post_event_rescan_enabled": self.post_event_rescan_enabled,
             "dynamic_universe_enabled": self.dynamic_universe_enabled,
             "max_universe_symbols": self.max_universe_symbols,

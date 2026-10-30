@@ -176,7 +176,7 @@ def classify_atr_band_thresholds(
     """Return (atr_low_pct, atr_high_pct) for band classification."""
     cls = asset_class_for_symbol(symbol)
     if cls == "gold":
-        # Gold M15 ATR% typically clusters 0.08–0.30 on thin sessions.
+        # Gold M15 ATR% typically clusters 0.08-0.30 on thin sessions.
         # Prior low=0.10 forced ATR%≈0.082 into the raised 88/88 low-vol band
         # (quality 84 tradable setups rejected before RiskEngine / order_send).
         return Decimal("0.08"), Decimal("0.35")
@@ -243,8 +243,13 @@ def resolve_spread_limits(
         if "JPY" in code:
             # JPY quotes: pip ≈ 0.01
             return Decimal("0.350"), Decimal("0.020"), Decimal("100"), Decimal("0.015")
-        # 5-digit majors: pip ≈ 0.0001 — allow typical 1–3 pip spreads
-        return Decimal("0.00100"), Decimal("0.00030"), Decimal("100"), Decimal("0.00040")
+        # 5-digit majors: pip ≈ 0.0001 — allow typical 1-3 pip spreads
+        return (
+            Decimal("0.00100"),
+            Decimal("0.00030"),
+            Decimal("100"),
+            Decimal("0.00040"),
+        )
     if cls == "commodity":
         # No invented oil/energy ceiling. Callers must fail-closed this desk.
         return (

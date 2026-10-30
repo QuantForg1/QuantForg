@@ -50,7 +50,7 @@ def simulate_mode_comparison(
     Live execution is identical across modes in this layer (no OMS). Reported
     expectancy is hypothetical R * suggested_volume / min_lot, not live PnL.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311  # seeded simulation, not a secret
     modes_seen: dict[str, list[float]] = {}
     live_r: list[float] = []
     for _ in range(max(1, int(n))):
@@ -61,7 +61,9 @@ def simulate_mode_comparison(
         realized = rr if won else -1.0
         daily = Decimal(str(round(rng.uniform(-4.0, 2.0), 2)))
         equity = Decimal("208.86")
-        daily_loss = Decimal("0") if daily >= 0 else (abs(daily) / equity * Decimal("100"))
+        daily_loss = (
+            Decimal("0") if daily >= 0 else (abs(daily) / equity * Decimal("100"))
+        )
         obs = evaluate_compounding_shadow(
             CompoundingInputs(
                 symbol="XAUUSD_i",
@@ -82,7 +84,9 @@ def simulate_mode_comparison(
             )
         )
         live_r.append(realized)
-        util = float(obs.sizing.suggested_volume / risk_approved) if risk_approved else 0.0
+        util = (
+            float(obs.sizing.suggested_volume / risk_approved) if risk_approved else 0.0
+        )
         modes_seen.setdefault(obs.mode, []).append(realized * util)
 
     def _pack(xs: list[float]) -> dict[str, float | int | None]:
@@ -110,6 +114,7 @@ def simulate_mode_comparison(
         "historical_backtest": "NOT_RUN",
         "walk_forward": "NOT_RUN",
         "reason_not_promoted": (
-            "No market-bar backtest/walk-forward. Shadow layer cannot change live Risk/OMS."
+            "No market-bar backtest/walk-forward. Shadow layer cannot change live "
+            "Risk/OMS."
         ),
     }

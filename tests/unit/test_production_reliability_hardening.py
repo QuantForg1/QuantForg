@@ -68,7 +68,7 @@ def test_owner_surfaces_not_required() -> None:
 
 def test_opportunity_70_and_daily_loss_owner_19_unchanged() -> None:
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_take_is_not_executed_without_ticket() -> None:
@@ -151,10 +151,14 @@ def test_risk_rejected_overlay_keeps_human_reason() -> None:
     assert "spread too wide" in str(out.get("reasoning") or "")
 
 
-def test_atomic_hash_persist_and_reload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_atomic_hash_persist_and_reload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import app.domain.institutional_trading.execution.decision_hash_store as store
 
-    monkeypatch.setattr(store, "_path", lambda: tmp_path / "execution_decision_hashes.json")
+    monkeypatch.setattr(
+        store, "_path", lambda: tmp_path / "execution_decision_hashes.json"
+    )
     persist_executed_hashes(["aaa", "bbb"])
     loaded, order = load_executed_hashes()
     assert loaded == {"aaa", "bbb"}
@@ -264,7 +268,7 @@ def test_resource_snapshot_does_not_change_thresholds() -> None:
     assert "ram_band" in snap
     assert "disk_band" in snap
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_railway_restart_policy_always() -> None:

@@ -38,9 +38,7 @@ class UniverseFilters(BaseModel):
 def _snap_call(**extra: Any) -> dict[str, Any]:
     adapter, diag = resolve_runtime_mt5_adapter()
     return _research_envelope(
-        _service.snapshot(
-            mt5_adapter=adapter, adapter_resolution=diag, **extra
-        )
+        _service.snapshot(mt5_adapter=adapter, adapter_resolution=diag, **extra)
     )
 
 
@@ -251,9 +249,7 @@ async def market_universe_health(user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/instrument/{symbol}")
 @router.get("/{symbol}")
-async def market_universe_instrument(
-    symbol: str, user: CurrentUser
-) -> dict[str, Any]:
+async def market_universe_instrument(symbol: str, user: CurrentUser) -> dict[str, Any]:
     _ = user
     snap = _snap_call()
     item = find_instrument(snap, symbol)

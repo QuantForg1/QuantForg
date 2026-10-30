@@ -86,7 +86,10 @@ def _telegram_message_id(response: object) -> int | None:
     if not isinstance(result, dict):
         return None
     try:
-        mid = int(result.get("message_id"))
+        mid_raw = result.get("message_id")
+        if mid_raw is None:
+            return None
+        mid = int(mid_raw)
     except (TypeError, ValueError):
         return None
     return mid if mid > 0 else None
@@ -131,7 +134,7 @@ class _TelegramUrlRedactFilter(logging.Filter):
             elif isinstance(args, tuple):
                 record.args = tuple(_redact_log_value(a) for a in args)
             elif args:
-                record.args = _redact_log_value(args)
+                record.args = _redact_log_value(args)  # type: ignore[assignment]
             if isinstance(record.msg, str) and "api.telegram.org" in record.msg:
                 record.msg = _BOT_URL_RE.sub(r"\1***", record.msg)
         except Exception:
@@ -457,7 +460,7 @@ class TelegramDispatcher:
             if status == 429:
                 retry_after = getattr(response, "headers", {}).get("Retry-After")
                 try:
-                    wait = min(8.0, float(retry_after))
+                    wait = 2.0 if retry_after is None else min(8.0, float(retry_after))
                 except (TypeError, ValueError):
                     wait = 2.0
             await asyncio.sleep(wait)
@@ -603,7 +606,7 @@ def compose_inbound_reply(reply_to_message_id: int) -> str | None:
 
 _dispatcher: TelegramDispatcher | None = None
 _dispatcher_lock = Lock()
-_connectivity = {"mt5": None, "gateway": None}
+_connectivity: dict[str, bool | None] = {"mt5": None, "gateway": None}
 
 
 def get_telegram_dispatcher() -> TelegramDispatcher | None:
@@ -616,7 +619,8 @@ def reset_telegram_dispatcher_for_tests(
     global _dispatcher, _connectivity
     with _dispatcher_lock:
         _dispatcher = dispatcher
-        _connectivity = {"mt5": None, "gateway": None}
+        reset_connectivity: dict[str, bool | None] = {"mt5": None, "gateway": None}
+        _connectivity = reset_connectivity
     return _dispatcher
 
 
@@ -874,9 +878,7 @@ def notify_pme(result: Any, *, current_price: object = None) -> None:
     try:
         from app.application.services.telegram_events import classify_pme_notices
 
-        classified = classify_pme_notices(
-            result=result, current_price=current_price
-        )
+        classified = classify_pme_notices(result=result, current_price=current_price)
         _emit_verified_public_notices(classified)
     except Exception:
         logger.exception("telegram_pme_notify_failed")
@@ -890,9 +892,7 @@ def notify_robot_started() -> None:
         )
 
         dispatcher = get_telegram_dispatcher()
-        forget = (
-            getattr(dispatcher, "forget", None) if dispatcher is not None else None
-        )
+        forget = getattr(dispatcher, "forget", None) if dispatcher is not None else None
         enabled = bool(
             getattr(dispatcher, "enabled", False) if dispatcher is not None else False
         )
@@ -900,9 +900,7 @@ def notify_robot_started() -> None:
             forget("robot:stopped")
         if enabled:
             status = (
-                "CONNECTED"
-                if getattr(dispatcher, "last_success", False)
-                else "ENABLED"
+                "CONNECTED" if getattr(dispatcher, "last_success", False) else "ENABLED"
             )
         else:
             status = "DISABLED"
@@ -926,9 +924,7 @@ def notify_robot_stopped(*, reason: str | None = None) -> None:
         )
 
         dispatcher = get_telegram_dispatcher()
-        forget = (
-            getattr(dispatcher, "forget", None) if dispatcher is not None else None
-        )
+        forget = getattr(dispatcher, "forget", None) if dispatcher is not None else None
         if callable(forget):
             forget("robot:started")
             forget("public:status:READY")

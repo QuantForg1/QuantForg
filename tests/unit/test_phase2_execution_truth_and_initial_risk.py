@@ -235,14 +235,17 @@ class TestPrivateReasonsAndPublicFilter:
             market_context_diagnostics={"opportunity_score": 70},
         )
         assert row["private_no_fill_reason"] is None
-        assert public_channel_notices(
-            [
-                {
-                    "event": TRADE_OPENED,
-                    "fields": _public_fields(opportunity="70", ticket=881004),
-                }
-            ]
-        ) == []
+        assert (
+            public_channel_notices(
+                [
+                    {
+                        "event": TRADE_OPENED,
+                        "fields": _public_fields(opportunity="70", ticket=881004),
+                    }
+                ]
+            )
+            == []
+        )
 
     def test_private_reason_codes_cover_approved_set(self) -> None:
         assert (
@@ -250,9 +253,7 @@ class TestPrivateReasonsAndPublicFilter:
             == "MIN_LOT_EXCEEDS_RISK"
         )
         assert (
-            classify_private_no_fill_reason(
-                abort_reason="MIN_PLANNED_RISK_NOT_REACHED"
-            )
+            classify_private_no_fill_reason(abort_reason="MIN_PLANNED_RISK_NOT_REACHED")
             == "MIN_LOT_EXCEEDS_RISK"
         )
         assert (
@@ -465,9 +466,12 @@ class TestInitialRiskAndProtection:
 class TestNotificationFailOpen:
     def test_p_public_filter_unchanged_and_empty_is_safe(self) -> None:
         assert public_channel_notices([]) == []
-        assert public_channel_notices(
-            [
-                {"event": "RISK_BLOCKED", "opportunity": "91", "direction": "BUY"},
-                {"event": "OMS_REJECTED", "opportunity": "88"},
-            ]
-        ) == []
+        assert (
+            public_channel_notices(
+                [
+                    {"event": "RISK_BLOCKED", "opportunity": "91", "direction": "BUY"},
+                    {"event": "OMS_REJECTED", "opportunity": "88"},
+                ]
+            )
+            == []
+        )

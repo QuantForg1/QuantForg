@@ -85,9 +85,7 @@ def evaluate_virtual_bar(
             "would_submit_order": False,
             "requires_bar_timestamp_gt_entry": True,
         }
-    hit = conservative_exit_hit(
-        direction=direction, sl=sl, tp=tp, high=high, low=low
-    )
+    hit = conservative_exit_hit(direction=direction, sl=sl, tp=tp, high=high, low=low)
     return {
         "status": "OK",
         "applied": hit is not None,

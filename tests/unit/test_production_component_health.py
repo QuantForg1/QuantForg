@@ -237,4 +237,3 @@ def test_live_probe_cache_dedupes_duplicate_gateway_health(
     assert second.gateway_available is True
     assert len(urls) == 1
     assert b.last_health_payload is not None
-

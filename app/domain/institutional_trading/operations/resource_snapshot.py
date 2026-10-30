@@ -75,7 +75,10 @@ def _windows_mem() -> tuple[float | None, int | None, int | None]:
 
         stat = MEMORYSTATUSEX()
         stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+        windll = getattr(ctypes, "windll", None)
+        if windll is None:
+            return None, None, None
+        if not windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
             return None, None, None
         return (
             float(stat.dwMemoryLoad),
@@ -128,7 +131,7 @@ def collect_resource_snapshot() -> dict[str, Any]:
     disk_pct: float | None = None
     disk_total = disk_free = None
     try:
-        usage = shutil.disk_usage(os.getcwd() or ".")
+        usage = shutil.disk_usage(Path.cwd())
         disk_total = int(usage.total)
         disk_free = int(usage.free)
         if usage.total:

@@ -89,8 +89,10 @@ def filter_user_signal_notices(
         symbol = fields.get("symbol") or notice.get("symbol")
         # Lifecycle replies may omit symbol if thread-bound; still require gold
         # when a symbol is present.
-        if symbol is not None and str(symbol).strip() and not symbol_allowed_for_user_signal(
-            symbol
+        if (
+            symbol is not None
+            and str(symbol).strip()
+            and not symbol_allowed_for_user_signal(symbol)
         ):
             continue
         out.append(notice)

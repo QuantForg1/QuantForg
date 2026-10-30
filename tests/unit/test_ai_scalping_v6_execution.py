@@ -321,7 +321,7 @@ def test_structure_tp_below_min_rr_prefers_atr_expansion() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_structure_nearby_swing_inside_stop_falls_back_to_atr_tp() -> None:
-    """LIVE P>70 WAIT: nearest swing TP closer than SL was nulled (RR 0.3–0.9).
+    """LIVE P>70 WAIT: nearest swing TP closer than SL was nulled (RR 0.3-0.9).
 
     ATR expansion is already the no-structure TP. Using it when the nearby
     swing cannot pay for the stop is geometry repair, not a manufactured R.

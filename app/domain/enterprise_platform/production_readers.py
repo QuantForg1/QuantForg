@@ -10,7 +10,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def _platform_uow():
+async def _platform_uow() -> Any:
     try:
         from core.di.container import get_container
 
@@ -42,14 +42,12 @@ async def read_organizations(*, limit: int = 200) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, name, slug, org_type, created_at, updated_at
                 FROM organizations
                 ORDER BY COALESCE(updated_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         rows = []
@@ -90,29 +88,25 @@ async def read_organization_members(
         session = uow._require_session()
         if organization_id:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT id, organization_id, user_id, role, status,
                            created_at, updated_at
                     FROM organization_members
                     WHERE organization_id::text = :oid
                     ORDER BY COALESCE(updated_at, created_at) DESC
                     LIMIT :limit
-                    """
-                ),
+                    """),
                 {"oid": organization_id, "limit": limit},
             )
         else:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT id, organization_id, user_id, role, status,
                            created_at, updated_at
                     FROM organization_members
                     ORDER BY COALESCE(updated_at, created_at) DESC
                     LIMIT :limit
-                    """
-                ),
+                    """),
                 {"limit": limit},
             )
         rows = []
@@ -146,15 +140,13 @@ async def read_users(*, limit: int = 500) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, email, display_name, role, status, last_login_at,
                        created_at
                 FROM users
                 ORDER BY COALESCE(updated_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [
@@ -191,15 +183,13 @@ async def read_sessions(*, limit: int = 200) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, user_id, ip_address, user_agent, created_at,
                        last_active_at, revoked_at, is_active
                 FROM user_sessions
                 ORDER BY COALESCE(last_active_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [
@@ -242,15 +232,13 @@ async def read_devices(*, limit: int = 200) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, user_id, device_label, user_agent, last_seen_at,
                        created_at
                 FROM user_devices
                 ORDER BY COALESCE(last_seen_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [
@@ -287,15 +275,13 @@ async def read_audit_logs(*, limit: int = 200) -> list[dict[str, Any]]:
 
         session = uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT id, action, actor_user_id, occurred_at, ip_address,
                        message, created_at
                 FROM audit_logs
                 ORDER BY COALESCE(occurred_at, created_at) DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [

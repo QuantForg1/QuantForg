@@ -82,7 +82,10 @@ class TrendEngine:
         sem_dict: dict[str, Any] = {}
         if semantics is not None:
             sem_dict = semantics.to_dict()
-            why = f"{why} | M15 semantics: {semantics.new_classification.value} — {semantics.reason}"
+            why = (
+                f"{why} | M15 semantics: {semantics.new_classification.value} — "
+                f"{semantics.reason}"
+            )
 
         return TrendSnapshot(
             macro_bias=macro,

@@ -208,9 +208,7 @@ def test_one_bad_symbol_does_not_stop_signal_generation() -> None:
                 "trade_quality": 84,
             },
         ],
-        config=replace(
-            DEFAULT_AI_SCALPING_CONFIG, universe=("LTCUSD", "XAUUSD")
-        ),
+        config=replace(DEFAULT_AI_SCALPING_CONFIG, universe=("LTCUSD", "XAUUSD")),
     )
     assert ranked["eligible_count"] == 1
     assert ranked["best"]["symbol"] == "XAUUSD"
@@ -323,9 +321,7 @@ def test_crypto_contract_size_does_not_inherit_gold_or_fx() -> None:
     assert contract_size_for_symbol("BTCUSD", default=Decimal("0")) == Decimal("1")
     assert contract_size_for_symbol("ETHUSD", default=Decimal("0")) == Decimal("1")
     assert contract_size_for_symbol("XAUUSD", default=Decimal("0")) == Decimal("100")
-    assert contract_size_for_symbol("EURUSD", default=Decimal("0")) == Decimal(
-        "100000"
-    )
+    assert contract_size_for_symbol("EURUSD", default=Decimal("0")) == Decimal("100000")
 
 
 def test_portfolio_limits_still_block_at_existing_ceilings() -> None:

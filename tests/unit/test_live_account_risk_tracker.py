@@ -142,12 +142,9 @@ class TestLiveAccountRiskTracker:
         assert baseline["baseline_source"] == "mt5_balance_credit_deal"
         assert baseline["balance_before"] == "110"
         assert baseline["balance_after"] == "510"
-        assert (
-            LiveAccountRiskTracker.daily_pnl_from_deals(
-                deals, now=now, ending_balance=Decimal("500")
-            )
-            == Decimal("-10")
-        )
+        assert LiveAccountRiskTracker.daily_pnl_from_deals(
+            deals, now=now, ending_balance=Decimal("500")
+        ) == Decimal("-10")
 
     def test_unverified_balance_increase_is_not_a_deposit(self) -> None:
         now = datetime(2026, 9, 1, 16, 0, tzinfo=UTC)

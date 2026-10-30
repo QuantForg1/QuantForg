@@ -121,14 +121,16 @@ def research_scan_order(
             "last_opportunity": opp.get(desk, None),
             "last_analyzed_at": analyzed_at.get(desk),
             "analysis_age_s": age_s,
-            "history_sufficient": bool(
-                (item.get("timeframe_quality") or {}).get("sufficient")
-            )
-            if isinstance(item.get("timeframe_quality"), dict)
-            else None,
-            "data_age": (item.get("data_quality") or {}).get("quote_age_s")
-            if isinstance(item.get("data_quality"), dict)
-            else None,
+            "history_sufficient": (
+                bool((item.get("timeframe_quality") or {}).get("sufficient"))
+                if isinstance(item.get("timeframe_quality"), dict)
+                else None
+            ),
+            "data_age": (
+                (item.get("data_quality") or {}).get("quote_age_s")
+                if isinstance(item.get("data_quality"), dict)
+                else None
+            ),
         }
         if is_gold_symbol(desk):
             gold.append(payload)
@@ -151,8 +153,8 @@ def research_scan_order(
                     else 0
                 ),
                 -(
-                    float(r.get("last_opportunity"))
-                    if r.get("last_opportunity") is not None
+                    float(last_opp)
+                    if (last_opp := r.get("last_opportunity")) is not None
                     else 0
                 ),
             ),

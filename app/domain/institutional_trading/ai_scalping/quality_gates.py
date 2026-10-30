@@ -157,7 +157,9 @@ def evaluate_quality_gates(
     session_ok = session.stars >= cfg.min_session_stars
     checks["session_quality"] = session_ok
     if cfg.require_session_quality and not session_ok:
-        soft_rejects.append(f"Session quality {session.stars}★ < {cfg.min_session_stars}★")
+        soft_rejects.append(
+            f"Session quality {session.stars}★ < {cfg.min_session_stars}★"
+        )
 
     checks["clear_direction"] = direction_clear
     if not checks["clear_direction"]:
@@ -165,10 +167,7 @@ def evaluate_quality_gates(
 
     # Dual-score reconciliation remains for evidence quality, not an AND-kill.
     gate_confidence = confidence
-    if (
-        trade_quality - confidence >= 15
-        and trade_quality >= thresholds.quality
-    ):
+    if trade_quality - confidence >= 15 and trade_quality >= thresholds.quality:
         gate_confidence = trade_quality
 
     checks["adaptive_confidence"] = gate_confidence >= thresholds.confidence

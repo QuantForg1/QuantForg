@@ -1,4 +1,4 @@
-"""JPY min-lot must use broker tick value, not gold lots×CS×stop identity.
+"""JPY min-lot must use broker tick value, not gold lotsxCSxstop identity.
 
 Live 2026-09-07 EURJPY/USDJPY cycles rejected MIN_LOT_EXCEEDS_RISK_BUDGET at
 needed_pct≈105% because 0.01 * 100000 * 0.108 was treated as $108 USD.
@@ -48,7 +48,7 @@ _TICK_VALUE = Decimal("0.68")  # USD per tick per 1.00 lot (Weltrade-style)
 
 
 def test_live_usdjpy_identity_formula_matches_production_false_reject() -> None:
-    """Reproduction: lots×CS×stop treats yen as dollars → ~105% of equity."""
+    """Reproduction: lotsxCSxstop treats yen as dollars → ~105% of equity."""
     needed = min_lot_needed_pct(
         stop_distance=_STOP,
         equity=_EQUITY,

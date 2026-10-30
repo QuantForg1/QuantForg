@@ -552,17 +552,19 @@ class OperatorWatch:
                 f"{_money(trade.equity)}), RR {rr}",
                 key=f"shadow-open:{trade.id}",
             )
-        trade = book.open_trade()
-        if trade is None:
+        open_trade = book.open_trade()
+        if open_trade is None:
             return
         try:
             from app.domain.market_data.timeframe import Timeframe
 
             rates = list(
-                self.adapter.copy_rates_from_pos(trade.symbol, Timeframe("M1"), 0, 15)
+                self.adapter.copy_rates_from_pos(
+                    open_trade.symbol, Timeframe("M1"), 0, 15
+                )
                 or []
             )
-            tick = self.adapter.latest_tick(trade.symbol)
+            tick = self.adapter.latest_tick(open_trade.symbol)
         except Exception as exc:
             logger.warning("shadow_update_failed", error=type(exc).__name__)
             return

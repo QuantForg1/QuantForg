@@ -165,7 +165,8 @@ class LiveHealthMonitor:
         broker_retcode: int | None = None,
         mt5_retcode: int | None = None,
     ) -> None:
-        """Record a genuine execution-layer reject. With symbol → pause that symbol only.
+        """Record a genuine execution-layer reject. With symbol → pause that symbol
+        only.
 
         Callers must not invoke this for WAIT, Risk/Safety holds, or OMS
         application rejects that never reached order_send / MT5.
@@ -204,7 +205,8 @@ class LiveHealthMonitor:
             self._protection.reject_burst = len(self._rejects)
             if len(self._rejects) >= self.reject_burst_threshold:
                 self._pause(
-                    f"EXECUTION_REJECT_BURST: Excessive rejects ({len(self._rejects)} in "
+                    f"EXECUTION_REJECT_BURST: Excessive rejects "
+                    f"({len(self._rejects)} in "
                     f"{self.reject_window_seconds}s)"
                 )
 
@@ -221,7 +223,8 @@ class LiveHealthMonitor:
                 )
 
     def record_abnormal_spread(self, detail: str | None = None) -> None:
-        """Observability only. Hard spread reject is the bridge SPREAD_UNACCEPTABLE gate.
+        """Observability only. Hard spread reject is the bridge SPREAD_UNACCEPTABLE
+        gate.
 
         A scoring-cycle spread event must not become a sticky Safety latch that
         blocks a later valid TAKE after spread has already passed the bridge.

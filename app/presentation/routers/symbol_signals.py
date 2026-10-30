@@ -89,7 +89,8 @@ async def get_symbol(symbol: str, user: CurrentUser) -> dict[str, Any]:
     payload = symbol_management_service.list_managed_symbols(q=symbol)
     for item in payload.get("items") or []:
         if str(item.get("symbol") or "").upper() == symbol.strip().upper():
-            return item
+            found: dict[str, Any] = item
+            return found
     raise HTTPException(status_code=404, detail="Symbol not found")
 
 

@@ -96,14 +96,10 @@ class PhaseCControlPlane:
         self.__post_init__()
 
     def run_pbo(self, matrix: list[list[float]]) -> dict[str, Any]:
-        self.last_pbo = estimate_pbo(
-            matrix, min_trials=self.config.min_trials_for_pbo
-        )
+        self.last_pbo = estimate_pbo(matrix, min_trials=self.config.min_trials_for_pbo)
         return self.last_pbo
 
-    def run_dsr(
-        self, returns: list[float], *, n_trials: int
-    ) -> dict[str, Any]:
+    def run_dsr(self, returns: list[float], *, n_trials: int) -> dict[str, Any]:
         self.last_dsr = deflated_sharpe_ratio(returns, n_trials=n_trials)
         return self.last_dsr
 
@@ -164,9 +160,7 @@ class PhaseCControlPlane:
                 "DSR": self.last_dsr if self.config.dsr_enabled else None,
                 "walk_forward": "REUSE_APPLICATION_WALKFORWARD_ENGINE",
                 "monte_carlo": (
-                    self.last_monte_carlo
-                    if self.config.monte_carlo_enabled
-                    else None
+                    self.last_monte_carlo if self.config.monte_carlo_enabled else None
                 ),
                 "parameter_sensitivity": (
                     self.last_sensitivity
@@ -186,13 +180,9 @@ class PhaseCControlPlane:
             "comparison": self.last_comparison,
             "drift": self.drift.snapshot() if self.config.drift_enabled else None,
             "calibration": (
-                self.calibration.snapshot()
-                if self.config.calibration_enabled
-                else None
+                self.calibration.snapshot() if self.config.calibration_enabled else None
             ),
-            "parity": self.last_parity
-            if self.config.parity_enabled
-            else None,
+            "parity": self.last_parity if self.config.parity_enabled else None,
             "phase_b_live_vs_research": phase_b_parity,
             "promotion": (
                 self.promotion.snapshot()

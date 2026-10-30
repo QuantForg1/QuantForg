@@ -308,9 +308,7 @@ def test_pme_break_even_partial_trail_close_loop() -> None:
     assert r3.position.state is PositionLifecycleState.TRAILING
 
     # missing from book → local exit
-    r4 = svc.evaluate(
-        100, _ctx(Decimal("2315"), position_still_open=False)
-    )
+    r4 = svc.evaluate(100, _ctx(Decimal("2315"), position_still_open=False))
     assert r4.position.state is PositionLifecycleState.EXITED
     assert len(oms.calls) >= 2  # BE + trail (partial may be local min-lot)
 
@@ -368,9 +366,7 @@ def test_position_recovery_broker_be_reconstruct() -> None:
             return None
 
     eng = PositionManagementEngine(oms=SimpleNamespace())  # type: ignore[arg-type]
-    result = recover_positions_from_mt5(
-        mt5_adapter=Adap(), engine=eng, symbol="XAUUSD"
-    )
+    result = recover_positions_from_mt5(mt5_adapter=Adap(), engine=eng, symbol="XAUUSD")
     assert result["registered"] == 1
     pos = eng.get(533737978)
     assert pos is not None

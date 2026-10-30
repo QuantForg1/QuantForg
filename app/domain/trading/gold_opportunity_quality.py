@@ -87,9 +87,7 @@ def assess_gold_opportunity(
         if spread_d < 0:
             skips.append("Invalid spread reading — fail-safe skip")
         elif spread_d > ceiling:
-            skips.append(
-                f"Spread {spread_d} exceeds Gold ceiling {ceiling} — skip"
-            )
+            skips.append(f"Spread {spread_d} exceeds Gold ceiling {ceiling} — skip")
         else:
             entries.append(f"Spread {spread_d} within Gold ceiling {ceiling}")
     if not stop_loss_present:
@@ -107,7 +105,9 @@ def assess_gold_opportunity(
     if mtf_aligned and not mtf_conflict:
         entries.append("Higher-timeframe bias aligned with entry timeframe")
     if stop_loss_present:
-        invalidation.append("Invalidate if stop-loss is hit or structure breaks against bias")
+        invalidation.append(
+            "Invalidate if stop-loss is hit or structure breaks against bias"
+        )
     if not skips and mtf_aligned:
         entries.append("No hard skip gates — candidate may proceed to Risk Engine")
 
@@ -149,8 +149,11 @@ def min_lot_fits_equity_risk(
     if eq <= 0 or pct <= 0:
         return False
     budget = (eq * pct / Decimal("100")).quantize(Decimal("0.01"))
-    return min_lot_risk_dollars(
-        stop_distance=stop_distance,
-        contract_size=contract_size,
-        min_lot=min_lot,
-    ) <= budget
+    return (
+        min_lot_risk_dollars(
+            stop_distance=stop_distance,
+            contract_size=contract_size,
+            min_lot=min_lot,
+        )
+        <= budget
+    )

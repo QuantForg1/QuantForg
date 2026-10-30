@@ -320,7 +320,9 @@ def evaluate_gold_execution_contract(
     symbol = raw_symbol.upper()
     direction = str(facts.direction or "NONE").strip().upper() or "NONE"
     action = str(facts.action or "NO_TRADE").strip().upper() or "NO_TRADE"
-    stages: dict[str, str] = {name: StageStatus.NOT_REACHED.value for name in READINESS_STAGES}
+    stages: dict[str, str] = dict.fromkeys(
+        READINESS_STAGES, StageStatus.NOT_REACHED.value
+    )
     failures: list[dict[str, Any]] = []
     stamps: dict[str, str] = {"signal_detected": _utc_now()}
 
@@ -334,7 +336,8 @@ def evaluate_gold_execution_contract(
         market_fail = _stage_fail(
             stage="MARKET",
             code=DISABLED_AUTONOMOUS_SYMBOL,
-            reason=f"Autonomous universe is [{CANONICAL_GOLD}] — rejected {raw_symbol or symbol}",
+            reason=f"Autonomous universe is [{CANONICAL_GOLD}] — rejected "
+            f"{raw_symbol or symbol}",
             fault_class=FaultClass.HARD_BLOCK.value,
             next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
             current=raw_symbol or symbol,
@@ -414,9 +417,7 @@ def evaluate_gold_execution_contract(
                 next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
             )
         elif (
-            apply_gold_specs
-            and facts.spread is not None
-            and facts.spread > MAX_SPREAD
+            apply_gold_specs and facts.spread is not None and facts.spread > MAX_SPREAD
         ):
             market_fail = _stage_fail(
                 stage="MARKET",
@@ -428,7 +429,14 @@ def evaluate_gold_execution_contract(
                 required=MAX_SPREAD,
             )
     if market_fail:
-        mark("MARKET", StageStatus.BLOCK.value if market_fail["fault_class"] != FaultClass.WAIT.value else StageStatus.WAIT.value)
+        mark(
+            "MARKET",
+            (
+                StageStatus.BLOCK.value
+                if market_fail["fault_class"] != FaultClass.WAIT.value
+                else StageStatus.WAIT.value
+            ),
+        )
         failures.append(market_fail)
     else:
         mark("MARKET", StageStatus.PASS.value)
@@ -547,7 +555,14 @@ def evaluate_gold_execution_contract(
             required=MAX_LEVERAGE,
         )
     if safety_fail:
-        mark("SAFETY", StageStatus.BLOCK.value if safety_fail["fault_class"] != FaultClass.WAIT.value else StageStatus.WAIT.value)
+        mark(
+            "SAFETY",
+            (
+                StageStatus.BLOCK.value
+                if safety_fail["fault_class"] != FaultClass.WAIT.value
+                else StageStatus.WAIT.value
+            ),
+        )
         failures.append(safety_fail)
     elif not any((market_fail, strategy_fail, decision_fail)):
         mark("SAFETY", StageStatus.PASS.value)
@@ -563,9 +578,9 @@ def evaluate_gold_execution_contract(
         facts.risk_reasons
     )
     max_pos_blocked = _reasons_indicate_max_positions(facts.risk_reasons)
-    daily_loss_blocked = _reasons_indicate_daily_loss(
-        facts.risk_reasons
-    ) or bool(facts.daily_loss_exceeded)
+    daily_loss_blocked = _reasons_indicate_daily_loss(facts.risk_reasons) or bool(
+        facts.daily_loss_exceeded
+    )
     if daily_loss_blocked:
         risk_fail = _stage_fail(
             stage="RISK",
@@ -595,9 +610,7 @@ def evaluate_gold_execution_contract(
         failures.append(risk_fail)
     elif min_lot_blocked:
         exceeds = _reasons_indicate_min_lot_exceeds_budget(facts.risk_reasons)
-        lot_code = (
-            "MIN_LOT_EXCEEDS_RISK_BUDGET" if exceeds else "MIN_LOT_CONSTRAINT"
-        )
+        lot_code = "MIN_LOT_EXCEEDS_RISK_BUDGET" if exceeds else "MIN_LOT_CONSTRAINT"
         risk_fail = _stage_fail(
             stage="RISK",
             code=lot_code,
@@ -665,7 +678,9 @@ def evaluate_gold_execution_contract(
             )
             mark("SIZING", StageStatus.BLOCK.value)
             failures.append(sizing_fail)
-        elif not any((market_fail, strategy_fail, decision_fail, safety_fail, risk_fail)):
+        elif not any(
+            (market_fail, strategy_fail, decision_fail, safety_fail, risk_fail)
+        ):
             mark("SIZING", StageStatus.PASS.value)
             stamps["sizing_pass"] = _utc_now()
 
@@ -675,13 +690,16 @@ def evaluate_gold_execution_contract(
         portfolio_fail = _stage_fail(
             stage="PORTFOLIO",
             code="PORTFOLIO_REJECTED",
-            reason="; ".join(facts.portfolio_reasons) or "portfolio rejected new XAUUSD_i exposure",
+            reason="; ".join(facts.portfolio_reasons)
+            or "portfolio rejected new XAUUSD_i exposure",
             fault_class=FaultClass.HARD_BLOCK.value,
             next_action=CandidateAction.FAIL_CLOSED.value,
         )
         mark("PORTFOLIO", StageStatus.BLOCK.value)
         failures.append(portfolio_fail)
-    elif not any((market_fail, strategy_fail, decision_fail, safety_fail, risk_fail, sizing_fail)):
+    elif not any(
+        (market_fail, strategy_fail, decision_fail, safety_fail, risk_fail, sizing_fail)
+    ):
         mark("PORTFOLIO", StageStatus.PASS.value)
         stamps["portfolio_pass"] = _utc_now()
 
@@ -773,10 +791,7 @@ def evaluate_gold_execution_contract(
         )
         mark("OMS", StageStatus.BLOCK.value)
         failures.append(oms_fail)
-    elif (
-        not earlier_block
-        and stages.get("OPTIMIZER") == StageStatus.PASS.value
-    ):
+    elif not earlier_block and stages.get("OPTIMIZER") == StageStatus.PASS.value:
         mark("OMS", StageStatus.PASS.value)
         stamps["oms_authorized"] = _utc_now()
 
@@ -823,7 +838,8 @@ def evaluate_gold_execution_contract(
             (
                 f
                 for f in failures
-                if str(f.get("code") or "") in {
+                if str(f.get("code") or "")
+                in {
                     "EXECUTION_REJECT_BURST",
                     "REJECT_BURST",
                 }
@@ -842,10 +858,9 @@ def evaluate_gold_execution_contract(
             # relabel independent Safety (MT5 AutoTrading, EXECUTION_ENABLED).
             prior_stage = str((first or {}).get("stage") or "").upper()
             prior_reason = str((first or {}).get("reason") or "")
-            if prior_stage in {"", "RISK", "SIZING", "OMS", "BROKER"}:
-                first = daily
-            elif prior_stage == "SAFETY" and _reasons_indicate_daily_loss(
-                (prior_reason,)
+            if prior_stage in {"", "RISK", "SIZING", "OMS", "BROKER"} or (
+                prior_stage == "SAFETY"
+                and _reasons_indicate_daily_loss((prior_reason,))
             ):
                 first = daily
     all_pass = first is None
@@ -865,19 +880,24 @@ def evaluate_gold_execution_contract(
             if first and first["code"] in {"MARKET_CONTEXT_NOT_READY", "MARKET_CLOSED"}
             else (
                 DecisionState.SETUP_NOT_READY.value
-                if first and first["code"] in {
+                if first
+                and first["code"]
+                in {
                     "SETUP_NOT_READY",
                     "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
                 }
                 else (
                     DecisionState.NO_EXECUTABLE_FOCUS.value
-                    if first and first["next_action"] == CandidateAction.NO_EXECUTABLE_FOCUS.value
+                    if first
+                    and first["next_action"]
+                    == CandidateAction.NO_EXECUTABLE_FOCUS.value
                     else (
                         DecisionState.HARD_BLOCK.value
                         if first and first["fault_class"] == FaultClass.HARD_BLOCK.value
                         else (
                             DecisionState.SYSTEM_BLOCK.value
-                            if first and first["fault_class"] == FaultClass.SYSTEM_BLOCK.value
+                            if first
+                            and first["fault_class"] == FaultClass.SYSTEM_BLOCK.value
                             else DecisionState.WAITING.value
                         )
                     )
@@ -900,10 +920,16 @@ def evaluate_gold_execution_contract(
         fault_class = str(first["fault_class"] if first else FaultClass.WAIT.value)
         fault_code = str(first["code"] if first else "NOT_READY")
         fault_reason = str(first["reason"] if first else "not ready")
-        next_action = str(first["next_action"] if first else CandidateAction.WAIT_SAME_FOCUS.value)
+        next_action = str(
+            first["next_action"] if first else CandidateAction.WAIT_SAME_FOCUS.value
+        )
         blocking = str(first["stage"] if first else "MARKET")
 
-    display_symbol = CANONICAL_GOLD if (gold_only or is_gold_symbol(symbol)) else (raw_symbol or symbol)
+    display_symbol = (
+        CANONICAL_GOLD
+        if (gold_only or is_gold_symbol(symbol))
+        else (raw_symbol or symbol)
+    )
     from app.domain.institutional_trading.operations.trade_classifier import (
         classify_trade,
     )
@@ -921,9 +947,7 @@ def evaluate_gold_execution_contract(
             market_fail
             and market_fail.get("fault_class") == FaultClass.HARD_BLOCK.value
         ),
-        hard_invalid_reason=(
-            str(market_fail["reason"]) if market_fail else None
-        ),
+        hard_invalid_reason=(str(market_fail["reason"]) if market_fail else None),
         cycle_id=facts.cycle_id,
         snapshot_id=facts.snapshot_id,
     )
@@ -1027,7 +1051,9 @@ def facts_from_cycle(
     _breakdown_value = ai.get("score_breakdown")
     breakdown = _breakdown_value if isinstance(_breakdown_value, dict) else None
     return GoldExecutionFacts(
-        symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "") or ""),
+        symbol=str(
+            getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "") or ""
+        ),
         direction=str(
             getattr(getattr(decision, "direction", None), "value", None)
             or getattr(decision, "direction", None)
@@ -1046,12 +1072,10 @@ def facts_from_cycle(
         quote_age_seconds=getattr(account, "quote_age_seconds", None),
         spread=_as_decimal(spread),
         structure_score=_as_int(
-            factors.get("structure_score")
-            or getattr(snapshot, "structure_score", None)
+            factors.get("structure_score") or getattr(snapshot, "structure_score", None)
         ),
         momentum_score=_as_int(
-            factors.get("momentum_score")
-            or getattr(snapshot, "momentum_score", None)
+            factors.get("momentum_score") or getattr(snapshot, "momentum_score", None)
         ),
         quality=_as_int(getattr(decision, "quality", None)),
         confidence=_as_int(getattr(decision, "confidence", None)),
@@ -1068,7 +1092,9 @@ def facts_from_cycle(
         execution_enabled=bool(execution_enabled),
         auto_running=bool(auto_running),
         account_leverage=_as_decimal(getattr(account, "leverage", None)),
-        risk_eligible=bool(getattr(elig, "eligible", False)) if elig is not None else False,
+        risk_eligible=(
+            bool(getattr(elig, "eligible", False)) if elig is not None else False
+        ),
         risk_reasons=tuple(dict.fromkeys((*reasons, *elig_reasons))),
         approved_lots=_as_decimal(getattr(decision, "approved_lots", None)),
         min_lot_infeasible=min_lot,
@@ -1080,12 +1106,10 @@ def facts_from_cycle(
         broker_connected=bool(broker_connected),
         force_shadow=bool(force_shadow),
         opportunity_score=_as_int(
-            ai.get("opportunity_score")
-            or getattr(decision, "opportunity_score", None)
+            ai.get("opportunity_score") or getattr(decision, "opportunity_score", None)
         ),
-        opportunity_threshold=_as_int(
-            ai.get("opportunity_threshold")
-        ) or OPPORTUNITY_SCORE_THRESHOLD,
+        opportunity_threshold=_as_int(ai.get("opportunity_threshold"))
+        or OPPORTUNITY_SCORE_THRESHOLD,
         score_breakdown=breakdown,
         liquidity_score=_as_int(ai.get("liquidity")),
         spread_score=_as_int(ai.get("spread_score")),
@@ -1094,11 +1118,7 @@ def facts_from_cycle(
             if isinstance(ai.get("factors"), dict)
             else None
         ),
-        cycle_id=(
-            str(ai.get("cycle_id") or "") or None
-        ),
-        snapshot_id=(
-            str(ai.get("snapshot_id") or "") or None
-        ),
+        cycle_id=(str(ai.get("cycle_id") or "") or None),
+        snapshot_id=(str(ai.get("snapshot_id") or "") or None),
         daily_loss_exceeded=bool(daily_loss_exceeded),
     )

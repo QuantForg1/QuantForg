@@ -33,13 +33,13 @@ from app.domain.trading.xauusd_specs import (
 __all__ = [
     "AUTONOMOUS_DISPLAY_NAME",
     "CANONICAL_GOLD_BROKER_DISPLAY",
-    "DISABLED_AUTONOMOUS_SYMBOL",
-    "DisabledAutonomousSymbolError",
     "CONTRACT_SIZE",
+    "DISABLED_AUTONOMOUS_SYMBOL",
     "GOLD_SYMBOL",
     "MAX_LEVERAGE",
     "MAX_SPREAD",
     "SYMBOL",
+    "DisabledAutonomousSymbolError",
     "autonomous_execution_symbols",
     "coerce_max_spread",
     "default_trading_symbol",
@@ -54,6 +54,6 @@ __all__ = [
     "require_xauusd",
     "resolve_trading_symbol",
     "same_gold_identity",
-    "symbol_in_scan_universe",
     "specs_dict",
+    "symbol_in_scan_universe",
 ]

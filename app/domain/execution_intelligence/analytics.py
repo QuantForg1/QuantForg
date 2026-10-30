@@ -44,9 +44,7 @@ def _trade_timeline(row: dict[str, Any]) -> dict[str, Any]:
         request_snapshot if isinstance(request_snapshot, dict) else {}
     )
     market_at = (
-        row.get("market_data_at")
-        or snap.get("market_data_at")
-        or snap.get("quote_at")
+        row.get("market_data_at") or snap.get("market_data_at") or snap.get("quote_at")
     )
     signal_at = row.get("signal_at") or snap.get("signal_at") or snap.get("signal_ts")
     decision_at = (

@@ -6,6 +6,7 @@ for reporting; enforcement remains in existing PRE / Risk limits.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.correlation_book import (
@@ -38,10 +39,8 @@ def _vol(pos: Any) -> float:
     for key in ("volume", "lots", "qty"):
         v = getattr(pos, key, None)
         if v is not None:
-            try:
+            with contextlib.suppress(Exception):
                 return abs(float(v))
-            except Exception:
-                pass
     return 0.0
 
 

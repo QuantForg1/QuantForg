@@ -61,7 +61,9 @@ class InfrastructureHeartbeats:
         self._lock = Lock()
         self._beats = {name: HeartbeatState(name=name) for name in _NAMES}
 
-    def note(self, name: str, *, ok: bool, state: str, reason: str | None = None) -> None:
+    def note(
+        self, name: str, *, ok: bool, state: str, reason: str | None = None
+    ) -> None:
         if name not in self._beats:
             return
         now = _now()

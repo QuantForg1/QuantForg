@@ -1,4 +1,7 @@
-"""Fast decision path — rotate candidate blocks, never force trades or retry order_send."""
+(
+    """Fast decision path — rotate candidate blocks, never force trades or retry """
+    """order_send."""
+)
 
 from __future__ import annotations
 

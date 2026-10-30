@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from dataclasses import dataclass, field
 from typing import Any
@@ -53,14 +54,12 @@ class PhaseAControlPlane:
 
     def persist(self) -> None:
         # Unit tests must not block on Postgres / volume I/O.
-        try:
+        with contextlib.suppress(Exception):
             import os
 
             if os.environ.get("PYTEST_CURRENT_TEST"):
                 return
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             from app.application.services.ops_state_persistence import save_ops_state
 
             patch = {
@@ -68,8 +67,6 @@ class PhaseAControlPlane:
                 **self.ambiguity.to_persist(),
             }
             save_ops_state(patch)
-        except Exception:
-            pass
 
     def hydrate(self, state: dict[str, Any]) -> None:
         # Rollback: persistence enforcement off → do not restore halt from disk
@@ -85,12 +82,10 @@ class PhaseAControlPlane:
 
     def sync_legacy_kill_flag(self, plane: Any) -> None:
         """Keep OperationsControlPlane.kill_switch_armed aligned with HALT_ALL."""
-        try:
+        with contextlib.suppress(Exception):
             armed = self.halt.mode is HaltMode.HALT_ALL_TRADING
             with plane._lock:
                 plane.kill_switch_armed = armed
-        except Exception:
-            pass
 
     def set_halt(
         self,
@@ -133,7 +128,7 @@ class PhaseAControlPlane:
 
         # Kill / halt
         halt_blocks = False
-        if cfg.kill_persistence_enabled or True:
+        if True:
             # Halt mode always consulted; feature flag only disables *persistence*
             # enforcement of reopen — mode still blocks when set.
             halt_blocks = not self.halt.new_entries_allowed()
@@ -179,7 +174,9 @@ class PhaseAControlPlane:
             burst_latched=cfg.burst_latch_enabled and self.burst.is_latched(),
             recon_blocking=cfg.recon_gate_enabled
             and self.ambiguity.has_blocking_ambiguity(),
-            market_data_allow=md_allow if (cfg.md_firewall_enabled and md_context) else True,
+            market_data_allow=(
+                md_allow if (cfg.md_firewall_enabled and md_context) else True
+            ),
             risk_decision=risk_decision,
             safety_allowed=safety_allowed,
             first_blocking_gate=first_gate,

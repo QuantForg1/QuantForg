@@ -79,4 +79,5 @@ def publish_notification(
         after={"channel": ch, "title": saved["title"]},
         ip=ip,
     )
-    return redact(saved)
+    redacted: dict[str, Any] = redact(saved)
+    return redacted

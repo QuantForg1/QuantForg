@@ -228,7 +228,13 @@ def test_shadow_cannot_send_or_bypass() -> None:
     assert SHADOW_MAY_BYPASS_RISK is False
     assert SHADOW_MAY_BYPASS_SAFETY is False
     assert SHADOW_MAY_BYPASS_OMS is False
-    for fn in (submit_order, alter_live_decision, bypass_risk, bypass_safety, bypass_oms):
+    for fn in (
+        submit_order,
+        alter_live_decision,
+        bypass_risk,
+        bypass_safety,
+        bypass_oms,
+    ):
         with pytest.raises(ShadowExpansionBlocked):
             fn()
     forbidden = ("order_send", "FORCE_FIRST_TRADE", "execute_now", "Execute Now")
@@ -250,7 +256,9 @@ def test_shadow_observe_does_not_create_fill() -> None:
     assert live["inherits_edge_5"] is True
     assert "mtf_alignment" not in live["present_families"]
     assert "continuation" in live["present_families"]
-    assert all(c["CORE"] is False and c["EXPANSION"] is True for c in live["candidates"])
+    assert all(
+        c["CORE"] is False and c["EXPANSION"] is True for c in live["candidates"]
+    )
     assert live["SHADOW_ONLY"] is True
     assert all(c["would_submit_order"] is False for c in live["candidates"])
 
@@ -264,7 +272,9 @@ def test_expansion_without_matched_is_insufficient() -> None:
     assert all(c["classification"] == INSUFFICIENT_SAMPLE for c in report["candidates"])
     assert all(c["can_send_orders"] is False for c in report["candidates"])
     assert all(c["auto_promote"] is False for c in report["candidates"])
-    assert all(c["promotion_status"] == INSUFFICIENT_SAMPLE for c in report["candidates"])
+    assert all(
+        c["promotion_status"] == INSUFFICIENT_SAMPLE for c in report["candidates"]
+    )
     assert all(c["SHADOW_ONLY"] is True for c in report["candidates"])
 
 
@@ -315,7 +325,9 @@ def test_walk_forward_rejects_lookahead_leak() -> None:
     }
     resorted = walk_forward_split(corrupted)
     assert resorted["lookahead"] is False
-    assert resorted["train"][-1]["exit_time"] <= resorted["out_of_sample"][0]["exit_time"]
+    assert (
+        resorted["train"][-1]["exit_time"] <= resorted["out_of_sample"][0]["exit_time"]
+    )
 
 
 def test_mfe_mae_unknown_without_path(tmp_path) -> None:
@@ -430,7 +442,10 @@ def test_vps_duplicate_listener_and_unproven_recovery() -> None:
     assert snap["EXECUTION_PATH_READY"] == "NOT_READY"
     assert snap["mt5_reboot_recovery"] == "MT5_SESSION_RECOVERY_UNPROVEN"
     assert snap["never_reboots"] is True
-    assert "UNPROVEN" in snap["vps_autonomy_status"] or snap["vps_autonomy_status"] != "AUTONOMOUS"
+    assert (
+        "UNPROVEN" in snap["vps_autonomy_status"]
+        or snap["vps_autonomy_status"] != "AUTONOMOUS"
+    )
 
 
 def test_buy_sell_symmetry_of_join_contract(tmp_path) -> None:
@@ -457,7 +472,9 @@ def test_buy_sell_symmetry_of_join_contract(tmp_path) -> None:
             candidate="BUY",
         )
     )
-    sell = classify_closed_deal({"entry_ticket": 321, "profit_loss": -4.0, "side": "sell"})
+    sell = classify_closed_deal(
+        {"entry_ticket": 321, "profit_loss": -4.0, "side": "sell"}
+    )
     buy = classify_closed_deal({"entry_ticket": 320, "profit_loss": 4.0, "side": "buy"})
     assert sell["classification"] == buy["classification"] == STRATEGY_MATCHED
 
@@ -474,15 +491,34 @@ def test_lookahead_fields_are_stripped() -> None:
 
 
 def test_promotion_cannot_reach_live() -> None:
-    assert promotion_status(sample_size=0, oos_positive=False, lookahead=False) == INSUFFICIENT_SAMPLE
-    assert promotion_status(sample_size=25, oos_positive=False, lookahead=False) == "RESEARCH"
+    assert (
+        promotion_status(sample_size=0, oos_positive=False, lookahead=False)
+        == INSUFFICIENT_SAMPLE
+    )
+    assert (
+        promotion_status(sample_size=25, oos_positive=False, lookahead=False)
+        == "RESEARCH"
+    )
     with pytest.raises(ShadowExpansionBlocked):
-        promotion_status(sample_size=120, oos_positive=True, lookahead=False, human_approved=True, promote_live=True)
+        promotion_status(
+            sample_size=120,
+            oos_positive=True,
+            lookahead=False,
+            human_approved=True,
+            promote_live=True,
+        )
     with pytest.raises(ShadowExpansionBlocked):
         apply_human_promotion("LIVE", approved_by="owner")
-    assert apply_human_promotion("APPROVED", approved_by="owner") == "PROMOTION_CANDIDATE"
-    assert promotion_status(sample_size=80, oos_positive=True, lookahead=False) == "PROMOTION_CANDIDATE"
-    assert promotion_status(sample_size=80, oos_positive=True, lookahead=False) != "LIVE"
+    assert (
+        apply_human_promotion("APPROVED", approved_by="owner") == "PROMOTION_CANDIDATE"
+    )
+    assert (
+        promotion_status(sample_size=80, oos_positive=True, lookahead=False)
+        == "PROMOTION_CANDIDATE"
+    )
+    assert (
+        promotion_status(sample_size=80, oos_positive=True, lookahead=False) != "LIVE"
+    )
 
 
 def test_loss_contributors_insufficient_without_matched() -> None:
@@ -574,7 +610,11 @@ def test_research_modules_cannot_reach_oms_or_mt5() -> None:
         lower = src.lower()
         for token in forbidden:
             assert token.lower() not in lower, f"{name} contains {token}"
-        assert "mutates_engines" in src or "never_sends_orders" in src or "advisory_only" in src.lower()
+        assert (
+            "mutates_engines" in src
+            or "never_sends_orders" in src
+            or "advisory_only" in src.lower()
+        )
 
 
 def test_decision_snapshot_is_immutable(tmp_path) -> None:
@@ -656,7 +696,9 @@ def test_ticket_without_identity_is_unmatched(tmp_path) -> None:
             mt5_ticket=111,
         )
     )
-    join = classify_closed_deal({"entry_ticket": 111, "profit_loss": 9.0, "side": "buy"})
+    join = classify_closed_deal(
+        {"entry_ticket": 111, "profit_loss": 9.0, "side": "buy"}
+    )
     assert join["classification"] == UNMATCHED
     assert join["reason"] == "ticket_without_identity"
 
@@ -724,7 +766,10 @@ def test_config_audit_rows_have_required_fields() -> None:
     assert by_name["Directional edge margin"]["LIVE_VALUE"] == 5
     assert by_name["Directional edge margin"]["SAFE_TO_CHANGE"] is False
     assert len(audit["LIVE_EFFECTIVE_CONFIG"]) >= 8
-    assert any(r["SETTING"] == "Max open trades (ITEConfig default)" for r in audit["LEGACY_CONFIG"])
+    assert any(
+        r["SETTING"] == "Max open trades (ITEConfig default)"
+        for r in audit["LEGACY_CONFIG"]
+    )
     assert any(r["SETTING"] == "News protection" for r in audit["RESEARCH_ONLY_CONFIG"])
     assert "UNWIRED_CONFIG" in audit
     assert isinstance(audit["UNWIRED_CONFIG"], list)
@@ -742,7 +787,10 @@ def test_cause_strength_never_proven_from_tiny_n() -> None:
     assert cause_strength(sample_size=200, contradicted=True) == REJECTED
     stats = build_loss_forensics(closed_trades=[])
     assert len(stats["loss_dimensions"]) == len(LOSS_DIMENSIONS)
-    assert all(v["classification"] == INSUFFICIENT_SAMPLE for v in stats["loss_dimensions"].values())
+    assert all(
+        v["classification"] == INSUFFICIENT_SAMPLE
+        for v in stats["loss_dimensions"].values()
+    )
 
 
 def test_compact_snapshot_retains_cycle_and_snapshot_ids() -> None:
@@ -774,7 +822,9 @@ def test_conflict_paint_cannot_convert_take_to_wait() -> None:
         / "scoring.py"
     ).read_text(encoding="utf-8")
     i_sniper = src.find("evaluate_sniper_entry(")
-    i_paint = src.find('stale_or_chase = setup_state in {"CHASING", "STALE", "CONFLICT"}')
+    i_paint = src.find(
+        'stale_or_chase = setup_state in {"CHASING", "STALE", "CONFLICT"}'
+    )
     i_opp = src.find("evaluate_from_score_dict(")
     i_reject = src.find("if not sniper.passed:")
     assert 0 <= i_sniper < i_paint < i_opp < i_reject
@@ -802,7 +852,9 @@ def test_conflict_paint_cannot_convert_take_to_wait() -> None:
     assert painted["raw_timing"] == 80
     assert painted["effective_timing"] == 20
     assert painted["paint_reason"].startswith("STALE_OR_CHASE_PAINT")
-    take = classify_conflict_paint(_cycle(setup_state="TAKE", first_authoritative_blocker=""))
+    take = classify_conflict_paint(
+        _cycle(setup_state="TAKE", first_authoritative_blocker="")
+    )
     assert take["applies_on_this_scan"] is False
     assert take["paint_reason"] == "NONE"
 
@@ -847,7 +899,9 @@ def test_shadow_candidates_are_twenty_four_and_isolated() -> None:
 def test_promotion_state_machine_never_returns_live() -> None:
     assert ALLOW_LIVE_PROMOTION is False
     assert "LIVE" in PROMOTION_STATES
-    assert promotion_status(sample_size=200, oos_positive=True, lookahead=False) != "LIVE"
+    assert (
+        promotion_status(sample_size=200, oos_positive=True, lookahead=False) != "LIVE"
+    )
     with pytest.raises(ShadowExpansionBlocked):
         apply_human_promotion("LIVE", approved_by="owner")
 

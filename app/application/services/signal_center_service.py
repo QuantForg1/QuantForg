@@ -70,12 +70,7 @@ def _session() -> str:
 
 
 def _parse_cycle_ts(row: dict[str, Any]) -> datetime | None:
-    raw = (
-        row.get("recorded_at")
-        or row.get("as_of")
-        or row.get("ts")
-        or row.get("time")
-    )
+    raw = row.get("recorded_at") or row.get("as_of") or row.get("ts") or row.get("time")
     if raw is None:
         return None
     text = str(raw).strip().replace("Z", "+00:00")
@@ -306,9 +301,7 @@ def _operator_signal_reason(
 def _present(value: Any) -> bool:
     if value is None or value == "":
         return False
-    if isinstance(value, (list, dict, tuple)) and len(value) == 0:
-        return False
-    return True
+    return not (isinstance(value, (list, dict, tuple)) and len(value) == 0)
 
 
 def _first_present(*values: Any) -> Any:
@@ -400,9 +393,7 @@ def _execution_classification(
             "signal_state": "NO_TRADE",
             "execution_state": None,
             "block_code": (
-                "NO_DIRECTION"
-                if direction in {"", "NONE", "NO_TRADE"}
-                else None
+                "NO_DIRECTION" if direction in {"", "NONE", "NO_TRADE"} else None
             ),
             "decision": "NO_TRADE",
             "status": "NO_TRADE",
@@ -416,7 +407,9 @@ def _execution_classification(
     }
 
 
-def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> dict[str, Any]:
+def _row_from_score(
+    score: dict[str, Any], *, strategy: str | None = None
+) -> dict[str, Any]:
     factors = _factors(score)
     quality = int(score.get("trade_quality") or score.get("quality") or 0)
     confidence = int(score.get("ai_confidence") or score.get("confidence") or 0)
@@ -519,9 +512,12 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         score.get("reward_risk"),
         factors.get("rr"),
     )
-    hold = score.get("expected_hold") or score.get("expected_hold_time") or score.get(
-        "hold_minutes"
-    ) or factors.get("expected_hold")
+    hold = (
+        score.get("expected_hold")
+        or score.get("expected_hold_time")
+        or score.get("hold_minutes")
+        or factors.get("expected_hold")
+    )
     price = _first_present(
         score.get("price"),
         score.get("mid"),
@@ -532,7 +528,9 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
     )
     reason = score.get("reject_reason") or score.get("reason") or score.get("summary")
     operator_reason = _operator_signal_reason(
-        signal_action=direction_out if direction_out in {"BUY", "SELL", "WAIT"} else signal_action,
+        signal_action=(
+            direction_out if direction_out in {"BUY", "SELL", "WAIT"} else signal_action
+        ),
         reason=str(reason or reason_early or ""),
         sniper=sniper if isinstance(sniper, dict) else None,
     )
@@ -659,9 +657,11 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "opportunity_score": opportunity_score,
         "opportunity_threshold": score.get("opportunity_threshold") or 70,
         "confluence": confluence,
-        "first_blocker": exec_cls["block_code"]
-        if (reject or direction_out in {"WAIT", "NO_TRADE"})
-        else None,
+        "first_blocker": (
+            exec_cls["block_code"]
+            if (reject or direction_out in {"WAIT", "NO_TRADE"})
+            else None
+        ),
         "pipeline": _pipeline_snapshot(
             decision=str(exec_cls["decision"] or direction_out),
             block_code=exec_cls["block_code"],
@@ -675,12 +675,16 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             opportunity_threshold=score.get("opportunity_threshold") or 70,
             order_status=score.get("order_status") or score.get("fill_status"),
             order_ticket=score.get("order_ticket") or score.get("ticket"),
-            score_breakdown=score.get("score_breakdown")
-            if isinstance(score.get("score_breakdown"), dict)
-            else None,
-            opportunity_audit=score.get("opportunity_audit")
-            if isinstance(score.get("opportunity_audit"), dict)
-            else None,
+            score_breakdown=(
+                score.get("score_breakdown")
+                if isinstance(score.get("score_breakdown"), dict)
+                else None
+            ),
+            opportunity_audit=(
+                score.get("opportunity_audit")
+                if isinstance(score.get("opportunity_audit"), dict)
+                else None
+            ),
             candidate=direction if direction in {"BUY", "SELL"} else "NONE",
             spread=spread,
             atr=atr,
@@ -691,13 +695,21 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             entry=score.get("entry"),
             stop_loss=score.get("stop_loss") or score.get("original_stop"),
             take_profit=score.get("take_profit"),
-            sniper_tier=(sniper.get("sniper_tier") if isinstance(sniper, dict) else None)
+            sniper_tier=(
+                sniper.get("sniper_tier") if isinstance(sniper, dict) else None
+            )
             or score.get("sniper_tier"),
-            entry_state=(sniper.get("entry_state") if isinstance(sniper, dict) else None)
+            entry_state=(
+                sniper.get("entry_state") if isinstance(sniper, dict) else None
+            )
             or score.get("entry_state"),
             operator_regime=score.get("operator_regime"),
-            zone_timeframe=(sniper.get("zone_timeframe") if isinstance(sniper, dict) else None),
-            atr_timeframe=(sniper.get("atr_timeframe") if isinstance(sniper, dict) else None),
+            zone_timeframe=(
+                sniper.get("zone_timeframe") if isinstance(sniper, dict) else None
+            ),
+            atr_timeframe=(
+                sniper.get("atr_timeframe") if isinstance(sniper, dict) else None
+            ),
             zone_atr=(sniper.get("zone_atr") if isinstance(sniper, dict) else None)
             or (sniper.get("atr_used") if isinstance(sniper, dict) else None),
             entry_state_chase=(
@@ -780,13 +792,10 @@ def _pipeline_snapshot(
         "PORTFOLIO_EXTRA_REJECT",
         "WAITING_NEXT_CYCLE",
     }
-    reached_risk = (
-        code in execution_codes
-        or (
-            action in {"BUY", "SELL"}
-            and code not in eligibility_abort_codes
-            and not code.startswith("WAIT_")
-        )
+    reached_risk = code in execution_codes or (
+        action in {"BUY", "SELL"}
+        and code not in eligibility_abort_codes
+        and not code.startswith("WAIT_")
     )
     age: float | None
     try:
@@ -927,8 +936,7 @@ def _pipeline_snapshot(
             or (
                 "TAKE"
                 if take
-                else ((sniper or {}).get("setup_state") if sniper else None)
-                or "WAIT"
+                else ((sniper or {}).get("setup_state") if sniper else None) or "WAIT"
             )
         ),
         "entry": entry,
@@ -942,9 +950,7 @@ def _pipeline_snapshot(
         "displacement_score_xy": _xy((opportunity_audit or {}).get("displacement")),
         "timing_score_xy": _xy((opportunity_audit or {}).get("timing")),
         "rr_score_xy": _xy((opportunity_audit or {}).get("rr")),
-        "freshness": (
-            str((opportunity_audit or {}).get("freshness") or "") or None
-        ),
+        "freshness": (str((opportunity_audit or {}).get("freshness") or "") or None),
         "h1_context": "context-only",
         "decision": action,
         "final_decision": "TAKE" if take else "WAIT",
@@ -958,8 +964,8 @@ def _pipeline_snapshot(
         "blocker_category": blocker_category,
         "execution_stage": execution_stage,
         "blocker_reason": code or None,
-        "forwarded_to_oms": bool(order_ticket) or execution_lifecycle
-        in {"ORDER_SENT", "FILLED"},
+        "forwarded_to_oms": bool(order_ticket)
+        or execution_lifecycle in {"ORDER_SENT", "FILLED"},
         "ticket": order_ticket,
         "eligibility_status": (
             str((eligibility_trace or {}).get("eligibility_status") or "") or None
@@ -1134,7 +1140,9 @@ def _attach_execution_observability(
     except Exception:
         live_burst = None
     _phase_a_burst_value = pipe.get("reject_burst")
-    phase_a_burst = _phase_a_burst_value if isinstance(_phase_a_burst_value, dict) else None
+    phase_a_burst = (
+        _phase_a_burst_value if isinstance(_phase_a_burst_value, dict) else None
+    )
     if not isinstance(phase_a_burst, dict):
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
@@ -1152,8 +1160,10 @@ def _attach_execution_observability(
             "reject_burst_window_seconds"
         )
         last_ev = live_burst.get("last_execution_reject") or {}
-        if isinstance(last_ev, dict) and last_ev.get("at") and not pipe.get(
-            "reject_timestamp"
+        if (
+            isinstance(last_ev, dict)
+            and last_ev.get("at")
+            and not pipe.get("reject_timestamp")
         ):
             pipe["reject_timestamp"] = last_ev.get("at")
     elif isinstance(phase_a_burst, dict):
@@ -1213,9 +1223,9 @@ def _overlay_last_ite_cycle(
         return row
     # Research BUY/SELL is not ITE TAKE. Last-cycle WAIT must not paint
     # EXECUTION_BLOCKED over a research QUALIFIED row.
-    cycle_action = str(
-        last.get("decision_action") or last.get("action") or ""
-    ).strip().upper()
+    cycle_action = (
+        str(last.get("decision_action") or last.get("action") or "").strip().upper()
+    )
     cycle_outcome = str(last.get("cycle_outcome") or "").strip().lower()
     wait_action = cycle_action in {
         "WAIT",
@@ -1355,9 +1365,11 @@ def _overlay_last_ite_cycle(
         stage = "RISK"
     elif abort == "EXECUTION_REJECT_BURST":
         stage = "EXECUTION_REJECT_BURST"
-    elif abort in {"EXECUTION_HEALTH_DEGRADED", "HEALTH_DEGRADED"}:
-        stage = "EXECUTION_HEALTH"
-    elif abort == "DECISION_HASH_UNVERIFIED" or "DECISION_HASH_UNVERIFIED" in abort:
+    elif (
+        abort in {"EXECUTION_HEALTH_DEGRADED", "HEALTH_DEGRADED"}
+        or abort == "DECISION_HASH_UNVERIFIED"
+        or "DECISION_HASH_UNVERIFIED" in abort
+    ):
         stage = "EXECUTION_HEALTH"
     elif not stage:
         stage = bridge_abort_stage(abort)
@@ -1432,15 +1444,19 @@ def _overlay_last_ite_cycle(
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
         pipe["mt5"] = not_reached
-        scanner_abort = abort in {
-            "NO_ELIGIBLE_SETUP",
-            "NO_EXECUTABLE_SYMBOL",
-            "NO_EXECUTABLE_FOCUS",
-            "WAITING_NEXT_CYCLE",
-            "SYMBOL_COOLDOWN_ACTIVE",
-            "SYMBOL_UNIVERSE_MISMATCH",
-            "PORTFOLIO_EXTRA_REJECT",
-        } or stage == "SCANNER"
+        scanner_abort = (
+            abort
+            in {
+                "NO_ELIGIBLE_SETUP",
+                "NO_EXECUTABLE_SYMBOL",
+                "NO_EXECUTABLE_FOCUS",
+                "WAITING_NEXT_CYCLE",
+                "SYMBOL_COOLDOWN_ACTIVE",
+                "SYMBOL_UNIVERSE_MISMATCH",
+                "PORTFOLIO_EXTRA_REJECT",
+            }
+            or stage == "SCANNER"
+        )
         if scanner_abort:
             pipe["risk"] = not_reached
             pipe["safety"] = not_reached
@@ -1461,24 +1477,18 @@ def _overlay_last_ite_cycle(
     if human:
         row["reasoning"] = human[:500]
         pipe["blocker_reason"] = human[:500]
-    if abort == "MAX_POSITIONS_REACHED":
-        if str(pipe.get("decision") or row.get("direction") or "").upper() in {
-            "BUY",
-            "SELL",
-            "TAKE",
-        }:
-            pipe["final_decision"] = "TAKE"
-            pipe["setup_state"] = "TAKE"
-            row["status"] = "MAX_POSITIONS_REACHED"
-    if abort == "DAILY_LOSS_BLOCK":
-        if str(pipe.get("decision") or row.get("direction") or "").upper() in {
-            "BUY",
-            "SELL",
-            "TAKE",
-        }:
-            pipe["final_decision"] = "TAKE"
-            pipe["setup_state"] = "TAKE"
-            row["status"] = "DAILY_LOSS_BLOCK"
+    if abort == "MAX_POSITIONS_REACHED" and str(
+        pipe.get("decision") or row.get("direction") or ""
+    ).upper() in {"BUY", "SELL", "TAKE"}:
+        pipe["final_decision"] = "TAKE"
+        pipe["setup_state"] = "TAKE"
+        row["status"] = "MAX_POSITIONS_REACHED"
+    if abort == "DAILY_LOSS_BLOCK" and str(
+        pipe.get("decision") or row.get("direction") or ""
+    ).upper() in {"BUY", "SELL", "TAKE"}:
+        pipe["final_decision"] = "TAKE"
+        pipe["setup_state"] = "TAKE"
+        row["status"] = "DAILY_LOSS_BLOCK"
     mcd = last.get("market_context_diagnostics")
     if isinstance(mcd, dict):
         for key in (
@@ -1508,9 +1518,7 @@ def _overlay_last_ite_cycle(
         symbol=str(row.get("symbol") or pipe.get("symbol") or "") or None,
     )
     row["pipeline"] = pipe
-    row["rejection_reason"] = (
-        human[:500] if stage == "RISK" and human else abort
-    )
+    row["rejection_reason"] = human[:500] if stage == "RISK" and human else abort
     row["rejection_stage"] = stage
     row["rejected_at"] = _now_iso()
     row["rejection_timestamp"] = row["rejected_at"]
@@ -1615,8 +1623,14 @@ def _promote_pipeline_trade_levels(row: dict[str, Any]) -> dict[str, Any]:
         opp = pipe.get("opportunity_score")
         if isinstance(opp, (int, float)):
             row["opportunity_score"] = opp
-    if row.get("rr") in (None, "", "UNKNOWN") and row.get("RR") in (None, "", "UNKNOWN"):
-        rr = _honest_numeric(pipe.get("rr") or pipe.get("RR") or pipe.get("risk_reward"))
+    if row.get("rr") in (None, "", "UNKNOWN") and row.get("RR") in (
+        None,
+        "",
+        "UNKNOWN",
+    ):
+        rr = _honest_numeric(
+            pipe.get("rr") or pipe.get("RR") or pipe.get("risk_reward")
+        )
         if rr is not None:
             row["rr"] = rr
             row["RR"] = rr
@@ -1624,12 +1638,16 @@ def _promote_pipeline_trade_levels(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _signal_type_from_row(row: dict[str, Any]) -> str | None:
-    raw = str(
-        row.get("signal_type")
-        or row.get("entry_type")
-        or row.get("order_type")
-        or ""
-    ).strip().upper()
+    raw = (
+        str(
+            row.get("signal_type")
+            or row.get("entry_type")
+            or row.get("order_type")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
     if raw in {"MARKET", "LIMIT", "STOP"}:
         return raw
     return None
@@ -1712,11 +1730,7 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         or row.get("data_timestamp")
         or row.get("market_timestamp")
     )
-    as_of = (
-        str(as_of_raw)
-        if as_of_raw not in (None, "", "UNKNOWN")
-        else _now_iso()
-    )
+    as_of = str(as_of_raw) if as_of_raw not in (None, "", "UNKNOWN") else _now_iso()
     return {
         "symbol": sym,
         "canonical_symbol": row.get("canonical_symbol") or sym,
@@ -1745,12 +1759,16 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         "entry_type": signal_type,
         "asset_class": str(row.get("asset_class") or "OTHER").lower(),
         "session": row.get("session"),
-        "market_regime": (row.get("evidence") or {}).get("REGIME")
-        if isinstance(row.get("evidence"), dict)
-        else row.get("regime"),
-        "regime": (row.get("evidence") or {}).get("REGIME")
-        if isinstance(row.get("evidence"), dict)
-        else row.get("regime"),
+        "market_regime": (
+            (row.get("evidence") or {}).get("REGIME")
+            if isinstance(row.get("evidence"), dict)
+            else row.get("regime")
+        ),
+        "regime": (
+            (row.get("evidence") or {}).get("REGIME")
+            if isinstance(row.get("evidence"), dict)
+            else row.get("regime")
+        ),
         "research_rank_score": row.get("research_rank_score"),
         "board_status": row.get("board_status"),
         "qualified_research": row.get("qualified_research"),
@@ -1772,7 +1790,9 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
             if isinstance(row.get("evidence"), dict)
             else None
         ),
-        "evidence": row.get("evidence") if isinstance(row.get("evidence"), dict) else {},
+        "evidence": (
+            row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+        ),
         "blocker": row.get("blocker") or row.get("first_authoritative_blocker"),
         "research_only": True,
         "authorizes_trade": False,
@@ -1781,9 +1801,11 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         "pipeline": {
             "directional_edge": edge if isinstance(edge, (int, float)) else None,
             "setup_state": row.get("setup_state"),
-            "market_regime": (row.get("evidence") or {}).get("REGIME")
-            if isinstance(row.get("evidence"), dict)
-            else row.get("regime"),
+            "market_regime": (
+                (row.get("evidence") or {}).get("REGIME")
+                if isinstance(row.get("evidence"), dict)
+                else row.get("regime")
+            ),
             "structure_score": row.get("structure_score"),
             "momentum_score": row.get("momentum_score"),
             "volatility_score": row.get("volatility_score"),
@@ -1937,10 +1959,9 @@ def _merge_research_into_signals(
                 if projected_status not in (None, "", "UNKNOWN"):
                     existing["board_status"] = projected_status
                 continue
-            if (
-                existing.get(key) in (None, "", "UNKNOWN")
-                and projected.get(key) not in (None, "", "UNKNOWN")
-            ):
+            if existing.get(key) in (None, "", "UNKNOWN") and projected.get(
+                key
+            ) not in (None, "", "UNKNOWN"):
                 existing[key] = projected[key]
         by_sym[sym] = existing
     meta["scanner_status"] = "ACTIVE"
@@ -1974,12 +1995,8 @@ def list_live_signals(
     if scan_trace:
         for score in scores:
             score.setdefault("eligibility_trace", scan_trace)
-            score.setdefault(
-                "eligibility_status", scan_trace.get("eligibility_status")
-            )
-            score.setdefault(
-                "eligibility_reason", scan_trace.get("eligibility_reason")
-            )
+            score.setdefault("eligibility_status", scan_trace.get("eligibility_status"))
+            score.setdefault("eligibility_reason", scan_trace.get("eligibility_reason"))
     as_of = str(scan.get("as_of") or _now_iso())
     strategy = None
     try:
@@ -2067,12 +2084,16 @@ def list_live_signals(
                             "direction": latest.get("decision_action")
                             or latest.get("action")
                             or "NONE",
-                            "trade_quality": (latest.get("quality") or {}).get("score")
-                            if isinstance(latest.get("quality"), dict)
-                            else latest.get("quality"),
-                            "ai_confidence": (latest.get("confluence") or {}).get("score")
-                            if isinstance(latest.get("confluence"), dict)
-                            else latest.get("confluence"),
+                            "trade_quality": (
+                                (latest.get("quality") or {}).get("score")
+                                if isinstance(latest.get("quality"), dict)
+                                else latest.get("quality")
+                            ),
+                            "ai_confidence": (
+                                (latest.get("confluence") or {}).get("score")
+                                if isinstance(latest.get("confluence"), dict)
+                                else latest.get("confluence")
+                            ),
                             "reject": str(latest.get("cycle_outcome") or "")
                             .upper()
                             .find("EXEC")
@@ -2118,10 +2139,12 @@ def list_live_signals(
             raw_last = st.get("last_cycle")
             last_cycle = raw_last if isinstance(raw_last, dict) else None
             try:
-                from app.domain.institutional_trading.operations.quantforg_position_cap import (
-                    engine_position_rows,
-                    quantforg_open_symbols,
+                from app.domain.institutional_trading.operations import (
+                    quantforg_position_cap as _q2142,
                 )
+
+                engine_position_rows = _q2142.engine_position_rows
+                quantforg_open_symbols = _q2142.quantforg_open_symbols
 
                 open_symbols = sorted(
                     quantforg_open_symbols(
@@ -2203,9 +2226,11 @@ def list_live_signals(
         )
         ticket_n = 0
         try:
-            raw_ticket = (row.get("pipeline") or {}).get("ticket") if isinstance(
-                row.get("pipeline"), dict
-            ) else row.get("ticket")
+            raw_ticket = (
+                (row.get("pipeline") or {}).get("ticket")
+                if isinstance(row.get("pipeline"), dict)
+                else row.get("ticket")
+            )
             ticket_n = int(raw_ticket) if raw_ticket not in (None, "", "0", 0) else 0
         except (TypeError, ValueError):
             ticket_n = 0
@@ -2275,9 +2300,7 @@ def list_live_signals(
         ac = asset_class.strip().lower()
         if ac not in {"all", "*"}:
             signals = [
-                s
-                for s in signals
-                if str(s.get("asset_class") or "").lower() == ac
+                s for s in signals if str(s.get("asset_class") or "").lower() == ac
             ]
     if strong_only:
         signals = [
@@ -2313,9 +2336,10 @@ def list_live_signals(
     confs = [int(s["confidence"]) for s in signals if s.get("confidence") is not None]
     quals = [int(s["quality"]) for s in signals if s.get("quality") is not None]
     all_prefs = load_preferences()
-    test_synthetic = bool(scan.get("test_synthetic")) or str(
-        scan.get("source") or ""
-    ).upper() == "TEST_SYNTHETIC"
+    test_synthetic = (
+        bool(scan.get("test_synthetic"))
+        or str(scan.get("source") or "").upper() == "TEST_SYNTHETIC"
+    )
     rolling = _rolling_signal_metrics()
     _hourly_value = rolling.get("hourly")
     hourly = _hourly_value if isinstance(_hourly_value, dict) else {}
@@ -2324,7 +2348,10 @@ def list_live_signals(
     for item in signals:
         _pipe_value = item.get("pipeline")
         pipe = _pipe_value if isinstance(_pipe_value, dict) else {}
-        if last_take is None and str(pipe.get("final_decision") or "").upper() == "TAKE":
+        if (
+            last_take is None
+            and str(pipe.get("final_decision") or "").upper() == "TAKE"
+        ):
             last_take = {
                 "symbol": item.get("symbol"),
                 "direction": item.get("direction"),
@@ -2453,9 +2480,7 @@ def list_live_signals(
         "research_analysis": research_analysis,
         "dashboard": {
             "total_symbols": universe_size,
-            "enabled_symbols": len(enabled)
-            if manage_active
-            else universe_size,
+            "enabled_symbols": len(enabled) if manage_active else universe_size,
             "buy_signals": buy_n,
             "sell_signals": sell_n,
             "wait": wait_n,
@@ -2500,5 +2525,6 @@ def get_signal(symbol: str) -> dict[str, Any] | None:
     payload = list_live_signals(q=code, enabled_only=False, active_only=False)
     for item in payload.get("items") or []:
         if item.get("symbol") == code:
-            return item
+            found: dict[str, Any] = item
+            return found
     return None

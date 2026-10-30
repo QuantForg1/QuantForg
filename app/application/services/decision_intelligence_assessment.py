@@ -213,9 +213,7 @@ def collect_live_gold_facts() -> GoldAssessmentFacts | None:
         entry_price=mid,
         stop_distance=None,
         atr=(
-            _as_decimal(getattr(account, "atr", None))
-            if account is not None
-            else None
+            _as_decimal(getattr(account, "atr", None)) if account is not None else None
         ),
         consecutive_losses=(
             int(getattr(account, "consecutive_losses", 0) or 0)

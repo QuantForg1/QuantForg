@@ -165,7 +165,9 @@ def compact_signal_row(cycle: dict[str, Any] | None) -> dict[str, Any]:
     """Project a diagnostics cycle into the forensic signal contract."""
     row = dict(cycle or {})
     signal_id = _as_str(row.get("signal_id") or row.get("candidate_signal_id"))
-    scan_as_of = _as_str(row.get("scan_as_of") or row.get("as_of") or row.get("tick_time"))
+    scan_as_of = _as_str(
+        row.get("scan_as_of") or row.get("as_of") or row.get("tick_time")
+    )
     symbol = _as_str(row.get("symbol")) or "XAUUSD_i"
     observation_id = signal_id or (
         f"obs:{scan_as_of or row.get('recorded_at') or _now_iso()}:{symbol}"
@@ -173,9 +175,7 @@ def compact_signal_row(cycle: dict[str, Any] | None) -> dict[str, Any]:
     _handoff_value = row.get("execution_handoff")
     handoff = _handoff_value if isinstance(_handoff_value, dict) else {}
     ticket = _ticket(
-        row.get("mt5_ticket")
-        or row.get("ticket")
-        or handoff.get("mt5_ticket")
+        row.get("mt5_ticket") or row.get("ticket") or handoff.get("mt5_ticket")
     )
     canonical = _as_str(row.get("canonical_symbol"))
     broker_symbol = _as_str(row.get("broker_symbol")) or symbol
@@ -235,8 +235,12 @@ def compact_signal_row(cycle: dict[str, Any] | None) -> dict[str, Any]:
         "consensus_score": _score_from(row, "consensus_score", "consensus"),
         "volatility_score": _score_from(row, "volatility_score", "volatility"),
         "regime_score": _score_from(row, "regime_score", "regime"),
-        "price_action_score": _score_from(row, "price_action_score", "price_action", "pa"),
-        "rr": _as_float(row.get("rr") or row.get("expected_rr") or _score_from(row, "rr")),
+        "price_action_score": _score_from(
+            row, "price_action_score", "price_action", "pa"
+        ),
+        "rr": _as_float(
+            row.get("rr") or row.get("expected_rr") or _score_from(row, "rr")
+        ),
         "ob_state": _as_str(row.get("ob_state") or row.get("order_block_state")),
         "fvg_state": _as_str(row.get("fvg_state")),
         "bos_state": _as_str(row.get("bos_state")),
@@ -268,7 +272,9 @@ def compact_signal_row(cycle: dict[str, Any] | None) -> dict[str, Any]:
             "zone_score": _score_from(row, "zone_score", "zone"),
             "ob_state": _as_str(row.get("ob_state") or row.get("order_block_state")),
             "fvg_state": _as_str(row.get("fvg_state")),
-            "displacement_score": _score_from(row, "displacement_score", "displacement"),
+            "displacement_score": _score_from(
+                row, "displacement_score", "displacement"
+            ),
             "momentum_score": _score_from(row, "momentum_score", "momentum"),
             "timing_score": _score_from(row, "timing_score", "timing", "timing_retest"),
             "volatility_score": _score_from(row, "volatility_score", "volatility"),
@@ -277,10 +283,15 @@ def compact_signal_row(cycle: dict[str, Any] | None) -> dict[str, Any]:
             "regime": _as_str(row.get("market_regime")),
             "spread": _as_float(row.get("spread")),
             "margin": _as_float(row.get("margin") or row.get("margin_level")),
-            "entry": _as_float(row.get("entry") or row.get("entry_price") or row.get("bid")),
+            "entry": _as_float(
+                row.get("entry") or row.get("entry_price") or row.get("bid")
+            ),
             "sl": _as_float(row.get("sl") or row.get("stop") or row.get("stop_loss")),
-            "tp": _as_float(row.get("tp") or row.get("target") or row.get("take_profit")),
-            "timestamp": _as_str(row.get("recorded_at") or row.get("scan_as_of")) or _now_iso(),
+            "tp": _as_float(
+                row.get("tp") or row.get("target") or row.get("take_profit")
+            ),
+            "timestamp": _as_str(row.get("recorded_at") or row.get("scan_as_of"))
+            or _now_iso(),
             "bos_state": _as_str(row.get("bos_state")),
             "choch_state": _as_str(row.get("choch_state")),
             "scan_as_of": _as_str(row.get("scan_as_of") or row.get("as_of")),
@@ -320,7 +331,9 @@ def compact_submission_row(cycle: dict[str, Any] | None) -> dict[str, Any] | Non
         "mt5_request": src.get("mt5_request") or handoff.get("mt5_request"),
         "mt5_retcode": _as_int(src.get("mt5_retcode") or handoff.get("mt5_retcode")),
         "ticket": ticket,
-        "entry_price": _as_float(src.get("entry_price") or src.get("entry") or src.get("price")),
+        "entry_price": _as_float(
+            src.get("entry_price") or src.get("entry") or src.get("price")
+        ),
         "requested_volume": _as_float(src.get("requested_volume") or src.get("volume")),
         "executed_volume": _as_float(src.get("executed_volume") or src.get("volume")),
         "sl": _as_float(src.get("sl") or src.get("stop") or src.get("stop_loss")),
@@ -350,7 +363,9 @@ def compact_submission_row(cycle: dict[str, Any] | None) -> dict[str, Any] | Non
             "market_regime": row.get("market_regime"),
         },
         "decision_snapshot": dict(row.get("decision_snapshot") or {}),
-        "order_id": _as_int(src.get("order_id") or src.get("order") or handoff.get("order_id")),
+        "order_id": _as_int(
+            src.get("order_id") or src.get("order") or handoff.get("order_id")
+        ),
         "deal_id": _as_int(src.get("deal_id") or handoff.get("deal_id")),
         "immutable": True,
     }
@@ -370,7 +385,9 @@ def compact_close_row(cycle: dict[str, Any] | None) -> dict[str, Any] | None:
         )
     )
     exit_px = _as_float(src.get("exit") or src.get("exit_price"))
-    pnl = _as_float(src.get("net_pnl") if src.get("net_pnl") is not None else src.get("profit_loss"))
+    pnl = _as_float(
+        src.get("net_pnl") if src.get("net_pnl") is not None else src.get("profit_loss")
+    )
     if ticket is None or (exit_px is None and pnl is None):
         return None
     signal = compact_signal_row(src)
@@ -391,7 +408,9 @@ def compact_close_row(cycle: dict[str, Any] | None) -> dict[str, Any] | None:
         "exit_price": exit_px,
         "realized_pnl": pnl,
         "R": _as_float(src.get("R_multiple") or src.get("R") or src.get("risk_reward")),
-        "holding_time": _as_float(src.get("holding_time") or src.get("holding_time_sec")),
+        "holding_time": _as_float(
+            src.get("holding_time") or src.get("holding_time_sec")
+        ),
         "exit_reason": _as_str(src.get("exit_reason") or src.get("comment")),
         "MAE": _as_float(src.get("MAE") or src.get("maximum_adverse_excursion")),
         "MFE": _as_float(src.get("MFE") or src.get("maximum_favorable_excursion")),
@@ -405,7 +424,8 @@ def compact_close_row(cycle: dict[str, Any] | None) -> dict[str, Any] | None:
         "cycle_id": signal.get("cycle_id"),
         "snapshot_id": signal.get("snapshot_id"),
         "decision_snapshot": dict(signal.get("decision_snapshot") or {}),
-        "timestamp_utc": _as_str(src.get("exit_time") or src.get("recorded_at")) or _now_iso(),
+        "timestamp_utc": _as_str(src.get("exit_time") or src.get("recorded_at"))
+        or _now_iso(),
     }
 
 
@@ -449,12 +469,16 @@ def classify_closed_deal(
         return row
     signal: dict[str, Any] | None = None
     for sig in signals if signals is not None else list_signals():
-        if identity_overlap(matched_sub, sig) or _ticket(sig.get("mt5_ticket")) == ticket:
+        if (
+            identity_overlap(matched_sub, sig)
+            or _ticket(sig.get("mt5_ticket")) == ticket
+        ):
             if identity_overlap(matched_sub, sig) or identity_overlap(deal, sig):
                 signal = sig
                 break
             if _ticket(sig.get("mt5_ticket")) == ticket and (
-                identity_overlap(matched_sub, sig) or identity_overlap(matched_sub, deal)
+                identity_overlap(matched_sub, sig)
+                or identity_overlap(matched_sub, deal)
             ):
                 signal = sig
                 break
@@ -516,7 +540,11 @@ def persist_submission(row: dict[str, Any]) -> dict[str, Any]:
         return row
     with _LOCK:
         existing_idx = next(
-            (i for i, s in enumerate(_SUBMISSIONS) if _ticket(s.get("ticket")) == ticket),
+            (
+                i
+                for i, s in enumerate(_SUBMISSIONS)
+                if _ticket(s.get("ticket")) == ticket
+            ),
             None,
         )
         if existing_idx is not None:
@@ -543,7 +571,11 @@ def persist_close(row: dict[str, Any]) -> dict[str, Any]:
     with _LOCK:
         if ticket is not None:
             existing_idx = next(
-                (i for i, c in enumerate(_CLOSES) if _ticket(c.get("ticket")) == ticket),
+                (
+                    i
+                    for i, c in enumerate(_CLOSES)
+                    if _ticket(c.get("ticket")) == ticket
+                ),
                 None,
             )
             if existing_idx is not None:

@@ -206,9 +206,7 @@ class LiveAccountRiskTracker:
     @staticmethod
     def _is_trade_deal(deal: Any) -> bool:
         """True for market buy/sell fills. Balance/credit/deposit never count."""
-        dtype = str(
-            LiveAccountRiskTracker._deal_value(deal, "deal_type", "type") or ""
-        )
+        dtype = str(LiveAccountRiskTracker._deal_value(deal, "deal_type", "type") or "")
         low = dtype.lower()
         if any(
             tok in low

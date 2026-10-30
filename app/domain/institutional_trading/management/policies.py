@@ -371,10 +371,7 @@ def plan_action(
     regime = volatility_regime(context.atr, mid, config)
 
     be_at = profile.break_even_at_r
-    if (
-        trade_class == "SCALP"
-        and getattr(config, "session_aware_management", False)
-    ):
+    if trade_class == "SCALP" and getattr(config, "session_aware_management", False):
         sess = str(getattr(context, "market_session", "") or "").lower()
         if sess in {"sydney", "tokyo", "asian"}:
             # Earlier break-even timing in thin sessions (SCALP only).
@@ -479,9 +476,7 @@ def plan_action(
         and bool(getattr(config, "second_partial_enabled", False))
         and r >= Decimal(str(getattr(config, "second_partial_at_r", "3.0") or "3.0"))
     ):
-        pct = Decimal(
-            str(getattr(config, "second_partial_close_pct", "25") or "25")
-        )
+        pct = Decimal(str(getattr(config, "second_partial_close_pct", "25") or "25"))
         # Reuse partial_close_volume math with temporary pct via remaining * pct/100
         vol = (position.remaining_volume * pct / Decimal("100")).quantize(
             config.volume_step

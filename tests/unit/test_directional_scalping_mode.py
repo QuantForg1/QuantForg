@@ -255,9 +255,7 @@ def test_empty_trading_mode_applies_scalping() -> None:
 
 
 def test_hard_risk_safety_and_leverage_unchanged() -> None:
-    src = (_APP / "domain" / "trading" / "xauusd_specs.py").read_text(
-        encoding="utf-8"
-    )
+    src = (_APP / "domain" / "trading" / "xauusd_specs.py").read_text(encoding="utf-8")
     assert 'MAX_LEVERAGE = Decimal("2000")' in src
     assert Decimal("2000") == MAX_LEVERAGE
     assert OPPORTUNITY_SCORE_THRESHOLD == 70

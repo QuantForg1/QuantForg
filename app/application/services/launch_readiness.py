@@ -329,8 +329,7 @@ def build_launch_readiness(
         market_state = "GATEWAY_UNAVAILABLE"
         market_code = "GATEWAY_OFFLINE"
         market_why = (
-            "Not evaluated — MT5 Gateway offline "
-            "(not a market-hours determination)"
+            "Not evaluated — MT5 Gateway offline " "(not a market-hours determination)"
         )
         market_value = "UNAVAILABLE"
         market_blocks = False
@@ -542,9 +541,7 @@ def build_launch_readiness(
                 else (
                     "GATEWAY_OFFLINE"
                     if not gateway_ok
-                    else (
-                        "BROKER_DISCONNECTED" if not broker_ok else "MT5_NOT_READY"
-                    )
+                    else ("BROKER_DISCONNECTED" if not broker_ok else "MT5_NOT_READY")
                 )
             ),
         ),
@@ -580,9 +577,7 @@ def build_launch_readiness(
                 else (
                     "GATEWAY_OFFLINE"
                     if not gateway_ok
-                    else (
-                        "BROKER_DISCONNECTED" if not broker_ok else "NO_QUOTE"
-                    )
+                    else ("BROKER_DISCONNECTED" if not broker_ok else "NO_QUOTE")
                 )
             ),
         ),
@@ -641,25 +636,19 @@ def build_launch_readiness(
         next_target = "LIVE" if ready_for_live else "CANARY"
         ready_for_promotion = ready_for_canary
         blockers = tuple(
-            _blocker_dict(i)
-            for i in items
-            if not i.passed and i.required_for_canary
+            _blocker_dict(i) for i in items if not i.passed and i.required_for_canary
         )
     elif mode is OpsExecutionMode.CANARY:
         next_target = "LIVE"
         ready_for_promotion = ready_for_live
         blockers = tuple(
-            _blocker_dict(i)
-            for i in items
-            if not i.passed and i.required_for_live
+            _blocker_dict(i) for i in items if not i.passed and i.required_for_live
         )
     else:
         next_target = "NONE"
         ready_for_promotion = False
         blockers = tuple(
-            _blocker_dict(i)
-            for i in items
-            if not i.passed and i.blocks_execution
+            _blocker_dict(i) for i in items if not i.passed and i.blocks_execution
         )
 
     exec_blockers = tuple(i for i in items if not i.passed and i.blocks_execution)

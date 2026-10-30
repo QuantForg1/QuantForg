@@ -71,8 +71,7 @@ class TradeDecisionEngine:
         direction = signal_direction
 
         hard_fail = (
-            not eligibility.eligible
-            or confluence.direction is TradeDirection.NONE
+            not eligibility.eligible or confluence.direction is TradeDirection.NONE
         )
         if not cfg.is_scalping():
             hard_fail = hard_fail or (
@@ -224,9 +223,7 @@ class TradeDecisionEngine:
             if snapshot.trend.macro_bias is TrendDirection.DOWN:
                 invalidations.append("H4 flips bearish")
         elif direction is TradeDirection.SELL:
-            stop = _zone(
-                anchor + stop_dist * Decimal("0.5"), anchor + stop_dist
-            )
+            stop = _zone(anchor + stop_dist * Decimal("0.5"), anchor + stop_dist)
             target = _zone(
                 anchor - stop_dist * Decimal("2.5"),
                 anchor - stop_dist * Decimal("2"),

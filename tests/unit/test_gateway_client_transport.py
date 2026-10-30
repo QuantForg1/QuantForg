@@ -247,7 +247,7 @@ class TestGatewayHttpTransport:
 
         mod.httpx.Client = PatchedClient  # type: ignore[misc]
         try:
-            with pytest.raises(RuntimeError, match="CALLER_TOKEN|not configured"):
+            with pytest.raises(RuntimeError, match=r"CALLER_TOKEN|not configured"):
                 # Protected route — /health intentionally omits auth.
                 client._request("GET", "/account")
         finally:
@@ -328,7 +328,11 @@ class TestGatewayHttpTransport:
                 )
             return httpx.Response(
                 200,
-                json={"status": "ok", "bridge_available": True, "token_configured": True},
+                json={
+                    "status": "ok",
+                    "bridge_available": True,
+                    "token_configured": True,
+                },
             )
 
         transport = httpx.MockTransport(handler)

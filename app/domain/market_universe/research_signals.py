@@ -56,9 +56,8 @@ def build_research_signals(
         decision_hash = hashlib.sha256(
             json.dumps(identity, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()[:16]
-        evidence = (
-            row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
-        )
+        _evidence_value = row.get("evidence")
+        evidence = _evidence_value if isinstance(_evidence_value, dict) else {}
         signals.append(
             {
                 "kind": "RESEARCH_SIGNAL",
@@ -166,9 +165,7 @@ def build_research_signals(
                 "structure_score": _u(row.get("structure_score")),
                 "liquidity": _u(row.get("liquidity_score")),
                 "liquidity_score": _u(row.get("liquidity_score")),
-                "momentum": _u(
-                    row.get("momentum_score") or evidence.get("MOMENTUM")
-                ),
+                "momentum": _u(row.get("momentum_score") or evidence.get("MOMENTUM")),
                 "momentum_score": _u(row.get("momentum_score")),
                 "volatility_score": _u(row.get("volatility_score")),
                 "invalidation": _u(

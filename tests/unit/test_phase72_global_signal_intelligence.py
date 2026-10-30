@@ -36,8 +36,7 @@ def test_research_lifecycle_states() -> None:
         == "MARKET_CLOSED"
     )
     assert (
-        research_lifecycle(data_state="NO_DATA", has_score=False)
-        == "DATA_UNAVAILABLE"
+        research_lifecycle(data_state="NO_DATA", has_score=False) == "DATA_UNAVAILABLE"
     )
     assert research_lifecycle(data_state="ERROR", has_score=False) == "FAILED"
     assert (

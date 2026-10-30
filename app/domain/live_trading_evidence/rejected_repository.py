@@ -63,9 +63,8 @@ def _normalize_rejection(row: dict[str, Any], *, source: str) -> dict[str, Any]:
         or (reasons[0] if reasons else None)
     )
     # Never invent a reason — leave null if absent
-    ctx = (
-        row.get("market_context") if isinstance(row.get("market_context"), dict) else {}
-    )
+    _ctx_value = row.get("market_context")
+    ctx = _ctx_value if isinstance(_ctx_value, dict) else {}
     return {
         "id": str(
             row.get("trace_id")

@@ -134,8 +134,12 @@ def test_strategy_stats_and_live_rank(tmp_path: Path) -> None:
     book.record_evaluation("smc_scalping", passed=True)
     book.record_evaluation("smc_scalping", passed=False)
     book.record_accepted("smc_scalping", latency_ms=400.0)
-    book.record_closed("smc_scalping", win=True, pnl=10.0, hold_minutes=5.0, r_multiple=1.2)
-    book.record_closed("smc_scalping", win=False, pnl=-4.0, hold_minutes=3.0, r_multiple=-1.0)
+    book.record_closed(
+        "smc_scalping", win=True, pnl=10.0, hold_minutes=5.0, r_multiple=1.2
+    )
+    book.record_closed(
+        "smc_scalping", win=False, pnl=-4.0, hold_minutes=3.0, r_multiple=-1.0
+    )
     snap = book.snapshot()
     assert "smc_scalping" in book.live_rank_boosts()
     row = next(r for r in snap["strategies"] if r["strategy_id"] == "smc_scalping")

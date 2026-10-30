@@ -154,12 +154,16 @@ def test_parent_child_gateway_is_one_tree_not_duplicate() -> None:
         {
             "pid": 7728,
             "ppid": 3168,
-            "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main",
+            "cmd": (
+                r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main"
+            ),
         },
         {
             "pid": 7848,
             "ppid": 7728,
-            "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main",
+            "cmd": (
+                r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main"
+            ),
         },
     ]
     listen = [7848]
@@ -229,8 +233,8 @@ def test_production_task_not_once_and_startup_ignore_new() -> None:
     assert "IgnoreNew" in text
     assert "Do NOT append -Once" in text
     assert (
-        '$arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Supervise`""'
-        in text
+        '$arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File '
+        '`"$Supervise`""' in text
     )
     assert (
         "-Once"
@@ -449,15 +453,17 @@ def test_watchdog_ps1_files_parse() -> None:
             "if ($errs) { $errs | ForEach-Object { $_.ToString() }; exit 1 }; "
             "exit 0"
         )
-        completed = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", cmd],
-            check=False,
-            capture_output=True,
-            text=True,
+        completed = (
+            subprocess.run(  # noqa: S603  # fixed parser command, not untrusted input
+                ["powershell", "-NoProfile", "-Command", cmd],  # noqa: S607
+                check=False,
+                capture_output=True,
+                text=True,
+            )
         )
-        assert completed.returncode == 0, (
-            f"{name}: {completed.stdout}\n{completed.stderr}"
-        )
+        assert (
+            completed.returncode == 0
+        ), f"{name}: {completed.stdout}\n{completed.stderr}"
 
 
 def test_autologon_detection_does_not_expose_password() -> None:

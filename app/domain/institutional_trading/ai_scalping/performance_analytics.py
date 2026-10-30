@@ -56,21 +56,20 @@ def build_performance_analytics() -> dict[str, Any]:
     # else undefined / infinite — leave null, never invent
 
     avg_rr = None
-    rr_vals = [
-        _safe_float(getattr(r, "r_multiple", None))
-        for r in learning_rows
-        if getattr(r, "r_multiple", None) is not None
-    ]
-    rr_vals = [v for v in rr_vals if v is not None]
-    if rr_vals:
-        avg_rr = sum(rr_vals) / len(rr_vals)
+    rr_clean: list[float] = []
+    for r in learning_rows:
+        rr = _safe_float(getattr(r, "r_multiple", None))
+        if rr is not None:
+            rr_clean.append(rr)
+    if rr_clean:
+        avg_rr = sum(rr_clean, 0.0) / len(rr_clean)
 
-    holds = [
-        getattr(r, "holding_time_minutes", None)
-        for r in learning_rows
-        if getattr(r, "holding_time_minutes", None) is not None
-    ]
-    avg_hold = (sum(float(h) for h in holds) / len(holds)) if holds else None
+    hold_clean: list[float] = []
+    for r in learning_rows:
+        hold = getattr(r, "holding_time_minutes", None)
+        if hold is not None:
+            hold_clean.append(float(hold))
+    avg_hold = (sum(hold_clean, 0.0) / len(hold_clean)) if hold_clean else None
 
     qualities = [int(getattr(r, "quality", 0) or 0) for r in learning_rows]
     confidences = [int(getattr(r, "confidence", 0) or 0) for r in learning_rows]

@@ -134,9 +134,7 @@ class ProvenanceStore:
             ),
             verified=verified,
             status=(
-                "VERIFIED_RESEARCH_RESULT"
-                if verified
-                else "UNVERIFIED_RESEARCH_RESULT"
+                "VERIFIED_RESEARCH_RESULT" if verified else "UNVERIFIED_RESEARCH_RESULT"
             ),
         )
         if missing:

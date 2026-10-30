@@ -7,6 +7,7 @@ If the best disappears, peek_next_eligible() returns the next ranked candidate.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -116,12 +117,10 @@ def peek_next_eligible(
             if sym in exclude:
                 continue
             ts = str(row.get("timestamp") or "")
-            try:
+            with contextlib.suppress(Exception):
                 when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                 if when < cutoff:
                     continue
-            except Exception:
-                pass
             return dict(row)
     return None
 

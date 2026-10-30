@@ -5,6 +5,7 @@ Does not enable live trading on GET. Never fabricates broker state.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -32,6 +33,7 @@ from app.domain.institutional_trading.live_trading_control import (
     LiveTradingTransitionError,
     spec_from_broker,
 )
+from app.domain.institutional_trading.operations.models import OperatorIdentity
 from app.presentation.dependencies.auth import require_roles
 
 router = APIRouter(prefix="/live-trading", tags=["live-trading-control"])
@@ -46,7 +48,7 @@ def _operator(
     user: AuthUserDTO,
     request: Request,
     x_forwarded_for: str | None = Header(default=None),
-):
+) -> OperatorIdentity:
     ip = x_forwarded_for or (request.client.host if request.client else None)
     ua = request.headers.get("user-agent")
     return operator_from_user(user, ip=ip, user_agent=ua)
@@ -323,11 +325,9 @@ def live_trading_evaluate(body: EvaluateBody, _user: OperatorUser) -> dict[str, 
     return evaluate_live_order_request(req)
 
 
-def _d(value: str | None):
+def _d(value: str | None) -> Decimal | None:
     if value is None or value == "":
         return None
-    from decimal import Decimal
-
     try:
         return Decimal(str(value))
     except Exception:

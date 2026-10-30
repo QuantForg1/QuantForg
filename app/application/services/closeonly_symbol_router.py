@@ -183,9 +183,11 @@ def select_full_mode_symbol(
                 seen.add(key)
                 kept.append(display_autonomous_symbol(code))
             if not kept:
-                kept = [canonical_gold_execution_symbol(
-                    candidates[0] if candidates else None
-                )]
+                kept = [
+                    canonical_gold_execution_symbol(
+                        candidates[0] if candidates else None
+                    )
+                ]
             candidates = list(kept)
     except Exception:
         logger.exception("gold_only_full_mode_filter_failed")

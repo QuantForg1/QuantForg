@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.domain.institutional_trading.ai_scalping import (
+    institutional_performance_kpis as _q20,
+)
 from app.domain.institutional_trading.ai_scalping.adaptive_recommendations import (
     build_adaptive_recommendations,
 )
@@ -17,9 +20,6 @@ from app.domain.institutional_trading.ai_scalping.institutional_learning_engine 
     LearningObservation,
     observe_from_learning_trade,
 )
-from app.domain.institutional_trading.ai_scalping.institutional_performance_kpis import (  # noqa: E501
-    build_institutional_performance_kpis,
-)
 from app.domain.institutional_trading.ai_scalping.institutional_period_reports import (
     build_institutional_period_reports,
 )
@@ -29,6 +29,8 @@ from app.domain.institutional_trading.ai_scalping.pattern_intelligence import (
 from app.domain.institutional_trading.ai_scalping.portfolio_intelligence_v2 import (
     build_portfolio_intelligence_v2,
 )
+
+build_institutional_performance_kpis = _q20.build_institutional_performance_kpis
 
 
 @dataclass

@@ -39,7 +39,13 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
         return "RISK"
     if any(
         tok in abort
-        for tok in ("ELIGIBILITY", "CONFLUENCE", "QUALITY", "IGNORED_ACTION", "MISSING_ZONES")
+        for tok in (
+            "ELIGIBILITY",
+            "CONFLUENCE",
+            "QUALITY",
+            "IGNORED_ACTION",
+            "MISSING_ZONES",
+        )
     ):
         return "ELIGIBILITY"
     if any(tok in abort for tok in ("EXPIRED", "STALE", "INPUT_HASH")):
@@ -58,10 +64,7 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
         )
     ):
         return "EXECUTION_HEALTH"
-    if any(
-        tok in abort
-        for tok in ("HEALTH",)
-    ) and "INPUT_HASH" not in abort:
+    if any(tok in abort for tok in ("HEALTH",)) and "INPUT_HASH" not in abort:
         return "EXECUTION_HEALTH"
     if any(tok in abort for tok in ("OPTIMIZER", "DEFER")):
         return "OPTIMIZER"
@@ -131,8 +134,10 @@ def build_execution_handoff(
         "0",
     }
     forwarded = bool(forwarded_to_oms)
-    risk_block = stage == "RISK" or "DAILY_LOSS" in abort or (
-        "RISK" in abort and "REJECT_BURST" not in abort
+    risk_block = (
+        stage == "RISK"
+        or "DAILY_LOSS" in abort
+        or ("RISK" in abort and "REJECT_BURST" not in abort)
     )
     safety_block = stage == "SAFETY" or (
         "SAFETY" in abort or "KILL" in abort or "AUTOTRADING" in abort

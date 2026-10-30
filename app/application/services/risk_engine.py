@@ -1526,9 +1526,11 @@ class RiskEngine:
                         "risk reduce requested but already at broker min_lot - "
                         "keeping min_lot"
                     )
-                    from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
-                        lot_dollar_risk,
+                    from app.domain.institutional_trading.operations import (
+                        min_lot_feasibility as _qf_min_lot_feasibility,
                     )
+
+                    lot_dollar_risk = _qf_min_lot_feasibility.lot_dollar_risk
                     from app.domain.institutional_trading.owner_live_limits import (
                         planned_risk_usd as _owner_planned_risk,
                         price_unit_value as _price_unit_value,
@@ -1580,11 +1582,13 @@ class RiskEngine:
 
         stop_for_actual = size.stop_distance or check.stop_loss_distance or Decimal("0")
         if approved > 0 and stop_for_actual > 0:
-            from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
-                actual_planned_sl_band_reason,
-                format_planned_sl_reject_detail,
-                lot_dollar_risk,
+            from app.domain.institutional_trading.operations import (
+                min_lot_feasibility as _q1585,
             )
+
+            actual_planned_sl_band_reason = _q1585.actual_planned_sl_band_reason
+            format_planned_sl_reject_detail = _q1585.format_planned_sl_reject_detail
+            lot_dollar_risk = _q1585.lot_dollar_risk
 
             actual = lot_dollar_risk(
                 approved,

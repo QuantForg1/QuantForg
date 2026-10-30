@@ -42,7 +42,7 @@ class SpreadAssessment:
 
 def _record_spread(symbol: str | None, spread: Decimal) -> deque[Decimal]:
     # Per-symbol only — never GLOBAL. Mixing FX (~0.0004) into gold history made
-    # LIVE XAUUSD spread 0.474 look "abnormal >2.5× median" and aborted OMS.
+    # LIVE XAUUSD spread 0.474 look "abnormal >2.5x median" and aborted OMS.
     key = (symbol or "").strip().upper()
     if not key:
         return deque(maxlen=64)
@@ -106,26 +106,27 @@ def assess_spread(
     med_s = str(med) if med is not None else None
     abnormal = False
     # Abnormality is symbol-local only (never cross-asset GLOBAL medians).
-    if symbol and med is not None and len(hist) >= 8 and med > 0:
-        # Abnormal: > 2.5× recent median (flash / liquidity vacuum)
-        if spread > med * Decimal("2.5"):
-            abnormal = True
+    # Abnormal: > 2.5x recent median (flash / liquidity vacuum)
+    if (
+        symbol
+        and med is not None
+        and len(hist) >= 8
+        and med > 0
+        and spread > med * Decimal("2.5")
+    ):
+        abnormal = True
 
     if spread > max_reject:
         return SpreadAssessment(
             score=0,
             confidence_penalty=cfg.spread_soft_penalty_max,
             reject=True,
-            reason=(
-                f"Spread {spread} exceeds configured reject {max_reject}"
-            ),
+            reason=(f"Spread {spread} exceeds configured reject {max_reject}"),
             historical_median=med_s,
             abnormal_vs_history=abnormal,
         )
     if atr is not None and atr > 0 and atr_pct_limit > 0:
-        atr_cap = (atr * atr_pct_limit / Decimal("100")).quantize(
-            Decimal("0.0001")
-        )
+        atr_cap = (atr * atr_pct_limit / Decimal("100")).quantize(Decimal("0.0001"))
         if atr_cap_floor > 0 and atr_cap < atr_cap_floor:
             atr_cap = atr_cap_floor
         if spread > atr_cap:
@@ -134,8 +135,7 @@ def assess_spread(
                 confidence_penalty=cfg.spread_soft_penalty_max,
                 reject=True,
                 reason=(
-                    f"Spread {spread} exceeds {atr_pct_limit}% of ATR "
-                    f"({atr_cap})"
+                    f"Spread {spread} exceeds {atr_pct_limit}% of ATR " f"({atr_cap})"
                 ),
                 historical_median=med_s,
                 abnormal_vs_history=abnormal,
@@ -147,7 +147,7 @@ def assess_spread(
             reject=True,
             reason=(
                 f"Abnormal spread {spread} vs historical median {med} "
-                f"(>{Decimal('2.5')}×)"
+                f"(>{Decimal('2.5')}x)"
             ),
             historical_median=med_s,
             abnormal_vs_history=True,
@@ -162,10 +162,7 @@ def assess_spread(
             abnormal_vs_history=False,
         )
     span = max_reject - max_full
-    if span <= 0:
-        ratio = Decimal("1")
-    else:
-        ratio = (spread - max_full) / span
+    ratio = Decimal("1") if span <= 0 else (spread - max_full) / span
     ratio = max(Decimal("0"), min(Decimal("1"), ratio))
     score = int(max(0, float(100 * (1 - ratio))))
     penalty = round(float(ratio) * cfg.spread_soft_penalty_max)

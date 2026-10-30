@@ -223,7 +223,9 @@ async def test_scan_purpose_skips_history_deals(
     monkeypatch.setattr(ud, "_CATALOGUE_CACHE", None)
     _patch_analyze(monkeypatch)
     adapter = _ready_adapter()
-    adapter.history_deals = MagicMock(side_effect=AssertionError("scan must not load deals"))
+    adapter.history_deals = MagicMock(
+        side_effect=AssertionError("scan must not load deals")
+    )
     ctx = await build_ite_cycle_market_context(adapter, purpose="scan")
     assert ctx.ok is True
     adapter.history_deals.assert_not_called()

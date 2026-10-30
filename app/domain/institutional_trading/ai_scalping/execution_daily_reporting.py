@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,8 +28,12 @@ def build_execution_daily_report() -> dict[str, Any]:
         eq = {}
 
     try:
-        from app.domain.institutional_trading.ai_scalping.execution_quality_analytics import (  # noqa: E501
-            get_execution_quality_analytics_store,
+        from app.domain.institutional_trading.ai_scalping import (
+            execution_quality_analytics as _q31,
+        )
+
+        get_execution_quality_analytics_store = (
+            _q31.get_execution_quality_analytics_store
         )
 
         rich = get_execution_quality_analytics_store().snapshot()
@@ -65,7 +70,7 @@ def build_execution_daily_report() -> dict[str, Any]:
     # Uptime proxies from live health if available (never invent 100%)
     gateway_uptime = None
     broker_uptime = None
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.ai_scalping.live_health import (
             get_live_health_monitor,
         )
@@ -76,14 +81,11 @@ def build_execution_daily_report() -> dict[str, Any]:
                 "gateway_ok"
             )
             broker_uptime = health.get("mt5_uptime_pct") or health.get("mt5_connected")
-    except Exception:
-        pass
 
     return {
         "as_of": _iso(),
-        "execution_quality": rich.get("avg_execution_score") or eq.get(
-            "execution_success_rate"
-        ),
+        "execution_quality": rich.get("avg_execution_score")
+        or eq.get("execution_success_rate"),
         "average_latency_ms": rich.get("avg_latency_ms") or eq.get("avg_latency_ms"),
         "average_slippage": rich.get("avg_slippage") or eq.get("avg_slippage"),
         "broker_uptime": broker_uptime,

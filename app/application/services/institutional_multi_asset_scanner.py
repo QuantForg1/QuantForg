@@ -12,6 +12,7 @@ Does not bypass AI, Risk, PRE, OMS, or MT5.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 import time
 from collections.abc import Sequence
@@ -78,11 +79,7 @@ def _isolated_symbol_failure(symbol: str, reason: str) -> dict[str, Any]:
     hay = str(reason or "").upper()
     if "TIMEOUT" in hay or "CYCLE_BUDGET" in hay:
         status = "SYMBOL_TIMEOUT"
-    elif (
-        "SCORING" in hay
-        or "AI_SCORE" in hay
-        or "EXECUTION_ERROR" in hay
-    ):
+    elif "SCORING" in hay or "AI_SCORE" in hay or "EXECUTION_ERROR" in hay:
         status = "SCORING_ERROR"
     else:
         status = "SYMBOL_CONTEXT_NOT_READY"
@@ -173,12 +170,16 @@ def _is_hard_routing_reject(reason: Any) -> bool:
 def _row_direction(row: dict[str, Any]) -> str:
     raw_sniper = row.get("sniper_entry")
     sniper = raw_sniper if isinstance(raw_sniper, dict) else {}
-    raw = str(
-        row.get("direction")
-        or row.get("signal_action")
-        or (sniper.get("action") if isinstance(sniper, dict) else "")
-        or ""
-    ).strip().upper()
+    raw = (
+        str(
+            row.get("direction")
+            or row.get("signal_action")
+            or (sniper.get("action") if isinstance(sniper, dict) else "")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
     return raw if raw in {"BUY", "SELL"} else ""
 
 
@@ -279,7 +280,9 @@ def _publish_scan_observation(payload: dict[str, Any]) -> None:
         for key in ("rows", "ranked", "noc_rows", "opportunity_ranked"):
             block = payload.get(key)
             if isinstance(block, list):
-                scored.extend([r for r in block if isinstance(r, dict) and r.get("symbol")])
+                scored.extend(
+                    [r for r in block if isinstance(r, dict) and r.get("symbol")]
+                )
         row = scored[0] if scored else {}
         action = str(row.get("signal_action") or "").upper()
         if action not in {"WAIT", "NO_TRADE"}:
@@ -331,7 +334,10 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
     _sniper_value = row.get("sniper_entry")
     sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
     action = str(
-        row.get("signal_action") or sniper.get("action") or row.get("direction") or "WAIT"
+        row.get("signal_action")
+        or sniper.get("action")
+        or row.get("direction")
+        or "WAIT"
     ).upper()
     logger.warning(
         "xauusd_signal_scan",
@@ -410,7 +416,9 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         liquidity = factors.get("liquidity_sweep") or factors.get("liquidity")
     volatility = None
     if vol_dec:
-        volatility = vol_dec.get("band") or vol_dec.get("reason") or vol_dec.get("passed")
+        volatility = (
+            vol_dec.get("band") or vol_dec.get("reason") or vol_dec.get("passed")
+        )
     if volatility is None:
         volatility = score.get("market_regime") or factors.get("volatility")
     blocker = None
@@ -419,6 +427,7 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         reasons = score.get("reject_reasons") or score.get("failed_gates")
         if not blocker and isinstance(reasons, list) and reasons:
             blocker = str(reasons[0])
+    reject_reasons_raw = score.get("reject_reasons")
     return {
         "symbol": str(score.get("symbol") or "").upper(),
         "quality": quality,
@@ -428,13 +437,15 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         "volatility": volatility,
         "decision": decision,
         "direction": direction,
-        "signal_action": signal_action if signal_action in {"BUY", "SELL", "WAIT"} else decision,
+        "signal_action": (
+            signal_action if signal_action in {"BUY", "SELL", "WAIT"} else decision
+        ),
         "blocking_gate": blocker,
         "reject": reject,
         "reject_reason": score.get("reject_reason"),
         "reject_reasons": (
-            list(score.get("reject_reasons"))
-            if isinstance(score.get("reject_reasons"), (list, tuple))
+            list(reject_reasons_raw)
+            if isinstance(reject_reasons_raw, (list, tuple))
             else []
         ),
         "eligible": (not reject) and direction in {"BUY", "SELL"},
@@ -832,9 +843,7 @@ def resolve_scan_universe(
         if execution_universe_fail_closed():
             return ()
         if gold_only_enabled():
-            return autonomous_execution_symbols(
-                broker_symbol_rows=broker_symbol_rows
-            )
+            return autonomous_execution_symbols(broker_symbol_rows=broker_symbol_rows)
         if broker_discovered_enabled():
             live = live_execution_symbols(mt5_adapter=mt5_adapter)
             if not live:
@@ -869,9 +878,11 @@ def resolve_scan_universe(
         boost: dict[str, float] = {}
         if getattr(cfg, "live_symbol_learning_enabled", True):
             try:
-                from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
-                    get_symbol_stats_book,
+                from app.domain.institutional_trading.ai_scalping import (
+                    symbol_production_stats as _q880,
                 )
+
+                get_symbol_stats_book = _q880.get_symbol_stats_book
 
                 book = get_symbol_stats_book()
                 book.expire_stale_demotions()
@@ -883,9 +894,11 @@ def resolve_scan_universe(
         # the scan to exact-string leftovers such as unsuffixed crypto.
         if getattr(cfg, "session_symbol_priority_enabled", True):
             try:
-                from app.domain.institutional_trading.ai_scalping.session_symbol_priority import (
-                    prioritize_universe_for_session,
+                from app.domain.institutional_trading.ai_scalping import (
+                    session_symbol_priority as _q894,
                 )
+
+                prioritize_universe_for_session = _q894.prioritize_universe_for_session
 
                 base = prioritize_universe_for_session(
                     base, session, performance_boost=boost
@@ -897,13 +910,15 @@ def resolve_scan_universe(
     seed = tuple(s for s in seed if s not in BROKER_UNAVAILABLE_SCALP_SYMBOLS)
 
     demoted: set[str] = set()
-    boost: dict[str, float] = {}
+    boost = {}
     seed_recovery: set[str] = set()
     if getattr(cfg, "live_symbol_learning_enabled", True):
         try:
-            from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
-                get_symbol_stats_book,
+            from app.domain.institutional_trading.ai_scalping import (
+                symbol_production_stats as _qf_symbol_production_stats,
             )
+
+            get_symbol_stats_book = _qf_symbol_production_stats.get_symbol_stats_book
 
             book = get_symbol_stats_book()
             # Cooldown expiry + recovery eligibility before universe assembly.
@@ -916,11 +931,13 @@ def resolve_scan_universe(
     base = seed
     if getattr(cfg, "dynamic_universe_enabled", False) and broker_symbol_rows:
         try:
-            from app.domain.institutional_trading.ai_scalping.universe_discovery import (
-                build_dynamic_scalping_universe,
-                discover_from_broker_rows,
-                resolve_seed_to_broker_symbol,
+            from app.domain.institutional_trading.ai_scalping import (
+                universe_discovery as _q929,
             )
+
+            build_dynamic_scalping_universe = _q929.build_dynamic_scalping_universe
+            discover_from_broker_rows = _q929.discover_from_broker_rows
+            resolve_seed_to_broker_symbol = _q929.resolve_seed_to_broker_symbol
 
             discovered = discover_from_broker_rows(list(broker_symbol_rows))
             # Catalogue-liquid seeds are recovery-eligible even if demoted.
@@ -974,7 +991,10 @@ def resolve_scan_universe(
                 elif len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}:
                     # Stale gold-only plane — keep dynamic / seed base
                     pass
-                elif getattr(cfg, "dynamic_universe_enabled", False) and broker_symbol_rows:
+                elif (
+                    getattr(cfg, "dynamic_universe_enabled", False)
+                    and broker_symbol_rows
+                ):
                     # LIVE broker discovery owns membership; plane must not
                     # shrink the liquid scalping universe back to a static seed.
                     pass
@@ -993,9 +1013,11 @@ def resolve_scan_universe(
 
     if getattr(cfg, "session_symbol_priority_enabled", True):
         try:
-            from app.domain.institutional_trading.ai_scalping.session_symbol_priority import (
-                prioritize_universe_for_session,
+            from app.domain.institutional_trading.ai_scalping import (
+                session_symbol_priority as _q1009,
             )
+
+            prioritize_universe_for_session = _q1009.prioritize_universe_for_session
 
             base = prioritize_universe_for_session(
                 base, session, performance_boost=boost
@@ -1071,9 +1093,7 @@ async def score_symbol_for_scan(
             code, f"market_context_error:{type(exc).__name__}"
         )
     if not ctx.ok or ctx.snapshot is None or ctx.account is None:
-        row = _isolated_symbol_failure(
-            code, ctx.reason or "market_context_unavailable"
-        )
+        row = _isolated_symbol_failure(code, ctx.reason or "market_context_unavailable")
         row["broker_symbol"] = code
         row["market_context_reason"] = ctx.reason
         row["broker_ok"] = False
@@ -1114,9 +1134,7 @@ async def score_symbol_for_scan(
         return payload
     except Exception as exc:
         logger.exception("multi_asset_score_failed", symbol=code)
-        return _isolated_symbol_failure(
-            code, f"SCORING_ERROR:{type(exc).__name__}"
-        )
+        return _isolated_symbol_failure(code, f"SCORING_ERROR:{type(exc).__name__}")
 
 
 async def run_institutional_multi_asset_scan(
@@ -1155,10 +1173,12 @@ async def run_institutional_multi_asset_scan(
             skipped = dict(last)
             skipped["overlap_skipped"] = True
             try:
-                from app.domain.institutional_trading.operations.fast_decision_path import (
-                    build_current_scan_decision,
-                    publish_current_scan_decision,
+                from app.domain.institutional_trading.operations import (
+                    fast_decision_path as _q1167,
                 )
+
+                build_current_scan_decision = _q1167.build_current_scan_decision
+                publish_current_scan_decision = _q1167.publish_current_scan_decision
 
                 current = skipped.get("current_scan")
                 if not isinstance(current, dict):
@@ -1268,14 +1288,14 @@ async def _run_institutional_multi_asset_scan_body(
         session_name = None
     if mt5_adapter is not None and getattr(cfg, "dynamic_universe_enabled", False):
         try:
-            from app.domain.institutional_trading.ai_scalping.universe_discovery import (
-                fetch_broker_symbol_rows,
+            from app.domain.institutional_trading.ai_scalping import (
+                universe_discovery as _qf_universe_discovery,
             )
 
+            fetch_broker_symbol_rows = _qf_universe_discovery.fetch_broker_symbol_rows
+
             # Offload sync catalogue I/O so login/health stay responsive.
-            broker_rows = await asyncio.to_thread(
-                fetch_broker_symbol_rows, mt5_adapter
-            )
+            broker_rows = await asyncio.to_thread(fetch_broker_symbol_rows, mt5_adapter)
         except Exception:
             logger.exception("broker_universe_fetch_failed")
     try:
@@ -1322,17 +1342,21 @@ async def _run_institutional_multi_asset_scan_body(
     as_of = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     if broker_rows:
         try:
-            from app.domain.institutional_trading.ai_scalping.universe_discovery import (
-                classify_catalogue_summary,
-                discover_from_broker_rows,
+            from app.domain.institutional_trading.ai_scalping import (
+                universe_discovery as _q1334,
             )
+
+            classify_catalogue_summary = _q1334.classify_catalogue_summary
+            discover_from_broker_rows = _q1334.discover_from_broker_rows
 
             logger.warning(
                 "scalping_dynamic_universe_resolved",
                 session=session_name,
                 universe_size=len(universe),
                 universe=list(universe),
-                catalogue=classify_catalogue_summary(discover_from_broker_rows(broker_rows)),
+                catalogue=classify_catalogue_summary(
+                    discover_from_broker_rows(broker_rows)
+                ),
             )
         except Exception:
             logger.exception("dynamic_universe_log_failed")
@@ -1447,9 +1471,11 @@ async def _run_institutional_multi_asset_scan_body(
         # Live learning: production scan stats (priority only — not gate weakening).
         if getattr(cfg, "live_symbol_learning_enabled", True):
             try:
-                from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
-                    get_symbol_stats_book,
+                from app.domain.institutional_trading.ai_scalping import (
+                    symbol_production_stats as _q1461,
                 )
+
+                get_symbol_stats_book = _q1461.get_symbol_stats_book
 
                 reason = str(row.get("reject_reason") or "")
                 reason_l = reason.lower()
@@ -1510,8 +1536,8 @@ async def _run_institutional_multi_asset_scan_body(
                 by_sym[sym] = evals
                 for ev in evals:
                     book.record_evaluation(ev.strategy_id, passed=ev.passed)
-            scored, strategy_global_best, strategy_winners = attach_strategies_to_scores(
-                scored, evaluations_by_symbol=by_sym
+            scored, strategy_global_best, strategy_winners = (
+                attach_strategies_to_scores(scored, evaluations_by_symbol=by_sym)
             )
             if strategy_global_best is not None:
                 logger.warning(
@@ -1534,12 +1560,14 @@ async def _run_institutional_multi_asset_scan_body(
 
     # Opportunity Ranking + Execution Probability + Trade Queue
     try:
+        from app.domain.institutional_trading.ai_scalping import (
+            institutional_trade_queue as _qf_institutional_trade_queue,
+        )
         from app.domain.institutional_trading.ai_scalping.execution_probability import (
             estimate_execution_probability,
         )
-        from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
-            rebuild_trade_queue,
-        )
+
+        rebuild_trade_queue = _qf_institutional_trade_queue.rebuild_trade_queue
         from app.domain.institutional_trading.ai_scalping.opportunity_ranking import (
             enrich_scores_with_opportunity,
             rank_by_opportunity_score,
@@ -1594,9 +1622,7 @@ async def _run_institutional_multi_asset_scan_body(
         logger.exception("run_multi_asset_scan_failed")
         scan = {
             "ranked": [
-                r
-                for r in scored
-                if isinstance(r, dict) and not r.get("reject")
+                r for r in scored if isinstance(r, dict) and not r.get("reject")
             ],
             "rows": [r for r in scored if isinstance(r, dict)],
             "best": None,
@@ -1620,9 +1646,7 @@ async def _run_institutional_multi_asset_scan_body(
         for r in ranked
         if isinstance(r, dict) and not r.get("reject")
     }
-    portfolio_rows = [
-        r for r in (scan.get("rows") or []) if isinstance(r, dict)
-    ]
+    portfolio_rows = [r for r in (scan.get("rows") or []) if isinstance(r, dict)]
 
     def _portfolio_has(sym: str) -> bool:
         if sym in portfolio_eligible:
@@ -1707,14 +1731,17 @@ async def _run_institutional_multi_asset_scan_body(
 
     scalp_traces: list[dict[str, Any]] = []
     ite_mode = str(getattr(ite_config, "trading_mode", "") or "scalping")
-    if ite_config is not None and hasattr(ite_config, "is_scalping"):
-        if not bool(ite_config.is_scalping()):
-            logger.warning(
-                "scanner_ite_config_not_scalping",
-                trading_mode=ite_mode,
-                note="SCALPING_V1 handoff predicates — swing 80/80 must not re-enter",
-            )
-            ite_mode = "scalping"
+    if (
+        ite_config is not None
+        and hasattr(ite_config, "is_scalping")
+        and not bool(ite_config.is_scalping())
+    ):
+        logger.warning(
+            "scanner_ite_config_not_scalping",
+            trading_mode=ite_mode,
+            note="SCALPING_V1 handoff predicates — swing 80/80 must not re-enter",
+        )
+        ite_mode = "scalping"
     for row in opportunity_ranked:
         if not isinstance(row, dict):
             continue
@@ -1749,10 +1776,12 @@ async def _run_institutional_multi_asset_scan_body(
     # If current best disappears, evaluate next ranked eligible from queue
     if best_symbol is None and not bool(scan.get("blocked_by_portfolio")):
         try:
-            from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
-                peek_next_eligible,
-                select_for_risk,
+            from app.domain.institutional_trading.ai_scalping import (
+                institutional_trade_queue as _qf_institutional_trade_queue,
             )
+
+            peek_next_eligible = _qf_institutional_trade_queue.peek_next_eligible
+            select_for_risk = _qf_institutional_trade_queue.select_for_risk
 
             excluded: set[str] = set(open_syms)
             nxt = peek_next_eligible(exclude_symbols=excluded)
@@ -1778,9 +1807,11 @@ async def _run_institutional_multi_asset_scan_body(
     # Mark every independent eligible for Risk visibility (multi-asset concurrent).
     if eligible_symbols and not bool(scan.get("blocked_by_portfolio")):
         try:
-            from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
-                select_for_risk,
+            from app.domain.institutional_trading.ai_scalping import (
+                institutional_trade_queue as _qf_institutional_trade_queue,
             )
+
+            select_for_risk = _qf_institutional_trade_queue.select_for_risk
 
             for sym in eligible_symbols:
                 select_for_risk(sym)
@@ -1841,9 +1872,7 @@ async def _run_institutional_multi_asset_scan_body(
             capacity_reason=ownership_facts.get("capacity_reason"),
             quantforg_open_count=ownership_facts.get("quantforg_open_count"),
             account_open_count=ownership_facts.get("account_open_count"),
-            manual_same_symbol_count=ownership_facts.get(
-                "manual_same_symbol_count"
-            ),
+            manual_same_symbol_count=ownership_facts.get("manual_same_symbol_count"),
             candidate_allowed=ownership_facts.get("candidate_allowed"),
             portfolio_eligible_count=len(portfolio_eligible),
             scan_universe_size=len(universe),
@@ -1875,9 +1904,10 @@ async def _run_institutional_multi_asset_scan_body(
             for r in opportunity_ranked
             if isinstance(r, dict) and str(r.get("symbol") or "").strip()
         }
-        prior = str(
-            opportunity_window_snapshot().get("current_focus") or ""
-        ).upper() or None
+        prior = (
+            str(opportunity_window_snapshot().get("current_focus") or "").upper()
+            or None
+        )
         held, focus_why = apply_focus_hysteresis(
             current_focus=prior,
             eligible_symbols=list(eligible_symbols),
@@ -1927,12 +1957,21 @@ async def _run_institutional_multi_asset_scan_body(
         sym = base["symbol"]
         port = by_sym.get(sym) or {}
         enriched = dict(base)
-        raw = next((r for r in scored if str(r.get("symbol") or "").upper() == sym), {})
-        enriched["opportunity_score"] = raw.get("opportunity_score")
-        enriched["estimated_probability"] = raw.get("estimated_probability")
-        enriched["strategy_id"] = raw.get("strategy_id")
-        enriched["strategy_quality"] = raw.get("strategy_quality")
-        enriched["strategy_confidence"] = raw.get("strategy_confidence")
+        empty_score: dict[str, Any] = {}
+        matched = next(
+            (
+                r
+                for r in scored
+                if isinstance(r, dict) and str(r.get("symbol") or "").upper() == sym
+            ),
+            empty_score,
+        )
+        score_row = matched if isinstance(matched, dict) else empty_score
+        enriched["opportunity_score"] = score_row.get("opportunity_score")
+        enriched["estimated_probability"] = score_row.get("estimated_probability")
+        enriched["strategy_id"] = score_row.get("strategy_id")
+        enriched["strategy_quality"] = score_row.get("strategy_quality")
+        enriched["strategy_confidence"] = score_row.get("strategy_confidence")
         if port.get("reject_reason"):
             enriched["blocking_gate"] = port.get("reject_reason") or enriched.get(
                 "blocking_gate"
@@ -1957,11 +1996,13 @@ async def _run_institutional_multi_asset_scan_body(
             first_blocking_gate = named_from_trace
         else:
             try:
-                from app.domain.institutional_trading.operations.fast_decision_path import (
-                    named_reject_reasons,
+                from app.domain.institutional_trading.operations import (
+                    fast_decision_path as _qf_fast_decision_path,
                 )
+
+                named_reject_reasons = _qf_fast_decision_path.named_reject_reasons
             except Exception:
-                named_reject_reasons = None  # type: ignore[assignment]
+                named_reject_reasons = None
             for row in opportunity_ranked:
                 if not isinstance(row, dict):
                     continue
@@ -2015,7 +2056,7 @@ async def _run_institutional_multi_asset_scan_body(
     )
     best_eligible_candidate = _candidate_view(best) if best_symbol else None
 
-    payload: dict[str, Any] = {
+    payload = {
         "as_of": as_of,
         "enabled": True,
         "universe": list(universe),
@@ -2076,7 +2117,9 @@ async def _run_institutional_multi_asset_scan_body(
         "optimizer_status": "NOT_REACHED",
         "optimizer_reason": "SCANNER — optimizer runs only after eligibility PASS",
         "config_profile": "SCALPING_V1",
-        "eligible_count": len(ranked) if not eligible_symbols else len(eligible_symbols),
+        "eligible_count": (
+            len(ranked) if not eligible_symbols else len(eligible_symbols)
+        ),
         "eligible_symbols": list(eligible_symbols),
         "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),
         "portfolio_block_reason": scan.get("portfolio_block_reason"),
@@ -2091,18 +2134,14 @@ async def _run_institutional_multi_asset_scan_body(
         "execute_only_best": False,
         "independent_multi_asset": True,
         "open_symbols_excluded": sorted(open_syms),
-        "quantforg_open_count": int(
-            ownership_facts.get("quantforg_open_count") or 0
-        ),
+        "quantforg_open_count": int(ownership_facts.get("quantforg_open_count") or 0),
         "account_open_count": int(ownership_facts.get("account_open_count") or 0),
         "manual_same_symbol_count": int(
             ownership_facts.get("manual_same_symbol_count") or 0
         ),
         "already_open_reason": ownership_facts.get("already_open_reason"),
         "capacity_reason": ownership_facts.get("capacity_reason"),
-        "max_entries_per_cycle": int(
-            getattr(cfg, "max_entries_per_cycle", 3) or 3
-        ),
+        "max_entries_per_cycle": int(getattr(cfg, "max_entries_per_cycle", 3) or 3),
         "max_open_trades": int(getattr(cfg, "max_open_trades", 5) or 5),
         "parallel_scan": bool(getattr(cfg, "parallel_scan_enabled", True)),
         "profile": str(getattr(cfg, "quality_baseline", "") or cfg.version),
@@ -2123,9 +2162,7 @@ async def _run_institutional_multi_asset_scan_body(
         "symbols_timed_out": int(scan_stats.get("symbols_timed_out") or 0),
         "symbols_budget_skipped": int(scan_stats.get("symbols_budget_skipped") or 0),
         "scan_budget_seconds": scan_stats.get("scan_budget_seconds"),
-        "per_symbol_timeout_seconds": scan_stats.get(
-            "per_symbol_timeout_seconds"
-        ),
+        "per_symbol_timeout_seconds": scan_stats.get("per_symbol_timeout_seconds"),
     }
     try:
         from app.domain.institutional_trading.operations.fast_decision_path import (
@@ -2139,14 +2176,12 @@ async def _run_institutional_multi_asset_scan_body(
         publish_current_scan_decision(current_scan)
     except Exception:
         logger.exception("current_scan_decision_publish_failed")
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.ai_scalping.strategies import (
             get_strategy_stats_book,
         )
 
         payload["strategy_stats"] = get_strategy_stats_book().snapshot()
-    except Exception:
-        pass
     _store_last_scan(payload, mt5_adapter=mt5_adapter)
     _log_scan_signal_row(payload)
     _publish_scan_observation(payload)

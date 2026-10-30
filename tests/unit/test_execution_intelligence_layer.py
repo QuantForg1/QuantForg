@@ -6,6 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.domain.institutional_trading.ai_scalping import (
+    institutional_position_monitor as _qf_institutional_position_monitor,
+)
 from app.domain.institutional_trading.ai_scalping.execution_daily_reporting import (
     build_execution_daily_report,
 )
@@ -17,9 +20,6 @@ from app.domain.institutional_trading.ai_scalping.execution_quality_analytics im
     classify_fill_quality,
     get_execution_quality_analytics_store,
 )
-from app.domain.institutional_trading.ai_scalping.institutional_position_monitor import (
-    build_position_monitor,
-)
 from app.domain.institutional_trading.ai_scalping.operational_intelligence import (
     build_operational_intelligence,
 )
@@ -30,6 +30,8 @@ from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline impor
     LIFECYCLE_STAGES,
     get_trade_lifecycle_store,
 )
+
+build_position_monitor = _qf_institutional_position_monitor.build_position_monitor
 
 
 @pytest.mark.unit
@@ -177,7 +179,9 @@ def test_position_monitor_real_positions_only() -> None:
         risk_distance=5.0,
         state=SimpleNamespace(value="TRAILING"),
     )
-    mon = build_position_monitor([pos], mid_price=2305.0, atr=2.0, market_session="london")
+    mon = build_position_monitor(
+        [pos], mid_price=2305.0, atr=2.0, market_session="london"
+    )
     assert mon["open_positions"] == 1
     assert mon["fabricated"] is False
     assert mon["rows"][0]["remaining_rr"] is not None

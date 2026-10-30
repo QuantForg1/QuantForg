@@ -49,7 +49,7 @@ def build_configuration_audit() -> dict[str, Any]:
     gold_only = True
     force_first = False
     multi_symbol = False
-    execution_enabled = UNKNOWN
+    execution_enabled: str | bool = UNKNOWN
     try:
         from core.config.settings import get_settings
 
@@ -236,9 +236,11 @@ def build_configuration_audit() -> dict[str, Any]:
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
             # Owner daily stop: 19% of the UTC day's start equity. Equal does not halt.
-            status="LIVE_EFFECTIVE"
-            if Decimal(str(daily_loss)) == OWNER_DAILY_LOSS_PCT
-            else "CONFLICTING",
+            status=(
+                "LIVE_EFFECTIVE"
+                if Decimal(str(daily_loss)) == OWNER_DAILY_LOSS_PCT
+                else "CONFLICTING"
+            ),
             note="Research must not change this.",
         ),
         _row(

@@ -6,6 +6,7 @@ ExecutionBridge / Gateway / MT5 for challenger paths.
 
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -44,14 +45,14 @@ def assert_challenger_cannot_execute() -> None:
     except ChallengerExecutionForbidden:
         raise
     except Exception:
-        pass
+        logging.getLogger(__name__).debug(
+            "challenger_execute_guard_unavailable", exc_info=True
+        )
 
 
 def forbid_challenger_execution(target: str) -> None:
     if str(target) in FORBIDDEN_CHALLENGER_CALLS:
-        raise ChallengerExecutionForbidden(
-            f"Challenger must not call {target}"
-        )
+        raise ChallengerExecutionForbidden(f"Challenger must not call {target}")
 
 
 @dataclass

@@ -1,4 +1,4 @@
-"""Strategy × regime performance matrices with minimum-sample safeguards."""
+"""Strategy x regime performance matrices with minimum-sample safeguards."""
 
 from __future__ import annotations
 
@@ -73,9 +73,7 @@ class CellStats:
         avg_win = (self.sum_win / self.wins) if self.wins else None
         losses = n - self.wins
         avg_loss = (self.sum_loss / losses) if losses else None
-        profit_factor = (
-            (self.sum_win / self.sum_loss) if self.sum_loss > 0 else None
-        )
+        profit_factor = (self.sum_win / self.sum_loss) if self.sum_loss > 0 else None
         win_rate = (100.0 * self.wins / n) if n else None
         expectancy = avg_r  # R expectancy proxy
         return {
@@ -142,7 +140,13 @@ class StrategyMatrixStore:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             rows = []
-            for (strategy, symbol, regime, session, direction), cell in self.cells.items():
+            for (
+                strategy,
+                symbol,
+                regime,
+                session,
+                direction,
+            ), cell in self.cells.items():
                 d = cell.to_dict(min_sample=self.min_sample)
                 d.update(
                     {

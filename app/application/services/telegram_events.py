@@ -7,7 +7,7 @@ Missing fields are omitted or shown as N/A — never fabricated.
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 
 PUBLIC_MARKET_WATCH = "PUBLIC_MARKET_WATCH"
 PUBLIC_MARKET_SCAN = "PUBLIC_MARKET_SCAN"
@@ -708,7 +708,7 @@ def _zone_price(zone: Any) -> str | None:
 
 def _int_ticket(value: object) -> int | None:
     try:
-        ticket = int(value)  # type: ignore[arg-type]
+        ticket = int(cast("int | str | bytes | float", value))
     except (TypeError, ValueError):
         return None
     return ticket if ticket > 0 else None
@@ -769,8 +769,7 @@ def classify_close_event(reason: str | None) -> str:
     ):
         return TAKE_PROFIT
     if any(
-        tok in text
-        for tok in ("STOP_LOSS", "STOP LOSS", "SL_HIT", "DEAL_REASON_SL")
+        tok in text for tok in ("STOP_LOSS", "STOP LOSS", "SL_HIT", "DEAL_REASON_SL")
     ):
         return STOP_LOSS
     return TRADE_CLOSED
@@ -963,15 +962,15 @@ def public_channel_notices(
         visible = public_fields_only(facts)
         if not validate_canonical_signal(visible):
             try:
-                signal_text = render_public_signal(visible)
+                confirmed_text: str | None = render_public_signal(visible)
             except ValueError:
-                signal_text = None
-            if signal_text:
+                confirmed_text = None
+            if confirmed_text:
                 out.append(
                     {
                         "event": SIGNAL_CONFIRMED,
                         "event_id": f"signal:{signal_id}",
-                        "text": signal_text,
+                        "text": confirmed_text,
                         "fields": visible,
                         "bind_signal": signal_id,
                         "lifecycle_state": "CONFIRMED",
@@ -1095,17 +1094,14 @@ def classify_cycle_notices(
         or ""
     ).upper()
     signal_action = str(ai.get("signal_action") or "").upper()
-    entry = (
-        _zone_price(getattr(decision, "entry_zone", None))
-        or _num(ai.get("entry"), treat_zero_missing=True)
+    entry = _zone_price(getattr(decision, "entry_zone", None)) or _num(
+        ai.get("entry"), treat_zero_missing=True
     )
-    stop_loss = (
-        _zone_price(getattr(decision, "stop_zone", None))
-        or _num(ai.get("stop_loss"), treat_zero_missing=True)
+    stop_loss = _zone_price(getattr(decision, "stop_zone", None)) or _num(
+        ai.get("stop_loss"), treat_zero_missing=True
     )
-    take_profit = (
-        _zone_price(getattr(decision, "target_zone", None))
-        or _num(ai.get("take_profit"), treat_zero_missing=True)
+    take_profit = _zone_price(getattr(decision, "target_zone", None)) or _num(
+        ai.get("take_profit"), treat_zero_missing=True
     )
     opportunity = ai.get("opportunity_score")
     confidence = (

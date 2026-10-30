@@ -51,7 +51,9 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
 def _ts(minutes: int = 0) -> str:
-    return (datetime(2026, 8, 28, 12, 0, tzinfo=UTC) + timedelta(minutes=minutes)).isoformat()
+    return (
+        datetime(2026, 8, 28, 12, 0, tzinfo=UTC) + timedelta(minutes=minutes)
+    ).isoformat()
 
 
 def _wait_cycle(**kwargs):
@@ -95,7 +97,9 @@ def test_shadow_cannot_execute(tmp_path: Path) -> None:
     assert ENGINE_PROMO is False
 
 
-def test_live_wait_tape_records_observations_without_fabricating_fills(tmp_path: Path) -> None:
+def test_live_wait_tape_records_observations_without_fabricating_fills(
+    tmp_path: Path,
+) -> None:
     reset_shadow_pipeline_for_tests(tmp_path)
     out = observe_live_scan(_wait_cycle())
     assert out["would_submit_order"] is False
@@ -108,7 +112,9 @@ def test_live_wait_tape_records_observations_without_fabricating_fills(tmp_path:
     assert snap["observations"] == 1
     assert snap["virtual_completed"] == 0
     assert snap["would_submit_order"] is False
-    assert snap["verdict"]["text"] == "NO SAFE EXPANSION PROVEN — CONTINUE COLLECTING DATA"
+    assert (
+        snap["verdict"]["text"] == "NO SAFE EXPANSION PROVEN — CONTINUE COLLECTING DATA"
+    )
     below = [c for c in out["candidates"] if c["WOULD_QUALIFY_AS_SHADOW"]]
     assert below
     assert all(c["below_core_threshold"] for c in below)
@@ -275,7 +281,9 @@ def test_live_thresholds_unchanged_by_shadow_module() -> None:
     assert STRATEGY_MATCHED_LIVE_TRADE == "STRATEGY_MATCHED_LIVE_TRADE"
 
 
-def test_diagnostics_record_observes_shadow_without_oms(tmp_path: Path, monkeypatch) -> None:
+def test_diagnostics_record_observes_shadow_without_oms(
+    tmp_path: Path, monkeypatch
+) -> None:
     reset_shadow_pipeline_for_tests(tmp_path)
     reset_forensic_ledger_for_tests(tmp_path / "live")
     from app.application.services.strategy_diagnostics import StrategyDiagnosticsStore

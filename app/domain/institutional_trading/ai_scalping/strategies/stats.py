@@ -171,7 +171,9 @@ class StrategyStatsBook:
                 row.rejected += 1
         self._persist()
 
-    def record_accepted(self, strategy_id: str, *, latency_ms: float | None = None) -> None:
+    def record_accepted(
+        self, strategy_id: str, *, latency_ms: float | None = None
+    ) -> None:
         with self._lock:
             row = self._row(strategy_id)
             row.accepted += 1
@@ -214,7 +216,7 @@ class StrategyStatsBook:
         self._persist()
 
     def live_rank_boosts(self) -> dict[str, float]:
-        """AI ranking boost from LIVE outcomes only (−20..+25)."""
+        """AI ranking boost from LIVE outcomes only (-20..+25)."""
         with self._lock:
             rows = list(self._by_id.values())
         out: dict[str, float] = {}

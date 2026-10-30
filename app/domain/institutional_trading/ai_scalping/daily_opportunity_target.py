@@ -106,7 +106,7 @@ def compute_performance_metrics(
     *,
     include_rolling: bool = True,
 ) -> PerformanceMetrics:
-    """Expectancy = (win_rate × avg_win) − ((1 − win_rate) × avg_loss)."""
+    """Expectancy = (win_rate x avg_win) - ((1 - win_rate) x avg_loss)."""
     n = len(trades)
     if n == 0:
         return PerformanceMetrics(
@@ -131,22 +131,14 @@ def compute_performance_metrics(
     wins = [t for t in trades if t.won]
     losses = [t for t in trades if not t.won]
     win_rate = len(wins) / n
-    avg_win = (
-        sum(t.realized_pnl for t in wins) / len(wins) if wins else None
-    )
+    avg_win = sum(t.realized_pnl for t in wins) / len(wins) if wins else None
     # average_loss stored as positive magnitude for expectancy formula
     avg_loss_mag = (
         abs(sum(t.realized_pnl for t in losses) / len(losses)) if losses else None
     )
     gross_profit = sum(t.realized_pnl for t in wins)
     gross_loss = abs(sum(t.realized_pnl for t in losses))
-    profit_factor = (
-        (gross_profit / gross_loss) if gross_loss > 0 else (None if gross_profit <= 0 else None)
-    )
-    if gross_loss > 0:
-        profit_factor = gross_profit / gross_loss
-    elif gross_profit > 0:
-        profit_factor = None
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
     expectancy = None
     if avg_win is not None and avg_loss_mag is not None:
         expectancy = (win_rate * avg_win) - ((1.0 - win_rate) * avg_loss_mag)
@@ -282,9 +274,7 @@ class DailyOpportunityTargetTracker:
             self._roll_day()
             self.trades_today += 1
             self.quality_setups_executed += 1
-            self.last_execution_decision = (
-                f"EXECUTED:{symbol or 'unknown'}"
-            )
+            self.last_execution_decision = f"EXECUTED:{symbol or 'unknown'}"
             self.last_analysis_at = datetime.now(UTC).isoformat()
 
     def note_trade_closed(self, record: ClosedTradeRecord) -> None:
@@ -366,10 +356,7 @@ class DailyOpportunityTargetTracker:
                     )
                 ),
                 "avg_hold_time": (
-                    (
-                        sum(t.holding_seconds for t in self._closed)
-                        / len(self._closed)
-                    )
+                    (sum(t.holding_seconds for t in self._closed) / len(self._closed))
                     if self._closed
                     else None
                 ),

@@ -6,6 +6,7 @@ or retry order_send. Advisory / stale / UI-only states never halt a new entry.
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -51,7 +52,7 @@ SCAN_STALE_SECONDS = 180.0
 
 
 class StageStatus(StrEnum):
-    PASS = "PASS"
+    PASS = "PASS"  # noqa: S105  # readiness status, not a credential
     WAIT = "WAIT"
     BLOCK = "BLOCK"
     NOT_REACHED = "NOT_REACHED"
@@ -192,7 +193,12 @@ def build_readiness_matrix(
         execution_ready
         or forwarded_to_oms
         or str(cls.get("decision_state") or "")
-        in {"EXECUTION_READY", "EXECUTION_AUTHORIZED", "ORDER_SUBMITTED", "POSITION_OPEN"}
+        in {
+            "EXECUTION_READY",
+            "EXECUTION_AUTHORIZED",
+            "ORDER_SUBMITTED",
+            "POSITION_OPEN",
+        }
     )
 
     def later(name: str) -> str:
@@ -200,7 +206,11 @@ def build_readiness_matrix(
         if not has_current_scan or not eligible:
             return StageStatus.NOT_REACHED.value
         if advisory:
-            return StageStatus.PASS.value if later_reached or idx <= reached_idx else StageStatus.NOT_REACHED.value
+            return (
+                StageStatus.PASS.value
+                if later_reached or idx <= reached_idx
+                else StageStatus.NOT_REACHED.value
+            )
         if hard and idx == reached_idx:
             return StageStatus.BLOCK.value
         if hard and idx > reached_idx:
@@ -276,7 +286,9 @@ def build_readiness_matrix(
     return {
         "stages": stages,
         "as_of": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        "scan_age_seconds": round(scan_age_seconds, 1) if scan_age_seconds is not None else None,
+        "scan_age_seconds": (
+            round(scan_age_seconds, 1) if scan_age_seconds is not None else None
+        ),
         "scan_stale": bool(
             scan_age_seconds is not None and scan_age_seconds > SCAN_STALE_SECONDS
         ),
@@ -352,7 +364,7 @@ def production_feature_inventory() -> list[dict[str, Any]]:
     risk_override = False
     scan_on = True
     continuous = True
-    try:
+    with contextlib.suppress(Exception):
         from core.config.settings import get_settings
 
         settings = get_settings()
@@ -362,9 +374,7 @@ def production_feature_inventory() -> list[dict[str, Any]]:
         execution_on = bool(getattr(settings, "execution_enabled", False))
         force_first = bool(getattr(settings, "force_first_trade", False))
         risk_override = bool(getattr(settings, "allow_risk_lock_override", False))
-    except Exception:
-        pass
-    try:
+    with contextlib.suppress(Exception):
         from app.domain.institutional_trading.ai_scalping.config import (
             DEFAULT_AI_SCALPING_CONFIG,
         )
@@ -375,8 +385,6 @@ def production_feature_inventory() -> list[dict[str, Any]]:
         continuous = bool(
             getattr(DEFAULT_AI_SCALPING_CONFIG, "continuous_operation_enabled", True)
         )
-    except Exception:
-        pass
 
     def row(
         feature: str,

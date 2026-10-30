@@ -59,9 +59,7 @@ def phase_b_config_from_settings(settings: Any | None = None) -> PhaseBConfig:
 
     return PhaseBConfig(
         mae_mfe_enabled=_b("phase_b_mae_mfe_enabled", True),
-        portfolio_incremental_enabled=_b(
-            "phase_b_portfolio_incremental_enabled", True
-        ),
+        portfolio_incremental_enabled=_b("phase_b_portfolio_incremental_enabled", True),
         execution_intel_enabled=_b("phase_b_execution_intel_enabled", True),
         regime_align_enabled=_b("phase_b_regime_align_enabled", True),
         strategy_matrix_enabled=_b("phase_b_strategy_matrix_enabled", True),

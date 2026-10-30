@@ -63,19 +63,25 @@ def record_observations(
                     "asset_class": row.get("asset_class") or UNKNOWN,
                     "timestamp": as_of,
                     "market_data_status": row.get("data_state") or UNKNOWN,
-                    "Opportunity": row.get("opportunity_score")
-                    if isinstance(row.get("opportunity_score"), int)
-                    else UNKNOWN,
-                    "edge": row.get("directional_edge")
-                    if isinstance(row.get("directional_edge"), int)
-                    else UNKNOWN,
+                    "Opportunity": (
+                        row.get("opportunity_score")
+                        if isinstance(row.get("opportunity_score"), int)
+                        else UNKNOWN
+                    ),
+                    "edge": (
+                        row.get("directional_edge")
+                        if isinstance(row.get("directional_edge"), int)
+                        else UNKNOWN
+                    ),
                     "direction": row.get("direction") or UNKNOWN,
                     "setup": row.get("setup_state") or UNKNOWN,
                     "regime": (row.get("evidence") or {}).get("REGIME") or UNKNOWN,
                     "session": row.get("session") or UNKNOWN,
-                    "spread": row.get("spread")
-                    if row.get("spread") not in (None, "")
-                    else UNKNOWN,
+                    "spread": (
+                        row.get("spread")
+                        if row.get("spread") not in (None, "")
+                        else UNKNOWN
+                    ),
                     "RR": row.get("RR") or row.get("rr") or UNKNOWN,
                     "entry_candidate": row.get("entry_candidate")
                     or row.get("entry")

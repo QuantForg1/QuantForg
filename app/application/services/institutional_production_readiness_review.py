@@ -1,4 +1,3 @@
-
 """Institutional Production Readiness Review (PRR) — STRICTLY READ ONLY.
 
 Audits architecture, security, reliability, trading pipeline presence,

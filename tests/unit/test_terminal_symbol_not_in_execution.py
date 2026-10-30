@@ -117,9 +117,9 @@ def test_execution_modules_do_not_read_terminal_ui_symbol() -> None:
 @pytest.mark.unit
 def test_bridge_builds_oms_intent_from_decision_symbol_source() -> None:
     """ExecutionBridge.parse_order_intent call site uses decision.symbol."""
-    src = (
-        ROOT / "app/domain/institutional_trading/execution/bridge.py"
-    ).read_text(encoding="utf-8")
+    src = (ROOT / "app/domain/institutional_trading/execution/bridge.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(src)
     found = False
     for node in ast.walk(tree):
@@ -144,9 +144,9 @@ def test_bridge_builds_oms_intent_from_decision_symbol_source() -> None:
 
 @pytest.mark.unit
 def test_gateway_order_send_uses_intent_symbol() -> None:
-    src = (
-        ROOT / "app/infrastructure/brokers/mt5/gateway_client.py"
-    ).read_text(encoding="utf-8")
+    src = (ROOT / "app/infrastructure/brokers/mt5/gateway_client.py").read_text(
+        encoding="utf-8"
+    )
     assert "order_send" in src
     assert "qf.workspace.symbol" not in src
     engine = (

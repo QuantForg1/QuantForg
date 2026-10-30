@@ -86,12 +86,12 @@ def _group_key(trade: dict[str, Any], dimension: str) -> str:
         if rr in (None, "", UNKNOWN):
             return UNKNOWN
         try:
-            n = float(rr)
+            rr_n = float(rr)
         except (TypeError, ValueError):
             return UNKNOWN
-        if n >= 2:
+        if rr_n >= 2:
             return ">=2.0"
-        if n >= 1.2:
+        if rr_n >= 1.2:
             return "1.20-1.99"
         return "<1.20"
     if dimension == "volatility":
@@ -101,12 +101,12 @@ def _group_key(trade: dict[str, Any], dimension: str) -> str:
         if spread in (None, "", UNKNOWN):
             return UNKNOWN
         try:
-            n = float(spread)
+            spread_n = float(spread)
         except (TypeError, ValueError):
             return UNKNOWN
-        if n >= 5:
+        if spread_n >= 5:
             return "WIDE"
-        if n >= 2:
+        if spread_n >= 2:
             return "MID"
         return "TIGHT"
     return UNKNOWN

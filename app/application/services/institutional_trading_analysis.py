@@ -47,9 +47,11 @@ class InstitutionalTradingAnalysisService:
         try:
             from dataclasses import replace
 
-            from app.domain.institutional_trading.ai_scalping.economic_calendar_adapter import (  # noqa: E501
-                build_configured_news_calendar,
+            from app.domain.institutional_trading.ai_scalping import (
+                economic_calendar_adapter as _q50,
             )
+
+            build_configured_news_calendar = _q50.build_configured_news_calendar
             from app.domain.institutional_trading.news_protection import NewsProtection
 
             calendar = build_configured_news_calendar()

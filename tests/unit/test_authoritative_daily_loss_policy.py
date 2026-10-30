@@ -127,12 +127,15 @@ def _daily_loss_oms(*, message: str) -> OmsSubmitResult:
 
 
 def test_1_configured_daily_loss_pct_is_owner_19() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
     assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("19.0")
     assert RiskEngineConfig().max_daily_loss_pct == Decimal("19.0")
     assert RiskEngineConfig().max_daily_loss_pct == MAX_DAILY_LOSS_PCT
     assert oms_risk_config_from_ite().max_daily_loss_pct == MAX_DAILY_LOSS_PCT
-    assert risk_config_from_ite(DEFAULT_ITE_CONFIG).max_daily_loss_pct == MAX_DAILY_LOSS_PCT
+    assert (
+        risk_config_from_ite(DEFAULT_ITE_CONFIG).max_daily_loss_pct
+        == MAX_DAILY_LOSS_PCT
+    )
 
 
 def test_2_loss_above_19_percent_of_day_start_blocks_everywhere() -> None:
@@ -228,7 +231,9 @@ def test_6_oms_uses_authoritative_owner_pct() -> None:
     assert cfg.max_daily_loss_pct == Decimal("19.0")
     engine = oms_risk_engine_from_ite()
     assert engine.config.max_daily_loss_pct == MAX_DAILY_LOSS_PCT
-    factory = InstitutionalExecutionEngine.__dataclass_fields__["risk_engine"].default_factory
+    factory = InstitutionalExecutionEngine.__dataclass_fields__[
+        "risk_engine"
+    ].default_factory
     assert factory is not None
     oms_engine = factory()
     assert oms_engine.config.max_daily_loss_pct == MAX_DAILY_LOSS_PCT
@@ -271,21 +276,27 @@ def test_8_risk_and_oms_agree_on_daily_loss_decision() -> None:
 
 def test_9_daily_loss_application_reject_does_not_increment_burst() -> None:
     oms = _daily_loss_oms(message="daily loss 15.21% exceeds 40.0%")
-    assert should_count_execution_reject(
-        oms,
-        abort_reason=BridgeAbortReason.OMS_FAILURE,
-        oms_submit_called=True,
-    ) is False
+    assert (
+        should_count_execution_reject(
+            oms,
+            abort_reason=BridgeAbortReason.OMS_FAILURE,
+            oms_submit_called=True,
+        )
+        is False
+    )
     assert classify_downstream_execution_reject(oms) is None
 
 
 def test_10_order_check_only_daily_loss_is_not_broker_mt5_reject() -> None:
     legacy = _daily_loss_oms(message="daily loss 15.21% exceeds 5%")
-    assert should_count_execution_reject(
-        legacy,
-        abort_reason=BridgeAbortReason.OMS_FAILURE,
-        oms_submit_called=True,
-    ) is False
+    assert (
+        should_count_execution_reject(
+            legacy,
+            abort_reason=BridgeAbortReason.OMS_FAILURE,
+            oms_submit_called=True,
+        )
+        is False
+    )
     assert classify_downstream_execution_reject(legacy) is None
     assert legacy.gateway_status == "order_check_only"
     assert legacy.retcode is None
@@ -303,14 +314,15 @@ def test_11_genuine_mt5_order_send_reject_does_increment() -> None:
         gateway_status="order_send",
         raw={"order_send_reached": True, "oms_reached": True, "gateway_reached": True},
     )
-    assert should_count_execution_reject(
-        genuine,
-        abort_reason=BridgeAbortReason.MT5_REJECTION,
-        oms_submit_called=True,
-    ) is True
-    stage = classify_downstream_execution_reject(
-        genuine, abort_reason="MT5_REJECTION"
+    assert (
+        should_count_execution_reject(
+            genuine,
+            abort_reason=BridgeAbortReason.MT5_REJECTION,
+            oms_submit_called=True,
+        )
+        is True
     )
+    stage = classify_downstream_execution_reject(genuine, abort_reason="MT5_REJECTION")
     assert stage in {MT5_REJECTED, BROKER_REJECTED}
 
 
@@ -322,8 +334,8 @@ def test_12_utc_day_reset_unchanged() -> None:
 def test_13_untrusted_history_fail_closed_unchanged() -> None:
     plane = SimpleNamespace(
         daily_loss_exceeded=True,
-        flag_daily_loss=lambda now=None: None,
-        clear_daily_loss=lambda **k: False,
+        flag_daily_loss=lambda now=None: None,  # noqa: ARG005
+        clear_daily_loss=lambda **_k: False,
     )
     out = sync_utc_daily_loss_lock(
         plane,

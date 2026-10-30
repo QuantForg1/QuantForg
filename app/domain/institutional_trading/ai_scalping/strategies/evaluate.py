@@ -26,11 +26,8 @@ def _i(value: Any, default: int = 0) -> int:
 def _components(score: dict[str, Any]) -> tuple[dict[str, int], str, str, str]:
     _factors_value = score.get("factors")
     factors = _factors_value if isinstance(_factors_value, dict) else {}
-    vol = (
-        score.get("volatility_decision")
-        if isinstance(score.get("volatility_decision"), dict)
-        else {}
-    )
+    _vol_value = score.get("volatility_decision")
+    vol = _vol_value if isinstance(_vol_value, dict) else {}
     atr_band = "normal"
     _thresholds_value = score.get("thresholds")
     thresholds = _thresholds_value if isinstance(_thresholds_value, dict) else {}
@@ -47,11 +44,15 @@ def _components(score: dict[str, Any]) -> tuple[dict[str, int], str, str, str]:
         ),
         "momentum": _i(score.get("momentum") or factors.get("momentum")),
         "liquidity": _i(score.get("liquidity") or factors.get("liquidity_sweep")),
-        "mtf": _i(score.get("mtf_alignment") or factors.get("mtf") or factors.get("h1_bias")),
+        "mtf": _i(
+            score.get("mtf_alignment") or factors.get("mtf") or factors.get("h1_bias")
+        ),
         "order_block": _i(factors.get("order_block")),
         "fvg": _i(factors.get("fvg")),
         "volume": _i(factors.get("volume")),
-        "volatility": _i(factors.get("volatility") or factors.get("atr_expansion") or 50),
+        "volatility": _i(
+            factors.get("volatility") or factors.get("atr_expansion") or 50
+        ),
         "ema": _i(factors.get("ema")),
         "trend_strength": _i(factors.get("trend_strength") or factors.get("momentum")),
         "pa_confluence": _i(factors.get("pa_confluence")),
@@ -71,7 +72,7 @@ def _weighted_score(components: dict[str, int], weights: dict[str, float]) -> in
         acc += float(w) * float(components.get(key, 0))
     if total_w <= 0:
         return 0
-    return max(0, min(100, int(round(acc / total_w))))
+    return max(0, min(100, round(acc / total_w)))
 
 
 def evaluate_strategy(
@@ -141,7 +142,7 @@ def evaluate_strategy(
     base_conf = comps["confidence"]
     strategy_confidence = max(
         0,
-        min(100, int(round(0.55 * base_conf + 0.45 * strategy_quality))),
+        min(100, round(0.55 * base_conf + 0.45 * strategy_quality)),
     )
 
     if strategy.prefer_setup_families and setup_fam in strategy.prefer_setup_families:
@@ -157,9 +158,8 @@ def evaluate_strategy(
         reasons.append("No clear BUY/SELL direction")
 
     passed = all(filters.values()) and not base_reject and direction_ok
-    explanation = (
-        f"{strategy.name}: {strategy.explanation} | "
-        + ("; ".join(reasons) if reasons else "all strategy filters cleared")
+    explanation = f"{strategy.name}: {strategy.explanation} | " + (
+        "; ".join(reasons) if reasons else "all strategy filters cleared"
     )
     reject_reason = None if passed else ("; ".join(reasons) or "strategy_reject")
 

@@ -151,8 +151,8 @@ def test_wait_duration_reached_executes_if_hard_gates_pass(
     _force_better_tick_required(monkeypatch)
     monkeypatch.setattr(eo, "_optimizer_bounds", lambda: (2, 2500, 45, 40))
     key = "dur-1"
-    started = (datetime.now(UTC) - timedelta(seconds=5)).isoformat().replace(
-        "+00:00", "Z"
+    started = (
+        (datetime.now(UTC) - timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
     )
     with eo._LOCK:
         eo._DEFER_COUNTS[key] = {"count": 1, "first_at": started}
@@ -242,8 +242,10 @@ def test_optimizer_never_remains_waiting_forever(
     states = []
     for i in range(8):
         if i == 2:
-            started = (datetime.now(UTC) - timedelta(seconds=2)).isoformat().replace(
-                "+00:00", "Z"
+            started = (
+                (datetime.now(UTC) - timedelta(seconds=2))
+                .isoformat()
+                .replace("+00:00", "Z")
             )
             with eo._LOCK:
                 row = eo._DEFER_COUNTS.get("forever") or {}

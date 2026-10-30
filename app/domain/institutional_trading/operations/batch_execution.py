@@ -40,9 +40,7 @@ _HARD_ABORTS = frozenset(
     }
 )
 
-_SUCCESS_OUTCOMES = frozenset(
-    {"success", "filled", "done", "accepted", "oms_success"}
-)
+_SUCCESS_OUTCOMES = frozenset({"success", "filled", "done", "accepted", "oms_success"})
 _UNKNOWN_OUTCOMES = frozenset(
     {"unknown", "timeout", "ambiguous", "reconciliation_required"}
 )
@@ -93,9 +91,7 @@ def submit_position_plan_batch(
         tally.state = "SOFT_REJECT"
         tally.reasons.append("duplicate_cycle_blocked")
         return apply_tally(plan, tally), tally, None
-    if not mark_cycle_executed(
-        plan.cycle_id, plan.snapshot_id, plan.position_plan_id
-    ):
+    if not mark_cycle_executed(plan.cycle_id, plan.snapshot_id, plan.position_plan_id):
         tally.state = "SOFT_REJECT"
         tally.reasons.append("duplicate_cycle_blocked")
         return apply_tally(plan, tally), tally, None

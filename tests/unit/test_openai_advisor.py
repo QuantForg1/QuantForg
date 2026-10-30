@@ -23,7 +23,7 @@ from core.config.environments import testing_settings
 
 
 class _FakeTransport(httpx.AsyncBaseTransport):
-    def __init__(self, handler) -> None:  # noqa: ANN001
+    def __init__(self, handler) -> None:
         self._handler = handler
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -147,7 +147,11 @@ async def test_client_rate_limit_then_success() -> None:
             return httpx.Response(429, json={"error": {"message": "rate"}})
         return httpx.Response(
             200,
-            json={"output_text": '{"stance":"HOLD","confidence":0.5,"summary":"ok","risks":[]}'},
+            json={
+                "output_text": (
+                    '{"stance":"HOLD","confidence":0.5,"summary":"ok","risks":[]}'
+                )
+            },
         )
 
     client = OpenAIResponsesClient(

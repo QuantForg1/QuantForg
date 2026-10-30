@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -237,6 +238,13 @@ def _dry_run_oms_readiness(*, symbol: str, side: Side) -> dict[str, Any]:
                 },
             }
         )
+        reasons_raw = result.get("blocked_reasons")
+        if not reasons_raw:
+            blocked_reasons: list[Any] = []
+        elif isinstance(reasons_raw, Iterable):
+            blocked_reasons = list(reasons_raw)
+        else:
+            raise TypeError("blocked_reasons is not iterable")
         return {
             "status": "PASS",
             "mode": "TEST_ONLY_DRY_RUN",
@@ -248,7 +256,7 @@ def _dry_run_oms_readiness(*, symbol: str, side: Side) -> dict[str, Any]:
             "decision": result.get("decision"),
             "dry_run": bool(result.get("dry_run", True)),
             "allow_trade_idea": bool(result.get("allow_trade_idea")),
-            "blocked_reasons": list(result.get("blocked_reasons") or []),
+            "blocked_reasons": blocked_reasons,
             "note": "Dry-run advisory only — live OMS/MT5 path not invoked",
         }
     except Exception as exc:
@@ -385,4 +393,3 @@ def inject_once(
                 "live_order_path_invoked": False,
             },
         }
-

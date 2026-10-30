@@ -529,13 +529,16 @@ def test_min_lot_rejection_does_not_stop_worker_or_stall_scheduler() -> None:
     assert payload["execution_status"] == EXEC_WAITING_FOR_SETUP
     assert payload["tradeability"] == "NOT_TRADEABLE"
     assert payload["execution_result"] == "NO BROKER ORDER WAS SUBMITTED"
-    assert classify_cycle_execution_status(
-        abort_reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
-        cycle_outcome="execution_contract",
-        forwarded_to_oms=False,
-        mt5_ticket=None,
-        tradeability="NOT_TRADEABLE",
-    ) == EXEC_WAITING_FOR_SETUP
+    assert (
+        classify_cycle_execution_status(
+            abort_reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            cycle_outcome="execution_contract",
+            forwarded_to_oms=False,
+            mt5_ticket=None,
+            tradeability="NOT_TRADEABLE",
+        )
+        == EXEC_WAITING_FOR_SETUP
+    )
     blocker, stage = last_blocker_from_cycle(cycle)
     assert blocker == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
     assert stage == "risk"

@@ -8,6 +8,7 @@ Scalping mode overlays adaptive thresholds + broker-aware lot sizing.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
@@ -853,6 +854,9 @@ class InstitutionalDecisionPipeline:
         if cfg.is_scalping() and risk_allowed:
             from dataclasses import replace as dc_replace
 
+            from app.domain.institutional_trading.ai_scalping import (
+                session_intelligence as _qf_session_intelligence,
+            )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
@@ -863,9 +867,8 @@ class InstitutionalDecisionPipeline:
                 calculate_dynamic_lots_v2,
                 check_portfolio_sizing_limits,
             )
-            from app.domain.institutional_trading.ai_scalping.session_intelligence import (  # noqa: E501
-                assess_session,
-            )
+
+            assess_session = _qf_session_intelligence.assess_session
             from app.domain.institutional_trading.ai_scalping.sizing import (
                 calculate_scalping_lots,
             )
@@ -874,17 +877,20 @@ class InstitutionalDecisionPipeline:
                 DEFAULT_AI_SCALPING_CONFIG,
                 broker_min_lot=live_min,
                 broker_lot_step=live_step,
-                broker_max_lot=min(live_max, DEFAULT_AI_SCALPING_CONFIG.broker_max_lot)
-                if live_max > 0
-                else DEFAULT_AI_SCALPING_CONFIG.broker_max_lot,
+                broker_max_lot=(
+                    min(live_max, DEFAULT_AI_SCALPING_CONFIG.broker_max_lot)
+                    if live_max > 0
+                    else DEFAULT_AI_SCALPING_CONFIG.broker_max_lot
+                ),
             )
             ai_payload = (
                 self._last_ai_score if isinstance(self._last_ai_score, dict) else {}
             )
             opportunity_score = None
             try:
-                if ai_payload.get("opportunity_score") is not None:
-                    opportunity_score = int(ai_payload.get("opportunity_score"))
+                score_raw = ai_payload.get("opportunity_score")
+                if score_raw is not None:
+                    opportunity_score = int(score_raw)
             except (TypeError, ValueError):
                 opportunity_score = None
             sniper_blob = ai_payload.get("sniper_entry") or ai_payload.get("sniper")
@@ -933,10 +939,12 @@ class InstitutionalDecisionPipeline:
                 approved_lots = Decimal("0")
 
             if risk_allowed and scalp_cfg.portfolio_risk_engine_v2_enabled:
-                from app.domain.institutional_trading.ai_scalping.portfolio_risk_engine_v2 import (  # noqa: E501
-                    BrokerComplianceSpec,
-                    evaluate_portfolio_allocation,
+                from app.domain.institutional_trading.ai_scalping import (
+                    portfolio_risk_engine_v2 as _q941,
                 )
+
+                BrokerComplianceSpec = _q941.BrokerComplianceSpec
+                evaluate_portfolio_allocation = _q941.evaluate_portfolio_allocation
 
                 broker_spec = BrokerComplianceSpec(
                     min_lot=live_min,
@@ -1007,7 +1015,7 @@ class InstitutionalDecisionPipeline:
                     if isinstance(self._last_ai_score, dict):
                         self._last_ai_score["portfolio_risk_v2"] = alloc.to_dict()
                     # Phase B — incremental portfolio risk visibility (observe only)
-                    try:
+                    with contextlib.suppress(Exception):
                         from app.domain.institutional_trading.phase_b import (
                             get_phase_b_plane,
                         )
@@ -1018,41 +1026,47 @@ class InstitutionalDecisionPipeline:
                             for p in (live_positions or ())
                         )
                         get_phase_b_plane().observe_incremental_risk(
-                            current_open_risk=float(book.exposure_pct)
-                            if book.exposure_pct is not None
-                            else None,
-                            new_trade_risk=float(cfg.risk_per_trade_pct)
-                            if cfg.risk_per_trade_pct is not None
-                            else None,
+                            current_open_risk=(
+                                float(book.exposure_pct)
+                                if book.exposure_pct is not None
+                                else None
+                            ),
+                            new_trade_risk=(
+                                float(cfg.risk_per_trade_pct)
+                                if cfg.risk_per_trade_pct is not None
+                                else None
+                            ),
                             max_portfolio_risk=float(
                                 getattr(scalp_cfg, "max_daily_exposure_pct", 0) or 0
                             )
                             or None,
-                            correlation_score=float(alloc.correlation_score)
-                            if alloc.correlation_score is not None
-                            else None,
+                            correlation_score=(
+                                float(alloc.correlation_score)
+                                if alloc.correlation_score is not None
+                                else None
+                            ),
                             symbol=str(getattr(snapshot, "symbol", "") or ""),
-                            symbol_exposure=float(alloc.symbol_exposure_pct)
-                            if alloc.symbol_exposure_pct is not None
-                            else None,
-                            directional_exposure=float(
-                                alloc.correlated_exposure_pct
-                            )
-                            if alloc.correlated_exposure_pct is not None
-                            else None,
+                            symbol_exposure=(
+                                float(alloc.symbol_exposure_pct)
+                                if alloc.symbol_exposure_pct is not None
+                                else None
+                            ),
+                            directional_exposure=(
+                                float(alloc.correlated_exposure_pct)
+                                if alloc.correlated_exposure_pct is not None
+                                else None
+                            ),
                             existing_symbols=existing,
                             hard_blocked=not bool(alloc.allow),
                             hard_block_reason=alloc.rejection_reason,
                         )
                         raw_reg = None
                         if ai_score is not None:
-                            raw_reg = getattr(ai_score, "market_regime", None) or getattr(
-                                ai_score, "regime", None
-                            )
+                            raw_reg = getattr(
+                                ai_score, "market_regime", None
+                            ) or getattr(ai_score, "regime", None)
                         if raw_reg:
                             get_phase_b_plane().observe_regime(str(raw_reg))
-                    except Exception:
-                        pass
                     if alloc.allow:
                         # Never exceed RiskEngine REDUCE_SIZE / caps — take stricter
                         pre_lots = alloc.approved_lots
@@ -1120,10 +1134,12 @@ class InstitutionalDecisionPipeline:
                 symbol_exp = Decimal("0")
                 correlated_exp = Decimal("0")
                 try:
-                    from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
-                        aggregate_portfolio_risk,
-                        portfolio_exposure_pct,
+                    from app.domain.institutional_trading.ai_scalping import (
+                        portfolio_risk as _q1134,
                     )
+
+                    aggregate_portfolio_risk = _q1134.aggregate_portfolio_risk
+                    portfolio_exposure_pct = _q1134.portfolio_exposure_pct
 
                     risk_snap_pre = aggregate_portfolio_risk(
                         account,
@@ -1142,10 +1158,12 @@ class InstitutionalDecisionPipeline:
                         risk_per_trade_pct=scalp_cfg.risk_per_trade_pct,
                     )
                     try:
-                        from app.domain.institutional_trading.ai_scalping.correlation_book import (  # noqa: E501
-                            correlation_group_members,
-                            normalize_book_symbol,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            correlation_book as _q1156,
                         )
+
+                        correlation_group_members = _q1156.correlation_group_members
+                        normalize_book_symbol = _q1156.normalize_book_symbol
 
                         members = correlation_group_members(sym)
                         if members:
@@ -1237,11 +1255,11 @@ class InstitutionalDecisionPipeline:
                         target_risk_usd=getattr(
                             scalp_cfg, "target_risk_per_trade_usd", None
                         ),
-                        open_planned_risk_usd=self.risk_engine.aggregate_planned_sl_risk(
-                            pos_all
-                        )
-                        if pos_all
-                        else None,
+                        open_planned_risk_usd=(
+                            self.risk_engine.aggregate_planned_sl_risk(pos_all)
+                            if pos_all
+                            else None
+                        ),
                         max_total_planned_risk_usd=getattr(
                             scalp_cfg, "max_total_planned_risk_usd", None
                         ),
@@ -1307,7 +1325,7 @@ class InstitutionalDecisionPipeline:
                             logger.exception("below_min_lot_reject_log_failed")
                     approved_lots = Decimal("0")
 
-                profits: tuple = ()
+                profits: tuple[Decimal, ...] = ()
                 if account.floating_pnl is not None:
                     profits = (account.floating_pnl,)
                 add = may_add_scalping_trade(
@@ -1336,19 +1354,23 @@ class InstitutionalDecisionPipeline:
 
                 if DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled:
                     try:
-                        from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
-                            aggregate_portfolio_risk,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            portfolio_risk as _q1350,
                         )
-                        from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (  # noqa: E501
-                            check_portfolio_limits,
+
+                        aggregate_portfolio_risk = _q1350.aggregate_portfolio_risk
+                        from app.domain.institutional_trading.ai_scalping import (
+                            portfolio_scanner as _q1353,
                         )
+
+                        check_portfolio_limits = _q1353.check_portfolio_limits
 
                         risk_snap = aggregate_portfolio_risk(
                             account,
                             config=DEFAULT_AI_SCALPING_CONFIG,
                             ite_config=cfg,
                         )
-                        blocked, block_why = check_portfolio_limits(
+                        portfolio_blocked, block_why = check_portfolio_limits(
                             open_positions=risk_snap.open_positions,
                             max_open_positions=risk_snap.max_open_positions,
                             daily_loss_pct=risk_snap.daily_loss_pct,
@@ -1356,7 +1378,7 @@ class InstitutionalDecisionPipeline:
                             exposure_pct=risk_snap.exposure_pct,
                             max_exposure_pct=risk_snap.max_exposure_pct,
                         )
-                        if blocked:
+                        if portfolio_blocked:
                             risk_allowed = False
                             risk_reasons.append(
                                 f"portfolio_risk_block:{block_why or 'limits'}"
@@ -1401,11 +1423,13 @@ class InstitutionalDecisionPipeline:
             from app.domain.institutional_trading.config import (
                 MAX_PLANNED_SL_RISK_USD,
             )
-            from app.domain.institutional_trading.operations.min_lot_feasibility import (  # noqa: E501
-                actual_planned_sl_band_reason,
-                format_planned_sl_reject_detail,
-                lot_dollar_risk,
+            from app.domain.institutional_trading.operations import (
+                min_lot_feasibility as _q1415,
             )
+
+            actual_planned_sl_band_reason = _q1415.actual_planned_sl_band_reason
+            format_planned_sl_reject_detail = _q1415.format_planned_sl_reject_detail
+            lot_dollar_risk = _q1415.lot_dollar_risk
             from app.domain.institutional_trading.owner_live_limits import (
                 max_aggregate_risk_usd,
                 owner_risk_cap_usd,
@@ -1484,9 +1508,7 @@ class InstitutionalDecisionPipeline:
         return _align_decision_to_structural_targets(
             decision,
             ai_score=(
-                self._last_ai_score
-                if isinstance(self._last_ai_score, dict)
-                else None
+                self._last_ai_score if isinstance(self._last_ai_score, dict) else None
             ),
             stop_distance=stop_distance,
             approved_lots=approved_lots if risk_allowed else Decimal("0"),

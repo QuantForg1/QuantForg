@@ -35,7 +35,7 @@ def test_institutional_defaults_unchanged() -> None:
 
 @pytest.mark.unit
 def test_dollar_risk_at_min_lot_is_stop_distance() -> None:
-    """0.01 lot × stop × 100 contract = stop dollars."""
+    """0.01 lot x stop x 100 contract = stop dollars."""
     stop = Decimal("18.00")
     loss = dollar_risk_at_lots(
         lots=VOLUME_MIN, stop_distance=stop, contract_size=Decimal("100")

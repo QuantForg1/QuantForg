@@ -84,14 +84,12 @@ def _load_postgres_rows() -> dict[str, dict[str, Any]]:
         try:
             from app.infrastructure.persistence.direct_postgres import fetch
 
-            rows = fetch(
-                """
+            rows = fetch("""
                 SELECT symbol, enabled, favorite, priority, asset_class, notes,
                        updated_at, updated_by
                 FROM symbol_management
                 LIMIT 500
-                """
-            )
+                """)
             out: dict[str, dict[str, Any]] = {}
             for row in rows:
                 if not isinstance(row, dict):
@@ -143,7 +141,7 @@ def _load_postgres_rows() -> dict[str, dict[str, Any]]:
     except Exception as exc:
         logger.warning("symbol_management_postgres_load_failed", error=str(exc))
         return {}
-    out: dict[str, dict[str, Any]] = {}
+    out = {}
     if not isinstance(rows, list):
         return out
     for row in rows:
@@ -344,7 +342,7 @@ def sync_allowed_symbols_to_plane(
 
         plane = get_control_plane()
         if operator is not None:
-            plane.update_auto_trade_controls(
+            plane.update_auto_trade_controls(  # type: ignore[call-arg]
                 operator,
                 allowed_symbols=tuple(ordered),
                 reason=reason,

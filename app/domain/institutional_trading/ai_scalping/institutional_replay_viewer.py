@@ -19,15 +19,11 @@ def format_institutional_replay(raw: dict[str, Any] | Any) -> dict[str, Any]:
 
     _frames_value = item.get("frames")
     frames = _frames_value if isinstance(_frames_value, list) else []
-    market = (
-        item.get("market_snapshot")
-        if isinstance(item.get("market_snapshot"), dict)
-        else {}
-    )
+    _market_value = item.get("market_snapshot")
+    market = _market_value if isinstance(_market_value, dict) else {}
+    _institutional_value = market.get("institutional")
     institutional = (
-        market.get("institutional")
-        if isinstance(market.get("institutional"), dict)
-        else {}
+        _institutional_value if isinstance(_institutional_value, dict) else {}
     )
 
     timeline = []

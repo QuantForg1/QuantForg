@@ -67,6 +67,7 @@ def build_market_universe_report(
         if unavailable:
             return CATALOGUE_UNAVAILABLE
         return counts.get(key, default)
+
     return {
         "advisory_only": True,
         "authorizes_trade": False,

@@ -107,7 +107,9 @@ def test_execution_worker_status_reports_disabled_blocker() -> None:
 
 @pytest.mark.unit
 def test_openai_quota_error_recorded_as_advisory_degraded() -> None:
-    _record_openai_error("insufficient_quota", "OpenAI account has no remaining API credits")
+    _record_openai_error(
+        "insufficient_quota", "OpenAI account has no remaining API credits"
+    )
     err = last_openai_provider_error()
     assert err is not None
     assert err["code"] == "insufficient_quota"

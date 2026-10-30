@@ -774,9 +774,7 @@ def test_genuine_chase_documents_zone_and_atr() -> None:
 
 def test_ob_retest_uses_originating_timeframe() -> None:
     snap = _snap(
-        order_blocks=[
-            _ob(bias="BUY", high="2612", low="2608", timeframe=Timeframe.H1)
-        ],
+        order_blocks=[_ob(bias="BUY", high="2612", low="2608", timeframe=Timeframe.H1)],
         bos=[_bos("UP")],
         sweeps=[MagicMock(side="LOW")],
     )
@@ -798,13 +796,11 @@ def test_ob_retest_uses_originating_timeframe() -> None:
 
 
 def test_ob_missing_timeframe_scales_m5_atr_to_m15_not_false_chase() -> None:
-    """M15 OB without TF metadata must not use raw M5 1.5×ATR as chase."""
+    """M15 OB without TF metadata must not use raw M5 1.5xATR as chase."""
     from app.domain.institutional_trading.ai_scalping.sniper_entry import _atr_for_zone
 
     m5 = Decimal("5.61")
-    scaled = _atr_for_zone(
-        m5, atr_timeframe="M5", zone_timeframe=None, source="ob"
-    )
+    scaled = _atr_for_zone(m5, atr_timeframe="M5", zone_timeframe=None, source="ob")
     assert scaled > m5
     snap = _snap(
         order_blocks=[_ob(bias="BUY", high="2612", low="2608", timeframe=None)],
@@ -877,9 +873,7 @@ def test_operator_regime_labels_are_display_only() -> None:
     assert operator_regime_label("breakout") == "BREAKOUT"
     assert operator_regime_label("expansion") == "HIGH_VOLATILITY"
     assert operator_regime_label("compression") == "LOW_LIQUIDITY"
-    assert (
-        operator_regime_label("range", setup_family="fvg_retest") == "RETEST"
-    )
+    assert operator_regime_label("range", setup_family="fvg_retest") == "RETEST"
     assert operator_regime_label("range", no_trade=True) == "NO_TRADE"
 
 

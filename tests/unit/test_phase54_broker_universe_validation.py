@@ -153,9 +153,9 @@ async def test_authenticated_connect_binds_owned_account() -> None:
     assert bound_login == 4242
     blob = str(result).lower()
     assert _SECRET_PASSWORD.lower() not in blob
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
     assert snap["owned"] is True
     assert snap["ownership"] == "owned"
     assert snap["concurrent_live_sessions_supported"] is False
@@ -411,9 +411,7 @@ def test_no_second_gateway_scanner_engine_or_live_order() -> None:
     ]
     assert gateway == ["app/infrastructure/brokers/mt5/gateway_client.py"]
     assert engines == ["app/application/services/institutional_ite_runtime.py"]
-    assert scanners == [
-        "app/application/services/institutional_multi_asset_scanner.py"
-    ]
+    assert scanners == ["app/application/services/institutional_multi_asset_scanner.py"]
     for rel in (
         "app/domain/market_universe/broker_catalogue.py",
         "app/application/services/trading_session.py",

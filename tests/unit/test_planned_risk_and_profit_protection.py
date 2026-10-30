@@ -250,7 +250,7 @@ class TestPositionSizingUsdTarget:
             assert sized.accepted is True
             assert sized.volume == Decimal("0.01")
             assert sized.monetary_loss_at_sl == Decimal("1.80")
-            assert MIN_PLANNED_RISK_USD < sized.monetary_loss_at_sl
+            assert sized.monetary_loss_at_sl > MIN_PLANNED_RISK_USD
             assert sized.monetary_loss_at_sl <= MAX_PLANNED_SL_RISK_USD
 
     def test_volume_min_rejected_when_next_step_exceeds_remaining(self) -> None:

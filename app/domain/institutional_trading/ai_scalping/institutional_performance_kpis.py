@@ -78,12 +78,18 @@ def build_institutional_performance_kpis() -> dict[str, Any]:
     calmar = (total_return / max_dd) if max_dd > 0 else None
     recovery_factor = (total_return / max_dd) if max_dd > 0 else None
 
-    mae_vals = [_f(getattr(r, "mae_r", None)) for r in rows]
-    mae_vals = [v for v in mae_vals if v is not None]
-    mfe_vals = [_f(getattr(r, "mfe_r", None)) for r in rows]
-    mfe_vals = [v for v in mfe_vals if v is not None]
-    avg_mae = sum(mae_vals) / len(mae_vals) if mae_vals else None
-    avg_mfe = sum(mfe_vals) / len(mfe_vals) if mfe_vals else None
+    mae_clean: list[float] = []
+    for r in rows:
+        mae = _f(getattr(r, "mae_r", None))
+        if mae is not None:
+            mae_clean.append(mae)
+    mfe_clean: list[float] = []
+    for r in rows:
+        mfe = _f(getattr(r, "mfe_r", None))
+        if mfe is not None:
+            mfe_clean.append(mfe)
+    avg_mae = sum(mae_clean, 0.0) / len(mae_clean) if mae_clean else None
+    avg_mfe = sum(mfe_clean, 0.0) / len(mfe_clean) if mfe_clean else None
 
     # Execution Quality Index from EQ store when present
     eqi = None

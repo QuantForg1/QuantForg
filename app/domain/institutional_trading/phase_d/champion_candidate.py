@@ -50,8 +50,11 @@ def compare_champion_candidate(
     dd = (cd.get("max_drawdown") or 0) - (ch.get("max_drawdown") or 0)
     tl = (cd.get("tail_loss") or 0) - (ch.get("tail_loss") or 0)
     slip_ok = True
-    if champion_slippage and candidate_slippage and len(champion_slippage) and len(
-        candidate_slippage
+    if (
+        champion_slippage
+        and candidate_slippage
+        and len(champion_slippage)
+        and len(candidate_slippage)
     ):
         slip_ok = (sum(candidate_slippage) / len(candidate_slippage)) <= (
             sum(champion_slippage) / len(champion_slippage)

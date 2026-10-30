@@ -66,8 +66,8 @@ class TestXauusdSpecs:
     def test_desk_max_leverage_is_weltrade_2000(self) -> None:
         from app.domain.trading.xauusd_specs import EXPOSURE_LEVERAGE_FALLBACK
 
-        assert MAX_LEVERAGE == Decimal("2000")
-        assert EXPOSURE_LEVERAGE_FALLBACK == Decimal("1000")
+        assert Decimal("2000") == MAX_LEVERAGE
+        assert Decimal("1000") == EXPOSURE_LEVERAGE_FALLBACK
 
     def test_risk_engine_exposure_uses_margin_not_fx_notional(self) -> None:
         engine = RiskEngine(config=RiskEngineConfig())

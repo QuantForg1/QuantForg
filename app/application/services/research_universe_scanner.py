@@ -159,7 +159,7 @@ def score_injected_snapshots(
             highs=item.get("highs"),
             lows=item.get("lows"),
         )
-        payload = verdict.to_dict() if hasattr(verdict, "to_dict") else dict(verdict)
+        payload = verdict.to_dict()
         payload["symbol"] = str(item.get("symbol") or payload.get("symbol") or "")
         payload["layer"] = RESEARCH_SCAN_TAG
         payload["authorizes_trade"] = False
@@ -280,7 +280,7 @@ async def _score_one_research_symbol(
             bid=getattr(account, "bid", None),
             ask=getattr(account, "ask", None),
         )
-        payload = verdict.to_dict() if hasattr(verdict, "to_dict") else dict(verdict)
+        payload = verdict.to_dict()
     except Exception as exc:
         return {
             "symbol": resolved or code,
@@ -435,10 +435,11 @@ def score_symbols_for_research(
             "symbols_requested": 0,
             "second_scanner": False,
         }
-    return _run_coro(
+    scanned: dict[str, Any] = _run_coro(
         _score_symbols_for_research_async(
             mt5_adapter,
             list(symbols or ()),
             max_workers=max_workers,
         )
     )
+    return scanned

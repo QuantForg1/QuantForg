@@ -96,9 +96,7 @@ async def add_license_internal_note(
     }
     existing = _notes_store().get(license_id)
     if existing:
-        updated = _notes_store().upsert(
-            license_id, lambda _: {**row, "id": license_id}
-        )
+        updated = _notes_store().upsert(license_id, lambda _: {**row, "id": license_id})
     else:
         updated = _notes_store().append(row)
     _append_history(
@@ -118,7 +116,8 @@ async def add_license_internal_note(
         after=updated,
         ip=ip,
     )
-    return redact(updated or row)
+    redacted: dict[str, Any] = redact(updated or row)
+    return redacted
 
 
 async def license_manual_action(

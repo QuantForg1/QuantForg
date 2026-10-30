@@ -96,8 +96,7 @@ def first_blocking_gate_from_reasons(
     if reasons_indicate_execution_reject_burst(reasons):
         return EXECUTION_REJECT_BURST
     if any(
-        tok in hay
-        for tok in ("SAFETY_BLOCKED", "KILL_SWITCH", "AUTO_TRADING_BLOCKED")
+        tok in hay for tok in ("SAFETY_BLOCKED", "KILL_SWITCH", "AUTO_TRADING_BLOCKED")
     ):
         return SAFETY_BLOCKED
     # The owner quality floor is its own pre-OMS gate.
@@ -189,9 +188,10 @@ def should_count_execution_reject(
     """True only after OMS submit and a genuine downstream execution failure."""
     if not oms_submit_called and oms_result is None:
         return False
-    return classify_downstream_execution_reject(
-        oms_result, abort_reason=abort_reason
-    ) is not None
+    return (
+        classify_downstream_execution_reject(oms_result, abort_reason=abort_reason)
+        is not None
+    )
 
 
 def execution_observability(
@@ -205,6 +205,7 @@ def execution_observability(
     reject_timestamp: str | None = None,
 ) -> dict[str, Any]:
     """Operator flags. Never labels Risk/Safety/WAIT as a broker reject."""
+    _ = forwarded_to_oms
     abort = _abort_token(abort_reason)
     raw: dict[str, Any] = {}
     if oms_result is not None:
@@ -219,9 +220,7 @@ def execution_observability(
     order_send = bool(raw.get("order_send_reached")) or "order_send" in gw
     order_check = bool(raw.get("order_check_reached")) or "order_check" in gw
     oms_reached = bool(
-        oms_submit_called
-        or oms_result is not None
-        or raw.get("oms_reached")
+        oms_submit_called or oms_result is not None or raw.get("oms_reached")
     )
     if abort in _PRE_OMS_ABORTS and not oms_submit_called and oms_result is None:
         oms_reached = False
@@ -242,14 +241,14 @@ def execution_observability(
                 mt5_retcode = rc
     stage = None
     if oms_result is not None or oms_submit_called:
-        stage = classify_downstream_execution_reject(
-            oms_result, abort_reason=abort
-        )
+        stage = classify_downstream_execution_reject(oms_result, abort_reason=abort)
     if stage:
         reject_source = stage
     elif oms_reached and not execution_attempted:
         reject_source = "OMS_APPLICATION"
-    elif abort in {EXECUTION_REJECT_BURST, "SELF_PROTECTION"} or "REJECT_BURST" in abort:
+    elif (
+        abort in {EXECUTION_REJECT_BURST, "SELF_PROTECTION"} or "REJECT_BURST" in abort
+    ):
         reject_source = EXECUTION_REJECT_BURST
     elif abort:
         reject_source = abort
@@ -290,9 +289,7 @@ def apply_oms_outcome_to_burst(
         return burst.record_execution_failure(stage=GATEWAY)
     if status_u in {"OMS_SUCCESS", "SUCCESS"}:
         return burst.record_entry_attempt()
-    stage = classify_downstream_execution_reject(
-        oms_result, abort_reason=abort
-    )
+    stage = classify_downstream_execution_reject(oms_result, abort_reason=abort)
     if stage is None:
         return None
     burst.record_broker_reject(stage=stage)

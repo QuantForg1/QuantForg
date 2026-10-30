@@ -37,7 +37,7 @@ def get_api_key_store() -> JsonDocumentStore:
 
 
 def _public_view(row: dict[str, Any]) -> dict[str, Any]:
-    out = redact(dict(row))
+    out: dict[str, Any] = redact(dict(row))
     out.pop("key_hash", None)
     out["secret_exposed"] = False
     out["plaintext"] = None
@@ -75,8 +75,10 @@ def create_api_key(
     expires_at = None
     if expires_days and expires_days > 0:
         expires_at = (
-            datetime.now(UTC) + timedelta(days=int(expires_days))
-        ).isoformat().replace("+00:00", "Z")
+            (datetime.now(UTC) + timedelta(days=int(expires_days)))
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
     row = {
         "id": new_id("key"),
         "organization_id": organization_id,

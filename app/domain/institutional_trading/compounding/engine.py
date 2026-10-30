@@ -57,7 +57,9 @@ def _clamp_int(n: int, lo: int = 0, hi: int = 100) -> int:
     return max(lo, min(hi, int(n)))
 
 
-def classify_drawdown(inputs: CompoundingInputs) -> tuple[DrawdownState, tuple[str, ...]]:
+def classify_drawdown(
+    inputs: CompoundingInputs,
+) -> tuple[DrawdownState, tuple[str, ...]]:
     """Reuse ITE daily-loss / weekly-drawdown ceilings. Do not invent live limits."""
     notes: list[str] = []
     max_daily = _dec(
@@ -70,7 +72,7 @@ def classify_drawdown(inputs: CompoundingInputs) -> tuple[DrawdownState, tuple[s
     daily = inputs.daily_loss_pct
     if daily is None and inputs.equity and inputs.daily_pnl is not None:
         if inputs.equity > 0 and inputs.daily_pnl < 0:
-            daily = (abs(inputs.daily_pnl) / inputs.equity * _PCT)
+            daily = abs(inputs.daily_pnl) / inputs.equity * _PCT
         else:
             daily = Decimal("0")
     if daily is None:
@@ -78,11 +80,13 @@ def classify_drawdown(inputs: CompoundingInputs) -> tuple[DrawdownState, tuple[s
         return "CAUTION", tuple(notes)
 
     weekly = Decimal("0")
-    if inputs.peak_equity and inputs.equity and inputs.peak_equity > 0:
-        if inputs.equity < inputs.peak_equity:
-            weekly = (
-                (inputs.peak_equity - inputs.equity) / inputs.peak_equity * _PCT
-            )
+    if (
+        inputs.peak_equity
+        and inputs.equity
+        and inputs.peak_equity > 0
+        and inputs.equity < inputs.peak_equity
+    ):
+        weekly = (inputs.peak_equity - inputs.equity) / inputs.peak_equity * _PCT
 
     # max_week 0 = no weekly limit (owner 2026-10-23: daily stop only).
     if daily >= max_daily or (max_week > 0 and weekly >= max_week):
@@ -163,7 +167,11 @@ def compute_conviction(inputs: CompoundingInputs) -> ConvictionResult:
         penalties.append("same_symbol_or_capacity_blocked-15")
 
     conviction = _clamp_int(base - deduct)
-    conf = int(inputs.confidence if inputs.confidence is not None else components.get("confidence") or 0)
+    conf = int(
+        inputs.confidence
+        if inputs.confidence is not None
+        else components.get("confidence") or 0
+    )
     conf = _clamp_int(conf)
     adjusted = _clamp_int(round(0.55 * conviction + 0.45 * conf))
 
@@ -347,7 +355,7 @@ def compute_sizing(
     if approved < 0:
         approved = Decimal("0")
     band = _quality_band(conviction.conviction_score)
-    mult = _QUALITY_RISK_SCALE[band]  # type: ignore[index]
+    mult = _QUALITY_RISK_SCALE[band]
     # Never exceed Risk-approved volume. Aggressive = use more of the
     # already-approved budget, not a higher cap.
     suggested = (approved * mult).quantize(VOLUME_STEP)
@@ -382,7 +390,9 @@ def compute_scale_in(inputs: CompoundingInputs) -> ScaleInAdvice:
     # auto-enabled by this shadow layer.
     if inputs.same_symbol_blocked or not inputs.candidate_allowed:
         shadow = may_add_scalping_trade(
-            open_positions=max(1, int(inputs.quantforg_open_count or inputs.open_positions)),
+            open_positions=max(
+                1, int(inputs.quantforg_open_count or inputs.open_positions)
+            ),
             max_open=max(1, int(inputs.configured_max_open)),
             new_confidence=int(inputs.confidence or 0),
             best_open_confidence=None,
@@ -403,9 +413,9 @@ def compute_scale_in(inputs: CompoundingInputs) -> ScaleInAdvice:
             scale_in_allowed=False,
             scale_in_live_enabled=False,
             shadow_eligible=bool(shadow.allow) and not live_on,
-            scale_in_block_reason=reason
-            if not shadow.allow
-            else "SEQUENTIAL_SCALE_IN_LIVE_DISABLED",
+            scale_in_block_reason=(
+                reason if not shadow.allow else "SEQUENTIAL_SCALE_IN_LIVE_DISABLED"
+            ),
             winners_only=True,
         )
 
@@ -484,7 +494,7 @@ def evaluate_compounding_shadow(inputs: CompoundingInputs) -> CompoundingObserva
     if approved < 0:
         approved = Decimal("0")
     band = _quality_band(conviction.conviction_score)
-    preview = (approved * _QUALITY_RISK_SCALE[band]).quantize(VOLUME_STEP)  # type: ignore[index]
+    preview = (approved * _QUALITY_RISK_SCALE[band]).quantize(VOLUME_STEP)
     if preview > approved:
         preview = approved
     counts = compute_counts(

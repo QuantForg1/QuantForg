@@ -86,9 +86,7 @@ async def incidents(
 
 
 @router.get("/incidents/{incident_id}")
-async def incident_detail(
-    incident_id: str, _user: OperatorUser
-) -> dict[str, Any]:
+async def incident_detail(incident_id: str, _user: OperatorUser) -> dict[str, Any]:
     row = get_incident(incident_id)
     if not row:
         return {"ok": False, "error": "not_found"}
@@ -116,9 +114,7 @@ async def set_incident_status(
     body: dict[str, Any] = Body(default_factory=dict),
 ) -> dict[str, Any]:
     actions = body.get("actions")
-    action_list = (
-        [str(a) for a in actions] if isinstance(actions, list) else None
-    )
+    action_list = [str(a) for a in actions] if isinstance(actions, list) else None
     return update_incident_status(
         incident_id,
         status=str(body.get("status") or ""),

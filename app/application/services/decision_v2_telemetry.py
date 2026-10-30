@@ -136,10 +136,14 @@ def build_rejection_telemetry(
     confidence_pass = c is not None and c >= min_confidence
     liquidity_pass_v2 = liq is not None and liq >= 65
     # Legacy liquidity: score 20 meant reject
-    liquidity_pass_v1 = liq is not None and liq >= 65 and not (
-        # If sources include only v2 expansions, legacy would have failed —
-        # callers should pass liquidity_sources for accuracy.
-        False
+    liquidity_pass_v1 = (
+        liq is not None
+        and liq >= 65
+        and not (
+            # If sources include only v2 expansions, legacy would have failed —
+            # callers should pass liquidity_sources for accuracy.
+            False
+        )
     )
 
     sources = [str(s) for s in (liquidity_sources or ())]
@@ -170,7 +174,9 @@ def build_rejection_telemetry(
         "symbol": symbol,
         "market_regime": regime,
         "h4_contribution": contributions.get("h4", contributions.get("macro_bias", 0)),
-        "h1_contribution": contributions.get("h1", contributions.get("primary_structure", 0)),
+        "h1_contribution": contributions.get(
+            "h1", contributions.get("primary_structure", 0)
+        ),
         "m15_contribution": contributions.get(
             "m15", contributions.get("entry_confirmation", 0)
         ),

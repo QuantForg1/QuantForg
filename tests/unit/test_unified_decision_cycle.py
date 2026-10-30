@@ -1,6 +1,5 @@
 """Unified same-cycle decision: SCALP/HOLD, multi-position plan, safety."""
 
-# ruff: noqa: E501
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -83,7 +82,9 @@ def _zone(px: str = "2400") -> PriceZone:
     return PriceZone(low=p, high=p, mid=p)
 
 
-def _decision(*, lots: str = "0.10", action: DecisionAction = DecisionAction.BUY) -> TradeDecision:
+def _decision(
+    *, lots: str = "0.10", action: DecisionAction = DecisionAction.BUY
+) -> TradeDecision:
     conf = ConfluenceResult(
         confidence=80,
         direction=TradeDirection.BUY,
@@ -95,7 +96,9 @@ def _decision(*, lots: str = "0.10", action: DecisionAction = DecisionAction.BUY
     )
     return TradeDecision(
         action=action,
-        direction=TradeDirection.BUY if action is DecisionAction.BUY else TradeDirection.NONE,
+        direction=(
+            TradeDirection.BUY if action is DecisionAction.BUY else TradeDirection.NONE
+        ),
         confidence=80,
         quality=80,
         risk_score=20,
@@ -107,7 +110,9 @@ def _decision(*, lots: str = "0.10", action: DecisionAction = DecisionAction.BUY
         estimated_rr=Decimal("1.5"),
         expected_duration="scalp",
         confluence=conf,
-        eligibility=EligibilityResult(eligible=True, checks={"risk_available": True}, rejection_reasons=()),
+        eligibility=EligibilityResult(
+            eligible=True, checks={"risk_available": True}, rejection_reasons=()
+        ),
         input_hash="cycle-hash-base",
         config_version="ite-test",
         symbol="XAUUSD_i",
@@ -167,7 +172,9 @@ def _ok_result() -> ExecutionBridgeResult:
         abort_reason=BridgeAbortReason.NONE,
         decision_hash="h",
         journal_entry=rec,
-        oms_result=OmsSubmitResult(outcome="success", message="filled", retcode=10009, order_ticket=1),
+        oms_result=OmsSubmitResult(
+            outcome="success", message="filled", retcode=10009, order_ticket=1
+        ),
     )
 
 
@@ -236,7 +243,9 @@ def test_medium_valid_signal_is_scalp() -> None:
         regime="range",
     )
     assert out.trade_class is TradeClass.SCALP
-    assert "holding-quality" in out.reason.lower() or "insufficient" in out.reason.lower()
+    assert (
+        "holding-quality" in out.reason.lower() or "insufficient" in out.reason.lower()
+    )
 
 
 def test_strong_signal_is_hold() -> None:
@@ -379,9 +388,7 @@ def test_margin_can_reduce_requested_count() -> None:
 
 
 def test_existing_quantforg_positions_reduce_capacity() -> None:
-    rem = remaining_quantforg_capacity(
-        current_count=7, configured_max=10, class_cap=10
-    )
+    rem = remaining_quantforg_capacity(current_count=7, configured_max=10, class_cap=10)
     assert rem == 3
     plan = build_position_plan(
         cycle_id="c",
@@ -401,7 +408,12 @@ def test_existing_quantforg_positions_reduce_capacity() -> None:
 def test_manual_positions_do_not_reduce_quantforg_capacity() -> None:
     rows = [
         {"ticket": 1, "magic": 0, "comment": "manual", "symbol": "XAUUSD_i"},
-        {"ticket": 2, "magic": QUANTFORG_MAGIC, "comment": "ite:v1:x", "symbol": "XAUUSD_i"},
+        {
+            "ticket": 2,
+            "magic": QUANTFORG_MAGIC,
+            "comment": "ite:v1:x",
+            "symbol": "XAUUSD_i",
+        },
     ]
     assert owned_count_from_rows(rows, symbol="XAUUSD_i") == 1
 
@@ -466,7 +478,9 @@ def test_stale_safety_cannot_authorize() -> None:
     )
     from dataclasses import replace
 
-    aged = replace(snap, timestamp=utc_stamp(), risk_as_of=utc_stamp(), safety_as_of=old)
+    aged = replace(
+        snap, timestamp=utc_stamp(), risk_as_of=utc_stamp(), safety_as_of=old
+    )
     assert stale_authorization(aged) == "STALE_SAFETY"
 
 
@@ -488,7 +502,9 @@ def test_hard_risk_failure_blocks_entire_batch() -> None:
     )
     calls: list[int] = []
 
-    def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
+    def submit(
+        dec: TradeDecision, _ctx: ExecutionBridgeContext
+    ) -> ExecutionBridgeResult:
         calls.append(1)
         return _hard_result()
 
@@ -519,7 +535,9 @@ def test_hard_safety_failure_blocks_entire_batch() -> None:
         base_input_hash=decision.input_hash,
     )
 
-    def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
+    def submit(
+        dec: TradeDecision, _ctx: ExecutionBridgeContext
+    ) -> ExecutionBridgeResult:
         rec = _ok_result().journal_entry
         return ExecutionBridgeResult(
             forwarded_to_oms=False,
@@ -551,7 +569,9 @@ def test_one_cycle_one_position_plan() -> None:
         ite_config=ITEConfig(),
     )
     assert plan.position_plan_id
-    assert all(leg.idempotency_key.startswith(plan.idempotency_key) for leg in plan.legs)
+    assert all(
+        leg.idempotency_key.startswith(plan.idempotency_key) for leg in plan.legs
+    )
 
 
 def test_single_leg_shares_cycle_snapshot_plan_ids() -> None:
@@ -593,7 +613,9 @@ def test_single_leg_rejection_is_recorded_not_filled() -> None:
         base_input_hash=decision.input_hash,
     )
 
-    def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
+    def submit(
+        dec: TradeDecision, _ctx: ExecutionBridgeContext
+    ) -> ExecutionBridgeResult:
         rec = ExecutionAttemptRecord(
             decision_hash="r",
             input_hash="i",
@@ -650,7 +672,9 @@ def test_unknown_order_is_not_blindly_retried() -> None:
     )
     calls = {"n": 0}
 
-    def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
+    def submit(
+        dec: TradeDecision, _ctx: ExecutionBridgeContext
+    ) -> ExecutionBridgeResult:
         calls["n"] += 1
         return _unknown_result()
 
@@ -681,7 +705,9 @@ def test_duplicate_cycle_cannot_duplicate_execution() -> None:
     )
     calls = {"n": 0}
 
-    def submit(dec: TradeDecision, _ctx: ExecutionBridgeContext) -> ExecutionBridgeResult:
+    def submit(
+        dec: TradeDecision, _ctx: ExecutionBridgeContext
+    ) -> ExecutionBridgeResult:
         calls["n"] += 1
         return _ok_result()
 

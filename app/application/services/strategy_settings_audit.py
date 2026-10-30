@@ -73,7 +73,9 @@ def audit_news_protection() -> dict[str, Any]:
     try:
         from core.config.settings import get_settings
 
-        url = str(getattr(get_settings(), "economic_calendar_feed_url", "") or "").strip()
+        url = str(
+            getattr(get_settings(), "economic_calendar_feed_url", "") or ""
+        ).strip()
     except Exception:
         url = ""
 
@@ -89,7 +91,7 @@ def audit_news_protection() -> dict[str, Any]:
     else:
         status = "UNUSED"
 
-    currently_vetoes = False
+    currently_vetoes: bool | str = False
     if calendar_configured and live_flag:
         currently_vetoes = "UNKNOWN"
     enabling = (
@@ -148,7 +150,8 @@ def build_strategy_settings_audit() -> dict[str, Any]:
             conflict=False,
             action="Keep 70. Do not lower to increase frequency.",
             status="AUTHORITATIVE_LIVE",
-            actual_effect="TAKE requires opportunity_score >= 70 after present-only renormalization.",
+            actual_effect="TAKE requires opportunity_score >= 70 after present-only "
+            "renormalization.",
             safe_to_change=False,
         ),
         _row(
@@ -157,14 +160,17 @@ def build_strategy_settings_audit() -> dict[str, Any]:
             default=5,
             live=SCALPING_V1.direction_edge_margin,
             consumer="ai_scalping.direction.decide_scalping_direction",
-            path="SCALPING_V1 → decide_scalping_direction (LTF abs(buy−sell))",
+            path="SCALPING_V1 → decide_scalping_direction (LTF abs(buy-sell))",
             legacy=False,
             duplicated=False,
             unused=False,
             conflict=False,
             action="Keep 5. LTF edge is authoritative, not totals.",
             status="AUTHORITATIVE_LIVE",
-            actual_effect="BUY/SELL only when LTF core_buy > core_sell + 5 (or reverse). Totals do not decide.",
+            actual_effect=(
+                "BUY/SELL only when LTF core_buy > core_sell + 5 (or reverse). Totals "
+                "do not decide."
+            ),
             safe_to_change=False,
         ),
         _row(
@@ -200,7 +206,8 @@ def build_strategy_settings_audit() -> dict[str, Any]:
             duplicated=True,
             unused=False,
             conflict=True,
-            action="Do not change without explicit approval. ITEConfig default 1 is leftover.",
+            action="Do not change without explicit approval. ITEConfig default 1 is "
+            "leftover.",
             status="AUTHORITATIVE_LIVE",
         ),
         _row(
@@ -265,7 +272,8 @@ def build_strategy_settings_audit() -> dict[str, Any]:
             default=False,
             live=SCALPING_V1.news_protection_enabled,
             consumer=str(news.get("consumed_by")),
-            path="pipeline.NewsProtection.evaluate; calendar only if ECONOMIC_CALENDAR_FEED_URL",
+            path="pipeline.NewsProtection.evaluate; calendar only if "
+            "ECONOMIC_CALENDAR_FEED_URL",
             legacy=False,
             duplicated=True,
             unused=news.get("STATUS") in {"UNWIRED", "UNUSED", "INACTIVE"},
@@ -284,7 +292,9 @@ def build_strategy_settings_audit() -> dict[str, Any]:
             duplicated=False,
             unused=False,
             conflict=False,
-            action="No change. Do not infer session profitability from a London-only tape.",
+            action=(
+                "No change. Do not infer session profitability from a London-only tape."
+            ),
             status="AUTHORITATIVE_LIVE",
         ),
         _row(
@@ -355,8 +365,12 @@ def build_strategy_settings_audit() -> dict[str, Any]:
         "never_changes_live_settings": True,
         "settings": rows,
         "news_protection": news,
-        "LIVE_EFFECTIVE_CONFIG": [r for r in rows if r.get("STATUS") == "AUTHORITATIVE_LIVE"],
-        "LEGACY_CONFIG": [r for r in rows if r.get("LEGACY") or r.get("STATUS") == "LEGACY_DEFAULT"],
+        "LIVE_EFFECTIVE_CONFIG": [
+            r for r in rows if r.get("STATUS") == "AUTHORITATIVE_LIVE"
+        ],
+        "LEGACY_CONFIG": [
+            r for r in rows if r.get("LEGACY") or r.get("STATUS") == "LEGACY_DEFAULT"
+        ],
         "RESEARCH_ONLY_CONFIG": [
             r
             for r in rows
@@ -366,7 +380,8 @@ def build_strategy_settings_audit() -> dict[str, Any]:
         "authoritative_call_chain": (
             "SCALPING_V1 is applied through ite_config_from_scalping. "
             "Opportunity 70 lives in probability_selector. "
-            "Directional edge 5 lives in SCALPING_V1.direction_edge_margin → direction.py. "
+            "Directional edge 5 lives in SCALPING_V1.direction_edge_margin → "
+            "direction.py. "
             "ITEConfig dataclass defaults are leftovers unless copied."
         ),
     }

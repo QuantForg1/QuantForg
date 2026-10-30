@@ -40,9 +40,7 @@ class LoginUseCase:
         try:
             try:
                 session = await asyncio.wait_for(
-                    self.auth.sign_in(
-                        email=command.email, password=command.password
-                    ),
+                    self.auth.sign_in(email=command.email, password=command.password),
                     timeout=_LOGIN_SIGN_IN_TIMEOUT_S,
                 )
             except TimeoutError as extra:

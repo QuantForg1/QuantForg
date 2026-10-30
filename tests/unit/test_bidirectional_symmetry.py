@@ -162,7 +162,7 @@ def _sniper(snap: MagicMock, direction: DirectionDecision, **kwargs: object) -> 
 
 def test_contracts_unchanged() -> None:
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert MAX_DAILY_LOSS_PCT == Decimal("19.0")
+    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
     assert should_blind_retry_order_submit() is False
     assert DEFAULT_AI_SCALPING_CONFIG.never_prefer_buy_only is True
     assert DEFAULT_AI_SCALPING_CONFIG.allow_martingale is False
@@ -214,7 +214,9 @@ def test_tie_does_not_default_reversal_to_sell() -> None:
 
 
 def test_momentum_does_not_follow_htf_totals() -> None:
-    snap = _snap(macro=TrendDirection.DOWN, primary=TrendDirection.DOWN, bos=[], sweeps=[])
+    snap = _snap(
+        macro=TrendDirection.DOWN, primary=TrendDirection.DOWN, bos=[], sweeps=[]
+    )
     dec = decide_scalping_direction(snap)
     joined = " ".join(dec.reasons)
     assert "Momentum confirms SELL" not in joined
@@ -273,7 +275,9 @@ def test_close_ltf_scores_are_wait_not_take() -> None:
     )
     dec = decide_scalping_direction(snap)
     assert dec.direction is TradeDirection.NONE
-    out = _sniper(snap, _dir(TradeDirection.NONE, buy=42, sell=34, ltf_buy=28, ltf_sell=24))
+    out = _sniper(
+        snap, _dir(TradeDirection.NONE, buy=42, sell=34, ltf_buy=28, ltf_sell=24)
+    )
     assert out.passed is False
     assert out.action == "WAIT"
     assert out.primary_reason == "WAIT_NO_DIRECTIONAL_EDGE"
@@ -282,10 +286,16 @@ def test_close_ltf_scores_are_wait_not_take() -> None:
 
 def test_standing_equal_levels_do_not_false_conflict() -> None:
     snap = _snap(equal_highs=[object()], equal_lows=[object()])
-    out = _sniper(snap, _dir(TradeDirection.NONE, buy=42, sell=34, ltf_buy=28, ltf_sell=24))
+    out = _sniper(
+        snap, _dir(TradeDirection.NONE, buy=42, sell=34, ltf_buy=28, ltf_sell=24)
+    )
     assert out.passed is False
     assert out.primary_reason == "WAIT_NO_DIRECTIONAL_EDGE"
-    assert out.diagnostics.get("setup_state") in {"CONFLICT", "NO_SETUP", "SETUP_FORMING"}
+    assert out.diagnostics.get("setup_state") in {
+        "CONFLICT",
+        "NO_SETUP",
+        "SETUP_FORMING",
+    }
 
 
 def test_real_opposite_setup_family_still_waits() -> None:
@@ -409,7 +419,11 @@ def test_take_without_ticket_is_not_executed() -> None:
                 "direction": "BUY",
                 "signal_action": "BUY",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "BUY", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {

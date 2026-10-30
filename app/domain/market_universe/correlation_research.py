@@ -114,9 +114,11 @@ def analyze_correlation_exposure(
         "forex_concentration": forex,
         "duplicate_desks": {k: v for k, v in by_desk.items() if v > 1},
         "flags": unique_flags,
-        "status": "CORRELATED_EXPOSURE"
-        if unique_flags
-        else "INDEPENDENT_OR_INSUFFICIENT_SAMPLE",
+        "status": (
+            "CORRELATED_EXPOSURE"
+            if unique_flags
+            else "INDEPENDENT_OR_INSUFFICIENT_SAMPLE"
+        ),
         "instruments": rows,
         "clusters": {
             "USD": usd,
@@ -127,20 +129,20 @@ def analyze_correlation_exposure(
             "ENERGY": energy,
             "BTC": btc,
         },
-        "correlation_matrix": "INSUFFICIENT_SAMPLE"
-        if n < 2
-        else {
-            "price_correlation": INSUFFICIENT_SAMPLE
-            if n < 20
-            else UNKNOWN,
-            "price_correlation_method": "not_computed_without_matched_history",
-            "usd_cluster_n": usd,
-            "crypto_cluster_n": crypto,
-            "metals_cluster_n": metals,
-            "indices_cluster_n": indices,
-            "energy_cluster_n": energy,
-            "forex_cluster_n": forex,
-        },
+        "correlation_matrix": (
+            "INSUFFICIENT_SAMPLE"
+            if n < 2
+            else {
+                "price_correlation": INSUFFICIENT_SAMPLE if n < 20 else UNKNOWN,
+                "price_correlation_method": "not_computed_without_matched_history",
+                "usd_cluster_n": usd,
+                "crypto_cluster_n": crypto,
+                "metals_cluster_n": metals,
+                "indices_cluster_n": indices,
+                "energy_cluster_n": energy,
+                "forex_cluster_n": forex,
+            }
+        ),
         "same_direction_concentration": UNKNOWN,
         "inverse_exposure": UNKNOWN,
         "open_positions": UNKNOWN,

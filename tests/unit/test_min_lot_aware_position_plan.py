@@ -272,8 +272,12 @@ def test_one_existing_quantforg_position_leaves_no_capacity() -> None:
 def test_manual_positions_do_not_reduce_count() -> None:
     rows = [
         {"ticket": 1, "magic": 0, "comment": "manual", "symbol": "XAUUSD_i"},
-        {"ticket": 2, "magic": QUANTFORG_MAGIC, "comment": "ite:v1:x",
-         "symbol": "XAUUSD_i"},
+        {
+            "ticket": 2,
+            "magic": QUANTFORG_MAGIC,
+            "comment": "ite:v1:x",
+            "symbol": "XAUUSD_i",
+        },
     ]
     assert owned_count_from_rows(rows, symbol="XAUUSD_i") == 1
     snap = build_authoritative_snapshot(

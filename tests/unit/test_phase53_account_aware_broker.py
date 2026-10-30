@@ -195,16 +195,14 @@ async def test_missing_broker_connection_is_broker_not_connected() -> None:
     factory = MemoryMT5UnitOfWorkFactory()
     adapter = MT5Adapter(client=FakeGatewayClient())
     user_id = uuid4()
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
     assert snap["robot_blocked_reason"] == "BROKER_NOT_CONNECTED"
     assert snap["owned"] is False
     assert snap["ownership"] == "none"
     with pytest.raises(NotFoundError) as exc:
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=user_id,
             role="trader",
             display_name="Trader",
@@ -219,9 +217,9 @@ async def test_session_dto_never_includes_broker_password() -> None:
     adapter = MT5Adapter(client=FakeGatewayClient())
     user_id = uuid4()
     await seed_owned_mt5_connection(factory, user_id)
-    snap = await GetTradingSessionUseCase(
-        uow_factory=factory, adapter=adapter
-    ).execute(user_id=user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
     blob = str(snap).lower()
     assert "password" not in blob
     assert "ciphertext" not in blob
@@ -399,9 +397,7 @@ async def test_foreign_robot_start_is_account_session_mismatch() -> None:
     )
     assert started["robot"] == "Running"
     with pytest.raises(ConflictError) as exc:
-        await ControlTradingRobotUseCase(
-            uow_factory=factory, adapter=adapter
-        ).execute(
+        await ControlTradingRobotUseCase(uow_factory=factory, adapter=adapter).execute(
             user_id=user_b,
             role="trader",
             display_name="Trader B",

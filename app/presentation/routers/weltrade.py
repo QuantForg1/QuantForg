@@ -32,9 +32,7 @@ async def weltrade_profile(_user: CurrentUser, svc: WeltradeSvc) -> dict[str, An
 @router.get("/health")
 async def weltrade_health(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     """Gateway / tunnel / MT5 session health for the Weltrade production desk."""
-    return await svc.health(
-        user_id=user.id, role=str(getattr(user, "role", "") or "")
-    )
+    return await svc.health(user_id=user.id, role=str(getattr(user, "role", "") or ""))
 
 
 @router.get("/dashboard")

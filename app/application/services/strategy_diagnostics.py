@@ -7,6 +7,7 @@ safety, OMS, or MT5 execution paths.
 
 from __future__ import annotations
 
+import contextlib
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -251,6 +252,7 @@ def extract_cycle_diagnostics(
         session = snapshot.session.session.value
         session_allowed = bool(snapshot.session.allowed)
         t = snapshot.trend
+        trade_bias = getattr(t, "trade_bias", None)
         trend = {
             "h4": _trend_value(t.macro_bias),
             "h1": _trend_value(t.primary),
@@ -262,11 +264,7 @@ def extract_cycle_diagnostics(
             "mtf_policy": getattr(t, "mtf_policy", "v1"),
             "mtf_contributions": dict(getattr(t, "mtf_contributions", {}) or {}),
             "h4_is_context": bool(getattr(t, "h4_is_context", False)),
-            "trade_bias": (
-                t.trade_bias.value
-                if getattr(t, "trade_bias", None) is not None
-                else None
-            ),
+            "trade_bias": (trade_bias.value if trade_bias is not None else None),
             "m15_semantics": dict(getattr(t, "m15_semantics", {}) or {}),
         }
         quality_total = int(snapshot.trade_quality.total)
@@ -387,9 +385,7 @@ def extract_cycle_diagnostics(
 
     blocked_ev = diag.get("execution_blocked")
     blocked_stage = (
-        str(blocked_ev.get("stage") or "")
-        if isinstance(blocked_ev, dict)
-        else ""
+        str(blocked_ev.get("stage") or "") if isinstance(blocked_ev, dict) else ""
     )
     handoff = diag.get("execution_handoff")
     ticket_probe: dict[str, Any] = dict(diag)
@@ -566,15 +562,18 @@ def extract_cycle_diagnostics(
         "decision_hash": diag.get("decision_hash"),
         "request_id": diag.get("request_id") or trace_id,
         "timeframe": diag.get("timeframe") or diag.get("atr_timeframe"),
-        "market_regime": diag.get("market_regime")
-        or trend.get("market_regime"),
+        "market_regime": diag.get("market_regime") or trend.get("market_regime"),
         "data_age": diag.get("data_age") or diag.get("data_age_seconds"),
-        "score_breakdown": diag.get("score_breakdown")
-        if isinstance(diag.get("score_breakdown"), dict)
-        else {},
-        "opportunity_audit": diag.get("opportunity_audit")
-        if isinstance(diag.get("opportunity_audit"), dict)
-        else {},
+        "score_breakdown": (
+            diag.get("score_breakdown")
+            if isinstance(diag.get("score_breakdown"), dict)
+            else {}
+        ),
+        "opportunity_audit": (
+            diag.get("opportunity_audit")
+            if isinstance(diag.get("opportunity_audit"), dict)
+            else {}
+        ),
         "structure_score": diag.get("structure_score"),
         "liquidity_score": diag.get("liquidity_score"),
         "zone_score": diag.get("zone_score"),
@@ -668,7 +667,10 @@ def hourly_scan_rates(
                 opp_n += 1
                 if action == "BUY" or str(row.get("candidate") or "").upper() == "BUY":
                     buy_cand_n += 1
-                elif action == "SELL" or str(row.get("candidate") or "").upper() == "SELL":
+                elif (
+                    action == "SELL"
+                    or str(row.get("candidate") or "").upper() == "SELL"
+                ):
                     sell_cand_n += 1
         except (TypeError, ValueError):
             pass
@@ -1043,10 +1045,8 @@ class StrategyDiagnosticsStore:
             )
         except Exception:  # noqa: S110  # best-effort evidence path
             pass
-        try:
+        with contextlib.suppress(Exception):  # best-effort funnel histogram
             observe_funnel_cycle(cycle)
-        except Exception:  # noqa: S110  # best-effort funnel histogram
-            pass
         try:
             from app.application.services.strategy_forensic_ledger import persist_signal
 
@@ -1070,24 +1070,14 @@ class StrategyDiagnosticsStore:
                     record_rejection_telemetry,
                 )
 
-                trend = (
-                    cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
-                )
-                conf = (
-                    cycle.get("confluence")
-                    if isinstance(cycle.get("confluence"), dict)
-                    else {}
-                )
-                factors = (
-                    conf.get("engine_factors")
-                    if isinstance(conf.get("engine_factors"), dict)
-                    else {}
-                )
-                rejection = (
-                    cycle.get("rejection")
-                    if isinstance(cycle.get("rejection"), dict)
-                    else {}
-                )
+                trend_raw = cycle.get("trend")
+                trend = trend_raw if isinstance(trend_raw, dict) else {}
+                conf_raw = cycle.get("confluence")
+                conf = conf_raw if isinstance(conf_raw, dict) else {}
+                factors_raw = conf.get("engine_factors")
+                factors = factors_raw if isinstance(factors_raw, dict) else {}
+                rejection_raw = cycle.get("rejection")
+                rejection = rejection_raw if isinstance(rejection_raw, dict) else {}
                 trend_ns = SimpleNamespace(
                     macro_bias=trend.get("h4"),
                     primary=trend.get("h1"),
@@ -1132,23 +1122,14 @@ class StrategyDiagnosticsStore:
                 get_m15_semantics_telemetry_store,
             )
 
-            _trend_value = cycle.get("trend")
-            trend = _trend_value if isinstance(_trend_value, dict) else {}
-            conf = (
-                cycle.get("confluence")
-                if isinstance(cycle.get("confluence"), dict)
-                else {}
-            )
-            factors = (
-                conf.get("engine_factors")
-                if isinstance(conf.get("engine_factors"), dict)
-                else {}
-            )
-            rejection = (
-                cycle.get("rejection")
-                if isinstance(cycle.get("rejection"), dict)
-                else {}
-            )
+            trend_raw = cycle.get("trend")
+            trend = trend_raw if isinstance(trend_raw, dict) else {}
+            conf_raw = cycle.get("confluence")
+            conf = conf_raw if isinstance(conf_raw, dict) else {}
+            factors_raw = conf.get("engine_factors")
+            factors = factors_raw if isinstance(factors_raw, dict) else {}
+            rejection_raw = cycle.get("rejection")
+            rejection = rejection_raw if isinstance(rejection_raw, dict) else {}
             reasons = list(rejection.get("decision_reasons") or [])
             latest_bos = None
             for r in reasons:

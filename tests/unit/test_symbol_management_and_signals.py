@@ -17,7 +17,7 @@ def test_symbol_update_and_enabled_order(monkeypatch) -> None:
     monkeypatch.setattr(
         symbol_management_service,
         "load_preferences",
-        lambda force=False: {k: dict(v) for k, v in store.items()},
+        lambda force=False: {k: dict(v) for k, v in store.items()},  # noqa: ARG005
     )
 
     def _persist(prefs):
@@ -28,7 +28,7 @@ def test_symbol_update_and_enabled_order(monkeypatch) -> None:
     monkeypatch.setattr(
         symbol_management_service,
         "sync_allowed_symbols_to_plane",
-        lambda **kwargs: symbol_management_service.enabled_symbols_ordered(store),
+        lambda **_kwargs: symbol_management_service.enabled_symbols_ordered(store),
     )
     monkeypatch.setattr(
         symbol_management_service,
@@ -65,7 +65,7 @@ def test_bulk_and_reorder(monkeypatch) -> None:
     monkeypatch.setattr(
         symbol_management_service,
         "load_preferences",
-        lambda force=False: {k: dict(v) for k, v in store.items()},
+        lambda force=False: {k: dict(v) for k, v in store.items()},  # noqa: ARG005
     )
 
     def _persist(prefs):
@@ -76,7 +76,7 @@ def test_bulk_and_reorder(monkeypatch) -> None:
     monkeypatch.setattr(
         symbol_management_service,
         "sync_allowed_symbols_to_plane",
-        lambda **kwargs: symbol_management_service.enabled_symbols_ordered(store),
+        lambda **_kwargs: symbol_management_service.enabled_symbols_ordered(store),
     )
 
     symbol_management_service.bulk_update(

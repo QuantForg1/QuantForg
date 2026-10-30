@@ -74,20 +74,17 @@ def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_read_only_calc_has_bounded_retries_mutations_do_not() -> None:
     assert (
-        request_attempts("POST", "/trade/order_calc_profit")
-        == READ_ONLY_POST_ATTEMPTS
+        request_attempts("POST", "/trade/order_calc_profit") == READ_ONLY_POST_ATTEMPTS
     )
     assert (
-        request_attempts("POST", "/trade/order_calc_margin")
-        == READ_ONLY_POST_ATTEMPTS
+        request_attempts("POST", "/trade/order_calc_margin") == READ_ONLY_POST_ATTEMPTS
     )
     assert request_attempts("POST", "/trade/order_check") == READ_ONLY_POST_ATTEMPTS
     assert request_attempts("POST", "/trade/order_send") == MUTATION_ATTEMPTS
     assert request_attempts("POST", "/trade/order_cancel") == MUTATION_ATTEMPTS
     assert is_mutation_path("POST", "/trade/order_send") is True
     assert (
-        coalesce_key("POST", "/trade/order_send", {"symbol": "XAUUSD_i"}, None)
-        is None
+        coalesce_key("POST", "/trade/order_send", {"symbol": "XAUUSD_i"}, None) is None
     )
     assert coalesce_key(
         "POST",
@@ -294,8 +291,7 @@ def test_ui_lane_does_not_use_trading_budget(no_backoff: None) -> None:
 
     try:
         threads = [
-            threading.Thread(target=worker, args=(i,))
-            for i in range(UI_READ_LIMIT + 3)
+            threading.Thread(target=worker, args=(i,)) for i in range(UI_READ_LIMIT + 3)
         ]
         for t in threads:
             t.start()
@@ -313,14 +309,17 @@ def test_metrics_pressure_and_no_secrets() -> None:
     assert "password" not in blob
     assert "token" not in blob
     assert snap["resource_pressure_state"] == "NORMAL"
-    assert resource_pressure_state(
-        errno11_count=5,
-        retry_exhausted_count=0,
-        timeout_count=0,
-        active_requests=1,
-        budget=11,
-        calc_failures=0,
-    ) == "CRITICAL"
+    assert (
+        resource_pressure_state(
+            errno11_count=5,
+            retry_exhausted_count=0,
+            timeout_count=0,
+            active_requests=1,
+            budget=11,
+            calc_failures=0,
+        )
+        == "CRITICAL"
+    )
 
 
 def test_valid_signal_stays_visible_when_calc_fails() -> None:

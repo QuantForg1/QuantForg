@@ -644,9 +644,7 @@ def calculate_dynamic_lots_v2(
             )
         )
     )
-    usd_budget = resolve_target_risk_budget_usd(
-        equity=equity, target_usd=usd_target
-    )
+    usd_budget = resolve_target_risk_budget_usd(equity=equity, target_usd=usd_target)
     min_floor = Decimal(
         str(
             getattr(cfg, "min_planned_risk_usd", MIN_PLANNED_RISK_USD)
@@ -677,8 +675,7 @@ def calculate_dynamic_lots_v2(
 
     agg_cap = (
         max_total_planned_risk_usd
-        if max_total_planned_risk_usd is not None
-        and max_total_planned_risk_usd > 0
+        if max_total_planned_risk_usd is not None and max_total_planned_risk_usd > 0
         else Decimal(
             str(
                 getattr(
@@ -895,10 +892,7 @@ def calculate_dynamic_lots_v2(
             dist=dist,
         )
 
-    if (
-        final_norm is not None
-        and final_norm.sizing_status == STATUS_NORMALIZED_TO_MIN
-    ):
+    if final_norm is not None and final_norm.sizing_status == STATUS_NORMALIZED_TO_MIN:
         method_suffix += "+micro_conditional"
 
     # Recompute margin at final lot

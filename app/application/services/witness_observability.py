@@ -1,4 +1,3 @@
-
 """Witness observability — separate auth health from trading execution health.
 
 Read-only helpers for the live execution witness. Never touches Strategy, Risk,

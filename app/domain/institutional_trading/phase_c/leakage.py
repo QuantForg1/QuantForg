@@ -107,15 +107,19 @@ def check_time_splits(
             )
 
     # Embargo: train max + embargo must be < oos min when both provided
-    if train_set and oos_set and embargo_bars > 0:
-        if max(train_set) + embargo_bars >= min(oos_set):
-            findings.append(
-                LeakageFinding(
-                    "EMBARGO_VIOLATION",
-                    "BLOCK",
-                    "purged/embargoed gap insufficient between train and OOS",
-                )
+    if (
+        train_set
+        and oos_set
+        and embargo_bars > 0
+        and max(train_set) + embargo_bars >= min(oos_set)
+    ):
+        findings.append(
+            LeakageFinding(
+                "EMBARGO_VIOLATION",
+                "BLOCK",
+                "purged/embargoed gap insufficient between train and OOS",
             )
+        )
 
     if not any(
         [

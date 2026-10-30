@@ -437,6 +437,4 @@ def test_ui_copy_explains_verified_deposit_without_ignored_loss_language() -> No
         assert "Pre-deposit P/L preserved" in src
         assert "Post-deposit risk:" in src
         assert "ignored loss" not in src.lower()
-        assert (
-            "Maximum daily loss exceeded — deposit verification required." in src
-        )
+        assert "Maximum daily loss exceeded — deposit verification required." in src

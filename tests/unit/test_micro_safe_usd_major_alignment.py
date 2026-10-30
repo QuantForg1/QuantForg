@@ -152,9 +152,9 @@ def test_xauusd_i_min_lot_approved_on_micro_equity_inside_owner_band() -> None:
 
 @pytest.mark.unit
 def test_usdjpy_i_existing_cs_stop_sizing_still_rejects_micro_equity() -> None:
-    """Do not alter JPY sizing semantics — cs×stop path still rejects ~$100."""
+    """Do not alter JPY sizing semantics — csxstop path still rejects ~$100."""
     equity = Decimal("100.72")
-    # Live-like USDJPY stop (ATR×1.5 ≈ 0.10); existing engine uses cs×stop.
+    # Live-like USDJPY stop (ATRx1.5 ≈ 0.10); existing engine uses csxstop.
     stop = Decimal("0.1020")
     cs = Decimal("100000")
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct

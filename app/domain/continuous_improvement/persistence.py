@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -98,7 +99,11 @@ class JsonDocumentStore:
             self._persist()
             return deepcopy(row)
 
-    def upsert(self, doc_id: str, mutator) -> dict[str, Any] | None:
+    def upsert(
+        self,
+        doc_id: str,
+        mutator: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any] | None:
         with self._lock:
             for i, row in enumerate(self._docs):
                 if str(row.get("id")) == str(doc_id):
@@ -107,7 +112,8 @@ class JsonDocumentStore:
                     updated["updated_at"] = utc_iso()
                     self._docs[i] = updated
                     self._persist()
-                    return deepcopy(updated)
+                    copied: dict[str, Any] = deepcopy(updated)
+                    return copied
         return None
 
     def count(self) -> int:

@@ -41,9 +41,7 @@ def _allow_broker_submit() -> None:
     if halt.mode is not HaltMode.ACTIVE:
         halt.set_mode(HaltMode.ACTIVE, actor="unit-test", reason="clear test halt")
     ctrl = reset_live_trading_controller_for_tests()
-    operator = OperatorIdentity(
-        user_id=uuid4(), role="owner", display_name="unit-test"
-    )
+    operator = OperatorIdentity(user_id=uuid4(), role="owner", display_name="unit-test")
     ctrl.transition(operator, "ARMED", confirmed=True, reason="unit-test")
     ctrl.transition(operator, "ENABLED", confirmed=True, reason="unit-test")
     # Touch the controller so a later hydrate-free read sees ENABLED.
@@ -154,7 +152,9 @@ def test_disabled_controller_blocks_a_new_entry_before_send() -> None:
 
 
 @pytest.mark.unit
-def test_deal_history_failure_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_deal_history_failure_blocks_a_new_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.domain.institutional_trading.live_trading_control import (
         reset_live_trading_controller_for_tests,
     )

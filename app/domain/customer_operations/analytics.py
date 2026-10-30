@@ -24,8 +24,7 @@ async def build_enterprise_analytics() -> dict[str, Any]:
     active_customers = sum(
         1
         for u in users
-        if str(u.get("status") or "").lower()
-        in {"active", "enabled", ""}
+        if str(u.get("status") or "").lower() in {"active", "enabled", ""}
     )
     # Countries unknown until profile enrichment — report null, never invent
     countries: list[str] = sorted(

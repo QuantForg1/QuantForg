@@ -102,14 +102,21 @@ def test_signal_center_wait_unchanged_without_abort() -> None:
     )
     over = _overlay_last_ite_cycle(
         row,
-        {"forwarded_to_oms": False, "abort_reason": None, "decision_action": "NO_TRADE"},
+        {
+            "forwarded_to_oms": False,
+            "abort_reason": None,
+            "decision_action": "NO_TRADE",
+        },
     )
     assert over["pipeline"]["oms"] == "NOT_REACHED"
     assert over["pipeline"].get("execution_lifecycle") != "FILLED"
 
 
 def test_signal_center_wait_not_oms_block_from_manage_only_last_cycle() -> None:
-    """Opportunity WAIT must not inherit last_cycle NO_EXECUTABLE_SYMBOL as OMS BLOCK."""
+    (
+        """Opportunity WAIT must not inherit last_cycle NO_EXECUTABLE_SYMBOL as OMS """
+        """BLOCK."""
+    )
     row = _row_from_score(
         {
             "symbol": "XAUUSD_I",
@@ -264,7 +271,10 @@ def test_signal_center_overlays_eligibility_failed_not_broker() -> None:
             "abort_reason": "eligibility_failed",
             "decision_action": "SELL",
             "mt5_ticket": None,
-            "detail": "Confluence 65 (SELL) below institutional gate; Trade quality 66 below 80",
+            "detail": (
+                "Confluence 65 (SELL) below institutional gate; Trade quality 66 below "
+                "80"
+            ),
         },
     )
     assert over["first_blocker"] == "ELIGIBILITY_FAILED"
@@ -276,7 +286,10 @@ def test_signal_center_overlays_eligibility_failed_not_broker() -> None:
 
 @pytest.mark.parametrize("side", ["BUY", "SELL"])
 def test_scalping_take_below_swing_quality_80_still_reaches_oms(side: str) -> None:
-    """Live stall: Opportunity PASS + sniper TAKE, then swing quality 80 at the bridge."""
+    (
+        """Live stall: Opportunity PASS + sniper TAKE, then swing quality 80 at the """
+        """bridge."""
+    )
     from app.application.services.institutional_execution_integration import (
         InstitutionalExecutionIntegration,
     )
@@ -532,9 +545,7 @@ def test_scalping_take_reaches_oms_without_quality_ok_check() -> None:
     )
     decision = replace(
         decision,
-        eligibility=EligibilityResult(
-            eligible=True, checks={}, rejection_reasons=()
-        ),
+        eligibility=EligibilityResult(eligible=True, checks={}, rejection_reasons=()),
         reasons=("scalp take",),
     )
     oms = RecordingOmsPort()

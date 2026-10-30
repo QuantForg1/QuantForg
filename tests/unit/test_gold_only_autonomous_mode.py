@@ -54,7 +54,16 @@ WELTRADE_ROWS = (
     {"code": "GBPUSD_i", "trade_mode": 4},
     {"code": "NZDUSD_i", "trade_mode": 4},
 )
-FX_DESKS = ("EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "US30", "NAS100", "BTCUSD")
+FX_DESKS = (
+    "EURUSD",
+    "GBPUSD",
+    "USDJPY",
+    "AUDUSD",
+    "NZDUSD",
+    "US30",
+    "NAS100",
+    "BTCUSD",
+)
 
 
 @pytest.fixture
@@ -154,8 +163,10 @@ def test_no_rotation_to_other_symbols(gold_only: None) -> None:
 
 
 def test_no_fallback_to_eurusd(gold_only: None) -> None:
-    adapter = _Adapter({"XAUUSD": "closeonly", "XAUUSD_I": "closeonly", "EURUSD": "full"})
-    selected, skipped = resolve_executable_symbol(
+    adapter = _Adapter(
+        {"XAUUSD": "closeonly", "XAUUSD_I": "closeonly", "EURUSD": "full"}
+    )
+    selected, _skipped = resolve_executable_symbol(
         adapter,
         preferred="XAUUSD",
         alpha_ranking=[{"symbol": "EURUSD", "opportunity_score": 90}],
@@ -182,7 +193,7 @@ def test_closeonly_gold_does_not_select_fx(gold_only: None) -> None:
             "GBPUSD": "full",
         }
     )
-    selected, skipped = select_full_mode_symbol(
+    selected, _skipped = select_full_mode_symbol(
         adapter, ["XAUUSD", "EURUSD", "GBPUSD"]
     )
     assert selected is None
@@ -206,9 +217,7 @@ def test_require_xauusd_preserves_broker_form(gold_only: None) -> None:
     "symbol",
     ("EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD", "NAS100", "AUDUSD"),
 )
-def test_disabled_autonomous_symbols_rejected(
-    gold_only: None, symbol: str
-) -> None:
+def test_disabled_autonomous_symbols_rejected(gold_only: None, symbol: str) -> None:
     from app.application.services.institutional_execution_engine import (
         parse_order_intent,
     )
@@ -311,25 +320,28 @@ def test_safety_and_risk_remain_authoritative(gold_only: None) -> None:
 def test_max_leverage_is_2000() -> None:
     src = (ROOT / "app/domain/trading/xauusd_specs.py").read_text(encoding="utf-8")
     assert 'MAX_LEVERAGE = Decimal("2000")' in src
-    assert MAX_LEVERAGE == Decimal("2000")
+    assert Decimal("2000") == MAX_LEVERAGE
     from app.domain.entities.execution_safety import ExecutionPolicy
 
     assert ExecutionPolicy().max_leverage == MAX_LEVERAGE
 
 
 def test_no_order_send_bypass_or_retry() -> None:
-    gateway = (
-        ROOT / "app/infrastructure/brokers/mt5/gateway_client.py"
-    ).read_text(encoding="utf-8")
+    gateway = (ROOT / "app/infrastructure/brokers/mt5/gateway_client.py").read_text(
+        encoding="utf-8"
+    )
     assert "Never retry order_send" in gateway
     runtime_src = (
         ROOT / "app/application/services/institutional_ite_runtime.py"
     ).read_text(encoding="utf-8")
     tree = ast.parse(runtime_src)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if node.func.attr == "order_send":
-                pytest.fail("ITE runtime must not call order_send directly")
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "order_send"
+        ):
+            pytest.fail("ITE runtime must not call order_send directly")
 
 
 def test_unknown_order_still_reconciles(gold_only: None) -> None:

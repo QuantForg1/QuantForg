@@ -61,7 +61,9 @@ def test_scalp_ltf_zone_timeframes_are_m5_m1() -> None:
 
 def test_stale_fvg_only_is_wait_stale_fvg() -> None:
     snap = _snap(fvgs=[_stale_fvg(side="BULLISH", high="2612", low="2608")])
-    out = _sniper(snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65)
+    out = _sniper(
+        snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65
+    )
     assert out.passed is False
     assert out.action == "WAIT"
     assert out.primary_reason == "WAIT_STALE_FVG"
@@ -230,7 +232,11 @@ def test_oms_entered_only_after_actual_oms_invocation() -> None:
                 "direction": "BUY",
                 "signal_action": "BUY",
                 "reject": False,
-                "sniper_entry": {"passed": True, "action": "BUY", "setup_state": "TAKE"},
+                "sniper_entry": {
+                    "passed": True,
+                    "action": "BUY",
+                    "setup_state": "TAKE",
+                },
             }
         ),
         {"forwarded_to_oms": False, "mt5_ticket": None, "take": True},

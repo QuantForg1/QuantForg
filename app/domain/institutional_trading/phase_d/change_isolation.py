@@ -29,11 +29,13 @@ def validate_change_isolation(change: dict[str, Any]) -> dict[str, Any]:
         "kinds": list(kinds_t),
         "unknown_kinds": unknown,
         "includes_unrelated_refactor": unrelated,
-        "why_blocked": None
-        if ok
-        else (
-            "unrelated_refactor"
-            if unrelated
-            else ("missing_kinds" if not kinds_t else "unknown_kinds")
+        "why_blocked": (
+            None
+            if ok
+            else (
+                "unrelated_refactor"
+                if unrelated
+                else ("missing_kinds" if not kinds_t else "unknown_kinds")
+            )
         ),
     }

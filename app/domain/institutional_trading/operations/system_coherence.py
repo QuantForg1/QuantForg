@@ -393,12 +393,14 @@ def compose_system_snapshot(
     ).strip()
     logical, canonical = symbol_identity(scan_symbol or CANONICAL_GOLD_BROKER_DISPLAY)
     eligible = int(scan.get("eligible_count") or 0) > 0
-    direction = str(
-        (scan.get("best_candidate") or {}).get("direction")
-        if isinstance(scan.get("best_candidate"), dict)
-        else scan.get("direction")
-        or ""
-    ).upper() or "NONE"
+    direction = (
+        str(
+            (scan.get("best_candidate") or {}).get("direction")
+            if isinstance(scan.get("best_candidate"), dict)
+            else scan.get("direction") or ""
+        ).upper()
+        or "NONE"
+    )
     focus = str(scan.get("executable_focus") or scan_symbol or "").strip() or None
     next_action = sanitize_next_action(
         focus=focus,
@@ -470,9 +472,7 @@ def compose_system_snapshot(
     di_safety = _di_safety_value if isinstance(_di_safety_value, dict) else {}
     risk_state = str(di_risk.get("state") or "")
     if risk_state in {s.value for s in StageStatus} or risk_state == "FAIL":
-        stages["RISK"] = (
-            StageStatus.BLOCK.value if risk_state == "FAIL" else risk_state
-        )
+        stages["RISK"] = StageStatus.BLOCK.value if risk_state == "FAIL" else risk_state
     safety_state = str(di_safety.get("state") or "")
     if safety_state:
         stages["SAFETY"] = (

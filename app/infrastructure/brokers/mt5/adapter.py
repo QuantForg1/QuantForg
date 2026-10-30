@@ -182,9 +182,7 @@ class MT5Adapter:
         ref = (session_ref or "").strip()
         if ref == live:
             return True
-        if getattr(self._client, "stores_credentials_remotely", False) and ref:
-            return True
-        return False
+        return bool(getattr(self._client, "stores_credentials_remotely", False) and ref)
 
     def shutdown(self) -> None:
         self._client.shutdown()

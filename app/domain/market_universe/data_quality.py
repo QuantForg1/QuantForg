@@ -98,16 +98,16 @@ class DataQuality:
             "bar_freshness": self.bar_freshness,
             "quote_age_seconds": self.quote_age_seconds,
             "bar_age_seconds": self.bar_age_seconds,
-            "missing_bars": self.missing_bars
-            if self.missing_bars is not None
-            else UNKNOWN,
-            "history_depth": self.history_depth
-            if self.history_depth is not None
-            else UNKNOWN,
+            "missing_bars": (
+                self.missing_bars if self.missing_bars is not None else UNKNOWN
+            ),
+            "history_depth": (
+                self.history_depth if self.history_depth is not None else UNKNOWN
+            ),
             "spread": self.spread if self.spread is not None else UNKNOWN,
-            "tick_frequency": self.tick_frequency
-            if self.tick_frequency is not None
-            else UNKNOWN,
+            "tick_frequency": (
+                self.tick_frequency if self.tick_frequency is not None else UNKNOWN
+            ),
             "volume": self.volume if self.volume is not None else UNKNOWN,
             "session_status": self.session_status,
             "symbol_available": self.symbol_available,
@@ -179,6 +179,7 @@ def evaluate_data_quality(
     elif open_flag is True or has_quote:
         session_status = "OPEN"
 
+    state: DataState
     if unknown:
         state = "UNKNOWN"
         reason = "quality not evaluated"
@@ -186,7 +187,7 @@ def evaluate_data_quality(
         state = "ERROR"
         reason = "symbol probe failed; other instruments continue"
     elif disabled:
-        state: DataState = "DISABLED"
+        state = "DISABLED"
         reason = "operator or policy disabled"
     elif unsupported:
         state = "UNSUPPORTED"
@@ -275,4 +276,4 @@ def evaluate_timeframe_quality(
 def assert_known_state(state: str) -> DataState:
     if state not in DATA_STATES:
         raise ValueError(f"unknown data state {state!r}")
-    return state  # type: ignore[return-value]
+    return state

@@ -81,7 +81,9 @@ def _safe_snapshot(market_snapshot: dict[str, Any]) -> dict[str, Any]:
                 out[key] = value
         elif isinstance(value, (list, dict)):
             # Keep shallow structure only — avoid dumping large blobs.
-            out[key] = value if len(json.dumps(value, default=str)) < 2000 else "<omitted>"
+            out[key] = (
+                value if len(json.dumps(value, default=str)) < 2000 else "<omitted>"
+            )
     return out
 
 
@@ -172,7 +174,7 @@ def parse_advice_payload(
         authorizes_trade=False,
         provider_status="ok",
         detail="",
-        raw_keys=tuple(sorted(str(k) for k in data.keys())),
+        raw_keys=tuple(sorted(str(k) for k in data)),
     )
 
 

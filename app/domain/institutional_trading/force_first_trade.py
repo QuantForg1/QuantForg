@@ -217,6 +217,7 @@ def force_first_trade_status(
     execution_enabled: bool = False,
     open_positions: int = 0,
 ) -> dict[str, Any]:
+    _ = execution_enabled
     cfg = ForceFirstTradeConfig.from_settings(settings)
     state = get_force_first_trade_state()
     remaining = max(0, cfg.max_trades - state.executed_count)
@@ -273,7 +274,6 @@ def maybe_override_decision(
         force_shadow,
     )
     return decision, False
-
 
 
 def record_forced_trade_success(

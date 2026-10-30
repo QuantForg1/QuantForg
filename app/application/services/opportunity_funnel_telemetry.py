@@ -145,7 +145,7 @@ def _as_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     try:
-        return int(round(float(value)))
+        return round(float(value))
     except (TypeError, ValueError):
         return None
 
@@ -216,7 +216,7 @@ def _component_scores(cycle: dict[str, Any]) -> dict[str, int]:
 
 
 def _empty_counts(keys: tuple[str, ...]) -> dict[str, int]:
-    return {k: 0 for k in keys}
+    return dict.fromkeys(keys, 0)
 
 
 def _empty_hour() -> dict[str, Any]:
@@ -260,7 +260,7 @@ def _empty_hour() -> dict[str, Any]:
         "setup_state": {},
         "regimes": {},
         "families": {},
-        "stages": {s: 0 for s in FUNNEL_STAGES},
+        "stages": dict.fromkeys(FUNNEL_STAGES, 0),
         "components": {k: _empty_counts(_SCORE_BUCKETS) for k in COMPONENT_KEYS},
     }
 
@@ -332,7 +332,11 @@ def observe_funnel_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
     setup = str(row.get("setup_state") or "").upper() or None
     blocker = str(
         row.get("first_authoritative_blocker")
-        or ((row.get("rejection") or {}).get("primary") if isinstance(row.get("rejection"), dict) else "")
+        or (
+            (row.get("rejection") or {}).get("primary")
+            if isinstance(row.get("rejection"), dict)
+            else ""
+        )
         or ""
     )
     source = str(row.get("blocker_source") or classify_blocker_source(blocker))
@@ -370,7 +374,9 @@ def observe_funnel_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
                     key = f"opp_ge_{thresh}"
                     funnel[key] = int(funnel.get(key) or 0) + 1
             if opp >= OPP_THRESHOLD:
-                funnel["opportunity_ge_70"] = int(funnel.get("opportunity_ge_70") or 0) + 1
+                funnel["opportunity_ge_70"] = (
+                    int(funnel.get("opportunity_ge_70") or 0) + 1
+                )
         if edge is not None:
             for thresh in (3, 5, 7, 10):
                 if edge >= thresh:
@@ -385,9 +391,13 @@ def observe_funnel_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
             funnel["both_qualify"] = int(funnel.get("both_qualify") or 0) + 1
             if buy is not None and sell is not None:
                 if buy > sell:
-                    funnel["buy_qualifying"] = int(funnel.get("buy_qualifying") or 0) + 1
+                    funnel["buy_qualifying"] = (
+                        int(funnel.get("buy_qualifying") or 0) + 1
+                    )
                 elif sell > buy:
-                    funnel["sell_qualifying"] = int(funnel.get("sell_qualifying") or 0) + 1
+                    funnel["sell_qualifying"] = (
+                        int(funnel.get("sell_qualifying") or 0) + 1
+                    )
         if setup == "TAKE" or action in {"BUY", "SELL"}:
             funnel["sniper_take"] = int(funnel.get("sniper_take") or 0) + 1
         if risk_reached:
@@ -428,7 +438,7 @@ def observe_funnel_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
                     token = str(fam).strip().lower()
                     if token:
                         families[token] = int(families.get(token) or 0) + 1
-        stages = bucket.setdefault("stages", {s: 0 for s in FUNNEL_STAGES})
+        stages = bucket.setdefault("stages", dict.fromkeys(FUNNEL_STAGES, 0))
         stage_key = source if source in FUNNEL_STAGES else None
         if stage_key:
             stages[stage_key] = int(stages.get(stage_key) or 0) + 1
@@ -436,7 +446,10 @@ def observe_funnel_cycle(cycle: dict[str, Any] | None) -> dict[str, Any]:
             "components", {k: _empty_counts(_SCORE_BUCKETS) for k in COMPONENT_KEYS}
         )
         for name, value in _component_scores(row).items():
-            _inc(components.setdefault(name, _empty_counts(_SCORE_BUCKETS)), score_bucket(value))
+            _inc(
+                components.setdefault(name, _empty_counts(_SCORE_BUCKETS)),
+                score_bucket(value),
+            )
         hours = _prune_hours(hours)
         _STATE["hours"] = hours
         _STATE["updated_at"] = datetime.now(UTC).isoformat()
@@ -488,7 +501,8 @@ def _flush_unlocked(snapshot: dict[str, Any] | None = None) -> None:
 def _merge_hour(dst: dict[str, Any], hour: dict[str, Any]) -> None:
     dst["n"] += int(hour.get("n") or 0)
     for name in ("opportunity", "edge", "buy", "sell", "ltf_buy", "ltf_sell"):
-        src = hour.get(name) if isinstance(hour.get(name), dict) else {}
+        _src_value = hour.get(name)
+        src = _src_value if isinstance(_src_value, dict) else {}
         bucket = dst[name]
         for k, v in src.items():
             bucket[k] = int(bucket.get(k) or 0) + int(v or 0)
@@ -510,11 +524,13 @@ def _merge_hour(dst: dict[str, Any], hour: dict[str, Any]) -> None:
         dst.setdefault("families", {})
         dst["families"][k] = int(dst["families"].get(k) or 0) + int(v or 0)
     for k, v in (hour.get("stages") or {}).items():
-        dst.setdefault("stages", {s: 0 for s in FUNNEL_STAGES})
+        dst.setdefault("stages", dict.fromkeys(FUNNEL_STAGES, 0))
         dst["stages"][k] = int(dst["stages"].get(k) or 0) + int(v or 0)
     _src_comp_value = hour.get("components")
     src_comp = _src_comp_value if isinstance(_src_comp_value, dict) else {}
-    dst.setdefault("components", {k: _empty_counts(_SCORE_BUCKETS) for k in COMPONENT_KEYS})
+    dst.setdefault(
+        "components", {k: _empty_counts(_SCORE_BUCKETS) for k in COMPONENT_KEYS}
+    )
     for name, buckets in src_comp.items():
         if not isinstance(buckets, dict):
             continue
@@ -538,7 +554,10 @@ def _rates(funnel: dict[str, Any], n: int) -> dict[str, float]:
         "opp_ge_85": round(100.0 * int(funnel.get("opp_ge_85") or 0) / denom, 2),
         "opp_ge_90": round(100.0 * int(funnel.get("opp_ge_90") or 0) / denom, 2),
         "opportunity_ge_70": round(
-            100.0 * int(funnel.get("opportunity_ge_70") or funnel.get("opp_ge_70") or 0) / denom, 2
+            100.0
+            * int(funnel.get("opportunity_ge_70") or funnel.get("opp_ge_70") or 0)
+            / denom,
+            2,
         ),
         "both_qualify": round(100.0 * int(funnel.get("both_qualify") or 0) / denom, 2),
         "sniper_take": round(100.0 * int(funnel.get("sniper_take") or 0) / denom, 2),
@@ -589,7 +608,12 @@ def funnel_snapshot() -> dict[str, Any]:
             "blockers": bucket["blockers"],
             "stages": bucket.get("stages") or {},
             "stage_rates_pct": {
-                s: round(100.0 * int((bucket.get("stages") or {}).get(s) or 0) / max(int(bucket["n"] or 0), 1), 2)
+                s: round(
+                    100.0
+                    * int((bucket.get("stages") or {}).get(s) or 0)
+                    / max(int(bucket["n"] or 0), 1),
+                    2,
+                )
                 for s in FUNNEL_STAGES
             },
             "components": bucket.get("components") or {},
@@ -608,7 +632,12 @@ def funnel_snapshot() -> dict[str, Any]:
         "totals": totals,
         "rates_pct": _rates(totals["funnel"], totals["n"]),
         "stage_rates_pct": {
-            s: round(100.0 * int((totals.get("stages") or {}).get(s) or 0) / max(int(totals["n"] or 0), 1), 2)
+            s: round(
+                100.0
+                * int((totals.get("stages") or {}).get(s) or 0)
+                / max(int(totals["n"] or 0), 1),
+                2,
+            )
             for s in FUNNEL_STAGES
         },
         "components": totals.get("components") or {},

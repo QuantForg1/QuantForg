@@ -14,16 +14,10 @@ def explain_trade_replay(raw: dict[str, Any] | Any) -> dict[str, Any]:
     else:
         item = {}
 
-    market = (
-        item.get("market_snapshot")
-        if isinstance(item.get("market_snapshot"), dict)
-        else {}
-    )
-    inst = (
-        market.get("institutional")
-        if isinstance(market.get("institutional"), dict)
-        else {}
-    )
+    _market_value = item.get("market_snapshot")
+    market = _market_value if isinstance(_market_value, dict) else {}
+    _inst_value = market.get("institutional")
+    inst = _inst_value if isinstance(_inst_value, dict) else {}
     timeline = item.get("management_timeline") or item.get("frames") or []
     if not isinstance(timeline, list):
         timeline = []
@@ -80,13 +74,13 @@ def explain_trade_replay(raw: dict[str, Any] | Any) -> dict[str, Any]:
     if isinstance(sor, dict):
         slip = sor.get("expected_slippage")
         if slip is not None:
-                try:
-                    if abs(float(slip)) >= 0.2:
-                        reduced_expectancy.append(f"Elevated expected slippage {slip}")
-                    elif succeeded:
-                        why_success.append(f"Contained expected slippage {slip}")
-                except (TypeError, ValueError):
-                    reduced_expectancy.append("Slippage value non-numeric in artefact")
+            try:
+                if abs(float(slip)) >= 0.2:
+                    reduced_expectancy.append(f"Elevated expected slippage {slip}")
+                elif succeeded:
+                    why_success.append(f"Contained expected slippage {slip}")
+            except (TypeError, ValueError):
+                reduced_expectancy.append("Slippage value non-numeric in artefact")
 
     oms = inst.get("oms_payload") or inst.get("oms")
     if isinstance(oms, dict) and oms.get("outcome"):
@@ -124,14 +118,18 @@ def enrich_replay_library(items: list[Any], *, limit: int = 25) -> dict[str, Any
     out: list[dict[str, Any]] = []
     for raw in items[:limit]:
         try:
-            from app.domain.institutional_trading.ai_scalping.institutional_replay_viewer import (  # noqa: E501
-                format_institutional_replay,
+            from app.domain.institutional_trading.ai_scalping import (
+                institutional_replay_viewer as _q127,
             )
+
+            format_institutional_replay = _q127.format_institutional_replay
 
             base = format_institutional_replay(raw)
         except Exception:
-            base = raw.to_dict() if hasattr(raw, "to_dict") else (
-                dict(raw) if isinstance(raw, dict) else {}
+            base = (
+                raw.to_dict()
+                if hasattr(raw, "to_dict")
+                else (dict(raw) if isinstance(raw, dict) else {})
             )
         explain = explain_trade_replay(base if isinstance(base, dict) else raw)
         merged = dict(base) if isinstance(base, dict) else {"fabricated": False}

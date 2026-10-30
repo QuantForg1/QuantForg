@@ -7,6 +7,7 @@ services from this container rather than constructing them inline.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -410,9 +411,7 @@ class Container:
                                 # magic desk present on the broker book (not gold-only).
                                 live_rows: list[Any] = []
                                 try:
-                                    live_rows = list(
-                                        adapter.list_positions() or []
-                                    )
+                                    live_rows = list(adapter.list_positions() or [])
                                 except Exception:
                                     live_rows = []
                                 recover_syms: list[str] = []
@@ -447,9 +446,7 @@ class Container:
                                     )
                                     if not part.get("ok"):
                                         recovery["ok"] = False
-                                        last_err = str(
-                                            part.get("error") or "not_ok"
-                                        )
+                                        last_err = str(part.get("error") or "not_ok")
                                     recovery["registered"] = int(
                                         recovery.get("registered") or 0
                                     ) + int(part.get("registered") or 0)
@@ -497,11 +494,9 @@ class Container:
             import asyncio
             import os
 
-            restore_enabled = (
-                self.mt5_adapter is not None
-                and os.environ.get("QF_BROKER_AUTO_RESTORE", "true").lower()
-                not in {"0", "false", "no", "off"}
-            )
+            restore_enabled = self.mt5_adapter is not None and os.environ.get(
+                "QF_BROKER_AUTO_RESTORE", "true"
+            ).lower() not in {"0", "false", "no", "off"}
             if restore_enabled:
                 from app.application.services.weltrade_integration import (
                     WeltradeIntegrationService,
@@ -564,7 +559,7 @@ class Container:
                 "broker_auto_restore_schedule_failed",
                 error=str(restore_sched_exc),
             )
-            try:
+            with contextlib.suppress(Exception):
                 import asyncio
 
                 ev = getattr(self, "broker_restore_finished", None)
@@ -572,8 +567,6 @@ class Container:
                     self.broker_restore_finished = asyncio.Event()
                     ev = self.broker_restore_finished
                 ev.set()
-            except Exception:
-                pass
 
         logger.info(
             "container_startup_complete",

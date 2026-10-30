@@ -37,7 +37,7 @@ _COMPONENT_KEYS = (
 
 
 def _empty_components() -> dict[str, int]:
-    return {key: 0 for key in _COMPONENT_KEYS}
+    return dict.fromkeys(_COMPONENT_KEYS, 0)
 
 
 def _seq(obj: Any, name: str) -> list[Any]:
@@ -315,15 +315,11 @@ def decide_scalping_direction(
     m5_down = _trend_matches(getattr(trend, "entry", None), TrendDirection.DOWN)
     m1_up = _trend_matches(getattr(trend, "execution", None), TrendDirection.UP)
     m1_down = _trend_matches(getattr(trend, "execution", None), TrendDirection.DOWN)
-    if m5_up:
-        factors["m5_entry"] = _M5_ENTRY
-    elif m5_down:
+    if m5_up or m5_down:
         factors["m5_entry"] = _M5_ENTRY
     else:
         factors["m5_entry"] = 0
-    if m1_up:
-        factors["m1_execution"] = _M1_EXECUTION
-    elif m1_down:
+    if m1_up or m1_down:
         factors["m1_execution"] = _M1_EXECUTION
     else:
         factors["m1_execution"] = 0
@@ -479,10 +475,16 @@ def decide_scalping_direction(
                 or getattr(b, "direction", None)
             )
             if "BUY" in bias or "BULL" in bias:
-                _add(TradeDirection.BUY, 8, "ob", "Active bullish order block", core=True)
+                _add(
+                    TradeDirection.BUY, 8, "ob", "Active bullish order block", core=True
+                )
             elif "SELL" in bias or "BEAR" in bias:
                 _add(
-                    TradeDirection.SELL, 8, "ob", "Active bearish order block", core=True
+                    TradeDirection.SELL,
+                    8,
+                    "ob",
+                    "Active bearish order block",
+                    core=True,
                 )
             quality = getattr(b, "quality", None)
             ratio = getattr(quality, "displacement_ratio", None) if quality else None

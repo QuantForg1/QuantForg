@@ -6,6 +6,7 @@ Does not modify OMS. Shadow path never order_send.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -166,6 +167,7 @@ class ShadowCycleResult:
             mt5_ticket=self.mt5_ticket,
             tradeability=diag.get("tradeability"),
         )
+        handoff = diag.get("execution_handoff")
         ticket = self.mt5_ticket
         no_ticket = ticket in (None, "", 0, "0")
         return {
@@ -193,17 +195,10 @@ class ShadowCycleResult:
             "stage_timings_ms": self.stage_timings_ms,
             "decision_cycle_latency_ms": self.decision_cycle_latency_ms,
             "execute_now_required": False,
-            "execution_blocked": dict(self.execution_blocked)
-            if self.execution_blocked
-            else None,
-            "execution_handoff": (
-                dict((self.market_context_diagnostics or {}).get("execution_handoff"))
-                if isinstance(
-                    (self.market_context_diagnostics or {}).get("execution_handoff"),
-                    dict,
-                )
-                else None
+            "execution_blocked": (
+                dict(self.execution_blocked) if self.execution_blocked else None
             ),
+            "execution_handoff": (dict(handoff) if isinstance(handoff, dict) else None),
             "tradeability": diag.get("tradeability"),
             "tradeability_reason": diag.get("tradeability_reason"),
             "execution_status": execution_status,
@@ -220,9 +215,7 @@ class ShadowCycleResult:
             "broker_ticket": ticket if not no_ticket else None,
             "order_attempt": bool(self.forwarded_to_oms),
             "execution_result": (
-                "BROKER_TICKET"
-                if not no_ticket
-                else "NO BROKER ORDER WAS SUBMITTED"
+                "BROKER_TICKET" if not no_ticket else "NO BROKER ORDER WAS SUBMITTED"
             ),
         }
 
@@ -393,8 +386,12 @@ class InstitutionalIteRuntime:
                 cycles=self._cycles,
             )
             try:
-                from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
-                    get_continuous_operation_controller,
+                from app.domain.institutional_trading.ai_scalping import (
+                    continuous_operation as _q395,
+                )
+
+                get_continuous_operation_controller = (
+                    _q395.get_continuous_operation_controller
                 )
 
                 get_continuous_operation_controller().heal_dependencies(
@@ -410,7 +407,7 @@ class InstitutionalIteRuntime:
     def tick_health(self) -> dict[str, Any]:
         """Live probes → ReliabilityPlatform.tick (no POST body flags)."""
         # Trading-cycle health: Gateway/MT5/OMS only. Railway/Supabase/Cloudflare
-        # HTTP self-probes are advisory and must not add 3–5s to every tick.
+        # HTTP self-probes are advisory and must not add 3-5s to every tick.
         probes = self.probes.collect(include_platform_probes=False)
         # Heartbeats only for components that are currently healthy — never
         # refresh a failed dependency as alive (stale-heartbeat pause must work).
@@ -460,11 +457,15 @@ class InstitutionalIteRuntime:
             logger.exception("telegram_connectivity_hook_failed")
         # v7.1 continuous ops — heal deps, pause new entries only, never abandon book
         try:
+            from app.domain.institutional_trading.ai_scalping import (
+                continuous_operation as _q465,
+            )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
-            from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
-                get_continuous_operation_controller,
+
+            get_continuous_operation_controller = (
+                _q465.get_continuous_operation_controller
             )
 
             if DEFAULT_AI_SCALPING_CONFIG.continuous_operation_enabled:
@@ -688,9 +689,11 @@ class InstitutionalIteRuntime:
         if self.plane.mode is OpsExecutionMode.SHADOW:
             try:
                 if _pvm_token is not None:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        get_production_validation_recorder as _pvm_rec,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _q690,
                     )
+
+                    _pvm_rec = _q690.get_production_validation_recorder
 
                     _pvm_rec().unbind_context(_pvm_token)
             except Exception:
@@ -788,11 +791,13 @@ class InstitutionalIteRuntime:
                 mode=result.mode,
             )
             try:
-                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                    ValidationStage,
-                    finalize as pvm_finalize,
-                    stage as pvm_stage,
+                from app.domain.institutional_trading import (
+                    production_validation_mode as _qf_production_validation_mode,
                 )
+
+                ValidationStage = _qf_production_validation_mode.ValidationStage
+                pvm_finalize = _qf_production_validation_mode.finalize
+                pvm_stage = _qf_production_validation_mode.stage
 
                 pvm_stage(
                     ValidationStage.CONTEXT,
@@ -806,9 +811,11 @@ class InstitutionalIteRuntime:
             finally:
                 try:
                     if _pvm_token is not None:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            get_production_validation_recorder as _pvm_rec2,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q810,
                         )
+
+                        _pvm_rec2 = _q810.get_production_validation_recorder
 
                         _pvm_rec2().unbind_context(_pvm_token)
                 except Exception:
@@ -837,9 +844,7 @@ class InstitutionalIteRuntime:
             utc_session=session_val,
             symbol_tradable=symbol_tradable,
             market_data_live=bool(market_data_live),
-            cooled=is_market_closed_cooled(
-                str(getattr(snapshot, "symbol", "") or "")
-            ),
+            cooled=is_market_closed_cooled(str(getattr(snapshot, "symbol", "") or "")),
         )
         snapshot = overlay_snapshot_session(
             snapshot, broker_open=session_obs.broker_session_open
@@ -858,9 +863,7 @@ class InstitutionalIteRuntime:
             "session_truth",
             **session_obs.to_dict(),
             open_event=open_event,
-            close_event=(
-                open_event if open_event == SESSION_CLOSE_DETECTED else None
-            ),
+            close_event=(open_event if open_event == SESSION_CLOSE_DETECTED else None),
         )
         news = snapshot.news
 
@@ -916,9 +919,7 @@ class InstitutionalIteRuntime:
                 session=session_val,
                 broker_session_open=session_obs.broker_session_open,
                 session_source=session_obs.session_source,
-                spread=coerce_spread_value(
-                    getattr(snapshot, "spread", None)
-                ),
+                spread=coerce_spread_value(getattr(snapshot, "spread", None)),
                 news_blocked=bool(news.blocked),
                 news_reason=str(news.reason or ""),
                 daily_loss_exceeded=cycle_daily_loss,
@@ -979,8 +980,8 @@ class InstitutionalIteRuntime:
                             broker_session_open=session_obs.broker_session_open,
                             session_source=session_obs.session_source,
                             spread=coerce_spread_value(
-                        getattr(snapshot, "spread", None)
-                    ),
+                                getattr(snapshot, "spread", None)
+                            ),
                             news_blocked=bool(news.blocked),
                             news_reason=str(news.reason or ""),
                             daily_loss_exceeded=cycle_daily_loss,
@@ -1009,7 +1010,9 @@ class InstitutionalIteRuntime:
                 ok=True,
                 trace_id=None,
                 mode=self.plane.mode.value,
-                detail="SCHEDULER_STALLED recovery — new entries blocked, no order_send",
+                detail=(
+                    "SCHEDULER_STALLED recovery — new entries blocked, no order_send"
+                ),
                 health=health.get("health") if isinstance(health, dict) else None,
                 cycle_outcome="recovering",
                 abort_reason="RECOVERING",
@@ -1073,9 +1076,9 @@ class InstitutionalIteRuntime:
                         mode=self.plane.mode.value,
                         detail="; ".join(safety.failed_reasons)
                         or "Auto Trading Disabled",
-                        health=health.get("health")
-                        if isinstance(health, dict)
-                        else None,
+                        health=(
+                            health.get("health") if isinstance(health, dict) else None
+                        ),
                         cycle_outcome="safety_blocked",
                         abort_reason="SAFETY_BLOCKED",
                         safety_failed_reasons=tuple(safety.failed_reasons),
@@ -1115,9 +1118,11 @@ class InstitutionalIteRuntime:
                         forwarded_to_oms=False,
                     )
                     try:
-                        from app.domain.institutional_trading.production_hardening.lifecycle import (
-                            get_lifecycle_store,
+                        from app.domain.institutional_trading import (
+                            production_hardening as _q1113,
                         )
+
+                        get_lifecycle_store = _q1113.lifecycle.get_lifecycle_store
 
                         get_lifecycle_store().record(
                             stage="FIRST_BLOCKING_GATE",
@@ -1139,9 +1144,7 @@ class InstitutionalIteRuntime:
                         reasons=list(result.safety_failed_reasons),
                         mode=result.mode,
                         pme_positions=len(
-                            getattr(
-                                self.position_management.engine, "_positions", {}
-                            )
+                            getattr(self.position_management.engine, "_positions", {})
                             or {}
                         ),
                     )
@@ -1166,15 +1169,19 @@ class InstitutionalIteRuntime:
                         logger.exception("strategy_diagnostics_safety_blocked_failed")
                     self._emit_telegram_cycle(result)
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            ValidationStage,
-                            capture_signal as pvm_capture,
-                            finalize as pvm_finalize,
-                            stage as pvm_stage,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q1162,
                         )
-                        from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
-                            get_production_validation_recorder as _pvm_get,
+
+                        ValidationStage = _q1162.ValidationStage
+                        pvm_capture = _q1162.capture_signal
+                        pvm_finalize = _q1162.finalize
+                        pvm_stage = _q1162.stage
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q1168,
                         )
+
+                        _pvm_get = _q1168.recorder.get_production_validation_recorder
 
                         pvm_capture(
                             snapshot=snapshot,
@@ -1202,9 +1209,11 @@ class InstitutionalIteRuntime:
                     finally:
                         try:
                             if _pvm_token is not None:
-                                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                                    get_production_validation_recorder as _pvm_rec3,
+                                from app.domain.institutional_trading import (
+                                    production_validation_mode as _q1198,
                                 )
+
+                                _pvm_rec3 = _q1198.get_production_validation_recorder
 
                                 _pvm_rec3().unbind_context(_pvm_token)
                         except Exception:
@@ -1212,9 +1221,11 @@ class InstitutionalIteRuntime:
                     if symbol_skip:
                         self._release_non_entry_slot()
                         try:
-                            from app.domain.institutional_trading.operations.fast_decision_path import (  # noqa: E501
-                                set_focus,
+                            from app.domain.institutional_trading.operations import (
+                                fast_decision_path as _qf_fast_decision_path,
                             )
+
+                            set_focus = _qf_fast_decision_path.set_focus
 
                             # Symbol-scoped Safety miss must not keep hysteresis
                             # focus. Next cycle may take the next eligible desk.
@@ -1250,9 +1261,11 @@ class InstitutionalIteRuntime:
         finally:
             try:
                 if _pvm_token is not None:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        get_production_validation_recorder as _pvm_rec4,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _q1248,
                     )
+
+                    _pvm_rec4 = _q1248.get_production_validation_recorder
 
                     _pvm_rec4().unbind_context(_pvm_token)
             except Exception:
@@ -1276,8 +1289,7 @@ class InstitutionalIteRuntime:
                 open_syms = [
                     str(getattr(p, "symbol", "") or "")
                     for p in (
-                        getattr(self.position_management.engine, "_positions", {})
-                        or {}
+                        getattr(self.position_management.engine, "_positions", {}) or {}
                     ).values()
                 ]
             except Exception:
@@ -1298,9 +1310,11 @@ class InstitutionalIteRuntime:
             )
             return
         try:
-            from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
-                recover_positions_from_mt5,
+            from app.domain.institutional_trading.production_hardening import (
+                position_recovery as _q1295,
             )
+
+            recover_positions_from_mt5 = _q1295.recover_positions_from_mt5
             from app.domain.trading.gold_only import GOLD_SYMBOL
 
             recover_syms: list[str] = []
@@ -1340,9 +1354,11 @@ class InstitutionalIteRuntime:
         symbol = self._gold_exec_symbol(snapshot)
         engine = self.position_management.engine
         try:
-            from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
-                recover_positions_from_mt5,
+            from app.domain.institutional_trading.production_hardening import (
+                position_recovery as _q1337,
             )
+
+            recover_positions_from_mt5 = _q1337.recover_positions_from_mt5
 
             if self.mt5_adapter is not None:
                 recovery = recover_positions_from_mt5(
@@ -1359,10 +1375,12 @@ class InstitutionalIteRuntime:
                         reason=reason,
                     )
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            ValidationStage,
-                            stage as pvm_stage,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q1356,
                         )
+
+                        ValidationStage = _q1356.ValidationStage
+                        pvm_stage = _q1356.stage
 
                         pvm_stage(
                             ValidationStage.POSITION_OPEN,
@@ -1410,9 +1428,7 @@ class InstitutionalIteRuntime:
                 try:
                     broker_sl = Decimal(
                         str(
-                            getattr(live, "stop_loss", 0)
-                            or getattr(live, "sl", 0)
-                            or 0
+                            getattr(live, "stop_loss", 0) or getattr(live, "sl", 0) or 0
                         )
                     )
                     entry_px = Decimal(str(getattr(pos, "entry_price", 0) or 0))
@@ -1424,11 +1440,18 @@ class InstitutionalIteRuntime:
                         if be_on_broker:
                             if not bool(getattr(pos, "be_moved", False)):
                                 pos.be_moved = True
-                                from app.domain.institutional_trading.management.models import (
-                                    PositionLifecycleState,
+                                from app.domain.institutional_trading import (
+                                    management as _q1419,
                                 )
 
-                                if getattr(pos, "state", None) is PositionLifecycleState.OPEN:
+                                PositionLifecycleState = (
+                                    _q1419.models.PositionLifecycleState
+                                )
+
+                                if (
+                                    getattr(pos, "state", None)
+                                    is PositionLifecycleState.OPEN
+                                ):
                                     pos.state = PositionLifecycleState.BE_MOVED
                                 logger.warning(
                                     "pme_be_detected_on_broker",
@@ -1458,9 +1481,9 @@ class InstitutionalIteRuntime:
             # when it is same-symbol scale (avoid 1.15 mid on a 4060 gold book).
             current_px = live_px if live_px and live_px > 0 else fallback_mid
             if current_px <= 0:
-                current_px = Decimal(str(getattr(pos, "entry_price", 0) or 0)) or Decimal(
-                    "1"
-                )
+                current_px = Decimal(
+                    str(getattr(pos, "entry_price", 0) or 0)
+                ) or Decimal("1")
             # Empty book ⇒ ambiguous (gateway blip); never force local EXIT.
             # Non-empty book without this ticket ⇒ truly closed on MT5.
             pos_still_open = True if not live_by_ticket else (live is not None)
@@ -1480,9 +1503,7 @@ class InstitutionalIteRuntime:
                 current_price=current_px,
                 atr=account.atr or Decimal("1"),
                 mid_price=current_px,
-                spread=coerce_spread_value(
-                    getattr(snapshot, "spread", None)
-                ),
+                spread=coerce_spread_value(getattr(snapshot, "spread", None)),
                 market_open=True,
                 position_still_open=pos_still_open,
                 book_volume=book_vol,
@@ -1518,11 +1539,14 @@ class InstitutionalIteRuntime:
                 tid = str(ticket)
                 if tid not in pb.mae_mfe.open:
                     entry = float(getattr(pos, "entry_price", 0) or 0)
-                    stop = float(
-                        getattr(pos, "current_stop", 0)
-                        or getattr(pos, "initial_stop", 0)
-                        or 0
-                    ) or None
+                    stop = (
+                        float(
+                            getattr(pos, "current_stop", 0)
+                            or getattr(pos, "initial_stop", 0)
+                            or 0
+                        )
+                        or None
+                    )
                     if entry > 0:
                         pb.mae_mfe.observe_entry(
                             trade_id=tid,
@@ -1535,9 +1559,7 @@ class InstitutionalIteRuntime:
                             ),
                             entry_price=entry,
                             initial_stop=stop,
-                            initial_target=float(
-                                getattr(pos, "current_tp", 0) or 0
-                            )
+                            initial_target=float(getattr(pos, "current_tp", 0) or 0)
                             or None,
                         )
                 mark = float(current_px) if current_px is not None else None
@@ -1546,27 +1568,28 @@ class InstitutionalIteRuntime:
                 mfr = getattr(pos, "max_favorable_r", None)
                 rec = pb.mae_mfe.open.get(tid)
                 if rec is not None and mfr is not None and rec.mfe_r is None:
-                    try:
+                    with contextlib.suppress(Exception):
                         rec.mfe_r = float(mfr)
-                    except Exception:
-                        pass
             except Exception:
                 logger.exception("phase_b_mae_mfe_mark_failed")
             try:
-                from app.domain.institutional_trading.ai_scalping.institutional_position_monitor import (  # noqa: E501
-                    build_position_monitor,
+                from app.domain.institutional_trading.ai_scalping import (
+                    institutional_position_monitor as _q1548,
                 )
-                from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
-                    get_trade_lifecycle_store,
+
+                build_position_monitor = _q1548.build_position_monitor
+                from app.domain.institutional_trading.ai_scalping import (
+                    trade_lifecycle_timeline as _q1551,
                 )
+
+                get_trade_lifecycle_store = _q1551.get_trade_lifecycle_store
                 from app.domain.institutional_trading.management.r_math import signed_r
 
+                atr_raw = getattr(account, "atr", None)
                 build_position_monitor(
                     getattr(engine, "_positions", {}),
                     mid_price=float(current_px),
-                    atr=float(account.atr)
-                    if getattr(account, "atr", None) is not None
-                    else None,
+                    atr=(float(atr_raw) if atr_raw is not None else None),
                     market_session=str(getattr(pctx, "market_session", "") or "")
                     or None,
                 )
@@ -1601,7 +1624,11 @@ class InstitutionalIteRuntime:
                     break_even_at_r=str(be_at),
                     be_moved=bool(getattr(pos, "be_moved", False)),
                     state=str(
-                        getattr(getattr(pos, "state", None), "value", getattr(pos, "state", ""))
+                        getattr(
+                            getattr(pos, "state", None),
+                            "value",
+                            getattr(pos, "state", ""),
+                        )
                     ),
                     still_open=pos_still_open,
                 )
@@ -1663,9 +1690,11 @@ class InstitutionalIteRuntime:
                         ),
                     )
                     try:
-                        from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
-                            get_trade_lifecycle_store,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            trade_lifecycle_timeline as _q1664,
                         )
+
+                        get_trade_lifecycle_store = _q1664.get_trade_lifecycle_store
 
                         _cr = str(
                             getattr(getattr(result, "record", None), "reason", "")
@@ -1687,10 +1716,12 @@ class InstitutionalIteRuntime:
                     except Exception:
                         logger.exception("lifecycle_close_mark_failed")
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            ValidationStage,
-                            stage as pvm_stage,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q1688,
                         )
+
+                        ValidationStage = _q1688.ValidationStage
+                        pvm_stage = _q1688.stage
 
                         _close_record = getattr(result, "record", None)
                         _close_reason = getattr(_close_record, "reason", "")
@@ -1702,13 +1733,17 @@ class InstitutionalIteRuntime:
                     except Exception:
                         logger.exception("pvm_position_close_stage_failed")
                     try:
-                        from app.domain.institutional_trading.ai_scalping.decision_explain import (  # noqa: E501
-                            explain_decision,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            decision_explain as _qf_decision_explain,
                         )
-                        from app.domain.institutional_trading.ai_scalping.learning import (  # noqa: E501
-                            LearningTradeRecord,
-                            get_scalping_learning_store,
+
+                        explain_decision = _qf_decision_explain.explain_decision
+                        from app.domain.institutional_trading.ai_scalping import (
+                            learning as _q1708,
                         )
+
+                        LearningTradeRecord = _q1708.LearningTradeRecord
+                        get_scalping_learning_store = _q1708.get_scalping_learning_store
 
                         ai = getattr(self.decision_pipeline, "_last_ai_score", None)
                         ai_d = ai if isinstance(ai, dict) else {}
@@ -1734,85 +1769,78 @@ class InstitutionalIteRuntime:
                             why=explain.get("why"),
                             ticket=ticket,
                         )
+                        hold_raw = getattr(pos, "holding_time_minutes", None)
                         trade_rec = LearningTradeRecord(
-                                closed_at=datetime.now(UTC).isoformat(),
-                                symbol=str(
-                                    getattr(pos, "symbol", None)
-                                    or getattr(snapshot, "symbol", "")
-                                    or "XAUUSD"
-                                ),
-                                direction=direction,
-                                session=str(
+                            closed_at=datetime.now(UTC).isoformat(),
+                            symbol=str(
+                                getattr(pos, "symbol", None)
+                                or getattr(snapshot, "symbol", "")
+                                or "XAUUSD"
+                            ),
+                            direction=direction,
+                            session=str(
+                                getattr(
                                     getattr(
-                                        getattr(
-                                            getattr(snapshot, "session", None),
-                                            "session",
-                                            None,
-                                        ),
-                                        "value",
-                                        None,
-                                    )
-                                    or getattr(
                                         getattr(snapshot, "session", None),
                                         "session",
-                                        "",
-                                    )
-                                    or ""
-                                ),
-                                win=pnl_f > 0,
-                                pnl=str(pnl_raw if pnl_raw is not None else "0"),
-                                confidence=int(
-                                    ai_d.get("ai_confidence")
-                                    or ai_d.get("confidence")
-                                    or 0
-                                ),
-                                quality=int(
-                                    ai_d.get("trade_quality")
-                                    or ai_d.get("quality")
-                                    or 0
-                                ),
-                                confluence=int(ai_d.get("confluence") or 0),
-                                spread=(
-                                    str(getattr(snapshot, "spread", None))
-                                    if getattr(snapshot, "spread", None) is not None
-                                    else None
-                                ),
-                                atr_pct=(
-                                    str(ai_d.get("atr_pct"))
-                                    if ai_d.get("atr_pct") is not None
-                                    else None
-                                ),
-                                regime=ai_d.get("market_regime") or ai_d.get("regime"),
-                                execution_ms=None,
-                                ticket=str(ticket),
-                                entry_reason=ai_d.get("entry_reason")
-                                or (
-                                    "; ".join(ai_d.get("reasons") or [])
-                                    if isinstance(ai_d.get("reasons"), list)
-                                    else None
-                                ),
-                                exit_reason=str(_close_reason or reason or "closed"),
-                                rejection_reason=ai_d.get("reject_reason"),
-                                setup_family=ai_d.get("setup_family"),
-                                holding_time_minutes=(
-                                    float(getattr(pos, "holding_time_minutes", None))
-                                    if getattr(pos, "holding_time_minutes", None)
-                                    is not None
-                                    else None
-                                ),
-                                r_multiple=(
-                                    str(getattr(pos, "r_multiple", None))
-                                    if getattr(pos, "r_multiple", None) is not None
-                                    else None
-                                ),
-                                indicators={
-                                    "explain": explain,
-                                    "management_reason": reason,
-                                    "mtf": ai_d.get("mtf_alignment")
-                                    or ai_d.get("mtf"),
-                                    "liquidity": ai_d.get("liquidity"),
-                                },
-                            )
+                                        None,
+                                    ),
+                                    "value",
+                                    None,
+                                )
+                                or getattr(
+                                    getattr(snapshot, "session", None),
+                                    "session",
+                                    "",
+                                )
+                                or ""
+                            ),
+                            win=pnl_f > 0,
+                            pnl=str(pnl_raw if pnl_raw is not None else "0"),
+                            confidence=int(
+                                ai_d.get("ai_confidence") or ai_d.get("confidence") or 0
+                            ),
+                            quality=int(
+                                ai_d.get("trade_quality") or ai_d.get("quality") or 0
+                            ),
+                            confluence=int(ai_d.get("confluence") or 0),
+                            spread=(
+                                str(getattr(snapshot, "spread", None))
+                                if getattr(snapshot, "spread", None) is not None
+                                else None
+                            ),
+                            atr_pct=(
+                                str(ai_d.get("atr_pct"))
+                                if ai_d.get("atr_pct") is not None
+                                else None
+                            ),
+                            regime=ai_d.get("market_regime") or ai_d.get("regime"),
+                            execution_ms=None,
+                            ticket=str(ticket),
+                            entry_reason=ai_d.get("entry_reason")
+                            or (
+                                "; ".join(ai_d.get("reasons") or [])
+                                if isinstance(ai_d.get("reasons"), list)
+                                else None
+                            ),
+                            exit_reason=str(_close_reason or reason or "closed"),
+                            rejection_reason=ai_d.get("reject_reason"),
+                            setup_family=ai_d.get("setup_family"),
+                            holding_time_minutes=(
+                                float(hold_raw) if hold_raw is not None else None
+                            ),
+                            r_multiple=(
+                                str(getattr(pos, "r_multiple", None))
+                                if getattr(pos, "r_multiple", None) is not None
+                                else None
+                            ),
+                            indicators={
+                                "explain": explain,
+                                "management_reason": reason,
+                                "mtf": ai_d.get("mtf_alignment") or ai_d.get("mtf"),
+                                "liquidity": ai_d.get("liquidity"),
+                            },
+                        )
                         get_scalping_learning_store().record(trade_rec)
                         # Phase B — observe-only post-trade / MAE-MFE close
                         try:
@@ -1824,28 +1852,31 @@ class InstitutionalIteRuntime:
                             tid = str(ticket)
                             exit_px = None
                             try:
-                                exit_px = float(
-                                    getattr(pos, "exit_price", None)
-                                    or getattr(account, "mid_price", None)
-                                    or 0
-                                ) or None
+                                exit_px = (
+                                    float(
+                                        getattr(pos, "exit_price", None)
+                                        or getattr(account, "mid_price", None)
+                                        or 0
+                                    )
+                                    or None
+                                )
                             except Exception:
                                 exit_px = None
                             closed = pb.mae_mfe.observe_close(
                                 tid,
                                 exit_price=exit_px,
-                                exit_reason=str(
-                                    _close_reason or reason or "closed"
-                                ),
+                                exit_reason=str(_close_reason or reason or "closed"),
                             )
                             rr = None
                             if closed and closed.realized_r is not None:
                                 rr = closed.realized_r
-                            elif getattr(pos, "r_multiple", None) is not None:
-                                try:
-                                    rr = float(pos.r_multiple)
-                                except Exception:
-                                    rr = None
+                            else:
+                                r_raw = getattr(pos, "r_multiple", None)
+                                if r_raw is not None:
+                                    try:
+                                        rr = float(r_raw)
+                                    except Exception:
+                                        rr = None
                             pb.post_trade.record(
                                 trade_id=tid,
                                 symbol=str(getattr(pos, "symbol", "") or ""),
@@ -1855,12 +1886,8 @@ class InstitutionalIteRuntime:
                                 holding_time=(
                                     closed.holding_time_s if closed else None
                                 ),
-                                exit_reason=str(
-                                    _close_reason or reason or "closed"
-                                ),
-                                entry_risk=(
-                                    closed.risk_distance if closed else None
-                                ),
+                                exit_reason=str(_close_reason or reason or "closed"),
+                                entry_risk=(closed.risk_distance if closed else None),
                             )
                             pb.matrix.record(
                                 strategy=str(
@@ -1924,8 +1951,12 @@ class InstitutionalIteRuntime:
                             logger.exception("phase_b_post_close_observe_failed")
                         # AI v8 — append-only observation (never auto-applies)
                         try:
-                            from app.domain.institutional_trading.ai_scalping.institutional_learning_engine import (  # noqa: E501
-                                observe_from_learning_trade,
+                            from app.domain.institutional_trading.ai_scalping import (
+                                institutional_learning_engine as _q1919,
+                            )
+
+                            observe_from_learning_trade = (
+                                _q1919.observe_from_learning_trade
                             )
 
                             observe_from_learning_trade(
@@ -1951,11 +1982,17 @@ class InstitutionalIteRuntime:
                     except Exception:
                         logger.exception("ai_scalping_learning_record_failed")
                     try:
-                        from app.domain.institutional_trading.ai_scalping.config import (  # noqa: E501
-                            DEFAULT_AI_SCALPING_CONFIG,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            config as _q1946,
                         )
-                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
-                            get_continuous_operation_controller,
+
+                        DEFAULT_AI_SCALPING_CONFIG = _q1946.DEFAULT_AI_SCALPING_CONFIG
+                        from app.domain.institutional_trading.ai_scalping import (
+                            continuous_operation as _q1949,
+                        )
+
+                        get_continuous_operation_controller = (
+                            _q1949.get_continuous_operation_controller
                         )
 
                         if DEFAULT_AI_SCALPING_CONFIG.post_close_rescan_enabled:
@@ -1963,6 +2000,9 @@ class InstitutionalIteRuntime:
                                 DEFAULT_AI_SCALPING_CONFIG
                             ).request_rescan_after_close()
                             try:
+                                from app.domain.institutional_trading import (
+                                    ai_scalping as _q1965,
+                                )
                                 from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (  # noqa: E501
                                     ClosedTradeRecord,
                                     get_daily_opportunity_tracker,
@@ -1970,8 +2010,9 @@ class InstitutionalIteRuntime:
                                 from app.domain.institutional_trading.ai_scalping.same_symbol_requalification import (  # noqa: E501
                                     fingerprint_from_snapshot,
                                 )
-                                from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
-                                    get_symbol_state_book,
+
+                                get_symbol_state_book = (
+                                    _q1965.symbol_state.get_symbol_state_book
                                 )
 
                                 _ai = getattr(
@@ -1992,8 +2033,7 @@ class InstitutionalIteRuntime:
                                             or ""
                                         ),
                                         setup_family=(
-                                            str(_ai_d.get("setup_family") or "")
-                                            or None
+                                            str(_ai_d.get("setup_family") or "") or None
                                         ),
                                         opportunity_score=_ai_d.get(
                                             "opportunity_score"
@@ -2023,11 +2063,14 @@ class InstitutionalIteRuntime:
                                             get_symbol_stats_book,
                                         )
 
-                                        close_why = str(
-                                            getattr(pos, "close_reason", None)
-                                            or getattr(pos, "exit_reason", None)
-                                            or ""
-                                        ) or None
+                                        close_why = (
+                                            str(
+                                                getattr(pos, "close_reason", None)
+                                                or getattr(pos, "exit_reason", None)
+                                                or ""
+                                            )
+                                            or None
+                                        )
                                         get_symbol_performance_book().record_closed(
                                             closed_sym,
                                             pnl=pnl_close,
@@ -2043,8 +2086,12 @@ class InstitutionalIteRuntime:
                                             "symbol_performance_note_closed_failed"
                                         )
                                     try:
-                                        from app.domain.institutional_trading.live_trading_control import (  # noqa: E501
-                                            get_live_trading_controller,
+                                        from app.domain.institutional_trading import (
+                                            live_trading_control as _q2040,
+                                        )
+
+                                        get_live_trading_controller = (
+                                            _q2040.get_live_trading_controller
                                         )
 
                                         vol_close = getattr(
@@ -2073,7 +2120,8 @@ class InstitutionalIteRuntime:
                                         getattr(pos, "r_multiple", None) or 0.0
                                     )
                                     hold_m = float(
-                                        getattr(pos, "holding_time_minutes", None) or 0.0
+                                        getattr(pos, "holding_time_minutes", None)
+                                        or 0.0
                                     )
                                     planned_r = 0.0
                                     try:
@@ -2092,9 +2140,9 @@ class InstitutionalIteRuntime:
                                         )
                                         if risk_d > 0 and entry_px > 0 and tp_px > 0:
                                             planned_r = float(
-                                                (abs(tp_px - entry_px) / risk_d).quantize(
-                                                    Decimal("0.01")
-                                                )
+                                                (
+                                                    abs(tp_px - entry_px) / risk_d
+                                                ).quantize(Decimal("0.01"))
                                             )
                                     except Exception:
                                         planned_r = 0.0
@@ -2111,8 +2159,12 @@ class InstitutionalIteRuntime:
                                         gmi_state = None
                                     streak_at_close = None
                                     try:
-                                        from app.domain.institutional_trading.live_trading_control import (  # noqa: E501
-                                            get_live_trading_controller,
+                                        from app.domain.institutional_trading import (
+                                            live_trading_control as _q2109,
+                                        )
+
+                                        get_live_trading_controller = (
+                                            _q2109.get_live_trading_controller
                                         )
 
                                         streak_at_close = int(
@@ -2183,19 +2235,25 @@ class InstitutionalIteRuntime:
                                                 getattr(pos, "trailing_active", False)
                                             ),
                                             intelligence_alignment=(
-                                                str(gmi_state)
-                                                if gmi_state
-                                                else None
+                                                str(gmi_state) if gmi_state else None
                                             ),
                                             opportunity_score=(
-                                                int(pos.opportunity_score)
-                                                if getattr(
-                                                    pos, "opportunity_score", None
+                                                int(opp_raw)
+                                                if (
+                                                    opp_raw := getattr(
+                                                        pos,
+                                                        "opportunity_score",
+                                                        None,
+                                                    )
                                                 )
                                                 is not None
                                                 else (
-                                                    int(_ai_d["opportunity_score"])
-                                                    if _ai_d.get("opportunity_score")
+                                                    int(ai_opp)
+                                                    if (
+                                                        ai_opp := _ai_d.get(
+                                                            "opportunity_score"
+                                                        )
+                                                    )
                                                     is not None
                                                     else None
                                                 )
@@ -2207,9 +2265,7 @@ class InstitutionalIteRuntime:
                                             consecutive_losses_at_close=streak_at_close,
                                             max_favorable_r=(
                                                 float(pos.max_favorable_r)
-                                                if getattr(
-                                                    pos, "max_favorable_r", None
-                                                )
+                                                if getattr(pos, "max_favorable_r", None)
                                                 is not None
                                                 else None
                                             ),
@@ -2238,8 +2294,12 @@ class InstitutionalIteRuntime:
                                         )
                                     )
                                     try:
-                                        from app.application.services.strategy_performance_telemetry import (  # noqa: E501
-                                            get_strategy_performance_telemetry,
+                                        from app.application.services import (
+                                            strategy_performance_telemetry as _q2232,
+                                        )
+
+                                        get_strategy_performance_telemetry = (
+                                            _q2232.get_strategy_performance_telemetry
                                         )
 
                                         _tel = get_strategy_performance_telemetry()
@@ -2289,8 +2349,12 @@ class InstitutionalIteRuntime:
                                     ticket=ticket,
                                 )
                                 try:
-                                    from app.application.services.mt5_position_truth import (
-                                        _invalidate_adapter_position_cache,
+                                    from app.application.services import (
+                                        mt5_position_truth as _q2283,
+                                    )
+
+                                    _invalidate_adapter_position_cache = (
+                                        _q2283._invalidate_adapter_position_cache
                                     )
 
                                     _invalidate_adapter_position_cache(self.mt5_adapter)
@@ -2299,8 +2363,12 @@ class InstitutionalIteRuntime:
                                         "position_close_cache_invalidate_failed"
                                     )
                                 try:
-                                    from app.domain.institutional_trading.operations.decision_cycle import (  # noqa: E501
-                                        note_cycle_event,
+                                    from app.domain.institutional_trading import (
+                                        operations as _q2293,
+                                    )
+
+                                    note_cycle_event = (
+                                        _q2293.decision_cycle.note_cycle_event
                                     )
 
                                     note_cycle_event("position_close")
@@ -2316,9 +2384,11 @@ class InstitutionalIteRuntime:
                 logger.exception("pme_manage_log_failed", ticket=ticket)
 
         try:
-            from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
-                persist_pme_state,
+            from app.domain.institutional_trading.production_hardening import (
+                position_recovery as _qf_position_recovery,
             )
+
+            persist_pme_state = _qf_position_recovery.persist_pme_state
 
             persist_pme_state(engine)
             from app.domain.institutional_trading.production_hardening.observe import (
@@ -2412,8 +2482,7 @@ class InstitutionalIteRuntime:
         except Exception:
             qf_count = int(getattr(account, "open_positions", 0) or 0)
         snap = build_authoritative_snapshot(
-            cycle_id=diagnostics.get("cycle_id")
-            or getattr(contract, "cycle_id", None),
+            cycle_id=diagnostics.get("cycle_id") or getattr(contract, "cycle_id", None),
             snapshot_id=diagnostics.get("snapshot_id")
             or getattr(contract, "snapshot_id", None),
             snapshot=snapshot,
@@ -2439,9 +2508,11 @@ class InstitutionalIteRuntime:
                 snapshot_id=snap.snapshot_id,
             )
             diagnostics["stale_authorization"] = stale
-            from app.domain.institutional_trading.operations.execution_chain_log import (
-                execution_blocked_event as _blk_stale,
+            from app.domain.institutional_trading.operations import (
+                execution_chain_log as _qf_execution_chain_log,
             )
+
+            _blk_stale = _qf_execution_chain_log.execution_blocked_event
 
             diagnostics["execution_blocked"] = _blk_stale(
                 stage="MARKET",
@@ -2559,9 +2630,11 @@ class InstitutionalIteRuntime:
             )
 
             hold = plan.min_lot_constraint_reason or "effective_position_count=0"
-            from app.domain.institutional_trading.operations.execution_chain_log import (
-                execution_blocked_event as _blk_plan,
+            from app.domain.institutional_trading.operations import (
+                execution_chain_log as _qf_execution_chain_log,
             )
+
+            _blk_plan = _qf_execution_chain_log.execution_blocked_event
 
             min_lot_hold = "min_lot" in str(hold).lower()
             diagnostics["execution_blocked"] = _blk_plan(
@@ -2585,9 +2658,7 @@ class InstitutionalIteRuntime:
         t_first = _time.perf_counter()
 
         def _submit(leg_decision: Any, leg_ctx: Any) -> Any:
-            return self.execution.bridge.handle(
-                leg_decision, leg_ctx, trace_id=tid
-            )
+            return self.execution.bridge.handle(leg_decision, leg_ctx, trace_id=tid)
 
         plan, tally, last = submit_position_plan_batch(
             plan=plan,
@@ -2625,9 +2696,11 @@ class InstitutionalIteRuntime:
                 action=_DA_dup.NO_TRADE,
                 reasons=(*decision.reasons, "duplicate_or_empty_batch"),
             )
-            from app.domain.institutional_trading.operations.execution_chain_log import (
-                execution_blocked_event as _blk_dup,
+            from app.domain.institutional_trading.operations import (
+                execution_chain_log as _qf_execution_chain_log,
             )
+
+            _blk_dup = _qf_execution_chain_log.execution_blocked_event
 
             diagnostics["execution_blocked"] = _blk_dup(
                 stage="OMS",
@@ -2988,12 +3061,14 @@ class InstitutionalIteRuntime:
             from dataclasses import replace as _dc_replace
             from decimal import Decimal as _Dec
 
+            from app.domain.institutional_trading.ai_scalping import (
+                continuous_operation as _qf_continuous_operation,
+            )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG as _scalp_cfg,
             )
-            from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
-                get_continuous_operation_controller as _get_co,
-            )
+
+            _get_co = _qf_continuous_operation.get_continuous_operation_controller
             from app.domain.institutional_trading.decision_models import (
                 DecisionAction as _DA,
                 EligibilityResult as _Elig,
@@ -3005,9 +3080,11 @@ class InstitutionalIteRuntime:
                 try:
                     import time as _time
 
-                    from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
-                        get_daily_opportunity_tracker as _get_dot,
+                    from app.domain.institutional_trading.ai_scalping import (
+                        daily_opportunity_target as _q3006,
                     )
+
+                    _get_dot = _q3006.get_daily_opportunity_tracker
 
                     _dot = _get_dot(
                         target_trades_per_day=int(
@@ -3074,6 +3151,8 @@ class InstitutionalIteRuntime:
                         logger.exception("entry_pause_portfolio_risk_probe_failed")
                         portfolio_risk_exceeded = True  # fail closed
 
+                    bid_raw = getattr(account, "bid", None)
+                    ask_raw = getattr(account, "ask", None)
                     pause = ctrl.evaluate_new_entry_pause(
                         daily_loss_exceeded=bool(self.plane.daily_loss_exceeded),
                         broker_available=bool(broker_connected),
@@ -3085,16 +3164,8 @@ class InstitutionalIteRuntime:
                             or getattr(snapshot, "symbol", "")
                             or ""
                         ),
-                        bid=(
-                            float(account.bid)
-                            if getattr(account, "bid", None) is not None
-                            else None
-                        ),
-                        ask=(
-                            float(account.ask)
-                            if getattr(account, "ask", None) is not None
-                            else None
-                        ),
+                        bid=float(bid_raw) if bid_raw is not None else None,
+                        ask=float(ask_raw) if ask_raw is not None else None,
                         quote_age_seconds=getattr(account, "quote_age_seconds", None),
                         strategy=str(
                             getattr(decision, "strategy_id", "")
@@ -3240,10 +3311,12 @@ class InstitutionalIteRuntime:
         portfolio_allow = True
         portfolio_reasons: tuple[str, ...] = ()
         try:
-            from app.domain.institutional_trading.operations.quantforg_position_cap import (
-                engine_position_rows,
-                quantforg_open_symbols,
+            from app.domain.institutional_trading.operations import (
+                quantforg_position_cap as _qf_quantforg_position_cap,
             )
+
+            engine_position_rows = _qf_quantforg_position_cap.engine_position_rows
+            quantforg_open_symbols = _qf_quantforg_position_cap.quantforg_open_symbols
             from app.domain.institutional_trading.portfolio_intelligence import (
                 build_portfolio_state,
                 evaluate_capital_protection,
@@ -3547,10 +3620,12 @@ class InstitutionalIteRuntime:
         elif feas_pipe.get("tradeability") == "TRADEABLE":
             sizing_diag["execution_status"] = "TRADEABLE"
             # Drop ATR-preview min-lot leftovers; pipeline stop is authoritative.
-            from app.domain.institutional_trading.operations.min_lot_feasibility import (
-                CODE_MIN_LOT_CONSTRAINT,
-                CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            from app.domain.institutional_trading.operations import (
+                min_lot_feasibility as _q3550,
             )
+
+            CODE_MIN_LOT_CONSTRAINT = _q3550.CODE_MIN_LOT_CONSTRAINT
+            CODE_MIN_LOT_EXCEEDS_RISK_BUDGET = _q3550.CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
 
             leftover = str(sizing_diag.get("block_reason") or "")
             if leftover in {
@@ -3592,9 +3667,7 @@ class InstitutionalIteRuntime:
             utc_session=utc_sess,
             symbol_tradable=symbol_tradable,
             market_data_live=market_data_live,
-            cooled=is_market_closed_cooled(
-                str(getattr(snapshot, "symbol", "") or "")
-            ),
+            cooled=is_market_closed_cooled(str(getattr(snapshot, "symbol", "") or "")),
         )
         snapshot = overlay_snapshot_session(
             snapshot, broker_open=session_obs.broker_session_open
@@ -3632,8 +3705,7 @@ class InstitutionalIteRuntime:
             ),
             session_source=session_obs.session_source,
             daily_pnl_trusted=(
-                market_context_diagnostics.get("daily_pnl_fail_closed")
-                is not True
+                market_context_diagnostics.get("daily_pnl_fail_closed") is not True
                 and market_context_diagnostics.get("daily_pnl_trusted") is True
             ),
         )
@@ -3653,17 +3725,23 @@ class InstitutionalIteRuntime:
             getattr(decision.action, "value", decision.action) or ""
         ).upper()
         try:
-            from app.domain.institutional_trading.ai_scalping.execution_optimizer import (
-                clear_optimizer_defers,
-                evaluate_execution_moment,
-                should_defer_submit,
+            from app.domain.institutional_trading.ai_scalping import (
+                execution_optimizer as _q3653,
             )
-            from app.domain.institutional_trading.ai_scalping.smart_order_routing import (
-                estimate_smart_routing,
+
+            clear_optimizer_defers = _q3653.clear_optimizer_defers
+            evaluate_execution_moment = _q3653.evaluate_execution_moment
+            should_defer_submit = _q3653.should_defer_submit
+            from app.domain.institutional_trading.ai_scalping import (
+                smart_order_routing as _qf_smart_order_routing,
             )
-            from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
-                get_trade_lifecycle_store,
+
+            estimate_smart_routing = _qf_smart_order_routing.estimate_smart_routing
+            from app.domain.institutional_trading.ai_scalping import (
+                trade_lifecycle_timeline as _q3663,
             )
+
+            get_trade_lifecycle_store = _q3663.get_trade_lifecycle_store
 
             lc = get_trade_lifecycle_store()
             lc.begin(
@@ -3687,7 +3765,8 @@ class InstitutionalIteRuntime:
                     tid,
                     "RISK_APPROVED",
                     ok=False,
-                    reason=";".join(decision.eligibility.rejection_reasons) or "ineligible",
+                    reason=";".join(decision.eligibility.rejection_reasons)
+                    or "ineligible",
                 )
 
             if (
@@ -3709,9 +3788,7 @@ class InstitutionalIteRuntime:
                 sor_payload = estimate_smart_routing(
                     symbol=str(getattr(decision, "symbol", "") or ""),
                     side=action_for_exec,
-                    spread=coerce_spread_value(
-                        getattr(snapshot, "spread", None)
-                    ),
+                    spread=coerce_spread_value(getattr(snapshot, "spread", None)),
                     optimizer=optimizer_payload,
                 )
                 rec = str(optimizer_payload.get("recommendation") or "")
@@ -3726,12 +3803,8 @@ class InstitutionalIteRuntime:
                         reason=optimizer_payload.get("reason"),
                         final_state=final_state,
                         defer_count=optimizer_payload.get("defer_count"),
-                        remaining_wait_ms=optimizer_payload.get(
-                            "remaining_wait_ms"
-                        ),
-                        remaining_attempts=optimizer_payload.get(
-                            "remaining_attempts"
-                        ),
+                        remaining_wait_ms=optimizer_payload.get("remaining_wait_ms"),
+                        remaining_attempts=optimizer_payload.get("remaining_attempts"),
                     )
                 elif final_state == "EXECUTE_NOW" or rec in {
                     "PROCEED",
@@ -3767,11 +3840,13 @@ class InstitutionalIteRuntime:
                 f":count={opt.get('defer_count') or 0}"
                 f":remaining_wait_ms={opt.get('remaining_wait_ms') or 0}"
             )
-            from app.domain.institutional_trading.operations.execution_chain_log import (
-                execution_blocked_event,
+            from app.domain.institutional_trading.operations import (
+                execution_chain_log as _qf_execution_chain_log,
             )
 
-            blocked_ev = execution_blocked_event(
+            execution_blocked_event = _qf_execution_chain_log.execution_blocked_event
+
+            blocked_ev: dict[str, Any] | None = execution_blocked_event(
                 stage="OPTIMIZER",
                 reason_code="EXECUTION_OPTIMIZER_DEFER",
                 human_reason=detail,
@@ -3814,10 +3889,12 @@ class InstitutionalIteRuntime:
             )
             return result
 
-        from app.domain.institutional_trading.operations.gold_execution_contract import (
-            evaluate_gold_execution_contract,
-            facts_from_cycle,
+        from app.domain.institutional_trading.operations import (
+            gold_execution_contract as _q3813,
         )
+
+        evaluate_gold_execution_contract = _q3813.evaluate_gold_execution_contract
+        facts_from_cycle = _q3813.facts_from_cycle
 
         contract = evaluate_gold_execution_contract(
             facts_from_cycle(
@@ -3859,9 +3936,11 @@ class InstitutionalIteRuntime:
                 may_submit_oms=False,
                 execute_now_required=False,
             )
-            from app.domain.institutional_trading.operations.execution_chain_log import (
-                execution_blocked_event,
+            from app.domain.institutional_trading.operations import (
+                execution_chain_log as _qf_execution_chain_log,
             )
+
+            execution_blocked_event = _qf_execution_chain_log.execution_blocked_event
 
             blocked_ev = execution_blocked_event(
                 stage=str(contract.blocking_stage or "RISK"),
@@ -3877,13 +3956,16 @@ class InstitutionalIteRuntime:
                 signal_id=str(tid or ""),
             )
             market_context_diagnostics["execution_blocked"] = blocked_ev
-            from app.domain.institutional_trading.operations.execution_chain_log import (
-                build_execution_handoff,
+            from app.domain.institutional_trading.operations import (
+                execution_chain_log as _qf_execution_chain_log,
             )
 
+            build_execution_handoff = _qf_execution_chain_log.build_execution_handoff
+
             market_context_diagnostics["execution_handoff"] = build_execution_handoff(
-                take=str(getattr(decision.action, "value", decision.action) or "")
-                .upper()
+                take=str(
+                    getattr(decision.action, "value", decision.action) or ""
+                ).upper()
                 in {"BUY", "SELL"},
                 abort_reason=str(contract.fault_code or ""),
                 blocking_stage=str(contract.blocking_stage or ""),
@@ -4262,17 +4344,23 @@ class InstitutionalIteRuntime:
                             }
                         # Execution intelligence artefacts
                         try:
-                            from app.domain.institutional_trading.ai_scalping.execution_optimizer import (  # noqa: E501
-                                get_last_execution_optimizer,
-                            )
-                            from app.domain.institutional_trading.ai_scalping.smart_order_routing import (  # noqa: E501
-                                get_last_smart_routing,
+                            from app.domain.institutional_trading.ai_scalping import (
+                                execution_optimizer as _q4266,
                             )
 
-                            opt = get_last_execution_optimizer()
+                            get_last_execution_optimizer = (
+                                _q4266.get_last_execution_optimizer
+                            )
+                            from app.domain.institutional_trading.ai_scalping import (
+                                smart_order_routing as _q4269,
+                            )
+
+                            get_last_smart_routing = _q4269.get_last_smart_routing
+
+                            replay_opt = get_last_execution_optimizer()
                             sor = get_last_smart_routing()
-                            if opt:
-                                inst["execution_decision"] = opt
+                            if replay_opt:
+                                inst["execution_decision"] = replay_opt
                             if sor:
                                 inst["smart_order_routing"] = sor
                         except Exception:
@@ -4297,23 +4385,31 @@ class InstitutionalIteRuntime:
 
                     # Rich execution quality + lifecycle FILLED
                     try:
-                        from app.domain.institutional_trading.ai_scalping.execution_quality_analytics import (  # noqa: E501
-                            classify_fill_quality,
-                            get_execution_quality_analytics_store,
-                        )
-                        from app.domain.institutional_trading.ai_scalping.slippage_protection import (  # noqa: E501
-                            extract_fill_price,
-                        )
-                        from app.domain.institutional_trading.ai_scalping.smart_order_routing import (  # noqa: E501
-                            get_last_smart_routing,
-                        )
-                        from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
-                            get_trade_lifecycle_store,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            execution_quality_analytics as _q4301,
                         )
 
-                        get_trade_lifecycle_store().mark(
-                            tid, "OMS_SUBMITTED", ok=True
+                        classify_fill_quality = _q4301.classify_fill_quality
+                        get_execution_quality_analytics_store = (
+                            _q4301.get_execution_quality_analytics_store
                         )
+                        from app.domain.institutional_trading.ai_scalping import (
+                            slippage_protection as _qf_slippage_protection,
+                        )
+
+                        extract_fill_price = _qf_slippage_protection.extract_fill_price
+                        from app.domain.institutional_trading.ai_scalping import (
+                            smart_order_routing as _q4310,
+                        )
+
+                        get_last_smart_routing = _q4310.get_last_smart_routing
+                        from app.domain.institutional_trading.ai_scalping import (
+                            trade_lifecycle_timeline as _q4313,
+                        )
+
+                        get_trade_lifecycle_store = _q4313.get_trade_lifecycle_store
+
+                        get_trade_lifecycle_store().mark(tid, "OMS_SUBMITTED", ok=True)
                         get_trade_lifecycle_store().mark(
                             tid, "BROKER_ACCEPTED", ok=True
                         )
@@ -4352,7 +4448,9 @@ class InstitutionalIteRuntime:
                                 )
                                 or ""
                             ),
-                            requested_price=float(req_px) if req_px is not None else None,
+                            requested_price=(
+                                float(req_px) if req_px is not None else None
+                            ),
                             executed_price=(
                                 float(filled_px) if filled_px is not None else None
                             ),
@@ -4362,9 +4460,9 @@ class InstitutionalIteRuntime:
                             fill_quality=fq,
                             execution_score=(
                                 int(
-                                    (
-                                        get_last_smart_routing() or {}
-                                    ).get("execution_quality_score")
+                                    (get_last_smart_routing() or {}).get(
+                                        "execution_quality_score"
+                                    )
                                     or 0
                                 )
                                 or None
@@ -4405,14 +4503,22 @@ class InstitutionalIteRuntime:
                     )
                     # Daily opportunity target — observe only; never forces next entry.
                     try:
-                        from app.domain.institutional_trading.ai_scalping.config import (
-                            DEFAULT_AI_SCALPING_CONFIG as _tgt_cfg,
+                        from app.domain.institutional_trading.ai_scalping import (
+                            config as _qf_config,
                         )
-                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (
-                            get_continuous_operation_controller as _tgt_co,
+
+                        _tgt_cfg = _qf_config.DEFAULT_AI_SCALPING_CONFIG
+                        from app.domain.institutional_trading.ai_scalping import (
+                            continuous_operation as _q4416,
                         )
-                        from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
-                            get_daily_opportunity_tracker,
+
+                        _tgt_co = _q4416.get_continuous_operation_controller
+                        from app.domain.institutional_trading.ai_scalping import (
+                            daily_opportunity_target as _q4419,
+                        )
+
+                        get_daily_opportunity_tracker = (
+                            _q4419.get_daily_opportunity_tracker
                         )
 
                         get_daily_opportunity_tracker(
@@ -4423,8 +4529,12 @@ class InstitutionalIteRuntime:
                             symbol=str(getattr(decision, "symbol", "") or "")
                         )
                         try:
-                            from app.application.services.strategy_performance_telemetry import (  # noqa: E501
-                                get_strategy_performance_telemetry,
+                            from app.application.services import (
+                                strategy_performance_telemetry as _q4431,
+                            )
+
+                            get_strategy_performance_telemetry = (
+                                _q4431.get_strategy_performance_telemetry
                             )
 
                             _ai_fill = getattr(
@@ -4467,11 +4577,11 @@ class InstitutionalIteRuntime:
                                 or getattr(decision, "entry", None),
                             )
                         except Exception:
-                            logger.exception(
-                                "strategy_performance_fill_observe_failed"
-                            )
+                            logger.exception("strategy_performance_fill_observe_failed")
                         if getattr(_tgt_cfg, "post_event_rescan_enabled", True):
-                            _tgt_co(_tgt_cfg).request_opportunity_rescan("position_opened")
+                            _tgt_co(_tgt_cfg).request_opportunity_rescan(
+                                "position_opened"
+                            )
                     except Exception:
                         logger.exception("daily_opportunity_target_post_fill_failed")
                     # Calibration updated when outcome known; seed sample as pending via confidence only later  # noqa: E501
@@ -4646,9 +4756,11 @@ class InstitutionalIteRuntime:
                     blocked_ev = raw_b
             action_now = str(getattr(decision.action, "value", decision.action) or "")
             if blocked_ev is None and action_now in {"BUY", "SELL"}:
-                from app.domain.institutional_trading.operations.execution_chain_log import (
-                    execution_blocked_event as _blk_bridge,
+                from app.domain.institutional_trading.operations import (
+                    execution_chain_log as _qf_execution_chain_log,
                 )
+
+                _blk_bridge = _qf_execution_chain_log.execution_blocked_event
 
                 abort_s = str(
                     getattr(
@@ -4658,9 +4770,11 @@ class InstitutionalIteRuntime:
                     )
                     or "UNKNOWN_EXECUTION_ERROR"
                 )
-                from app.domain.institutional_trading.operations.execution_chain_log import (
-                    bridge_abort_stage as _abort_stage,
+                from app.domain.institutional_trading.operations import (
+                    execution_chain_log as _qf_execution_chain_log,
                 )
+
+                _abort_stage = _qf_execution_chain_log.bridge_abort_stage
 
                 blocked_ev = _blk_bridge(
                     stage=_abort_stage(abort_s),
@@ -4678,6 +4792,11 @@ class InstitutionalIteRuntime:
 
             oms_for_obs = getattr(bridge_result, "oms_result", None)
             entry_for_obs = getattr(bridge_result, "journal_entry", None)
+            reject_ts = (
+                getattr(entry_for_obs, "timestamp", None)
+                if entry_for_obs is not None
+                else None
+            )
             obs = _exec_obs(
                 oms_result=oms_for_obs,
                 abort_reason=getattr(bridge_result, "abort_reason", None),
@@ -4692,10 +4811,7 @@ class InstitutionalIteRuntime:
                 ),
                 reject_reason=str(detail or "") or None,
                 reject_timestamp=(
-                    getattr(entry_for_obs, "timestamp", None).isoformat()
-                    if entry_for_obs is not None
-                    and getattr(entry_for_obs, "timestamp", None) is not None
-                    else None
+                    reject_ts.isoformat() if reject_ts is not None else None
                 ),
             )
             if isinstance(market_context_diagnostics, dict):
@@ -4983,9 +5099,7 @@ class InstitutionalIteRuntime:
                     "trade_class": getattr(decision, "trade_class", None),
                     "approved_stop": ai_d.get("stop_distance")
                     or feas.get("stop_distance"),
-                    "approved_lot": str(
-                        getattr(decision, "approved_lots", "") or ""
-                    )
+                    "approved_lot": str(getattr(decision, "approved_lots", "") or "")
                     or None,
                     "min_lot_feasibility": feas.get("classification"),
                     "risk_result": "PASS" if risk_pass else "FAIL",
@@ -5405,11 +5519,7 @@ class InstitutionalIteRuntime:
                 "UNAVAILABLE"
                 if diag.get("daily_pnl_fail_closed") is True
                 or diag.get("daily_pnl_trusted") is False
-                else (
-                    "TRUSTED"
-                    if diag.get("daily_pnl_trusted") is True
-                    else None
-                )
+                else ("TRUSTED" if diag.get("daily_pnl_trusted") is True else None)
             ),
             "capital_baseline": diag.get("capital_baseline"),
             "deposit_verification": diag.get("deposit_verification"),
@@ -5421,8 +5531,7 @@ class InstitutionalIteRuntime:
                 "UNAVAILABLE"
                 if last is not None
                 and (
-                    "GATEWAY"
-                    in str(getattr(last, "abort_reason", "") or "").upper()
+                    "GATEWAY" in str(getattr(last, "abort_reason", "") or "").upper()
                     or str(getattr(last, "abort_reason", "") or "")
                     == "NO_MARKET_CONTEXT"
                 )
@@ -5482,8 +5591,7 @@ class InstitutionalIteRuntime:
             if last_d.get("mt5_ticket") in (None, "", 0, "0"):
                 payload.setdefault(
                     "execution_result",
-                    last_d.get("execution_result")
-                    or "NO BROKER ORDER WAS SUBMITTED",
+                    last_d.get("execution_result") or "NO BROKER ORDER WAS SUBMITTED",
                 )
         positions_n = 0
         try:
@@ -5539,10 +5647,12 @@ class InstitutionalIteRuntime:
         if payload.get("signals_found") is None:
             payload["signals_found"] = cycle_ops.get("signals_found")
         try:
-            from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
-                RAILWAY_ITE_HEARTBEAT,
-                note_heartbeat,
+            from app.domain.institutional_trading.operations import (
+                infrastructure_heartbeats as _qf_infrastructure_heartbeats,
             )
+
+            RAILWAY_ITE_HEARTBEAT = _qf_infrastructure_heartbeats.RAILWAY_ITE_HEARTBEAT
+            note_heartbeat = _qf_infrastructure_heartbeats.note_heartbeat
 
             note_heartbeat(
                 RAILWAY_ITE_HEARTBEAT,
@@ -5888,10 +5998,12 @@ class InstitutionalIteRuntime:
             ite = getattr(self.decision_pipeline, "config", None)
             if ite is None or not bool(getattr(ite, "is_scalping", lambda: False)()):
                 ite = scalping_ite_config()
-            from app.domain.institutional_trading.operations.worker_runtime_state import (  # noqa: E501
-                cycle_hard_timeout_seconds,
-                cycle_scan_budget_seconds,
+            from app.domain.institutional_trading.operations import (
+                worker_runtime_state as _q5894,
             )
+
+            cycle_hard_timeout_seconds = _q5894.cycle_hard_timeout_seconds
+            cycle_scan_budget_seconds = _q5894.cycle_scan_budget_seconds
 
             hard = cycle_hard_timeout_seconds(self.interval_seconds)
             started = self._cycle_started_mono or time.monotonic()
@@ -5913,9 +6025,11 @@ class InstitutionalIteRuntime:
             except Exception:
                 logger.exception("multi_asset_scan_call_failed")
                 try:
-                    from app.application.services.institutional_multi_asset_scanner import (
-                        get_last_multi_asset_scan,
+                    from app.application.services import (
+                        institutional_multi_asset_scanner as _q5919,
                     )
+
+                    get_last_multi_asset_scan = _q5919.get_last_multi_asset_scan
 
                     prior = get_last_multi_asset_scan()
                     scan = prior if isinstance(prior, dict) else None
@@ -6035,23 +6149,27 @@ class InstitutionalIteRuntime:
                 logger.exception("gold_only_post_research_handoff_failed")
             if not eligible and isinstance(scan, dict):
                 try:
-                    from app.application.services.institutional_multi_asset_scanner import (
-                        independent_evaluation_symbols,
+                    from app.application.services import (
+                        institutional_multi_asset_scanner as _q6041,
+                    )
+
+                    independent_evaluation_symbols = (
+                        _q6041.independent_evaluation_symbols
                     )
 
                     ranked_rows: list[Any] = []
                     for key in ("opportunity_ranked", "ranked", "rows"):
                         block = scan.get(key)
                         if isinstance(block, list):
-                            ranked_rows.extend(
-                                r for r in block if isinstance(r, dict)
-                            )
+                            ranked_rows.extend(r for r in block if isinstance(r, dict))
                     open_for_eval: set[str] = set()
                     try:
-                        from app.domain.institutional_trading.operations.quantforg_position_cap import (
-                            engine_position_rows,
-                            quantforg_open_symbols,
+                        from app.domain.institutional_trading.operations import (
+                            quantforg_position_cap as _q6052,
                         )
+
+                        engine_position_rows = _q6052.engine_position_rows
+                        quantforg_open_symbols = _q6052.quantforg_open_symbols
 
                         open_for_eval = quantforg_open_symbols(
                             engine_position_rows(self.position_management.engine)
@@ -6122,8 +6240,7 @@ class InstitutionalIteRuntime:
                 cat = [
                     str(s).strip().upper()
                     for s in (
-                        (scan.get("universe") if isinstance(scan, dict) else None)
-                        or []
+                        (scan.get("universe") if isinstance(scan, dict) else None) or []
                     )
                     if str(s).strip()
                 ]
@@ -6176,11 +6293,19 @@ class InstitutionalIteRuntime:
                     handoff="multi_symbol_independent",
                     max_entries_per_cycle=min(
                         OWNER_MAX_ENTRIES_PER_CYCLE,
-                        int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 1) or 1),
+                        int(
+                            getattr(
+                                DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 1
+                            )
+                            or 1
+                        ),
                     ),
                     max_open_trades=min(
                         OWNER_MAX_OPEN_POSITIONS,
-                        int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 1) or 1),
+                        int(
+                            getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 1)
+                            or 1
+                        ),
                     ),
                     open_positions=open_n,
                 )
@@ -6197,9 +6322,7 @@ class InstitutionalIteRuntime:
             with self._lock:
                 if not isinstance(self._last_multi_asset_scan, dict):
                     self._last_multi_asset_scan = {
-                        "as_of": datetime.now(UTC).isoformat().replace(
-                            "+00:00", "Z"
-                        ),
+                        "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                         "enabled": True,
                         "scan_incomplete": True,
                         "note": "multi_asset_scan_exception",
@@ -6219,7 +6342,12 @@ class InstitutionalIteRuntime:
         # Owner limits: one entry per cycle, one open position.
         max_e = min(
             OWNER_MAX_ENTRIES_PER_CYCLE,
-            max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 1) or 1)),
+            max(
+                1,
+                int(
+                    getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 1) or 1
+                ),
+            ),
         )
         max_open = min(
             OWNER_MAX_OPEN_POSITIONS,
@@ -6254,7 +6382,7 @@ class InstitutionalIteRuntime:
             for sym in self._eligible_handoff_queue:
                 if not sym or sym in self._eligible_consumed:
                     continue
-                try:
+                with contextlib.suppress(Exception):
                     from app.domain.trading.gold_only import (
                         gold_only_enabled,
                         is_gold_symbol,
@@ -6263,8 +6391,6 @@ class InstitutionalIteRuntime:
                     if gold_only_enabled() and not is_gold_symbol(sym):
                         self._eligible_consumed.add(sym)
                         continue
-                except Exception:
-                    pass
                 # Never drop a NEW independent continuation on an open
                 # QuantForg gold ticket — Risk/PRE enforce winner-only
                 # scale-in and reject averaging down.
@@ -6355,19 +6481,24 @@ class InstitutionalIteRuntime:
             last_account = getattr(self, "_last_account_risk", None)
             broker_open = getattr(last_account, "open_positions", None)
             snap = opportunity_window_snapshot(
-                current_scan=current
-                if isinstance(current, dict) and current.get("label") == "CURRENT_SCAN"
-                else None,
-                broker_open_positions=int(broker_open)
-                if isinstance(broker_open, int)
-                else None,
+                current_scan=(
+                    current
+                    if isinstance(current, dict)
+                    and current.get("label") == "CURRENT_SCAN"
+                    else None
+                ),
+                broker_open_positions=(
+                    int(broker_open) if isinstance(broker_open, int) else None
+                ),
             )
             last_pipeline = self._last_pipeline_snapshot()
             with self._lock:
                 last = self._last_cycle
                 queue = list(self._eligible_handoff_queue)
             snap["eligible_symbols"] = queue[:16]
-            snap["last_abort_reason"] = getattr(last, "abort_reason", None) if last else None
+            snap["last_abort_reason"] = (
+                getattr(last, "abort_reason", None) if last else None
+            )
             snap["last_cycle_outcome"] = (
                 getattr(last, "cycle_outcome", None) if last else None
             )
@@ -6395,9 +6526,11 @@ class InstitutionalIteRuntime:
                 # Last ITE NO_TRADE abort is not the current-scan blocking gate.
                 snap["last_abort_reason_class"] = "NO_TRADE_EVENT"
             try:
-                from app.domain.institutional_trading.operations.system_coherence import (
-                    compose_system_snapshot,
+                from app.domain.institutional_trading.operations import (
+                    system_coherence as _qf_system_coherence,
                 )
+
+                compose_system_snapshot = _qf_system_coherence.compose_system_snapshot
 
                 contract = None
                 if last is not None:
@@ -6405,9 +6538,7 @@ class InstitutionalIteRuntime:
                     if isinstance(diag, dict):
                         contract = diag.get("execution_contract")
                 snap["system_coherence"] = compose_system_snapshot(
-                    current_scan=current
-                    if isinstance(current, dict)
-                    else None,
+                    current_scan=current if isinstance(current, dict) else None,
                     last_pipeline=last_pipeline,
                     contract=contract if isinstance(contract, dict) else None,
                 )
@@ -6497,14 +6628,18 @@ class InstitutionalIteRuntime:
                 and last.get("note") != "scan_in_flight_no_prior_snapshot"
                 and not last.get("scan_incomplete")
             )
-            eligible = list(
-                filter_autonomous_symbols(last.get("eligible_symbols") or [])
-            ) if last else []
+            eligible = (
+                list(filter_autonomous_symbols(last.get("eligible_symbols") or []))
+                if last
+                else []
+            )
             if scan_complete and not eligible:
                 # Rejected / ineligible Gold — CURRENT_SCAN already published.
-                from app.domain.institutional_trading.operations.fast_decision_path import (
-                    scan_ineligible_abort_reason,
+                from app.domain.institutional_trading.operations import (
+                    fast_decision_path as _q6521,
                 )
+
+                scan_ineligible_abort_reason = _q6521.scan_ineligible_abort_reason
 
                 self._remember_pick_abort(scan_ineligible_abort_reason(last))
                 return None
@@ -6519,7 +6654,8 @@ class InstitutionalIteRuntime:
                 return None
             logger.warning("Submitting Order...", symbol=symbol)
             self._remember_pick_abort(None)
-            return symbol
+            picked: str | None = symbol
+            return picked
 
         with self._lock:
             last = (
@@ -6547,9 +6683,7 @@ class InstitutionalIteRuntime:
                 )
                 self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
                 return None
-            preferred = (
-                await self._offload_blocking_io(self._alpha_preferred_symbol)
-            )
+            preferred = await self._offload_blocking_io(self._alpha_preferred_symbol)
             if not preferred:
                 self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
                 return None
@@ -6577,7 +6711,8 @@ class InstitutionalIteRuntime:
         else:
             logger.warning("Submitting Order...", symbol=symbol)
             self._remember_pick_abort(None)
-        return symbol
+        picked = symbol
+        return picked
 
     def _pick_executable_symbol(self) -> str | None:
         """Sync fallback — prefer Alpha / gold when async scan is not awaited."""
@@ -6592,7 +6727,7 @@ class InstitutionalIteRuntime:
         )
 
         if gold_only_enabled():
-            preferred = canonical_gold_execution_symbol()
+            preferred: str | None = canonical_gold_execution_symbol()
             symbol, skipped = resolve_executable_symbol(
                 self.mt5_adapter,
                 preferred=preferred,
@@ -6729,21 +6864,22 @@ class InstitutionalIteRuntime:
                 1,
             )
             try:
-                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                    ValidationStage,
-                    stage as pvm_stage,
+                from app.domain.institutional_trading import (
+                    production_validation_mode as _qf_production_validation_mode,
                 )
 
+                pvm_mod = _qf_production_validation_mode
+
                 market_ok = bool(ctx.ok) and ctx.snapshot is not None
-                pvm_stage(
-                    ValidationStage.MARKET_DATA,
+                pvm_mod.stage(
+                    pvm_mod.ValidationStage.MARKET_DATA,
                     ok=market_ok,
                     reason=ctx.reason or ("market data ok" if market_ok else "fail"),
                     latency_ms=getattr(ctx, "latency_ms", None),
                     validation_id=_pvm_vid,
                 )
-                pvm_stage(
-                    ValidationStage.CONTEXT,
+                pvm_mod.stage(
+                    pvm_mod.ValidationStage.CONTEXT,
                     ok=bool(
                         ctx.ok and ctx.snapshot is not None and ctx.account is not None
                     ),
@@ -6771,9 +6907,11 @@ class InstitutionalIteRuntime:
                     self._last_cycle = result
                     self._cycles += 1
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        finalize as pvm_finalize,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _qf_production_validation_mode,
                     )
+
+                    pvm_finalize = _qf_production_validation_mode.finalize
 
                     pvm_finalize(validation_id=_pvm_vid)
                 except Exception:
@@ -6871,8 +7009,11 @@ class InstitutionalIteRuntime:
                     for row in stages:
                         if not isinstance(row, dict):
                             continue
-                        name = str(row.get("stage") or "").strip().lower().replace(
-                            " ", "_"
+                        name = (
+                            str(row.get("stage") or "")
+                            .strip()
+                            .lower()
+                            .replace(" ", "_")
                         )
                         if name:
                             stage_timings_ms[f"oms_{name}_ms"] = float(
@@ -6895,7 +7036,9 @@ class InstitutionalIteRuntime:
                 payload["order_check_reached"] = bool(
                     raw_flags.get("order_check_reached")
                 )
-                payload["order_send_reached"] = bool(raw_flags.get("order_send_reached"))
+                payload["order_send_reached"] = bool(
+                    raw_flags.get("order_send_reached")
+                )
             logger.warning(
                 "[QF][EXEC_STAGE_TIMING]",
                 **{
@@ -6917,9 +7060,11 @@ class InstitutionalIteRuntime:
             reason = f"cycle exception: {exc}"
             logger.warning("Execution Finished", success=False, status="REJECTED")
             try:
-                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                    finalize as pvm_finalize,
+                from app.domain.institutional_trading import (
+                    production_validation_mode as _qf_production_validation_mode,
                 )
+
+                pvm_finalize = _qf_production_validation_mode.finalize
 
                 pvm_finalize(validation_id=_pvm_vid)
             except Exception:
@@ -6942,9 +7087,11 @@ class InstitutionalIteRuntime:
             self._manual_execution = False
             try:
                 if _pvm_token is not None:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        get_production_validation_recorder as _pvm_rec_en,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _q6970,
                     )
+
+                    _pvm_rec_en = _q6970.get_production_validation_recorder
 
                     _pvm_rec_en().unbind_context(_pvm_token)
             except Exception:
@@ -7080,11 +7227,15 @@ class InstitutionalIteRuntime:
             logger.exception("opportunity_window_start_failed")
         # Mark open-book resume after process start / reconnect path.
         try:
+            from app.domain.institutional_trading.ai_scalping import (
+                continuous_operation as _q7111,
+            )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
-            from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
-                get_continuous_operation_controller,
+
+            get_continuous_operation_controller = (
+                _q7111.get_continuous_operation_controller
             )
 
             if DEFAULT_AI_SCALPING_CONFIG.continuous_operation_enabled:
@@ -7126,13 +7277,17 @@ class InstitutionalIteRuntime:
                 from app.domain.trading.gold_only import GOLD_SYMBOL
 
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        ValidationStage,
-                        begin_validation,
-                        get_production_validation_recorder,
-                        stage as pvm_stage,
-                        update_live_status,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _q7154,
                     )
+
+                    ValidationStage = _q7154.ValidationStage
+                    begin_validation = _q7154.begin_validation
+                    get_production_validation_recorder = (
+                        _q7154.get_production_validation_recorder
+                    )
+                    pvm_stage = _q7154.stage
+                    update_live_status = _q7154.update_live_status
 
                     _pvm_vid = begin_validation(
                         execution_mode=self.plane.mode.value,
@@ -7164,10 +7319,12 @@ class InstitutionalIteRuntime:
                 # cycle_budget_exhausted:pick_executable_symbol when PME already
                 # consumed the budget. Inner scan still isolates per-symbol
                 # timeouts; this outer bound only prevents a hung pick.
-                from app.domain.institutional_trading.operations.worker_runtime_state import (
-                    cycle_hard_timeout_seconds as _hard_to,
-                    cycle_scan_budget_seconds as _scan_to,
+                from app.domain.institutional_trading.operations import (
+                    worker_runtime_state as _qf_worker_runtime_state,
                 )
+
+                _hard_to = _qf_worker_runtime_state.cycle_hard_timeout_seconds
+                _scan_to = _qf_worker_runtime_state.cycle_scan_budget_seconds
 
                 pick_timeout = min(
                     _scan_to(self.interval_seconds),
@@ -7273,12 +7430,14 @@ class InstitutionalIteRuntime:
                 except Exception:
                     logger.exception("ite_cycle_stage_timings_failed")
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        ValidationStage,
-                        finalize as pvm_finalize,
-                        stage as pvm_stage,
-                        update_live_status,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _q7303,
                     )
+
+                    ValidationStage = _q7303.ValidationStage
+                    pvm_finalize = _q7303.finalize
+                    pvm_stage = _q7303.stage
+                    update_live_status = _q7303.update_live_status
 
                     market_ok = bool(ctx.ok) and ctx.snapshot is not None
                     pvm_stage(
@@ -7332,14 +7491,20 @@ class InstitutionalIteRuntime:
                                 else None
                             )
                         if isinstance(last_scan_m, dict):
-                            rows = last_scan_m.get("rows") or last_scan_m.get("noc_rows") or []
+                            rows = (
+                                last_scan_m.get("rows")
+                                or last_scan_m.get("noc_rows")
+                                or []
+                            )
                             scan_diag = {
                                 "symbols_queued": last_scan_m.get("symbols_queued"),
                                 "symbols_evaluated": last_scan_m.get(
                                     "symbols_evaluated"
                                 ),
                                 "eligible_count": last_scan_m.get("eligible_count"),
-                                "universe": list(last_scan_m.get("universe") or [])[:36],
+                                "universe": list(last_scan_m.get("universe") or [])[
+                                    :36
+                                ],
                                 "first_blocking_gate": last_scan_m.get(
                                     "first_blocking_gate"
                                 ),
@@ -7365,14 +7530,18 @@ class InstitutionalIteRuntime:
                     )
                     logger.warning("Waiting Next Cycle", reason=pick_abort.lower())
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            ValidationStage,
-                            finalize as pvm_finalize,
-                            stage as pvm_stage,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q7401,
                         )
-                        from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
-                            get_production_validation_recorder as _pvm_get,
+
+                        ValidationStage = _q7401.ValidationStage
+                        pvm_finalize = _q7401.finalize
+                        pvm_stage = _q7401.stage
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q7406,
                         )
+
+                        _pvm_get = _q7406.recorder.get_production_validation_recorder
 
                         pvm_stage(
                             ValidationStage.AI,
@@ -7389,9 +7558,11 @@ class InstitutionalIteRuntime:
                     finally:
                         try:
                             if _pvm_token is not None:
-                                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                                    get_production_validation_recorder as _pvm_rec,
+                                from app.domain.institutional_trading import (
+                                    production_validation_mode as _q7425,
                                 )
+
+                                _pvm_rec = _q7425.get_production_validation_recorder
 
                                 _pvm_rec().unbind_context(_pvm_token)
                                 _pvm_token = None
@@ -7411,8 +7582,7 @@ class InstitutionalIteRuntime:
                         snapshot_present=True,
                         market_context_diagnostics=scan_diag or None,
                         market_context_reason=(
-                            str(scan_diag.get("first_blocking_gate") or "")
-                            or None
+                            str(scan_diag.get("first_blocking_gate") or "") or None
                         ),
                     )
                     with self._lock:
@@ -7481,14 +7651,18 @@ class InstitutionalIteRuntime:
                         mode=self.plane.mode.value,
                     )
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            ValidationStage,
-                            finalize as pvm_finalize,
-                            stage as pvm_stage,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q7516,
                         )
-                        from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
-                            get_production_validation_recorder as _pvm_get,
+
+                        ValidationStage = _q7516.ValidationStage
+                        pvm_finalize = _q7516.finalize
+                        pvm_stage = _q7516.stage
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q7521,
                         )
+
+                        _pvm_get = _q7521.recorder.get_production_validation_recorder
 
                         pvm_stage(
                             ValidationStage.AI,
@@ -7634,15 +7808,17 @@ class InstitutionalIteRuntime:
             except TimeoutError as exc:
                 from datetime import timedelta
 
-                from app.domain.institutional_trading.operations.worker_runtime_state import (  # noqa: E501
-                    cycle_hard_timeout_seconds,
+                from app.domain.institutional_trading.operations import (
+                    worker_runtime_state as _q7669,
                 )
 
+                cycle_hard_timeout_seconds = _q7669.cycle_hard_timeout_seconds
+
                 stage = str(exc) if str(exc) else "unknown"
-                last_scan: dict[str, Any] = {}
+                timeout_scan: dict[str, Any] = {}
                 with self._lock:
                     if isinstance(self._last_multi_asset_scan, dict):
-                        last_scan = dict(self._last_multi_asset_scan)
+                        timeout_scan = dict(self._last_multi_asset_scan)
                 hard = cycle_hard_timeout_seconds(self.interval_seconds)
                 deadline_iso = None
                 try:
@@ -7651,12 +7827,12 @@ class InstitutionalIteRuntime:
                         started_dt = datetime.strptime(
                             started_at, "%Y-%m-%dT%H:%M:%SZ"
                         ).replace(tzinfo=UTC)
-                        deadline_iso = (
-                            started_dt + timedelta(seconds=hard)
-                        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        deadline_iso = (started_dt + timedelta(seconds=hard)).strftime(
+                            "%Y-%m-%dT%H:%M:%SZ"
+                        )
                 except Exception:
                     deadline_iso = None
-                ranked = last_scan.get("ranked") or last_scan.get("rows") or []
+                ranked = timeout_scan.get("ranked") or timeout_scan.get("rows") or []
                 signals_found = 0
                 if isinstance(ranked, list):
                     signals_found = sum(
@@ -7672,18 +7848,20 @@ class InstitutionalIteRuntime:
                     "cycle_duration_ms": round(
                         (time.perf_counter() - cycle_t0) * 1000.0, 1
                     ),
-                    "symbols_discovered": len(last_scan.get("universe") or []),
-                    "symbols_queued": last_scan.get("symbols_queued"),
-                    "symbols_evaluated": last_scan.get("symbols_evaluated"),
-                    "symbols_completed": last_scan.get("symbols_completed"),
-                    "symbols_timed_out": last_scan.get("symbols_timed_out"),
-                    "symbols_budget_skipped": last_scan.get("symbols_budget_skipped"),
+                    "symbols_discovered": len(timeout_scan.get("universe") or []),
+                    "symbols_queued": timeout_scan.get("symbols_queued"),
+                    "symbols_evaluated": timeout_scan.get("symbols_evaluated"),
+                    "symbols_completed": timeout_scan.get("symbols_completed"),
+                    "symbols_timed_out": timeout_scan.get("symbols_timed_out"),
+                    "symbols_budget_skipped": timeout_scan.get(
+                        "symbols_budget_skipped"
+                    ),
                     "signals_found": signals_found,
-                    "eligible_opportunities": last_scan.get("eligible_count"),
+                    "eligible_opportunities": timeout_scan.get("eligible_count"),
                     "risk_evaluations": 0,
                     "oms_attempts": 0,
                     "orders_submitted": 0,
-                    "scanner_duration_ms": last_scan.get("scanner_duration_ms"),
+                    "scanner_duration_ms": timeout_scan.get("scanner_duration_ms"),
                     "execution_result": "NO BROKER ORDER WAS SUBMITTED",
                 }
                 logger.warning(
@@ -7771,11 +7949,13 @@ class InstitutionalIteRuntime:
                 except Exception:
                     logger.exception("cycle_evidence_exception_record_failed")
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        ValidationStage,
-                        finalize as pvm_finalize,
-                        stage as pvm_stage,
+                    from app.domain.institutional_trading import (
+                        production_validation_mode as _qf_production_validation_mode,
                     )
+
+                    ValidationStage = _qf_production_validation_mode.ValidationStage
+                    pvm_finalize = _qf_production_validation_mode.finalize
+                    pvm_stage = _qf_production_validation_mode.stage
 
                     pvm_stage(
                         ValidationStage.SCHEDULER,
@@ -7803,9 +7983,11 @@ class InstitutionalIteRuntime:
                     logger.exception("cycle_gateway_reads_unbind_failed")
                 try:
                     if _pvm_token is not None:
-                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                            get_production_validation_recorder as _pvm_rec_end,
+                        from app.domain.institutional_trading import (
+                            production_validation_mode as _q7840,
                         )
+
+                        _pvm_rec_end = _q7840.get_production_validation_recorder
 
                         _pvm_rec_end().unbind_context(_pvm_token)
                 except Exception:
@@ -7856,16 +8038,22 @@ class InstitutionalIteRuntime:
             except Exception:
                 logger.exception("event_driven_wakeup_failed")
             try:
+                from app.domain.institutional_trading.ai_scalping import (
+                    continuous_operation as _q7896,
+                )
                 from app.domain.institutional_trading.ai_scalping.config import (
                     DEFAULT_AI_SCALPING_CONFIG as _sc,
                 )
-                from app.domain.institutional_trading.ai_scalping.continuous_operation import (
-                    get_continuous_operation_controller,
+
+                get_continuous_operation_controller = (
+                    _q7896.get_continuous_operation_controller
                 )
-                from app.domain.institutional_trading.operations.fast_decision_path import (
-                    classify_candidate_outcome,
-                    record_cycle_classification,
+                from app.domain.institutional_trading.operations import (
+                    fast_decision_path as _q7899,
                 )
+
+                classify_candidate_outcome = _q7899.classify_candidate_outcome
+                record_cycle_classification = _q7899.record_cycle_classification
 
                 last_for_cls = None
                 last_decision = None
@@ -7873,71 +8061,81 @@ class InstitutionalIteRuntime:
                     last_for_cls = self._last_cycle
                     last_decision = self._last_decision
                 cls = classify_candidate_outcome(
-                    abort_reason=getattr(last_for_cls, "abort_reason", None)
-                    if last_for_cls
-                    else None,
-                    failed_reasons=tuple(
-                        getattr(last_for_cls, "safety_failed_reasons", ()) or ()
-                    )
-                    + tuple(getattr(last_for_cls, "decision_reasons", ()) or ())
-                    if last_for_cls
-                    else (),
-                    cycle_outcome=getattr(last_for_cls, "cycle_outcome", None)
-                    if last_for_cls
-                    else None,
-                    forwarded_to_oms=bool(
-                        getattr(last_for_cls, "forwarded_to_oms", False)
-                    )
-                    if last_for_cls
-                    else False,
-                    decision_action=str(
-                        getattr(
-                            getattr(last_decision, "action", None),
-                            "value",
-                            None,
+                    abort_reason=(
+                        getattr(last_for_cls, "abort_reason", None)
+                        if last_for_cls
+                        else None
+                    ),
+                    failed_reasons=(
+                        tuple(getattr(last_for_cls, "safety_failed_reasons", ()) or ())
+                        + tuple(getattr(last_for_cls, "decision_reasons", ()) or ())
+                        if last_for_cls
+                        else ()
+                    ),
+                    cycle_outcome=(
+                        getattr(last_for_cls, "cycle_outcome", None)
+                        if last_for_cls
+                        else None
+                    ),
+                    forwarded_to_oms=(
+                        bool(getattr(last_for_cls, "forwarded_to_oms", False))
+                        if last_for_cls
+                        else False
+                    ),
+                    decision_action=(
+                        str(
+                            getattr(
+                                getattr(last_decision, "action", None),
+                                "value",
+                                None,
+                            )
+                            or getattr(last_for_cls, "decision_action", None)
+                            or ""
                         )
-                        or getattr(last_for_cls, "decision_action", None)
-                        or ""
-                    )
-                    if last_for_cls or last_decision
-                    else "",
+                        if last_for_cls or last_decision
+                        else ""
+                    ),
                 )
                 diag = (
                     getattr(last_for_cls, "market_context_diagnostics", None)
                     if last_for_cls
                     else None
                 )
-                contract = diag.get("execution_contract") if isinstance(diag, dict) else None
-                if isinstance(contract, dict):
-                    if contract.get("decision_state"):
-                        cls["decision_state"] = contract["decision_state"]
-                    if contract.get("fault_code"):
-                        cls["fault_code"] = contract["fault_code"]
-                    if contract.get("fault_class"):
-                        cls["fault_class"] = contract["fault_class"]
-                    if contract.get("fault_reason"):
-                        cls["fault_reason"] = contract["fault_reason"]
-                    if contract.get("next_action"):
-                        cls["next_action"] = contract["next_action"]
-                    if contract.get("blocking_stage"):
-                        cls["blocking_stage"] = contract["blocking_stage"]
-                    cls["execution_readiness"] = contract.get("execution_readiness")
-                    cls["first_authoritative_blocker"] = contract.get(
+                exec_contract = (
+                    diag.get("execution_contract") if isinstance(diag, dict) else None
+                )
+                if isinstance(exec_contract, dict):
+                    if exec_contract.get("decision_state"):
+                        cls["decision_state"] = exec_contract["decision_state"]
+                    if exec_contract.get("fault_code"):
+                        cls["fault_code"] = exec_contract["fault_code"]
+                    if exec_contract.get("fault_class"):
+                        cls["fault_class"] = exec_contract["fault_class"]
+                    if exec_contract.get("fault_reason"):
+                        cls["fault_reason"] = exec_contract["fault_reason"]
+                    if exec_contract.get("next_action"):
+                        cls["next_action"] = exec_contract["next_action"]
+                    if exec_contract.get("blocking_stage"):
+                        cls["blocking_stage"] = exec_contract["blocking_stage"]
+                    cls["execution_readiness"] = exec_contract.get(
+                        "execution_readiness"
+                    )
+                    cls["first_authoritative_blocker"] = exec_contract.get(
                         "first_authoritative_blocker"
                     )
-                    cls["all_failed_conditions"] = contract.get(
+                    cls["all_failed_conditions"] = exec_contract.get(
                         "all_failed_conditions"
                     )
-                    cls["stages"] = contract.get("stages")
+                    cls["stages"] = exec_contract.get("stages")
                     cls["execute_now_required"] = False
                 record_cycle_classification(
                     cls,
                     cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
-                    forwarded_to_oms=bool(
-                        getattr(last_for_cls, "forwarded_to_oms", False)
-                    )
-                    if last_for_cls
-                    else False,
+                    forwarded_to_oms=(
+                        bool(getattr(last_for_cls, "forwarded_to_oms", False))
+                        if last_for_cls
+                        else False
+                    ),
                     fill_symbol=str(
                         getattr(last_for_cls, "symbol", None)
                         or getattr(last_decision, "symbol", None)

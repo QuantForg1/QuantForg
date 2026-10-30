@@ -19,9 +19,7 @@ from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settin
 def _is_gold_name(symbol: str) -> bool:
     code = "".join(ch for ch in symbol.upper() if ch.isalnum())
     return (
-        code == "GOLD"
-        or code.startswith("XAUUSD")
-        or ("XAU" in code and "USD" in code)
+        code == "GOLD" or code.startswith("XAUUSD") or ("XAU" in code and "USD" in code)
     )
 
 
@@ -665,9 +663,7 @@ class TestMT5Gateway:
         runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
         runtime.diagnostics.connected = True
         with pytest.raises(GatewayExecutionDisabled):
-            runtime.order_send(
-                {"symbol": "EURUSD", "action": "buy", "volume": 0.01}
-            )
+            runtime.order_send({"symbol": "EURUSD", "action": "buy", "volume": 0.01})
         assert bridge.order_send_calls == 0
 
     def test_order_send_live_after_check(
@@ -827,9 +823,7 @@ class TestMT5Gateway:
             with pytest.raises(RuntimeError, match="volume must be > 0"):
                 runtime.order_send({"symbol": "XAUUSD", "action": "buy"})
             with pytest.raises(RuntimeError, match="volume must be > 0"):
-                runtime.order_send(
-                    {"symbol": "XAUUSD", "action": "buy", "volume": 0}
-                )
+                runtime.order_send({"symbol": "XAUUSD", "action": "buy", "volume": 0})
         finally:
             runtime_module.build_mt5_trade_request = original
         assert seen == []
@@ -1169,9 +1163,7 @@ class TestFillingModeSelection:
         assert body["gateway_version"] == gateway_version
         assert "mt5" not in body
 
-    def test_market_data_timeout_returns_503_not_hang(
-        self, client: TestClient
-    ) -> None:
+    def test_market_data_timeout_returns_503_not_hang(self, client: TestClient) -> None:
         import time
 
         runtime = client.app.state.runtime

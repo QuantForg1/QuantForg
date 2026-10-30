@@ -320,7 +320,7 @@ def assess_global_market_intelligence(
         else:
             reward = 25
 
-    layers = (
+    layers: tuple[LayerAssessment, ...] = (
         _layer(
             "structure",
             # Weak structure is lack of confirmation — Sniper already gates quality.
@@ -380,9 +380,7 @@ def assess_global_market_intelligence(
             confirmation=bool(execution_quality_ok),
             score=exec_score,
             reason=(
-                "execution_quality_ok"
-                if execution_quality_ok
-                else "execution_degraded"
+                "execution_quality_ok" if execution_quality_ok else "execution_degraded"
             ),
         ),
         _layer(

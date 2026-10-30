@@ -125,9 +125,10 @@ def build_adaptive_recommendations() -> dict[str, Any]:
         )
 
         opt = get_last_execution_optimizer() or {}
-        if str(opt.get("final_state") or "") == "WAIT_BOUNDED" or opt.get(
-            "recommendation"
-        ) == "DEFER_TICK":
+        if (
+            str(opt.get("final_state") or "") == "WAIT_BOUNDED"
+            or opt.get("recommendation") == "DEFER_TICK"
+        ):
             recs.append(
                 {
                     "code": "microstructure_wait",

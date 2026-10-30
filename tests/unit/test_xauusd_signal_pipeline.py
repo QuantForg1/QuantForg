@@ -469,7 +469,9 @@ def test_signal_center_merges_slim_noc_rows_with_quotes() -> None:
     assert item["opportunity_score"] == 64
 
 
-def test_signal_persistence_observe_writes_wait_row(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_signal_persistence_observe_writes_wait_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.application.services import signal_intelligence_service as si
     from app.application.services.institutional_multi_asset_scanner import (
         _publish_scan_observation,
@@ -494,8 +496,10 @@ def test_signal_persistence_observe_writes_wait_row(monkeypatch: pytest.MonkeyPa
             ],
         }
     )
-    monkeypatch.setattr(si, "_upsert_history_postgres", lambda rows: written.append(rows) or len(rows))
-    monkeypatch.setattr(si, "_save_history_ops_fallback", lambda rows: None)
+    monkeypatch.setattr(
+        si, "_upsert_history_postgres", lambda rows: written.append(rows) or len(rows)
+    )
+    monkeypatch.setattr(si, "_save_history_ops_fallback", lambda _rows: None)
     obs = si.observe_live_scan()
     assert obs["fabricated"] is False
     assert obs["observed"] == 1
@@ -754,7 +758,9 @@ def test_scale_in_blocks_losing_leg_and_missing_pnl() -> None:
         min_confidence_delta=3,
     )
     assert missing.allow is False
-    assert "fail closed" in missing.reason.lower() or "missing" in missing.reason.lower()
+    assert (
+        "fail closed" in missing.reason.lower() or "missing" in missing.reason.lower()
+    )
 
     winner = may_add_scalping_trade(
         open_positions=1,

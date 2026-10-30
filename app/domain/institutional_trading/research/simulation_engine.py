@@ -151,9 +151,11 @@ class SimulationEngine:
                         tp = (
                             entry_ref - sig.take_distance if sig.take_distance else None
                         )
-                    from app.application.services.institutional_execution_engine import (  # noqa: E501
-                        parse_order_intent,
+                    from app.application.services import (
+                        institutional_execution_engine as _q154,
                     )
+
+                    parse_order_intent = _q154.parse_order_intent
 
                     intent = parse_order_intent(
                         symbol=self.config.symbol,

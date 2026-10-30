@@ -149,7 +149,7 @@ def normalize_state(value: Any) -> LiveTradingState:
     if raw in _STATE_ALIASES:
         return _STATE_ALIASES[raw]
     if raw in STATES:
-        return raw  # type: ignore[return-value]
+        return raw
     return "DISABLED"
 
 
@@ -1031,6 +1031,8 @@ def evaluate_live_order(
     if (
         req.spec is not None
         and req.equity is not None
+        and entry is not None
+        and sl is not None
         and finite_positive(entry)
         and finite_positive(sl)
     ):
@@ -1147,7 +1149,7 @@ class LiveTradingAuditEntry:
     request_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return strip_secrets(
+        body: dict[str, Any] = strip_secrets(
             {
                 "timestamp": self.timestamp,
                 "operator_id": self.operator_id,
@@ -1163,6 +1165,7 @@ class LiveTradingAuditEntry:
                 "request_metadata": self.request_metadata,
             }
         )
+        return body
 
 
 @dataclass
@@ -1187,7 +1190,8 @@ class ExecutionRecord:
     reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return strip_secrets(asdict(self))
+        body: dict[str, Any] = strip_secrets(asdict(self))
+        return body
 
 
 @dataclass
@@ -1247,7 +1251,7 @@ class LiveTradingController:
     def persist_payload(self) -> dict[str, Any]:
         with self._lock:
             durable = self.durable_authorization_state()
-            return strip_secrets(
+            body: dict[str, Any] = strip_secrets(
                 {
                     "live_trading_state": durable,
                     "live_trading_runtime_state": self.state,
@@ -1269,6 +1273,7 @@ class LiveTradingController:
                     "live_trading_audit": [e.to_dict() for e in self.audit[-50:]],
                 }
             )
+            return body
 
     def hydrate(
         self, payload: MappingLike | None, *, persist_recovery: bool = True
