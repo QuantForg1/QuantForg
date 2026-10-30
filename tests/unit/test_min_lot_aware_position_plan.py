@@ -192,8 +192,8 @@ def test_approved_lots_exactly_min_lot_allows_one_position() -> None:
     assert plan.state == "POSITION_PLAN_READY"
 
 
-def test_aggregate_lots_reduce_to_one_owner_position_instead_of_rejecting() -> None:
-    """Split helper still divides lots; the owner cap leaves exactly one 0.01 leg."""
+def test_aggregate_lots_split_across_min_lot_legs() -> None:
+    """0.03 lots is three 0.01 legs. The five-slot book does not collapse it."""
     n, per = split_aggregate_lots(
         aggregate_lots=Decimal("0.03"),
         count=6,
@@ -204,17 +204,18 @@ def test_aggregate_lots_reduce_to_one_owner_position_instead_of_rejecting() -> N
     assert per == MIN
     plan = _plan(lots="0.03", score=92)
     assert plan.requested_count > 1
-    assert plan.effective_count == 1
+    assert plan.effective_count == 3
     assert plan.per_position_lots == MIN
     assert plan.min_lot_constraint_reason is None
-    assert any("quantforg_capacity 1" in r for r in plan.reductions)
+    assert any("quantforg_capacity 5" in r for r in plan.reductions)
+    assert any("sizing_split_reduced_count" in r for r in plan.reductions)
 
 
-def test_five_cents_lots_still_open_only_one_min_lot_position() -> None:
+def test_five_cents_lots_open_five_min_lot_legs() -> None:
     plan = _plan(lots="0.05", score=92)
-    assert plan.effective_count == 1
+    assert plan.effective_count == 5
     assert plan.per_position_lots == MIN
-    assert plan.per_position_lots * plan.effective_count == Decimal("0.01")
+    assert plan.per_position_lots * plan.effective_count == Decimal("0.05")
 
 
 def test_lot_step_normalization_rounds_down() -> None:
@@ -236,11 +237,12 @@ def test_max_lot_caps_per_position_without_upsizing() -> None:
     assert plan.per_position_lots * plan.effective_count <= Decimal("1.00")
 
 
-def test_owner_capacity_binds_before_risk_reduction() -> None:
+def test_risk_allowance_binds_under_the_five_cap() -> None:
     plan = _plan(lots="0.10", score=92, risk_n=2)
-    assert plan.effective_count == 1
+    assert plan.effective_count == 2
     assert plan.per_position_lots == MIN
     assert plan.min_lot_constraint_reason is None
+    assert any("risk_allowed 2" in r for r in plan.reductions)
 
 
 def test_portfolio_reduction_keeps_candidate() -> None:
@@ -263,10 +265,10 @@ def test_margin_reduction_keeps_candidate_when_one_leg_fits() -> None:
     assert plan.margin_required is not None
 
 
-def test_one_existing_quantforg_position_leaves_no_capacity() -> None:
+def test_one_existing_quantforg_position_leaves_four_slots() -> None:
     plan = _plan(lots="0.10", score=90, current=1)
-    assert plan.effective_count == 0
-    assert plan.remaining_capacity == 0
+    assert plan.effective_count == 4
+    assert plan.remaining_capacity == 4
 
 
 def test_manual_positions_do_not_reduce_count() -> None:
@@ -377,8 +379,8 @@ def test_no_live_order_in_min_lot_suite() -> None:
     assert (n, per) == (1, MIN)
 
 
-def test_burst_emits_one_gold_leg_inside_owner_band() -> None:
-    """A large aggregate (0.12) still yields one 0.01 XAUUSD_i leg of $1.80."""
+def test_burst_emits_five_gold_legs_inside_owner_band() -> None:
+    """0.12 lots at a $1.80 stop is five 0.01 legs. Each leg stays inside the cap."""
     from app.domain.institutional_trading.config import (
         MAX_PLANNED_SL_RISK_USD,
         MIN_PLANNED_RISK_USD,
@@ -407,7 +409,7 @@ def test_burst_emits_one_gold_leg_inside_owner_band() -> None:
         contract_size=cs,
         base_input_hash="gold-band",
     )
-    assert plan.effective_count == 1
+    assert plan.effective_count == 5
     assert plan.per_position_lots == MIN
     per_risk = lot_dollar_risk(
         plan.per_position_lots,

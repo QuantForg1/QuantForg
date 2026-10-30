@@ -681,9 +681,21 @@ def _owner_targets(
     atr: Decimal | None,
 ) -> StructureTargets:
     """Owner TP: nearest structure level clearing the active net floor."""
+    from app.domain.institutional_trading.execution.config import (
+        ExecutionBridgeConfig,
+    )
+    from app.domain.institutional_trading.owner_live_limits import (
+        OWNER_MAX_LOT,
+        resolve_entry_commission,
+    )
     from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
 
     min_rr = active_min_reward_risk()
+    # XAUUSD point is 0.001, so the execution deviation of 10 points is 0.010.
+    # Confirmed commission is included. Unknown commission is omitted here and
+    # the entry check still fails closed.
+    fee = resolve_entry_commission("XAUUSD", None)
+    slip = Decimal(ExecutionBridgeConfig().slippage) * Decimal("0.001")
     if direction is TradeDirection.BUY:
         sl = entry - stop_distance
     else:
@@ -700,6 +712,10 @@ def _owner_targets(
         stop_distance=stop_distance,
         spread=spread,
         min_rr=min_rr,
+        slippage=slip,
+        commission=fee,
+        contract_size=Decimal("100"),
+        volume=OWNER_MAX_LOT,
     )
     tried = ", ".join(
         f"L{idx} {src} {price} RR "

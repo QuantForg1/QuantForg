@@ -17,6 +17,7 @@ from typing import Any
 
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_DAILY_LOSS_PCT,
+    OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_PLANNED_RISK_PCT,
@@ -126,15 +127,17 @@ def active_min_lot() -> Decimal | None:
 
 
 def active_max_aggregate_open_risk_pct() -> Decimal:
-    """Saved book cap. It cannot exceed the 14% ceiling."""
-    value = _active_decimal("max_aggregate_open_risk_pct", OWNER_MAX_PLANNED_RISK_PCT)
-    if value <= 0 or value > OWNER_MAX_PLANNED_RISK_PCT:
-        return OWNER_MAX_PLANNED_RISK_PCT
+    """Saved book cap. It cannot exceed 30% and is not cut down to 20%."""
+    value = _active_decimal(
+        "max_aggregate_open_risk_pct", OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
+    )
+    if value <= 0 or value > OWNER_MAX_AGGREGATE_OPEN_RISK_PCT:
+        return OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
     return value
 
 
 def active_max_open_positions() -> int:
-    """Saved concurrent-position cap. It cannot exceed one."""
+    """Saved concurrent-position cap. It cannot exceed five."""
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("unavailable"):
         return OWNER_MAX_OPEN_POSITIONS
@@ -171,8 +174,8 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     """Floor a document actually applies. A stored candidate is not that floor.
 
     0.10, 0.15, and 0.20 stay inactive unless ``experimental_promoted`` is
-    true. Any other value below 1.50 fails closed to 1.50. A value above
-    1.50 stays, because it is stricter.
+    true. Any other value below 0.50 fails closed to 0.50. A value at or
+    above 0.50 stays, including a stricter floor.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -196,7 +199,7 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
 
 
 def active_min_reward_risk() -> Decimal:
-    """Published default is 1.50. See :func:`enforced_min_reward_risk`."""
+    """Active floor is 0.50. See :func:`enforced_min_reward_risk`."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
@@ -279,9 +282,13 @@ def m1_overlay_mode(key: str) -> str | None:
 
 def approved_baseline() -> dict[str, Any]:
     """Approved live policy. Weekly halt is explicitly off."""
+    from app.domain.institutional_trading.owner_live_limits import (
+        owner_commission_configuration,
+    )
+
     return {
-        "max_planned_risk_pct": "14.0",
-        "daily_loss_pct": "19.0",
+        "max_planned_risk_pct": "20.0",
+        "daily_loss_pct": "48.0",
         "weekly_loss_pct": "0",
         "weekly_loss_documented": (
             "0 means off. A weekly halt is enforced only after an owner save "
@@ -293,12 +300,13 @@ def approved_baseline() -> dict[str, Any]:
             "high-water mark and is enforced only after an owner save. A missing "
             "mark fails closed while the halt is on."
         ),
-        "max_aggregate_open_risk_pct": "14.0",
+        "max_aggregate_open_risk_pct": "30.0",
         "max_concurrent_positions": OWNER_MAX_OPEN_POSITIONS,
         "min_lot": None,
         "max_lot": "0.01",
-        "max_spread": "0.45",
-        "min_reward_risk": "1.50",
+        "max_spread": "1.00",
+        "min_reward_risk": "0.50",
+        "commission": owner_commission_configuration(),
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
         "stop_atr_multiplier": "1.00",
         "gold_only": True,
@@ -379,7 +387,7 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
         raw,
         "max_aggregate_open_risk_pct",
         lo=Decimal("0.01"),
-        hi=OWNER_MAX_PLANNED_RISK_PCT,
+        hi=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
     )
     _reject_number(
         errors,
@@ -427,20 +435,30 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
                 errors.append(
                     "experimental stop_atr_multiplier must be 1.00, 1.25, or 1.50"
                 )
-    if (
-        "max_concurrent_positions" in raw
-        and raw["max_concurrent_positions"] != OWNER_MAX_OPEN_POSITIONS
-    ):
-        errors.append(
-            "experimental max_concurrent_positions is fixed at "
-            f"{OWNER_MAX_OPEN_POSITIONS}"
-        )
+    if "max_concurrent_positions" in raw:
+        try:
+            positions = int(raw["max_concurrent_positions"])
+        except (TypeError, ValueError):
+            positions = 0
+        if positions < 1 or positions > OWNER_MAX_OPEN_POSITIONS:
+            errors.append(
+                "experimental max_concurrent_positions must be from 1 to "
+                f"{OWNER_MAX_OPEN_POSITIONS}"
+            )
     if errors:
         return None, errors
     cleaned: dict[str, Any] = {}
     for key, value in raw.items():
         cleaned[key] = format(value, "f") if isinstance(value, Decimal) else value
     return cleaned, []
+
+
+def _clean_commission(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
+    from app.domain.institutional_trading.owner_live_limits import (
+        clean_commission_configuration,
+    )
+
+    return clean_commission_configuration(raw)
 
 
 def _active_rr_is_candidate(value: object) -> bool:
@@ -511,7 +529,7 @@ def validate_policy_changes(
         changes,
         "max_aggregate_open_risk_pct",
         lo=Decimal("0.01"),
-        hi=OWNER_MAX_PLANNED_RISK_PCT,
+        hi=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
     )
     _reject_number(errors, changes, "max_lot", lo=Decimal("0.01"), hi=OWNER_MAX_LOT)
     _reject_number(
@@ -532,7 +550,7 @@ def validate_policy_changes(
             authorized = authorized_min_reward_risk(rr)
             if authorized is None or authorized < OWNER_MIN_REWARD_RISK:
                 errors.append(
-                    "active min_reward_risk must be at least 1.50. "
+                    "active min_reward_risk must be at least 0.50. "
                     "Candidates 0.10, 0.15, and 0.20 belong under experimental "
                     "and stay inactive until that experiment is promoted."
                 )
@@ -562,13 +580,16 @@ def validate_policy_changes(
                 )
             elif verdict != "accepted":
                 errors.append("stop_atr_multiplier must be 1.00, 1.25, or 1.50")
-    if (
-        "max_concurrent_positions" in changes
-        and changes["max_concurrent_positions"] != OWNER_MAX_OPEN_POSITIONS
-    ):
-        errors.append(
-            f"max_concurrent_positions is fixed at {OWNER_MAX_OPEN_POSITIONS}"
-        )
+    if "max_concurrent_positions" in changes:
+        try:
+            positions = int(changes["max_concurrent_positions"])
+        except (TypeError, ValueError):
+            positions = 0
+        if positions < 1 or positions > OWNER_MAX_OPEN_POSITIONS:
+            errors.append(
+                "max_concurrent_positions must be from 1 to "
+                f"{OWNER_MAX_OPEN_POSITIONS}"
+            )
     if "min_lot" in changes and changes["min_lot"] is not None:
         try:
             min_lot = _dec(changes["min_lot"])
@@ -584,6 +605,12 @@ def validate_policy_changes(
             and not isinstance(changes[key], bool)
         ):
             errors.append(f"{key} must be true, false, or null")
+    cleaned_commission: dict[str, Any] | None = None
+    if "commission" in changes:
+        cleaned_commission, commission_errors = _clean_commission(
+            changes.get("commission")
+        )
+        errors.extend(commission_errors)
     promote = changes.get("promote_experimental") is True
     cleaned_experimental: dict[str, Any] | None = None
     if "experimental" in changes or promote:
@@ -595,12 +622,14 @@ def validate_policy_changes(
 
     merged = dict(current)
     for key, value in changes.items():
-        if key in {"reason", "experimental", "promote_experimental"}:
+        if key in {"reason", "experimental", "promote_experimental", "commission"}:
             continue
         if isinstance(value, Decimal):
             merged[key] = format(value, "f")
         else:
             merged[key] = value
+    if cleaned_commission is not None:
+        merged["commission"] = cleaned_commission
     if cleaned_experimental is not None:
         merged["experimental"] = cleaned_experimental
         if promote:
@@ -627,6 +656,16 @@ def validate_policy_changes(
     max_lot_value = OWNER_MAX_LOT if saved_max_lot is None else _dec(saved_max_lot)
     if saved_min_lot is not None and _dec(saved_min_lot) > max_lot_value:
         return PolicyDecision(False, None, ("min_lot cannot exceed max_lot",))
+    planned_pct = _dec(merged.get("max_planned_risk_pct") or OWNER_MAX_PLANNED_RISK_PCT)
+    aggregate_pct = _dec(
+        merged.get("max_aggregate_open_risk_pct") or OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
+    )
+    if aggregate_pct < planned_pct:
+        return PolicyDecision(
+            False,
+            None,
+            ("max_aggregate_open_risk_pct cannot be below max_planned_risk_pct",),
+        )
     live_submit = merged.get("m1_live_submit") is True
     micro_off = merged.get("m1_micro_enabled") is False
     if live_submit and micro_off:

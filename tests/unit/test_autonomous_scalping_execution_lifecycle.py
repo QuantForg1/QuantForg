@@ -264,8 +264,8 @@ def test_min_lot_infeasible_remains_blocked() -> None:
 
 @pytest.mark.unit
 def test_daily_loss_uses_owner_stop_not_a_flat_percent() -> None:
-    """19% of the day's start. Exact 19% of $100 does not halt; one cent over does."""
-    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
+    """48% of the day's start. Exact 48% of $100 does not halt; one cent over does."""
+    assert Decimal("48.0") == MAX_DAILY_LOSS_PCT
     assert (
         utc_daily_loss_exceeded(
             daily_pnl=Decimal("-5.01"),
@@ -277,18 +277,18 @@ def test_daily_loss_uses_owner_stop_not_a_flat_percent() -> None:
     )
     assert (
         utc_daily_loss_exceeded(
-            daily_pnl=Decimal("-19.00"),
-            equity=Decimal("81.00"),
-            balance=Decimal("81.00"),
+            daily_pnl=Decimal("-48.00"),
+            equity=Decimal("52.00"),
+            balance=Decimal("52.00"),
             max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
         )
         is False
     )
     assert (
         utc_daily_loss_exceeded(
-            daily_pnl=Decimal("-19.01"),
-            equity=Decimal("80.99"),
-            balance=Decimal("80.99"),
+            daily_pnl=Decimal("-48.01"),
+            equity=Decimal("51.99"),
+            balance=Decimal("51.99"),
             max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
         )
         is True

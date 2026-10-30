@@ -656,11 +656,11 @@ def test_quality_below_70_is_still_rejected() -> None:
 def test_quality_at_or_above_75_does_not_skip_later_gates() -> None:
     gates = _gates(75)
     assert gates.checks["owner_min_trade_quality"] is True
-    low_rr = _gates(90, expected_rr=Decimal("0.50"))
+    low_rr = _gates(90, expected_rr=Decimal("0.49"))
     assert low_rr.checks["min_rr"] is False
     assert low_rr.passed is False
     assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=Decimal("101")))
-    assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("0.46")))
+    assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("1.01")))
     assert any(r.startswith("OWNER_MAX_LOT") for r in _entry(volume=Decimal("0.02")))
     assert any(r.startswith("OWNER_SL_REQUIRED") for r in _entry(stop_loss=None))
     assert any(r.startswith("OWNER_TP_REQUIRED") for r in _entry(take_profit=None))
@@ -706,19 +706,20 @@ def test_quality_at_or_above_75_does_not_skip_later_gates() -> None:
     assert incomplete.allow_new_entry is False
 
 
-def test_reward_risk_below_1_50_stays_rejected() -> None:
-    assert Decimal("1.50") == OWNER_MIN_REWARD_RISK
-    reasons = _entry(take_profit=Decimal("101.40"))
-    assert any("1.50" in r for r in reasons)
+def test_reward_risk_below_0_50_stays_rejected() -> None:
+    assert Decimal("0.50") == OWNER_MIN_REWARD_RISK
+    reasons = _entry(take_profit=Decimal("101.09"))
+    assert any("0.50" in r for r in reasons)
     assert any(r.startswith("OWNER_MIN_RR") for r in reasons)
     cleared = _entry()
     assert not any(r.startswith("OWNER_MIN_RR") for r in cleared)
 
 
 def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
-    assert daily_loss_exceeded(daily_pnl=Decimal("-20"), base_now=Decimal("80"))
+    assert daily_loss_exceeded(daily_pnl=Decimal("-48.01"), base_now=Decimal("51.99"))
     assert (
-        daily_loss_exceeded(daily_pnl=Decimal("-19"), base_now=Decimal("81")) is False
+        daily_loss_exceeded(daily_pnl=Decimal("-48.00"), base_now=Decimal("52.00"))
+        is False
     )
     token = use_runtime_policy(
         {
@@ -736,8 +737,8 @@ def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
             peak_equity=Decimal("100"),
         )
         assert any(r.startswith("OWNER_DRAWDOWN") for r in reasons)
-        assert max_planned_risk_usd(Decimal("100")) == Decimal("14.00")
-        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("14.00")
+        assert max_planned_risk_usd(Decimal("100")) == Decimal("20.00")
+        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("30.00")
     finally:
         reset_runtime_policy(token)
     halt = DurableHaltController()

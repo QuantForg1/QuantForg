@@ -246,7 +246,7 @@ def test_recovered_gateway_allows_without_execute_now() -> None:
 
 
 def test_daily_loss_owner_stop_still_enforced() -> None:
-    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
+    assert Decimal("48.0") == MAX_DAILY_LOSS_PCT
     assert bridge_abort_stage("DAILY_LOSS_BLOCK") == "RISK"
 
 
@@ -255,7 +255,7 @@ def test_max_positions_owner_one_and_winner_only_scale_in_preserved() -> None:
     assert cfg.max_positions_per_symbol == 2
     assert cfg.pyramid_winners_only is True
     assert cfg.allow_martingale is False
-    assert cfg.max_open_trades == 1
+    assert cfg.max_open_trades == 5
 
 
 def test_take_without_oms_forward_is_not_executed() -> None:

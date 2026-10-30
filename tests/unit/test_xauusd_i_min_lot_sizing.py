@@ -65,8 +65,8 @@ def test_xauusd_i_volume_step_normalization() -> None:
 
 @pytest.mark.unit
 def test_xauusd_i_atr_stop_above_owner_cap_is_legitimate_block() -> None:
-    """A 1.5x ATR stop of $15 at 0.01 lot is above 14% of $100.72 ($14.10)."""
-    atr = Decimal("10")
+    """A 1.5x ATR stop of $21 at 0.01 lot is above 20% of $100.72 ($20.14)."""
+    atr = Decimal("14")
     dist = stop_distance_from_atr(atr)
     min_loss = (_VOLUME_MIN * _CONTRACT * dist).quantize(Decimal("0.01"))
     needed = (min_loss / _EQUITY * Decimal("100")).quantize(Decimal("0.01"))

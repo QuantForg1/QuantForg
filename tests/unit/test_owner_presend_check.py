@@ -2,8 +2,9 @@
 
 Owner review 2026-10-23: trades 1 and 4 passed the owner guard on a tick a
 few hundred ms older than the one the order was sent at; at the send tick
-their RR after spread was already below 1.50. The pre-send check re-reads the
-tick, builds the request from it and re-runs the full owner check on that
+their RR after spread was already below the active floor. The pre-send
+check re-reads the tick, builds the request from it and re-runs the owner
+check on that
 same price before ``order_send``.
 """
 
@@ -53,15 +54,15 @@ def test_slippage_buffer_defaults_to_zero() -> None:
 
 
 def test_trade_4_at_the_send_tick_is_refused() -> None:
-    # 5.220 / (3.168 + 0.424) = 1.453 < 1.50
-    reasons = _sell("4018.033", "4021.201", "4012.813", "0.424")
+    # 1.700 / (3.168 + 0.424) = 0.473 < 0.50
+    reasons = _sell("4018.033", "4021.201", "4016.333", "0.424")
     assert any(r.startswith("PRESEND OWNER_MIN_RR") for r in reasons), reasons
 
 
 def test_trade_1_is_refused_by_rr_not_by_the_drift_guard() -> None:
     # Plan 4019.155 -> stop 2.715; send tick 4018.853 -> 3.017 (wider, no
-    # drift). RR 5.140 / (3.017 + 0.424) = 1.494 < 1.50.
-    reasons = _sell("4018.853", "4021.870", "4013.713", "0.424", plan="4019.155")
+    # drift). RR 1.700 / (3.017 + 0.424) = 0.494 < 0.50.
+    reasons = _sell("4018.853", "4021.870", "4017.153", "0.424", plan="4019.155")
     assert any("OWNER_MIN_RR" in r for r in reasons), reasons
     assert not any("OWNER_PRICE_DRIFT" in r for r in reasons)
 
@@ -72,15 +73,15 @@ def test_trade_2_passes() -> None:
 
 
 def test_buffer_is_applied_to_rr_when_set() -> None:
-    # Trade 2 with B = 0.45: 5.650 / (3.057 + 0.344 + 0.45) = 1.467 < 1.50.
-    reasons = _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="0.45")
+    # Trade 2 with B = 3.00: 3.100 / (3.057 + 3.00 + 0.344) = 0.484 < 0.50.
+    reasons = _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="3.00")
     assert reasons and reasons[0].startswith("PRESEND OWNER_MIN_RR_SLIPPAGE")
     assert _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="0.25") == []
 
 
 def test_spread_comes_from_the_same_tick() -> None:
-    # Same price, spread above the 0.45 cap at the send tick.
-    reasons = _sell("4019.813", "4022.870", "4013.713", "0.50")
+    # Same price, spread above the 1.00 cap at the send tick.
+    reasons = _sell("4019.813", "4022.870", "4013.713", "1.01")
     assert any("OWNER_MAX_SPREAD" in r for r in reasons), reasons
 
 
@@ -141,8 +142,8 @@ def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
 def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ask 2320.90 at the send tick: 3.40 / (1.90 + 0.30 + 0.10) = 1.48.
-    pipeline, sent, client = _run(monkeypatch, move="0.10")
+    # Ask 2322.50 at the send tick: 1.80 / (3.50 + 0.30) = 0.47, below 0.50.
+    pipeline, sent, client = _run(monkeypatch, move="1.70")
     assert pipeline.outcome == "rejected"
     assert "PRESEND OWNER_MIN_RR" in pipeline.message
     assert sent == []
@@ -152,7 +153,7 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
         for s in pipeline.stages
         if (s.meta or {}).get("component") == "owner_presend_check"
     )
-    assert meta["check_price"] == "2320.90"
+    assert meta["check_price"] == "2322.50"
     assert meta["check_spread"] == "0.30"
 
 

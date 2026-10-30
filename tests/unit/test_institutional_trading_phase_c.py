@@ -556,7 +556,7 @@ class TestExecutionBridgePhaseC:
         decision, snap, _acct = _buy_decision()
         oms = RecordingOmsPort()
         integ = _bridge(oms)
-        bad_acct = _account(already_in_trade=True, open_positions=1)
+        bad_acct = _account(already_in_trade=True, open_positions=5)
         result = integ.execute(
             decision,
             ExecutionBridgeContext(

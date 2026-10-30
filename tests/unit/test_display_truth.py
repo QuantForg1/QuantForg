@@ -50,18 +50,21 @@ def test_price_rr_sides(
 
 
 def test_model_rr_cannot_pass_the_rr_gate() -> None:
+    # Screenshot prices clear 0.50. A closer target does not, and the model
+    # value of 1.27 must not override that price ratio.
+    close_tp = ENTRY - Decimal("4.00")
     req = LiveOrderRequest(
         symbol="XAUUSD",
         direction="SELL",
         price=ENTRY,
         entry=ENTRY,
         stop_loss=SL,
-        take_profit=TP,
+        take_profit=close_tp,
         score=Decimal("76"),
         regime="UNKNOWN",
         signal_status="TAKE",
         evidence={"WHY": "x"},
-        reward_risk=Decimal("1.27"),  # model value from the screenshot
+        reward_risk=Decimal("1.27"),
     )
     gates = {g.key: g for g in evaluate_signal_quality(req, LiveTradingRiskConfig())}
     assert gates["acceptable_rr"].passed is False

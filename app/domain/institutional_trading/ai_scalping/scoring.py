@@ -54,7 +54,6 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     assess_spread,
 )
 from app.domain.institutional_trading.ai_scalping.structure_targets import (
-    atr_scalp_geometry_rr,
     compute_structure_targets,
 )
 from app.domain.institutional_trading.ai_scalping.symbol_state import (
@@ -552,9 +551,6 @@ def score_scalping_setup(
     # ``expected_rr`` on the owner path is gross. The gate uses net when the
     # owner saved a floor below 1. The published default still rejects gross <= 1.
     expected_rr = targets.expected_rr
-    from app.domain.institutional_trading.owner_live_limits import (
-        OWNER_MIN_REWARD_RISK,
-    )
     from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
 
     owner_floor = active_min_reward_risk()
@@ -576,15 +572,9 @@ def score_scalping_setup(
             "(do not manufacture RR from fixed_tp_r)"
         )
 
-    effective_min_rr = max(cfg.min_expected_rr, exec_profile.min_expected_rr)
-    # Consistency: regime bumps must not exceed fixed TP target.
-    if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0:
-        effective_min_rr = min(effective_min_rr, cfg.fixed_tp_r)
-    geom_rr = atr_scalp_geometry_rr(cfg)
-    if geom_rr is not None and geom_rr > 0:
-        effective_min_rr = min(effective_min_rr, geom_rr)
-    if owner_floor < OWNER_MIN_REWARD_RISK:
-        effective_min_rr = owner_floor
+    # The saved owner floor is the gate. A profile value above it would
+    # restore a stricter reward:risk rule the owner replaced.
+    effective_min_rr = owner_floor
 
     gates = evaluate_quality_gates(
         direction=direction_dec,

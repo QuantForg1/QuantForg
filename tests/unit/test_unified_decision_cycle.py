@@ -329,7 +329,7 @@ def test_hold_never_exceeds_cap_5() -> None:
     assert plan.effective_count <= 5
 
 
-def test_owner_capacity_caps_requested_count_at_one() -> None:
+def test_owner_capacity_caps_requested_count_at_five() -> None:
     plan = build_position_plan(
         cycle_id="c",
         snapshot_id="s",
@@ -341,12 +341,12 @@ def test_owner_capacity_caps_requested_count_at_one() -> None:
         aggregate_lots=Decimal("0.10"),
         current_quantforg_count=0,
         ite_config=ITEConfig(),
-        risk_allowed_count=2,
+        risk_allowed_count=8,
     )
-    assert plan.target_count > 1
-    assert plan.effective_count == 1
+    assert plan.target_count > 5
+    assert plan.effective_count == 5
     assert plan.per_position_lots == Decimal("0.01")
-    assert any("quantforg_capacity 1" in r for r in plan.reductions)
+    assert any("quantforg_capacity 5" in r for r in plan.reductions)
 
 
 def test_portfolio_can_reduce_requested_count_to_zero() -> None:
@@ -511,7 +511,7 @@ def test_hard_risk_failure_blocks_entire_batch() -> None:
     _out, tally, _ = submit_position_plan_batch(
         plan=plan, decision=decision, context=ctx, submit=submit, trade_class="SCALP"
     )
-    assert plan.effective_count == 1
+    assert plan.effective_count == 5
     assert tally.state == "HARD_BLOCK"
     assert tally.submitted_count == 1
     assert tally.accepted_count == 0
@@ -588,8 +588,8 @@ def test_single_leg_shares_cycle_snapshot_plan_ids() -> None:
         ite_config=ITEConfig(),
         base_input_hash="base",
     )
-    assert plan.effective_count == 1
-    assert len(plan.legs) == 1
+    assert plan.effective_count == 5
+    assert len(plan.legs) == 5
     leg = plan.legs[0]
     assert plan.cycle_id == "cyc-shared"
     assert plan.snapshot_id == "snap-shared"
@@ -648,9 +648,9 @@ def test_single_leg_rejection_is_recorded_not_filled() -> None:
     out, tally, _ = submit_position_plan_batch(
         plan=plan, decision=decision, context=ctx, submit=submit, trade_class="SCALP"
     )
-    assert tally.requested_count == plan.effective_count == 1
+    assert tally.requested_count == plan.effective_count == 5
     assert tally.accepted_count == 0
-    assert tally.rejected_count == 1
+    assert tally.rejected_count == 5
     assert out.state != "FULL_FILL"
 
 
@@ -867,11 +867,11 @@ def test_no_hidden_soft_gates_kill_probability_candidate() -> None:
     assert out.trade_class is TradeClass.SCALP
 
 
-def test_scalping_profile_cap_is_owner_one() -> None:
-    assert SCALPING_V1.max_open_trades == 1
+def test_scalping_profile_cap_is_the_owner_maximum() -> None:
+    assert SCALPING_V1.max_open_trades == 5
     assert SCALPING_V1.max_entries_per_cycle == 1
     for current in (1, 2, 5, 8, 10):
-        assert align_live_scalp_cap(current, trading_mode="scalping") == 1
+        assert align_live_scalp_cap(current, trading_mode="scalping") == 5
 
 
 def test_event_driven_wakeup_on_score_cross() -> None:

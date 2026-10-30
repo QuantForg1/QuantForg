@@ -3,9 +3,9 @@
 Enforced on this Windows host, independent of whatever Railway sends:
 
 - New entries: XAUUSD only, protective SL/TP on the correct side of the live
-  quote, 0 < volume <= 0.01, planned loss at or under 14% of live equity, no
-  second Gold position, no working Gold pending order, and a unique
-  ``client_order_id``.
+  quote, 0 < volume <= 0.01, planned loss at or under 20% of live equity,
+  combined open risk at or under 30% of live equity, at most five Gold
+  positions including working orders, and a unique ``client_order_id``.
 - Closes / partial closes: an explicit close kind, a ticket that is open, the
   same Gold symbol, and a volume that does not exceed the open volume.
 - SL/TP modifies: SL and TP stay > 0 and the SL may only tighten. When the
@@ -269,15 +269,24 @@ def _check_entry(
             "GUARD_MAX_LOT",
             f"entry volume must be > 0 and <= {OWNER_MAX_ENTRY_VOLUME} (got {volume})",
         )
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    position_cap = active_max_open_positions()
     rows = _read_positions(positions_lookup, code="GUARD_POSITIONS_UNVERIFIED")
-    for row in rows:
-        if _num(row, "volume") <= 0:
-            continue
-        if is_gold_symbol(str(row.get("symbol") or row.get("code") or "")):
-            raise OrderGuardRejected(
-                "GUARD_HEDGE",
-                "an open Gold position already exists; a second entry is blocked",
-            )
+    gold_open = [
+        row
+        for row in rows
+        if _num(row, "volume") > 0
+        and is_gold_symbol(str(row.get("symbol") or row.get("code") or ""))
+    ]
+    if len(gold_open) >= position_cap:
+        raise OrderGuardRejected(
+            "GUARD_MAX_POSITIONS",
+            f"{len(gold_open)} open Gold positions already use the "
+            f"{position_cap} position maximum",
+        )
     if orders_lookup is not None:
         try:
             pending = list(orders_lookup())
@@ -295,10 +304,12 @@ def _check_entry(
             if pending_volume <= 0:
                 continue
             if is_gold_symbol(str(row.get("symbol") or row.get("code") or "")):
-                raise OrderGuardRejected(
-                    "GUARD_PENDING_EXPOSURE",
-                    "a working Gold order already uses the entry budget",
-                )
+                gold_open.append(row)
+    if len(gold_open) >= position_cap:
+        raise OrderGuardRejected(
+            "GUARD_MAX_POSITIONS",
+            f"open Gold exposure already uses the {position_cap} position maximum",
+        )
     if equity is None or equity <= 0:
         raise OrderGuardRejected(
             "GUARD_EQUITY_UNAVAILABLE", "live equity is required before sizing"
@@ -351,6 +362,44 @@ def _check_entry(
         commission=fee,
     )
     cap = max_planned_risk_usd(equity)
+    from app.domain.institutional_trading.owner_live_limits import (
+        max_aggregate_risk_usd,
+    )
+
+    open_loss = Decimal("0")
+    for row in gold_open:
+        row_sl = _decimal(row.get("sl"))
+        row_px = _decimal(row.get("price_current")) or _decimal(row.get("price_open"))
+        row_vol = _decimal(row.get("volume")) or _decimal(row.get("volume_current"))
+        if (
+            row_sl is None
+            or row_sl <= 0
+            or row_px is None
+            or row_px <= 0
+            or row_vol is None
+            or row_vol <= 0
+        ):
+            raise OrderGuardRejected(
+                "GUARD_OPEN_RISK_UNMEASURED",
+                "an open Gold order has no priced protective stop",
+            )
+        open_loss += _planned_loss_usd(
+            volume=row_vol,
+            price=row_px,
+            stop=row_sl,
+            quote=quote,
+            slippage=slip,
+            commission=fee,
+        )
+    book_cap = max_aggregate_risk_usd(equity)
+    if open_loss + loss > book_cap:
+        raise OrderGuardRejected(
+            "GUARD_AGGREGATE_RISK",
+            (
+                f"planned book {open_loss + loss} exceeds the aggregate cap "
+                f"{book_cap}; open {open_loss}; new {loss}"
+            ),
+        )
     if loss > cap:
         from app.domain.institutional_trading.runtime_policy import (
             active_max_planned_risk_pct,

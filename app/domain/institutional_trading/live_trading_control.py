@@ -63,8 +63,8 @@ MappingLike = dict[str, Any]
 # ITE MAX_DAILY_LOSS_PCT (3%, $5 floor, 10% ceiling) is the global engine cap;
 # this overlay is strictly tighter for real-money live authorization.
 HARD_CEILING_RISK_PER_TRADE_PCT = _ol.OWNER_MAX_PLANNED_RISK_PCT
-HARD_CEILING_DAILY_LOSS_PCT = Decimal("19.00")
-HARD_CEILING_MAX_POSITIONS = 2
+HARD_CEILING_DAILY_LOSS_PCT = Decimal("48.00")
+HARD_CEILING_MAX_POSITIONS = 5
 HARD_CEILING_CONSECUTIVE_LOSSES = 3
 HARD_CEILING_MARGIN_UTIL_PCT = Decimal("40.00")
 HARD_CEILING_TOTAL_EXPOSURE_PCT = Decimal("50.00")
@@ -74,15 +74,15 @@ HARD_CEILING_QUOTE_AGE_S = Decimal("5.00")
 
 # Conservative defaults for a ~$33 real-money account (capital preservation).
 DEFAULT_RISK_PER_TRADE_PCT = _ol.OWNER_MAX_PLANNED_RISK_PCT
-DEFAULT_DAILY_LOSS_PCT = Decimal("19.00")
-DEFAULT_MAX_POSITIONS = 1
+DEFAULT_DAILY_LOSS_PCT = Decimal("48.00")
+DEFAULT_MAX_POSITIONS = 5
 DEFAULT_CONSECUTIVE_LOSSES = 3
 DEFAULT_MARGIN_UTIL_PCT = Decimal("25.00")
 DEFAULT_TOTAL_EXPOSURE_PCT = Decimal("30.00")
-DEFAULT_MAX_SPREAD = Decimal("0.45")
+DEFAULT_MAX_SPREAD = Decimal("1.00")
 DEFAULT_MAX_SLIPPAGE = Decimal("0.50")
 DEFAULT_QUOTE_AGE_S = Decimal("3.00")
-DEFAULT_MIN_RR = Decimal("1.50")
+DEFAULT_MIN_RR = Decimal("0.50")
 DEFAULT_MIN_SCORE = Decimal("70")
 DEFAULT_DUPLICATE_TTL_S = 120
 ACCOUNT_TOO_SMALL = "Account too small for configured risk limits on this instrument."
@@ -357,7 +357,10 @@ class LiveTradingRiskConfig:
         object.__setattr__(
             self,
             "min_reward_risk",
-            max(_dec(self.min_reward_risk, str(DEFAULT_MIN_RR)), Decimal("1.00")),
+            max(
+                _dec(self.min_reward_risk, str(DEFAULT_MIN_RR)),
+                _ol.OWNER_MIN_REWARD_RISK,
+            ),
         )
         object.__setattr__(
             self,
@@ -382,18 +385,21 @@ class LiveTradingRiskConfig:
         # spread 1.50) can no longer show or enforce values that differ from
         # the owner limits on the manual-order check, the UI or the audit.
         from app.domain.institutional_trading.runtime_policy import (
+            active_daily_loss_pct,
+            active_max_open_positions,
             active_max_planned_risk_pct,
+            active_max_spread,
             active_min_reward_risk,
         )
 
         object.__setattr__(self, "risk_per_trade_pct", active_max_planned_risk_pct())
-        object.__setattr__(self, "max_daily_loss_pct", _ol.OWNER_DAILY_LOSS_PCT)
+        object.__setattr__(self, "max_daily_loss_pct", active_daily_loss_pct())
         object.__setattr__(
             self, "max_consecutive_losses", _ol.OWNER_MAX_CONSECUTIVE_LOSSES
         )
         object.__setattr__(self, "min_reward_risk", active_min_reward_risk())
-        object.__setattr__(self, "max_spread", _ol.OWNER_MAX_SPREAD)
-        object.__setattr__(self, "max_open_positions", _ol.OWNER_MAX_OPEN_POSITIONS)
+        object.__setattr__(self, "max_spread", active_max_spread())
+        object.__setattr__(self, "max_open_positions", active_max_open_positions())
 
     def to_dict(self) -> dict[str, Any]:
         return {

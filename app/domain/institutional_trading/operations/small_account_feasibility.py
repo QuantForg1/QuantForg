@@ -15,6 +15,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     declared_commission,
     planned_risk_usd,
     price_unit_value,
+    resolve_entry_commission,
 )
 
 _CENT = Decimal("0.01")
@@ -119,6 +120,8 @@ def evaluate_min_volume(
     contract = Decimal(str(contract_size))
     cap = risk_cap_usd(eq, pct)
     fee = declared_commission(commission)
+    if fee is None:
+        fee = resolve_entry_commission("XAUUSD", None)
     unit = price_unit_value(
         contract_size=contract, tick_size=tick_size, tick_value=tick_value
     )

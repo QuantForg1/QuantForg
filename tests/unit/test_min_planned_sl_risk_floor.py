@@ -193,12 +193,12 @@ def test_owner_band_accepts_1_51_at_min_lot() -> None:
     assert out.estimated_risk_amount <= MAX_PLANNED_SL_RISK_USD
 
 
-def test_exactly_7_00_is_accepted_and_7_01_rejected_at_owner_max_lot() -> None:
-    # 0.01 * 100 * 7.00 = $7.00 = cap (inclusive); $7.01 is above it.
-    at_cap = _gold_norm(stop=Decimal("7.00"), max_lot=OWNER_MAX_LOT)
-    assert at_cap.estimated_risk_amount == Decimal("7.00")
+def test_exactly_10_00_is_accepted_and_10_01_rejected_at_owner_max_lot() -> None:
+    # 0.01 * 100 * 10.00 = $10.00 = cap (inclusive); $10.01 is above it.
+    at_cap = _gold_norm(stop=Decimal("10.00"), max_lot=OWNER_MAX_LOT)
+    assert at_cap.estimated_risk_amount == Decimal("10.00")
     assert at_cap.approved is True
-    over = _gold_norm(stop=Decimal("7.01"), max_lot=OWNER_MAX_LOT)
+    over = _gold_norm(stop=Decimal("10.01"), max_lot=OWNER_MAX_LOT)
     assert over.approved is False
     assert over.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
 
@@ -210,8 +210,8 @@ def test_six_01_is_inside_the_14_percent_cap() -> None:
     assert out.estimated_risk_amount == Decimal("6.01")
 
 
-def test_one_cent_over_seven_dollars_is_rejected() -> None:
-    out = _gold_norm(stop=Decimal("7.01"), max_lot=OWNER_MAX_LOT)
+def test_one_cent_over_ten_dollars_is_rejected() -> None:
+    out = _gold_norm(stop=Decimal("10.01"), max_lot=OWNER_MAX_LOT)
     assert out.approved is False
     assert out.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
 
@@ -244,11 +244,11 @@ def test_volume_min_itself_above_20_is_rejected() -> None:
 
 
 def test_next_volume_step_exceeding_cap_is_rejected_not_rounded_up() -> None:
-    # 0.01=$4.00 is inside the $7.00 cap; 0.02 would be $8.00 — reject.
-    in_band = _gold_norm(stop=Decimal("4.00"), calculated_lot=Decimal("0.01"))
+    # 0.01=$6.00 is inside the $10.00 cap; 0.02 would be $12.00 — reject.
+    in_band = _gold_norm(stop=Decimal("6.00"), calculated_lot=Decimal("0.01"))
     assert in_band.approved is True
     assert in_band.normalized_lot == Decimal("0.01")
-    too_big = _gold_norm(stop=Decimal("4.00"), calculated_lot=Decimal("0.02"))
+    too_big = _gold_norm(stop=Decimal("6.00"), calculated_lot=Decimal("0.02"))
     assert too_big.approved is False
     assert too_big.normalized_lot == Decimal("0")
     assert too_big.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
@@ -265,7 +265,7 @@ def test_open_initial_plus_proposed_above_cap_is_rejected() -> None:
     engine = _fx_engine(contract_size=_GOLD_CS)
     open_leg = _qf_pos(
         ticket=880001,
-        initial_stop=Decimal("2296.00"),  # 0.01 * 100 * 4.00 = $4.00
+        initial_stop=Decimal("2292.00"),  # 0.01 * 100 * 8.00 = $8.00
     )
     result = engine.evaluate(
         RiskCheckInput(
@@ -274,12 +274,12 @@ def test_open_initial_plus_proposed_above_cap_is_rejected() -> None:
             symbol="XAUUSD",
             side="buy",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("3.20"),
+            stop_loss_distance=Decimal("8.00"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("2300"),
             contract_size=_GOLD_CS,
         ),
-        account=_account(_CAP_EQUITY),  # 14% of $50 = $7.00
+        account=_account(_CAP_EQUITY),  # 30% of $50 = $15.00
         positions=[open_leg],
     )
     assert result.decision is RiskDecision.REJECT
@@ -319,7 +319,7 @@ def test_gold_uses_same_broker_aware_path() -> None:
     assert accept.approved is True
     assert accept.normalized_lot == Decimal("0.01")
     assert accept.estimated_risk_amount == Decimal("4.40")
-    reject = _gold_norm(stop=Decimal("7.01"))
+    reject = _gold_norm(stop=Decimal("10.01"))
     assert reject.approved is False
     assert reject.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BAND
     buy = planned_sl_risk_usd(
@@ -346,12 +346,12 @@ def test_no_universal_0_01_fallback_when_actual_above_cap() -> None:
             symbol="XAUUSD",
             side="buy",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("7.10"),
+            stop_loss_distance=Decimal("10.01"),
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("2300"),
             contract_size=_GOLD_CS,
         ),
-        account=_account(_CAP_EQUITY),  # 14% of $50 = $7.00
+        account=_account(_CAP_EQUITY),  # 20% of $50 = $10.00
         positions=[],
     )
     assert result.decision is RiskDecision.REJECT
@@ -375,12 +375,12 @@ def test_rejected_sizing_does_not_live_in_order_send_path() -> None:
             symbol="EURUSD",
             side="sell",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("0.0080"),  # $8.00 > $7.00 cap
+            stop_loss_distance=Decimal("0.0101"),  # $10.10 > $10.00 cap
             sizing_method=PositionSizingMethod.FIXED_LOT,
             entry_price=Decimal("1.08500"),
             contract_size=_FX_CS,
         ),
-        account=_account(_CAP_EQUITY),  # 14% of $50 = $7.00
+        account=_account(_CAP_EQUITY),  # 20% of $50 = $10.00
         positions=[],
     )
     assert result.decision is RiskDecision.REJECT
@@ -449,7 +449,7 @@ def test_v2_does_not_allow_above_max_planned() -> None:
         equity=Decimal("50"),
         balance=Decimal("50"),
         free_margin=Decimal("50"),
-        stop_distance=Decimal("0.0080"),  # 0.01 lot = $8.00 > $7.00 (14% of $50)
+        stop_distance=Decimal("0.0101"),  # 0.01 lot = $10.10 > $10.00 (20% of $50)
         risk_pct=Decimal("1.0"),
         contract_size=_FX_CS,
         min_lot=_MIN,
@@ -484,6 +484,6 @@ def test_tick_path_matches_contract_fallback_for_fx_step_up() -> None:
 
 def test_constants_remain_single_source() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
-    assert Decimal("7.00") == TARGET_PLANNED_RISK_USD
-    assert Decimal("7.00") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("7.00") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("10.00") == TARGET_PLANNED_RISK_USD
+    assert Decimal("10.00") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("15.00") == MAX_TOTAL_PLANNED_RISK_USD

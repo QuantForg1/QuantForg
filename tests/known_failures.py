@@ -158,11 +158,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
     ),
     # --- owner-policy: fixed by FT-1 (#66); remove when it merges ---
     _G
-    + "test_portfolio_intelligence_v9.py::test_capital_protection_scales_near_limit": (
-        "owner-policy",
-        "near-limit scaling relative to the 80% cap",
-    ),
-    _G
     + "test_portfolio_risk_engine_v2.py::TestPortfolioBookAndAllocation::"
     + "test_never_force_min_lot": (
         "owner-policy",

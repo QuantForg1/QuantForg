@@ -407,7 +407,7 @@ class TestInitialRiskAndProtection:
             ".load_initial_leg_facts_fail_open",
             lambda: {},
         )
-        legs = [_pos(ticket=40, sl=Decimal("2300"), initial_stop=Decimal("2297.00"))]
+        legs = [_pos(ticket=40, sl=Decimal("2300"), initial_stop=Decimal("2292"))]
         engine = _engine()
         result = engine.evaluate(
             RiskCheckInput(
@@ -415,7 +415,7 @@ class TestInitialRiskAndProtection:
                 request_id="phase2-1-80",
                 symbol="XAUUSD",
                 side="buy",
-                stop_loss_distance=Decimal("4.20"),
+                stop_loss_distance=Decimal("8.00"),
                 sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
                 entry_price=Decimal("2300"),
                 contract_size=Decimal("100"),
@@ -423,9 +423,9 @@ class TestInitialRiskAndProtection:
             account=_account(Decimal("50")),
             positions=legs,
         )
-        # Initial risk $3.00 still counts after SL moved to break-even:
-        # $3.00 + $4.20 > $7.00 (14% of $50, one position).
-        assert engine.aggregate_planned_sl_risk(legs) == Decimal("3.00")
+        # Initial risk $8.00 still counts after the stop moves.
+        # $8.00 + $8.00 = $16.00, above the $15.00 book (30% of $50).
+        assert engine.aggregate_planned_sl_risk(legs) == Decimal("8.00")
         assert result.decision is RiskDecision.REJECT
 
     def test_n_no_averaging_into_losing_positions(self) -> None:

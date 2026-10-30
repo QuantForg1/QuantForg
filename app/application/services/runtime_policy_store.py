@@ -365,11 +365,16 @@ def install_cycle_policy() -> StoredPolicy:
         _note_applied(loaded.version)
         _persist_worker_ack(loaded.version)
     if _LOGGED_VERSION.get("version") != loaded.version:
+        from app.domain.institutional_trading.owner_live_limits import (
+            commission_audit,
+        )
+
         logger.info(
             "runtime_policy_applied",
             version=loaded.version,
             source=loaded.source,
             status="applied" if loaded.version > 0 else "approved_baseline",
+            **commission_audit("XAUUSD", loaded.document),
         )
         _LOGGED_VERSION["version"] = loaded.version
     return StoredPolicy(

@@ -14,8 +14,10 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_SL_RISK_USD,
     OWNER_MIN_REWARD_RISK,
     OWNER_MIN_SL_RISK_USD,
+    OWNER_RISK_REFERENCE_USD,
     OWNER_SL_RISK_PCT,
     OWNER_WEEKLY_LOSS_PCT,
+    max_aggregate_risk_usd,
 )
 from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
 from app.domain.market_context.enums import MarketSession
@@ -23,24 +25,23 @@ from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
 # Authoritative XAUUSD autonomous daily-loss percent:
-# 19% of the UTC day's starting equity — see owner_live_limits.daily_loss_cap_usd.
+# 48% of the UTC day's starting equity — see owner_live_limits.daily_loss_cap_usd.
 # Boundary: loss > cap blocks; loss == cap does not.
 MAX_DAILY_LOSS_PCT = OWNER_DAILY_LOSS_PCT
 MAX_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_CEILING_PCT
 
-# Planned SL-loss (not margin) at the reference capital: 14% ($7.00 at $50).
-# No minimum floor. TARGET is the single sizing budget. The live owner guard
-# recomputes the cap from equity on every entry (owner_live_limits).
+# Planned SL-loss (not margin) at the reference capital: 20% of that equity.
+# The book cap is 30% of the same reference, not 20% times the position count.
+# No minimum floor. The live owner guard recomputes both caps from equity.
 MIN_PLANNED_RISK_USD = OWNER_MIN_SL_RISK_USD
 TARGET_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD
 TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
 MAX_PLANNED_SL_RISK_USD = OWNER_MAX_SL_RISK_USD
-MAX_TOTAL_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD * OWNER_MAX_OPEN_POSITIONS
-# Reward must be at least 1.5R after spread; never stretch TP to reach it —
-# reject instead.
+MAX_TOTAL_PLANNED_RISK_USD = max_aggregate_risk_usd(OWNER_RISK_REFERENCE_USD)
+# Reward must clear the active 0.50 floor after costs. Never stretch TP.
 MIN_REWARD_RISK = OWNER_MIN_REWARD_RISK
 PREFERRED_REWARD_RISK = Decimal("1.50")
-# Per-trade percent ceiling (14% of the risk reference).
+# Per-trade percent ceiling (20% of the risk reference).
 RISK_PER_TRADE_CEILING_PCT = OWNER_SL_RISK_PCT
 
 

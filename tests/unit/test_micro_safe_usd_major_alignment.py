@@ -110,7 +110,7 @@ def test_london_session_prioritizes_micro_safe_over_gold_and_crosses() -> None:
 
 @pytest.mark.unit
 def test_xauusd_i_min_lot_approved_on_micro_equity_inside_owner_band() -> None:
-    """A $1.80 gold stop on ~$100 is approved at 0.01; a $15 stop is not."""
+    """A $1.80 gold stop on ~$100 is approved at 0.01; a $21 stop is not."""
     equity = Decimal("100.72")
     price = Decimal("4380.013")
     account = AccountSnapshot(
@@ -144,8 +144,8 @@ def test_xauusd_i_min_lot_approved_on_micro_equity_inside_owner_band() -> None:
     ok = _eval(Decimal("1.80"))
     assert ok.decision in {RiskDecision.ALLOW, RiskDecision.REDUCE_SIZE}
     assert ok.approved_lots == Decimal("0.01")
-    # 14% of $100.72 is $14.10. $15 at 0.01 lot is outside that cap.
-    wide = _eval(Decimal("15.00"))
+    # 20% of $100.72 is $20.14. $21 at 0.01 lot is outside that cap.
+    wide = _eval(Decimal("21.00"))
     assert wide.decision is RiskDecision.REJECT
 
 
@@ -182,7 +182,7 @@ def test_usdjpy_i_existing_cs_stop_sizing_still_rejects_micro_equity() -> None:
 @pytest.mark.unit
 def test_alignment_does_not_change_risk_ceilings() -> None:
     profile = MicroAccountProfile()
-    assert profile.hard_max_risk_pct == Decimal("14.0")
+    assert profile.hard_max_risk_pct == Decimal("20.0")
     assert DEFAULT_ITE_CONFIG.risk_per_trade_pct == Decimal("1.0")
     # Seed list still contains gold — analysis retained, not force-executable.
     assert "XAUUSD" in DEFAULT_SCALPING_UNIVERSE

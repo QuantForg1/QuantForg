@@ -89,7 +89,7 @@ def _plane(*, exceeded: bool) -> SimpleNamespace:
 
 
 def test_max_daily_loss_pct_is_owner_25() -> None:
-    assert Decimal("19.0") == MAX_DAILY_LOSS_PCT
+    assert Decimal("48.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_verified_deposit_clears_latch_via_existing_lock_not_assignment() -> None:
@@ -134,12 +134,12 @@ def test_deposit_then_additional_loss_still_blocks_when_over_80() -> None:
             volume="0",
             deal_type="balance",
         ),
-        _deal(profit="-161", when=datetime(2026, 9, 1, 13, 0, tzinfo=UTC), ticket=3),
+        _deal(profit="-185", when=datetime(2026, 9, 1, 13, 0, tzinfo=UTC), ticket=3),
     ]
     daily = LiveAccountRiskTracker.daily_pnl_from_deals(
         deals, now=now, ending_balance=Decimal("200")
     )
-    assert daily == Decimal("-161")
+    assert daily == Decimal("-185")
     assert utc_daily_loss_exceeded(
         daily_pnl=daily,
         equity=Decimal("200"),
@@ -414,7 +414,7 @@ async def test_ite_cycle_verified_deposit_sets_audit_baseline(
     assert ctx.diagnostics.get("daily_pnl_trusted") is True
     assert ctx.diagnostics.get("new_capital_detected") is True
     assert ctx.diagnostics.get("deposit_verification") == "verified"
-    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "19.0"
+    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "48.0"
     baseline = ctx.diagnostics.get("capital_baseline")
     assert isinstance(baseline, dict)
     assert baseline.get("broker_deal_ticket") == 2

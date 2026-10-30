@@ -233,12 +233,12 @@ class TestFailClosed:
         assert d.method == "no_stop"
 
     def test_invalid_lot_below_min(self) -> None:
-        # 26.00 stop = $26 at min lot: above 14% of $181.53 ($25.41) -> fail closed.
+        # 36.31 stop = $36.31 at min lot: above 20% of $181.53 ($36.30).
         d = _size(
             equity=Decimal("181.53"),
             free_margin=Decimal("181.53"),
-            stop_distance=Decimal("26.00"),
-            atr=Decimal("26.00"),
+            stop_distance=Decimal("36.31"),
+            atr=Decimal("36.31"),
         )
         assert d.valid is False
         assert d.final_lot == Decimal("0")
