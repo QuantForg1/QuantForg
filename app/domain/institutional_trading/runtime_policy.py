@@ -376,9 +376,7 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
         hi=OWNER_DAILY_LOSS_PCT,
     )
     _reject_number(errors, raw, "max_lot", lo=Decimal("0.01"), hi=OWNER_MAX_LOT)
-    _reject_number(
-        errors, raw, "max_spread", lo=Decimal("0.01"), hi=OWNER_MAX_SPREAD
-    )
+    _reject_number(errors, raw, "max_spread", lo=Decimal("0.01"), hi=OWNER_MAX_SPREAD)
     from app.domain.institutional_trading.owner_live_limits import (
         atr_multiplier_verdict,
         authorized_min_reward_risk,

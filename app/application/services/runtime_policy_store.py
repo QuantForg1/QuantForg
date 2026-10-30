@@ -170,13 +170,11 @@ def ensure_owner_schema() -> None:
     if not available():
         return
     execute(_CREATE_TABLE)
-    execute(
-        """
+    execute("""
         ALTER TABLE public.trading_runtime_config
             ADD COLUMN IF NOT EXISTS worker_applied_version INTEGER,
             ADD COLUMN IF NOT EXISTS worker_applied_at TIMESTAMPTZ
-        """
-    )
+        """)
     execute(_POLICY_LOCKDOWN)
     execute(_ROLE_FUNCTION)
     execute(_ROLE_TRIGGER)
@@ -309,12 +307,10 @@ def load_runtime_policy() -> StoredPolicy:
     if available():
         try:
             ensure_owner_schema()
-            rows = fetch(
-                """
+            rows = fetch("""
                 SELECT version, document, worker_applied_version, worker_applied_at
                 FROM trading_runtime_config WHERE id = 1
-                """
-            )
+                """)
         except Exception as exc:
             logger.warning("runtime_policy_load_failed", error_type=type(exc).__name__)
             return StoredPolicy(
