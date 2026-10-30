@@ -36,7 +36,6 @@ from app.domain.institutional_trading.operations.worker_runtime_state import (
     scheduler_is_stalled,
 )
 from app.domain.trading.gold_only import (
-    CANONICAL_GOLD_BROKER_DISPLAY,
     canonical_gold_execution_symbol,
     is_bare_gold_symbol,
 )
@@ -232,9 +231,10 @@ def test_named_blocker_not_generic_no_trade() -> None:
     assert stage == "session"
 
 
-def test_gold_execution_never_falls_back_to_bare_xauusd() -> None:
-    assert canonical_gold_execution_symbol(None) == CANONICAL_GOLD_BROKER_DISPLAY
-    assert canonical_gold_execution_symbol("XAUUSD") == CANONICAL_GOLD_BROKER_DISPLAY
+def test_gold_execution_keeps_bare_xauusd_and_a_real_suffix() -> None:
+    assert canonical_gold_execution_symbol(None) == "XAUUSD"
+    assert canonical_gold_execution_symbol("XAUUSD") == "XAUUSD"
+    assert canonical_gold_execution_symbol("XAUUSD_i") == "XAUUSD_i"
     assert not is_bare_gold_symbol(canonical_gold_execution_symbol("XAUUSD_i"))
     assert derive_worker_state(
         running=True,

@@ -1,4 +1,4 @@
-"""Gold-only routing must stay on XAUUSD_i. Never fallback to unsuffixed XAUUSD."""
+"""Gold routing uses the catalogue spelling. A 503 bare alias does not win."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from app.domain.institutional_trading.operations.fast_decision_path import (
     classify_candidate_outcome,
 )
 from app.domain.trading.gold_only import (
-    CANONICAL_GOLD_BROKER_DISPLAY,
     canonical_gold_execution_symbol,
     is_bare_gold_symbol,
 )
@@ -62,8 +61,8 @@ def test_mixed_xauusd_and_suffix_collapses_to_canonical(gold_only: None) -> None
         alpha_ranking=[{"symbol": "XAUUSD_i"}, {"symbol": "XAUUSD"}],
         plane=SimpleNamespace(allowed_symbols=("XAUUSD", "EURUSD")),
     )
-    assert rows == [CANONICAL_GOLD_BROKER_DISPLAY]
-    assert "XAUUSD" not in rows
+    assert rows == ["XAUUSD"]
+    assert "XAUUSD_i" not in rows
 
 
 def test_xauusd_503_does_not_win_when_xauusd_i_is_authoritative(
@@ -91,11 +90,13 @@ def test_resolver_never_returns_unsuffixed_xauusd(gold_only: None) -> None:
     assert selected != "XAUUSD"
 
 
-def test_canonical_helper_never_returns_bare() -> None:
+def test_canonical_helper_does_not_invent_a_suffix() -> None:
     assert canonical_gold_execution_symbol("XAUUSD_i") == "XAUUSD_i"
     assert canonical_gold_execution_symbol("XAUUSD_I") == "XAUUSD_i"
-    assert canonical_gold_execution_symbol("XAUUSD") == "XAUUSD_i"
-    assert not is_bare_gold_symbol(canonical_gold_execution_symbol(None))
+    assert canonical_gold_execution_symbol("XAUUSD") == "XAUUSD"
+    assert canonical_gold_execution_symbol(None) == "XAUUSD"
+    assert is_bare_gold_symbol("XAUUSD") is True
+    assert not is_bare_gold_symbol("XAUUSD_i")
 
 
 def test_buy_survives_symbol_routing_block() -> None:

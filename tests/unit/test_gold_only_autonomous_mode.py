@@ -98,7 +98,7 @@ def test_gold_only_mode_enabled(gold_only: None) -> None:
 
 def test_execution_universe_is_exactly_xauusd_i(gold_only: None) -> None:
     universe = autonomous_execution_symbols(broker_symbol_rows=WELTRADE_ROWS)
-    assert universe == ("XAUUSD_I",)
+    assert universe == ("XAUUSD_i",)
     diag = gold_only_diagnostics(broker_symbol_rows=WELTRADE_ROWS)
     assert diag["execution_universe"] == ["XAUUSD_i"]
     assert diag["canonical_symbol"] == CANONICAL_GOLD_BROKER_DISPLAY
@@ -132,7 +132,7 @@ def test_production_preserves_gold_only_universe() -> None:
 
 def test_scanner_evaluates_xauusd_i_only(gold_only: None) -> None:
     uni = resolve_scan_universe(broker_symbol_rows=WELTRADE_ROWS)
-    assert uni == ("XAUUSD_I",)
+    assert uni == ("XAUUSD_i",)
     assert "EURUSD_I" not in uni
     assert "GBPUSD" not in {s.upper() for s in uni}
 
@@ -257,7 +257,7 @@ def test_xauusd_i_accepted_for_autonomous_policy(gold_only: None) -> None:
     from app.domain.trading.gold_only import resolve_trading_symbol
 
     assert resolve_trading_symbol("EURUSD") == "EURUSD"
-    assert resolve_trading_symbol("XAUUSD") == "XAUUSD_I"
+    assert resolve_trading_symbol("XAUUSD") == "XAUUSD"
 
 
 def test_current_scan_never_exposes_fx(gold_only: None) -> None:

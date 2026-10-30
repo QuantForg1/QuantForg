@@ -355,9 +355,10 @@ def resolve_canonical_market_data_symbol(
 ) -> str:
     """Single catalogue broker code for quotes/candles — never invents ``_i``.
 
-    Prefers an existing institutional ``_I`` form for the desk when the
-    catalogue lists it. Returns ``""`` when the seed cannot be resolved
-    from provided rows (caller must fail closed).
+    An exact catalogue hit for the seed wins, including unsuffixed ``XAUUSD``.
+    A suffixed form is used only when the seed itself is absent and that
+    suffix is in the catalogue. Returns ``""`` when the seed cannot be
+    resolved from provided rows (caller must fail closed).
     """
     raw = (seed_code or "").strip()
     if not raw:
@@ -367,16 +368,16 @@ def resolve_canonical_market_data_symbol(
     )
     if not codes:
         return ""
+    key = raw.upper()
+    if key in codes:
+        return codes[key]
     desk = scalp_desk_code(raw)
     inst = f"{desk}_I"
     if inst in codes:
-        return inst
-    key = raw.upper()
-    if key in codes:
-        return key
-    for upper in codes:
+        return codes[inst]
+    for upper, spelling in codes.items():
         if scalp_desk_code(upper) == desk:
-            return upper
+            return spelling
     return ""
 
 

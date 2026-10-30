@@ -94,7 +94,7 @@ def build_opportunity_candidates(
         ordered.append(code)
 
     if gold_only:
-        # Preferred broker form first and only. Never unsuffixed XAUUSD.
+        # One gold instrument. Keep the preferred spelling. Do not invent a suffix.
         return [canonical_gold_execution_symbol(preferred)]
 
     _add(preferred)

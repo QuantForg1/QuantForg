@@ -1115,6 +1115,19 @@ class InstitutionalIteRuntime:
                         symbol=safety_diag.get("symbol")
                         or getattr(account, "symbol", None)
                         or getattr(snapshot, "symbol", None),
+                        snapshot_symbol=getattr(snapshot, "symbol", None),
+                        account_trading_enabled=bool(account_trading_enabled),
+                        mt5_autotrading_enabled=bool(mt5_autotrading_enabled),
+                        account_trading_source=(
+                            (market_context_diagnostics or {}).get(
+                                "account_trading_source"
+                            )
+                        ),
+                        symbol_trade_allowed=(
+                            (market_context_diagnostics or {}).get(
+                                "symbol_trade_allowed"
+                            )
+                        ),
                         forwarded_to_oms=False,
                     )
                     try:

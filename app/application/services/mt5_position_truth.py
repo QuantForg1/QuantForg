@@ -271,11 +271,12 @@ def force_sync_positions(
 def candidate_position_truth_symbol(symbol: str | None) -> str:
     """Resolve symbol scope for candidate add-on / position-truth sync.
 
-    Gold → canonical broker gold (``XAUUSD_i``). Non-gold → candidate spelling
-    via existing display helper — never coerce FX/crypto/index to gold.
+    Gold keeps the caller's spelling, including unsuffixed ``XAUUSD``.
+    Non-gold keeps the candidate spelling. Never coerce FX/crypto/index
+    to gold, and never invent an ``XAUUSD_i`` suffix.
     """
     from app.domain.trading.gold_only import (
-        CANONICAL_GOLD_BROKER_DISPLAY,
+        GOLD_SYMBOL,
         canonical_gold_execution_symbol,
         display_autonomous_symbol,
         is_gold_symbol,
@@ -283,7 +284,7 @@ def candidate_position_truth_symbol(symbol: str | None) -> str:
 
     raw = (symbol or "").strip()
     if not raw:
-        return CANONICAL_GOLD_BROKER_DISPLAY
+        return GOLD_SYMBOL
     if is_gold_symbol(raw):
         return canonical_gold_execution_symbol(raw)
     return display_autonomous_symbol(raw)

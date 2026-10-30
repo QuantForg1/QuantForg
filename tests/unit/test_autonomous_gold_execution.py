@@ -118,13 +118,15 @@ def test_execute_now_is_not_required_for_autonomous_submit() -> None:
 
 
 @pytest.mark.unit
-def test_gold_only_universe_is_xauusd_i(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gold_only_universe_without_catalogue_is_xauusd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "app.domain.trading.gold_only.gold_only_enabled",
         lambda: True,
     )
     diag = gold_only_diagnostics()
-    assert diag["execution_universe"] == ["XAUUSD_i"]
+    assert diag["execution_universe"] == ["XAUUSD"]
     rejected = evaluate_gold_execution_contract(_ready(symbol="EURUSD_I"))
     assert rejected.may_submit_oms is False
     assert rejected.fault_code == "DISABLED_AUTONOMOUS_SYMBOL"

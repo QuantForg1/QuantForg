@@ -54,7 +54,6 @@ from app.domain.institutional_trading.operations.trade_classifier import TradeCl
 from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
 from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
 from app.domain.trading.gold_only import (
-    CANONICAL_GOLD_BROKER_DISPLAY,
     canonical_gold_execution_symbol,
     is_bare_gold_symbol,
 )
@@ -488,7 +487,7 @@ def test_owner_cap_overrides_strategy_targets_and_min_stack() -> None:
 
 
 def test_gold_manual_and_session_regressions() -> None:
-    assert canonical_gold_execution_symbol() == CANONICAL_GOLD_BROKER_DISPLAY
+    assert canonical_gold_execution_symbol() == "XAUUSD"
     assert is_bare_gold_symbol("XAUUSD") is True
     assert QUANTFORG_MAGIC == 260720
     manual = SimpleNamespace(magic=0, symbol="XAUUSD_i", comment="ite:v1")

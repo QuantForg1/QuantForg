@@ -342,7 +342,7 @@ def test_scanner_universe_resolver_is_gold_only(gold_only: None) -> None:
         {"code": "GBPUSD_i", "trade_mode": 4},
     )
     uni = resolve_scan_universe(broker_symbol_rows=rows)
-    assert uni == ("XAUUSD_I",)
+    assert uni == ("XAUUSD_i",)
     assert "EURUSD" not in {s.upper() for s in uni}
 
 

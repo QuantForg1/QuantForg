@@ -113,6 +113,52 @@ class TestAutoTradeSafetyGate:
         assert result.allowed is False
         assert any("Spread" in r for r in result.failed_reasons)
 
+    def test_account_trading_disabled_is_only_the_account_flag(self) -> None:
+        policy = AutoTradePolicy(enabled=True)
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(
+                account_trading_enabled=False,
+                no_broker_restrictions=False,
+                mt5_autotrading_enabled=True,
+            ),
+        )
+        assert result.allowed is False
+        assert result.failed_reasons[0] == "Account trading is disabled"
+        assert "AutoTrading is disabled in MetaTrader 5" not in result.failed_reasons
+
+    def test_account_trading_enabled_does_not_emit_the_disabled_reason(self) -> None:
+        result = evaluate_auto_trade_safety(
+            AutoTradePolicy(enabled=True), _all_pass_facts()
+        )
+        assert "Account trading is disabled" not in result.failed_reasons
+        assert result.allowed is True
+
+    def test_terminal_autotrading_off_is_not_account_trading_disabled(self) -> None:
+        result = evaluate_auto_trade_safety(
+            AutoTradePolicy(enabled=True),
+            _all_pass_facts(
+                account_trading_enabled=True,
+                mt5_autotrading_enabled=False,
+                mt5_autotrading_known=True,
+            ),
+        )
+        assert result.allowed is False
+        assert "Account trading is disabled" not in result.failed_reasons
+        assert any(
+            "AutoTrading is disabled in MetaTrader 5" in reason
+            for reason in result.failed_reasons
+        )
+
+    def test_symbol_not_tradable_is_not_account_trading_disabled(self) -> None:
+        result = evaluate_auto_trade_safety(
+            AutoTradePolicy(enabled=True),
+            _all_pass_facts(symbol="XAUUSD", symbol_tradable=False),
+        )
+        assert result.allowed is False
+        assert "Account trading is disabled" not in result.failed_reasons
+        assert any("not tradable" in reason for reason in result.failed_reasons)
+
     def test_missing_spread_fail_closed(self) -> None:
         policy = AutoTradePolicy(enabled=True, max_spread=Decimal("1.00"))
         result = evaluate_auto_trade_safety(policy, _all_pass_facts(spread=None))

@@ -69,10 +69,10 @@ def _stub_fetch(monkeypatch: pytest.MonkeyPatch, rows: tuple[dict, ...]) -> None
 @pytest.mark.parametrize(
     ("desk", "broker"),
     [
-        ("AUDUSD", "AUDUSD_I"),
-        ("AUDJPY", "AUDJPY_I"),
-        ("EURUSD", "EURUSD_I"),
-        ("XAUUSD", "XAUUSD_I"),
+        ("AUDUSD", "AUDUSD_i"),
+        ("AUDJPY", "AUDJPY_i"),
+        ("EURUSD", "EURUSD_i"),
+        ("XAUUSD", "XAUUSD_i"),
     ],
 )
 def test_desk_maps_to_catalogue_i_only(desk: str, broker: str) -> None:
@@ -89,7 +89,7 @@ def test_desk_maps_to_catalogue_i_only(desk: str, broker: str) -> None:
 def test_canonical_has_no_unsuffixed_fallback() -> None:
     ordered = catalogue_ordered_candidates("AUDUSD", broker_symbol_rows=WELTRADE_ROWS)
     assert "AUDUSD" not in ordered
-    assert ordered == ("AUDUSD_I",)
+    assert ordered == ("AUDUSD_i",)
 
 
 @pytest.mark.unit

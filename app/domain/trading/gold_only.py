@@ -4,9 +4,9 @@
 Alpha, multi-symbol, and multi-asset scan flags must not silently expand the
 universe when gold-only is enabled.
 
-Logical desk remains ``XAUUSD``. Catalogue/MT5 operations use the broker form
-returned by the existing canonical resolver (typically ``XAUUSD_I`` /
-``XAUUSD_i``). This module never invents suffixes.
+Logical desk remains ``XAUUSD``. Catalogue/MT5 operations use the broker
+spelling the live symbol list actually contains. This module never invents
+a suffix such as ``XAUUSD_i``.
 """
 
 from __future__ import annotations
@@ -76,7 +76,11 @@ def default_trading_symbol() -> str:
 
 
 def is_bare_gold_symbol(code: str) -> bool:
-    """True for unsuffixed gold aliases that Weltrade rejects (503)."""
+    """True for unsuffixed gold aliases (XAUUSD, GOLD, XAUUSDM).
+
+    A bare code is not a broker rejection. The live catalogue decides whether
+    that spelling is tradable.
+    """
     u = (code or "").strip().upper()
     if not u:
         return False
@@ -87,17 +91,15 @@ def is_bare_gold_symbol(code: str) -> bool:
 
 
 def canonical_gold_execution_symbol(preferred: str | None = None) -> str:
-    """Gold-only executable form. Never unsuffixed XAUUSD."""
+    """Strategy gold symbol. A real suffix is kept. A bare code stays XAUUSD.
+
+    The broker spelling comes from the live catalogue. This helper does not
+    invent ``XAUUSD_i`` when the caller passed unsuffixed gold.
+    """
     pref = (preferred or "").strip()
-    if pref and is_gold_symbol(pref) and not is_bare_gold_symbol(pref):
+    if pref and is_gold_symbol(pref):
         return display_autonomous_symbol(pref)
-    try:
-        for sym in autonomous_execution_symbols():
-            if is_gold_symbol(sym) and not is_bare_gold_symbol(sym):
-                return display_autonomous_symbol(sym)
-    except Exception:  # noqa: S110  # best-effort optional path
-        pass
-    return CANONICAL_GOLD_BROKER_DISPLAY
+    return GOLD_SYMBOL
 
 
 def is_gold_symbol(code: str) -> bool:
@@ -110,15 +112,19 @@ def is_gold_symbol(code: str) -> bool:
 
 
 def display_autonomous_symbol(code: str | None = None) -> str:
-    """Operator-facing catalogue spelling (``XAUUSD_i``), never invented for MD."""
+    """Keep the caller's gold spelling. Only ``_I`` is normalized to ``_i``.
+
+    Unsuffixed ``XAUUSD`` stays ``XAUUSD``. A suffix is not invented.
+    """
     raw = (code or "").strip()
     if not raw:
-        return CANONICAL_GOLD_BROKER_DISPLAY if gold_only_enabled() else GOLD_SYMBOL
+        return GOLD_SYMBOL
+    compact = "".join(ch for ch in raw.upper() if ch.isalnum())
+    if compact in {"GOLD", "XAUUSDM"}:
+        return GOLD_SYMBOL
     u = raw.upper()
     if u.endswith("_I") and len(u) > 2:
         return f"{u[:-2]}_i"
-    if is_gold_symbol(u):
-        return CANONICAL_GOLD_BROKER_DISPLAY
     return raw
 
 
@@ -129,12 +135,14 @@ def autonomous_execution_symbols(
 ) -> tuple[str, ...]:
     """Authoritative autonomous execution universe.
 
-    Gold-only: catalogue-resolved gold broker form only. Never unsuffixed
-    ``XAUUSD`` — that form 503s on the live Weltrade catalogue.
+    Gold-only uses the catalogue spelling when rows are supplied. Unsuffixed
+    ``XAUUSD`` is returned when that is the catalogue code or when no
+    catalogue was supplied. A suffix is used only when the catalogue lists it
+    and does not list the bare strategy symbol.
 
     BROKER_DISCOVERED: exact LIVE_BROKER codes from existing MT5Adapter.symbols.
     Missing/mock/injected catalogues fail closed (empty). Never falls back to
-    XAUUSD_i or a hardcoded FX list.
+    a hardcoded FX list or an invented ``XAUUSD_i``.
     """
     from app.domain.trading.execution_universe import (
         MODE_BROKER_DISCOVERED,
@@ -161,9 +169,11 @@ def autonomous_execution_symbols(
         )
     except Exception:
         resolved = ""
-    if resolved and is_gold_symbol(resolved) and not is_bare_gold_symbol(resolved):
+    if resolved and is_gold_symbol(resolved):
         return (resolved,)
-    return (CANONICAL_GOLD_BROKER_DISPLAY,)
+    if broker_symbol_rows:
+        return ()
+    return (GOLD_SYMBOL,)
 
 
 def is_autonomous_execution_symbol(code: str | None) -> bool:
@@ -233,9 +243,7 @@ def gold_only_diagnostics(
     enabled = gold_only_enabled()
     universe = list(autonomous_execution_symbols(broker_symbol_rows=broker_symbol_rows))
     if enabled:
-        display = [display_autonomous_symbol(s) for s in universe] or [
-            CANONICAL_GOLD_BROKER_DISPLAY
-        ]
+        display = [display_autonomous_symbol(s) for s in universe] or [GOLD_SYMBOL]
         canonical = display[0]
     else:
         display = universe

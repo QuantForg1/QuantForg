@@ -724,18 +724,46 @@ def _owner_targets(
     )
     if choice.price is None:
         best = max((abs(p - entry) for _, p, _, _ in choice.considered), default=None)
+        nets = [rr for _, _, _, rr in choice.considered if rr is not None]
+        best_net = max(nets) if nets else None
+        gross = (best / stop_distance).quantize(Decimal("0.01")) if best else None
+        net_text = (
+            str(best_net.quantize(Decimal("0.01"))) if best_net is not None else "n/a"
+        )
+        reason = (
+            "OWNER_TP_NO_STRUCTURE_RR: no structure level within "
+            f"{OWNER_TP_MAX_STRUCTURE_LEVELS} gives net RR after spread >= "
+            f"{min_rr} ({tried or 'no level beyond entry'}); "
+            f"best_gross={gross if gross is not None else 'n/a'} "
+            f"best_net={net_text}; TP not stretched"
+        )
+        logger.info(
+            "owner_tp_rejected",
+            direction=direction.value,
+            entry=str(entry),
+            stop_loss=str(sl),
+            stop_distance=str(stop_distance),
+            spread=str(spread),
+            slippage=str(slip),
+            commission=str(fee) if fee is not None else None,
+            best_gross_rr=str(gross) if gross is not None else None,
+            best_net_rr=net_text,
+            candidates=tried or "no level beyond entry",
+            min_rr=str(min_rr),
+            reason=reason,
+        )
         return StructureTargets(
             entry,
             sl,
             None,
             stop_distance,
-            (best / stop_distance).quantize(Decimal("0.01")) if best else None,
-            "OWNER_TP_NO_STRUCTURE_RR: no structure level within "
-            f"{OWNER_TP_MAX_STRUCTURE_LEVELS} gives net RR after spread >= "
-            f"{min_rr} ({tried or 'no level beyond entry'}); "
-            "TP not stretched",
+            gross,
+            reason,
             stop_source=stop_source,
             stop_atr=atr,
+            expected_net_rr=(
+                best_net.quantize(Decimal("0.01")) if best_net is not None else None
+            ),
         )
     tp = choice.price
     expected_rr = (abs(tp - entry) / stop_distance).quantize(Decimal("0.01"))
