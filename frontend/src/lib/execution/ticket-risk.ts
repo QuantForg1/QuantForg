@@ -96,7 +96,7 @@ function finitePositive(n: number): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
-/** Per-trade planned-risk cap in USD: 14% of equity, rounded down to the cent. */
+/** Per-trade planned-risk cap in USD: 20% of equity, rounded down to the cent. */
 export function maxSlRiskUsd(equity: number): number {
   if (!finitePositive(equity)) return 0;
   return Math.floor(equity * OWNER_MAX_PLANNED_RISK_PCT + 1e-9) / 100;
