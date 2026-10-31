@@ -3,351 +3,374 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>QuantForg — Institutional Trading OS</title>
+    <title>QuantForg — Institutional Trading Intelligence</title>
     <meta
       name="description"
-      content="Institutional trading terminal for operators who demand clarity. Live MT5 portfolio sync, risk before fill, research loop, and AI workspace."
+      content="Institutional trading terminal. Connect your own broker. QuantForg analyzes gold, checks risk, and executes only under approved settings."
     />
-    <meta name="theme-color" content="#FF5A1F" />
+    <meta name="theme-color" content="#061a38" />
     <meta name="robots" content="index,follow" />
     <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
-    <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta property="og:title" content="QuantForg — Institutional Trading OS" />
-    <meta
-      property="og:description"
-      content="Institutional trading terminal for operators who demand clarity."
-    />
-    <meta property="og:image" content="/og-image.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/og-image.png" />
     <style>
       :root {
-        --bg: #0b1120;
-        --bg-elevated: #0f172a;
-        --surface: #151f32;
-        --surface-2: #182337;
-        --border: #243049;
-        --border-strong: #31415c;
-        --fg: #f8fafc;
-        --fg-muted: #94a3b8;
-        --fg-subtle: #64748b;
-        --accent: #ff5a1f;
-        --accent-fg: #ffffff;
-        --accent-soft: rgba(255, 90, 31, 0.16);
-        --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
-        --ring: rgba(255, 90, 31, 0.5);
-        --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 32px rgba(2, 6, 23, 0.35);
+        --bg: #061a38;
+        --elev: #08264d;
+        --card: #0b315d;
+        --line: rgba(143, 184, 232, 0.22);
+        --fg: #f5f8ff;
+        --muted: #afc4e2;
+        --subtle: #7f9cc0;
+        --blue: #168bff;
+        --hot: #ff5a24;
+        --teal: #00d6b2;
+        --danger: #ff5364;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        min-height: 100vh;
         color: var(--fg);
-        font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+        font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
         background:
-          radial-gradient(ellipse 70% 50% at 88% 0%, rgba(255, 90, 31, 0.08), transparent 52%),
-          radial-gradient(ellipse 50% 40% at 8% 88%, rgba(56, 189, 248, 0.05), transparent 48%),
-          linear-gradient(180deg, #0f172a 0%, #0b1120 48%, #0a101c 100%);
-        background-attachment: fixed;
-        -webkit-font-smoothing: antialiased;
+          radial-gradient(ellipse at 15% 0%, rgba(22, 139, 255, 0.22), transparent 42%),
+          radial-gradient(ellipse at 90% 10%, rgba(255, 90, 36, 0.12), transparent 36%),
+          linear-gradient(180deg, #0c3c72 0%, var(--bg) 42%, #071433 100%);
       }
-      .qf-skip-link {
-        position: absolute; left: 1rem; top: 1rem; z-index: 100;
-        transform: translateY(-200%);
-        border-radius: 0.5rem; background: var(--accent); color: var(--accent-fg);
-        padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: 600;
-      }
-      .qf-skip-link:focus { transform: translateY(0); outline: 2px solid var(--ring); outline-offset: 2px; }
       a { color: inherit; text-decoration: none; }
-      .wrap { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; }
-      header {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 1rem; padding: 1.25rem 0;
+      .skip {
+        position: absolute; left: 1rem; top: 1rem; transform: translateY(-200%);
+        background: var(--blue); color: white; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
       }
-      .brand { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
-      .brand img { width: 2.25rem; height: 2.25rem; object-fit: contain; flex-shrink: 0; }
-      .name { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.02em; }
-      .nav-links {
-        display: none; align-items: center; gap: 1.5rem;
-        font-size: 0.875rem; color: var(--fg-muted);
+      .skip:focus { transform: none; }
+      .wrap { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; }
+      header.bar {
+        position: sticky; top: 0; z-index: 5;
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        padding: 0.85rem 0;
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        backdrop-filter: blur(10px);
       }
-      @media (min-width: 768px) { .nav-links { display: flex; } }
-      .nav-links a:hover { color: var(--fg); }
-      .nav-links .muted { color: var(--fg-subtle); }
-      nav.actions { display: flex; gap: 0.5rem; align-items: center; }
+      .brand { display: flex; align-items: center; gap: 0.65rem; }
+      .brand img { width: 36px; height: 36px; }
+      .brand strong { display: block; font-size: 0.95rem; }
+      .brand span { display: block; color: var(--subtle); font-size: 0.72rem; }
+      nav.links { display: none; gap: 1.1rem; color: var(--muted); font-size: 0.92rem; }
+      .actions { display: flex; gap: 0.5rem; align-items: center; }
       .btn {
-        display: inline-flex; align-items: center; justify-content: center;
-        border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500;
-        height: 2.75rem; padding: 0 1.5rem;
-        transition: filter 160ms ease, background-color 160ms ease, border-color 160ms ease;
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+        min-height: 2.5rem; padding: 0 1rem; border-radius: 0.7rem; font-weight: 650; font-size: 0.92rem;
       }
-      @media (max-width: 379px) {
-        .btn { height: 2.5rem; padding: 0 0.85rem; font-size: 0.8125rem; }
-        .btn-ghost, .btn-outline { height: 2.5rem; padding: 0 0.75rem; }
-        header { gap: 0.5rem; }
-        .name { font-size: 0.95rem; }
+      .btn-line { border: 1px solid var(--line); }
+      .btn-hot { background: linear-gradient(#ff7a45, var(--hot)); color: white; border: 0; }
+      .menu { display: none; }
+      .hero { display: grid; gap: 2rem; padding: 3.5rem 0 2rem; }
+      .kicker {
+        display: inline-flex; border: 1px solid var(--line); border-radius: 999px;
+        padding: 0.3rem 0.7rem; color: var(--muted); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
       }
-      .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-      .btn-primary {
-        background-image: var(--accent-gradient);
-        color: var(--accent-fg);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+      h1 { font-size: clamp(2.4rem, 6vw, 4.4rem); line-height: 1.02; margin: 1rem 0; letter-spacing: -0.03em; }
+      .hot { color: var(--hot); }
+      .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .lede { max-width: 38rem; color: var(--muted); font-size: 1.05rem; line-height: 1.55; }
+      .checks { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; padding: 0; margin: 1.2rem 0 0; list-style: none; color: var(--muted); }
+      .terminal, .card, .step, .tile, details {
+        background: color-mix(in srgb, var(--card) 92%, transparent);
+        border: 1px solid var(--line); border-radius: 1rem;
       }
-      .btn-primary:hover { filter: brightness(1.06); }
-      .btn-secondary {
-        background: transparent; border: 1px solid var(--border-strong); color: var(--fg);
+      .terminal { padding: 1rem; }
+      .bars { display: flex; align-items: end; gap: 4px; height: 120px; margin: 1rem 0; }
+      .bars i { display: block; width: 100%; border-radius: 3px; }
+      .up { background: color-mix(in srgb, var(--teal) 80%, transparent); }
+      .down { background: color-mix(in srgb, var(--danger) 80%, transparent); }
+      .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+      .metrics div, .grid article, .step, .tile { padding: 0.9rem 1rem; }
+      .metrics small, .section p.intro, .card p, .tile p, .step p, details p { color: var(--muted); }
+      .section { padding: 2.2rem 0; }
+      .section h2 { font-size: clamp(1.5rem, 3vw, 2rem); margin: 0.2rem 0 0.4rem; }
+      .eyebrow { color: var(--hot); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+      .grid { display: grid; gap: 0.75rem; }
+      .grid-4 { grid-template-columns: 1fr; }
+      .grid-3 { grid-template-columns: 1fr; }
+      .n {
+        display: inline-flex; width: 1.8rem; height: 1.8rem; align-items: center; justify-content: center;
+        border-radius: 999px; background: var(--blue); color: white; font-weight: 700;
       }
-      .btn-secondary:hover { background: var(--surface-2); }
-      .btn-ghost { height: 2.5rem; padding: 0 1rem; color: var(--fg-muted); }
-      .btn-ghost:hover { color: var(--fg); background: var(--surface-2); }
-      .btn-outline {
-        height: 2.5rem; padding: 0 1rem;
-        border: 1px solid var(--border); color: var(--fg);
+      details summary { cursor: pointer; font-weight: 650; padding: 1rem 1.1rem; }
+      details p { margin: 0; padding: 0 1.1rem 1rem; }
+      .cta {
+        margin: 1rem 0 3rem; padding: 2rem;
+        border-radius: 1.2rem; border: 1px solid var(--line);
+        background: linear-gradient(120deg, #0c3c72, #061a38 60%);
       }
-      .btn-outline:hover { border-color: var(--border-strong); background: var(--surface-2); }
-      .hero {
-        display: grid; gap: 3rem; align-items: center;
-        min-height: 72vh; padding: 1.5rem 0 4rem;
+      footer { border-top: 1px solid var(--line); background: var(--elev); padding: 2rem 0 1rem; }
+      .foot { display: grid; gap: 1.5rem; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .cols a, .copy { color: var(--muted); }
+      .cols h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+      .cols ul { list-style: none; margin: 0; padding: 0; }
+      .cols li + li { margin-top: 0.4rem; }
+      .copy { text-align: center; font-size: 0.75rem; }
+      @media (min-width: 800px) {
+        nav.links { display: flex; }
+        .menu { display: none !important; }
+        .hero { grid-template-columns: 1.05fr 0.95fr; align-items: center; }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .metrics { grid-template-columns: repeat(4, 1fr); }
+        .foot { grid-template-columns: 1.1fr 2fr; }
+        .cols { grid-template-columns: repeat(4, 1fr); }
       }
-      @media (min-width: 1024px) {
-        .hero { grid-template-columns: 1.15fr 0.85fr; }
-      }
-      h1 {
-        font-size: clamp(2.35rem, 5vw, 3.35rem);
-        line-height: 1.08; margin: 0; letter-spacing: -0.025em; font-weight: 600;
-      }
-      h1 .accent { color: var(--accent); }
-      .lede {
-        max-width: 36rem; color: var(--fg-muted); font-size: 1.125rem;
-        line-height: 1.55; margin: 1.25rem 0 0;
-      }
-      .cta { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
-      .panel {
-        position: relative; overflow: hidden; border: 1px solid var(--border);
-        border-radius: 1rem; background: color-mix(in srgb, var(--surface) 80%, transparent);
-        padding: 1.25rem; box-shadow: var(--shadow-card);
-      }
-      .panel::before {
-        content: ""; position: absolute; inset: 0;
-        background: radial-gradient(circle at top right, rgba(255,90,31,0.12), transparent 48%);
-      }
-      .panel > * { position: relative; }
-      .row {
-        display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
-        color: var(--fg-muted); font-size: 0.875rem;
-      }
-      .live {
-        display: inline-flex; align-items: center; gap: 0.4rem;
-        border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-        background: var(--accent-soft); color: var(--accent);
-        padding: 0.25rem 0.65rem; font-size: 0.6875rem; font-weight: 500;
-        letter-spacing: 0.06em; text-transform: uppercase;
-      }
-      .live::before {
-        content: ""; width: 0.45rem; height: 0.45rem; border-radius: 999px; background: #16a34a;
-      }
-      .lattice {
-        display: flex; align-items: flex-end; gap: 0.35rem;
-        height: 10rem; margin-top: 1.25rem;
-      }
-      .lattice span {
-        flex: 1; border-radius: 2px; background: color-mix(in srgb, var(--accent) 30%, transparent);
-      }
-      .brand-points {
-        margin: 1.25rem 0 0; padding-left: 1.1rem;
-        color: var(--fg-muted); font-size: 0.875rem; line-height: 1.55;
-      }
-      .features {
-        display: grid; gap: 1rem; padding: 0 0 5rem;
-        grid-template-columns: 1fr;
-      }
-      @media (min-width: 640px) { .features { grid-template-columns: 1fr 1fr; } }
-      @media (min-width: 1024px) { .features { grid-template-columns: repeat(4, 1fr); } }
-      .card {
-        border: 1px solid var(--border); border-radius: 0.75rem;
-        background: color-mix(in srgb, var(--surface) 70%, transparent);
-        padding: 1.25rem; box-shadow: var(--shadow-card);
-      }
-      .card .icon {
-        width: 1.25rem; height: 1.25rem; margin-bottom: 0.75rem; color: var(--accent);
-      }
-      .card h2 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -0.02em; }
-      .card p { margin: 0.5rem 0 0; color: var(--fg-muted); font-size: 0.875rem; line-height: 1.5; }
-      .stats {
-        position: relative; overflow: hidden;
-        border: 1px solid var(--border); border-radius: 1rem;
-        background: var(--surface); padding: 3rem 1.5rem; margin-bottom: 5rem;
-      }
-      @media (min-width: 640px) { .stats { padding: 3rem 2.5rem; } }
-      .stats-mark {
-        position: absolute; right: -1.5rem; top: 50%; transform: translateY(-50%);
-        width: 17.5rem; height: 17.5rem; opacity: 0.12; pointer-events: none;
-        display: none;
-      }
-      @media (min-width: 768px) { .stats-mark { display: block; } }
-      .stats h2 {
-        margin: 0; font-size: clamp(1.5rem, 3vw, 1.875rem);
-        font-weight: 600; letter-spacing: -0.02em; max-width: 36rem;
-      }
-      .stats .lede { margin-top: 0.75rem; font-size: 1rem; }
-      .stats dl {
-        position: relative; display: grid; gap: 1.5rem; margin: 2.5rem 0 0; padding: 0;
-        grid-template-columns: 1fr 1fr;
-      }
-      @media (min-width: 1024px) { .stats dl { grid-template-columns: repeat(4, 1fr); } }
-      .stats dt {
-        margin: 0; font-size: 0.6875rem; letter-spacing: 0.14em;
-        text-transform: uppercase; color: var(--fg-subtle);
-      }
-      .stats dd {
-        margin: 0.25rem 0 0; font-size: 1.5rem; font-weight: 600;
-        letter-spacing: -0.02em; color: var(--accent);
-      }
-      footer {
-        border-top: 1px solid var(--border);
-        background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
-      }
-      .footer-grid {
-        display: flex; flex-direction: column; gap: 2rem;
-        padding: 2.5rem 0;
-      }
-      @media (min-width: 768px) {
-        .footer-grid { flex-direction: row; justify-content: space-between; }
-      }
-      .footer-brand { max-width: 20rem; }
-      .footer-brand p { margin: 0.75rem 0 0; font-size: 0.875rem; color: var(--fg-muted); }
-      .footer-cols {
-        display: grid; gap: 2rem; grid-template-columns: 1fr 1fr;
-        font-size: 0.875rem;
-      }
-      @media (min-width: 640px) { .footer-cols { grid-template-columns: repeat(3, 1fr); } }
-      .footer-cols h3 { margin: 0 0 0.75rem; font-size: 0.875rem; font-weight: 500; }
-      .footer-cols ul { list-style: none; margin: 0; padding: 0; }
-      .footer-cols li + li { margin-top: 0.5rem; }
-      .footer-cols a { color: var(--fg-muted); }
-      .footer-cols a:hover { color: var(--fg); }
-      .copy {
-        border-top: 1px solid var(--border);
-        padding: 1rem 0; text-align: center;
-        font-size: 0.75rem; color: var(--fg-subtle);
+      @media (max-width: 799px) {
+        .actions .signin { display: none; }
+        .menu { display: block; margin-bottom: 1rem; }
       }
     </style>
   </head>
   <body>
-    <a class="qf-skip-link" href="#main-content">Skip to content</a>
+    <a class="skip" href="#main-content">Skip to content</a>
     <div class="wrap">
-      <header>
+      <header class="bar">
         <a class="brand" href="/" aria-label="QuantForg home">
           <img src="/brand/quantforg-mark-256.png" width="36" height="36" alt="" />
-          <span class="name">QuantForg</span>
+          <span><strong>QuantForg</strong><span>Institutional Trading Intelligence</span></span>
         </a>
-        <div class="nav-links" aria-label="Marketing">
+        <nav class="links" aria-label="Marketing">
           <a href="#features">Features</a>
           <a href="#platform">Platform</a>
+          <a href="#how-it-works">How It Works</a>
+          <a href="#strategies">Strategies</a>
+          <a href="#security">Security</a>
           <a href="/pricing">Pricing</a>
-        </div>
-        <nav class="actions" aria-label="Primary">
-          <a class="btn btn-ghost" href="/login">Sign In</a>
-          <a class="btn btn-outline" href="/register">Create account</a>
         </nav>
+        <div class="actions">
+          <a class="btn btn-line signin" href="/login">Sign In</a>
+          <a class="btn btn-hot" href="/register">Connect Your Broker</a>
+        </div>
       </header>
+      <details class="menu">
+        <summary>Menu</summary>
+        <p><a href="#features">Features</a> · <a href="#platform">Platform</a> · <a href="#how-it-works">How It Works</a> · <a href="#strategies">Strategies</a> · <a href="#security">Security</a> · <a href="/pricing">Pricing</a> · <a href="/login">Sign In</a></p>
+      </details>
       <main id="main-content" tabindex="-1">
         <section class="hero" id="platform">
           <div>
-            <h1>The institutional trading terminal for operators who <span class="accent">demand clarity.</span></h1>
-            <p class="lede">
-              Portfolio, risk, MT5 connectivity, research, and execution controls —
-              designed like a product, measured like a desk.
+            <p class="kicker">AI powered · MT5 · Institutional grade</p>
+            <h1>
+              Your Trading.<br />Our Intelligence.<br /><span class="hot">Fully Connected.</span>
+              <span class="sr"> Institutional trading terminal.</span>
+            </h1>
+            <p class="lede">Connect your broker. QuantForg analyzes the gold market, identifies research opportunities, manages risk, and can execute only under the settings already approved for your account.</p>
+            <p>
+              <a class="btn btn-hot" href="/register">Connect Your Broker</a>
+              <a class="btn btn-line" href="#how-it-works">Explore How It Works</a>
             </p>
-            <div class="cta">
-              <a class="btn btn-primary" href="/register">Create account</a>
-              <a class="btn btn-secondary" href="/login">Sign In</a>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="row">
-              <span>Live book · MT5 gateway</span>
-              <span class="live">Live</span>
-            </div>
-            <div class="lattice" role="img" aria-label="Abstract terminal lattice — no sample trading figures">
-              <span style="height:42%"></span><span style="height:58%"></span><span style="height:35%"></span>
-              <span style="height:71%"></span><span style="height:48%"></span><span style="height:63%"></span>
-              <span style="height:40%"></span><span style="height:77%"></span><span style="height:52%"></span>
-              <span style="height:66%"></span><span style="height:44%"></span><span style="height:59%"></span>
-              <span style="height:38%"></span><span style="height:69%"></span><span style="height:55%"></span>
-              <span style="height:47%"></span><span style="height:73%"></span><span style="height:50%"></span>
-              <span style="height:62%"></span><span style="height:41%"></span>
-            </div>
-            <ul class="brand-points">
-              <li>Positions and equity sync from your terminal</li>
-              <li>Empty states when the gateway has no data</li>
-              <li>No demo balances or placeholder trades</li>
+            <ul class="checks">
+              <li>Works with your MT5 broker</li>
+              <li>Your capital, your control</li>
+              <li>Risk checks before every order</li>
             </ul>
           </div>
+          <aside class="terminal" aria-label="Terminal layout preview">
+            <strong>Live Trading Terminal</strong>
+            <p>Layout only. Prices, equity, and P&amp;L appear after your broker session connects.</p>
+            <div class="bars" role="img" aria-label="Decorative chart frame, not a price history">
+              <i class="up" style="height:46%"></i><i class="up" style="height:62%"></i><i class="down" style="height:38%"></i>
+              <i class="up" style="height:70%"></i><i class="down" style="height:44%"></i><i class="up" style="height:80%"></i>
+              <i class="up" style="height:58%"></i><i class="down" style="height:36%"></i><i class="up" style="height:74%"></i>
+              <i class="up" style="height:88%"></i><i class="down" style="height:50%"></i><i class="up" style="height:66%"></i>
+            </div>
+            <div class="metrics">
+              <div><small>Symbol</small><br /><strong>XAUUSD</strong></div>
+              <div><small>Account equity</small><br /><strong>—</strong></div>
+              <div><small>Open positions</small><br /><strong>—</strong></div>
+              <div><small>Today's P&amp;L</small><br /><strong>—</strong></div>
+            </div>
+          </aside>
         </section>
-        <section class="features" id="features" aria-label="Product capabilities">
-          <div class="card">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <h2>Live portfolio sync</h2>
-            <p>Positions, equity, and exposure synchronized from your MT5 terminal — read-first, execution gated.</p>
-          </div>
-          <div class="card">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <h2>Risk before fill</h2>
-            <p>Pre-trade checks, SL/TP validation, and policy gates before any live order path is enabled.</p>
-          </div>
-          <div class="card">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></svg>
-            <h2>Research loop</h2>
-            <p>Strategy evaluation, backtests, walk-forward, and paper trading in one workspace.</p>
-          </div>
-          <div class="card">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M12 5a5 5 0 0 1 5 5c0 2.5-1.5 4-3 5.5S12 18 12 18s-.5-1-2-2.5S7 12.5 7 10a5 5 0 0 1 5-5z"/><circle cx="12" cy="10" r="1.5"/></svg>
-            <h2>AI workspace</h2>
-            <p>Explain strategies, surface portfolio insights, and accelerate operator decisions.</p>
+
+        <section class="section" id="features">
+          <div class="grid grid-4">
+            <article class="card"><h2>MT5 Connectivity</h2><p>Secure connection to the MetaTrader 5 account you authorize.</p></article>
+            <article class="card"><h2>AI Market Intelligence</h2><p>Research scoring on the gold desk. A score is not an executed trade.</p></article>
+            <article class="card"><h2>Automated Risk Management</h2><p>Existing risk checks run before an order is handed to the broker.</p></article>
+            <article class="card"><h2>24/5 Trading</h2><p>The gold session runs Monday to Friday. Weekends are not an active session.</p></article>
           </div>
         </section>
-        <section class="stats" aria-label="Platform posture">
-          <img class="stats-mark" src="/brand/quantforg-mark.png" width="280" height="280" alt="" />
-          <h2>Built for operators. <span class="accent" style="color:var(--accent)">Backed by clarity.</span></h2>
-          <p class="lede">
-            Real connectivity, gated execution, and desks that stay honest when data is missing.
+
+        <section class="section" id="how-it-works">
+          <p class="eyebrow">Get started</p>
+          <h2>How to Connect Your Broker — 3 Simple Steps</h2>
+          <p class="intro">You connect the account you already have. QuantForg does not open a broker account for you.</p>
+          <div class="grid grid-3">
+            <article class="step"><span class="n">1</span><h3>Create your account</h3><p>Sign up with email and password. Verification stays on the existing path.</p></article>
+            <article class="step"><span class="n">2</span><h3>Connect your broker</h3><p>Enter the Weltrade MT5 login you own and grant the permissions that account allows.</p></article>
+            <article class="step"><span class="n">3</span><h3>Verify and activate</h3><p>Confirm the session, review risk status, then allow execution only if you choose to.</p></article>
+          </div>
+        </section>
+
+        <section class="section">
+          <p class="eyebrow">Workflow</p>
+          <h2>What Your Robot Does</h2>
+          <p class="intro">Analysis, a research signal, an approved order, and a confirmed fill stay separate. A later step does not run unless the earlier checks pass.</p>
+          <div class="grid grid-4">
+            <article class="tile"><h3>Market Scanning</h3><p>Reads the gold feed from the connected gateway.</p></article>
+            <article class="tile"><h3>AI Analysis</h3><p>Scores structure and context. Advisory until a gate passes.</p></article>
+            <article class="tile"><h3>Strategy Engine</h3><p>Evaluates modules already in the product.</p></article>
+            <article class="tile"><h3>Risk Validation</h3><p>Blocks the order when a saved limit fails.</p></article>
+            <article class="tile"><h3>Order Execution</h3><p>Sends an approved order through the existing OMS and MT5 path.</p></article>
+            <article class="tile"><h3>Trade Management</h3><p>Monitors an open position and its protective stops.</p></article>
+            <article class="tile"><h3>Trade Closure</h3><p>Closes or updates only through the same broker connection.</p></article>
+            <article class="tile"><h3>Performance</h3><p>History is the broker’s deals. Missing history stays empty.</p></article>
+          </div>
+        </section>
+
+        <section class="section" id="strategies">
+          <p class="eyebrow">Strategy intelligence</p>
+          <h2>Modules the product already evaluates</h2>
+          <p class="intro">These names come from the existing catalogue. A listing is not a claim that the module is taking trades.</p>
+          <div class="grid grid-3">
+            <article class="tile"><h3>Smart Money Concepts</h3><p>Composite SMC confluence.</p></article>
+            <article class="tile"><h3>Liquidity Sweep</h3><p>Sweep of equal highs or lows.</p></article>
+            <article class="tile"><h3>Break of structure</h3><p>BOS and change of character.</p></article>
+            <article class="tile"><h3>Order Block</h3><p>Institutional order block.</p></article>
+            <article class="tile"><h3>Fair Value Gap</h3><p>Imbalance and fill.</p></article>
+            <article class="tile"><h3>ICT sweep templates</h3><p>Bullish sweep, bearish sweep, and range watch. Same risk checks.</p></article>
+          </div>
+        </section>
+
+        <section class="section" id="risk">
+          <p class="eyebrow">Risk and capital protection</p>
+          <h2>Controls that run before an order</h2>
+          <p class="intro">Saved numbers are shown in Risk Center after you sign in. This page names the controls and does not publish a second copy of the limits.</p>
+          <div class="grid grid-4">
+            <article class="tile"><h3>Planned risk</h3><p>Per-trade ceiling checked before send.</p></article>
+            <article class="tile"><h3>Aggregate open risk</h3><p>Cap on combined open exposure.</p></article>
+            <article class="tile"><h3>Reward / risk</h3><p>Trades below the saved floor are rejected.</p></article>
+            <article class="tile"><h3>Trade quality</h3><p>Minimum score from the existing gate.</p></article>
+            <article class="tile"><h3>Maximum lot and spread</h3><p>Size and spread ceilings can block an entry.</p></article>
+            <article class="tile"><h3>Daily loss halt</h3><p>New entries stop when the saved daily loss is reached.</p></article>
+            <article class="tile"><h3>XAUUSD only</h3><p>The live desk is gold.</p></article>
+            <article class="tile"><h3>Stops and concurrency</h3><p>ATR stop distance and a cap on open positions.</p></article>
+          </div>
+        </section>
+
+        <section class="section">
+          <p class="eyebrow">Performance and transparency</p>
+          <h2>Real results stay inside the account</h2>
+          <p class="intro">No sample win rate, profit, or balance is shown here.</p>
+          <div class="grid grid-4">
+            <article class="tile"><h3>Total trades</h3><p>Unavailable until broker history loads.</p></article>
+            <article class="tile"><h3>Win rate</h3><p>Not published on this page.</p></article>
+            <article class="tile"><h3>Net profit</h3><p>Comes from broker deals.</p></article>
+            <article class="tile"><h3>Open positions</h3><p>Comes from the live session.</p></article>
+          </div>
+        </section>
+
+        <section class="section">
+          <p class="eyebrow">Why QuantForg is different</p>
+          <h2>Built around the account you connect</h2>
+          <div class="grid grid-3">
+            <article class="tile"><h3>Your capital stays at the broker</h3><p>QuantForg does not custody funds.</p></article>
+            <article class="tile"><h3>Separate states</h3><p>Analysis, signal, approved order, and confirmed fill are not the same thing.</p></article>
+            <article class="tile"><h3>No sample performance</h3><p>This page does not invent results.</p></article>
+          </div>
+        </section>
+
+        <section class="section" id="brokers">
+          <p class="eyebrow">Broker integration</p>
+          <h2>Supported connection</h2>
+          <p class="intro">Weltrade through MetaTrader 5 is the production path. Other broker brands are not listed as live integrations.</p>
+          <div class="grid grid-3">
+            <article class="card"><h3>Weltrade</h3><p>Connect the real account you own. Balance and sync status come from that session.</p></article>
+            <article class="card"><h3>MetaTrader 5</h3><p>Orders, positions, and history travel through the existing gateway.</p></article>
+          </div>
+        </section>
+
+        <section class="section" id="security">
+          <p class="eyebrow">Security and reliability</p>
+          <h2>Your account and the checks around it</h2>
+          <div class="grid grid-4">
+            <article class="tile"><h3>Credentials stay private</h3><p>Passwords are not printed back on the screen.</p></article>
+            <article class="tile"><h3>Broker connection</h3><p>The existing MT5 gateway talks to the server you connect.</p></article>
+            <article class="tile"><h3>Account permissions</h3><p>A missing broker permission stops the action.</p></article>
+            <article class="tile"><h3>Independent risk checks</h3><p>The risk engine can refuse an order before it is sent.</p></article>
+          </div>
+        </section>
+
+        <section class="section" id="faq">
+          <p class="eyebrow">Questions</p>
+          <h2>Frequently Asked Questions</h2>
+          <div class="grid">
+            <details open>
+              <summary>How does QuantForg work?</summary>
+              <p>You create an account, connect your own broker, and grant permissions. Analysis can show a research signal. An order is sent only after the existing risk checks pass. A broker fill is separate from the signal.</p>
+            </details>
+            <details>
+              <summary>Is my account safe?</summary>
+              <p>Your capital stays at your broker. QuantForg does not display broker passwords after entry. Risk checks and broker permissions can still block an order.</p>
+            </details>
+            <details>
+              <summary>What symbols can I trade?</summary>
+              <p>The live desk is XAUUSD (Gold). The signed-in Markets screen shows what the broker session actually returns.</p>
+            </details>
+            <details>
+              <summary>How are the results calculated?</summary>
+              <p>Completed results come from broker deals after you connect. This page does not publish sample win rates or profit figures.</p>
+            </details>
+            <details>
+              <summary>Which brokers are supported?</summary>
+              <p>The production connection is Weltrade through MetaTrader 5. You connect the account you own.</p>
+            </details>
+            <details>
+              <summary>What happens after I connect a broker?</summary>
+              <p>The session loads status, quotes, and positions from that login. Execution still waits for risk validation. Open positions stay under the existing stop rules.</p>
+            </details>
+            <details>
+              <summary>Can I use copy trading?</summary>
+              <p>QuantForg does not offer a separate copy-trading product. Automatic execution, when enabled, runs on your connected account.</p>
+            </details>
+          </div>
+        </section>
+
+        <section class="cta">
+          <h2>Ready to Trade <span class="hot">Smarter?</span></h2>
+          <p class="intro">Connect your broker. Analysis, risk checks, and execution stay under the settings you approve. Results are not guaranteed.</p>
+          <p>
+            <a class="btn btn-hot" href="/register">Connect Your Broker</a>
+            <a class="btn btn-line" href="/pricing">View Pricing</a>
           </p>
-          <dl>
-            <div><dt>Connectivity</dt><dd>24/7</dd></div>
-            <div><dt>Mock balances</dt><dd>0</dd></div>
-            <div><dt>Primary desks</dt><dd>8</dd></div>
-            <div><dt>Execution</dt><dd>Gated</dd></div>
-          </dl>
         </section>
       </main>
     </div>
     <footer>
-      <div class="wrap footer-grid">
-        <div class="footer-brand">
-          <div class="brand">
-            <img src="/brand/quantforg-mark-256.png" width="32" height="32" alt="" />
-            <span class="name">QuantForg</span>
-          </div>
-          <p>Institutional trading and research platform. Create an account to explore markets and signals. Live trading stays gated until you connect a broker.</p>
+      <div class="wrap foot">
+        <div>
+          <strong>QuantForg</strong>
+          <p class="intro">Connect your own broker account. Orders use the existing execution path.</p>
         </div>
-        <div class="footer-cols">
+        <div class="cols">
           <div>
             <h3>Product</h3>
             <ul>
               <li><a href="#features">Features</a></li>
+              <li><a href="#platform">Platform</a></li>
+              <li><a href="#how-it-works">How It Works</a></li>
               <li><a href="/pricing">Pricing</a></li>
-              <li><a href="mailto:support@quantforg.com?subject=QuantForg%20Documentation">Documentation</a></li>
             </ul>
           </div>
           <div>
-            <h3>Sales</h3>
+            <h3>Resources</h3>
             <ul>
-              <li><a href="/register">Create account</a></li>
-              <li><a href="/login">Sign In</a></li>
               <li><a href="/contact">Contact Sales</a></li>
+              <li><a href="mailto:support@quantforg.com">Support</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Company</h3>
+            <ul>
+              <li><a href="/login">Sign In</a></li>
+              <li><a href="/register">Create account</a></li>
             </ul>
           </div>
           <div>
@@ -359,7 +382,7 @@
           </div>
         </div>
       </div>
-      <div class="copy">© 2026 QuantForg. All rights reserved.</div>
+      <p class="copy">© 2026 QuantForg. Trading can lose capital. This site does not promise profits.</p>
     </footer>
   </body>
 </html>
