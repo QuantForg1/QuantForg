@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { GoogleAuthNote } from "@/components/auth/google-auth-note";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,13 +27,17 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", password: "", remember: true },
   });
 
   return (
-    <AuthShell title="Sign in" subtitle="Access your QuantForg workspace.">
+    <AuthShell
+      title="Welcome Back"
+      subtitle="Sign in to your QuantForg account and continue with the desk you already use."
+    >
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
@@ -83,12 +89,20 @@ export default function LoginPage() {
             />
             <Input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               placeholder="••••••••"
-              className="pl-9"
+              className="px-9"
               {...form.register("password")}
             />
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--fg-subtle)]"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((value) => !value)}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -104,14 +118,15 @@ export default function LoginPage() {
             Forgot password
           </Link>
         </div>
-        <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
+        <Button className="qf-btn-hot h-11 w-full" type="submit" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting ? "Signing in…" : "Sign In"}
         </Button>
       </form>
+      <GoogleAuthNote />
       <p className="mt-4 text-center text-sm text-[var(--fg-muted)]">
-        New to QuantForg?{" "}
-        <Link href="/register" className="text-[var(--accent)]">
-          Create an account
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-medium text-[var(--accent)]">
+          Create account
         </Link>
       </p>
     </AuthShell>

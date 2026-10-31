@@ -40,7 +40,7 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#061428",
+          background: "#061a38",
           color: "#F5F8FF",
           fontFamily: "system-ui, sans-serif",
           padding: 24,

@@ -5,12 +5,12 @@
    Light remains on .light for theme switching. */
 :root,
 .dark {
-  --bg: #061428;
-  --bg-elevated: #071e3a;
-  --surface: #0a2f59;
-  --surface-2: #0c3868;
+  --bg: #061a38;
+  --bg-elevated: #08264d;
+  --surface: #0b315d;
+  --surface-2: #0e3a6c;
   --surface-3: #103b6b;
-  --surface-elevated: #12467f;
+  --surface-elevated: #16467f;
   --border: rgba(143, 184, 232, 0.18);
   --border-strong: rgba(168, 204, 245, 0.36);
   --fg: #f5f8ff;
@@ -24,18 +24,18 @@
   --accent-soft: rgba(22, 139, 255, 0.18);
   --accent-glow: rgba(22, 139, 255, 0.32);
   --accent-gradient: linear-gradient(180deg, #3c9dff 0%, #0866ff 100%);
-  --hot: #ff6a24;
-  --hot-soft: rgba(255, 106, 36, 0.16);
+  --hot: #ff5a24;
+  --hot-soft: rgba(255, 90, 36, 0.16);
 
-  --success: #00d6b0;
-  --success-soft: rgba(0, 214, 176, 0.16);
+  --success: #00d6b2;
+  --success-soft: rgba(0, 214, 178, 0.16);
   --warning: #f5b942;
   --warning-soft: rgba(245, 185, 66, 0.16);
   --danger: #ff5364;
   --danger-soft: rgba(255, 83, 100, 0.16);
   --info: #168bff;
   --info-soft: rgba(22, 139, 255, 0.14);
-  --buy: #00d6b0;
+  --buy: #00d6b2;
   --sell: #ff5364;
 
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 32px rgba(2, 10, 28, 0.38);
@@ -46,9 +46,9 @@
   --radius-sm: 0.65rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 70% 42% at 88% -8%, rgba(22, 139, 255, 0.2), transparent 58%),
-    radial-gradient(ellipse 42% 28% at 8% 0%, rgba(8, 102, 255, 0.12), transparent 52%),
-    linear-gradient(180deg, #08264a 0%, #061428 46%, #051022 100%);
+    radial-gradient(ellipse 70% 42% at 88% -8%, rgba(22, 139, 255, 0.22), transparent 58%),
+    radial-gradient(ellipse 42% 28% at 8% 0%, rgba(8, 102, 255, 0.14), transparent 52%),
+    linear-gradient(180deg, #0a3260 0%, #061a38 46%, #071433 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
@@ -500,9 +500,9 @@ body {
 }
 
 .qf-btn-hot {
-  background-image: linear-gradient(180deg, #ff8a4c 0%, #ff6a24 100%);
+  background-image: linear-gradient(180deg, #ff7a45 0%, #ff5a24 100%);
   color: #ffffff;
-  box-shadow: 0 0 0 1px rgba(255, 106, 36, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 90, 36, 0.4);
 }
 
 .qf-btn-hot:hover {
