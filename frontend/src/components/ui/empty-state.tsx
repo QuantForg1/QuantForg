@@ -34,7 +34,7 @@ export function EmptyState({
     <div
       role="status"
       className={cn(
-          "flex flex-col items-center justify-center rounded-[var(--radius-os)] border border-dashed border-[var(--border)] bg-[var(--surface)] px-[var(--space-5)] py-[var(--space-7)] text-center qf-motion-desk",
+          "flex flex-col items-center justify-center rounded-[var(--radius-os)] border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-5 text-center qf-motion-desk",
         className,
       )}
     >
