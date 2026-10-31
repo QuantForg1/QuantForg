@@ -109,23 +109,23 @@ export function OwnerPolicySummary() {
       <CardContent className="space-y-4">
         <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {FIELDS.map((field) => (
-            <div key={field.key} className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
-              <dt className="text-[10px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">{field.label}</dt>
-              <dd className="mt-1 text-sm font-semibold tabular text-[var(--fg)]">{shown(doc[field.key])}</dd>
+            <div key={field.key} className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+              <dt className="text-[11px] font-medium text-[var(--fg-muted)]">{field.label}</dt>
+              <dd className="mt-2 text-2xl font-semibold tabular tracking-tight text-[var(--hot)]">{shown(doc[field.key])}</dd>
             </div>
           ))}
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Minimum net reward/risk</dt>
-            <dd className="mt-1 text-sm font-semibold tabular text-[var(--fg)]">{reward}</dd>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+            <dt className="text-[11px] font-medium text-[var(--fg-muted)]">Minimum net reward/risk</dt>
+            <dd className="mt-2 text-2xl font-semibold tabular tracking-tight text-[var(--hot)]">{reward}</dd>
             {rewardNote ? <p className="mt-1 text-xs text-[var(--warning)]">{rewardNote}</p> : null}
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Symbol allowlist</dt>
-            <dd className="mt-1 text-sm font-semibold text-[var(--fg)]">{allowlist}</dd>
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+            <dt className="text-[11px] font-medium text-[var(--fg-muted)]">Symbol allowlist</dt>
+            <dd className="mt-2 text-2xl font-semibold tracking-tight text-[var(--hot)]">{allowlist}</dd>
           </div>
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">XAUUSD commission</dt>
-            <dd className="mt-1 text-sm font-semibold tabular text-[var(--fg)]">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3">
+            <dt className="text-[11px] font-medium text-[var(--fg-muted)]">XAUUSD commission</dt>
+            <dd className="mt-2 text-2xl font-semibold tabular tracking-tight text-[var(--hot)]">
               {shown(commission.amount_usd)} {shown(commission.currency) === "—" ? "" : shown(commission.currency)}
             </dd>
           </div>

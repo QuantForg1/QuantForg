@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Cable, Layers, Shield } from "lucide-react";
+import { Activity, Cable, Layers, Shield, TrendingUp, Wallet } from "lucide-react";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { PageHeader } from "@/components/layout/page-header";
@@ -352,32 +352,47 @@ export default function DashboardPage() {
       />
 
       <section aria-label="Account statistics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Account equity</p>
-          <p className="mt-1 text-xl font-semibold tabular">{moneyOrUnavailable(session.equity, showMetrics)}</p>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">Broker session equity</p>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Wallet className="h-3.5 w-3.5" aria-hidden /></span>
+            Account equity
+          </div>
+          <p className="mt-3 text-[1.65rem] font-semibold leading-none tabular">{moneyOrUnavailable(session.equity, showMetrics)}</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">Broker session equity</p>
         </article>
-        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Available balance</p>
-          <p className="mt-1 text-xl font-semibold tabular">{moneyOrUnavailable(availableRaw, showMetrics)}</p>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">Free margin when the session sends it</p>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Layers className="h-3.5 w-3.5" aria-hidden /></span>
+            Available balance
+          </div>
+          <p className="mt-3 text-[1.65rem] font-semibold leading-none tabular">{moneyOrUnavailable(availableRaw, showMetrics)}</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">Free margin when the session sends it</p>
         </article>
-        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Today&apos;s P&amp;L</p>
-          <p className={`mt-1 text-xl font-semibold tabular ${todayPnl != null && todayPnl < 0 ? "text-[var(--danger)]" : todayPnl != null && todayPnl > 0 ? "text-[var(--success)]" : ""}`}>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><TrendingUp className="h-3.5 w-3.5" aria-hidden /></span>
+            Today&apos;s P&amp;L
+          </div>
+          <p className={`mt-3 text-[1.65rem] font-semibold leading-none tabular ${todayPnl != null && todayPnl < 0 ? "text-[var(--danger)]" : todayPnl != null && todayPnl > 0 ? "text-[var(--success)]" : ""}`}>
             {todayPnl == null ? "Unavailable" : formatCurrency(todayPnl)}
           </p>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">Closed deals since local midnight</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">Closed deals since local midnight</p>
         </article>
-        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Open positions</p>
-          <p className="mt-1 text-xl font-semibold tabular">{showMetrics ? String(positions.length) : "—"}</p>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">{showMetrics ? "Live account" : "Connect a broker to load positions"}</p>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Activity className="h-3.5 w-3.5" aria-hidden /></span>
+            Open positions
+          </div>
+          <p className="mt-3 text-[1.65rem] font-semibold leading-none tabular">{showMetrics ? String(positions.length) : "—"}</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">{showMetrics ? "Live account" : "Connect a broker to load positions"}</p>
         </article>
-        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">Account risk</p>
-          <p className="mt-1 text-xl font-semibold">{sessionQ.isError ? "Unavailable" : liveTradingHint.label}</p>
-          <p className="mt-1 line-clamp-2 text-xs text-[var(--fg-muted)]">{liveTradingHint.detail}</p>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Shield className="h-3.5 w-3.5" aria-hidden /></span>
+            Account risk
+          </div>
+          <p className="mt-3 text-[1.35rem] font-semibold leading-tight">{sessionQ.isError ? "Unavailable" : liveTradingHint.label}</p>
+          <p className="mt-2 line-clamp-2 text-xs text-[var(--fg-muted)]">{liveTradingHint.detail}</p>
         </article>
       </section>
 
@@ -438,7 +453,18 @@ export default function DashboardPage() {
       </section>
 
       <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(260px,0.75fr)]">
-        <section className="min-h-[22rem] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]" aria-label="XAUUSD chart">
+        <section className="min-h-[22rem] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]" aria-label="XAUUSD chart">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">XAUUSD <span className="font-normal text-[var(--fg-muted)]">Gold Spot / US Dollar</span></p>
+              <p className="mt-0.5 text-xs text-[var(--fg-subtle)]">
+                {showMetrics && Number.isFinite(bid) && Number.isFinite(ask)
+                  ? `Bid ${formatCurrency(bid)} · Ask ${formatCurrency(ask)}`
+                  : "Bid and ask appear after the broker session connects."}
+              </p>
+            </div>
+            <Badge tone={showMetrics ? "success" : "neutral"}>{showMetrics ? "Live" : "Not connected"}</Badge>
+          </div>
           {showMetrics ? (
             <div className="h-[28rem]">
               <WorkspaceChart
@@ -467,7 +493,7 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
-        <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4" aria-labelledby="market-intel">
+        <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]" aria-labelledby="market-intel">
           <h2 id="market-intel" className="text-base font-semibold">AI Market Intelligence</h2>
           <p className="mt-1 text-xs text-[var(--fg-muted)]">
             Research is not a trade authorization. Live Gold candles still require a reachable broker Gateway.
@@ -546,6 +572,7 @@ export default function DashboardPage() {
         )}
       </section>
 
+      <div className="grid items-start gap-4 xl:grid-cols-2">
       <section aria-labelledby="open-positions">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 id="open-positions" className="text-sm font-medium text-[var(--fg)]">
@@ -687,6 +714,7 @@ export default function DashboardPage() {
           </ul>
         )}
       </section>
+      </div>
 
       <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
         <SheetContent aria-describedby={undefined}>

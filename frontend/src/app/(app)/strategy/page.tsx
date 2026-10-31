@@ -243,8 +243,9 @@ export default function StrategyPage() {
   return (
     <div>
       <PageHeader
-        title="Strategy Builder"
-        description="Deterministic strategies and ICT confluence — signals only, never autonomous trading."
+        eyebrow="Strategies"
+        title="Trading Strategies"
+        description="Live catalog from the strategy engine. A card is active only when the catalog says so. Performance stays unavailable until the engine returns a completed run. Signals only — never autonomous trading."
         actions={
           <>
             <Button
@@ -310,12 +311,12 @@ export default function StrategyPage() {
       />
 
       {mode === "engine" ? (
-        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.35fr_1fr]">
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Strategy Catalog</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {catalogQ.isLoading ? (
                 <DeskSkeleton rows={4} />
               ) : catalogQ.isError ? (
@@ -328,10 +329,10 @@ export default function StrategyPage() {
                   <button
                     key={str(c.key)}
                     type="button"
-                    className={`w-full rounded-[var(--radius-os)] border px-3 py-2.5 text-left transition ${
+                    className={`min-h-[7.5rem] w-full rounded-[var(--radius-os)] border px-3 py-3 text-left transition ${
                       strategyKey === str(c.key)
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                        : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--accent)]/40"
+                        ? "border-[var(--hot)] bg-[var(--surface-2)] shadow-[0_0_0_1px_var(--hot)]"
+                        : "border-[var(--border)] bg-[var(--bg-elevated)] hover:border-[var(--accent)]/50"
                     }`}
                     onClick={() => {
                       setStrategyKey(str(c.key));
@@ -341,13 +342,20 @@ export default function StrategyPage() {
                     }}
                   >
                     <p className="text-sm font-medium text-[var(--fg)]">{str(c.name)}</p>
-                    <p className="text-xs text-[var(--fg-subtle)]">
-                      {str(c.category)} · {str(c.key)}
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--fg-muted)]">
+                      {str(c.description, str(c.category))}
+                    </p>
+                    <p className="mt-2 text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                      {c.enabled === true || c.active === true || str(c.status).toLowerCase() === "active"
+                        ? "Active"
+                        : "Catalog"}
+                      {" · "}
+                      {str(c.category)}
                     </p>
                   </button>
                 ))
               )}
-              <div className="border-t border-[var(--border)] pt-3">
+              <div className="border-t border-[var(--border)] pt-3 sm:col-span-2 lg:col-span-3 xl:col-span-4">
                 <p className="mb-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
                   Allocation
                 </p>
@@ -372,6 +380,7 @@ export default function StrategyPage() {
             </CardContent>
           </Card>
 
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
           <Card>
             <CardHeader>
               <CardTitle>
@@ -498,6 +507,7 @@ export default function StrategyPage() {
               </p>
             </CardContent>
           </Card>
+          </div>
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[0.85fr_1.4fr_0.95fr]">

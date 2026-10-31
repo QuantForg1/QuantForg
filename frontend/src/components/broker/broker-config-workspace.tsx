@@ -43,7 +43,7 @@ function Section({
   aside?: React.ReactNode;
 }) {
   return (
-    <section className="border border-[var(--border)] bg-[var(--surface)]">
+    <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
       <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
           {title}
@@ -431,10 +431,11 @@ export function BrokerConfigWorkspace() {
   };
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-2xl space-y-4 px-1 sm:px-0">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-4 px-1 sm:px-0">
       <PageHeader
-        title="Broker"
-        description="Connect your MT5 account to access your broker account, portfolio data and, when authorized, live execution."
+        eyebrow="Accounts"
+        title="Broker Accounts"
+        description="Connect your MT5 account to access your broker account, portfolio data and, when authorized, live execution. Weltrade is the connected broker. Login and balance appear only from the live session."
       />
 
       <p className="text-sm leading-relaxed text-[var(--fg-muted)]">

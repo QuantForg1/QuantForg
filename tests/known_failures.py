@@ -115,11 +115,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "greps for RESEARCH_SIGNAL copy",
     ),
     _G
-    + "test_phase60_trader_ux.py::test_dashboard_command_links_and_no_global_account": (
-        "ui-copy",
-        "greps for 'Open terminal'",
-    ),
-    _G
     + "test_phase60_trader_ux.py::test_signals_remain_research_only": (
         "ui-copy",
         "greps for 'Strongest edge'",

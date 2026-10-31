@@ -67,8 +67,9 @@ export default function RiskCenterPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Protection"
         title="Risk Center"
-        description="Detailed Risk Engine rules and live session exposure. Terminal keeps only a compact pre-trade gate."
+        description="Saved owner policy, live session exposure, and the existing risk check. Controls are edited on Admin control. This page does not write policy."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
