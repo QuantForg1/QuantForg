@@ -11,14 +11,6 @@ const sans = IBM_Plex_Sans({
   preload: true,
 });
 
-const display = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["500", "600"],
-  variable: "--font-display",
-  display: "swap",
-  preload: false,
-});
-
 const mono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
@@ -110,7 +102,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${sans.variable} ${display.variable} ${mono.variable} antialiased`}
+        className={`${sans.variable} ${mono.variable} antialiased`}
       >
         <a href="#main-content" className="qf-skip-link">
           Skip to content

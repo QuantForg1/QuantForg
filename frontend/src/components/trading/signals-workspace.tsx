@@ -45,6 +45,7 @@ import {
   signalBoardDirection,
   signalFreshness,
   signalFreshnessLabel,
+  signalHumanExplanation,
   signalSummary,
   signalTimestampLabel,
   signalUpdatedAgo,
@@ -593,8 +594,44 @@ export function SignalsWorkspace() {
         />
       ) : (
         <>
+          {feedRows[0] ? (
+            <section className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.7fr)]" aria-label="Featured signal">
+              <SignalCard row={feedRows[0]} onOpen={() => setSelected(feedRows[0])} />
+              <aside className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
+                <h2 className="text-sm font-semibold">Signal details</h2>
+                <dl className="mt-3 space-y-2 text-sm">
+                  <div className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5">
+                    <dt className="text-[var(--fg-muted)]">Symbol</dt>
+                    <dd className="font-medium">{str(feedRows[0].broker_symbol || feedRows[0].symbol)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5">
+                    <dt className="text-[var(--fg-muted)]">Direction</dt>
+                    <dd><DirectionBadge dir={signalBoardDirection(feedRows[0])} /></dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5">
+                    <dt className="text-[var(--fg-muted)]">Regime</dt>
+                    <dd className="text-right">{presentField(rowRegime(feedRows[0]))}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5">
+                    <dt className="text-[var(--fg-muted)]">Session</dt>
+                    <dd className="text-right">{presentField(rowSession(feedRows[0]))}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-[var(--border)] py-1.5">
+                    <dt className="text-[var(--fg-muted)]">Score</dt>
+                    <dd>{scoreDisplay(feedRows[0].score ?? feedRows[0].confidence ?? feedRows[0].quality)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 py-1.5">
+                    <dt className="text-[var(--fg-muted)]">Updated</dt>
+                    <dd className="text-right">{signalTimestampLabel(feedRows[0])}</dd>
+                  </div>
+                </dl>
+                <p className="mt-3 text-xs leading-relaxed text-[var(--fg-muted)]">{signalHumanExplanation(feedRows[0])}</p>
+              </aside>
+            </section>
+          ) : null}
+          {feedRows.length > 1 ? (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Signals">
-            {feedRows.map((row, i) => {
+            {feedRows.slice(1).map((row, i) => {
               const symbol = str(row.broker_symbol || row.symbol, "N/A");
               return (
                 <li key={`${symbol}-${i}`}>
@@ -603,6 +640,7 @@ export function SignalsWorkspace() {
               );
             })}
           </ul>
+          ) : null}
         </>
       )}
 

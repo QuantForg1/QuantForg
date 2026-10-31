@@ -3,12 +3,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Cable, Layers } from "lucide-react";
+import { Activity, Cable, Layers, Shield, TrendingUp, Wallet } from "lucide-react";
+import { WorkspaceChart } from "@/components/workspace/chart-panel";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
 import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { SignalCard } from "@/components/trading/signal-card";
@@ -92,6 +94,10 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Row | null>(null);
+  const [timeframe, setTimeframe] = useState("M15");
+  const [chartType, setChartType] = useState<"candles" | "line" | "area">("candles");
+  const [showVolume, setShowVolume] = useState(true);
+  const [chartFull, setChartFull] = useState(false);
 
   const sessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -283,6 +289,27 @@ export default function DashboardPage() {
   );
 
   const greeting = workspaceGreeting(new Date(), firstName);
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  let todayPnl: number | null = null;
+  if (showMetrics && !history.isLoading && !history.isError) {
+    todayPnl = 0;
+    for (const deal of deals) {
+      const when = Date.parse(str(deal.time));
+      const profit = num(deal.profit);
+      if (!Number.isFinite(when) || when < dayStart.getTime() || !Number.isFinite(profit)) continue;
+      todayPnl += profit;
+    }
+  }
+  const availableRaw = session.free_margin ?? session.margin_free ?? session.balance;
+  const bid = num(session.bid);
+  const ask = num(session.ask);
+  const lastPrice =
+    showMetrics && Number.isFinite(bid) && Number.isFinite(ask)
+      ? (bid + ask) / 2
+      : showMetrics && Number.isFinite(bid)
+        ? bid
+        : undefined;
 
   return (
     <div className="min-w-0 space-y-5">
@@ -308,7 +335,7 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title={greeting}
-        description="QuantForg workspace"
+        description="QuantForg workspace. Account figures appear only from the connected broker session."
         actions={
           noBroker || sessionMismatch ? (
             <Button asChild>
@@ -318,15 +345,60 @@ export default function DashboardPage() {
             </Button>
           ) : (
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/signals">Open signals</Link>
+              <Link href="/terminal">Open terminal</Link>
             </Button>
           )
         }
       />
 
+      <section aria-label="Account statistics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Wallet className="h-3.5 w-3.5" aria-hidden /></span>
+            Account equity
+          </div>
+          <p className="mt-3 text-[1.65rem] font-semibold leading-none tabular">{moneyOrUnavailable(session.equity, showMetrics)}</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">Broker session equity</p>
+        </article>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Layers className="h-3.5 w-3.5" aria-hidden /></span>
+            Available balance
+          </div>
+          <p className="mt-3 text-[1.65rem] font-semibold leading-none tabular">{moneyOrUnavailable(availableRaw, showMetrics)}</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">Free margin when the session sends it</p>
+        </article>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><TrendingUp className="h-3.5 w-3.5" aria-hidden /></span>
+            Today&apos;s P&amp;L
+          </div>
+          <p className={`mt-3 text-[1.65rem] font-semibold leading-none tabular ${todayPnl != null && todayPnl < 0 ? "text-[var(--danger)]" : todayPnl != null && todayPnl > 0 ? "text-[var(--success)]" : ""}`}>
+            {todayPnl == null ? "Unavailable" : formatCurrency(todayPnl)}
+          </p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">Closed deals since local midnight</p>
+        </article>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Activity className="h-3.5 w-3.5" aria-hidden /></span>
+            Open positions
+          </div>
+          <p className="mt-3 text-[1.65rem] font-semibold leading-none tabular">{showMetrics ? String(positions.length) : "—"}</p>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">{showMetrics ? "Live account" : "Connect a broker to load positions"}</p>
+        </article>
+        <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[var(--accent-soft)] text-[var(--accent)]"><Shield className="h-3.5 w-3.5" aria-hidden /></span>
+            Account risk
+          </div>
+          <p className="mt-3 text-[1.35rem] font-semibold leading-tight">{sessionQ.isError ? "Unavailable" : liveTradingHint.label}</p>
+          <p className="mt-2 line-clamp-2 text-xs text-[var(--fg-muted)]">{liveTradingHint.detail}</p>
+        </article>
+      </section>
+
       <section
         aria-label="Workspace status"
-        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2.5 text-sm"
       >
         <span>
           <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
@@ -380,6 +452,84 @@ export default function DashboardPage() {
         </span>
       </section>
 
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(260px,0.75fr)]">
+        <section className="min-h-[22rem] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]" aria-label="XAUUSD chart">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">XAUUSD <span className="font-normal text-[var(--fg-muted)]">Gold Spot / US Dollar</span></p>
+              <p className="mt-0.5 text-xs text-[var(--fg-subtle)]">
+                {showMetrics && Number.isFinite(bid) && Number.isFinite(ask)
+                  ? `Bid ${formatCurrency(bid)} · Ask ${formatCurrency(ask)}`
+                  : "Bid and ask appear after the broker session connects."}
+              </p>
+            </div>
+            <Badge tone={showMetrics ? "success" : "neutral"}>{showMetrics ? "Live" : "Not connected"}</Badge>
+          </div>
+          {showMetrics ? (
+            <div className="h-[28rem]">
+              <WorkspaceChart
+                symbol={TRADING_SYMBOL}
+                connected
+                timeframe={timeframe}
+                onTimeframeChange={setTimeframe}
+                chartType={chartType}
+                onChartTypeChange={setChartType}
+                showVolume={showVolume}
+                onShowVolumeChange={setShowVolume}
+                fullscreen={chartFull}
+                onFullscreenChange={setChartFull}
+                lastPrice={lastPrice}
+              />
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[12rem] flex-col justify-center px-5 py-6">
+              <p className="text-sm font-medium">XAUUSD chart</p>
+              <p className="mt-1 max-w-md text-sm text-[var(--fg-muted)]">
+                Candles load from the broker gateway after the session connects. No sample prices are drawn in their place.
+              </p>
+              <Button className="mt-3 w-fit" size="sm" asChild>
+                <Link href="/broker">Connect broker</Link>
+              </Button>
+            </div>
+          )}
+        </section>
+        <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]" aria-labelledby="market-intel">
+          <h2 id="market-intel" className="text-base font-semibold">AI Market Intelligence</h2>
+          <p className="mt-1 text-xs text-[var(--fg-muted)]">
+            Research is not a trade authorization. Live Gold candles still require a reachable broker Gateway.
+          </p>
+          <dl className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between gap-3 border-b border-[var(--border)] py-2">
+              <dt className="text-[var(--fg-muted)]">Research</dt>
+              <dd className="text-right font-medium">
+                {researchDeskStatusLabel({
+                  fetchError: Boolean(signalsQ.isError),
+                  workerStatus: String(asRecord(research.researchAnalysis).status || ""),
+                  availability: researchAvailability,
+                })}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-3 border-b border-[var(--border)] py-2">
+              <dt className="text-[var(--fg-muted)]">Robot</dt>
+              <dd><Badge tone={statusTone(robot)}>{robot}</Badge></dd>
+            </div>
+            <div className="flex justify-between gap-3 py-2">
+              <dt className="text-[var(--fg-muted)]">Live trading</dt>
+              <dd className="text-right font-medium">{liveTradingHint.label}</dd>
+            </div>
+          </dl>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"} onClick={() => robotMut.mutate("start")}>Start</Button>
+            <Button size="sm" variant="secondary" disabled={robotMut.isPending || robot !== "RUNNING"} onClick={() => robotMut.mutate("pause")}>Pause</Button>
+            <Button size="sm" variant="secondary" disabled={robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")} onClick={() => robotMut.mutate("stop")}>Stop</Button>
+          </div>
+          <p className="mt-3 flex items-start gap-2 text-xs text-[var(--fg-subtle)]">
+            <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            {liveTradingHint.detail}
+          </p>
+        </section>
+      </div>
+
       <section aria-labelledby="top-signals">
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -422,6 +572,7 @@ export default function DashboardPage() {
         )}
       </section>
 
+      <div className="grid items-start gap-4 xl:grid-cols-2">
       <section aria-labelledby="open-positions">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 id="open-positions" className="text-sm font-medium text-[var(--fg)]">
@@ -563,60 +714,7 @@ export default function DashboardPage() {
           </ul>
         )}
       </section>
-
-      <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-        <summary className="cursor-pointer rounded-sm text-sm font-medium text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
-          Account details
-        </summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
-          <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
-          <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
-          <DeskMetric
-            label="Free margin"
-            value={moneyOrUnavailable(session.free_margin, showMetrics)}
-          />
-        </div>
-      </details>
-
-      <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-        <summary className="cursor-pointer rounded-sm text-sm font-medium text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
-          Advanced · analysis controls
-        </summary>
-        <div className="mt-3 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={statusTone(robot)}>{robot}</Badge>
-            <span className="text-xs text-[var(--fg-subtle)]">{liveTradingHint.detail}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
-              onClick={() => robotMut.mutate("start")}
-            >
-              Start
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={robotMut.isPending || robot !== "RUNNING"}
-              onClick={() => robotMut.mutate("pause")}
-            >
-              Pause
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={
-                robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
-              }
-              onClick={() => robotMut.mutate("stop")}
-            >
-              Stop
-            </Button>
-          </div>
-        </div>
-      </details>
+      </div>
 
       <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
         <SheetContent aria-describedby={undefined}>

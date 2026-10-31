@@ -148,6 +148,7 @@ body {
   background-image: var(--bg-ambient);
   background-attachment: fixed;
   color: var(--fg);
+  --font-display: var(--font-sans);
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: var(--text-body);
   line-height: var(--leading-body);
