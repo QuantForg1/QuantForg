@@ -14,6 +14,7 @@ import { OverviewReferenceDesk } from "@/components/trading/overview-reference-d
 import { SignalCard } from "@/components/trading/signal-card";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
+  mt5Api,
   portfolioApi,
   signalCenterApi,
   tradingSessionApi,
@@ -24,6 +25,7 @@ import { useAuth } from "@/providers/auth-provider";
 // Auth still required for session; Admin link removed from trader Home.
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import {
   lastUpdatedCopy,
   normalizeSignalCenterPayload,
@@ -55,11 +57,24 @@ function workspaceGreeting(now = new Date(), firstName = ""): string {
   return firstName ? `${part}, ${firstName}` : part;
 }
 
-function moneyOrUnavailable(raw: unknown, available: boolean): string {
-  if (!available) return "Unavailable";
-  if (raw == null || raw === "") return "Unavailable";
+function moneyOrDash(
+  raw: unknown,
+  available: boolean,
+  currency = "USD",
+): string {
+  if (!available) return "—";
+  if (raw == null || raw === "" || raw === "—") return "—";
   const n = num(raw);
-  return Number.isFinite(n) ? formatCurrency(n) : "Unavailable";
+  const code = currency && currency !== "—" ? currency : "USD";
+  return Number.isFinite(n) ? formatCurrency(n, code) : "—";
+}
+
+function marketSessionName(at = new Date()): string {
+  const hour = at.getUTCHours();
+  if (hour >= 7 && hour < 16) return "London";
+  if (hour >= 16 && hour < 21) return "New York";
+  if (hour >= 0 && hour < 7) return "Tokyo";
+  return "Sydney";
 }
 
 function statusTone(
@@ -122,6 +137,14 @@ export default function DashboardPage() {
     liveAuthorization: session.live_authorization,
   });
 
+  const tickQ = useQuery({
+    queryKey: ["dashboard-tick", TRADING_SYMBOL],
+    queryFn: () => mt5Api.tick(TRADING_SYMBOL),
+    enabled: connection.connected && !sessionMismatch,
+    retry: false,
+    staleTime: 5_000,
+    refetchInterval: connection.connected && !sessionMismatch ? 10_000 : false,
+  });
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
     queryFn: () => signalCenterApi.list({ enabled_only: false }),
@@ -264,6 +287,29 @@ export default function DashboardPage() {
   const todayPnlRaw = num(session.profit ?? session.daily_pnl ?? session.today_pnl);
   const riskPctRaw = num(session.risk_pct ?? session.daily_risk_pct);
   const riskPct = Number.isFinite(riskPctRaw) ? riskPctRaw : null;
+  const accountCurrency = str(session.currency, "USD");
+  const tick = asRecord(tickQ.data);
+  const tickBid = num(tick.bid);
+  const tickAsk = num(tick.ask);
+  const tickMid =
+    Number.isFinite(tickBid) && Number.isFinite(tickAsk)
+      ? (tickBid + tickAsk) / 2
+      : Number.isFinite(tickBid)
+        ? tickBid
+        : Number.isFinite(tickAsk)
+          ? tickAsk
+          : NaN;
+  const liveMarketPrice = Number.isFinite(tickMid)
+    ? presentLevel(tickMid)
+    : topSignal
+      ? presentLevel(topSignal.mid ?? topSignal.price ?? topSignal.current_price)
+      : "—";
+  const sessionLabel = marketSessionName();
+  const lastUpdateLabel =
+    lastUpdatedCopy(research.asOf) ||
+    (tickQ.dataUpdatedAt
+      ? formatRelativeTime(new Date(tickQ.dataUpdatedAt))
+      : "—");
 
   return (
     <div className="min-w-0 space-y-5">
@@ -298,10 +344,10 @@ export default function DashboardPage() {
       ) : null}
       <PageHeader
         eyebrow="Overview"
-        title={`${greeting}${firstName ? `, ${firstName}` : ""}`}
+        title={greeting}
         description={
           showMetrics
-            ? "Your trading system status and market overview from the connected broker session."
+            ? "Your trading system is running smoothly. Here's your market overview."
             : "Connect your broker to load account figures. Research bias appears when a gold signal is available."
         }
         actions={
@@ -320,14 +366,18 @@ export default function DashboardPage() {
       />
 
       <OverviewReferenceDesk
-        equity={moneyOrUnavailable(session.equity, showMetrics)}
-        balance={moneyOrUnavailable(session.balance ?? session.free_margin, showMetrics)}
+        equity={moneyOrDash(session.equity, showMetrics, accountCurrency)}
+        balance={moneyOrDash(
+          session.free_margin ?? session.margin_free,
+          showMetrics,
+          accountCurrency,
+        )}
         todayPnl={
           showMetrics && Number.isFinite(todayPnlRaw)
-            ? formatCurrency(todayPnlRaw)
+            ? formatCurrency(todayPnlRaw, accountCurrency === "—" ? "USD" : accountCurrency)
             : showMetrics
-              ? formatCurrency(0)
-              : "Unavailable"
+              ? formatCurrency(0, accountCurrency === "—" ? "USD" : accountCurrency)
+              : "—"
         }
         openPositions={
           noBroker || sessionMismatch || positionsUnavailable
@@ -341,9 +391,7 @@ export default function DashboardPage() {
         }
         accountRiskLabel={
           riskPct == null
-            ? showMetrics
-              ? "—"
-              : "Unavailable"
+            ? "—"
             : riskPct < 30
               ? "Low"
               : riskPct < 60
@@ -367,11 +415,7 @@ export default function DashboardPage() {
             ? signalHumanExplanation(topSignal)
             : "Live research bias appears when a gold signal is available."
         }
-        currentPrice={
-          topSignal
-            ? presentLevel(topSignal.mid ?? topSignal.price ?? topSignal.current_price)
-            : "—"
-        }
+        currentPrice={liveMarketPrice}
         support={
           topSignal ? presentLevel(topSignal.support ?? topSignal.key_support) : "—"
         }
@@ -386,6 +430,8 @@ export default function DashboardPage() {
             : "—"
         }
         confidencePct={confPct}
+        sessionName={sessionLabel}
+        lastUpdate={lastUpdateLabel}
         topSignal={topSignal}
       />
 
@@ -587,12 +633,21 @@ export default function DashboardPage() {
           Account details
         </summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
-          <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
-          <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
+          <DeskMetric
+            label="Balance"
+            value={moneyOrDash(session.balance, showMetrics, accountCurrency)}
+          />
+          <DeskMetric
+            label="Equity"
+            value={moneyOrDash(session.equity, showMetrics, accountCurrency)}
+          />
+          <DeskMetric
+            label="Margin"
+            value={moneyOrDash(session.margin, showMetrics, accountCurrency)}
+          />
           <DeskMetric
             label="Free margin"
-            value={moneyOrUnavailable(session.free_margin, showMetrics)}
+            value={moneyOrDash(session.free_margin, showMetrics, accountCurrency)}
           />
         </div>
       </details>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, LogOut, Search } from "lucide-react";
+import { Bell, LogOut, Search, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/auth-provider";
 import { usePathname, useRouter } from "next/navigation";
@@ -10,10 +10,10 @@ import { MobileNav } from "@/components/layout/sidebar";
 import { isPrimaryActive, primaryRail } from "@/components/layout/nav-config";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { cn, formatNumber } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { mt5Api, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num } from "@/lib/desk";
-import { AUTONOMOUS_DISPLAY, TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 
 function workspaceLabel(pathname: string): string {
@@ -63,15 +63,6 @@ function MarketChrome() {
     refetchInterval: session.connected ? 15_000 : false,
   });
   const tick = asRecord(tickQ.data);
-  const bid = num(tick.bid);
-  const ask = num(tick.ask);
-  const mid =
-    Number.isFinite(bid) && Number.isFinite(ask)
-      ? (bid + ask) / 2
-      : Number.isFinite(bid)
-        ? bid
-        : NaN;
-  const price = Number.isFinite(mid) ? formatNumber(mid, 2) : null;
   const rawTime = (value: unknown) =>
     value == null || value === "" ? "" : String(value);
   const clock = serverClock(rawTime(tick.time) || rawTime(tick.time_msc));
@@ -80,15 +71,41 @@ function MarketChrome() {
   const weekday = sessionAt.getUTCDay();
   const weekdaySession = weekday >= 1 && weekday <= 5;
 
+  const balanceRaw = session.balance;
+  const balanceNum = num(balanceRaw);
+  const currency =
+    session.currency && session.currency !== "—" ? session.currency : "USD";
+  const balanceLabel =
+    session.connected && Number.isFinite(balanceNum)
+      ? formatCurrency(balanceNum, currency)
+      : session.connected && balanceRaw && balanceRaw !== "—"
+        ? balanceRaw
+        : "—";
+
   return (
     <div className="hidden min-w-0 items-center gap-3 lg:flex">
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          {AUTONOMOUS_DISPLAY}
-        </p>
-        <p className="truncate text-sm font-semibold tabular text-[var(--fg)]">
-          {price ?? (tickQ.isLoading && session.connected ? "Loading" : "—")}
-        </p>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_70%,transparent)] text-[var(--accent)]"
+          aria-hidden
+        >
+          <Wallet className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Account Balance
+          </p>
+          <p
+            className="truncate text-sm font-semibold tabular text-[var(--fg)]"
+            title={
+              session.connected
+                ? `Broker balance${currency ? ` (${currency})` : ""}`
+                : "Broker not connected"
+            }
+          >
+            {balanceLabel}
+          </p>
+        </div>
       </div>
       <span className="h-8 w-px bg-[var(--border)]" aria-hidden />
       <div>
