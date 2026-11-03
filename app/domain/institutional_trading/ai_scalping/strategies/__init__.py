@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from app.domain.institutional_trading.ai_scalping.strategies.advisory_collaboration import (  # noqa: E501
+    AdvisoryVote,
+    collect_score_factor_advisory_votes,
+    summarize_advisory_agreement,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.evaluate import (
     evaluate_all_strategies,
     evaluate_strategy,
+)
+from app.domain.institutional_trading.ai_scalping.strategies.live_eligibility import (
+    eligibility_snapshot,
+    list_eligibility,
+    live_executable_ids,
 )
 from app.domain.institutional_trading.ai_scalping.strategies.models import (
     StrategyDefinition,
@@ -49,6 +59,7 @@ __all__ = [
     "SMC_SCALPING",
     "STRATEGY_BY_ID",
     "TREND_CONTINUATION",
+    "AdvisoryVote",
     "OrchestrationVerdict",
     "StrategyDefinition",
     "StrategyEvaluation",
@@ -58,10 +69,15 @@ __all__ = [
     "best_strategy_for_symbol",
     "build_strategy_performance_monitor",
     "catalog_participation_policy",
+    "collect_score_factor_advisory_votes",
+    "eligibility_snapshot",
     "evaluate_all_strategies",
     "evaluate_strategy",
     "get_strategy_stats_book",
+    "list_eligibility",
     "list_strategy_ids",
+    "live_executable_ids",
     "orchestrate_strategies",
     "select_global_best",
+    "summarize_advisory_agreement",
 ]

@@ -253,7 +253,9 @@ def decide_gold(
     gold_score = dict(score)
     gold_score["symbol"] = symbol
     evaluations = evaluate_all_strategies(gold_score, live_boosts=live_boosts)
-    verdict = orchestrate_strategies(evaluations, live_boosts=live_boosts)
+    verdict = orchestrate_strategies(
+        evaluations, live_boosts=live_boosts, score=gold_score
+    )
     rejected = tuple(r.to_dict() for r in verdict.rejected)
 
     if verdict.prefer_no_trade or verdict.selected is None:

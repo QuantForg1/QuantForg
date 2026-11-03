@@ -2094,6 +2094,41 @@ class InstitutionalIteRuntime:
                                             win=bool(pnl_close > 0),
                                             pnl=pnl_close,
                                         )
+                                        # Closed-loop SOE influence: attribute when
+                                        # strategy_id was remembered on fill meta.
+                                        try:
+                                            from app.domain.institutional_trading.ai_scalping.strategies.stats import (  # noqa: E501
+                                                get_strategy_stats_book,
+                                            )
+                                            from app.domain.institutional_trading.management.class_policy import (  # noqa: E501
+                                                last_fill_metadata,
+                                                merge_position_metadata,
+                                            )
+
+                                            meta = merge_position_metadata(
+                                                snapshot={
+                                                    "symbol": closed_sym,
+                                                    "comment": str(
+                                                        getattr(pos, "comment", "")
+                                                        or ""
+                                                    ),
+                                                },
+                                                comment=str(
+                                                    getattr(pos, "comment", "") or ""
+                                                ),
+                                                live_meta=last_fill_metadata(),
+                                            )
+                                            sid = str(meta.get("strategy_id") or "")
+                                            if sid:
+                                                get_strategy_stats_book().record_closed(
+                                                    sid,
+                                                    win=bool(pnl_close > 0),
+                                                    pnl=float(pnl_close),
+                                                )
+                                        except Exception:
+                                            logger.exception(
+                                                "strategy_stats_record_closed_failed"
+                                            )
                                     except Exception:
                                         logger.exception(
                                             "symbol_performance_note_closed_failed"
@@ -2691,6 +2726,21 @@ class InstitutionalIteRuntime:
                 "opportunity_score": score,
                 "comment_hash": str(getattr(decision, "input_hash", "") or "")[:12],
                 "management_profile": "scalp" if trade_class == "SCALP" else "hold",
+                # Strategy attribution for SOE closed-loop stats (not in MT5 comment).
+                "strategy_id": str(
+                    getattr(decision, "strategy_id", None)
+                    or diagnostics.get("strategy_id")
+                    or ""
+                )
+                or None,
+                "strategy_name": str(
+                    getattr(decision, "strategy_name", None)
+                    or diagnostics.get("strategy_name")
+                    or ""
+                )
+                or None,
+                "soe_confluence_count": diagnostics.get("strategy_confluence_count")
+                or getattr(decision, "strategy_confluence_count", None),
             }
         )
         diagnostics["time_from_signal_to_first_order_send"] = round(

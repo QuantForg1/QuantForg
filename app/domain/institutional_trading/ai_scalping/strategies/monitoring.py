@@ -9,6 +9,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.strategies.live_eligibility import (
+    eligibility_snapshot,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.orchestrator import (
     ORCHESTRATION_VERSION,
     catalog_participation_policy,
@@ -92,6 +95,7 @@ def build_strategy_performance_monitor(
         for s in strategies
     )
 
+    eligibility = eligibility_snapshot()
     return {
         "as_of": datetime.now(UTC).isoformat(),
         "orchestration_version": ORCHESTRATION_VERSION,
@@ -103,13 +107,28 @@ def build_strategy_performance_monitor(
             else ["no_deteriorating_flags"]
         ),
         "participation_policy": catalog_participation_policy(),
+        "eligibility_registry": eligibility,
+        "collaboration": {
+            "mode": "live_pack_plus_advisory_votes",
+            "oms_winners": "live_executable_profiles_only",
+            "advisory_sources": [
+                "score_factor_advisory",
+                "strategy_engine_plugin",
+                "institutional_alpha",
+                "m1_micro",
+            ],
+            "prefer_no_trade_on_weak_or_conflict": True,
+        },
         "live_execution_authorization": {
             "soe_influence_safe": live_safe,
             "auto_authorize_live": False,
+            "live_operating_objective": True,
+            "permanent_shadow_not_required": True,
             "note": (
-                "SOE never authorizes live capital. Owner/ops must confirm Risk, "
-                "OMS, MT5 gates, and independent broker P&L before enabling "
-                "EXECUTION_ENABLED. Insufficient sample ≠ proven edge."
+                "LIVE is the operating objective when owner gates are enabled. "
+                "SOE never auto-authorizes capital. Risk, OMS, MT5, "
+                "EXECUTION_ENABLED, and ops LIVE mode remain fail-closed. "
+                "Insufficient sample ≠ proven edge. Broker P&L is authoritative."
             ),
         },
         "disclaimer": "Historical data does not guarantee future profitability.",

@@ -60,6 +60,7 @@ def attach_strategies_to_scores(
             evals,
             live_boosts=live_boosts,
             stats_snapshot=stats_snapshot,
+            score=row,
         )
         row["strategy_orchestration"] = verdict.to_dict()
         best = verdict.selected
