@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, LogOut, Search, Wallet } from "lucide-react";
+import { Bell, Coins, LogOut, Search, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/auth-provider";
 import { usePathname, useRouter } from "next/navigation";
@@ -10,10 +10,14 @@ import { MobileNav } from "@/components/layout/sidebar";
 import { isPrimaryActive, primaryRail } from "@/components/layout/nav-config";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import { mt5Api, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num } from "@/lib/desk";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import {
+  displayTradingSymbolCode,
+  TRADING_SYMBOL,
+  XAUUSD_SPECS,
+} from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 
 function workspaceLabel(pathname: string): string {
@@ -63,6 +67,22 @@ function MarketChrome() {
     refetchInterval: session.connected ? 15_000 : false,
   });
   const tick = asRecord(tickQ.data);
+  const bid = num(tick.bid);
+  const ask = num(tick.ask);
+  const mid =
+    Number.isFinite(bid) && Number.isFinite(ask)
+      ? (bid + ask) / 2
+      : Number.isFinite(bid)
+        ? bid
+        : Number.isFinite(ask)
+          ? ask
+          : NaN;
+  const xauLabel = Number.isFinite(mid)
+    ? formatNumber(mid, XAUUSD_SPECS.digits)
+    : session.connected && tickQ.isLoading
+      ? "Loading"
+      : "—";
+
   const rawTime = (value: unknown) =>
     value == null || value === "" ? "" : String(value);
   const clock = serverClock(rawTime(tick.time) || rawTime(tick.time_msc));
@@ -82,55 +102,113 @@ function MarketChrome() {
         ? balanceRaw
         : "—";
 
+  const xauDisplay =
+    xauLabel === "—" || xauLabel === "Loading" ? xauLabel : `$${xauLabel}`;
+  const symbolCode = displayTradingSymbolCode(TRADING_SYMBOL);
+  const balanceTitle = session.connected
+    ? `Broker balance${currency ? ` (${currency})` : ""}`
+    : "Broker not connected";
+  const xauTitle = session.connected
+    ? "Live mid from broker tick"
+    : "Broker not connected";
+
   return (
-    <div className="hidden min-w-0 items-center gap-3 lg:flex">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_70%,transparent)] text-[var(--accent)]"
-          aria-hidden
-        >
-          <Wallet className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-            Account Balance
+    <>
+      {/* Phone: dense dual readout — balance and mid stay independently labeled */}
+      <div
+        className="flex min-w-0 max-w-[11.5rem] items-center gap-1.5 sm:max-w-none md:hidden"
+        aria-label="Account balance and live gold mid"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            Balance
           </p>
           <p
-            className="truncate text-sm font-semibold tabular text-[var(--fg)]"
-            title={
-              session.connected
-                ? `Broker balance${currency ? ` (${currency})` : ""}`
-                : "Broker not connected"
-            }
+            className="truncate text-[11px] font-semibold tabular text-[var(--fg)]"
+            title={balanceTitle}
           >
             {balanceLabel}
           </p>
         </div>
+        <span className="h-6 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            {symbolCode}
+          </p>
+          <p
+            className="truncate text-[11px] font-semibold tabular text-[var(--fg)]"
+            title={xauTitle}
+          >
+            {xauDisplay}
+          </p>
+        </div>
       </div>
-      <span className="h-8 w-px bg-[var(--border)]" aria-hidden />
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          Market session
-        </p>
-        <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--fg)]">
+
+      <div className="hidden min-w-0 items-center gap-2 md:flex lg:gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              weekdaySession ? "bg-[var(--success)]" : "bg-[var(--fg-subtle)]",
-            )}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_70%,transparent)] text-[var(--accent)] lg:h-9 lg:w-9 lg:rounded-xl"
             aria-hidden
-          />
-          {sessionName}
-        </p>
+          >
+            <Wallet className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)] lg:text-[10px]">
+              Account Balance
+            </p>
+            <p
+              className="truncate text-xs font-semibold tabular text-[var(--fg)] lg:text-sm"
+              title={balanceTitle}
+            >
+              {balanceLabel}
+            </p>
+          </div>
+        </div>
+        <span className="h-7 w-px bg-[var(--border)] lg:h-8" aria-hidden />
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--warning-soft)_55%,transparent)] text-[var(--warning)] lg:h-9 lg:w-9 lg:rounded-xl"
+            aria-hidden
+          >
+            <Coins className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)] lg:text-[10px]">
+              {symbolCode}
+            </p>
+            <p
+              className="truncate text-xs font-semibold tabular text-[var(--fg)] lg:text-sm"
+              title={xauTitle}
+            >
+              {xauDisplay}
+            </p>
+          </div>
+        </div>
+        <span className="hidden h-8 w-px bg-[var(--border)] lg:block" aria-hidden />
+        <div className="hidden lg:block">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Market session
+          </p>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--fg)]">
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                weekdaySession ? "bg-[var(--success)]" : "bg-[var(--fg-subtle)]",
+              )}
+              aria-hidden
+            />
+            {sessionName}
+          </p>
+        </div>
+        <span className="hidden h-8 w-px bg-[var(--border)] xl:block" aria-hidden />
+        <div className="hidden xl:block">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Server time
+          </p>
+          <p className="text-sm font-medium text-[var(--fg)]">{clock?.label ?? "—"}</p>
+        </div>
       </div>
-      <span className="hidden h-8 w-px bg-[var(--border)] xl:block" aria-hidden />
-      <div className="hidden xl:block">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          Server time
-        </p>
-        <p className="text-sm font-medium text-[var(--fg)]">{clock?.label ?? "—"}</p>
-      </div>
-    </div>
+    </>
   );
 }
 

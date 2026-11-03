@@ -81,6 +81,43 @@ export default function RiskCenterPage() {
       />
 
       <PageMotion className="space-y-4">
+        <section
+          aria-label="Risk overview"
+          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        >
+          {(
+            [
+              [
+                "Risk Status",
+                Number.isFinite(ddPct) && ddPct > 2 ? "Attention" : "Normal",
+              ],
+              [
+                "Account Equity",
+                Number.isFinite(equity) ? formatCurrency(equity) : "—",
+              ],
+              [
+                "Free Margin",
+                Number.isFinite(free) ? formatCurrency(free) : "—",
+              ],
+              [
+                "Daily P&L",
+                Number.isFinite(floating) ? formatCurrency(floating) : "—",
+              ],
+            ] as const
+          ).map(([label, value]) => (
+            <article
+              key={label}
+              className="flex min-h-[5.5rem] flex-col justify-between rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)]"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+                {label}
+              </p>
+              <p className="mt-2 text-xl font-semibold tabular tracking-tight text-[var(--fg)]">
+                {value}
+              </p>
+            </article>
+          ))}
+        </section>
         <OwnerPolicySummary />
         <div className="grid gap-4 lg:grid-cols-3">
           <Card>
@@ -96,21 +133,18 @@ export default function RiskCenterPage() {
                 "Limit concurrent positions",
                 "Use ATR stop multiplier",
               ].map((label) => (
-                <label
+                <div
                   key={label}
                   className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5 text-sm"
                 >
                   <span>{label}</span>
-                  <span
-                    className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--hot)]"
-                    aria-hidden
-                  >
-                    <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
+                  <span className="shrink-0 rounded-full border border-[var(--success)]/40 bg-[var(--success-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--success)]">
+                    Active
                   </span>
-                </label>
+                </div>
               ))}
               <p className="text-xs text-[var(--fg-muted)]">
-                Rules mirror the saved owner policy. Toggles are display-only; editing stays on
+                Rules mirror the saved owner policy. Status chips are display-only; editing stays on
                 Admin control.
               </p>
             </CardContent>

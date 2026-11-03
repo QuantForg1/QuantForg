@@ -14,13 +14,13 @@ const POINTS = [
     title: "Automated Execution",
     body: "From signal to broker only after the existing risk gates pass.",
     icon: Brain,
-    tone: "bg-[#7c5cff]",
+    tone: "bg-[var(--accent-hover)]",
   },
   {
     title: "Advanced Risk Management",
     body: "Saved limits can block an order before it is sent.",
     icon: Shield,
-    tone: "bg-[var(--hot)]",
+    tone: "bg-[var(--accent-active)]",
   },
   {
     title: "24/5 Trading",
@@ -69,7 +69,7 @@ export function AuthShell({
         <section className="max-w-xl">
           <h2 className="font-[family-name:var(--font-display)] text-4xl leading-[1.05] tracking-tight sm:text-5xl">
             Trade Smarter with{" "}
-            <span className="text-[var(--hot)]">Institutional Intelligence.</span>
+            <span className="text-[var(--accent-hover)]">Institutional Intelligence.</span>
           </h2>
           <p className="mt-4 text-base leading-relaxed text-[var(--fg-muted)]">
             Connect your broker, let QuantForg analyze markets, manage risk, and execute
@@ -94,7 +94,7 @@ export function AuthShell({
             })}
           </ul>
         </section>
-        <section className="qf-auth-card rounded-[1.25rem] border border-white/15 bg-[color-mix(in_srgb,var(--surface)_78%,#061a38)] p-6 shadow-[var(--shadow-elevated),0_0_40px_rgba(255,107,53,0.08)] backdrop-blur-xl sm:p-8">
+        <section className="qf-auth-card rounded-[1.25rem] border border-white/15 bg-[color-mix(in_srgb,var(--surface)_78%,#061a38)] p-6 shadow-[var(--shadow-elevated)] backdrop-blur-xl sm:p-8">
           <div className="mb-6 flex flex-col items-center text-center">
             <BrandLogo size={42} caption="Institutional Trading Intelligence" />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight">{title}</h1>

@@ -25,12 +25,13 @@ import { useAuth } from "@/providers/auth-provider";
 // Auth still required for session; Admin link removed from trader Home.
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { TRADING_SYMBOL, XAUUSD_SPECS } from "@/lib/trading/gold-only";
 import {
   lastUpdatedCopy,
   normalizeSignalCenterPayload,
   presentField,
   presentLevel,
+  priceDisplay,
   researchAvailabilityAsCatalogue,
   researchDeskLiveTradingStatus,
   researchDeskStatusLabel,
@@ -300,9 +301,12 @@ export default function DashboardPage() {
           ? tickAsk
           : NaN;
   const liveMarketPrice = Number.isFinite(tickMid)
-    ? presentLevel(tickMid)
+    ? priceDisplay(tickMid, XAUUSD_SPECS.digits)
     : topSignal
-      ? presentLevel(topSignal.mid ?? topSignal.price ?? topSignal.current_price)
+      ? priceDisplay(
+          topSignal.mid ?? topSignal.price ?? topSignal.current_price,
+          XAUUSD_SPECS.digits,
+        )
       : "—";
   const sessionLabel = marketSessionName();
   const lastUpdateLabel =
@@ -433,6 +437,7 @@ export default function DashboardPage() {
         sessionName={sessionLabel}
         lastUpdate={lastUpdateLabel}
         topSignal={topSignal}
+        lastPrice={Number.isFinite(tickMid) ? tickMid : undefined}
       />
 
       <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">

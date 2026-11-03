@@ -467,7 +467,7 @@ export function BrokerConfigWorkspace() {
     <div className="mx-auto w-full min-w-0 max-w-5xl space-y-4 px-1 sm:px-0">
       <PageHeader
         title="Broker Accounts"
-        description="Connect and manage your trading account. Your account runs independently with its own settings. Balance and status come from the live session only."
+        description="Connect and manage your MT5 account. Balance and status come from the live session only — never fabricated. Live trading still requires existing authorization and risk controls."
         actions={
           <Button
             size="sm"
@@ -479,11 +479,6 @@ export function BrokerConfigWorkspace() {
           </Button>
         }
       />
-
-      <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
-        Connecting your broker gives QuantForg access to account information. Live trading
-        requires the existing authorization and risk controls.
-      </p>
 
       <ConnectionStatus
         session={tradingSnap}

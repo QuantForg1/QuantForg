@@ -131,7 +131,7 @@ function SectionTitle({
 }) {
   return (
     <div className="mb-8 max-w-3xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--hot)]">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
         {kicker}
       </p>
       <h2
