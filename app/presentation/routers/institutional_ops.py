@@ -1120,6 +1120,25 @@ def get_strategy_performance_telemetry_ops(_user: OperatorUser) -> dict[str, Any
     return payload
 
 
+@router.get("/strategy-orchestration-monitor")
+def get_strategy_orchestration_monitor_ops(_user: OperatorUser) -> dict[str, Any]:
+    """Read-only SOE performance / health / participation monitor.
+
+    Never mutates Risk, Safety, stops, lots, OMS, PME, or live weights on disk
+    beyond what StrategyStatsBook already persisted from closed outcomes.
+    Never authorizes live execution.
+    """
+    from app.domain.institutional_trading.ai_scalping.strategies.monitoring import (
+        build_strategy_performance_monitor,
+    )
+
+    payload = build_strategy_performance_monitor()
+    payload["thresholds_changed"] = False
+    payload["mutates_engines"] = False
+    payload["advisory_only"] = True
+    return payload
+
+
 @router.get("/m15-semantics-telemetry")
 def get_m15_semantics_telemetry(
     _user: OperatorUser,

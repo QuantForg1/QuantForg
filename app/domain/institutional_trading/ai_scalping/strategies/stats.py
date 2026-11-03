@@ -42,10 +42,19 @@ class StrategyProductionStats:
         d = asdict(self)
         d["win_rate"] = self.win_rate
         d["profit_factor"] = self.profit_factor
+        d["expectancy"] = self.expectancy
         d["avg_hold"] = self.avg_hold
         d["avg_rr"] = self.avg_rr
         d["avg_latency_ms"] = self.avg_latency_ms
         return d
+
+    @property
+    def expectancy(self) -> float | None:
+        """Average net PnL per closed trade from recorded outcomes only."""
+        n = self.wins + self.losses
+        if n <= 0:
+            return None
+        return round(self.running_pnl / n, 4)
 
     @property
     def win_rate(self) -> float | None:

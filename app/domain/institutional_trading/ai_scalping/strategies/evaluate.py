@@ -82,8 +82,16 @@ def evaluate_strategy(
     config: AiScalpingConfig | None = None,
     live_rank_boost: float = 0.0,
 ) -> StrategyEvaluation:
-    """Score one strategy. Hard base reject still blocks; soft floors do not."""
-    _ = config
+    """Score one strategy. Hard base reject still blocks; soft floors do not.
+
+    Strategy-specific ``min_momentum`` / ``min_structure`` may only ADD
+    requirements above SCALPING_V1 config floors — never lower them.
+    """
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_AI_SCALPING_CONFIG,
+    )
+
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
     symbol = str(score.get("symbol") or "").upper()
     direction = str(score.get("direction") or "NONE").upper()
     comps, atr_band, regime, setup_fam = _components(score)
@@ -97,9 +105,30 @@ def evaluate_strategy(
             f"Base SCALPING_V1 gates reject: {score.get('reject_reason') or 'reject'}"
         )
 
-    # Floors are Probability Center evidence — no independent AND-kill.
-    filters["structure_floor"] = True
-    filters["momentum_floor"] = True
+    # Strategy specialization floors — stricter than (or equal to) SCALPING_V1.
+    # Base SCALPING_V1 soft floors remain Probability Center evidence; these
+    # extra strategy mins are hard filters for that profile only.
+    structure_floor = max(
+        int(cfg.min_structure_score), int(strategy.min_structure or 0)
+    )
+    momentum_floor = max(
+        int(cfg.min_momentum_score), int(strategy.min_momentum or 0)
+    )
+    if strategy.min_structure or strategy.min_momentum:
+        filters["structure_floor"] = comps["structure"] >= structure_floor
+        if not filters["structure_floor"]:
+            reasons.append(
+                f"Structure {comps['structure']} < strategy floor {structure_floor}"
+            )
+        filters["momentum_floor"] = comps["momentum"] >= momentum_floor
+        if not filters["momentum_floor"]:
+            reasons.append(
+                f"Momentum {comps['momentum']} < strategy floor {momentum_floor}"
+            )
+    else:
+        # Baseline profiles inherit Probability Center evidence (no AND-kill).
+        filters["structure_floor"] = True
+        filters["momentum_floor"] = True
 
     if strategy.require_regimes:
         ok = regime in strategy.require_regimes

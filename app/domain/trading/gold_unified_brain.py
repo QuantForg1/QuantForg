@@ -17,11 +17,11 @@ from typing import Any
 from app.domain.institutional_trading.ai_scalping.strategies.evaluate import (
     evaluate_all_strategies,
 )
+from app.domain.institutional_trading.ai_scalping.strategies.orchestrator import (
+    orchestrate_strategies,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.registry import (
     ALL_STRATEGIES,
-)
-from app.domain.institutional_trading.ai_scalping.strategies.select import (
-    best_strategy_for_symbol,
 )
 
 # UI / operator preference modules (frontend AUTO_STRATEGY_MODULES). These are
@@ -253,20 +253,10 @@ def decide_gold(
     gold_score = dict(score)
     gold_score["symbol"] = symbol
     evaluations = evaluate_all_strategies(gold_score, live_boosts=live_boosts)
-    passed = [e for e in evaluations if e.passed]
-    rejected = [
-        {
-            "strategy_id": e.strategy_id,
-            "name": e.name,
-            "reject_reason": e.reject_reason,
-            "quality": e.quality,
-            "confidence": e.confidence,
-        }
-        for e in evaluations
-        if not e.passed
-    ]
+    verdict = orchestrate_strategies(evaluations, live_boosts=live_boosts)
+    rejected = tuple(r.to_dict() for r in verdict.rejected)
 
-    if not passed:
+    if verdict.prefer_no_trade or verdict.selected is None:
         return UnifiedGoldDecision(
             decision="NO_TRADE",
             symbol=symbol,
@@ -275,61 +265,15 @@ def decide_gold(
             selected_strategy_name=None,
             confidence=0,
             quality=0,
-            reasons=("No live-eligible strategy passed filters / base gates",),
-            rejected_strategies=tuple(rejected),
-            conflicting=False,
+            reasons=verdict.reasons
+            or ("SOE prefer no trade — no selectable strategy",),
+            rejected_strategies=rejected,
+            conflicting=verdict.conflicting,
             stale_data=False,
             as_of=as_of,
         )
 
-    directions = {e.direction for e in passed if e.direction in {"BUY", "SELL"}}
-    if len(directions) > 1:
-        return UnifiedGoldDecision(
-            decision="NO_TRADE",
-            symbol=symbol,
-            regime=regime,
-            selected_strategy_id=None,
-            selected_strategy_name=None,
-            confidence=0,
-            quality=0,
-            reasons=(
-                "Conflicting strategy directions: "
-                + ", ".join(f"{e.strategy_id}={e.direction}" for e in passed),
-            ),
-            rejected_strategies=tuple(rejected),
-            conflicting=True,
-            stale_data=False,
-            as_of=as_of,
-        )
-
-    best = best_strategy_for_symbol(passed)
-    if best is None:
-        return UnifiedGoldDecision(
-            decision="NO_TRADE",
-            symbol=symbol,
-            regime=regime,
-            selected_strategy_id=None,
-            selected_strategy_name=None,
-            confidence=0,
-            quality=0,
-            reasons=("Strategy selection produced no winner",),
-            rejected_strategies=tuple(rejected),
-            conflicting=False,
-            stale_data=False,
-            as_of=as_of,
-        )
-
-    superseded = [
-        f"superseded:{e.strategy_id}(q={e.quality})"
-        for e in passed
-        if e.strategy_id != best.strategy_id
-    ]
-    reasons = (
-        f"Selected {best.strategy_id} direction={best.direction} "
-        f"quality={best.quality} confidence={best.confidence}",
-        *superseded,
-        best.explanation,
-    )
+    best = verdict.selected
     return UnifiedGoldDecision(
         decision=best.direction,
         symbol=symbol,
@@ -338,8 +282,8 @@ def decide_gold(
         selected_strategy_name=best.name,
         confidence=int(best.confidence),
         quality=int(best.quality),
-        reasons=tuple(reasons),
-        rejected_strategies=tuple(rejected),
+        reasons=verdict.reasons,
+        rejected_strategies=rejected,
         conflicting=False,
         stale_data=False,
         as_of=as_of,
