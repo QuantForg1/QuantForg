@@ -53,7 +53,9 @@ def test_merge_metadata_prefers_ticket_store_over_sl_comment(tmp_path: Path) -> 
     )
     # Monkeypatch global store used by merge — bind via direct resolve path
     # by injecting ticket into snapshot that merge looks up through store.
-    import app.domain.institutional_trading.ai_scalping.strategies.attribution_store as mod
+    from app.domain.institutional_trading.ai_scalping.strategies import (
+        attribution_store as mod,
+    )
 
     previous = mod._STORE
     mod._STORE = store
