@@ -258,8 +258,8 @@ def test_dynamic_universe_not_shrunk_by_static_plane_allowlist() -> None:
     assert "GBPUSD" not in uni  # seed absent from catalogue stays out
     assert len(uni) == 4
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.normal_vol.quality == 74
-    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.quality == 76
+    assert cfg.normal_vol.confidence == 73
     assert cfg.min_structure_score == 60
     assert cfg.min_momentum_score == 55
     assert cfg.dynamic_universe_enabled is True

@@ -142,7 +142,7 @@ class TestPositionSizingUsdTarget:
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
         assert Decimal("0") == MIN_PLANNED_RISK_USD
         assert Decimal("10.00") == MAX_PLANNED_SL_RISK_USD
-        assert Decimal("1.50") == PREFERRED_REWARD_RISK
+        assert Decimal("2.00") == PREFERRED_REWARD_RISK
 
     def test_tight_gold_stop_is_not_upsized_past_owner_max_lot(self) -> None:
         # $0.50 at 0.01: no floor, so it trades — at 0.01, never stepped up.
@@ -563,21 +563,21 @@ class TestRewardRisk:
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.09900")))
         assert gate.passed is False
 
-    def test_tp_equal_to_sl_clears_the_half_reward_floor(self) -> None:
-        # Reward equals the stop. Ratio 1.0 clears the active 0.50 floor.
+    def test_tp_equal_to_sl_fails_owner_reward_floor(self) -> None:
+        # Reward equals the stop. Ratio 1.0 does not clear the active 1.50 floor.
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10200")))
-        assert gate.passed is True
+        assert gate.passed is False
 
     def test_tp_larger_than_sl_but_below_owner_rr_rejected(self) -> None:
-        # Reward 0.0009 / risk 0.0020 = 0.45 < owner minimum 0.50.
+        # Reward 0.0009 / risk 0.0020 = 0.45 < owner minimum 1.50.
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10090")))
         assert gate.passed is False
 
-    def test_preferred_one_point_five_rr_eligible(self) -> None:
-        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10300")))
+    def test_preferred_two_rr_eligible(self) -> None:
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10400")))
         assert gate.passed is True
         risk = Decimal("0.00200")
-        reward = Decimal("0.00300")
+        reward = Decimal("0.00400")
         assert reward / risk == PREFERRED_REWARD_RISK
 
 

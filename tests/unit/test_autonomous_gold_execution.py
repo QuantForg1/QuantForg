@@ -302,8 +302,8 @@ def test_order_check_and_single_order_send_remain_gateway() -> None:
 def test_floors_are_scalping_v1_not_lowered() -> None:
     assert FLOORS["structure"] == 60
     assert FLOORS["momentum"] == 55
-    assert FLOORS["quality"] == 74
-    assert FLOORS["confidence"] == 71
+    assert FLOORS["quality"] == 76
+    assert FLOORS["confidence"] == 73
     assert FLOORS["pa_confluence"] == 45
 
 

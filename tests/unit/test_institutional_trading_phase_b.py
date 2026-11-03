@@ -360,7 +360,10 @@ class TestEligibilityAndDecision:
             account=_account(already_in_trade=True, open_positions=1),
             risk_allowed=True,
         )
-        assert one_open.eligible is True
+        assert one_open.eligible is False
+        assert any(
+            "Already in trade" in r or "at max" in r for r in one_open.rejection_reasons
+        )
         full = PositionEligibilityEngine(config=ITEConfig()).evaluate(
             snapshot=snap,
             confluence=conf,

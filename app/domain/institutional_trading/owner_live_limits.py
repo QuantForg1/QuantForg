@@ -6,7 +6,7 @@ layer may be stricter, never looser.
 
 - Max PLANNED risk per trade: 20% of live equity. The aggregate open-risk
   budget for every position and pending order together is 30% of live equity.
-  Five positions is the maximum count. It does not grant 20% to each one.
+  One concurrent position is the maximum count. It does not grant 20% to each one.
   Planned risk = (|entry - SL| + spread + order slippage) x contract x
   volume + known commission, rounded up to the cent. The cap is rounded down.
   An amount is never rounded down to pass. Unknown commission is not zero:
@@ -19,9 +19,9 @@ layer may be stricter, never looser.
   A stop is never shrunk to fit the budget: too wide -> no trade. 1.00 is the
   noise boundary. A structural stop wider than that is kept. A setup whose
   1.00 x ATR stop is not a valid protective stop is rejected.
-- Active reward:risk floor is 0.50 after spread, expected slippage, and a
+- Active reward:risk floor is 1.50 after spread, expected slippage, and a
   confirmed commission. Candidates 0.10, 0.15, and 0.20 can be saved as an
-  experiment. They do not become the live floor unless that experiment is
+  experiment only. They do not become the live floor unless that experiment is
   explicitly promoted. Net reward:risk includes those costs. Unknown
   commission is omitted and is not a verified net. TP is a real structure
   level: the nearest one that clears the active floor, at most the second
@@ -29,7 +29,7 @@ layer may be stricter, never looser.
   shrunk to manufacture that floor.
 - Entries any UTC hour, every day. Broker symbol session, weekend close,
   holidays, and maintenance remain the availability gate. Spread <= 1.00.
-- Volume 0.01 (gateway max); at most 5 open positions; 1 entry per cycle.
+- Volume 0.01 (gateway max); at most 1 open position; 1 entry per cycle.
 - No consecutive-loss pause (owner 2026-10-23).
 
 ``evaluate_owner_entry`` is the final deterministic guard for NEW entries on
@@ -79,11 +79,11 @@ OWNER_DAILY_LOSS_PCT = Decimal("48.0")
 # and monthly P/L are still computed for reporting (summaries, journal).
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
-OWNER_MIN_REWARD_RISK = Decimal("0.50")
-# Active floor is 0.50. These three values are the only floors below 0.50 an
+OWNER_MIN_REWARD_RISK = Decimal("1.50")
+# Active floor is 1.50. These three values are the only floors below 1.50 an
 # owner may save, and only inside the experimental block. They stay inactive
-# until that experiment is promoted. Any other value below 0.50 is rejected
-# and the active floor fails closed to 0.50.
+# until that experiment is promoted. Any other value below 1.50 is rejected
+# and the active floor fails closed to 1.50.
 OWNER_EXPERIMENTAL_REWARD_RISK = (
     Decimal("0.10"),
     Decimal("0.15"),
@@ -122,18 +122,17 @@ OWNER_SL_ATR_TIMEFRAME = (
 )
 if OWNER_SL_ATR_TIMEFRAME not in {"M1", "M5"}:
     OWNER_SL_ATR_TIMEFRAME = "M1"
-OWNER_MAX_OPEN_POSITIONS = 5
+OWNER_MAX_OPEN_POSITIONS = 1
 OWNER_MAX_ENTRIES_PER_CYCLE = 1
 # Consecutive-loss pause removed (owner 2026-10-23): 0 = disabled.
 OWNER_MAX_CONSECUTIVE_LOSSES = 0
 # Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
-# Hard floor on the AI trade quality of a robot entry (owner 2026-10-24: 80;
-# lowered to 75 on 2026-10-26; experimental default 70 on 2026-10-30).
-# Unset policy stays 70. A saved integer from 70 to 100 is used. Below 70
-# fails closed to 70. No environment variable can lower the unset default.
-OWNER_MIN_TRADE_QUALITY = 70
-OWNER_MIN_TRADE_QUALITY_FLOOR = 70
+# Hard floor on the AI trade quality of a robot entry (owner Phase-2 target 75).
+# Unset policy stays 75. A saved integer from 75 to 100 is used. Below 75
+# fails closed to 75. No environment variable can lower the unset default.
+OWNER_MIN_TRADE_QUALITY = 75
+OWNER_MIN_TRADE_QUALITY_FLOOR = 75
 
 # Owner-confirmed Weltrade tariff. This is not a broker deal record.
 # Spread, swap, and slippage stay separate costs. A missing or altered
@@ -634,7 +633,7 @@ def _quantize_cent(value: Decimal) -> Decimal:
 def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
     """Return an enforceable net floor, or None when the saved value is illegal.
 
-    Any value at least 0.50 is allowed. Below that, only 0.10, 0.15, and 0.20.
+    Any value at least 1.50 is allowed. Below that, only 0.10, 0.15, and 0.20.
     """
     try:
         rr = Decimal(str(value))
@@ -649,7 +648,7 @@ def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
 
 
 def authorized_min_trade_quality(value: object) -> int | None:
-    """70-100 is savable. The unset default remains 70."""
+    """75-100 is savable. The unset default remains 75."""
     if isinstance(value, bool) or not isinstance(value, int | float | str | Decimal):
         return None
     try:
@@ -860,8 +859,8 @@ def evaluate_owner_entry(
     ``commission is None`` rejects the entry. It is not treated as zero.
     A known zero is included. Reward:risk counts the spread once, on the risk
     leg, plus order slippage and a known commission. The ratio must clear the
-    active owner floor (0.50; a promoted experiment may be 0.10, 0.15, or
-    0.20). A saved but unpromoted experiment stays at 0.50.
+    active owner floor (1.50; a promoted experiment may be 0.10, 0.15, or
+    0.20). A saved but unpromoted experiment stays at 1.50.
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """

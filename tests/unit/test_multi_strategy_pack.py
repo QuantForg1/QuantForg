@@ -77,7 +77,7 @@ def test_strategies_never_below_scalping_v1_floors() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.min_structure_score == 60
     assert cfg.min_momentum_score == 55
-    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.quality == 76
     assert cfg.multi_strategy_enabled is True
     # Momentum strategy is stricter, not weaker
     assert MOMENTUM_SCALPING.min_momentum >= cfg.min_momentum_score

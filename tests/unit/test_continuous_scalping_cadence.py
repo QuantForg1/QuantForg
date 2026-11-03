@@ -24,13 +24,13 @@ def test_continuous_scalp_flow_knobs_locked() -> None:
     assert cfg.max_entries_per_cycle == 1
     assert cfg.post_close_rescan_enabled is True
     assert cfg.post_close_rescan_delay_seconds == 0.0
-    assert cfg.max_open_trades == 5
+    assert cfg.max_open_trades == 1
     # Strategy floors = SCALPING_V1 (profile-owned)
-    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.quality == 76
     assert cfg.min_structure_score == 60
     assert cfg.min_momentum_score == 55
-    assert cfg.min_expected_rr == Decimal("1.20")
-    assert cfg.fixed_tp_r == Decimal("1.50")
+    assert cfg.min_expected_rr == Decimal("1.50")
+    assert cfg.fixed_tp_r == Decimal("2.00")
     assert cfg.absolute_max_hold_minutes == 12
     assert cfg.break_even_at_r == Decimal("0.80")
 
@@ -109,7 +109,7 @@ def test_handoff_does_not_skip_manual_same_symbol() -> None:
 @pytest.mark.unit
 def test_scalping_v1_caps_are_owner_one() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.max_open_trades == 5
+    assert cfg.max_open_trades == 1
     assert cfg.max_entries_per_cycle == 1
     assert cfg.require_probability_improvement is False
     assert "SCALPING_V1" in cfg.version

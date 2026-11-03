@@ -206,8 +206,8 @@ def test_generic_gate_only_when_no_rejected_row(gold_only: None) -> None:
 def test_scalping_v1_floors_unchanged() -> None:
     assert SCALPING_V1.min_structure_score == 60
     assert SCALPING_V1.min_momentum_score == 55
-    assert SCALPING_V1.normal_vol.quality == 74
-    assert SCALPING_V1.normal_vol.confidence == 71
+    assert SCALPING_V1.normal_vol.quality == 76
+    assert SCALPING_V1.normal_vol.confidence == 73
     assert SCALPING_V1.min_pa_confluence_score == 45
     gates = (
         ROOT / "app/domain/institutional_trading/ai_scalping/quality_gates.py"
@@ -217,8 +217,8 @@ def test_scalping_v1_floors_unchanged() -> None:
     ).read_text(encoding="utf-8")
     assert "min_structure_score=60" in profile
     assert "min_momentum_score=55" in profile
-    assert "quality=74" in profile
-    assert "confidence=71" in profile
+    assert "quality=76" in profile
+    assert "confidence=73" in profile
     assert "min_pa_confluence_score=45" in profile
     assert "Weak structure score" in gates
 

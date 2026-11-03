@@ -82,8 +82,8 @@ DEFAULT_TOTAL_EXPOSURE_PCT = Decimal("30.00")
 DEFAULT_MAX_SPREAD = Decimal("1.00")
 DEFAULT_MAX_SLIPPAGE = Decimal("0.50")
 DEFAULT_QUOTE_AGE_S = Decimal("3.00")
-DEFAULT_MIN_RR = Decimal("0.50")
-DEFAULT_MIN_SCORE = Decimal("70")
+DEFAULT_MIN_RR = Decimal("1.50")
+DEFAULT_MIN_SCORE = Decimal("75")
 DEFAULT_DUPLICATE_TTL_S = 120
 ACCOUNT_TOO_SMALL = "Account too small for configured risk limits on this instrument."
 

@@ -121,7 +121,7 @@ def test_full_book_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch) -> None:
         higher_timeframe_bias="up",
         open_positions=1,
     )
-    assert one_open.reason != "shared_book_position_open"
+    assert one_open.reason == "shared_book_position_open"
     decision = evaluate_m1(
         _trend_bars(),
         bid=Decimal("2306.10"),
@@ -327,6 +327,27 @@ def test_authorized_m1_submits_when_measured_rr_clears_the_owner_floor(
 
     monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "true")
     monkeypatch.setenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", "true")
+    from dataclasses import replace
+
+    from app.domain.institutional_trading.m1_micro import engine as m1_engine
+    from app.domain.institutional_trading.runtime_policy import (
+        active_min_reward_risk,
+    )
+
+    _orig_detect = m1_engine.detect_setup
+    ask = Decimal("2306.30")
+
+    def _detect_with_owner_rr(*args: object, **kwargs: object) -> object:
+        setup = _orig_detect(*args, **kwargs)
+        if setup is None or setup.side != "BUY":
+            return setup
+        spread = Decimal(str(kwargs["spread"]))
+        stop_dist = ask - setup.stop
+        floor = active_min_reward_risk()
+        need = floor * (stop_dist + spread) + Decimal("0.05")
+        return replace(setup, target=ask + need)
+
+    monkeypatch.setattr(m1_engine, "detect_setup", _detect_with_owner_rr)
     token = use_runtime_policy(approved_baseline())
     sent: list[dict] = []
 

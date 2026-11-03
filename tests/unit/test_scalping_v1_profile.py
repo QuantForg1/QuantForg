@@ -34,14 +34,14 @@ def test_scalping_v1_is_production_default() -> None:
 @pytest.mark.unit
 def test_scalping_v1_adaptive_quality_confluence_bands() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.high_vol.quality == 72
-    assert cfg.high_vol.confidence == 70
-    assert cfg.normal_vol.quality == 74
-    assert cfg.normal_vol.confidence == 71
-    assert cfg.low_vol.quality == 75
-    assert cfg.low_vol.confidence == 72
-    assert 72 <= cfg.high_vol.quality <= 75
-    assert 70 <= cfg.high_vol.confidence <= 72
+    assert cfg.high_vol.quality == 75
+    assert cfg.high_vol.confidence == 72
+    assert cfg.normal_vol.quality == 76
+    assert cfg.normal_vol.confidence == 73
+    assert cfg.low_vol.quality == 78
+    assert cfg.low_vol.confidence == 74
+    assert 75 <= cfg.high_vol.quality <= 78
+    assert 72 <= cfg.high_vol.confidence <= 74
 
 
 @pytest.mark.unit
@@ -75,8 +75,8 @@ def test_scalping_v1_gates_are_profile_owned_not_institutional() -> None:
 def test_scalping_v1_rr_internally_consistent() -> None:
     """fixed_tp_r and min_expected_rr must never contradict."""
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.fixed_tp_r == Decimal("1.50")
-    assert cfg.min_expected_rr == Decimal("1.20")
+    assert cfg.fixed_tp_r == Decimal("2.00")
+    assert cfg.min_expected_rr == Decimal("1.50")
     assert cfg.min_expected_rr <= cfg.fixed_tp_r
     # Regime bumps must not push RR above fixed TP
     for regime in ("range", "compression", "expansion", "strong_trend"):
@@ -94,7 +94,7 @@ def test_scalping_v1_rr_internally_consistent() -> None:
 
 @pytest.mark.unit
 def test_high_vol_rr_floor_not_above_atr_geometry() -> None:
-    """High-vol +0.2 demanded 1.40R while ATR TP/SL cap only delivers ~1.27R."""
+    """High-vol bump stays within ATR TP/SL geometry (atr_tp_mult/stop_atr_mult)."""
     from app.domain.institutional_trading.ai_scalping.structure_targets import (
         atr_scalp_geometry_rr,
     )
@@ -129,7 +129,7 @@ def test_config_post_init_clamps_rr_to_fixed_tp() -> None:
 def test_scalping_v1_scans_many_but_enters_one() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.max_entries_per_cycle == 1
-    assert cfg.max_open_trades == 5
+    assert cfg.max_open_trades == 1
     assert cfg.require_probability_improvement is False
     assert cfg.parallel_scan_enabled is True
     assert cfg.multi_asset_scan_enabled is True
@@ -162,6 +162,6 @@ def test_scalping_v1_safety_locked() -> None:
 def test_scalping_ite_maps_v1_floors() -> None:
     ite = scalping_ite_config()
     assert ite.trading_mode == "scalping"
-    assert ite.min_trade_quality_score == 74
-    assert ite.min_confluence_score == 71
-    assert ite.max_open_trades == 5
+    assert ite.min_trade_quality_score == 76
+    assert ite.min_confluence_score == 73
+    assert ite.max_open_trades == 1

@@ -142,8 +142,8 @@ def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
 def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ask 2322.50 at the send tick: 1.80 / (3.50 + 0.30) = 0.47, below 0.50.
-    pipeline, sent, client = _run(monkeypatch, move="1.70")
+    # Ask 2320.95 at send tick: 3.35 / (1.95 + 0.30 + 0.10) = 1.43 < 1.50.
+    pipeline, sent, client = _run(monkeypatch, move="0.15")
     assert pipeline.outcome == "rejected"
     assert "PRESEND OWNER_MIN_RR" in pipeline.message
     assert sent == []
@@ -153,7 +153,7 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
         for s in pipeline.stages
         if (s.meta or {}).get("component") == "owner_presend_check"
     )
-    assert meta["check_price"] == "2322.50"
+    assert meta["check_price"] == "2320.95"
     assert meta["check_spread"] == "0.30"
 
 

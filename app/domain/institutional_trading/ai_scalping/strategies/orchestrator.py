@@ -22,23 +22,28 @@ from app.domain.institutional_trading.ai_scalping.strategies.validation_status i
     strategy_health_snapshot,
 )
 
-ORCHESTRATION_VERSION = "soe-v1.1.0"
+ORCHESTRATION_VERSION = "soe-v1.2.0"
 
 # Solo passer must clear a higher quality bar (prefer no trade).
 MIN_SOLO_QUALITY = 82
 MIN_SOLO_CONFIDENCE = 80
-# With multi-strategy agreement, allow slightly lower quality (still not below
-# typical SCALPING_V1 soft evidence).
-MIN_CONFLUENT_QUALITY = 74
+# With multi-strategy agreement, allow slightly lower quality (still at/above
+# owner minimum trade quality 75).
+MIN_CONFLUENT_QUALITY = 76
 MIN_CONFLUENCE_COUNT = 2
-# Absolute floor even with confluence — never select junk.
-MIN_ABSOLUTE_QUALITY = 70
+# Absolute floor even with confluence — never select junk (owner Q75).
+MIN_ABSOLUTE_QUALITY = 75
 # When advisory engines strongly disagree with the live pack — raise the bar.
 ADVISORY_DISAGREE_MIN_QUALITY = 88
 ADVISORY_DISAGREE_MIN_CONFIDENCE = 85
 # Small-account / cost gate: wide spread vs weak RR → prefer no trade.
 MAX_SPREAD_FOR_WEAK_RR = 0.80
-MIN_RR_WHEN_SPREAD_ELEVATED = 1.35
+MIN_RR_WHEN_SPREAD_ELEVATED = 1.50
+# Absolute net reward:risk floor aligned with owner policy (prefer NO_TRADE).
+MIN_NET_REWARD_RISK = 1.50
+# Setup freshness: stale quotes / expired setups → NO_TRADE.
+MAX_QUOTE_AGE_SECONDS = 8.0
+MAX_SETUP_AGE_SECONDS = 120.0
 
 # Regime-incompatible pairs: if both somehow pass, keep only the regime-fit
 # specialist and demote the other (recorded as conflict resolution).
@@ -176,10 +181,29 @@ def _adjusted_rank(
     return (base * influence + confluence_bonus, ev.confidence, ev.quality)
 
 
-def _cost_gate_prefer_no_trade(score: dict[str, Any] | None) -> str | None:
-    """Prefer no trade when elevated spread meets weak RR (small accounts)."""
+def _score_rr(score: dict[str, Any]) -> float | None:
+    rr_raw = (
+        score.get("net_reward_risk")
+        or score.get("expected_rr")
+        or score.get("risk_reward")
+    )
+    try:
+        return float(rr_raw) if rr_raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _evidence_gate_prefer_no_trade(score: dict[str, Any] | None) -> str | None:
+    """Prefer no trade on weak geometry, stale setups, or false-breakout risk."""
     if not isinstance(score, dict):
         return None
+    rr = _score_rr(score)
+    if rr is not None and rr < MIN_NET_REWARD_RISK:
+        return (
+            f"Net reward:risk {rr:.2f} below owner floor "
+            f"{MIN_NET_REWARD_RISK:.2f} — prefer no trade"
+        )
+
     spread_raw = score.get("spread")
     if spread_raw is None:
         spread_raw = score.get("spread_points")
@@ -187,17 +211,59 @@ def _cost_gate_prefer_no_trade(score: dict[str, Any] | None) -> str | None:
         spread = float(spread_raw) if spread_raw is not None else None
     except (TypeError, ValueError):
         spread = None
-    rr_raw = score.get("expected_rr") or score.get("risk_reward")
-    try:
-        rr = float(rr_raw) if rr_raw is not None else None
-    except (TypeError, ValueError):
-        rr = None
-    if spread is None or rr is None:
-        return None
-    if spread >= MAX_SPREAD_FOR_WEAK_RR and rr < MIN_RR_WHEN_SPREAD_ELEVATED:
+    if (
+        spread is not None
+        and rr is not None
+        and spread >= MAX_SPREAD_FOR_WEAK_RR
+        and rr < MIN_RR_WHEN_SPREAD_ELEVATED
+    ):
         return (
             f"Elevated spread {spread:.2f} with weak RR {rr:.2f} "
             f"(need RR>={MIN_RR_WHEN_SPREAD_ELEVATED}) — prefer no trade"
+        )
+
+    for key, limit, label in (
+        ("quote_age_seconds", MAX_QUOTE_AGE_SECONDS, "quote"),
+        ("setup_age_seconds", MAX_SETUP_AGE_SECONDS, "setup"),
+        ("signal_age_seconds", MAX_SETUP_AGE_SECONDS, "signal"),
+    ):
+        raw = score.get(key)
+        if raw is None:
+            continue
+        try:
+            age = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if age > limit:
+            return (
+                f"Stale {label} age {age:.1f}s exceeds {limit:.0f}s "
+                "— prefer no trade (setup freshness)"
+            )
+
+    raw_factors = score.get("factors")
+    factors: dict[str, Any] = raw_factors if isinstance(raw_factors, dict) else {}
+    try:
+        bos = float(factors.get("bos") or score.get("structure_score") or 0)
+        vol = float(
+            factors.get("volatility")
+            or factors.get("atr_expansion")
+            or factors.get("volume")
+            or 50
+        )
+        momentum = float(score.get("momentum") or factors.get("momentum") or 0)
+        structure = float(score.get("structure_score") or factors.get("bos") or 0)
+    except (TypeError, ValueError):
+        return None
+
+    if bos >= 70 and vol < 45:
+        return (
+            f"False-breakout risk: BOS {bos:.0f} without volatility "
+            f"confirmation ({vol:.0f}) — prefer no trade"
+        )
+    if momentum >= 75 and structure < 45:
+        return (
+            f"Momentum exhaustion risk: momentum {momentum:.0f} with weak "
+            f"structure {structure:.0f} — prefer no trade"
         )
     return None
 
@@ -295,9 +361,9 @@ def orchestrate_strategies(
     rejected: list[RejectedCandidate] = []
     reasons: list[str] = []
 
-    cost_reason = _cost_gate_prefer_no_trade(score)
-    if cost_reason:
-        return _no_trade(reasons_t=(cost_reason,))
+    evidence_reason = _evidence_gate_prefer_no_trade(score)
+    if evidence_reason:
+        return _no_trade(reasons_t=(evidence_reason,))
 
     for ev in evals:
         if not ev.passed:

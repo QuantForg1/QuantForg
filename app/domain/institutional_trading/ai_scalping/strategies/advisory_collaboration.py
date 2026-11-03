@@ -100,8 +100,22 @@ def collect_score_factor_advisory_votes(
             )
         )
 
-    # Momentum advisory
-    if momentum >= 65 and direction in {"BUY", "SELL"}:
+    # Momentum advisory — withhold when high momentum lacks structure (exhaustion).
+    if momentum >= 75 and structure < 45:
+        votes.append(
+            AdvisoryVote(
+                strategy_id="momentum",
+                name="Momentum (factor advisory)",
+                direction="HOLD",
+                confidence=max(0, min(100, momentum)),
+                reason=(
+                    f"Momentum exhaustion risk: momentum {momentum} with weak "
+                    f"structure {structure}"
+                ),
+                source="score_factor_advisory",
+            )
+        )
+    elif momentum >= 65 and direction in {"BUY", "SELL"}:
         votes.append(
             AdvisoryVote(
                 strategy_id="momentum",
@@ -124,9 +138,23 @@ def collect_score_factor_advisory_votes(
             )
         )
 
-    # Breakout advisory
+    # Breakout advisory — withhold when BOS lacks volatility (false breakout).
     bos = _i(factors.get("bos"))
-    if bos >= 70 and vol >= 60 and direction in {"BUY", "SELL"}:
+    if bos >= 70 and vol < 45:
+        votes.append(
+            AdvisoryVote(
+                strategy_id="breakout",
+                name="Breakout (factor advisory)",
+                direction="HOLD",
+                confidence=max(0, bos),
+                reason=(
+                    f"False-breakout risk: BOS {bos} without volatility "
+                    f"confirmation ({vol})"
+                ),
+                source="score_factor_advisory",
+            )
+        )
+    elif bos >= 70 and vol >= 60 and direction in {"BUY", "SELL"}:
         votes.append(
             AdvisoryVote(
                 strategy_id="breakout",

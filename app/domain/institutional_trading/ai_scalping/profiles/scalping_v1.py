@@ -26,10 +26,10 @@ from app.domain.institutional_trading.owner_live_limits import (
 PROFILE_ID = "SCALPING_V1"
 PROFILE_VERSION = "ai-scalping-v8.2.0+SCALPING_V1+UNIVERSE_GATE_FIX"
 
-# Professional scalping RR target — min gate MUST match (never demand more).
-# The owner minimum (1.50, spread on the risk leg) is enforced at submit by
+# Professional scalping RR target — min gate MUST stay <= preferred TP R.
+# The owner minimum (1.50 net after costs) is enforced at submit by
 # owner_live_limits.evaluate_owner_entry.
-_SCALP_RR = Decimal("1.20")
+_SCALP_RR = Decimal("1.50")
 
 
 def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalpingConfig:
@@ -42,9 +42,9 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         continuous_version="ai-scalping-v7.1.0+SCALPING_V1",
         trading_mode="scalping",
         # Adaptive quality / confluence bands (professional scalping)
-        high_vol=AdaptiveThresholdBand(quality=72, confidence=70),
-        normal_vol=AdaptiveThresholdBand(quality=74, confidence=71),
-        low_vol=AdaptiveThresholdBand(quality=75, confidence=72),
+        high_vol=AdaptiveThresholdBand(quality=75, confidence=72),
+        normal_vol=AdaptiveThresholdBand(quality=76, confidence=73),
+        low_vol=AdaptiveThresholdBand(quality=78, confidence=74),
         # --- Profile-owned gates (were institutional class leftovers) ---
         # Structure / momentum / liquidity / PA: scalping-calibrated floors.
         # Still hard gates (not disabled). Not institutional swing 70/65/60/50.
@@ -61,11 +61,10 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         require_pa_confluence=True,
         require_tight_spread=True,
         require_valid_volatility=True,
-        # RR MUST not exceed preferred TP. Prefer 1.5R; min gate stays
-        # strictly above 1.0 (planned profit > planned loss).
+        # RR MUST not exceed preferred TP. Prefer 2.0R; min geometry 1.50R.
         min_expected_rr=_SCALP_RR,
         fixed_tp_r=PREFERRED_REWARD_RISK,
-        atr_tp_mult=Decimal("1.40"),
+        atr_tp_mult=Decimal("2.00"),
         # Hold window: target 2-10m, absolute 12m
         typical_hold_min_minutes=2,
         typical_hold_max_minutes=10,

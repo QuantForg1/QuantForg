@@ -397,8 +397,8 @@ def test_14_kill_switch_outranks_daily_loss() -> None:
 
 def test_15_max_positions_owner_limit_one() -> None:
     assert DEFAULT_AI_SCALPING_CONFIG.max_positions_per_symbol == 2
-    assert oms_risk_config_from_ite().max_open_positions == 5
-    assert RiskEngineConfig().max_open_positions == 5
+    assert oms_risk_config_from_ite().max_open_positions == 1
+    assert RiskEngineConfig().max_open_positions == 1
 
 
 def test_16_winner_only_scale_in_unchanged() -> None:
