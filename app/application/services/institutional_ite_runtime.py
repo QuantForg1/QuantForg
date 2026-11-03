@@ -2133,16 +2133,17 @@ class InstitutionalIteRuntime:
                                                     pnl=float(pnl_close),
                                                 )
                                             try:
-                                                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (
+                                                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
                                                     get_strategy_attribution_store,
                                                 )
 
                                                 rem_vol = getattr(
                                                     pos, "remaining_volume", None
                                                 )
-                                                fully = rem_vol is None or float(
-                                                    rem_vol
-                                                ) <= 0
+                                                fully = (
+                                                    rem_vol is None
+                                                    or float(rem_vol) <= 0
+                                                )
                                                 get_strategy_attribution_store().note_partial_close(
                                                     ticket=closed_ticket,
                                                     position_id=closed_ticket,
@@ -2809,7 +2810,7 @@ class InstitutionalIteRuntime:
         )
         if _fill_ticket or _fill_pos:
             try:
-                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (
+                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
                     get_strategy_attribution_store,
                 )
 

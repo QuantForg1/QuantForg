@@ -80,9 +80,11 @@ class StrategyAttributionStore:
                         if row.get("remaining_volume") is not None
                         else None
                     ),
-                    meta=dict(row.get("meta") or {})
-                    if isinstance(row.get("meta"), dict)
-                    else {},
+                    meta=(
+                        dict(row.get("meta") or {})
+                        if isinstance(row.get("meta"), dict)
+                        else {}
+                    ),
                 )
             with self._lock:
                 self._by_key = loaded
@@ -215,8 +217,8 @@ def reset_strategy_attribution_store_for_tests(path: Path | None = None) -> None
     with _STORE_LOCK:
         target = path or Path("data") / "strategy_attribution_bindings.test.json"
         if target.exists():
-            try:
+            import contextlib
+
+            with contextlib.suppress(OSError):
                 target.unlink()
-            except OSError:
-                pass
         _STORE = StrategyAttributionStore(path=target)

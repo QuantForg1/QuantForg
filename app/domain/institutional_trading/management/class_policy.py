@@ -121,11 +121,11 @@ def merge_position_metadata(
             out[key] = snap[key]
     # Ticket / position binding survives SL/TP comment overwrite and restarts.
     try:
-        from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (
-            get_strategy_attribution_store,
+        from app.domain.institutional_trading.ai_scalping.strategies import (
+            attribution_store as _attr_store,
         )
 
-        bound = get_strategy_attribution_store().resolve(
+        bound = _attr_store.get_strategy_attribution_store().resolve(
             ticket=ticket or snap.get("ticket") or live.get("ticket"),
             position_id=position_id
             or snap.get("position_id")
@@ -141,7 +141,12 @@ def merge_position_metadata(
             if out.get("symbol") in {None, ""} and bound.symbol:
                 out["symbol"] = bound.symbol
     except Exception:
-        pass
+        # Missing attribution store must not break position metadata merge.
+        import logging as _logging
+
+        _logging.getLogger(__name__).debug(
+            "strategy_attribution_resolve_skipped", exc_info=True
+        )
     live_hash = str(live.get("comment_hash") or "")
     comment_text = comment or str(out.get("comment") or "")
     if live_hash and live_hash == comment_hash_suffix(comment_text):
