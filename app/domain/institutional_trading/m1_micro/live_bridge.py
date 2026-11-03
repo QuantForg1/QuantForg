@@ -367,8 +367,28 @@ def _submit_entry(
             "direction": str(decision.action).upper(),
             "magic": int(QUANTFORG_MAGIC),
             "comment": comment,
+            "ticket": note.get("broker_ticket"),
         }
     )
+    try:
+        from app.domain.institutional_trading.ai_scalping.strategies import (
+            attribution_store as _attr_store,
+        )
+
+        _attr_store.get_strategy_attribution_store().bind_fill(
+            strategy_id="m1_micro",
+            engine="m1",
+            strategy_name="M1 Micro",
+            symbol=symbol,
+            ticket=note.get("broker_ticket"),
+            position_id=note.get("broker_ticket"),
+            volume=float(OWNER_MAX_LOT),
+            meta={"comment": comment, "magic": int(QUANTFORG_MAGIC)},
+        )
+    except Exception:
+        # Attribution must never block a successful M1 broker fill.
+        logger = __import__("logging").getLogger(__name__)
+        logger.exception("m1_strategy_attribution_bind_failed")
 
 
 def _maybe_close(

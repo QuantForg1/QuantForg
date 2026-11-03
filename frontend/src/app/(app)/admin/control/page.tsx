@@ -15,6 +15,7 @@ import {
   POLICY_NUMERIC_KEYS,
   buildExperimentalChanges,
   buildPolicyChanges,
+  canPromoteExperimental,
   m1ChoiceFromDocument,
   policyStateLines,
   policyStatusText,
@@ -165,14 +166,16 @@ export default function AdminControlPage() {
 
   async function saveExperimental(promote: boolean) {
     const version = overview?.policy?.version ?? 0;
-    const validation = validateExperimentalDraft(experimentalDraft);
+    const validation = promote
+      ? canPromoteExperimental(experimentalDraft)
+      : validateExperimentalDraft(experimentalDraft);
     if (validation.length) {
       setError(validation.join(" "));
       return;
     }
     const confirmed = window.confirm(
       promote
-        ? "Promote this experiment into the saved production policy? It still is not loaded until the worker confirms the new version."
+        ? "Promote this experiment into the saved production policy? Phase-5 blocks promoting a net RR floor below 1.50. It still is not loaded until the worker confirms the new version."
         : "Save this experiment only? It will not change the active production floor.",
     );
     if (!confirmed) return;

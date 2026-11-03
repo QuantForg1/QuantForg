@@ -88,8 +88,10 @@ def merge_position_metadata(
     snapshot: dict[str, Any] | None = None,
     comment: str | None = None,
     live_meta: dict[str, Any] | None = None,
+    ticket: Any = None,
+    position_id: Any = None,
 ) -> dict[str, Any]:
-    """Layer snapshot → live in-process fill → comment. Never fabricate class."""
+    """Layer snapshot → ticket store → live fill → comment. Never fabricate class."""
     out: dict[str, Any] = {}
     snap = dict(snapshot or {})
     live = dict(live_meta if live_meta is not None else last_fill_metadata())
@@ -103,6 +105,7 @@ def merge_position_metadata(
         "strategy_id",
         "strategy_name",
         "soe_confluence_count",
+        "attribution_engine",
         "magic",
         "comment",
         "symbol",
@@ -116,12 +119,50 @@ def merge_position_metadata(
     for key in keys:
         if snap.get(key) not in {None, ""}:
             out[key] = snap[key]
+    # Ticket / position binding survives SL/TP comment overwrite and restarts.
+    try:
+        from app.domain.institutional_trading.ai_scalping.strategies import (
+            attribution_store as _attr_store,
+        )
+
+        bound = _attr_store.get_strategy_attribution_store().resolve(
+            ticket=ticket or snap.get("ticket") or live.get("ticket"),
+            position_id=position_id
+            or snap.get("position_id")
+            or live.get("position_id"),
+        )
+        if bound is not None:
+            if out.get("strategy_id") in {None, ""}:
+                out["strategy_id"] = bound.strategy_id
+            if out.get("strategy_name") in {None, ""} and bound.strategy_name:
+                out["strategy_name"] = bound.strategy_name
+            if out.get("attribution_engine") in {None, ""}:
+                out["attribution_engine"] = bound.engine
+            if out.get("symbol") in {None, ""} and bound.symbol:
+                out["symbol"] = bound.symbol
+    except Exception:
+        # Missing attribution store must not break position metadata merge.
+        import logging as _logging
+
+        _logging.getLogger(__name__).debug(
+            "strategy_attribution_resolve_skipped", exc_info=True
+        )
     live_hash = str(live.get("comment_hash") or "")
     comment_text = comment or str(out.get("comment") or "")
     if live_hash and live_hash == comment_hash_suffix(comment_text):
         for key in keys:
             if out.get(key) in {None, ""} and live.get(key) not in {None, ""}:
                 out[key] = live[key]
+    # Comment prefixes are advisory only for engine tagging — never invent
+    # five-pack strategy_id from free-text alone.
+    cl = comment_text.lower()
+    if out.get("attribution_engine") in {None, ""}:
+        if cl.startswith("m1:") or "m1:" in cl:
+            out["attribution_engine"] = "m1"
+            if out.get("strategy_id") in {None, ""}:
+                out["strategy_id"] = "m1_micro"
+        elif cl.startswith("ite:") or "ite:" in cl:
+            out["attribution_engine"] = "ite"
     comment_class = trade_class_from_comment(comment_text)
     proven = proven_trade_class(out.get("trade_class"))
     if proven == TRADE_CLASS_UNKNOWN and comment_class in PROVEN_TRADE_CLASSES:

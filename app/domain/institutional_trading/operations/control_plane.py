@@ -42,7 +42,11 @@ from app.domain.institutional_trading.operations.models import (
     OpsPermission,
 )
 from app.domain.institutional_trading.operations.runbooks import RunbookCatalog
-from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_OPEN_POSITIONS
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_OPEN_POSITIONS,
+    OWNER_MAX_PLANNED_RISK_PCT,
+    OWNER_MAX_SPREAD,
+)
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
 
@@ -122,7 +126,7 @@ class OperationsControlPlane:
     config_version: str = "ite-cfg-v1.0.0"
     promotion_status: str = "not_promoted"
     git_commit: str | None = None
-    risk_per_trade_pct: Decimal = Decimal("1.0")
+    risk_per_trade_pct: Decimal = OWNER_MAX_PLANNED_RISK_PCT
     max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_open_trades: int = OWNER_MAX_OPEN_POSITIONS
     daily_loss_exceeded: bool = False
@@ -137,7 +141,7 @@ class OperationsControlPlane:
         "london_ny_overlap",
     )
     allowed_symbols: tuple[str, ...] = (GOLD_SYMBOL,)
-    max_spread: Decimal = Decimal("2.00")
+    max_spread: Decimal = OWNER_MAX_SPREAD
     news_filter_enabled: bool = False
     trading_mode: str = "scalping"
     compounding_enabled: bool = False
