@@ -128,6 +128,8 @@ class AiScalpingScore:
     opportunity_eligible: bool = False
     opportunity_audit: dict[str, object] | None = None
     sniper_entry: dict[str, object] | None = None
+    # Net reward:risk after spread/slippage/known commission (SOE prefers this).
+    expected_net_rr: Decimal | None = None
     # Operator-facing action. Bias stays on ``direction`` (BUY/SELL lean).
     signal_action: str = "WAIT"
     why_buy: tuple[str, ...] = ()
@@ -143,6 +145,12 @@ class AiScalpingScore:
             "confluence": self.confluence,
             "expected_rr": (
                 str(self.expected_rr) if self.expected_rr is not None else None
+            ),
+            "expected_net_rr": (
+                str(self.expected_net_rr) if self.expected_net_rr is not None else None
+            ),
+            "net_reward_risk": (
+                str(self.expected_net_rr) if self.expected_net_rr is not None else None
             ),
             "expected_hold_time": self.expected_hold_time,
             "market_regime": self.market_regime,
@@ -859,6 +867,7 @@ def score_scalping_setup(
         trade_quality=trade_quality,
         confluence=confluence,
         expected_rr=expected_rr,
+        expected_net_rr=net_rr,
         expected_hold_time=hold,
         market_regime=regime.regime,
         momentum=factors["momentum"],

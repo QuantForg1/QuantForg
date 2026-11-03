@@ -91,12 +91,15 @@ def test_momentum_floor_is_enforced() -> None:
 
 @pytest.mark.unit
 def test_soe_selects_with_confluence_on_strong_setup() -> None:
-    evals = evaluate_all_strategies(_base_score())
-    verdict = orchestrate_strategies(evals)
+    # Pass score so supportive advisory can clear cluster-solo selectivity.
+    # Effective confluence counts thesis clusters (trend pack = 1), not raw passers.
+    score = _base_score(net_reward_risk=2.2, expected_rr=2.2)
+    evals = evaluate_all_strategies(score)
+    verdict = orchestrate_strategies(evals, score=score)
     assert verdict.prefer_no_trade is False
     assert verdict.selected is not None
     assert verdict.decision in {"BUY", "SELL"}
-    assert verdict.confluence_count >= 2
+    assert verdict.confluence_count >= 1
     assert verdict.selected.strategy_id in {
         "smc_scalping",
         "trend_continuation",
@@ -104,6 +107,60 @@ def test_soe_selects_with_confluence_on_strong_setup() -> None:
         "momentum_scalping",
     }
     assert any("SOE selected" in r for r in verdict.reasons)
+
+
+@pytest.mark.unit
+def test_opportunity_enrich_preserves_soe_veto() -> None:
+    from app.domain.institutional_trading.ai_scalping.opportunity_ranking import (
+        enrich_scores_with_opportunity,
+    )
+
+    rows = enrich_scores_with_opportunity(
+        [
+            {
+                **_base_score(),
+                "soe_prefer_no_trade": True,
+                "soe_blocks_selection": True,
+                "strategy_id": "smc_scalping",
+                "reject": False,
+            }
+        ]
+    )
+    assert rows[0]["opportunity_eligible"] is False
+    assert rows[0]["strategy_id"] is None
+
+
+@pytest.mark.unit
+def test_correlated_trend_pack_is_one_confluence_cluster() -> None:
+    from app.domain.institutional_trading.ai_scalping.strategies.models import (
+        StrategyEvaluation,
+    )
+    from app.domain.institutional_trading.ai_scalping.strategies.orchestrator import (
+        _effective_confluence_count,
+    )
+
+    pack = [
+        StrategyEvaluation(
+            strategy_id=sid,
+            name=sid,
+            symbol="XAUUSD",
+            direction="BUY",
+            passed=True,
+            quality=88,
+            confidence=86,
+            explanation="x",
+            reject_reason=None,
+            filters={},
+            score_components={},
+        )
+        for sid in (
+            "smc_scalping",
+            "trend_continuation",
+            "breakout_scalping",
+            "momentum_scalping",
+        )
+    ]
+    assert _effective_confluence_count(pack) == 1
 
 
 @pytest.mark.unit
@@ -314,3 +371,85 @@ def test_monitor_and_catalog_policy(tmp_path: Path) -> None:
 def test_smc_baseline_still_evaluates() -> None:
     ev = evaluate_strategy(_base_score(), SMC_SCALPING)
     assert ev.passed is True
+
+
+@pytest.mark.unit
+def test_weak_mtf_alignment_prefers_no_trade() -> None:
+    from app.domain.institutional_trading.ai_scalping.strategies.models import (
+        StrategyEvaluation,
+    )
+
+    pack = tuple(
+        StrategyEvaluation(
+            strategy_id=sid,
+            name=sid,
+            symbol="XAUUSD",
+            direction="BUY" if sid == "smc_scalping" else "NONE",
+            passed=sid == "smc_scalping",
+            quality=90 if sid == "smc_scalping" else 20,
+            confidence=88 if sid == "smc_scalping" else 20,
+            explanation="x",
+            reject_reason=None if sid == "smc_scalping" else "fail",
+            filters={},
+            score_components={},
+        )
+        for sid in (
+            "smc_scalping",
+            "trend_continuation",
+            "breakout_scalping",
+            "range_mean_reversion",
+            "momentum_scalping",
+        )
+    )
+    verdict = orchestrate_strategies(
+        pack, score=_base_score(mtf_alignment=40, net_reward_risk=2.2)
+    )
+    assert verdict.prefer_no_trade is True
+    assert any("multi-timeframe" in r.lower() for r in verdict.reasons)
+
+
+@pytest.mark.unit
+def test_solo_below_preferred_rr_needs_higher_quality() -> None:
+    from app.domain.institutional_trading.ai_scalping.strategies.advisory_collaboration import (
+        AdvisoryVote,
+    )
+    from app.domain.institutional_trading.ai_scalping.strategies.models import (
+        StrategyEvaluation,
+    )
+
+    pack = tuple(
+        StrategyEvaluation(
+            strategy_id=sid,
+            name=sid,
+            symbol="XAUUSD",
+            direction="BUY" if sid == "smc_scalping" else "NONE",
+            passed=sid == "smc_scalping",
+            quality=83 if sid == "smc_scalping" else 20,
+            confidence=82 if sid == "smc_scalping" else 20,
+            explanation="x",
+            reject_reason=None if sid == "smc_scalping" else "fail",
+            filters={},
+            score_components={},
+        )
+        for sid in (
+            "smc_scalping",
+            "trend_continuation",
+            "breakout_scalping",
+            "range_mean_reversion",
+            "momentum_scalping",
+        )
+    )
+    # Non-empty HOLD-only advisory skips score-factor collection (keeps RR gate isolated).
+    hold_only = (
+        AdvisoryVote(
+            "neutral", "Neutral", "HOLD", 40, "isolated", "score_factor_advisory"
+        ),
+    )
+    # Single passer (raw_confluence=1) + RR below preferred → raised quality bar.
+    verdict = orchestrate_strategies(
+        pack,
+        score=_base_score(net_reward_risk=1.6, mtf_alignment=75),
+        advisory_votes=hold_only,
+    )
+    assert verdict.prefer_no_trade is True
+    assert any("preferred" in r.lower() for r in verdict.reasons)

@@ -21,7 +21,11 @@ from app.domain.institutional_trading.ai_scalping.strategies.models import (
     StrategyEvaluation,
     StrategyId,
 )
+from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (
+    snapshot_cycle_activity,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.monitoring import (
+    build_robot_health_monitor,
     build_strategy_performance_monitor,
 )
 from app.domain.institutional_trading.ai_scalping.strategies.orchestrator import (
@@ -67,6 +71,7 @@ __all__ = [
     "StrategyStatsBook",
     "attach_strategies_to_scores",
     "best_strategy_for_symbol",
+    "build_robot_health_monitor",
     "build_strategy_performance_monitor",
     "catalog_participation_policy",
     "collect_score_factor_advisory_votes",
@@ -79,5 +84,6 @@ __all__ = [
     "live_executable_ids",
     "orchestrate_strategies",
     "select_global_best",
+    "snapshot_cycle_activity",
     "summarize_advisory_agreement",
 ]

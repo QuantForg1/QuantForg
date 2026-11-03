@@ -1139,6 +1139,20 @@ def get_strategy_orchestration_monitor_ops(_user: OperatorUser) -> dict[str, Any
     return payload
 
 
+@router.get("/robot-health-monitor")
+def get_robot_health_monitor_ops(_user: OperatorUser) -> dict[str, Any]:
+    """Read-only LIVE robot operational health (strategies + SOE + M1 + data).
+
+    Per-strategy statuses are evidence-based (last evaluation timestamps).
+    Never mutates engines. Never authorizes LIVE. Never fabricates P&L.
+    """
+    from app.domain.institutional_trading.ai_scalping.strategies.monitoring import (
+        build_robot_health_monitor,
+    )
+
+    return build_robot_health_monitor()
+
+
 @router.get("/m15-semantics-telemetry")
 def get_m15_semantics_telemetry(
     _user: OperatorUser,

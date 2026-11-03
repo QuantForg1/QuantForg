@@ -105,7 +105,8 @@ NOT_IMPLEMENTED_AS_LIVE_PROFILES: tuple[dict[str, str], ...] = (
     },
 )
 
-DEFAULT_MAX_QUOTE_AGE_SECONDS = 30.0
+# Align with SOE MAX_QUOTE_AGE_SECONDS — one freshness policy for Gold decisions.
+DEFAULT_MAX_QUOTE_AGE_SECONDS = 8.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,12 +210,27 @@ def decide_gold(
         require_gold_trading_symbol,
     )
 
+    from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (
+        record_cycle_start,
+        record_soe_verdict,
+        record_strategy_evaluation,
+    )
+    from app.domain.institutional_trading.ai_scalping.strategies.stats import (
+        get_strategy_stats_book,
+    )
+
     raw_symbol = str(score.get("symbol") or "XAUUSD").upper()
     as_of = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     regime = str(score.get("market_regime") or score.get("regime") or "unknown")
+    age = _quote_age_seconds(score)
+    record_cycle_start(symbol=raw_symbol, quote_age_seconds=age, regime=regime)
     try:
         symbol = require_gold_trading_symbol(raw_symbol)
     except DisabledAutonomousSymbolError:
+        record_soe_verdict(
+            decision="NO_TRADE",
+            reasons=(f"Non-Gold symbol rejected at analysis boundary: {raw_symbol}",),
+        )
         return UnifiedGoldDecision(
             decision="NO_TRADE",
             symbol=raw_symbol,
@@ -230,9 +246,15 @@ def decide_gold(
             as_of=as_of,
         )
 
-    age = _quote_age_seconds(score)
     stale = age is not None and age > float(max_quote_age_seconds)
     if stale:
+        record_soe_verdict(
+            decision="NO_TRADE",
+            reasons=(
+                f"Stale market data: quote_age_seconds={age} > {max_quote_age_seconds}",
+            ),
+            stale_data=True,
+        )
         return UnifiedGoldDecision(
             decision="NO_TRADE",
             symbol=symbol,
@@ -253,12 +275,32 @@ def decide_gold(
     gold_score = dict(score)
     gold_score["symbol"] = symbol
     evaluations = evaluate_all_strategies(gold_score, live_boosts=live_boosts)
+    book = get_strategy_stats_book()
+    for ev in evaluations:
+        book.record_evaluation(ev.strategy_id, passed=ev.passed)
+        record_strategy_evaluation(
+            strategy_id=ev.strategy_id,
+            name=ev.name,
+            passed=ev.passed,
+            direction=ev.direction,
+            quality=ev.quality,
+            confidence=ev.confidence,
+            reject_reason=ev.reject_reason,
+        )
     verdict = orchestrate_strategies(
-        evaluations, live_boosts=live_boosts, score=gold_score
+        evaluations,
+        live_boosts=live_boosts,
+        stats_snapshot=book.snapshot(),
+        score=gold_score,
     )
     rejected = tuple(r.to_dict() for r in verdict.rejected)
 
     if verdict.prefer_no_trade or verdict.selected is None:
+        record_soe_verdict(
+            decision="NO_TRADE",
+            reasons=verdict.reasons
+            or ("SOE prefer no trade — no selectable strategy",),
+        )
         return UnifiedGoldDecision(
             decision="NO_TRADE",
             symbol=symbol,
@@ -276,6 +318,12 @@ def decide_gold(
         )
 
     best = verdict.selected
+    book.record_accepted(best.strategy_id)
+    record_soe_verdict(
+        decision=best.direction,
+        reasons=verdict.reasons,
+        selected_strategy_id=best.strategy_id,
+    )
     return UnifiedGoldDecision(
         decision=best.direction,
         symbol=symbol,

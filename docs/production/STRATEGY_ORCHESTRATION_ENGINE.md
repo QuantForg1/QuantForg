@@ -1,4 +1,4 @@
-# Strategy Orchestration Engine (SOE) — v1.2.0
+# Strategy Orchestration Engine (SOE) — v1.3.0
 
 **Status:** Production collaboration layer (upstream of Risk / OMS / MT5)  
 **Does not:** authorize `order_send`, weaken risk gates, enable grid/martingale, or auto-approve LIVE capital.
@@ -11,9 +11,10 @@ QuantForg evaluates the five live scalping profiles **and** advisory research en
 2. Collect advisory votes (factor proxies for RSI/MACD/MA/Bollinger/trend/momentum/breakout/mean-reversion roles).
 3. Measure agreement / disagreement — never manufacture consensus.
 4. Apply performance influence (deterioration → veto).
-5. Raise the evidence bar when advisory engines strongly disagree.
-6. Prefer **NO_TRADE** on weak solo setups, net RR &lt; 1.50, stale setups, false-breakout / momentum-exhaustion evidence, elevated spread, or conflicts.
-7. Select **one** coherent OMS-eligible winner (live pack only).
+5. Raise the evidence bar when advisory engines strongly disagree (**both** quality and confidence must clear raised floors).
+6. Raise the solo bar on mixed advisory disagreement.
+7. Prefer **NO_TRADE** on weak solo setups, net RR &lt; 1.50, weak MTF alignment, stale setups, false-breakout / momentum-exhaustion evidence, elevated spread, solo RR below preferred (2.0) without stronger quality, or conflicts.
+8. Select **one** coherent OMS-eligible winner (live pack only).
 
 **Operating objective:** LIVE trading through existing owner gates — not permanent SHADOW. SHADOW remains available; it is not required forever.
 
@@ -35,10 +36,13 @@ Catalog-only / forbidden: `session_breakout` as live profile, grid, martingale.
 - On close, `StrategyStatsBook.record_closed` updates SOE influence when `strategy_id` is present.
 - Broker `/history` remains authoritative for net P&L after costs.
 
-## Ops monitor
+## Ops monitors
 
-`GET …/strategy-orchestration-monitor` — strategies, health, eligibility registry, collaboration mode, `auto_authorize_live: false`.
+- `GET …/strategy-orchestration-monitor` — durable stats, health, eligibility, collaboration mode, `auto_authorize_live: false`.
+- `GET …/robot-health-monitor` — process-local cycle activity + per-strategy operational status vocabulary (`ACTIVE_AND_EVALUATING`, `ACTIVE_NO_VALID_SETUP`, `SIGNAL_GENERATED`, `BLOCKED_BY_RISK`, `DISABLED`, `DATA_UNAVAILABLE`, `ERROR`), M1 status (owner-controlled flags not auto-changed), risk policy defaults.
+
+Primary SOE path (`decide_gold`) and scanner both record evaluations into StrategyStatsBook and cycle activity.
 
 ## Honest note
 
-Matched STRATEGY_MATCHED closed-trade ledgers may be empty until fills are attributed. Do not invent strategy P&L. Historical data does not guarantee future profitability.
+Matched STRATEGY_MATCHED closed-trade ledgers may be empty until fills are attributed. Do not invent strategy P&L. Historical data does not guarantee future profitability. 20% per-trade risk and 48% daily halt are extremely aggressive.

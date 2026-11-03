@@ -1173,6 +1173,26 @@ class InstitutionalExecutionEngine:
             meta={"component": "risk_engine"},
         )
         if risk_reject:
+            try:
+                from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
+                    record_blocked_by_risk,
+                )
+
+                sid = None
+                for blob in (
+                    getattr(decision, "checks", None),
+                    getattr(decision, "calculated_risk", None),
+                    getattr(intent, "metadata", None),
+                ):
+                    if isinstance(blob, dict) and blob.get("strategy_id"):
+                        sid = str(blob.get("strategy_id"))
+                        break
+                record_blocked_by_risk(
+                    strategy_id=sid,
+                    reason="; ".join(risk_reject)[:300],
+                )
+            except Exception:
+                pass
             self._observe(
                 user_id=uid,
                 request_id=request_id,
