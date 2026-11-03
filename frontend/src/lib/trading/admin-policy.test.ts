@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   buildExperimentalChanges,
   buildPolicyChanges,
+  canPromoteExperimental,
   m1ChoiceFromDocument,
   policyStateLines,
   policyStatusText,
@@ -136,6 +137,7 @@ assert.equal(experimentalChanges.promote_experimental, undefined);
 const nested = experimentalChanges.experimental as Record<string, unknown>;
 assert.equal(nested.min_reward_risk, "0.20");
 assert.equal(nested.min_trade_quality, 75);
+assert.match(canPromoteExperimental(experimentDraft).join(" "), /Promotion blocked/);
 assert.equal("min_reward_risk" in buildPolicyChanges({
   draft: { ...experimentDraft, min_reward_risk: "1.50" },
   m1: "defer",

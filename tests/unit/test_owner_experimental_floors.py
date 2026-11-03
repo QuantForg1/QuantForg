@@ -132,7 +132,8 @@ def test_illegal_saved_values_fail_closed_to_the_published_default() -> None:
         reset_runtime_policy(token)
 
 
-def test_saved_experiment_stays_inactive_until_promoted() -> None:
+def test_saved_experiment_stays_inactive_and_cannot_undercut_rr_floor() -> None:
+    """Phase-5: experimental RR candidates may be stored but never promoted < 1.50."""
     base = approved_baseline()
     saved = validate_policy_changes(base, {"experimental": _experiment("0.15")})
     assert saved.ok and saved.document is not None
@@ -146,19 +147,12 @@ def test_saved_experiment_stays_inactive_until_promoted() -> None:
         base,
         {"experimental": _experiment("0.15"), "promote_experimental": True},
     )
-    assert promoted.ok and promoted.document is not None
-    assert promoted.document["experimental_promoted"] is True
-    assert promoted.document["min_reward_risk"] == "0.15"
-    assert promoted.document["max_planned_risk_pct"] == "14"
-    assert promoted.document["stop_atr_multiplier"] == "1.00"
-    assert promoted.document["gold_only"] is True
-    token = use_runtime_policy(promoted.document)
-    try:
-        assert active_min_reward_risk() == Decimal("0.15")
-    finally:
-        reset_runtime_policy(token)
-    top_level = _policy(
+    assert promoted.ok is False
+    assert any("promote_experimental cannot lower" in err for err in promoted.errors)
+    # Stale promoted documents still fail closed to 1.50 at enforcement time.
+    token = _policy(
         min_reward_risk="0.15",
+        experimental_promoted=True,
         min_trade_quality=75,
         stop_atr_multiplier="1.25",
     )
@@ -167,18 +161,30 @@ def test_saved_experiment_stays_inactive_until_promoted() -> None:
         assert active_min_trade_quality() == 75
         assert active_stop_atr_multiplier() == Decimal("1.25")
     finally:
-        reset_runtime_policy(top_level)
+        reset_runtime_policy(token)
+    # Any save of a sub-1.50 active RR is rewritten to the owner floor.
+    rewritten = validate_policy_changes(
+        {
+            **approved_baseline(),
+            "min_reward_risk": "0.20",
+            "experimental_promoted": True,
+        },
+        {"reason": "phase5_rr_floor_lock"},
+    )
+    assert rewritten.ok and rewritten.document is not None
+    assert rewritten.document["min_reward_risk"] == "1.50"
+    assert rewritten.document["experimental_promoted"] is False
 
 
-def test_promoted_experiment_is_what_the_gates_enforce() -> None:
+def test_promoted_quality_and_atr_still_apply_without_lowering_rr() -> None:
     token = _policy(
-        min_reward_risk="0.15",
-        experimental_promoted=True,
+        min_reward_risk="1.50",
+        experimental_promoted=False,
         min_trade_quality=80,
         stop_atr_multiplier="1.25",
     )
     try:
-        assert active_min_reward_risk() == Decimal("0.15")
+        assert active_min_reward_risk() == Decimal("1.50")
         assert active_min_trade_quality() == 80
         assert active_stop_atr_multiplier() == Decimal("1.25")
         passed = _gates(80)
@@ -239,7 +245,8 @@ def test_net_rr_includes_spread_slippage_and_known_commission_only() -> None:
     assert known.ratio < unknown.ratio
 
 
-def test_owner_entry_uses_the_saved_net_floor_and_slippage() -> None:
+def test_owner_entry_uses_the_locked_net_floor_and_slippage() -> None:
+    """Phase-5: even a stale promoted 0.10 document enforces 1.50."""
     common = {
         "symbol": "XAUUSD",
         "side": "BUY",
@@ -254,19 +261,25 @@ def test_owner_entry_uses_the_saved_net_floor_and_slippage() -> None:
     }
     token = _policy(min_reward_risk="0.10", experimental_promoted=True)
     try:
-        assert ol.evaluate_owner_entry(**common) == []
-        slipped = ol.evaluate_owner_entry(**common, slippage=Decimal("1"))
-        assert any(r.startswith("OWNER_MIN_RR") for r in slipped)
-        priced = ol.evaluate_owner_entry(**{**common, "commission": Decimal("0.50")})
-        assert any(r.startswith("OWNER_MIN_RR") for r in priced)
+        # Geometry clears 0.10 but fails the locked 1.50 owner floor.
+        blocked = ol.evaluate_owner_entry(**common)
+        assert any(r.startswith("OWNER_MIN_RR") for r in blocked)
     finally:
         reset_runtime_policy(token)
-    # The same geometry is below the published 0.50 default.
     default = ol.evaluate_owner_entry(**common)
     assert any(r.startswith("OWNER_MIN_RR") for r in default)
+    # A geometry that clears 1.50 after costs is accepted.
+    ok = ol.evaluate_owner_entry(
+        **{
+            **common,
+            "take_profit": Decimal("104"),
+            "stop_loss": Decimal("99"),
+        }
+    )
+    assert not any(r.startswith("OWNER_MIN_RR") for r in ok)
 
 
-def test_experimental_floor_can_select_a_structure_target_gross_rr_does_not() -> None:
+def test_structure_targets_respect_locked_rr_floor_not_experimental_candidate() -> None:
     snapshot = _snapshot(highs=("4134.50", "4135.20", "4140.00"))
     # Published / active floor 1.50 rejects near levels (net RR < 1.50).
     published = compute_structure_targets(
@@ -288,11 +301,8 @@ def test_experimental_floor_can_select_a_structure_target_gross_rr_does_not() ->
         )
     finally:
         reset_runtime_policy(token)
-    assert chosen.take_profit == Decimal("4134.50")
-    assert chosen.expected_rr is not None and chosen.expected_rr <= Decimal("1")
-    assert chosen.expected_net_rr is not None
-    assert chosen.expected_net_rr >= Decimal("0.10")
-    assert chosen.expected_net_rr < chosen.expected_rr
+    # Stale experimental promotion must not unlock near-structure targets.
+    assert chosen.take_profit is None
 
 
 def test_tighter_atr_multiplier_never_shrinks_a_wider_structure_stop() -> None:
@@ -358,8 +368,8 @@ def test_break_even_win_rate_rises_when_costs_lower_net_rr() -> None:
     assert breakeven(net.ratio) > breakeven(gross.ratio)
 
 
-def test_gross_precheck_follows_the_saved_floor() -> None:
-    # Active floor >= 1: gross precheck only requires TP profit > SL loss.
+def test_gross_precheck_follows_the_locked_floor() -> None:
+    # Active floor 1.50: gross precheck requires TP >= 1.50 * SL.
     assert ol.gross_distance_rr_block(
         tp_distance=Decimal("1.00"), stop_distance=Decimal("1")
     )
@@ -373,22 +383,22 @@ def test_gross_precheck_follows_the_saved_floor() -> None:
     assert ol.estimated_rr_block(Decimal("1.50")) is None
     token = _policy(min_reward_risk="0.10", experimental_promoted=True)
     try:
+        # Stale promotion cannot admit 0.15 gross RR.
+        assert ol.gross_distance_rr_block(
+            tp_distance=Decimal("0.15"), stop_distance=Decimal("1")
+        )
+        assert ol.estimated_rr_block(Decimal("0.15"))
         assert (
             ol.gross_distance_rr_block(
-                tp_distance=Decimal("0.15"), stop_distance=Decimal("1")
+                tp_distance=Decimal("1.50"), stop_distance=Decimal("1")
             )
             is None
         )
-        assert ol.gross_distance_rr_block(
-            tp_distance=Decimal("0.05"), stop_distance=Decimal("1")
-        )
-        assert ol.estimated_rr_block(Decimal("0.15")) is None
-        assert ol.estimated_rr_block(Decimal("0.05"))
     finally:
         reset_runtime_policy(token)
 
 
-def test_presend_slippage_buffer_uses_the_active_floor() -> None:
+def test_presend_slippage_buffer_uses_the_locked_floor() -> None:
     token = _policy(min_reward_risk="0.10", experimental_promoted=True)
     try:
         reasons = ol.presend_owner_violations(
@@ -408,8 +418,7 @@ def test_presend_slippage_buffer_uses_the_active_floor() -> None:
         )
     finally:
         reset_runtime_policy(token)
-    assert not any("OWNER_MIN_RR" in r for r in reasons)
-    # Same prices at the published floor are refused.
+    assert any("OWNER_MIN_RR" in r for r in reasons)
     refused = ol.presend_owner_violations(
         symbol="XAUUSD",
         side="BUY",

@@ -179,6 +179,18 @@ export function buildExperimentalChanges(
   return { experimental };
 }
 
+/** Phase-5: experimental RR candidates below 1.50 cannot be promoted live. */
+export function canPromoteExperimental(draft: Record<string, string>): string[] {
+  const errors = validateExperimentalDraft(draft);
+  const reward = numeric(draft.min_reward_risk || "");
+  if (reward != null && reward < ACTIVE_REWARD_RISK_FLOOR) {
+    errors.push(
+      `Promotion blocked: experimental min_reward_risk ${reward} cannot undercut the owner floor ${ACTIVE_REWARD_RISK_FLOOR}. Save as documentation only.`,
+    );
+  }
+  return errors;
+}
+
 export function policyStatusText(policy: {
   version?: number;
   source?: string;

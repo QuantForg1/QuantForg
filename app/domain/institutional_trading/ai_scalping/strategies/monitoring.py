@@ -283,8 +283,9 @@ def build_robot_health_monitor(
             "weekly_loss_halt_percent": "0 (off)",
             "overall_drawdown_halt_percent": "0 (off)",
             "note": (
-                "20% per-trade and 48% daily halt are extremely aggressive. "
-                "Broker constraints still bind. Not LIVE authorization."
+                "Owner Phase-5 lock: experimental_promoted cannot lower the "
+                "active net RR floor below 1.50. 20% per-trade and 48% daily "
+                "halt are aggressive. Broker constraints still bind."
             ),
         },
         "disclaimer": (

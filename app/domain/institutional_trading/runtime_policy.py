@@ -171,11 +171,13 @@ def active_max_spread() -> Decimal:
 
 
 def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
-    """Floor a document actually applies. A stored candidate is not that floor.
+    """Floor a document actually applies after estimated trading costs.
 
-    0.10, 0.15, and 0.20 stay inactive unless ``experimental_promoted`` is
-    true. Any other value below 0.50 fails closed to 0.50. A value at or
-    above 0.50 stays, including a stricter floor.
+    Owner Phase-5 lock: the live minimum net reward:risk is **1.50**.
+    Candidates 0.10 / 0.15 / 0.20 may still be stored under ``experimental``
+    for documentation, but ``experimental_promoted`` must never lower the
+    active enforcement floor below :data:`OWNER_MIN_REWARD_RISK`.
+    A stricter saved floor (≥ 1.50) remains allowed.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -191,15 +193,17 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     except (InvalidOperation, ValueError):
         return OWNER_MIN_REWARD_RISK
     authorized = authorized_min_reward_risk(value)
-    if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
-        return authorized or OWNER_MIN_REWARD_RISK
-    if document.get("experimental_promoted") is True:
-        return authorized
-    return OWNER_MIN_REWARD_RISK
+    if authorized is None:
+        return OWNER_MIN_REWARD_RISK
+    # Never allow experimental promotion (or stale persisted candidates) to
+    # undercut the owner-approved 1.50 net RR floor.
+    if authorized < OWNER_MIN_REWARD_RISK:
+        return OWNER_MIN_REWARD_RISK
+    return authorized
 
 
 def active_min_reward_risk() -> Decimal:
-    """Active floor is 1.50. See :func:`enforced_min_reward_risk`."""
+    """Active floor is always ≥ 1.50. See :func:`enforced_min_reward_risk`."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
@@ -306,6 +310,7 @@ def approved_baseline() -> dict[str, Any]:
         "max_lot": "0.01",
         "max_spread": "1.00",
         "min_reward_risk": str(OWNER_MIN_REWARD_RISK),
+        "preferred_reward_risk": "2.00",
         "commission": owner_commission_configuration(),
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
         "stop_atr_multiplier": "1.00",
@@ -314,8 +319,12 @@ def approved_baseline() -> dict[str, Any]:
         "evaluate_full_utc_day": True,
         "ite_enabled": True,
         "unified_decision_enabled": True,
+        "allow_martingale": False,
+        "allow_grid": False,
+        "allow_average_down": False,
         "m1_micro_enabled": None,
-        "m1_live_submit": None,
+        "m1_live_submit": False,
+        "experimental_promoted": False,
         "session_utc": "00:00-23:59",
     }
 
@@ -633,6 +642,20 @@ def validate_policy_changes(
     if cleaned_experimental is not None:
         merged["experimental"] = cleaned_experimental
         if promote:
+            # Phase-5: experimental RR candidates below 1.50 cannot be promoted
+            # onto the active document. Other experimental fields may still
+            # apply when they pass the normal active validators above.
+            exp_rr = cleaned_experimental.get("min_reward_risk")
+            if _active_rr_is_candidate(exp_rr):
+                return PolicyDecision(
+                    False,
+                    None,
+                    (
+                        "promote_experimental cannot lower min_reward_risk "
+                        f"below {OWNER_MIN_REWARD_RISK} "
+                        "(owner Phase-5 net RR floor lock)",
+                    ),
+                )
             for key, value in cleaned_experimental.items():
                 merged[key] = value
             merged["experimental_promoted"] = True
@@ -640,6 +663,11 @@ def validate_policy_changes(
             merged["experimental_promoted"] = False
             if _active_rr_is_candidate(merged.get("min_reward_risk")):
                 merged["min_reward_risk"] = str(OWNER_MIN_REWARD_RISK)
+    # Fail closed: any path that left a sub-1.50 RR on the active document
+    # is rewritten to the owner floor (stale promoted experiments included).
+    if _active_rr_is_candidate(merged.get("min_reward_risk")):
+        merged["min_reward_risk"] = str(OWNER_MIN_REWARD_RISK)
+        merged["experimental_promoted"] = False
     weekly = _dec(merged.get("weekly_loss_pct") or 0)
     daily = _dec(merged.get("daily_loss_pct") or OWNER_DAILY_LOSS_PCT)
     drawdown = _dec(merged.get("max_drawdown_pct") or 0)

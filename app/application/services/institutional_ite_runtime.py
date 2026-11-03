@@ -2105,6 +2105,9 @@ class InstitutionalIteRuntime:
                                                 merge_position_metadata,
                                             )
 
+                                            closed_ticket = getattr(
+                                                pos, "ticket", None
+                                            ) or getattr(pos, "position_id", None)
                                             meta = merge_position_metadata(
                                                 snapshot={
                                                     "symbol": closed_sym,
@@ -2112,11 +2115,15 @@ class InstitutionalIteRuntime:
                                                         getattr(pos, "comment", "")
                                                         or ""
                                                     ),
+                                                    "ticket": closed_ticket,
+                                                    "position_id": closed_ticket,
                                                 },
                                                 comment=str(
                                                     getattr(pos, "comment", "") or ""
                                                 ),
                                                 live_meta=last_fill_metadata(),
+                                                ticket=closed_ticket,
+                                                position_id=closed_ticket,
                                             )
                                             sid = str(meta.get("strategy_id") or "")
                                             if sid:
@@ -2124,6 +2131,30 @@ class InstitutionalIteRuntime:
                                                     sid,
                                                     win=bool(pnl_close > 0),
                                                     pnl=float(pnl_close),
+                                                )
+                                            try:
+                                                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (
+                                                    get_strategy_attribution_store,
+                                                )
+
+                                                rem_vol = getattr(
+                                                    pos, "remaining_volume", None
+                                                )
+                                                fully = rem_vol is None or float(
+                                                    rem_vol
+                                                ) <= 0
+                                                get_strategy_attribution_store().note_partial_close(
+                                                    ticket=closed_ticket,
+                                                    position_id=closed_ticket,
+                                                    closed_volume=float(
+                                                        getattr(pos, "volume", 0) or 0
+                                                    )
+                                                    or None,
+                                                    fully_closed=fully,
+                                                )
+                                            except Exception:
+                                                logger.exception(
+                                                    "strategy_attribution_close_failed"
                                                 )
                                         except Exception:
                                             logger.exception(
@@ -2728,6 +2759,35 @@ class InstitutionalIteRuntime:
                 diagnostics["strategy_confluence_count"] = attr.get(
                     "strategy_confluence_count"
                 )
+        _fill_sid = (
+            str(
+                getattr(decision, "strategy_id", None)
+                or diagnostics.get("strategy_id")
+                or ""
+            )
+            or None
+        )
+        _fill_sname = (
+            str(
+                getattr(decision, "strategy_name", None)
+                or diagnostics.get("strategy_name")
+                or ""
+            )
+            or None
+        )
+        _fill_ticket = (
+            getattr(last, "order_ticket", None)
+            or getattr(last, "ticket", None)
+            or getattr(last, "deal_ticket", None)
+            or (last.get("order_ticket") if isinstance(last, dict) else None)
+            or (last.get("ticket") if isinstance(last, dict) else None)
+        )
+        _fill_pos = (
+            getattr(last, "position_id", None)
+            or getattr(last, "position", None)
+            or (last.get("position_id") if isinstance(last, dict) else None)
+            or _fill_ticket
+        )
         remember_fill_metadata(
             {
                 "trade_class": trade_class,
@@ -2738,22 +2798,35 @@ class InstitutionalIteRuntime:
                 "comment_hash": str(getattr(decision, "input_hash", "") or "")[:12],
                 "management_profile": "scalp" if trade_class == "SCALP" else "hold",
                 # Strategy attribution for SOE closed-loop stats (not in MT5 comment).
-                "strategy_id": str(
-                    getattr(decision, "strategy_id", None)
-                    or diagnostics.get("strategy_id")
-                    or ""
-                )
-                or None,
-                "strategy_name": str(
-                    getattr(decision, "strategy_name", None)
-                    or diagnostics.get("strategy_name")
-                    or ""
-                )
-                or None,
+                "strategy_id": _fill_sid,
+                "strategy_name": _fill_sname,
                 "soe_confluence_count": diagnostics.get("strategy_confluence_count")
                 or getattr(decision, "strategy_confluence_count", None),
+                "ticket": _fill_ticket,
+                "position_id": _fill_pos,
+                "attribution_engine": "soe" if _fill_sid else "ite",
             }
         )
+        if _fill_ticket or _fill_pos:
+            try:
+                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (
+                    get_strategy_attribution_store,
+                )
+
+                get_strategy_attribution_store().bind_fill(
+                    strategy_id=_fill_sid or "ite_primary",
+                    engine="soe" if _fill_sid else "ite",
+                    strategy_name=_fill_sname or "ITE",
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                    ticket=_fill_ticket,
+                    position_id=_fill_pos,
+                    meta={
+                        "cycle_id": plan.cycle_id,
+                        "trade_class": trade_class,
+                    },
+                )
+            except Exception:
+                logger.exception("strategy_attribution_bind_fill_failed")
         diagnostics["time_from_signal_to_first_order_send"] = round(
             (t_first - signal_t0) * 1000.0, 3
         )
