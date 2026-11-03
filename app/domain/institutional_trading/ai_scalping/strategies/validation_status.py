@@ -83,7 +83,8 @@ def classify_strategy_health(row: dict[str, Any] | None) -> dict[str, Any]:
     wr = None
     if row and row.get("win_rate") is not None:
         try:
-            wr = float(row.get("win_rate"))
+            wr_raw = row.get("win_rate")
+            wr = float(wr_raw) if wr_raw is not None else None
         except (TypeError, ValueError):
             wr = None
 
