@@ -5201,12 +5201,10 @@ class InstitutionalIteRuntime:
                     or ai_d.get("confidence"),
                     "direction": sig_dir,
                     "strategy_id": (
-                        (
-                            market_context_diagnostics.get("strategy_id")
-                            if isinstance(market_context_diagnostics, dict)
-                            else None
-                        )
-                        or ai_d.get("strategy_id")
+                        ai_d.get("strategy_id")
+                        or self._resolve_scan_strategy_attribution(
+                            str(getattr(decision, "symbol", "") or "")
+                        ).get("strategy_id")
                         or ai_d.get("strategy")
                         or ai_d.get("setup_family")
                     ),

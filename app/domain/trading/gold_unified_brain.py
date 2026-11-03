@@ -205,11 +205,6 @@ def decide_gold(
     Stale quote → NO_TRADE. Never sets authorizes_trade.
     Non-Gold symbols are rejected at the analysis boundary.
     """
-    from app.domain.trading.gold_only import (
-        DisabledAutonomousSymbolError,
-        require_gold_trading_symbol,
-    )
-
     from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (
         record_cycle_start,
         record_soe_verdict,
@@ -217,6 +212,10 @@ def decide_gold(
     )
     from app.domain.institutional_trading.ai_scalping.strategies.stats import (
         get_strategy_stats_book,
+    )
+    from app.domain.trading.gold_only import (
+        DisabledAutonomousSymbolError,
+        require_gold_trading_symbol,
     )
 
     raw_symbol = str(score.get("symbol") or "XAUUSD").upper()

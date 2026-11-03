@@ -7,6 +7,9 @@ from app.domain.institutional_trading.ai_scalping.strategies.advisory_collaborat
     collect_score_factor_advisory_votes,
     summarize_advisory_agreement,
 )
+from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (
+    snapshot_cycle_activity,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.evaluate import (
     evaluate_all_strategies,
     evaluate_strategy,
@@ -20,9 +23,6 @@ from app.domain.institutional_trading.ai_scalping.strategies.models import (
     StrategyDefinition,
     StrategyEvaluation,
     StrategyId,
-)
-from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (
-    snapshot_cycle_activity,
 )
 from app.domain.institutional_trading.ai_scalping.strategies.monitoring import (
     build_robot_health_monitor,

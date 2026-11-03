@@ -1191,7 +1191,7 @@ class InstitutionalExecutionEngine:
                     strategy_id=sid,
                     reason="; ".join(risk_reject)[:300],
                 )
-            except Exception:
+            except Exception:  # noqa: S110 — monitoring must not block risk reject path
                 pass
             self._observe(
                 user_id=uid,

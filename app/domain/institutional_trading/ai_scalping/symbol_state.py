@@ -77,7 +77,7 @@ class SymbolStateBook:
             # One desk key for XAUUSD / XAUUSD_i / GOLD — cooldown & requalify.
             if is_gold_symbol(raw):
                 return GOLD_SYMBOL
-        except Exception:
+        except Exception:  # noqa: S110 — fall back to raw key if gold helpers unavailable
             pass
         return raw
 

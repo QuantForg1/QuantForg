@@ -1567,20 +1567,18 @@ async def _run_institutional_multi_asset_scan_body(
 
             for row in scored:
                 sym = str(row.get("symbol") or "").upper()
-                try:
+                with contextlib.suppress(Exception):
                     q_age = row.get("quote_age_seconds")
                     record_cycle_start(
                         symbol=sym,
                         quote_age_seconds=(float(q_age) if q_age is not None else None),
                         regime=str(row.get("market_regime") or row.get("regime") or ""),
                     )
-                except Exception:
-                    pass
                 evals = evaluate_all_strategies(row, config=cfg, live_boosts=boosts)
                 by_sym[sym] = evals
                 for ev in evals:
                     book.record_evaluation(ev.strategy_id, passed=ev.passed)
-                    try:
+                    with contextlib.suppress(Exception):
                         record_strategy_evaluation(
                             strategy_id=ev.strategy_id,
                             name=ev.name,
@@ -1590,8 +1588,6 @@ async def _run_institutional_multi_asset_scan_body(
                             confidence=ev.confidence,
                             reject_reason=ev.reject_reason,
                         )
-                    except Exception:
-                        pass
             scored, strategy_global_best, strategy_winners = (
                 attach_strategies_to_scores(
                     scored,
@@ -1652,7 +1648,7 @@ async def _run_institutional_multi_asset_scan_body(
                 )
 
                 record_error(f"multi_strategy_evaluation_failed: {multi_strategy_exc}")
-            except Exception:
+            except Exception:  # noqa: S110 — secondary monitor path only
                 pass
 
     # Opportunity Ranking + Execution Probability + Trade Queue

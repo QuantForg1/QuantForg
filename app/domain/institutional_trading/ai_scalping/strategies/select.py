@@ -91,7 +91,7 @@ def attach_strategies_to_scores(
                     reasons=verdict.reasons,
                     selected_strategy_id=best.strategy_id,
                 )
-            except Exception:
+            except Exception:  # noqa: S110 — cycle activity must not break selection
                 pass
         else:
             row["strategy_id"] = None
@@ -124,7 +124,7 @@ def attach_strategies_to_scores(
                         decision="NO_TRADE",
                         reasons=verdict.reasons or ("soe_prefer_no_trade",),
                     )
-                except Exception:
+                except Exception:  # noqa: S110 — cycle activity must not break selection
                     pass
         out.append(row)
     global_best = select_global_best(winners)
