@@ -15,7 +15,12 @@ import { WorkspaceChart } from "@/components/workspace/chart-panel";
 import { DirectionBadge } from "@/components/trading/signal-card";
 import { freshnessTone } from "@/components/trading/intelligence-detail";
 import { num, str } from "@/lib/desk";
-import { TRADING_SYMBOL, displayTradingSymbol } from "@/lib/trading/gold-only";
+import {
+  TRADING_SYMBOL,
+  displayTradingSymbol,
+  displayTradingSymbolCode,
+  tradingInstrumentDescription,
+} from "@/lib/trading/gold-only";
 import {
   presentField,
   presentLevel,
@@ -164,19 +169,19 @@ export function SignalsReferenceDesk({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-2xl font-semibold tracking-tight">
-                  {displayTradingSymbol(symbol)}
+                  {displayTradingSymbolCode(symbol)}
                 </h2>
                 <Badge tone={freshnessTone(freshness)}>
                   {freshness === "LIVE" ? "LIVE" : signalFreshnessLabel(freshness)}
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                Gold Spot / US Dollar
+                {tradingInstrumentDescription(symbol)}
               </p>
               <div className="mt-3">
                 <span
                   className={cn(
-                    "inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-bold tracking-wide shadow-[0_0_24px_rgba(0,201,167,0.18)]",
+                    "inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-bold tracking-wide",
                     bannerTone,
                   )}
                 >
@@ -185,9 +190,6 @@ export function SignalsReferenceDesk({
               </div>
             </div>
           </div>
-          <p className="rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--fg-muted)]">
-            {displayTradingSymbol(TRADING_SYMBOL)} (Gold)
-          </p>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Metric label="Entry Range" value={entryRange(row)} />
@@ -219,7 +221,7 @@ export function SignalsReferenceDesk({
       </article>
 
       <div className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
-        <section className="min-h-[360px] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
+        <section className="flex h-[min(420px,60vh)] min-h-[360px] flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
           <WorkspaceChart
             symbol={symbol}
             connected={connected}
@@ -227,6 +229,7 @@ export function SignalsReferenceDesk({
             onTimeframeChange={setTimeframe}
             chartType={chartType}
             onChartTypeChange={setChartType}
+            hideSymbolLabel
             showVolume={showVolume}
             onShowVolumeChange={setShowVolume}
             fullscreen={fullscreen}

@@ -82,13 +82,13 @@ function PolicyMeter({
         <div
           className={cn(
             "absolute inset-y-0 left-0 rounded-full transition-[width] duration-[var(--duration-os)]",
-            pct == null ? "bg-[var(--border)]" : "bg-[var(--hot)]",
+            pct == null ? "bg-[var(--border)]" : "bg-[var(--accent)]",
           )}
           style={{ width: pct == null ? "0%" : `${pct}%` }}
         />
         {pct != null ? (
           <span
-            className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-[var(--hot)] shadow-[0_0_0_3px_rgba(255,90,36,0.25)]"
+            className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-[var(--accent)] shadow-[0_0_0_3px_var(--accent-glow)]"
             style={{ left: `calc(${pct}% - 0.5rem)` }}
           />
         ) : null}

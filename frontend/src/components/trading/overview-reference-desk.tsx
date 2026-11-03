@@ -12,7 +12,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
 import { OverviewTradePanel } from "@/components/trading/overview-trade-panel";
-import { TRADING_SYMBOL, displayTradingSymbol } from "@/lib/trading/gold-only";
+import {
+  TRADING_SYMBOL,
+  displayTradingSymbol,
+  displayTradingSymbolCode,
+  tradingInstrumentDescription,
+} from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
 function KpiCard({
@@ -29,7 +34,7 @@ function KpiCard({
   icon: ReactNode;
 }) {
   return (
-    <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px]">
+    <article className="flex h-full min-h-[7.5rem] flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px]">
       <div className="flex items-start justify-between gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
           {label}
@@ -44,17 +49,25 @@ function KpiCard({
       <p className="mt-2 text-xl font-semibold tabular tracking-tight text-[var(--fg)]">
         {value}
       </p>
-      {hint ? (
-        <p className="mt-1 text-xs text-[var(--fg-muted)]">{hint}</p>
-      ) : null}
-      {bar != null ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--bg)]/70" aria-hidden>
+      <div className="mt-auto pt-2">
+        {hint ? (
+          <p className="text-xs leading-snug text-[var(--fg-muted)]">{hint}</p>
+        ) : (
+          <p className="text-xs leading-snug text-transparent" aria-hidden>
+            —
+          </p>
+        )}
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg)]/70" aria-hidden>
           <div
             className="h-full rounded-full bg-[var(--accent)]"
-            style={{ width: `${Math.max(0, Math.min(100, bar))}%` }}
+            style={{
+              width:
+                bar == null ? "0%" : `${Math.max(0, Math.min(100, bar))}%`,
+              opacity: bar == null ? 0 : 1,
+            }}
           />
         </div>
-      ) : null}
+      </div>
     </article>
   );
 }
@@ -83,6 +96,7 @@ export function OverviewReferenceDesk({
   sessionName,
   lastUpdate,
   topSignal,
+  lastPrice,
 }: {
   equity: string;
   balance: string;
@@ -102,6 +116,7 @@ export function OverviewReferenceDesk({
   sessionName: string;
   lastUpdate: string;
   topSignal: Record<string, unknown> | null;
+  lastPrice?: number;
 }) {
   const [timeframe, setTimeframe] = useState("M15");
   const [chartType, setChartType] = useState<"candles" | "line" | "area">("candles");
@@ -159,18 +174,27 @@ export function OverviewReferenceDesk({
 
       <div className="grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
         <section className="flex h-[min(520px,70vh)] min-h-[420px] flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold">
-                {displayTradingSymbol(TRADING_SYMBOL)}
-              </h2>
-              <span className="font-mono text-lg font-semibold tabular tracking-tight text-[var(--fg)] sm:text-xl">
-                {currentPrice}
-              </span>
-              <Badge tone={connected ? "success" : "neutral"}>
-                {connected ? "LIVE" : "OFFLINE"}
-              </Badge>
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                  {displayTradingSymbolCode(TRADING_SYMBOL)}
+                </h2>
+                <Badge tone={connected ? "success" : "neutral"}>
+                  {connected ? "LIVE" : "OFFLINE"}
+                </Badge>
+              </div>
+              <p className="mt-0.5 text-xs text-[var(--fg-muted)] sm:text-sm">
+                {tradingInstrumentDescription(TRADING_SYMBOL)}
+              </p>
             </div>
+            <p className="font-mono text-2xl font-semibold tabular tracking-tight text-[var(--fg)] sm:text-3xl">
+              {currentPrice === "—" || currentPrice.startsWith("$")
+                ? currentPrice
+                : currentPrice === "Not available"
+                  ? "—"
+                  : `$${currentPrice}`}
+            </p>
           </div>
           <div className="min-h-0 flex-1">
             <WorkspaceChart
@@ -184,6 +208,8 @@ export function OverviewReferenceDesk({
               onShowVolumeChange={setShowVolume}
               fullscreen={fullscreen}
               onFullscreenChange={setFullscreen}
+              lastPrice={lastPrice}
+              hideSymbolLabel
             />
           </div>
         </section>

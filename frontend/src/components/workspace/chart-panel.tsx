@@ -87,6 +87,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   fullscreen,
   onFullscreenChange,
   lastPrice,
+  hideSymbolLabel = false,
 }: {
   symbol: string;
   connected: boolean;
@@ -99,6 +100,8 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   fullscreen: boolean;
   onFullscreenChange: (v: boolean) => void;
   lastPrice?: number;
+  /** Parent owns the symbol title (Overview / Signals headers). */
+  hideSymbolLabel?: boolean;
 }) {
   const session = useTradingSession();
   const { connect: connectMt5, pending: connectPending } = useConnectMt5();
@@ -275,14 +278,18 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       aria-label={`${displayTradingSymbol(symbol)} chart workspace`}
     >
       <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[var(--border)]/70 px-2">
-        <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">{displayTradingSymbol(symbol)}</p>
-        <span
-          className={cn(
-            "qf-status-dot",
-          )}
-          data-state={connected ? "ok" : "warn"}
-          aria-label={connected ? "Live" : "Offline"}
-        />
+        {!hideSymbolLabel ? (
+          <>
+            <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">
+              {displayTradingSymbol(symbol)}
+            </p>
+            <span
+              className="qf-status-dot"
+              data-state={connected ? "ok" : "warn"}
+              aria-label={connected ? "Live" : "Offline"}
+            />
+          </>
+        ) : null}
         {ohlc ? (
           <p className="hidden tabular text-[10px] text-[var(--fg-muted)] md:inline" aria-live="polite">
             O {formatNumber(ohlc.open, 2)} · H {formatNumber(ohlc.high, 2)} · L{" "}

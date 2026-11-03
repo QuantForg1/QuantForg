@@ -246,8 +246,8 @@ export default function StrategyPage() {
   return (
     <div>
       <PageHeader
-        title="Trading Strategies"
-        description={`Configure, monitor and optimize each strategy for ${symbol}. Parameters stay advisory until risk and OMS gates pass.`}
+        title="Strategies"
+        description={`Configure and evaluate modules for ${symbol}. Parameters stay advisory until risk and OMS gates pass — Evaluate never bypasses live safeguards.`}
         actions={
           <>
             <Button
@@ -349,8 +349,8 @@ export default function StrategyPage() {
                         type="button"
                         className={`flex h-full w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition ${
                           selected
-                            ? "border-[var(--hot)] bg-[var(--hot-soft)] shadow-[0_0_0_1px_var(--hot),0_0_24px_rgba(255,90,36,0.25)]"
-                            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--accent)]/50"
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--accent)]/40"
                         }`}
                         onClick={() => {
                           setStrategyKey(key);
@@ -362,7 +362,7 @@ export default function StrategyPage() {
                         <span
                           className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
                             selected
-                              ? "bg-[var(--accent)] text-white"
+                              ? "bg-[var(--accent)] text-[var(--accent-fg)]"
                               : "bg-[var(--accent-soft)] text-[var(--accent)]"
                           }`}
                         >

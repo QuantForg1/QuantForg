@@ -18,6 +18,9 @@ import {
   isAutonomousExecutionSymbol,
   resolveTradingSymbol,
   displayTradingSymbol,
+  displayTradingSymbolCode,
+  GOLD_INSTRUMENT_DESCRIPTION,
+  tradingInstrumentDescription,
 } from "./gold-only.ts";
 
 assert.equal(MULTI_SYMBOL_ENABLED, false);
@@ -65,4 +68,8 @@ assert.equal(universeRows.length, 2);
 assert.equal(displayTradingSymbol("GOLD"), AUTONOMOUS_DISPLAY);
 assert.equal(displayTradingSymbol(""), "—");
 assert.equal(displayTradingSymbol(undefined), "—");
+assert.equal(displayTradingSymbolCode("XAUUSD_i"), "XAUUSD");
+assert.equal(displayTradingSymbolCode("GOLD"), "XAUUSD");
+assert.equal(tradingInstrumentDescription("XAUUSD"), GOLD_INSTRUMENT_DESCRIPTION);
+assert.equal(tradingInstrumentDescription(""), "—");
 console.log("gold-only universe/display tests passed");

@@ -18,6 +18,12 @@ export const AUTONOMOUS_SYMBOL = WELTRADE_XAUUSD;
 /** Operator-facing display. */
 export const AUTONOMOUS_DISPLAY = "XAUUSD (Gold)";
 
+/** Compact chart/header code (no parenthetical). */
+export const GOLD_CODE_LABEL = GOLD_SYMBOL;
+
+/** Institutional instrument description for desk headers. */
+export const GOLD_INSTRUMENT_DESCRIPTION = "Gold Spot / US Dollar";
+
 /** Compact non-editable badge. */
 export const AUTONOMOUS_BADGE = "XAUUSD · GOLD";
 
@@ -160,6 +166,24 @@ export function displayTradingSymbol(symbol: string | null | undefined): string 
   if (!raw) return "—";
   if (isGoldSymbol(raw)) return AUTONOMOUS_DISPLAY;
   return raw;
+}
+
+/** Short code for chart titles / market chrome (XAUUSD). */
+export function displayTradingSymbolCode(symbol: string | null | undefined): string {
+  const raw = (symbol || "").trim();
+  if (!raw) return "—";
+  if (isGoldSymbol(raw)) return GOLD_CODE_LABEL;
+  return raw;
+}
+
+/** Instrument subtitle for gold desks. */
+export function tradingInstrumentDescription(
+  symbol: string | null | undefined,
+): string {
+  const raw = (symbol || "").trim();
+  if (!raw) return "—";
+  if (isGoldSymbol(raw)) return GOLD_INSTRUMENT_DESCRIPTION;
+  return "—";
 }
 
 /** MT5 XAUUSD contract specs used by client-side sizing / display. */
