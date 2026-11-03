@@ -361,9 +361,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         atr_pct=Decimal("0.2"),
     )
     assert equal.passed is False
-    assert any(
-        "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in equal.hard_rejects
-    )
+    assert any("TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in equal.hard_rejects)
 
     worse = evaluate_quality_gates(
         direction=direction,
@@ -379,9 +377,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         atr_pct=Decimal("0.2"),
     )
     assert worse.passed is False
-    assert any(
-        "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in worse.hard_rejects
-    )
+    assert any("TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in worse.hard_rejects)
     assert any("Expected RR" in r for r in worse.soft_rejects)
 
 

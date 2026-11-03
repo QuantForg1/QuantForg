@@ -134,7 +134,10 @@ class TestEntries:
         assert _code(exc) == "GUARD_MAX_POSITIONS"
 
     def test_measured_pending_gold_order_under_the_cap_is_allowed(self) -> None:
-        assert _guard(_entry(client_order_id="second"), equity=Decimal("100")) == KIND_ENTRY
+        assert (
+            _guard(_entry(client_order_id="second"), equity=Decimal("100"))
+            == KIND_ENTRY
+        )
 
     def test_five_open_gold_positions_block_another_entry(self) -> None:
         with pytest.raises(OrderGuardRejected) as exc:
