@@ -158,21 +158,21 @@ export function OverviewReferenceDesk({
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
-        <div className="space-y-4">
-          <section className="min-h-[380px] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h2 className="text-sm font-semibold">
-                  {displayTradingSymbol(TRADING_SYMBOL)}
-                </h2>
-                <span className="font-mono text-lg font-semibold tabular tracking-tight text-[var(--fg)] sm:text-xl">
-                  {currentPrice}
-                </span>
-                <Badge tone={connected ? "success" : "neutral"}>
-                  {connected ? "LIVE" : "OFFLINE"}
-                </Badge>
-              </div>
+        <section className="flex h-[min(520px,70vh)] min-h-[420px] flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold">
+                {displayTradingSymbol(TRADING_SYMBOL)}
+              </h2>
+              <span className="font-mono text-lg font-semibold tabular tracking-tight text-[var(--fg)] sm:text-xl">
+                {currentPrice}
+              </span>
+              <Badge tone={connected ? "success" : "neutral"}>
+                {connected ? "LIVE" : "OFFLINE"}
+              </Badge>
             </div>
+          </div>
+          <div className="min-h-0 flex-1">
             <WorkspaceChart
               symbol={TRADING_SYMBOL}
               connected={connected}
@@ -185,10 +185,8 @@ export function OverviewReferenceDesk({
               fullscreen={fullscreen}
               onFullscreenChange={setFullscreen}
             />
-          </section>
-
-          <OverviewTradePanel connected={connected} />
-        </div>
+          </div>
+        </section>
 
         <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px] xl:self-start">
           <div
@@ -312,6 +310,8 @@ export function OverviewReferenceDesk({
           </div>
         </section>
       </div>
+
+      <OverviewTradePanel connected={connected} />
     </div>
   );
 }
