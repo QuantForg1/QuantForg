@@ -756,7 +756,7 @@ export const ExecutionOrderTicket = forwardRef<
         />
 
         {/* Live risk / reward preview */}
-        <div className="rounded-md border border-[var(--border)]/80 bg-[var(--surface-2)]/70 p-2.5">
+        <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)]/50 p-2.5">
           <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
             <span>Risk</span>
             <span className="tabular text-[var(--fg)]">
@@ -769,9 +769,9 @@ export const ExecutionOrderTicket = forwardRef<
                 : "Set SL / TP"}
             </span>
           </div>
-          <div className="h-1 overflow-hidden rounded-full bg-[var(--surface)]">
+          <div className="h-1 overflow-hidden rounded-full bg-[var(--bg)]/60">
             <div
-              className="h-full rounded-full bg-[var(--danger)]/80 transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)]"
+              className="h-full rounded-full bg-[color-mix(in_srgb,var(--danger)_55%,var(--fg-subtle))] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)]"
               style={{ width: `${riskBudgetPct}%` }}
             />
           </div>
@@ -781,9 +781,9 @@ export const ExecutionOrderTicket = forwardRef<
               {riskReward != null ? `1 : ${formatNumber(riskReward, 2)}` : "Set SL / TP"}
             </span>
           </div>
-          <div className="h-1 overflow-hidden rounded-full bg-[var(--surface)]">
+          <div className="h-1 overflow-hidden rounded-full bg-[var(--bg)]/60">
             <div
-              className="h-full rounded-full bg-[var(--success)]/80 transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)]"
+              className="h-full rounded-full bg-[color-mix(in_srgb,var(--accent)_70%,var(--fg-subtle))] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)]"
               style={{ width: `${rewardBudgetPct}%` }}
             />
           </div>

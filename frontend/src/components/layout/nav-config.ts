@@ -161,14 +161,13 @@ export function isTraderFacingHref(href: string): boolean {
 
 /**
  * Authenticated trader rail order.
- * Keeps the institutional reference desks and retains /markets so the
- * Phase 74 trader-rail contract (signals + markets, never /admin) stays intact.
+ * Markets catalogue stays at /markets for services and deep links, but is not
+ * shown on the trader rail (Overview → Intelligence → Signals → Positions…).
  */
 export const TRADER_DESK_ORDER = [
   "/dashboard",
   "/intelligence",
   "/signals",
-  "/markets",
   "/positions",
   "/history",
   "/broker",
@@ -1482,22 +1481,22 @@ export const mobileTabNav: NavItem[] = [
     hint: "Overview",
   },
   {
-    href: "/markets",
-    label: "Markets",
-    icon: CandlestickChart,
-    hint: "Markets",
-  },
-  {
     href: "/signals",
     label: "Signals",
     icon: Crosshair,
     hint: "Signals",
   },
   {
-    href: "/portfolio",
-    label: "Portfolio",
-    icon: PieChart,
-    hint: "Portfolio",
+    href: "/positions",
+    label: "Positions",
+    icon: Layers3,
+    hint: "Positions",
+  },
+  {
+    href: "/broker",
+    label: "Broker",
+    icon: Building2,
+    hint: "Broker",
   },
   {
     href: "/terminal",

@@ -173,7 +173,7 @@ def test_admin_layout_not_in_trader_rail() -> None:
         )
     ]
     assert '"/signals"' in desks
-    assert '"/markets"' in desks
+    assert '"/markets"' not in desks
     assert '"/admin"' not in desks
     fn = nav[
         nav.index("export function visiblePrimaryRail") : nav.index(

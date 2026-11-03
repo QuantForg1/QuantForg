@@ -154,16 +154,34 @@ export const AiDecisionCard = memo(function AiDecisionCard({
     const riskDecision = risk ? str(risk.decision).toUpperCase() : "";
 
     const reasons: { ok: boolean; label: string }[] = [];
+    const humanizeReason = (raw: string): string | null => {
+      const label = String(raw ?? "")
+        .replace(/^svg[\s_-]*/i, "")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!label || /^svg$/i.test(label)) return null;
+      const known: Record<string, string> = {
+        "data fresh": "Data fresh",
+        "market open": "Market open",
+        "has structure": "Has structure",
+        "structure": "Has structure",
+      };
+      const mapped = known[label.toLowerCase()];
+      if (mapped) return mapped;
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    };
     const signalReasons = asList(signal.reasons)
-      .map((r) => String(r).trim())
-      .filter(Boolean);
+      .map((r) => humanizeReason(String(r)))
+      .filter((r): r is string => Boolean(r));
     const quantReasons = asList(quant.reasons)
-      .map((r) => String(r).trim())
-      .filter(Boolean);
+      .map((r) => humanizeReason(String(r)))
+      .filter((r): r is string => Boolean(r));
     const preconditions = asRecord(strat.preconditions);
     for (const [k, v] of Object.entries(preconditions)) {
       if (typeof v === "boolean") {
-        reasons.push({ ok: v, label: k.replace(/_/g, " ") });
+        const label = humanizeReason(k);
+        if (label) reasons.push({ ok: v, label });
       }
     }
     for (const label of [...signalReasons, ...quantReasons]) {

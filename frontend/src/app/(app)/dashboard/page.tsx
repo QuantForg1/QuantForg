@@ -9,13 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
-import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { OverviewReferenceDesk } from "@/components/trading/overview-reference-desk";
 import { SignalCard } from "@/components/trading/signal-card";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
-  marketUniverseApi,
   portfolioApi,
   signalCenterApi,
   tradingSessionApi,
@@ -28,10 +26,6 @@ import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
 import {
   lastUpdatedCopy,
-  MARKET_UNIVERSE_QUERY_KEY,
-  mergeCatalogueRows,
-  hasResearchSignal,
-  knownInstrumentCountLabel,
   normalizeSignalCenterPayload,
   presentField,
   presentLevel,
@@ -39,10 +33,8 @@ import {
   researchDeskLiveTradingStatus,
   researchDeskStatusLabel,
   researchSignalsEmptyCopy,
-  researchUniverseViewState,
   signalBoardDirection,
   signalHumanExplanation,
-  skippedMalformedInstrumentCount,
   SIGNAL_CENTER_QUERY_KEY,
   numericDisplay,
   positionExposureLabel,
@@ -53,7 +45,6 @@ import {
   traderFacingErrorMessage,
   UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
-import { filterTradingSymbolRecords } from "@/lib/trading/gold-only";
 
 type Row = Record<string, unknown>;
 
@@ -153,34 +144,6 @@ export default function DashboardPage() {
     fabricatedBlocked: research.fabricatedBlocked,
     empty: true,
   });
-
-  const universeQ = useQuery({
-    queryKey: MARKET_UNIVERSE_QUERY_KEY,
-    queryFn: () => marketUniverseApi.snapshot(),
-    retry: false,
-    refetchInterval: UNIVERSE_POLL_MS,
-  });
-  const universe = asRecord(universeQ.data);
-  const instruments = filterTradingSymbolRecords(
-    asList(universe.instruments).map(asRecord),
-  );
-  const catalogue = researchUniverseViewState({
-    snapshotFetched: universeQ.isFetched,
-    snapshotError: Boolean(universeQ.isError),
-    catalogueSource: universe.catalogue_source,
-    instrumentCount: instruments.length - skippedMalformedInstrumentCount(instruments),
-  });
-  const rows =
-    catalogue === "LIVE_ROWS"
-      ? mergeCatalogueRows(
-          instruments,
-          asList(asRecord(universe.opportunity_board).rows).map(asRecord),
-        )
-      : [];
-  const marketPreview = [
-    ...rows.filter(hasResearchSignal),
-    ...rows.filter((row) => !hasResearchSignal(row)),
-  ];
 
   const positionsUnavailable = Boolean(portfolio.isError) && !noBroker && !sessionMismatch;
   const activityUnavailable = Boolean(history.isError) && !noBroker && !sessionMismatch;
@@ -307,20 +270,30 @@ export default function DashboardPage() {
       {sessionQ.isError ? (
         <div
           role="status"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
         >
-          <p className="text-sm text-[var(--fg-muted)]">
-            Trading session temporarily unavailable. Gold research still needs a reachable broker Gateway.
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              void sessionQ.refetch();
-            }}
-          >
-            Retry
-          </Button>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[var(--fg)]">Broker connection unavailable</p>
+            <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
+              Account session could not be loaded. Research stays available; reconnect when ready.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/broker">
+                <Cable className="h-4 w-4" /> Open Broker
+              </Link>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void sessionQ.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
         </div>
       ) : null}
       <PageHeader
@@ -452,20 +425,6 @@ export default function DashboardPage() {
             {liveTradingHint.label}
           </span>
         </span>
-        <span>
-          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Markets{" "}
-          </span>
-          <span className="font-medium text-[var(--fg)]">
-            {catalogue === "LIVE_ROWS"
-              ? knownInstrumentCountLabel(catalogue, marketPreview.length) || "Live"
-              : catalogue === "LIVE_EMPTY"
-                ? "Empty"
-                : catalogue === "NOT_READY"
-                  ? "Loading"
-                  : "Unavailable"}
-          </span>
-        </span>
       </section>
 
       <section aria-labelledby="top-signals">
@@ -483,7 +442,7 @@ export default function DashboardPage() {
           </Button>
         </div>
         <p className="mb-3 text-sm text-[var(--fg-muted)]">
-          Research is not a trade authorization. Live Gold candles still require a reachable broker Gateway.
+          Research is not a trade authorization. Live Gold candles require an active broker connection.
         </p>
         {signalState === "UNAVAILABLE" ? (
           <DeskEmpty
@@ -551,44 +510,6 @@ export default function DashboardPage() {
               }
             />
           </div>
-        )}
-      </section>
-
-      <section aria-labelledby="markets-preview">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 id="markets-preview" className="text-sm font-medium text-[var(--fg)]">
-            Markets
-          </h2>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/markets">View all markets</Link>
-          </Button>
-        </div>
-        {noBroker ? (
-          <p className="mb-3 text-sm text-[var(--fg-muted)]" role="status">
-            Global research is available without a broker. Live trading stays unavailable until you connect.
-          </p>
-        ) : null}
-        {sessionMismatch ? (
-          <p className="mb-3 text-sm text-[var(--warning)]" role="status">
-            Broker session mismatch — live trading is blocked. Global research remains available.
-          </p>
-        ) : null}
-        {catalogue === "UNAVAILABLE" ? (
-          <DeskEmpty
-            icon={Activity}
-            title="Market catalogue unavailable"
-            description="The global market catalogue is currently unavailable. This is not an empty market."
-          />
-        ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
-          <DeskSkeleton rows={3} />
-        ) : catalogue === "LIVE_EMPTY" ? (
-          <DeskEmpty
-            icon={Activity}
-            title="No markets in catalogue"
-            description="The live catalogue was queried. No instruments are listed."
-          />
-        ) : (
-          <MarketCatalogueRows rows={marketPreview} limit={8} compact enableDetail={false} />
         )}
       </section>
 

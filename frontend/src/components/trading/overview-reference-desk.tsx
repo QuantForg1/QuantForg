@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
-import { OrderTicket } from "@/components/trading/order-ticket";
 import { TRADING_SYMBOL, displayTradingSymbol } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +41,8 @@ function KpiCard({
 }
 
 /**
- * Reference Overview composition: KPI strip, live chart + AI panel, trade ticket.
+ * Reference Overview composition: KPI strip and live chart + AI panel.
+ * Order ticket / pre-trade live on Terminal — not on Overview.
  * All figures are caller-supplied live session / research values — never samples.
  */
 export function OverviewReferenceDesk({
@@ -189,9 +189,9 @@ export function OverviewReferenceDesk({
                 className={cn(
                   "mt-2 rounded-xl border px-3 py-2.5",
                   biasTone === "success" &&
-                    "border-[color-mix(in_srgb,var(--success)_40%,var(--border))] bg-[var(--success-soft)]",
+                    "border-[var(--border)] bg-[color-mix(in_srgb,var(--success-soft)_55%,var(--bg))]",
                   biasTone === "danger" &&
-                    "border-[color-mix(in_srgb,var(--danger)_40%,var(--border))] bg-[var(--danger-soft)]",
+                    "border-[var(--border)] bg-[color-mix(in_srgb,var(--danger-soft)_45%,var(--bg))]",
                   biasTone === "neutral" && "border-[var(--border)] bg-[var(--bg)]/40",
                 )}
               >
@@ -251,21 +251,6 @@ export function OverviewReferenceDesk({
           </div>
         </section>
       </div>
-
-      <section
-        aria-labelledby="trade-panel"
-        className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px]"
-      >
-        <div className="mb-3">
-          <h2 id="trade-panel" className="text-sm font-semibold">
-            Trade {displayTradingSymbol(TRADING_SYMBOL)}
-          </h2>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">
-            Execute trades with precision. Orders still pass existing risk and ownership gates.
-          </p>
-        </div>
-        <OrderTicket />
-      </section>
     </div>
   );
 }

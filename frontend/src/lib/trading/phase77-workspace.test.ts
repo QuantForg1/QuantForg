@@ -30,9 +30,13 @@ const detail = readFileSync(
 );
 
 assert.equal(dash.includes("Unable to load your trading session."), false);
-assert.match(dash, /Trading session temporarily unavailable/);
-assert.match(dash, /Gold research still needs a reachable broker Gateway/);
+assert.equal(dash.includes("Trading session temporarily unavailable"), false);
+assert.equal(dash.includes("reachable broker Gateway"), false);
+assert.match(dash, /Broker connection unavailable/);
 assert.match(dash, /connected broker session/);
+assert.equal(dash.includes('href="/markets"'), false);
+assert.equal(dash.includes("OrderTicket"), false);
+assert.ok(visiblePrimaryRail(true).every((item) => item.href !== "/markets"));
 
 assert.match(signals, /Trading Signals/);
 assert.equal(signals.includes("GLOBAL MARKET SIGNALS"), false);

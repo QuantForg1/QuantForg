@@ -515,7 +515,7 @@ export function SignalsWorkspace() {
 
       <p className="text-sm text-[var(--fg-muted)]">
         Research APIs do not require your personal MT5 login, but live Gold candles
-        still need a reachable Windows Gateway broker feed. Live trading is a
+        still need a reachable broker connection. Live trading is a
         separate authorized step.
       </p>
 

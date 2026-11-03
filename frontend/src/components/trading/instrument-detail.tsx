@@ -91,7 +91,7 @@ export function InstrumentDetail({ code }: { code: string }) {
         actions={
           <>
             <Button variant="secondary" asChild>
-              <Link href="/markets">Markets</Link>
+              <Link href="/dashboard">Overview</Link>
             </Button>
             <Button variant="secondary" asChild>
               <Link href="/terminal">Terminal</Link>
@@ -110,16 +110,16 @@ export function InstrumentDetail({ code }: { code: string }) {
           icon={Activity}
           title="CATALOGUE UNAVAILABLE"
           description="Broker market catalogue is currently unavailable. This is not an empty instrument."
-          actionLabel="Open Markets"
-          actionHref="/markets"
+          actionLabel="Open Broker"
+          actionHref="/broker"
         />
       ) : !row ? (
         <DeskEmpty
           icon={Activity}
           title="Instrument not in catalogue"
           description="This symbol is not in your live broker catalogue."
-          actionLabel="Open Markets"
-          actionHref="/markets"
+          actionLabel="Open Broker"
+          actionHref="/broker"
         />
       ) : (
         <Card>
