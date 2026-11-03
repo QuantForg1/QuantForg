@@ -179,7 +179,9 @@ def test_stale_setup_prefers_no_trade() -> None:
     evals = evaluate_all_strategies(score)
     verdict = orchestrate_strategies(evals, score=score)
     assert verdict.prefer_no_trade is True
-    assert any("freshness" in r.lower() or "stale" in r.lower() for r in verdict.reasons)
+    assert any(
+        "freshness" in r.lower() or "stale" in r.lower() for r in verdict.reasons
+    )
 
 
 @pytest.mark.unit
