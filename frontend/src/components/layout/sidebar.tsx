@@ -187,10 +187,10 @@ function Brand({ collapsed }: { collapsed?: boolean }) {
       {collapsed ? (
         <>
           <BrandMark size={28} />
-          <span className="sr-only">QuantForg Trading OS</span>
+          <span className="sr-only">QuantForg Institutional Trading Intelligence</span>
         </>
       ) : (
-        <BrandLogo size={28} caption="Trading OS" />
+        <BrandLogo size={28} caption="Institutional Trading Intelligence" />
       )}
     </div>
   );

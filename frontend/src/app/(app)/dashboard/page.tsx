@@ -308,7 +308,7 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title={greeting}
-        description="QuantForg workspace"
+        description="Your trading system status, research opportunities, and account figures from the connected broker session."
         actions={
           noBroker || sessionMismatch ? (
             <Button asChild>

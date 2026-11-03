@@ -119,7 +119,7 @@ export default function LoginPage() {
           </Link>
         </div>
         <Button className="qf-btn-hot h-11 w-full" type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Signing in…" : "Sign In"}
+          {form.formState.isSubmitting ? "Signing in…" : "Sign In →"}
         </Button>
       </form>
       <GoogleAuthNote />

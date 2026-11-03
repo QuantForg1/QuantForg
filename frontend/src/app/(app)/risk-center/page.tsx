@@ -68,7 +68,7 @@ export default function RiskCenterPage() {
     <div>
       <PageHeader
         title="Risk Center"
-        description="Detailed Risk Engine rules and live session exposure. Terminal keeps only a compact pre-trade gate."
+        description="Manage trading risk, limits, and safety controls for your account. Values come from the saved owner policy and live broker session."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
@@ -83,31 +83,38 @@ export default function RiskCenterPage() {
 
       <PageMotion className="space-y-4">
         <OwnerPolicySummary />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Equity"
-            value={Number.isFinite(equity) ? formatCurrency(equity) : "—"}
-          />
-          <StatCard
-            label="Free margin"
-            value={Number.isFinite(free) ? formatCurrency(free) : "—"}
-          />
-          <StatCard
-            label="Margin used"
-            value={
-              Number.isFinite(used)
-                ? formatCurrency(used)
-                : Number.isFinite(margin)
-                  ? formatCurrency(margin)
-                  : "—"
-            }
-          />
-          <StatCard
-            label="Float drawdown"
-            value={Number.isFinite(ddPct) ? `${formatNumber(ddPct, 2)}%` : "—"}
-            tone={Number.isFinite(ddPct) && ddPct > 2 ? "down" : "neutral"}
-          />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Live Risk Monitoring</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Account Equity"
+                value={Number.isFinite(equity) ? formatCurrency(equity) : "—"}
+              />
+              <StatCard
+                label="Free margin"
+                value={Number.isFinite(free) ? formatCurrency(free) : "—"}
+              />
+              <StatCard
+                label="Margin used"
+                value={
+                  Number.isFinite(used)
+                    ? formatCurrency(used)
+                    : Number.isFinite(margin)
+                      ? formatCurrency(margin)
+                      : "—"
+                }
+              />
+              <StatCard
+                label="Float drawdown"
+                value={Number.isFinite(ddPct) ? `${formatNumber(ddPct, 2)}%` : "—"}
+                tone={Number.isFinite(ddPct) && ddPct > 2 ? "down" : "neutral"}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="max-w-xl lg:max-w-none">

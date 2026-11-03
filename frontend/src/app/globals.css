@@ -46,9 +46,10 @@
   --radius-sm: 0.65rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 70% 42% at 88% -8%, rgba(22, 139, 255, 0.22), transparent 58%),
-    radial-gradient(ellipse 42% 28% at 8% 0%, rgba(8, 102, 255, 0.14), transparent 52%),
-    linear-gradient(180deg, #0a3260 0%, #061a38 46%, #071433 100%);
+    radial-gradient(ellipse 70% 42% at 88% -8%, rgba(22, 139, 255, 0.26), transparent 58%),
+    radial-gradient(ellipse 42% 28% at 8% 0%, rgba(8, 102, 255, 0.16), transparent 52%),
+    radial-gradient(ellipse 50% 30% at 50% 100%, rgba(255, 90, 36, 0.05), transparent 55%),
+    linear-gradient(180deg, #0c3a6e 0%, #061a38 46%, #071433 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
