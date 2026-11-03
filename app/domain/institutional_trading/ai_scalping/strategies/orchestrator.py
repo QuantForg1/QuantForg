@@ -22,7 +22,7 @@ from app.domain.institutional_trading.ai_scalping.strategies.validation_status i
     strategy_health_snapshot,
 )
 
-ORCHESTRATION_VERSION = "soe-v1.2.0"
+ORCHESTRATION_VERSION = "soe-v1.3.0"
 
 # Solo passer must clear a higher quality bar (prefer no trade).
 MIN_SOLO_QUALITY = 82
@@ -34,13 +34,22 @@ MIN_CONFLUENCE_COUNT = 2
 # Absolute floor even with confluence — never select junk (owner Q75).
 MIN_ABSOLUTE_QUALITY = 75
 # When advisory engines strongly disagree with the live pack — raise the bar.
+# Both raised floors must clear (stricter evidence under disagreement).
 ADVISORY_DISAGREE_MIN_QUALITY = 88
 ADVISORY_DISAGREE_MIN_CONFIDENCE = 85
+# Mild disagreement (mixed advisory) still raises solo selectivity.
+ADVISORY_MIXED_MIN_QUALITY = 84
+ADVISORY_MIXED_MIN_CONFIDENCE = 82
+# Multi-timeframe confirmation floor when alignment is present on the score.
+MIN_MTF_ALIGNMENT = 55
 # Small-account / cost gate: wide spread vs weak RR → prefer no trade.
 MAX_SPREAD_FOR_WEAK_RR = 0.80
 MIN_RR_WHEN_SPREAD_ELEVATED = 1.50
 # Absolute net reward:risk floor aligned with owner policy (prefer NO_TRADE).
 MIN_NET_REWARD_RISK = 1.50
+# Owner preferred RR — solo setups below preferred need stronger quality.
+PREFERRED_NET_REWARD_RISK = 2.00
+PREFERRED_RR_SOLO_MIN_QUALITY = 85
 # Setup freshness: stale quotes / expired setups → NO_TRADE.
 MAX_QUOTE_AGE_SECONDS = 8.0
 MAX_SETUP_AGE_SECONDS = 120.0
@@ -174,6 +183,31 @@ def _resolve_regime_conflicts(
     return kept, demoted
 
 
+# Correlated thesis clusters — same-direction pack passers are not independent.
+_TREND_CLUSTER = frozenset(
+    {
+        "smc_scalping",
+        "trend_continuation",
+        "breakout_scalping",
+        "momentum_scalping",
+    }
+)
+_RANGE_CLUSTER = frozenset({"range_mean_reversion"})
+
+
+def _effective_confluence_count(candidates: list[StrategyEvaluation]) -> int:
+    """Count independent thesis clusters, not correlated same-direction passers."""
+    if not candidates:
+        return 0
+    ids = {c.strategy_id for c in candidates}
+    clusters = 0
+    if ids & _TREND_CLUSTER:
+        clusters += 1
+    if ids & _RANGE_CLUSTER:
+        clusters += 1
+    return max(1, clusters)
+
+
 def _adjusted_rank(
     ev: StrategyEvaluation, *, influence: float, confluence_bonus: float
 ) -> tuple[float, int, int]:
@@ -242,20 +276,34 @@ def _evidence_gate_prefer_no_trade(score: dict[str, Any] | None) -> str | None:
 
     raw_factors = score.get("factors")
     factors: dict[str, Any] = raw_factors if isinstance(raw_factors, dict) else {}
+    # Multi-timeframe confirmation: when alignment is present and weak, veto.
+    mtf_raw = score.get("mtf_alignment")
+    if mtf_raw is None:
+        mtf_raw = factors.get("mtf")
+    if mtf_raw is not None:
+        try:
+            mtf = float(mtf_raw)
+        except (TypeError, ValueError):
+            mtf = None
+        if mtf is not None and mtf < MIN_MTF_ALIGNMENT:
+            return (
+                f"Weak multi-timeframe confirmation ({mtf:.0f} < "
+                f"{MIN_MTF_ALIGNMENT}) — prefer no trade"
+            )
+
     try:
         bos = float(factors.get("bos") or score.get("structure_score") or 0)
-        vol = float(
-            factors.get("volatility")
-            or factors.get("atr_expansion")
-            or factors.get("volume")
-            or 50
-        )
+        # Volatility only — never proxy volume (wrong signal for false-breakout).
+        vol_raw = factors.get("volatility")
+        if vol_raw is None:
+            vol_raw = factors.get("atr_expansion")
+        vol = float(vol_raw) if vol_raw is not None else None
         momentum = float(score.get("momentum") or factors.get("momentum") or 0)
         structure = float(score.get("structure_score") or factors.get("bos") or 0)
     except (TypeError, ValueError):
         return None
 
-    if bos >= 70 and vol < 45:
+    if vol is not None and bos >= 70 and vol < 45:
         return (
             f"False-breakout risk: BOS {bos:.0f} without volatility "
             f"confirmation ({vol:.0f}) — prefer no trade"
@@ -440,10 +488,12 @@ def orchestrate_strategies(
             conflicting=True,
         )
 
-    confluence_count = len(selectable)
+    raw_confluence = len(selectable)
+    # Independent thesis clusters only — trend pack passers are one vote.
+    confluence_count = _effective_confluence_count(selectable)
     # Agreement quality: share of live pack that passed and remained selectable.
     confluence_score = max(
-        0, min(100, round(100.0 * confluence_count / max(1, len(evals))))
+        0, min(100, round(100.0 * raw_confluence / max(1, len(evals))))
     )
     confluence_bonus = 4.0 if confluence_count >= MIN_CONFLUENCE_COUNT else 0.0
 
@@ -460,18 +510,45 @@ def orchestrate_strategies(
 
     # Selectivity: solo passers need stronger evidence; confluent packs use
     # MIN_CONFLUENT_QUALITY. Never select below MIN_ABSOLUTE_QUALITY.
+    # Effective confluence (clusters) drives solo vs confluent bars.
     solo = confluence_count < MIN_CONFLUENCE_COUNT
     agreement = summarize_advisory_agreement(live_direction=best.direction, votes=votes)
     # Advisory disagreement raises the evidence bar (never manufactures consensus).
+    # Strong disagreement: BOTH quality and confidence must clear raised floors.
     if agreement.get("strong_disagreement") and (
         best.quality < ADVISORY_DISAGREE_MIN_QUALITY
-        and best.confidence < ADVISORY_DISAGREE_MIN_CONFIDENCE
+        or best.confidence < ADVISORY_DISAGREE_MIN_CONFIDENCE
     ):
         return _no_trade(
             reasons_t=(
                 "Advisory engines disagree with live pack and evidence is "
-                f"below raised bar (need q>={ADVISORY_DISAGREE_MIN_QUALITY} or "
+                f"below raised bar (need q>={ADVISORY_DISAGREE_MIN_QUALITY} and "
                 f"c>={ADVISORY_DISAGREE_MIN_CONFIDENCE}; got q={best.quality} "
+                f"c={best.confidence}) — prefer no trade",
+            ),
+            rejected_t=tuple(rejected),
+            confluence_count=confluence_count,
+            confluence_score=confluence_score,
+            live_direction=best.direction,
+        )
+    # Mixed advisory (agree and disagree both present) — raise solo bar.
+    mixed = (
+        int(agreement.get("agree_count") or 0) >= 1
+        and int(agreement.get("disagree_count") or 0) >= 1
+    )
+    if (
+        mixed
+        and solo
+        and (
+            best.quality < ADVISORY_MIXED_MIN_QUALITY
+            or best.confidence < ADVISORY_MIXED_MIN_CONFIDENCE
+        )
+    ):
+        return _no_trade(
+            reasons_t=(
+                "Mixed advisory disagreement raises solo evidence bar "
+                f"(need q>={ADVISORY_MIXED_MIN_QUALITY} and "
+                f"c>={ADVISORY_MIXED_MIN_CONFIDENCE}; got q={best.quality} "
                 f"c={best.confidence}) — prefer no trade",
             ),
             rejected_t=tuple(rejected),
@@ -501,6 +578,27 @@ def orchestrate_strategies(
             solo_ok = True
             reasons.append(
                 f"advisory_supportive:{agreement.get('agree_count')} engines"
+            )
+        # True single-passer (not a correlated multi-passer cluster) with RR
+        # below preferred needs stronger quality evidence.
+        rr_pref = _score_rr(score) if isinstance(score, dict) else None
+        if (
+            raw_confluence == 1
+            and rr_pref is not None
+            and rr_pref < PREFERRED_NET_REWARD_RISK
+            and best.quality < PREFERRED_RR_SOLO_MIN_QUALITY
+        ):
+            return _no_trade(
+                reasons_t=(
+                    f"Solo RR {rr_pref:.2f} below preferred "
+                    f"{PREFERRED_NET_REWARD_RISK:.2f} with quality "
+                    f"{best.quality} < {PREFERRED_RR_SOLO_MIN_QUALITY} "
+                    "— prefer no trade",
+                ),
+                rejected_t=tuple(rejected),
+                confluence_count=confluence_count,
+                confluence_score=confluence_score,
+                live_direction=best.direction,
             )
         if not solo_ok:
             for ev in selectable:

@@ -67,6 +67,9 @@ def collect_score_factor_advisory_votes(
     factors = _factors(score)
     direction = str(score.get("direction") or "NONE").upper()
     regime = str(score.get("market_regime") or score.get("regime") or "").lower()
+    # Normalize aliases so advisory matches evaluate() require_regimes keys.
+    if regime in {"ranging", "sideways"}:
+        regime = "range"
     momentum = _i(score.get("momentum") or factors.get("momentum"))
     structure = _i(score.get("structure_score") or factors.get("bos"))
     mtf = _i(score.get("mtf_alignment") or factors.get("mtf"))

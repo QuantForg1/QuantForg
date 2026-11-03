@@ -6,6 +6,7 @@ remains the attachment facade used by the multi-asset scanner.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.strategies.models import (
@@ -22,12 +23,14 @@ def best_strategy_for_symbol(
     *,
     live_boosts: dict[str, float] | None = None,
     stats_snapshot: dict[str, Any] | None = None,
+    score: dict[str, Any] | None = None,
 ) -> StrategyEvaluation | None:
     """Never attach two strategies to the same symbol — SOE picks one or none."""
     verdict = orchestrate_strategies(
         evaluations,
         live_boosts=live_boosts,
         stats_snapshot=stats_snapshot,
+        score=score,
     )
     return verdict.selected
 
@@ -75,6 +78,20 @@ def attach_strategies_to_scores(
             row["strategy_rank_score"] = best.quality + best.live_rank_boost
             row["strategy_confluence_count"] = verdict.confluence_count
             row["strategy_confluence_score"] = verdict.confluence_score
+            with contextlib.suppress(Exception):
+                from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
+                    record_soe_verdict,
+                )
+                from app.domain.institutional_trading.ai_scalping.strategies.stats import (  # noqa: E501
+                    get_strategy_stats_book,
+                )
+
+                get_strategy_stats_book().record_accepted(best.strategy_id)
+                record_soe_verdict(
+                    decision=best.direction,
+                    reasons=verdict.reasons,
+                    selected_strategy_id=best.strategy_id,
+                )
         else:
             row["strategy_id"] = None
             row["strategy_name"] = None
@@ -97,6 +114,15 @@ def attach_strategies_to_scores(
                 row["opportunity_eligible"] = False
                 if not row.get("reject"):
                     row["soe_blocks_selection"] = True
+                with contextlib.suppress(Exception):
+                    from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
+                        record_soe_verdict,
+                    )
+
+                    record_soe_verdict(
+                        decision="NO_TRADE",
+                        reasons=verdict.reasons or ("soe_prefer_no_trade",),
+                    )
         out.append(row)
     global_best = select_global_best(winners)
     return out, global_best, winners

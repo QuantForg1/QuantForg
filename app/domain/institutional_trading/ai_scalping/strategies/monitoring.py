@@ -9,8 +9,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (
+    snapshot_cycle_activity,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.live_eligibility import (
     eligibility_snapshot,
+    live_executable_ids,
 )
 from app.domain.institutional_trading.ai_scalping.strategies.orchestrator import (
     ORCHESTRATION_VERSION,
@@ -132,4 +136,163 @@ def build_strategy_performance_monitor(
             ),
         },
         "disclaimer": "Historical data does not guarantee future profitability.",
+    }
+
+
+def _m1_status_block() -> dict[str, Any]:
+    try:
+        from app.domain.institutional_trading.m1_micro.config import (
+            m1_live_submit_enabled,
+            m1_micro_enabled,
+        )
+
+        micro = bool(m1_micro_enabled())
+        live = bool(m1_live_submit_enabled())
+    except Exception as exc:
+        return {
+            "m1_micro_enabled": None,
+            "m1_live_submit": None,
+            "status": "ERROR",
+            "error": str(exc)[:200],
+            "recommendation": "Inspect M1 config module",
+        }
+    if not micro:
+        status = "DISABLED"
+        recommendation = (
+            "M1 module off (deployment flag and/or policy). Keep separate from "
+            "five-pack SOE. Phase-2 matched expectancy was negative — do not "
+            "enable LIVE submit without new evidence."
+        )
+    elif not live:
+        status = "DISABLED"
+        recommendation = (
+            "M1 analysis may run but LIVE submit is off. Recommended while "
+            "matched expectancy remains negative."
+        )
+    else:
+        status = "ACTIVE_AND_EVALUATING"
+        recommendation = (
+            "m1_live_submit is ON. Phase-2 matched broker expectancy was "
+            "negative — owner should confirm Admin Off unless new evidence "
+            "supports LIVE. Flags were not silently changed."
+        )
+    return {
+        "m1_micro_enabled": micro,
+        "m1_live_submit": live,
+        "status": status,
+        "recommendation": recommendation,
+        "owner_controlled": True,
+        "auto_changed": False,
+    }
+
+
+def build_robot_health_monitor(
+    book: StrategyStatsBook | None = None,
+) -> dict[str, Any]:
+    """Operational truth for LIVE robot health — process-local + durable stats.
+
+    Never fabricates profitability. Never authorizes LIVE. Per-strategy status
+    uses the Phase-3 vocabulary when cycle activity is present; otherwise
+    falls back to registry + stats (never claims ACTIVE without evidence).
+    """
+    performance = build_strategy_performance_monitor(book=book)
+    activity = snapshot_cycle_activity()
+    activity_rows = dict(activity.get("strategies") or {})
+    live_ids = set(live_executable_ids())
+
+    strategies: list[dict[str, Any]] = []
+    for definition in ALL_STRATEGIES:
+        sid = definition.strategy_id
+        perf: dict[str, Any] = next(
+            (s for s in performance["strategies"] if s.get("strategy_id") == sid),
+            {},
+        )
+        act = activity_rows.get(sid) or {}
+        if sid not in live_ids:
+            status = "DISABLED"
+        elif activity.get("last_error") and not act:
+            status = "ERROR"
+        elif act.get("status"):
+            status = str(act["status"])
+        elif int(perf.get("scans") or 0) > 0:
+            status = "ACTIVE_NO_VALID_SETUP"
+        else:
+            status = "DATA_UNAVAILABLE"
+        strategies.append(
+            {
+                "strategy_id": sid,
+                "name": definition.name,
+                "tier": "live_executable" if sid in live_ids else "registry",
+                "operational_status": status,
+                "last_evaluated_at": act.get("last_evaluated_at"),
+                "last_direction": act.get("direction"),
+                "last_quality": act.get("quality"),
+                "last_confidence": act.get("confidence"),
+                "last_reject_reason": act.get("reject_reason"),
+                "scans": perf.get("scans"),
+                "accepted": perf.get("accepted"),
+                "rejected": perf.get("rejected"),
+                "closed_trades": perf.get("closed_trades"),
+                "expectancy": perf.get("expectancy"),
+                "profit_factor": perf.get("profit_factor"),
+                "win_rate": perf.get("win_rate"),
+                "running_pnl": perf.get("running_pnl"),
+                "health": perf.get("health"),
+                "influence_weight": perf.get("influence_weight"),
+            }
+        )
+
+    quote_age = activity.get("last_quote_age_seconds")
+    data_fresh = quote_age is None or (
+        isinstance(quote_age, (int, float)) and float(quote_age) <= 8.0
+    )
+
+    return {
+        "as_of": datetime.now(UTC).isoformat(),
+        "orchestration_version": ORCHESTRATION_VERSION,
+        "robot": {
+            "last_cycle_at": activity.get("last_cycle_at"),
+            "last_market_data_at": activity.get("last_market_data_at"),
+            "last_quote_age_seconds": quote_age,
+            "market_data_fresh": data_fresh,
+            "last_soe_decision": activity.get("last_soe_decision"),
+            "last_soe_reasons": activity.get("last_soe_reasons"),
+            "last_selected_strategy_id": activity.get("last_selected_strategy_id"),
+            "last_symbol": activity.get("last_symbol"),
+            "last_regime": activity.get("last_regime"),
+            "cycles_observed": activity.get("cycles_observed"),
+            "last_error": activity.get("last_error"),
+            "process_local": True,
+        },
+        "strategies": strategies,
+        "m1": _m1_status_block(),
+        "performance": {
+            "deteriorating_strategy_ids": performance.get("deteriorating_strategy_ids"),
+            "flags": performance.get("flags"),
+        },
+        "eligibility_registry": performance.get("eligibility_registry"),
+        "collaboration": performance.get("collaboration"),
+        "live_execution_authorization": performance.get("live_execution_authorization"),
+        "risk_policy_defaults": {
+            "max_concurrent_positions": 1,
+            "minimum_net_reward_risk": "1.50",
+            "preferred_reward_risk": "2.00",
+            "minimum_trade_quality": 75,
+            "max_lot": "0.01",
+            "daily_loss_halt_percent": "48",
+            "weekly_loss_halt_percent": "0 (off)",
+            "overall_drawdown_halt_percent": "0 (off)",
+            "note": (
+                "20% per-trade and 48% daily halt are extremely aggressive. "
+                "Broker constraints still bind. Not LIVE authorization."
+            ),
+        },
+        "disclaimer": (
+            "Operational status is evidence-based. Registry membership alone "
+            "never implies ACTIVE. Broker P&L is authoritative for "
+            "profitability. Historical data does not guarantee future results."
+        ),
+        "mutates_engines": False,
+        "advisory_only": True,
+        "auto_authorize_live": False,
     }

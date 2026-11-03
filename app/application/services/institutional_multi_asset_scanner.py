@@ -1560,12 +1560,34 @@ async def _run_institutional_multi_asset_scan_body(
             boosts = book.live_rank_boosts()
             stats_snap = book.snapshot()
             by_sym: dict[str, Any] = {}
+            from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
+                record_cycle_start,
+                record_strategy_evaluation,
+            )
+
             for row in scored:
                 sym = str(row.get("symbol") or "").upper()
+                with contextlib.suppress(Exception):
+                    q_age = row.get("quote_age_seconds")
+                    record_cycle_start(
+                        symbol=sym,
+                        quote_age_seconds=(float(q_age) if q_age is not None else None),
+                        regime=str(row.get("market_regime") or row.get("regime") or ""),
+                    )
                 evals = evaluate_all_strategies(row, config=cfg, live_boosts=boosts)
                 by_sym[sym] = evals
                 for ev in evals:
                     book.record_evaluation(ev.strategy_id, passed=ev.passed)
+                    with contextlib.suppress(Exception):
+                        record_strategy_evaluation(
+                            strategy_id=ev.strategy_id,
+                            name=ev.name,
+                            passed=ev.passed,
+                            direction=ev.direction,
+                            quality=ev.quality,
+                            confidence=ev.confidence,
+                            reject_reason=ev.reject_reason,
+                        )
             scored, strategy_global_best, strategy_winners = (
                 attach_strategies_to_scores(
                     scored,
@@ -1618,8 +1640,16 @@ async def _run_institutional_multi_asset_scan_body(
                         "no forced trades"
                     ),
                 )
-        except Exception:
+        except Exception as multi_strategy_exc:
             logger.exception("multi_strategy_evaluation_failed")
+            try:
+                from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
+                    record_error,
+                )
+
+                record_error(f"multi_strategy_evaluation_failed: {multi_strategy_exc}")
+            except Exception:  # noqa: S110 — secondary monitor path only
+                pass
 
     # Opportunity Ranking + Execution Probability + Trade Queue
     try:
@@ -1775,6 +1805,10 @@ async def _run_institutional_multi_asset_scan_body(
         if not eligible_symbols:
             for r in ranked:
                 if not isinstance(r, dict) or r.get("reject"):
+                    continue
+                # Same eligibility bar as the primary loop — never promote
+                # SOE-vetoed or opportunity-ineligible rows via fallback.
+                if not r.get("opportunity_eligible"):
                     continue
                 sym = str(r.get("symbol") or "").upper()
                 if (

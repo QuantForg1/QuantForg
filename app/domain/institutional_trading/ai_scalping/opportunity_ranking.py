@@ -131,7 +131,15 @@ def enrich_scores_with_opportunity(
         opp = compute_opportunity_score(base)
         base["opportunity_score"] = opp["opportunity_score"]
         base["opportunity_components"] = opp["components"]
-        base["opportunity_eligible"] = opp["eligible"]
+        # SOE prefer-no-trade must survive opportunity enrichment — never
+        # re-open eligibility for a vetoed symbol.
+        soe_veto = bool(
+            base.get("soe_prefer_no_trade") or base.get("soe_blocks_selection")
+        )
+        base["opportunity_eligible"] = bool(opp["eligible"]) and not soe_veto
+        if soe_veto:
+            base["strategy_id"] = None
+            base["strategy_name"] = None
         base["score_band"] = opp.get("score_band")
         base["opportunity_threshold"] = opp.get("opportunity_threshold")
         base["score_breakdown"] = opp.get("breakdown") or {}

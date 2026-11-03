@@ -62,7 +62,7 @@ def _base_score(**overrides):
 
 @pytest.mark.unit
 def test_soe_version_is_v11() -> None:
-    assert ORCHESTRATION_VERSION == "soe-v1.2.0"
+    assert ORCHESTRATION_VERSION == "soe-v1.3.0"
 
 
 @pytest.mark.unit
@@ -89,7 +89,8 @@ def test_advisory_votes_participate_without_oms_authority() -> None:
 
 @pytest.mark.unit
 def test_collaboration_attaches_advisory_to_verdict() -> None:
-    score = _base_score()
+    # Clear preferred-RR solo raise with net RR at preferred floor.
+    score = _base_score(expected_rr=2.0, net_reward_risk=2.0)
     evals = evaluate_all_strategies(score)
     verdict = orchestrate_strategies(evals, score=score)
     assert verdict.prefer_no_trade is False
