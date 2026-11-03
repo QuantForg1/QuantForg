@@ -243,8 +243,8 @@ export default function StrategyPage() {
   return (
     <div>
       <PageHeader
-        title="Strategy Builder"
-        description="Deterministic strategies and ICT confluence — signals only, never autonomous trading."
+        title="Trading Strategies"
+        description="Configure, monitor, and evaluate strategy modules already in the product. Parameters stay advisory until risk and OMS gates pass."
         actions={
           <>
             <Button

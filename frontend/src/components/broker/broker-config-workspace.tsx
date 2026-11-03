@@ -43,14 +43,14 @@ function Section({
   aside?: React.ReactNode;
 }) {
   return (
-    <section className="border border-[var(--border)] bg-[var(--surface)]">
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
+    <section className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px]">
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
           {title}
         </h2>
         {aside}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -431,10 +431,10 @@ export function BrokerConfigWorkspace() {
   };
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-2xl space-y-4 px-1 sm:px-0">
+    <div className="mx-auto w-full min-w-0 max-w-5xl space-y-4 px-1 sm:px-0">
       <PageHeader
-        title="Broker"
-        description="Connect your MT5 account to access your broker account, portfolio data and, when authorized, live execution."
+        title="Broker Accounts"
+        description="Connect and manage your MT5 broker account. Balance, server, and connection status come from the live session only."
       />
 
       <p className="text-sm leading-relaxed text-[var(--fg-muted)]">

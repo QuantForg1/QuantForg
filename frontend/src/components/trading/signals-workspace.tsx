@@ -473,8 +473,8 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-5">
       <PageHeader
         eyebrow="Signals"
-        title="XAUUSD SIGNALS"
-        description="Gold (XAUUSD) research opportunities ranked by strength. Live execution still requires the existing risk, OMS, and broker gates."
+        title="Trading Signals"
+        description="AI-powered trading signals with high-probability opportunities. Live figures come from the connected session; empty states stay empty when research is unavailable."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="hidden min-w-[12rem] md:block">

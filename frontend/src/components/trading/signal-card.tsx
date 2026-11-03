@@ -86,7 +86,7 @@ export function SignalCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        "relative h-full w-full overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-elevated)] text-left shadow-[var(--shadow-card)] transition duration-[var(--duration-os)] hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+        "relative h-full w-full overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface-elevated)_92%,transparent)] text-left shadow-[var(--shadow-card)] backdrop-blur-[6px] transition duration-[var(--duration-os)] hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
         compact ? "p-3" : "p-4",
       )}
     >

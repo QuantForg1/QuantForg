@@ -18,6 +18,7 @@ import {
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { FaqList } from "@/components/marketing/faq-list";
+import { MountainBackdrop } from "@/components/brand/mountain-backdrop";
 import { AUTO_STRATEGY_MODULES } from "@/lib/auto-trading/strategy-modules";
 
 const btn =
@@ -156,10 +157,7 @@ export function HomeLanding() {
       <SiteHeader active="home" />
       <main id="main-content" tabIndex={-1}>
         <section id="platform" className="relative overflow-hidden">
-          <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(255,122,69,0.16),transparent_42%),radial-gradient(ellipse_at_80%_0%,rgba(22,139,255,0.22),transparent_46%),linear-gradient(180deg,#0c3c72_0%,#061a38_72%)]"
-            aria-hidden
-          />
+          <MountainBackdrop />
           <div className="relative mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)]">
@@ -205,11 +203,12 @@ export function HomeLanding() {
                 </li>
               </ul>
             </div>
-            <div className="rounded-[1.25rem] border border-[var(--border-strong)] bg-[var(--bg-elevated)]/90 p-3 shadow-[var(--shadow-elevated)]">
-              <div className="rounded-[1rem] border border-[var(--border)] bg-[var(--surface)] p-4">
+            <div className="qf-glass-card qf-glass-card--hero rounded-[1.25rem] border border-[var(--border-strong)] bg-[var(--bg-elevated)]/90 p-3 shadow-[var(--shadow-elevated)]">
+              <div className="rounded-[1rem] border border-[var(--border)] bg-[var(--surface)]/95 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">Live Trading Terminal</p>
-                  <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--fg-muted)]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--success)]/40 bg-[var(--success-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--success)]">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--success)]" aria-hidden />
                     Preview
                   </span>
                 </div>
@@ -252,8 +251,10 @@ export function HomeLanding() {
           {CAPABILITIES.map((item) => {
             const Icon = item.icon;
             return (
-              <article key={item.title} className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4">
-                <Icon className="mb-3 h-5 w-5 text-[var(--accent)]" aria-hidden />
+              <article key={item.title} className="qf-glass-card qf-glass-card--hover rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4">
+                <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                  <Icon className="h-5 w-5" aria-hidden />
+                </span>
                 <h2 className="text-base font-semibold">{item.title}</h2>
                 <p className="mt-1 text-sm text-[var(--fg-muted)]">{item.body}</p>
               </article>
@@ -426,7 +427,9 @@ export function HomeLanding() {
         </section>
 
         <section className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
-          <div className="overflow-hidden rounded-[1.25rem] border border-[var(--border)] bg-[linear-gradient(120deg,#0c3c72,#061a38_55%,#12345c)] px-6 py-10 sm:px-10">
+          <div className="relative overflow-hidden rounded-[1.25rem] border border-[var(--border)] px-6 py-10 sm:px-10">
+            <MountainBackdrop className="rounded-[1.25rem]" />
+            <div className="relative">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Ready to Trade <span className="text-[var(--hot)]">Smarter?</span>
             </h2>
@@ -438,9 +441,10 @@ export function HomeLanding() {
                 Connect Your Broker
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
-              <Link href="/pricing" className={`${btn} h-11 border border-[var(--border-strong)] px-5`}>
+              <Link href="/pricing" className={`${btn} h-11 border border-[var(--border-strong)] bg-[var(--surface)]/50 px-5 backdrop-blur-sm`}>
                 View Pricing
               </Link>
+            </div>
             </div>
           </div>
         </section>
