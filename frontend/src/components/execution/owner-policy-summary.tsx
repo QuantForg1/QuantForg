@@ -78,15 +78,20 @@ function PolicyMeter({
         <p className="text-sm font-medium text-[var(--fg)]">{label}</p>
         <p className="text-sm font-semibold tabular text-[var(--fg)]">{display}</p>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[var(--bg)]/70">
+      <div className="relative h-2 rounded-full bg-[var(--bg)]/70" aria-hidden>
         <div
           className={cn(
-            "h-full rounded-full transition-[width] duration-[var(--duration-os)]",
+            "absolute inset-y-0 left-0 rounded-full transition-[width] duration-[var(--duration-os)]",
             pct == null ? "bg-[var(--border)]" : "bg-[var(--hot)]",
           )}
           style={{ width: pct == null ? "0%" : `${pct}%` }}
-          aria-hidden
         />
+        {pct != null ? (
+          <span
+            className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-[var(--hot)] shadow-[0_0_0_3px_rgba(255,90,36,0.25)]"
+            style={{ left: `calc(${pct}% - 0.5rem)` }}
+          />
+        ) : null}
       </div>
     </div>
   );

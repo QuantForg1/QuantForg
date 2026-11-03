@@ -63,13 +63,12 @@ assert.match(detail, /signalHumanExplanation/);
 const rail = visiblePrimaryRail(true);
 assert.ok(rail.some((item) => item.href === "/broker"));
 assert.ok(rail.every((item) => item.href !== "/admin"));
+assert.equal(rail.find((item) => item.href === "/broker")?.section, undefined);
+assert.equal(rail.find((item) => item.href === "/dashboard")?.section, undefined);
+assert.ok(rail.some((item) => item.href === "/intelligence"));
 assert.equal(
-  rail.find((item) => item.href === "/broker")?.section,
-  "Trading",
-);
-assert.equal(
-  rail.find((item) => item.href === "/dashboard")?.section,
-  "Workspace",
+  rail.find((item) => item.href === "/intelligence")?.railBadge?.label,
+  "AI",
 );
 assert.ok(TRADER_DESK_ORDER.includes("/broker"));
 

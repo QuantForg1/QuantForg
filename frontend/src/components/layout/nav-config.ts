@@ -72,6 +72,8 @@ export type PrimaryNavItem = NavItem & {
   match?: string[];
   /** ⌘N desk jump hint shown in rail tooltip */
   shortcut?: string;
+  /** Compact rail chip (e.g. AI / notification count) matching reference chrome. */
+  railBadge?: { label: string; tone?: "accent" | "danger" };
   /**
    * Bloomberg-style section title. Rendered when it changes from the
    * previous item (expanded rail only).
@@ -91,12 +93,17 @@ export type PrimaryNavItem = NavItem & {
 /** Product desks for authenticated traders — ops/internal routes stay off this list. */
 export const TRADER_DESK_HREFS = new Set([
   "/dashboard",
+  "/intelligence",
   "/signals",
+  "/positions",
+  "/history",
   "/markets",
   "/portfolio",
   "/terminal",
   "/research",
   "/broker",
+  "/strategy",
+  "/risk-center",
   "/trading-journal",
   "/notifications",
   "/settings",
@@ -152,30 +159,19 @@ export function isTraderFacingHref(href: string): boolean {
   return TRADER_COMMAND_EXTRA.has(path);
 }
 
+/** Matches the institutional reference sidebar order. */
 export const TRADER_DESK_ORDER = [
   "/dashboard",
-  "/markets",
+  "/intelligence",
   "/signals",
-  "/research",
-  "/portfolio",
-  "/terminal",
+  "/positions",
+  "/history",
   "/broker",
+  "/research",
+  "/strategy",
+  "/risk-center",
   "/settings",
 ] as const;
-
-const TRADER_RAIL_SECTIONS: Record<
-  (typeof TRADER_DESK_ORDER)[number],
-  NonNullable<PrimaryNavItem["section"]>
-> = {
-  "/dashboard": "Workspace",
-  "/markets": "Workspace",
-  "/signals": "Workspace",
-  "/research": "Workspace",
-  "/portfolio": "Workspace",
-  "/terminal": "Trading",
-  "/broker": "Trading",
-  "/settings": "System",
-};
 
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
@@ -183,15 +179,13 @@ export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
  * Product rail. Keeps every trader desk, and adds the institutional
  * destinations that already exist as routes. Admin stays off this list.
  */
+/** Matches the institutional reference sidebar order. */
 const PRODUCT_RAIL_ORDER = [
   "/dashboard",
   "/intelligence",
-  "/markets",
   "/signals",
   "/positions",
   "/history",
-  "/portfolio",
-  "/terminal",
   "/broker",
   "/research",
   "/strategy",
@@ -203,14 +197,18 @@ const PRODUCT_RAIL_ORDER = [
  * Authenticated trader shell rail.
  * Admin is never shown here — operators open /admin by URL; RBAC still gates the route.
  */
-export function visiblePrimaryRail(_isOperator = false): PrimaryNavItem[] {
+export function visiblePrimaryRail(isOperator = false): PrimaryNavItem[] {
+  void isOperator;
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
   return PRODUCT_RAIL_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
     .map((item) => {
-      const forced =
-        TRADER_RAIL_SECTIONS[item.href as (typeof TRADER_DESK_ORDER)[number]];
-      return forced ? { ...item, section: forced } : item;
+      // Flat institutional reference rail — no section headers between desks.
+      const withBadge =
+        item.href === "/intelligence"
+          ? { ...item, railBadge: { label: "AI", tone: "accent" as const } }
+          : item;
+      return { ...withBadge, section: undefined };
     });
 }
 

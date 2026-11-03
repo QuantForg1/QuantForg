@@ -244,7 +244,7 @@ export default function StrategyPage() {
     <div>
       <PageHeader
         title="Trading Strategies"
-        description="Configure, monitor, and evaluate strategy modules already in the product. Parameters stay advisory until risk and OMS gates pass."
+        description={`Configure, monitor and optimize each strategy for ${symbol}. Parameters stay advisory until risk and OMS gates pass.`}
         actions={
           <>
             <Button
@@ -310,79 +310,111 @@ export default function StrategyPage() {
       />
 
       {mode === "engine" ? (
-        <div className="grid gap-4 xl:grid-cols-[0.9fr_1.35fr_1fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle>Strategy Catalog</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {catalogQ.isLoading ? (
-                <DeskSkeleton rows={4} />
-              ) : catalogQ.isError ? (
-                <DeskError
-                  message="Catalog unavailable."
-                  onRetry={() => catalogQ.refetch()}
-                />
-              ) : (
-                catalog.map((c) => (
-                  <button
-                    key={str(c.key)}
-                    type="button"
-                    className={`w-full rounded-[var(--radius-os)] border px-3 py-2.5 text-left transition ${
-                      strategyKey === str(c.key)
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                        : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--accent)]/40"
-                    }`}
-                    onClick={() => {
-                      setStrategyKey(str(c.key));
-                      setParamsJson(
-                        JSON.stringify(asRecord(c.default_params), null, 2),
-                      );
-                    }}
-                  >
-                    <p className="text-sm font-medium text-[var(--fg)]">{str(c.name)}</p>
-                    <p className="text-xs text-[var(--fg-subtle)]">
-                      {str(c.category)} · {str(c.key)}
-                    </p>
-                  </button>
-                ))
-              )}
-              <div className="border-t border-[var(--border)] pt-3">
-                <p className="mb-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
-                  Allocation
-                </p>
-                {portfolioQ.isLoading ? (
-                  <DeskSkeleton rows={1} />
-                ) : (
-                  <ul className="space-y-1 text-xs text-[var(--fg-muted)]">
-                    {asList(asRecord(portfolioQ.data).allocations).length === 0 ? (
-                      <li>No weights set — use API PUT /strategy/portfolio/allocations</li>
-                    ) : (
-                      asList(asRecord(portfolioQ.data).allocations)
-                        .map(asRecord)
-                        .map((a, i) => (
-                          <li key={i}>
-                            {str(a.strategy_key)} · {String(a.weight_pct)}%
-                          </li>
-                        ))
-                    )}
-                  </ul>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="space-y-4">
+          <section aria-labelledby="strategy-grid-heading">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <h2 id="strategy-grid-heading" className="text-sm font-semibold">
+                Strategy Catalog
+              </h2>
+              <p className="text-xs text-[var(--fg-muted)]">
+                {catalog.length > 0
+                  ? `${catalog.length} strategies loaded for ${symbol}`
+                  : "Strategies load from the live catalogue"}
+              </p>
+            </div>
+            {catalogQ.isLoading ? (
+              <DeskSkeleton rows={4} />
+            ) : catalogQ.isError ? (
+              <DeskError
+                message="Catalog unavailable."
+                onRetry={() => catalogQ.refetch()}
+              />
+            ) : catalog.length === 0 ? (
+              <DeskEmpty
+                icon={Sparkles}
+                title="No strategies"
+                description="The strategy catalogue returned no rows."
+              />
+            ) : (
+              <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                {catalog.map((c) => {
+                  const key = str(c.key);
+                  const selected = strategyKey === key;
+                  return (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        className={`flex h-full w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition ${
+                          selected
+                            ? "border-[var(--hot)] bg-[var(--hot-soft)] shadow-[0_0_0_1px_var(--hot),0_0_24px_rgba(255,90,36,0.25)]"
+                            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--accent)]/50"
+                        }`}
+                        onClick={() => {
+                          setStrategyKey(key);
+                          setParamsJson(
+                            JSON.stringify(asRecord(c.default_params), null, 2),
+                          );
+                        }}
+                      >
+                        <span
+                          className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
+                            selected
+                              ? "bg-[var(--accent)] text-white"
+                              : "bg-[var(--accent-soft)] text-[var(--accent)]"
+                          }`}
+                        >
+                          <Sparkles className="h-4 w-4" aria-hidden />
+                        </span>
+                        <span className="text-sm font-semibold text-[var(--fg)]">
+                          {str(c.name)}
+                        </span>
+                        <span className="mt-1 text-xs text-[var(--fg-subtle)]">
+                          {str(c.category) || key}
+                        </span>
+                        <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--success)]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+                          Active
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
 
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
           <Card>
-            <CardHeader>
-              <CardTitle>
-                {strategyKey === "custom_rules" ? "Rule Tree" : "Parameters"}
-              </CardTitle>
+            <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle>
+                  {str(selectedPlugin?.name) ||
+                    (strategyKey === "custom_rules" ? "Rule Tree" : "Parameters")}
+                </CardTitle>
+                <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                  {str(selectedPlugin?.description) ||
+                    "Select a strategy. Bars load from MT5 when connected — never fabricated."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="success">Active</Badge>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setParamsJson("{}");
+                    setCustomRulesJson(defaultCustomRules);
+                    toast.message("Parameters reset");
+                  }}
+                >
+                  Reset
+                </Button>
+                <Button size="sm" onClick={runEngine} disabled={engineRun.isPending}>
+                  Save Changes
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-xs text-[var(--fg-subtle)]">
-                {str(selectedPlugin?.description) ||
-                  "Select a strategy. Bars load from MT5 when connected — never fabricated."}
-              </p>
               <textarea
                 className="min-h-[220px] w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-xs text-[var(--fg)]"
                 value={
@@ -496,8 +528,31 @@ export default function StrategyPage() {
                 Backtest / walk-forward: reuse existing{" "}
                 <code>/backtests/run</code> and <code>/walkforward/run</code>.
               </p>
+              <div className="border-t border-[var(--border)] pt-3">
+                <p className="mb-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
+                  Allocation
+                </p>
+                {portfolioQ.isLoading ? (
+                  <DeskSkeleton rows={1} />
+                ) : (
+                  <ul className="space-y-1 text-xs text-[var(--fg-muted)]">
+                    {asList(asRecord(portfolioQ.data).allocations).length === 0 ? (
+                      <li>No weights set — use API PUT /strategy/portfolio/allocations</li>
+                    ) : (
+                      asList(asRecord(portfolioQ.data).allocations)
+                        .map(asRecord)
+                        .map((a, i) => (
+                          <li key={i}>
+                            {str(a.strategy_key)} · {String(a.weight_pct)}%
+                          </li>
+                        ))
+                    )}
+                  </ul>
+                )}
+              </div>
             </CardContent>
           </Card>
+          </div>
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[0.85fr_1.4fr_0.95fr]">
