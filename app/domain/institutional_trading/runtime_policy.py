@@ -323,7 +323,9 @@ def approved_baseline() -> dict[str, Any]:
         "allow_grid": False,
         "allow_average_down": False,
         "m1_micro_enabled": None,
-        "m1_live_submit": False,
+        # None defers to QUANTFORG_M1_MICRO_LIVE_SUBMIT. Production Phase-5
+        # persists false via Admin policy + Railway env (does not force-close).
+        "m1_live_submit": None,
         "experimental_promoted": False,
         "session_utc": "00:00-23:59",
     }
