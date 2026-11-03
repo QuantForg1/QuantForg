@@ -3,20 +3,18 @@ import type { ReactNode } from "react";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 
+/**
+ * One IBM Plex Sans loader only. Turbopack fails production builds when the
+ * same next/font/google family is instantiated twice ("queries have exactly
+ * one entry" / missing @vercel/turbopack-next font resolver). Display headings
+ * reuse --font-sans via --font-display alias in globals.css.
+ */
 const sans = IBM_Plex_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-sans",
   display: "swap",
   preload: true,
-});
-
-const display = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["500", "600"],
-  variable: "--font-display",
-  display: "swap",
-  preload: false,
 });
 
 const mono = IBM_Plex_Mono({
@@ -110,7 +108,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${sans.variable} ${display.variable} ${mono.variable} antialiased`}
+        className={`${sans.variable} ${mono.variable} antialiased`}
       >
         <a href="#main-content" className="qf-skip-link">
           Skip to content

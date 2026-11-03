@@ -129,7 +129,8 @@
   --color-foreground: var(--fg);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --font-display: var(--font-display);
+  /* Alias display to the single IBM Plex Sans loader (see layout.tsx). */
+  --font-display: var(--font-sans);
 }
 
 * {
@@ -145,6 +146,8 @@ body {
 
 body {
   margin: 0;
+  /* Keep display typography on the one loaded Plex Sans face. */
+  --font-display: var(--font-sans);
   background: var(--bg);
   background-image: var(--bg-ambient);
   background-attachment: fixed;
