@@ -64,7 +64,15 @@
       .btn-line { border: 1px solid var(--line); }
       .btn-hot { background: linear-gradient(#ff7a45, var(--hot)); color: white; border: 0; }
       .menu { display: none; }
-      .hero { display: grid; gap: 2rem; padding: 3.5rem 0 2rem; }
+      .hero-shell { position: relative; overflow: hidden; margin: 0 -1rem; padding: 0 1rem; }
+      .mtn {
+        position: absolute; inset: 0; pointer-events: none; z-index: 0;
+        background:
+          radial-gradient(ellipse at 18% 12%, rgba(255,122,69,0.18), transparent 42%),
+          radial-gradient(ellipse at 82% 0%, rgba(22,139,255,0.28), transparent 48%);
+      }
+      .mtn svg { position: absolute; inset-inline: 0; bottom: 0; width: 100%; height: 48%; opacity: 0.9; }
+      .hero { position: relative; z-index: 1; display: grid; gap: 2rem; padding: 3.5rem 0 2rem; }
       .kicker {
         display: inline-flex; border: 1px solid var(--line); border-radius: 999px;
         padding: 0.3rem 0.7rem; color: var(--muted); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
@@ -99,10 +107,12 @@
       details summary { cursor: pointer; font-weight: 650; padding: 1rem 1.1rem; }
       details p { margin: 0; padding: 0 1.1rem 1rem; }
       .cta {
+        position: relative; overflow: hidden;
         margin: 1rem 0 3rem; padding: 2rem;
         border-radius: 1.2rem; border: 1px solid var(--line);
         background: linear-gradient(120deg, #0c3c72, #061a38 60%);
       }
+      .cta > * { position: relative; z-index: 1; }
       footer { border-top: 1px solid var(--line); background: var(--elev); padding: 2rem 0 1rem; }
       .foot { display: grid; gap: 1.5rem; }
       .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -153,6 +163,23 @@
         <p><a href="#features">Features</a> · <a href="#platform">Platform</a> · <a href="#how-it-works">How It Works</a> · <a href="#strategies">Strategies</a> · <a href="#security">Security</a> · <a href="/pricing">Pricing</a> · <a href="/login">Sign In</a></p>
       </details>
       <main id="main-content" tabindex="-1">
+        <div class="hero-shell">
+          <div class="mtn" aria-hidden="true">
+            <svg viewBox="0 0 1440 420" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="qf-mtn-a" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#1a4f8c" stop-opacity="0.95" />
+                  <stop offset="100%" stop-color="#061a38" stop-opacity="1" />
+                </linearGradient>
+                <linearGradient id="qf-mtn-b" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#0e3a6c" stop-opacity="0.92" />
+                  <stop offset="100%" stop-color="#041028" stop-opacity="1" />
+                </linearGradient>
+              </defs>
+              <path d="M0 420V250L180 140l140 70 160-110 120 60 200-130 150 90 170-70 150 80 170-50V420Z" fill="url(#qf-mtn-a)" />
+              <path d="M0 420V310l220 20 160-90 180 70 210-120 190 80 160-40 150 50 170-30V420Z" fill="url(#qf-mtn-b)" />
+            </svg>
+          </div>
         <section class="hero" id="platform">
           <div>
             <p class="kicker">AI powered · MT5 · Institutional grade</p>
@@ -188,6 +215,7 @@
             </div>
           </aside>
         </section>
+        </div>
 
         <section class="section" id="features">
           <div class="grid grid-4">
@@ -334,6 +362,12 @@
         </section>
 
         <section class="cta">
+          <div class="mtn" aria-hidden="true">
+            <svg viewBox="0 0 1440 420" preserveAspectRatio="none">
+              <path d="M0 420V250L180 140l140 70 160-110 120 60 200-130 150 90 170-70 150 80 170-50V420Z" fill="url(#qf-mtn-a)" />
+              <path d="M0 420V310l220 20 160-90 180 70 210-120 190 80 160-40 150 50 170-30V420Z" fill="url(#qf-mtn-b)" />
+            </svg>
+          </div>
           <h2>Ready to Trade <span class="hot">Smarter?</span></h2>
           <p class="intro">Connect your broker. Analysis, risk checks, and execution stay under the settings you approve. Results are not guaranteed.</p>
           <p>
