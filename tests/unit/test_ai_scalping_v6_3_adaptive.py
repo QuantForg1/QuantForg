@@ -52,8 +52,8 @@ def test_v63_version_preserves_quality_and_risk() -> None:
     assert cfg.typical_hold_min_minutes == 2
     assert cfg.typical_hold_max_minutes == 10
     assert cfg.absolute_max_hold_minutes == 12
-    assert cfg.normal_vol.confidence == 71
-    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.confidence == 73
+    assert cfg.normal_vol.quality == 76
 
 
 @pytest.mark.unit

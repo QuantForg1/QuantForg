@@ -26,7 +26,7 @@ def test_continuous_scalp_flow_knobs_locked() -> None:
     assert cfg.post_close_rescan_delay_seconds == 0.0
     assert cfg.max_open_trades == 1
     # Strategy floors = SCALPING_V1 (profile-owned)
-    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.quality == 76
     assert cfg.min_structure_score == 60
     assert cfg.min_momentum_score == 55
     assert cfg.min_expected_rr == Decimal("1.20")

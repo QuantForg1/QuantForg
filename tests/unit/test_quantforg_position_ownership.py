@@ -651,10 +651,9 @@ async def test_scanner_quantforg_same_symbol_blocks_duplicate(
         config=cfg,
         open_positions=1,
     )
-    # One open gold ticket is recorded. The five-slot book is not full, so the
-    # qualifying setup stays the scan winner.
+    # One open gold ticket fills the one-position book; no new entry is selected.
     assert out.get("already_open_reason") == "QUANTFORG_SAME_SYMBOL_OPEN"
-    assert out.get("best_symbol") == "XAUUSD"
+    assert out.get("best_symbol") is None
 
 
 def test_manual_does_not_reduce_effective_count() -> None:
@@ -674,8 +673,8 @@ def test_manual_does_not_reduce_effective_count() -> None:
         broker_allowed_count=10,
         min_lot=Decimal("0.01"),
     )
-    # Manual positions are not in this call. Score 95 targets 10; the owner cap is 5.
-    assert plan.effective_count == 5
+    # Manual positions are not in this call. Score 95 targets 10; the owner cap is 1.
+    assert plan.effective_count == 1
 
 
 def test_quantforg_positions_reduce_remaining_capacity() -> None:
@@ -731,7 +730,7 @@ def test_effective_count_follows_min_stack_including_owner_cap() -> None:
         broker_allowed_count=7,
         min_lot=Decimal("0.01"),
     )
-    assert plan.effective_count == 2
+    assert plan.effective_count == 1
 
 
 def test_scalp_targets_ten_but_effective_is_owner_five() -> None:
@@ -752,7 +751,7 @@ def test_scalp_targets_ten_but_effective_is_owner_five() -> None:
         min_lot=Decimal("0.01"),
     )
     assert plan.target_count == SCALP_MAX_OPEN_TRADES
-    assert plan.effective_count == 5
+    assert plan.effective_count == 1
 
 
 def test_hold_target_matches_the_five_cap() -> None:
@@ -773,7 +772,7 @@ def test_hold_target_matches_the_five_cap() -> None:
         min_lot=Decimal("0.01"),
     )
     assert plan.target_count == HOLD_MAX_OPEN_TRADES
-    assert plan.effective_count == 5
+    assert plan.effective_count == 1
 
 
 def test_account_open_still_observable_for_global_risk() -> None:

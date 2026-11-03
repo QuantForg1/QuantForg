@@ -44,7 +44,7 @@ def test_v61_version_preserves_v6_safety() -> None:
     assert cfg.min_expected_rr == cfg.fixed_tp_r
     assert cfg.self_protection_enabled is True
     assert cfg.slippage_protection_enabled is True
-    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.confidence == 73
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.quality_baseline == "SCALPING_V1"
 

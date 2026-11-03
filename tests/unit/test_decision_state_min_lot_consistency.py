@@ -450,7 +450,7 @@ def test_scalp_atr_stop_provenance_unchanged() -> None:
 
 
 def test_owner_cap_overrides_strategy_targets_and_min_stack() -> None:
-    """Strategy targets still rank multiple legs; owner capacity allows five."""
+    """Strategy targets still rank multiple legs; owner capacity allows one."""
     assert (
         2
         <= strategy_target_count(trade_class=TradeClass.SCALP, opportunity_score=82)
@@ -482,7 +482,7 @@ def test_owner_cap_overrides_strategy_targets_and_min_stack() -> None:
             broker_allowed_count=allowed,
             min_lot=Decimal("0.01"),
         )
-        assert plan.effective_count == min(int(allowed), 5)
+        assert plan.effective_count == min(int(allowed), 1)
         assert plan.per_position_lots == Decimal("0.01")
 
 

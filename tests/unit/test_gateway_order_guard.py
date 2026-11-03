@@ -3,7 +3,7 @@
 New entries need Gold, SL > 0, TP > 0, volume <= 0.01, a known commission,
 and a unique client_order_id. Closes are always allowed; SL/TP modifies may
 only tighten. Inclusive planned risk cannot exceed 20% of equity, and the
-open book cannot exceed 30%. The position maximum is five.
+open book cannot exceed 30%. The position maximum is one.
 """
 
 from __future__ import annotations
@@ -131,25 +131,10 @@ class TestEntries:
                     }
                 ],
             )
-        assert _code(exc) == "GUARD_OPEN_RISK_UNMEASURED"
+        assert _code(exc) == "GUARD_MAX_POSITIONS"
 
     def test_measured_pending_gold_order_under_the_cap_is_allowed(self) -> None:
-        assert (
-            _guard(
-                _entry(client_order_id="second"),
-                equity=Decimal("100"),
-                orders_lookup=lambda: [
-                    {
-                        "ticket": 15,
-                        "symbol": "XAUUSD",
-                        "volume_current": "0.01",
-                        "sl": 4100.0,
-                        "price_open": 4102.0,
-                    }
-                ],
-            )
-            == KIND_ENTRY
-        )
+        assert _guard(_entry(client_order_id="second"), equity=Decimal("100")) == KIND_ENTRY
 
     def test_five_open_gold_positions_block_another_entry(self) -> None:
         with pytest.raises(OrderGuardRejected) as exc:
@@ -178,10 +163,10 @@ class TestEntries:
                     {"ticket": 9, "symbol": "XAUUSD_i", "volume": "0.01"}
                 ],
             )
-        assert _code(exc) == "GUARD_OPEN_RISK_UNMEASURED"
+        assert _code(exc) == "GUARD_MAX_POSITIONS"
 
-    def test_one_measured_gold_position_is_allowed(self) -> None:
-        assert (
+    def test_one_measured_gold_position_blocks_a_second_entry(self) -> None:
+        with pytest.raises(OrderGuardRejected) as exc:
             _guard(
                 _entry(client_order_id="with-open"),
                 equity=Decimal("100"),
@@ -195,8 +180,7 @@ class TestEntries:
                     }
                 ],
             )
-            == KIND_ENTRY
-        )
+        assert _code(exc) == "GUARD_MAX_POSITIONS"
 
     def test_buy_stop_above_bid_is_rejected(self) -> None:
         with pytest.raises(OrderGuardRejected) as exc:

@@ -360,8 +360,10 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         expected_rr=Decimal("1.00"),
         atr_pct=Decimal("0.2"),
     )
-    assert equal.passed is True
-    assert not any("OWNER_MIN_RR" in r for r in equal.hard_rejects)
+    assert equal.passed is False
+    assert any(
+        "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in equal.hard_rejects
+    )
 
     worse = evaluate_quality_gates(
         direction=direction,
@@ -377,7 +379,10 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         atr_pct=Decimal("0.2"),
     )
     assert worse.passed is False
-    assert any("OWNER_MIN_RR" in r for r in worse.hard_rejects)
+    assert any(
+        "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS" in r for r in worse.hard_rejects
+    )
+    assert any("Expected RR" in r for r in worse.soft_rejects)
 
 
 @pytest.mark.unit

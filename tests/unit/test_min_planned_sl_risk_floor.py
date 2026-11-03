@@ -441,7 +441,7 @@ def test_pme_be_and_trail_unchanged() -> None:
     assert Decimal("0.80") == SCALP_BREAK_EVEN_AT_R
     assert Decimal("1.20") == cfg.partial_at_r
     assert Decimal("1.20") == cfg.trail_after_r
-    assert Decimal("1.20") == _SCALP_RR
+    assert Decimal("1.50") == _SCALP_RR
 
 
 def test_v2_does_not_allow_above_max_planned() -> None:

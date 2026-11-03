@@ -34,8 +34,8 @@ def test_v71_config_preserves_quality_risk() -> None:
     assert cfg.version.startswith("ai-scalping-v8")
     assert cfg.continuous_version.startswith("ai-scalping-v7.1")
     assert cfg.quality_baseline == "SCALPING_V1"
-    assert cfg.normal_vol.confidence == 71
-    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.confidence == 73
+    assert cfg.normal_vol.quality == 76
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.max_daily_exposure_pct == Decimal("5.00")
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")

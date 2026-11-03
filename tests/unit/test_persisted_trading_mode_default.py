@@ -155,8 +155,8 @@ def test_hydrate_explicit_swing_is_not_overwritten(
     state = load_ops_state()
     assert state.get("trading_mode") == "swing"
     assert state.get("trading_mode_explicit") is True
-    # Persisted 2 stays stricter than the five-position owner maximum.
-    assert plane.max_open_trades == 2
+    # Persisted 2 is coerced to the one-position owner maximum.
+    assert plane.max_open_trades == 1
     cp._GLOBAL_PLANE = None
 
 

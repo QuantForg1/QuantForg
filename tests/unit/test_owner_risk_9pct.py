@@ -52,7 +52,7 @@ def _codes(reasons: list[str]) -> set[str]:
 
 def test_exact_20_percent_of_50_is_allowed() -> None:
     # SL 9.70 + spread 0.30 = $10.00 = 20% of $50.
-    assert _entry(stop_loss=Decimal("4123.30"), take_profit=Decimal("4143.50")) == []
+    assert _entry(stop_loss=Decimal("4123.30"), take_profit=Decimal("4148.00")) == []
 
 
 def test_one_cent_over_20_percent_is_rejected() -> None:
@@ -88,7 +88,7 @@ def test_cap_recomputes_from_equity(equity: str, cap: str) -> None:
 
 def test_cap_dynamic_at_80_equity() -> None:
     # $10.01 planned risk: rejected at $50 equity, accepted at $80 equity.
-    wide = {"stop_loss": Decimal("4123.29"), "take_profit": Decimal("4145.00")}
+    wide = {"stop_loss": Decimal("4123.29"), "take_profit": Decimal("4148.50")}
     assert "OWNER_SL_RISK" in _codes(_entry(**wide))
     assert _entry(**wide, equity=Decimal("80")) == []
 
@@ -557,9 +557,9 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
     assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("20.0")
     assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("48.0")
     assert cfg.max_consecutive_losses == 0  # no loss-streak pause
-    assert cfg.min_reward_risk == Decimal("0.50")
+    assert cfg.min_reward_risk == Decimal("1.50")
     assert cfg.max_spread == Decimal("1.00")
-    assert cfg.max_open_positions == 5
+    assert cfg.max_open_positions == 1
     # Operator-only settings that are not owner limits are kept.
     assert cfg.min_score == Decimal("70")
     shown = cfg.to_dict()

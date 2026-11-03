@@ -240,7 +240,8 @@ def _evidence_gate_prefer_no_trade(score: dict[str, Any] | None) -> str | None:
                 "— prefer no trade (setup freshness)"
             )
 
-    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    raw_factors = score.get("factors")
+    factors: dict[str, Any] = raw_factors if isinstance(raw_factors, dict) else {}
     try:
         bos = float(factors.get("bos") or score.get("structure_score") or 0)
         vol = float(

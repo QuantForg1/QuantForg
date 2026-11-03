@@ -85,7 +85,7 @@ def test_v6_version_and_risk_locks() -> None:
     assert cfg.version.startswith("ai-scalping-v")
     assert cfg.quality_baseline == "SCALPING_V1"
     assert cfg.risk_per_trade_pct == Decimal("0.50")
-    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.confidence == 73
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
