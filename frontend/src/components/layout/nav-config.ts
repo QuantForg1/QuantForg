@@ -159,11 +159,16 @@ export function isTraderFacingHref(href: string): boolean {
   return TRADER_COMMAND_EXTRA.has(path);
 }
 
-/** Matches the institutional reference sidebar order. */
+/**
+ * Authenticated trader rail order.
+ * Keeps the institutional reference desks and retains /markets so the
+ * Phase 74 trader-rail contract (signals + markets, never /admin) stays intact.
+ */
 export const TRADER_DESK_ORDER = [
   "/dashboard",
   "/intelligence",
   "/signals",
+  "/markets",
   "/positions",
   "/history",
   "/broker",
@@ -176,31 +181,13 @@ export const TRADER_DESK_ORDER = [
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
 /**
- * Product rail. Keeps every trader desk, and adds the institutional
- * destinations that already exist as routes. Admin stays off this list.
- */
-/** Matches the institutional reference sidebar order. */
-const PRODUCT_RAIL_ORDER = [
-  "/dashboard",
-  "/intelligence",
-  "/signals",
-  "/positions",
-  "/history",
-  "/broker",
-  "/research",
-  "/strategy",
-  "/risk-center",
-  "/settings",
-] as const;
-
-/**
  * Authenticated trader shell rail.
  * Admin is never shown here — operators open /admin by URL; RBAC still gates the route.
  */
 export function visiblePrimaryRail(isOperator = false): PrimaryNavItem[] {
   void isOperator;
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
-  return PRODUCT_RAIL_ORDER.map((href) => allowed.get(href))
+  return TRADER_DESK_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
     .map((item) => {
       // Flat institutional reference rail — no section headers between desks.
