@@ -264,6 +264,19 @@ def build_robot_health_monitor(
             "last_error": activity.get("last_error"),
             "process_local": True,
         },
+        "opportunity_intelligence": {
+            "last_atr_pct": activity.get("last_atr_pct"),
+            "last_net_reward_risk": activity.get("last_net_reward_risk"),
+            "last_trade_quality": activity.get("last_trade_quality"),
+            "last_regime": activity.get("last_regime"),
+            "owner_min_net_rr": 1.50,
+            "owner_preferred_rr": 2.00,
+            "owner_min_quality": 75,
+            "note": (
+                "Phase-6: surfaces last-cycle ATR%/net RR/quality for reject "
+                "forensics. Does not authorize LIVE or fabricate profitability."
+            ),
+        },
         "strategies": strategies,
         "m1": _m1_status_block(),
         "performance": {

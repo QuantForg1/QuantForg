@@ -1569,10 +1569,24 @@ async def _run_institutional_multi_asset_scan_body(
                 sym = str(row.get("symbol") or "").upper()
                 with contextlib.suppress(Exception):
                     q_age = row.get("quote_age_seconds")
+                    atr_raw = row.get("atr_pct")
+                    if atr_raw is None and isinstance(row.get("thresholds"), dict):
+                        atr_raw = row["thresholds"].get("atr_pct")
+                    net_raw = (
+                        row.get("net_reward_risk")
+                        or row.get("expected_net_rr")
+                        or row.get("expected_rr")
+                    )
+                    q_raw = row.get("trade_quality")
                     record_cycle_start(
                         symbol=sym,
                         quote_age_seconds=(float(q_age) if q_age is not None else None),
                         regime=str(row.get("market_regime") or row.get("regime") or ""),
+                        atr_pct=(float(atr_raw) if atr_raw is not None else None),
+                        net_reward_risk=(
+                            float(net_raw) if net_raw is not None else None
+                        ),
+                        trade_quality=(int(q_raw) if q_raw is not None else None),
                     )
                 evals = evaluate_all_strategies(row, config=cfg, live_boosts=boosts)
                 by_sym[sym] = evals

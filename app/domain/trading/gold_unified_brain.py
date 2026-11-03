@@ -222,7 +222,40 @@ def decide_gold(
     as_of = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     regime = str(score.get("market_regime") or score.get("regime") or "unknown")
     age = _quote_age_seconds(score)
-    record_cycle_start(symbol=raw_symbol, quote_age_seconds=age, regime=regime)
+
+    def _f(key: str) -> float | None:
+        raw = score.get(key)
+        if raw is None and key == "net_reward_risk":
+            raw = score.get("expected_net_rr") or score.get("expected_rr")
+        try:
+            return float(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _i(key: str) -> int | None:
+        raw = score.get(key)
+        try:
+            return int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    atr_raw = score.get("atr_pct")
+    if atr_raw is None:
+        thr = score.get("thresholds")
+        if isinstance(thr, dict):
+            atr_raw = thr.get("atr_pct")
+    try:
+        atr_f = float(atr_raw) if atr_raw is not None else None
+    except (TypeError, ValueError):
+        atr_f = None
+    record_cycle_start(
+        symbol=raw_symbol,
+        quote_age_seconds=age,
+        regime=regime,
+        atr_pct=atr_f,
+        net_reward_risk=_f("net_reward_risk"),
+        trade_quality=_i("trade_quality"),
+    )
     try:
         symbol = require_gold_trading_symbol(raw_symbol)
     except DisabledAutonomousSymbolError:

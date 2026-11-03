@@ -495,6 +495,9 @@ def score_scalping_setup(
     trade_quality = int(quality.total)
     confluence = confidence
 
+    # Per-symbol key — used for regime ATR bands, cooldown, and gates.
+    sym_key = (symbol or str(getattr(snapshot, "symbol", "") or "")).upper()
+
     regime = classify_scalping_regime(
         alignment_score=int(trend.alignment_score),
         atr_pct=resolved.atr_pct,
@@ -503,6 +506,7 @@ def score_scalping_setup(
         sweep_count=sweeps,
         range_like=trend.alignment_score < 55,
         volume_expanding=factors["volume"] >= 70,
+        symbol=sym_key or None,
     )
     reasons.extend(regime.reasons)
     exec_profile = build_regime_execution_profile(
@@ -526,7 +530,6 @@ def score_scalping_setup(
     )
     cd_decision = dc_replace(cd_decision, seconds=scaled_seconds)
     # Per-symbol cooldown only — never share a global gate across the universe.
-    sym_key = (symbol or str(getattr(snapshot, "symbol", "") or "")).upper()
     if cfg.adaptive_cooldown_enabled and sym_key:
         cooldown_eval = get_symbol_state_book().evaluate_cooldown(sym_key, cd_decision)
     else:
@@ -563,7 +566,11 @@ def score_scalping_setup(
 
     owner_floor = active_min_reward_risk()
     net_rr = targets.expected_net_rr
-    if owner_floor < Decimal("1") and net_rr is not None:
+    # Phase-6: when the owner floor is >= 1.50, TP-room uses *net* RR (after
+    # costs) consistently with SOE evidence gate — not gross-only <= 1.
+    if net_rr is not None and owner_floor >= Decimal("1"):
+        no_valid_tp_room = targets.take_profit is None or net_rr < owner_floor
+    elif owner_floor < Decimal("1") and net_rr is not None:
         no_valid_tp_room = targets.take_profit is None or net_rr < owner_floor
         expected_rr = net_rr
     else:

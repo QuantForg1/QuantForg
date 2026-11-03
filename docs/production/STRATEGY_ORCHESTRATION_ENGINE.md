@@ -1,4 +1,4 @@
-# Strategy Orchestration Engine (SOE) — v1.3.0
+# Strategy Orchestration Engine (SOE) — v1.4.0
 
 **Status:** Production collaboration layer (upstream of Risk / OMS / MT5)  
 **Does not:** authorize `order_send`, weaken risk gates, enable grid/martingale, or auto-approve LIVE capital.
@@ -11,10 +11,17 @@ QuantForg evaluates the five live scalping profiles **and** advisory research en
 2. Collect advisory votes (factor proxies for RSI/MACD/MA/Bollinger/trend/momentum/breakout/mean-reversion roles).
 3. Measure agreement / disagreement — never manufacture consensus.
 4. Apply performance influence (deterioration → veto).
-5. Raise the evidence bar when advisory engines strongly disagree (**both** quality and confidence must clear raised floors).
+5. Raise the evidence bar when **real** advisory engines strongly disagree (**both** quality and confidence must clear raised floors). Score-factor proxies alone cannot invent strong disagreement (Phase-6).
 6. Raise the solo bar on mixed advisory disagreement.
-7. Prefer **NO_TRADE** on weak solo setups, net RR &lt; 1.50, weak MTF alignment, stale setups, false-breakout / momentum-exhaustion evidence, elevated spread, solo RR below preferred (2.0) without stronger quality, or conflicts.
-8. Select **one** coherent OMS-eligible winner (live pack only).
+7. Same-cluster multi-passer **pack agreement** may clear solo selectivity at Q≥76 (owner Q75 floor intact) without counting correlated passers as independent confluence.
+8. Prefer **NO_TRADE** on weak solo setups, net RR &lt; 1.50, weak MTF alignment, stale setups, false-breakout / momentum-exhaustion evidence, elevated spread, solo RR below preferred (2.0) without stronger quality, or conflicts.
+9. Select **one** coherent OMS-eligible winner (live pack only).
+
+### Phase-6 intelligence notes
+
+- Owner structure SL embeds the spread buffer — net RR must not add spread a second time.
+- Gold regime ATR bands use asset-class thresholds (≈0.08 / 0.35) so breakout/expansion are reachable on realistic XAUUSD tape.
+- Owner floors Q≥75 and net RR≥1.50 remain hard; thresholds were not loosened to manufacture volume.
 
 **Operating objective:** LIVE trading through existing owner gates — not permanent SHADOW. SHADOW remains available; it is not required forever.
 

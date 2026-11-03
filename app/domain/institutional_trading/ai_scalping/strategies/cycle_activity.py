@@ -30,6 +30,9 @@ _STATE: dict[str, Any] = {
     "last_selected_strategy_id": None,
     "last_symbol": None,
     "last_regime": None,
+    "last_atr_pct": None,
+    "last_net_reward_risk": None,
+    "last_trade_quality": None,
     "last_error": None,
     "cycles_observed": 0,
     "strategies": {},
@@ -45,12 +48,21 @@ def record_cycle_start(
     symbol: str | None = None,
     quote_age_seconds: float | None = None,
     regime: str | None = None,
+    atr_pct: float | None = None,
+    net_reward_risk: float | None = None,
+    trade_quality: int | None = None,
 ) -> None:
     with _LOCK:
         _STATE["cycles_observed"] = int(_STATE.get("cycles_observed") or 0) + 1
         _STATE["last_cycle_at"] = _now()
         _STATE["last_symbol"] = symbol
         _STATE["last_regime"] = regime
+        if atr_pct is not None:
+            _STATE["last_atr_pct"] = float(atr_pct)
+        if net_reward_risk is not None:
+            _STATE["last_net_reward_risk"] = float(net_reward_risk)
+        if trade_quality is not None:
+            _STATE["last_trade_quality"] = int(trade_quality)
         if quote_age_seconds is not None:
             _STATE["last_quote_age_seconds"] = float(quote_age_seconds)
             _STATE["last_market_data_at"] = _now()

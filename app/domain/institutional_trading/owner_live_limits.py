@@ -703,16 +703,25 @@ def net_reward_risk(
     commission: Decimal | None = None,
     contract_size: Decimal | None = None,
     volume: Decimal | None = None,
+    spread_already_in_stop: bool = False,
 ) -> NetRewardRisk:
     """Net RR. Slippage widens the risk leg, matching planned-risk dollars.
 
     Known commission is converted with ``contract_size * volume`` and added to
     the risk leg. Unknown commission is omitted. Reward is the target distance
     minus that known commission in price units.
+
+    When ``spread_already_in_stop`` is True, ``stop_distance`` already embeds the
+    owner spread buffer beyond structure (see structure SL placement). The spread
+    is then **not** added again on the risk leg — counting it twice falsely
+    depresses net RR and rejects valid owner-floor setups. Slippage and known
+    commission still apply.
     """
     tp = Decimal(str(tp_distance or 0))
     stop = Decimal(str(stop_distance or 0))
     spr = max(Decimal(str(spread or 0)), Decimal("0"))
+    if spread_already_in_stop:
+        spr = Decimal("0")
     slip = _nonneg(slippage)
     gross = (tp / stop) if stop > 0 and tp > 0 else None
     fee_price = Decimal("0")
@@ -850,6 +859,7 @@ def evaluate_owner_entry(
     slippage: Decimal | None = None,
     commission: Decimal | None = None,
     tick_size: Decimal | None = None,
+    stop_includes_spread_buffer: bool = False,
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
@@ -861,6 +871,9 @@ def evaluate_owner_entry(
     leg, plus order slippage and a known commission. The ratio must clear the
     active owner floor (1.50; a promoted experiment may be 0.10, 0.15, or
     0.20). A saved but unpromoted experiment stays at 1.50.
+    When ``stop_includes_spread_buffer`` is True, ``|entry - sl|`` already embeds
+    the owner spread buffer; spread is not added again to planned risk or net RR
+    (Phase-6 — avoid double-count; slippage + commission still apply).
     ``min_stop_distance`` is the broker stops_level in price units
     (``point * stops_level``); SL and TP must both be at least that far away.
     """
@@ -944,6 +957,8 @@ def evaluate_owner_entry(
     sl_dist = abs(px - sl)
     tp_dist = abs(tp - px)
     slip = _nonneg(slippage)
+    # Spread still gates max-spread; only omit it from risk/RR when already in SL.
+    risk_spread = Decimal("0") if stop_includes_spread_buffer else spr
     fee = resolve_entry_commission(symbol, commission)
     if fee is None:
         violations.append(
@@ -956,7 +971,7 @@ def evaluate_owner_entry(
     if fee is not None:
         risk_usd = planned_risk_usd(
             stop_distance=sl_dist,
-            spread=spr,
+            spread=risk_spread,
             contract_size=cs,
             volume=vol,
             slippage=slip,
@@ -992,12 +1007,13 @@ def evaluate_owner_entry(
         commission=fee,
         contract_size=cs,
         volume=vol,
+        spread_already_in_stop=stop_includes_spread_buffer,
     )
     rr = net.ratio if net.ratio is not None else Decimal("0")
     if rr < rr_floor:
         label = (
             "net reward:risk"
-            if slip > 0 or net.commission_included
+            if slip > 0 or net.commission_included or stop_includes_spread_buffer
             else "reward:risk after spread"
         )
         violations.append(f"OWNER_MIN_RR: {label} {rr.quantize(_CENT)} < {rr_floor}")
