@@ -88,24 +88,27 @@ export default function RiskCenterPage() {
               <CardTitle>Trading Rules</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5 text-sm">
-                <span>Stop trading at daily loss limit</span>
-                <span
-                  className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--hot)]"
-                  aria-hidden
+              {[
+                "Stop trading at daily loss limit",
+                "Allow trading XAUUSD only",
+                "Block entries when spread exceeds the saved maximum",
+                "Enforce minimum reward/risk",
+                "Limit concurrent positions",
+                "Use ATR stop multiplier",
+              ].map((label) => (
+                <label
+                  key={label}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5 text-sm"
                 >
-                  <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
-                </span>
-              </label>
-              <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5 text-sm">
-                <span>Allow trading XAUUSD only</span>
-                <span
-                  className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--hot)]"
-                  aria-hidden
-                >
-                  <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
-                </span>
-              </label>
+                  <span>{label}</span>
+                  <span
+                    className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--hot)]"
+                    aria-hidden
+                  >
+                    <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
+                  </span>
+                </label>
+              ))}
               <p className="text-xs text-[var(--fg-muted)]">
                 Rules mirror the saved owner policy. Toggles are display-only; editing stays on
                 Admin control.

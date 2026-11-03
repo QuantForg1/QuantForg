@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { MobileNav } from "@/components/layout/sidebar";
 import { isPrimaryActive, primaryRail } from "@/components/layout/nav-config";
 import { ConnectionStatus } from "@/components/trading/connection-status";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { cn, formatNumber } from "@/lib/utils";
 import { mt5Api, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num } from "@/lib/desk";
@@ -153,6 +154,13 @@ export function Topbar({
       <div className="shrink-0 lg:hidden">
         <MobileNav />
       </div>
+      <Link
+        href="/dashboard"
+        className="hidden shrink-0 lg:block"
+        aria-label="QuantForg overview"
+      >
+        <BrandLogo size={28} caption="Institutional Trading Intelligence" />
+      </Link>
       {!compact ? (
         <div className="hidden sm:block lg:hidden">
           <ConnectionStatus compact />

@@ -221,15 +221,20 @@ export function OwnerPolicySummary() {
             <div>
               <CardTitle>Risk Settings</CardTitle>
               <p className="text-xs text-[var(--fg-muted)]">
-                Read-only meters of the saved owner policy. Editing stays on Admin control.
+                Saved owner policy limits. Values are enforced live; editing stays on Admin control.
               </p>
             </div>
-            <Badge tone={confirmed ? "success" : "warning"}>
-              {confirmed ? "Worker confirmed" : "Not confirmed loaded"}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={confirmed ? "success" : "warning"}>
+                {confirmed ? "Worker confirmed" : "Not confirmed loaded"}
+              </Badge>
+              <Button className="qf-btn-hot border-0" size="sm" asChild>
+                <Link href="/admin/control">Save Changes</Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {METER_FIELDS.map((field) => {
+            {METER_FIELDS.filter((field) => field.key !== "daily_loss_pct").map((field) => {
               const value =
                 field.key === "min_reward_risk" ? reward : doc[field.key];
               return (
@@ -251,9 +256,6 @@ export function OwnerPolicySummary() {
                 {allowlist}
               </p>
             </div>
-            <Button variant="secondary" size="sm" asChild>
-              <Link href="/admin/control">Open policy editor</Link>
-            </Button>
           </CardContent>
         </Card>
 
@@ -292,6 +294,23 @@ export function OwnerPolicySummary() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Daily Loss Limit</CardTitle>
+          <p className="text-xs text-[var(--fg-muted)]">
+            Trading will automatically stop when daily loss reaches this limit.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <PolicyMeter
+            label="Daily Loss Protection"
+            value={doc.daily_loss_pct}
+            max={100}
+            suffix="%"
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

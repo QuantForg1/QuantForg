@@ -94,7 +94,7 @@ export function AuthShell({
             })}
           </ul>
         </section>
-        <section className="qf-auth-card rounded-[1.25rem] border border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] bg-[color-mix(in_srgb,var(--surface)_88%,#061a38)] p-6 shadow-[var(--shadow-elevated),0_0_0_1px_rgba(22,139,255,0.18),0_0_48px_rgba(22,139,255,0.12)] backdrop-blur-md sm:p-8">
+        <section className="qf-auth-card rounded-[1.25rem] border border-white/15 bg-[color-mix(in_srgb,var(--surface)_78%,#061a38)] p-6 shadow-[var(--shadow-elevated),0_0_40px_rgba(255,107,53,0.08)] backdrop-blur-xl sm:p-8">
           <div className="mb-6 flex flex-col items-center text-center">
             <BrandLogo size={42} caption="Institutional Trading Intelligence" />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight">{title}</h1>

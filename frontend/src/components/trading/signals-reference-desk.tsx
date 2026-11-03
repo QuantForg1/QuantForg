@@ -135,6 +135,23 @@ export function SignalsReferenceDesk({
   const status = signalExecutionStatusLabel(row);
   const strategy = presentField(row.strategy ?? row.strategy_id ?? row.setup);
   const mid = num(row.mid ?? row.price ?? row.current_price ?? row.close);
+  const strong =
+    conf != null && conf >= 70
+      ? dir === "BUY"
+        ? "STRONG BUY"
+        : dir === "SELL"
+          ? "STRONG SELL"
+          : null
+      : null;
+  const bannerLabel =
+    strong ??
+    (dir === "BUY" ? "BUY" : dir === "SELL" ? "SELL" : "WAIT");
+  const bannerTone =
+    dir === "BUY"
+      ? "border-[color-mix(in_srgb,var(--success)_45%,var(--border))] bg-[color-mix(in_srgb,var(--success-soft)_70%,var(--surface))] text-[var(--success)]"
+      : dir === "SELL"
+        ? "border-[color-mix(in_srgb,var(--danger)_45%,var(--border))] bg-[color-mix(in_srgb,var(--danger-soft)_70%,var(--surface))] text-[var(--danger)]"
+        : "border-[var(--border)] bg-[var(--bg)]/40 text-[var(--fg-muted)]";
 
   return (
     <div className="space-y-4">
@@ -150,11 +167,21 @@ export function SignalsReferenceDesk({
                   {displayTradingSymbol(symbol)}
                 </h2>
                 <Badge tone={freshnessTone(freshness)}>
-                  {signalFreshnessLabel(freshness)}
+                  {freshness === "LIVE" ? "LIVE" : signalFreshnessLabel(freshness)}
                 </Badge>
               </div>
-              <div className="mt-2">
-                <DirectionBadge dir={dir} />
+              <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                Gold Spot / US Dollar
+              </p>
+              <div className="mt-3">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-bold tracking-wide shadow-[0_0_24px_rgba(0,201,167,0.18)]",
+                    bannerTone,
+                  )}
+                >
+                  {bannerLabel}
+                </span>
               </div>
             </div>
           </div>
