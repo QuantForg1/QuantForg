@@ -59,12 +59,11 @@ const nextConfig: NextConfig = {
       { source: "/research-lab", destination: "/research", permanent: false },
       { source: "/backtesting", destination: "/research", permanent: false },
       { source: "/walkforward", destination: "/research", permanent: false },
-      { source: "/strategy", destination: "/research", permanent: false },
+      // /strategy and /intelligence stay on their product desks (reference rail).
 
       // Counsel / AI
       { source: "/quant-ai", destination: "/ai-signals", permanent: false },
       { source: "/decision-engine", destination: "/ai-signals", permanent: false },
-      { source: "/intelligence", destination: "/ai-signals", permanent: false },
       { source: "/ai", destination: "/ai-signals", permanent: false },
       { source: "/counsel", destination: "/ai-signals", permanent: false },
 
