@@ -275,8 +275,8 @@ def test_risk_limits_and_rr_floor_are_owner_values() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
     assert Decimal("10.00") == MAX_PLANNED_SL_RISK_USD
     assert Decimal("15.00") == MAX_TOTAL_PLANNED_RISK_USD
-    assert Decimal("1.50") == MIN_REWARD_RISK
-    assert DEFAULT_AI_SCALPING_CONFIG.min_expected_rr >= Decimal("1")
+    assert Decimal("0.50") == MIN_REWARD_RISK
+    assert DEFAULT_AI_SCALPING_CONFIG.min_expected_rr >= Decimal("0.50")
     assert CAUTIOUS_MIN_RR_SOFT >= 1.0
 
 

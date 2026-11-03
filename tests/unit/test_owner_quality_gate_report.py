@@ -41,7 +41,7 @@ from tests.unit.test_autonomous_gold_execution import _ready
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
-QUALITY = "OWNER_MIN_TRADE_QUALITY: trade quality 63 < 75"
+QUALITY = "OWNER_MIN_TRADE_QUALITY: trade quality 63 < 70"
 
 
 def test_quality_block_detail_keeps_the_owner_gate_text() -> None:
@@ -70,7 +70,7 @@ def test_quality_reason_is_the_logged_first_gate() -> None:
 
 
 def test_owner_diagnostic_floor_is_70_and_swing_default_stays_80() -> None:
-    assert owner_diagnostic_floor() == 75
+    assert owner_diagnostic_floor() == 70
     assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80
     assert DEFAULT_ITE_CONFIG.min_confluence_score == 80
 
@@ -104,7 +104,7 @@ def test_quality_withheld_side_is_not_an_oms_failure() -> None:
     )
     assert out.may_submit_oms is False
     assert out.fault_code == "OWNER_MIN_TRADE_QUALITY"
-    assert "63" in out.fault_reason and "75" in out.fault_reason
+    assert "63" in out.fault_reason and "70" in out.fault_reason
     # Stages start at NOT_REACHED. An earlier quality block must not
     # promote OMS to FAIL, BLOCK, or PASS.
     assert out.stages.get("OMS") == "NOT_REACHED"

@@ -643,18 +643,18 @@ async def test_research_scan_uses_scalping_configuration(
     assert cfg.primary_structure_tf is Timeframe.M15
 
 
-def test_quality_below_75_is_still_rejected() -> None:
-    assert OWNER_MIN_TRADE_QUALITY == 75
-    gates = _gates(74)
+def test_quality_below_70_is_still_rejected() -> None:
+    assert OWNER_MIN_TRADE_QUALITY == 70
+    gates = _gates(69)
     assert gates.passed is False
     assert any(
-        r.startswith("OWNER_MIN_TRADE_QUALITY: trade quality 74 < 75")
+        r.startswith("OWNER_MIN_TRADE_QUALITY: trade quality 69 < 70")
         for r in gates.hard_rejects
     )
 
 
-def test_quality_at_or_above_75_does_not_skip_later_gates() -> None:
-    gates = _gates(75)
+def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
+    gates = _gates(70)
     assert gates.checks["owner_min_trade_quality"] is True
     low_rr = _gates(90, expected_rr=Decimal("0.49"))
     assert low_rr.checks["min_rr"] is False
@@ -707,9 +707,9 @@ def test_quality_at_or_above_75_does_not_skip_later_gates() -> None:
 
 
 def test_reward_risk_below_0_50_stays_rejected() -> None:
-    assert Decimal("1.50") == OWNER_MIN_REWARD_RISK
-    reasons = _entry(take_profit=Decimal("101.09"))
-    assert any("1.50" in r for r in reasons)
+    assert Decimal("0.50") == OWNER_MIN_REWARD_RISK
+    reasons = _entry(take_profit=Decimal("100.90"))
+    assert any("0.50" in r for r in reasons)
     assert any(r.startswith("OWNER_MIN_RR") for r in reasons)
     cleared = _entry()
     assert not any(r.startswith("OWNER_MIN_RR") for r in cleared)
@@ -771,6 +771,6 @@ def test_apply_trading_mode_selects_scalping_without_changing_the_floor() -> Non
     assert runtime.decision_pipeline.config.is_scalping()
     assert runtime.decision_pipeline.config.primary_structure_tf is Timeframe.M15
     assert Timeframe.H4 not in runtime.decision_pipeline.config.analysis_timeframes()
-    assert OWNER_MIN_TRADE_QUALITY == 75
+    assert OWNER_MIN_TRADE_QUALITY == 70
     assert DEFAULT_ITE_CONFIG.trading_mode == "swing"
     assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80
