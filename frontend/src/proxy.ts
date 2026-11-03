@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-/** Serve zero-JS static marketing HTML for `/` to meet Lighthouse Performance ≥95. */
-export function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === "/") {
-    return NextResponse.rewrite(new URL("/go-live-landing.html", request.url));
-  }
+/**
+ * Edge proxy — keep `/` on the React HomeLanding (reference marketing page).
+ * Static `/go-live-landing.html` remains available for direct/Lighthouse checks.
+ */
+export function proxy(_request: NextRequest) {
   return NextResponse.next();
 }
 
