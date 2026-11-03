@@ -245,6 +245,12 @@ export const WorkspaceChart = memo(function WorkspaceChart({
 
     applySeries();
 
+    // Ensure the host has layout before the first paint (overview desks use flex height).
+    if (el.clientWidth > 0 && el.clientHeight > 0) {
+      chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+      chart.timeScale().fitContent();
+    }
+
     chart.subscribeCrosshairMove((param) => {
       if (!param.time || !mainRef.current) {
         const last = candlesCache.current[candlesCache.current.length - 1];
@@ -347,7 +353,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-[280px] flex-1">
         {!connected ? (
           <div className="absolute inset-0 flex items-center justify-center p-6">
             <DeskEmpty
@@ -376,11 +382,16 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             />
           </div>
         ) : candles.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-6 text-sm text-[var(--fg-muted)]">
+          <div className="flex h-full min-h-[280px] items-center justify-center p-6 text-sm text-[var(--fg-muted)]">
             No candle history returned for {displayTradingSymbol(symbol)} ({timeframe}).
           </div>
         ) : (
-          <div ref={hostRef} className="absolute inset-0" role="img" aria-label={`${displayTradingSymbol(symbol)} price chart`} />
+          <div
+            ref={hostRef}
+            className="absolute inset-0 min-h-[280px]"
+            role="img"
+            aria-label={`${displayTradingSymbol(symbol)} price chart`}
+          />
         )}
       </div>
     </section>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { CandlestickChart } from "lucide-react";
 import { ExecutionOrderTicket } from "@/components/execution/order-ticket";
 import { useExecutionStream } from "@/hooks/realtime";
 import { mt5Api } from "@/lib/api/endpoints";
@@ -13,8 +14,9 @@ import {
 } from "@/lib/trading/gold-only";
 
 /**
- * Overview Trade panel — chrome matching the institutional dashboard reference.
+ * Overview Trade panel — reference chrome only.
  * Execution always goes through ExecutionOrderTicket (existing risk / OMS / confirm flow).
+ * Diagnostic Decision / Risk / Pre-trade UI stays hidden on this desk.
  */
 export function OverviewTradePanel({ connected }: { connected: boolean }) {
   const [symbol, setSymbol] = useState(TRADING_SYMBOL);
@@ -49,13 +51,21 @@ export function OverviewTradePanel({ connected }: { connected: boolean }) {
       className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px]"
     >
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight text-[var(--fg)]">
-            Trade {displayTradingSymbol(TRADING_SYMBOL)}
-          </h2>
-          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
-            Execute trades with precision through the existing risk-checked order flow.
-          </p>
+        <div className="flex items-start gap-3">
+          <span
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_60%,transparent)] text-[var(--accent)]"
+            aria-hidden
+          >
+            <CandlestickChart className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight text-[var(--fg)]">
+              Trade {displayTradingSymbol(TRADING_SYMBOL)}
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
+              Execute trades with precision.
+            </p>
+          </div>
         </div>
       </div>
       <ExecutionOrderTicket
@@ -68,6 +78,7 @@ export function OverviewTradePanel({ connected }: { connected: boolean }) {
         marketOpen={marketOpen}
         symbolAvailable={connected}
         embedded
+        overviewChrome
       />
     </section>
   );

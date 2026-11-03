@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Minus, Plus, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,11 @@ export const ExecutionOrderTicket = forwardRef<
     dense?: boolean;
     /** Parent supplies chrome (e.g. Overview Trade panel) — skip local title/border. */
     embedded?: boolean;
+    /**
+     * Dashboard Trade panel: clean Market/Pending form + BUY/SELL only.
+     * Keeps confirm / risk / OMS submit path; hides diagnostic chrome.
+     */
+    overviewChrome?: boolean;
   }
 >(function ExecutionOrderTicket(
   {
@@ -101,11 +107,16 @@ export const ExecutionOrderTicket = forwardRef<
     symbolAvailable = null,
     dense = false,
     embedded = false,
+    overviewChrome = false,
   },
   ref,
 ) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<OrderType>("market");
+  const [overviewTab, setOverviewTab] = useState<"market" | "pending" | "stops">(
+    "market",
+  );
+  const [showOverviewSettings, setShowOverviewSettings] = useState(false);
   const [volume, setVolume] = useState("0.01");
   const [sizingMode, setSizingMode] = useState<SizingMode>("percentage_risk");
   const [price, setPrice] = useState("");
@@ -690,6 +701,356 @@ export const ExecutionOrderTicket = forwardRef<
   const riskBudgetPct = Math.min(100, Math.max(4, num(riskPct, 1) * 12));
   const rewardBudgetPct =
     riskReward != null ? Math.min(100, Math.max(4, riskBudgetPct * Math.min(riskReward, 4))) : riskBudgetPct;
+
+  const lotStepSafe = Number.isFinite(lotStep) && lotStep > 0 ? lotStep : 0.01;
+  const priceStep =
+    Number.isFinite(livePoint) && livePoint > 0 ? Math.max(livePoint * 10, 0.1) : 0.5;
+  const nudgeNumber = (raw: string, delta: number, digits: number) => {
+    const base = num(raw, NaN);
+    const next = (Number.isFinite(base) ? base : 0) + delta;
+    return Math.max(0, next).toFixed(digits);
+  };
+  const openConfirm = (nextSide: "buy" | "sell") => {
+    setSide(nextSide);
+    setConfirmMode(overviewTab === "pending" ? "ticket" : "oneclick");
+    setExecStage("idle");
+    setRejectReason(undefined);
+    setConfirmOpen(true);
+  };
+
+  if (overviewChrome) {
+    return (
+      <div className={cn("border-0", execFlash && "qf-exec-flash")} aria-busy={busy}>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
+          <div
+            className="flex flex-wrap gap-1"
+            role="tablist"
+            aria-label="Order mode"
+          >
+            {(
+              [
+                ["market", "Market"],
+                ["pending", "Pending"],
+                ["stops", "SL / TP"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={overviewTab === id}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                  overviewTab === id
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
+                )}
+                onClick={() => {
+                  setOverviewTab(id);
+                  if (id === "market") setOrderType("market");
+                  if (id === "pending") setOrderType("limit");
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 px-0"
+            aria-label="Trading settings"
+            aria-pressed={showOverviewSettings}
+            onClick={() => setShowOverviewSettings((v) => !v)}
+          >
+            <Settings2 className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+
+        <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_9.5rem]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <div className="space-y-1">
+              <Label className="text-[11px]">Symbol</Label>
+              {MULTI_SYMBOL_ENABLED ? (
+                <Input
+                  className="h-10"
+                  value={symbol}
+                  onChange={(e) => onSymbolChange(resolveTradingSymbol(e.target.value))}
+                  disabled={!connected}
+                  aria-label="Symbol"
+                />
+              ) : (
+                <p className="flex h-10 items-center rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 font-mono text-sm">
+                  {AUTONOMOUS_BADGE}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="overview-order-type" className="text-[11px]">
+                Order Type
+              </Label>
+              <select
+                id="overview-order-type"
+                className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
+                value={orderType}
+                onChange={(e) => {
+                  const next = e.target.value as OrderType;
+                  setOrderType(next);
+                  setOverviewTab(next === "market" ? "market" : "pending");
+                }}
+                disabled={!connected}
+              >
+                {ORDER_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="overview-volume" className="text-[11px]">
+                Volume (Lots)
+              </Label>
+              <div className="flex h-10 items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 px-0"
+                  aria-label="Decrease volume"
+                  disabled={!connected}
+                  onClick={() => {
+                    setSizingMode("fixed_lot");
+                    setVolume(nudgeNumber(volume, -lotStepSafe, 2));
+                  }}
+                >
+                  <Minus className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+                <Input
+                  id="overview-volume"
+                  className="h-8 border-0 bg-transparent px-1 text-center tabular shadow-none focus-visible:ring-0"
+                  value={volume}
+                  onChange={(e) => {
+                    setSizingMode("fixed_lot");
+                    setVolume(e.target.value);
+                  }}
+                  disabled={!connected}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 px-0"
+                  aria-label="Increase volume"
+                  disabled={!connected}
+                  onClick={() => {
+                    setSizingMode("fixed_lot");
+                    setVolume(nudgeNumber(volume, lotStepSafe, 2));
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="overview-sl" className="text-[11px]">
+                Stop Loss
+              </Label>
+              <div className="flex h-10 items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 px-0"
+                  aria-label="Decrease stop loss"
+                  disabled={!connected}
+                  onClick={() => setStopLoss(nudgeNumber(stopLoss || String(mid || 0), -priceStep, 2))}
+                >
+                  <Minus className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+                <Input
+                  id="overview-sl"
+                  className="h-8 border-0 bg-transparent px-1 text-center tabular shadow-none focus-visible:ring-0"
+                  value={stopLoss}
+                  onChange={(e) => setStopLoss(e.target.value)}
+                  disabled={!connected}
+                  placeholder="Required"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 px-0"
+                  aria-label="Increase stop loss"
+                  disabled={!connected}
+                  onClick={() => setStopLoss(nudgeNumber(stopLoss || String(mid || 0), priceStep, 2))}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="overview-tp" className="text-[11px]">
+                Take Profit
+              </Label>
+              <div className="flex h-10 items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 px-0"
+                  aria-label="Decrease take profit"
+                  disabled={!connected}
+                  onClick={() => setTakeProfit(nudgeNumber(takeProfit || String(mid || 0), -priceStep, 2))}
+                >
+                  <Minus className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+                <Input
+                  id="overview-tp"
+                  className="h-8 border-0 bg-transparent px-1 text-center tabular shadow-none focus-visible:ring-0"
+                  value={takeProfit}
+                  onChange={(e) => setTakeProfit(e.target.value)}
+                  disabled={!connected}
+                  placeholder="Required"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 px-0"
+                  aria-label="Increase take profit"
+                  disabled={!connected}
+                  onClick={() => setTakeProfit(nudgeNumber(takeProfit || String(mid || 0), priceStep, 2))}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="overview-risk" className="text-[11px]">
+                Risk
+              </Label>
+              <select
+                id="overview-risk"
+                className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
+                value={riskPct}
+                onChange={(e) => {
+                  setSizingMode("percentage_risk");
+                  setRiskPct(e.target.value);
+                }}
+                disabled={!connected}
+              >
+                {["0.5", "1", "1.5", "2", "2.5", "3"].map((pct) => (
+                  <option key={pct} value={pct}>
+                    {pct}%
+                  </option>
+                ))}
+              </select>
+            </div>
+            {needsPrice ? (
+              <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor="overview-price" className="text-[11px]">
+                  {orderType === "stop_limit" ? "Trigger / limit" : "Pending price"}
+                </Label>
+                <Input
+                  id="overview-price"
+                  className="h-10"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder={Number.isFinite(mid) ? formatNumber(mid, 2) : "0.00"}
+                  disabled={!connected}
+                />
+              </div>
+            ) : null}
+            {showOverviewSettings ? (
+              <div className="space-y-1 sm:col-span-2 2xl:col-span-3">
+                <Label className="text-[11px]">Sizing mode</Label>
+                <div className="flex flex-wrap gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8"
+                    variant={sizingMode === "percentage_risk" ? "default" : "secondary"}
+                    onClick={() => setSizingMode("percentage_risk")}
+                    disabled={!connected}
+                  >
+                    Risk %
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8"
+                    variant={sizingMode === "fixed_lot" ? "default" : "secondary"}
+                    onClick={() => setSizingMode("fixed_lot")}
+                    disabled={!connected}
+                  >
+                    Fixed lot
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={!connected || busy || submitBlockReason != null}
+              title={submitBlockReason ?? undefined}
+              onClick={() => openConfirm("buy")}
+              aria-label="Buy"
+              className={cn(
+                "flex min-h-[3.25rem] flex-1 flex-col items-center justify-center rounded-xl border px-3 py-2 text-sm font-bold tracking-wide transition active:scale-[0.98]",
+                "border-[var(--buy)]/50 bg-[var(--buy)] text-white hover:brightness-110",
+                "disabled:opacity-40 disabled:active:scale-100",
+              )}
+            >
+              BUY
+              <span className="mt-0.5 text-[11px] font-medium tabular opacity-90">
+                {Number.isFinite(ask) && ask != null ? formatNumber(ask, 2) : "—"}
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={!connected || busy || submitBlockReason != null}
+              title={submitBlockReason ?? undefined}
+              onClick={() => openConfirm("sell")}
+              aria-label="Sell"
+              className={cn(
+                "flex min-h-[3.25rem] flex-1 flex-col items-center justify-center rounded-xl border px-3 py-2 text-sm font-bold tracking-wide transition active:scale-[0.98]",
+                "border-[var(--sell)]/50 bg-[var(--sell)] text-white hover:brightness-110",
+                "disabled:opacity-40 disabled:active:scale-100",
+              )}
+            >
+              SELL
+              <span className="mt-0.5 text-[11px] font-medium tabular opacity-90">
+                {Number.isFinite(bid) && bid != null ? formatNumber(bid, 2) : "—"}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={(open) => {
+            setConfirmOpen(open);
+            if (!open) {
+              setExecStage("idle");
+              setRejectReason(undefined);
+            }
+          }}
+          title={`${side.toUpperCase()} ${displayTradingSymbol(symbol)}`}
+          description={`Submit ${confirmMode === "oneclick" ? "market" : orderType} ${side} ${volume} lots via the Execution Gateway. Live fills only occur when EXECUTION_ENABLED is true.`}
+          confirmLabel="Confirm submit"
+          tone={side === "sell" ? "danger" : "default"}
+          busy={busy}
+          stage={execStage}
+          rejectReason={rejectReason}
+          onConfirm={submitLive}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
