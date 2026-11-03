@@ -186,12 +186,12 @@ assert.equal(
     code: "CLOUDFLARE_ORIGIN_UNREACHABLE",
     message: "error code: 1033",
   });
-  assert.match(cf, /530|tunnel|origin/i);
-  assert.match(cf, /not an authentication/i);
+  assert.match(cf, /Broker connection path is unreachable/i);
+  assert.match(cf, /not a sign-in failure/i);
   const viaMsg = traderFacingErrorMessage({
     message: "Upstream failed with HTTP 530",
   });
-  assert.match(viaMsg, /530|tunnel|origin/i);
+  assert.match(viaMsg, /Broker connection path is unreachable|reconnect/i);
 }
 assert.equal(
   traderFacingErrorMessage({

@@ -179,14 +179,14 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
               : "awaiting",
       },
       {
-        ok: !inputs.stopLoss || num(inputs.stopLoss, NaN) > 0,
+        ok: Boolean(inputs.stopLoss) && num(inputs.stopLoss, NaN) > 0,
         label: "SL Valid",
-        detail: inputs.stopLoss || "optional",
+        detail: inputs.stopLoss ? String(inputs.stopLoss) : "required",
       },
       {
-        ok: !inputs.takeProfit || num(inputs.takeProfit, NaN) > 0,
+        ok: Boolean(inputs.takeProfit) && num(inputs.takeProfit, NaN) > 0,
         label: "TP Valid",
-        detail: inputs.takeProfit || "optional",
+        detail: inputs.takeProfit ? String(inputs.takeProfit) : "required",
       },
       {
         ok:
@@ -309,5 +309,7 @@ export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
     return false;
   if (inputs.validationValid === false) return false;
   if (inputs.riskDecision === "REJECT") return false;
+  if (!(num(inputs.stopLoss, NaN) > 0) || !(num(inputs.takeProfit, NaN) > 0))
+    return false;
   return true;
 }

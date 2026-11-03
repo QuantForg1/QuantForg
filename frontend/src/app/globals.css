@@ -22,34 +22,34 @@
   --accent-active: #0866ff;
   --accent-fg: #ffffff;
   --accent-soft: rgba(22, 139, 255, 0.18);
-  --accent-glow: rgba(22, 139, 255, 0.32);
-  --accent-gradient: linear-gradient(180deg, #3c9dff 0%, #0866ff 100%);
-  --hot: #ff5a24;
-  --hot-soft: rgba(255, 90, 36, 0.16);
+  --accent-glow: rgba(22, 139, 255, 0.16);
+  --accent-gradient: linear-gradient(180deg, #2f92f0 0%, #0d6fe0 100%);
+  --hot: #ff6b35;
+  --hot-soft: rgba(255, 107, 53, 0.14);
 
-  --success: #00d6b2;
-  --success-soft: rgba(0, 214, 178, 0.16);
-  --warning: #f5b942;
-  --warning-soft: rgba(245, 185, 66, 0.16);
-  --danger: #ff5364;
-  --danger-soft: rgba(255, 83, 100, 0.16);
+  --success: #00c9a7;
+  --success-soft: rgba(0, 201, 167, 0.12);
+  --warning: #e0a93a;
+  --warning-soft: rgba(224, 169, 58, 0.12);
+  --danger: #e45764;
+  --danger-soft: rgba(228, 87, 100, 0.12);
   --info: #168bff;
-  --info-soft: rgba(22, 139, 255, 0.14);
-  --buy: #00d6b2;
-  --sell: #ff5364;
+  --info-soft: rgba(22, 139, 255, 0.12);
+  --buy: #00c9a7;
+  --sell: #e45764;
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 32px rgba(2, 10, 28, 0.38);
-  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 40px rgba(2, 10, 28, 0.5);
-  --shadow-elevated: 0 24px 64px rgba(2, 8, 24, 0.55);
-  --ring: rgba(22, 139, 255, 0.55);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 28px rgba(2, 10, 28, 0.32);
+  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 32px rgba(2, 10, 28, 0.4);
+  --shadow-elevated: 0 20px 48px rgba(2, 8, 24, 0.48);
+  --ring: rgba(22, 139, 255, 0.4);
   --radius-os: 0.9rem;
   --radius-sm: 0.65rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 70% 42% at 88% -8%, rgba(22, 139, 255, 0.26), transparent 58%),
-    radial-gradient(ellipse 42% 28% at 8% 0%, rgba(8, 102, 255, 0.16), transparent 52%),
-    radial-gradient(ellipse 50% 30% at 50% 100%, rgba(255, 90, 36, 0.05), transparent 55%),
-    linear-gradient(180deg, #0c3a6e 0%, #061a38 46%, #071433 100%);
+    radial-gradient(ellipse 60% 36% at 88% -8%, rgba(22, 139, 255, 0.14), transparent 58%),
+    radial-gradient(ellipse 38% 24% at 8% 0%, rgba(8, 102, 255, 0.1), transparent 52%),
+    radial-gradient(ellipse 48% 26% at 50% 100%, rgba(255, 107, 53, 0.04), transparent 55%),
+    linear-gradient(180deg, #0a2f5c 0%, #061a38 48%, #071433 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;

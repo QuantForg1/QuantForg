@@ -251,15 +251,7 @@ export function CommandPalette({
               })}
             </Command.Group>
 
-            <Command.Group heading="Markets" className="qf-cmd-group">
-              <Command.Item
-                value="markets broker catalogue instruments"
-                onSelect={() => go("/markets", "Markets")}
-                className="qf-cmd-item"
-              >
-                <span className="text-[var(--fg)]">Broker-discovered markets</span>
-                <span className="text-[var(--fg-subtle)]">Open catalogue</span>
-              </Command.Item>
+            <Command.Group heading="Symbols" className="qf-cmd-group">
               {symbols.map((row, i) => {
                 const symbol = instrumentSymbol(row) || str(row.symbol, String(i));
                 if (!symbol) return null;

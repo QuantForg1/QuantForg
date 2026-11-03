@@ -14,7 +14,7 @@ const ITEMS = [
   },
   {
     q: "What symbols can I trade?",
-    a: "The live desk is gold: XAUUSD. Other symbols are not offered as a public trading universe on this page. The signed-in Markets screen shows what the broker session actually returns.",
+    a: "The live desk is gold: XAUUSD. Other symbols are not offered as a public trading universe on this page. Connected sessions show the broker instruments that the gateway returns.",
   },
   {
     q: "How are the results calculated?",

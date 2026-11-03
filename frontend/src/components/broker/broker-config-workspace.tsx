@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConnectionStatus } from "@/components/trading/connection-status";
+import { WeltradeLogo } from "@/components/brand/weltrade-logo";
 import { mt5Api, marketUniverseApi, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
@@ -496,9 +497,7 @@ export function BrokerConfigWorkspace() {
           <article className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px] sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
-                <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] text-lg font-bold text-white shadow-[0_8px_20px_var(--accent-glow)]">
-                  WT
-                </span>
+                <WeltradeLogo size={56} variant="wordmark" className="rounded-2xl" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-semibold tracking-tight">Weltrade</h2>
@@ -655,7 +654,7 @@ export function BrokerConfigWorkspace() {
                 </div>
                 <div>
                   <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Gateway status
+                    Connection status
                   </dt>
                   <dd className="text-sm text-[var(--fg)]">
                     {gatewayOnline
@@ -725,7 +724,7 @@ export function BrokerConfigWorkspace() {
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Gateway
+                Connection
               </dt>
               <dd className="text-sm text-[var(--fg)]">
                 {gatewayOnline

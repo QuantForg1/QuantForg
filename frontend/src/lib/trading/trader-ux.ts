@@ -34,13 +34,13 @@ const TRADER_ERROR_COPY: Record<string, string> = {
   INVALID_CREDENTIALS: "Broker login or password was not accepted.",
   CONNECTION_FAILED: "Could not verify the broker connection.",
   GATEWAY_UNAVAILABLE:
-    "Broker Gateway Offline — Windows MT5 Gateway is unreachable. Check the tunnel/URL and that the Gateway process is running. Research Gold candles also require this feed.",
+    "Broker connection offline. Open Broker Accounts to reconnect. Live gold market data requires a reachable connection.",
   gateway_unavailable:
-    "Broker Gateway Offline — Windows MT5 Gateway is unreachable. Check the tunnel/URL and that the Gateway process is running. Research Gold candles also require this feed.",
+    "Broker connection offline. Open Broker Accounts to reconnect. Live gold market data requires a reachable connection.",
   CLOUDFLARE_ORIGIN_UNREACHABLE:
-    "Cloudflare tunnel cannot reach the Windows Gateway origin (HTTP 530). Start/repair the cloudflared connector — this is not an authentication failure. Gold market data and research require this path.",
+    "Broker connection path is unreachable. Open Broker Accounts to reconnect. This is not a sign-in failure.",
   cloudflare_origin_unreachable:
-    "Cloudflare tunnel cannot reach the Windows Gateway origin (HTTP 530). Start/repair the cloudflared connector — this is not an authentication failure. Gold market data and research require this path.",
+    "Broker connection path is unreachable. Open Broker Accounts to reconnect. This is not a sign-in failure.",
   ACCOUNT_SESSION_MISMATCH: "Your trading session needs to be reconnected.",
   account_session_mismatch: "Your trading session needs to be reconnected.",
   CATALOGUE_UNAVAILABLE: "Connect or verify your broker and refresh market data.",
@@ -647,7 +647,7 @@ export function researchDeskLiveTradingStatus(
     return {
       label: "LIVE_PAUSED",
       detail:
-        "Live trading is paused. Gold research still needs a reachable Gateway market feed.",
+        "Live trading is paused. Gold research still needs a reachable broker connection.",
       state: "LIVE_TRADING_PAUSED",
     };
   }
@@ -897,7 +897,7 @@ export const TRADER_POLL_MS = 15_000;
 export const UNIVERSE_POLL_MS = 30_000;
 export const EXPLANATION_UNAVAILABLE = "EXPLANATION UNAVAILABLE";
 export const RESEARCH_INDEPENDENT_COPY =
-  "Research is not a trade authorization. Live Gold candles still require a reachable broker Gateway.";
+  "Research is not a trade authorization. Live Gold candles still require a reachable broker connection.";
 
 export type SignalAvailability = CatalogueViewState;
 
@@ -1293,7 +1293,7 @@ export function researchSignalsEmptyCopy(input: {
   ) {
     const detail =
       reasons[0] ||
-      "Broker Gold catalogue unavailable — Gateway Offline or MT5 Not attached. Live XAUUSD analysis needs the Windows Gateway market feed.";
+      "Broker gold catalogue unavailable. Live XAUUSD analysis needs a connected broker session.";
     return {
       title: "GOLD ANALYSIS DEGRADED",
       description: detail,

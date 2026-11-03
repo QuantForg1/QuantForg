@@ -237,7 +237,7 @@ export function PortfolioWorkspace() {
           className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
         >
           <p className="text-sm text-[var(--fg-muted)]">
-            Trading session temporarily unavailable. Retry to reload account data.
+            Account data could not be loaded. Retry or open Broker to reconnect.
           </p>
           <Button
             variant="secondary"

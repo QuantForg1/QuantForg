@@ -59,15 +59,12 @@ function PrimaryLink({
               "qf-rail-link group relative flex items-center gap-2.5 rounded-xl text-[13px] font-medium",
               collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
               active
-                ? "bg-[var(--accent)] text-white shadow-[0_8px_18px_var(--accent-glow)]"
+                ? "bg-[var(--accent)] text-white"
                 : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
             )}
           >
             <Icon
-              className={cn(
-                "h-4 w-4 shrink-0 transition-transform duration-[var(--duration-fast)] ease-[var(--ease-os)]",
-                active && "scale-105",
-              )}
+              className="h-4 w-4 shrink-0"
               aria-hidden
             />
             {!collapsed ? (
