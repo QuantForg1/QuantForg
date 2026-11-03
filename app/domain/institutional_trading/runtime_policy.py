@@ -173,11 +173,11 @@ def active_max_spread() -> Decimal:
 def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     """Floor a document actually applies after estimated trading costs.
 
-    Owner Phase-5 lock: the live minimum net reward:risk is **1.50**.
+    Owner floor: the live minimum net reward:risk is **0.50**.
     Candidates 0.10 / 0.15 / 0.20 may still be stored under ``experimental``
     for documentation, but ``experimental_promoted`` must never lower the
     active enforcement floor below :data:`OWNER_MIN_REWARD_RISK`.
-    A stricter saved floor (≥ 1.50) remains allowed.
+    A stricter saved floor (≥ 0.50) remains allowed.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -196,22 +196,22 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     if authorized is None:
         return OWNER_MIN_REWARD_RISK
     # Never allow experimental promotion (or stale persisted candidates) to
-    # undercut the owner-approved 1.50 net RR floor.
+    # undercut the owner-approved 0.50 net RR floor.
     if authorized < OWNER_MIN_REWARD_RISK:
         return OWNER_MIN_REWARD_RISK
     return authorized
 
 
 def active_min_reward_risk() -> Decimal:
-    """Active floor is always ≥ 1.50. See :func:`enforced_min_reward_risk`."""
+    """Active floor is always ≥ 0.50. See :func:`enforced_min_reward_risk`."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
 
 def active_min_trade_quality() -> int:
-    """Unset policy stays 75. A saved integer from 75 to 100 is used.
+    """Unset policy stays 70. A saved integer from 70 to 100 is used.
 
-    Below 75 or a non-integer fails closed to 75.
+    Below 70 or a non-integer fails closed to 70.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_trade_quality,
@@ -644,7 +644,7 @@ def validate_policy_changes(
     if cleaned_experimental is not None:
         merged["experimental"] = cleaned_experimental
         if promote:
-            # Phase-5: experimental RR candidates below 1.50 cannot be promoted
+            # Experimental RR candidates below 0.50 cannot be promoted
             # onto the active document. Other experimental fields may still
             # apply when they pass the normal active validators above.
             exp_rr = cleaned_experimental.get("min_reward_risk")
@@ -655,7 +655,7 @@ def validate_policy_changes(
                     (
                         "promote_experimental cannot lower min_reward_risk "
                         f"below {OWNER_MIN_REWARD_RISK} "
-                        "(owner Phase-5 net RR floor lock)",
+                        "(owner net RR floor lock)",
                     ),
                 )
             for key, value in cleaned_experimental.items():
@@ -665,7 +665,7 @@ def validate_policy_changes(
             merged["experimental_promoted"] = False
             if _active_rr_is_candidate(merged.get("min_reward_risk")):
                 merged["min_reward_risk"] = str(OWNER_MIN_REWARD_RISK)
-    # Fail closed: any path that left a sub-1.50 RR on the active document
+    # Fail closed: any path that left a sub-0.50 RR on the active document
     # is rewritten to the owner floor (stale promoted experiments included).
     if _active_rr_is_candidate(merged.get("min_reward_risk")):
         merged["min_reward_risk"] = str(OWNER_MIN_REWARD_RISK)

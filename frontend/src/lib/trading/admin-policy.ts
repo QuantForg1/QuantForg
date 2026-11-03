@@ -75,8 +75,8 @@ export const ACTIVE_AGGREGATE_CEILING = 30;
 export const ACTIVE_DAILY_LOSS_CEILING = 48;
 export const ACTIVE_SPREAD_CEILING = 1;
 export const ACTIVE_POSITION_CEILING = 1;
-export const ACTIVE_QUALITY_FLOOR = 75;
-export const ACTIVE_REWARD_RISK_FLOOR = 1.5;
+export const ACTIVE_QUALITY_FLOOR = 70;
+export const ACTIVE_REWARD_RISK_FLOOR = 0.5;
 export const EXPERIMENTAL_REWARD_RISK = [0.1, 0.15, 0.2] as const;
 
 export const EXPERIMENTAL_KEYS = [
@@ -99,7 +99,7 @@ export const EXPERIMENT_DEFAULTS: Record<(typeof EXPERIMENTAL_KEYS)[number], str
   max_lot: "0.01",
   max_spread: "1.00",
   min_reward_risk: "0.20",
-  min_trade_quality: "75",
+  min_trade_quality: "70",
   stop_atr_multiplier: "1.00",
   max_concurrent_positions: "1",
 };
@@ -145,7 +145,7 @@ export function validateActiveDraft(draft: Record<string, string>): string[] {
   }
   if (reward != null && reward < ACTIVE_REWARD_RISK_FLOOR) {
     errors.push(
-      "Active minimum reward/risk stays 1.50. Candidates 0.10, 0.15, and 0.20 are experimental and are not activated by this save.",
+      "Active minimum reward/risk stays 0.50. Candidates 0.10, 0.15, and 0.20 are experimental and are not activated by this save.",
     );
   }
   return errors;
@@ -179,7 +179,7 @@ export function buildExperimentalChanges(
   return { experimental };
 }
 
-/** Phase-5: experimental RR candidates below 1.50 cannot be promoted live. */
+/** Experimental RR candidates below 0.50 cannot be promoted live. */
 export function canPromoteExperimental(draft: Record<string, string>): string[] {
   const errors = validateExperimentalDraft(draft);
   const reward = numeric(draft.min_reward_risk || "");

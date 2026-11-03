@@ -28,11 +28,11 @@ ORCHESTRATION_VERSION = "soe-v1.4.0"
 MIN_SOLO_QUALITY = 82
 MIN_SOLO_CONFIDENCE = 80
 # With multi-strategy agreement, allow slightly lower quality (still at/above
-# owner minimum trade quality 75).
+# owner minimum trade quality 70).
 MIN_CONFLUENT_QUALITY = 76
 MIN_CONFLUENCE_COUNT = 2
-# Absolute floor even with confluence — never select junk (owner Q75).
-MIN_ABSOLUTE_QUALITY = 75
+# Absolute floor even with confluence — never select junk (owner Q70).
+MIN_ABSOLUTE_QUALITY = 70
 # When advisory engines strongly disagree with the live pack — raise the bar.
 # Both raised floors must clear (stricter evidence under disagreement).
 ADVISORY_DISAGREE_MIN_QUALITY = 88
@@ -44,9 +44,9 @@ ADVISORY_MIXED_MIN_CONFIDENCE = 82
 MIN_MTF_ALIGNMENT = 55
 # Small-account / cost gate: wide spread vs weak RR → prefer no trade.
 MAX_SPREAD_FOR_WEAK_RR = 0.80
-MIN_RR_WHEN_SPREAD_ELEVATED = 1.50
+MIN_RR_WHEN_SPREAD_ELEVATED = 0.50
 # Absolute net reward:risk floor aligned with owner policy (prefer NO_TRADE).
-MIN_NET_REWARD_RISK = 1.50
+MIN_NET_REWARD_RISK = 0.50
 # Owner preferred RR — solo setups below preferred need stronger quality.
 PREFERRED_NET_REWARD_RISK = 2.00
 PREFERRED_RR_SOLO_MIN_QUALITY = 85
@@ -493,7 +493,7 @@ def orchestrate_strategies(
     confluence_count = _effective_confluence_count(selectable)
     # Same-direction multi-passer agreement inside one thesis cluster is real
     # collaborative evidence (not independent confluence). It may clear the
-    # solo quality bar at MIN_CONFLUENT_QUALITY without lowering owner Q75.
+    # solo quality bar at MIN_CONFLUENT_QUALITY without lowering owner Q70.
     pack_agreement = raw_confluence >= 2
     # Agreement quality: share of live pack that passed and remained selectable.
     confluence_score = max(

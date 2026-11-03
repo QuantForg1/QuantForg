@@ -2,7 +2,7 @@
 
 Stop = max(1.00 x ATR, beyond nearest M1/M5 structure + spread), never shrunk.
 A saved 1.50 multiplier is still honoured. TP = the nearest real structure
-level with RR after spread >= 1.50, looking at most two levels out.
+level with RR after spread >= owner floor, looking at most two levels out.
 """
 
 from __future__ import annotations
@@ -201,12 +201,12 @@ def test_sell_levels_sorted_nearest_first() -> None:
     assert [p for p, _ in levels] == [Decimal("4130.00"), Decimal("4120.00")]
 
 
-# --- RR boundary 1.50 after spread (stop 1.70 + spread 0.30 = 2.00) ----------
+# --- RR boundary 0.50 after spread (stop 1.70 + spread 0.30 = 2.00) ----------
 
 
 @pytest.mark.parametrize(
     ("tp_distance", "accepted"),
-    [("3.00", True), ("2.99", False)],  # 3.00/2.00 = 1.50; 2.99/2.00 = 1.495
+    [("1.00", True), ("0.99", False)],  # 1.00/2.00 = 0.50; 0.99/2.00 = 0.495
 )
 def test_rr_boundary(tp_distance: str, accepted: bool) -> None:
     entry = Decimal("100")
@@ -219,7 +219,7 @@ def test_rr_boundary(tp_distance: str, accepted: bool) -> None:
     assert (choice.level == 1) is accepted
 
 
-@pytest.mark.parametrize(("tp", "ok"), [("4136.00", True), ("4135.99", False)])
+@pytest.mark.parametrize(("tp", "ok"), [("4134.00", True), ("4133.99", False)])
 def test_final_owner_guard_uses_same_boundary(tp: str, ok: bool) -> None:
     reasons = ol.evaluate_owner_entry(
         symbol="XAUUSD",
@@ -227,7 +227,7 @@ def test_final_owner_guard_uses_same_boundary(tp: str, ok: bool) -> None:
         volume=Decimal("0.01"),
         entry=Decimal("4133.00"),
         stop_loss=Decimal("4131.30"),  # 1.70 + 0.30 spread = 2.00 risk
-        take_profit=Decimal(tp),  # 3.00 -> 1.50 ; 2.99 -> 1.495
+        take_profit=Decimal(tp),  # 1.00 -> 0.50 ; 0.99 -> 0.495
         spread=Decimal("0.30"),
         contract_size=Decimal("100"),
         equity=Decimal("50"),
