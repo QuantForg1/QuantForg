@@ -68,7 +68,18 @@ class SymbolStateBook:
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def _key(self, symbol: str) -> str:
-        return (symbol or "").strip().upper()
+        raw = (symbol or "").strip().upper()
+        if not raw:
+            return raw
+        try:
+            from app.domain.trading.gold_only import GOLD_SYMBOL, is_gold_symbol
+
+            # One desk key for XAUUSD / XAUUSD_i / GOLD — cooldown & requalify.
+            if is_gold_symbol(raw):
+                return GOLD_SYMBOL
+        except Exception:
+            pass
+        return raw
 
     def get(self, symbol: str) -> SymbolExecutionState:
         key = self._key(symbol)

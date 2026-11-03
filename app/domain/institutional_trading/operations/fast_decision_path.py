@@ -1701,8 +1701,23 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
                 "score_breakdown": (
                     dict(score_breakdown) if isinstance(score_breakdown, dict) else {}
                 ),
+                "strategy_id": (best_row.get("strategy_id") if best_row else None),
+                "strategy_name": (best_row.get("strategy_name") if best_row else None),
+                "strategy_orchestration": (
+                    best_row.get("strategy_orchestration")
+                    if best_row
+                    and isinstance(best_row.get("strategy_orchestration"), dict)
+                    else None
+                ),
             }
             if scan_symbol
+            else None
+        ),
+        "strategy_id": (best_row.get("strategy_id") if best_row else None),
+        "strategy_name": (best_row.get("strategy_name") if best_row else None),
+        "strategy_orchestration": (
+            best_row.get("strategy_orchestration")
+            if best_row and isinstance(best_row.get("strategy_orchestration"), dict)
             else None
         ),
         "best_eligible": best_eligible,

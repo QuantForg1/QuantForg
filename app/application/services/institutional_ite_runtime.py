@@ -2717,6 +2717,17 @@ class InstitutionalIteRuntime:
         )
         diagnostics["position_plan"] = plan.to_dict()
         diagnostics["batch_tally"] = tally.to_dict()
+        # Bind SOE pack strategy_id from last scan when decision/diagnostics lack it.
+        if not diagnostics.get("strategy_id"):
+            attr = self._resolve_scan_strategy_attribution(
+                str(getattr(decision, "symbol", "") or "")
+            )
+            if attr.get("strategy_id"):
+                diagnostics["strategy_id"] = attr["strategy_id"]
+                diagnostics["strategy_name"] = attr.get("strategy_name")
+                diagnostics["strategy_confluence_count"] = attr.get(
+                    "strategy_confluence_count"
+                )
         remember_fill_metadata(
             {
                 "trade_class": trade_class,
@@ -3057,15 +3068,32 @@ class InstitutionalIteRuntime:
                     "stop_loss",
                     "take_profit",
                     "expected_rr",
+                    "expected_net_rr",
+                    "net_reward_risk",
                     "setup_family",
                     "market_regime",
                     "structure_score",
                     "sniper_entry",
                     "signal_action",
                     "direction",
+                    "strategy_id",
+                    "strategy_name",
                 ):
                     if key in ai_score and market_context_diagnostics.get(key) is None:
                         market_context_diagnostics[key] = ai_score.get(key)
+                # Prefer SOE pack id from last scan over setup_family fallbacks.
+                if not market_context_diagnostics.get("strategy_id"):
+                    attr = self._resolve_scan_strategy_attribution(
+                        str(
+                            getattr(decision, "symbol", None)
+                            or getattr(snapshot, "symbol", "")
+                            or ""
+                        )
+                    )
+                    if attr.get("strategy_id"):
+                        market_context_diagnostics.update(
+                            {k: v for k, v in attr.items() if v is not None}
+                        )
         except Exception:
             logger.exception("canonical_opportunity_score_attach_failed")
         try:
@@ -4637,7 +4665,13 @@ class InstitutionalIteRuntime:
                                     or getattr(decision, "direction", None)
                                     or ""
                                 ),
-                                strategy_id=_ai_fd.get("strategy")
+                                strategy_id=(
+                                    market_context_diagnostics.get("strategy_id")
+                                    if isinstance(market_context_diagnostics, dict)
+                                    else None
+                                )
+                                or _ai_fd.get("strategy_id")
+                                or _ai_fd.get("strategy")
                                 or _ai_fd.get("setup_family")
                                 or getattr(self.plane, "trading_mode", None),
                                 approved_stop=_ai_fd.get("stop_distance")
@@ -5166,7 +5200,16 @@ class InstitutionalIteRuntime:
                     or ai_d.get("ai_confidence")
                     or ai_d.get("confidence"),
                     "direction": sig_dir,
-                    "strategy_id": ai_d.get("strategy") or ai_d.get("setup_family"),
+                    "strategy_id": (
+                        (
+                            market_context_diagnostics.get("strategy_id")
+                            if isinstance(market_context_diagnostics, dict)
+                            else None
+                        )
+                        or ai_d.get("strategy_id")
+                        or ai_d.get("strategy")
+                        or ai_d.get("setup_family")
+                    ),
                     "trade_class": getattr(decision, "trade_class", None),
                     "approved_stop": ai_d.get("stop_distance")
                     or feas.get("stop_distance"),
@@ -6503,6 +6546,63 @@ class InstitutionalIteRuntime:
                 if isinstance(self._last_multi_asset_scan, dict)
                 else None
             )
+
+    def _resolve_scan_strategy_attribution(self, symbol: str | None) -> dict[str, Any]:
+        """Map execution symbol → SOE pack strategy_id from last multi-asset scan.
+
+        Never fabricates a strategy. Returns empty dict when unknown.
+        """
+        sym = str(symbol or "").strip().upper()
+        if not sym:
+            return {}
+        scan = self.last_multi_asset_scan()
+        if not isinstance(scan, dict):
+            try:
+                from app.application.services.institutional_multi_asset_scanner import (
+                    get_last_multi_asset_scan,
+                )
+
+                scan = get_last_multi_asset_scan()
+            except Exception:
+                scan = None
+        if not isinstance(scan, dict):
+            return {}
+        try:
+            from app.domain.trading.gold_only import same_gold_identity
+        except Exception:
+
+            def same_gold_identity(a: str | None, b: str | None) -> bool:  # type: ignore[misc]
+                return str(a or "").upper() == str(b or "").upper()
+
+        rows: list[dict[str, Any]] = []
+        for key in ("opportunity_ranked", "ranked", "scored", "rows"):
+            blob = scan.get(key)
+            if isinstance(blob, list):
+                rows.extend(r for r in blob if isinstance(r, dict))
+        best = scan.get("strategy_best")
+        if isinstance(best, dict):
+            rows.insert(0, best)
+        for row in rows:
+            row_sym = str(row.get("symbol") or "").upper()
+            if not row_sym:
+                continue
+            if row_sym == sym or same_gold_identity(row_sym, sym):
+                orch = row.get("strategy_orchestration")
+                orch_d = orch if isinstance(orch, dict) else {}
+                sid = (
+                    str(row.get("strategy_id") or "").strip()
+                    or str(orch_d.get("selected_strategy_id") or "").strip()
+                )
+                if not sid:
+                    continue
+                return {
+                    "strategy_id": sid,
+                    "strategy_name": row.get("strategy_name")
+                    or orch_d.get("selected_strategy_name"),
+                    "strategy_confluence_count": row.get("strategy_confluence_count")
+                    or orch_d.get("confluence_count"),
+                }
+        return {}
 
     def _last_pipeline_snapshot(self) -> dict[str, Any] | None:
         from app.domain.institutional_trading.operations.fast_decision_path import (

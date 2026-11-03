@@ -22,12 +22,14 @@ def best_strategy_for_symbol(
     *,
     live_boosts: dict[str, float] | None = None,
     stats_snapshot: dict[str, Any] | None = None,
+    score: dict[str, Any] | None = None,
 ) -> StrategyEvaluation | None:
     """Never attach two strategies to the same symbol — SOE picks one or none."""
     verdict = orchestrate_strategies(
         evaluations,
         live_boosts=live_boosts,
         stats_snapshot=stats_snapshot,
+        score=score,
     )
     return verdict.selected
 

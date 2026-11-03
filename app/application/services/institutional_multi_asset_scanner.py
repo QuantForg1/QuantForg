@@ -1810,6 +1810,10 @@ async def _run_institutional_multi_asset_scan_body(
             for r in ranked:
                 if not isinstance(r, dict) or r.get("reject"):
                     continue
+                # Same eligibility bar as the primary loop — never promote
+                # SOE-vetoed or opportunity-ineligible rows via fallback.
+                if not r.get("opportunity_eligible"):
+                    continue
                 sym = str(r.get("symbol") or "").upper()
                 if (
                     sym
