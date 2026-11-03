@@ -73,7 +73,21 @@ function PrimaryLink({
             {!collapsed ? (
               <>
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.shortcut ? (
+                {item.railBadge ? (
+                  <span
+                    className={cn(
+                      "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                      item.railBadge.tone === "danger"
+                        ? "bg-[var(--danger)] text-white"
+                        : active
+                          ? "bg-white/20 text-white"
+                          : "bg-[var(--accent)] text-white",
+                    )}
+                  >
+                    {item.railBadge.label}
+                  </span>
+                ) : null}
+                {item.shortcut && !item.railBadge ? (
                   <kbd className="rounded border border-[var(--border)] px-1 py-px font-mono text-[10px] text-[var(--fg-subtle)] opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 group-focus-visible:opacity-100">
                     ⌘{item.shortcut}
                   </kbd>

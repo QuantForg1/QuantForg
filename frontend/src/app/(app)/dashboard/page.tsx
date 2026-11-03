@@ -11,6 +11,7 @@ import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
+import { OverviewReferenceDesk } from "@/components/trading/overview-reference-desk";
 import { SignalCard } from "@/components/trading/signal-card";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
@@ -32,11 +33,15 @@ import {
   hasResearchSignal,
   knownInstrumentCountLabel,
   normalizeSignalCenterPayload,
+  presentField,
+  presentLevel,
   researchAvailabilityAsCatalogue,
   researchDeskLiveTradingStatus,
   researchDeskStatusLabel,
   researchSignalsEmptyCopy,
   researchUniverseViewState,
+  signalBoardDirection,
+  signalHumanExplanation,
   skippedMalformedInstrumentCount,
   SIGNAL_CENTER_QUERY_KEY,
   numericDisplay,
@@ -283,6 +288,19 @@ export default function DashboardPage() {
   );
 
   const greeting = workspaceGreeting(new Date(), firstName);
+  const topSignal = signalPreview[0] ?? null;
+  const biasDir = topSignal ? signalBoardDirection(topSignal) : "WAIT";
+  const confRaw = topSignal
+    ? num(topSignal.ai_confidence ?? topSignal.confidence ?? topSignal.opportunity_score)
+    : NaN;
+  const confPct = Number.isFinite(confRaw)
+    ? confRaw <= 1
+      ? Math.round(confRaw * 100)
+      : Math.round(confRaw)
+    : null;
+  const todayPnlRaw = num(session.profit ?? session.daily_pnl ?? session.today_pnl);
+  const riskPctRaw = num(session.risk_pct ?? session.daily_risk_pct);
+  const riskPct = Number.isFinite(riskPctRaw) ? riskPctRaw : null;
 
   return (
     <div className="min-w-0 space-y-5">
@@ -307,7 +325,7 @@ export default function DashboardPage() {
       ) : null}
       <PageHeader
         eyebrow="Overview"
-        title={greeting}
+        title={`${greeting}${firstName ? " 👋" : ""}`}
         description="Your trading system status, research opportunities, and account figures from the connected broker session."
         actions={
           noBroker || sessionMismatch ? (
@@ -322,6 +340,76 @@ export default function DashboardPage() {
             </Button>
           )
         }
+      />
+
+      <OverviewReferenceDesk
+        equity={moneyOrUnavailable(session.equity, showMetrics)}
+        balance={moneyOrUnavailable(session.balance ?? session.free_margin, showMetrics)}
+        todayPnl={
+          showMetrics && Number.isFinite(todayPnlRaw)
+            ? formatCurrency(todayPnlRaw)
+            : showMetrics
+              ? formatCurrency(0)
+              : "Unavailable"
+        }
+        openPositions={
+          noBroker || sessionMismatch || positionsUnavailable
+            ? "—"
+            : String(positions.length)
+        }
+        pendingOrders={
+          noBroker || sessionMismatch
+            ? "—"
+            : String(num(session.pending_orders) || 0)
+        }
+        accountRiskLabel={
+          riskPct == null
+            ? showMetrics
+              ? "—"
+              : "Unavailable"
+            : riskPct < 30
+              ? "Low"
+              : riskPct < 60
+                ? "Moderate"
+                : "Elevated"
+        }
+        accountRiskPct={riskPct}
+        connected={showMetrics}
+        marketBias={
+          biasDir === "BUY"
+            ? "Bullish"
+            : biasDir === "SELL"
+              ? "Bearish"
+              : presentField(topSignal?.regime ?? topSignal?.market_regime) !==
+                  "Not available"
+                ? presentField(topSignal?.regime ?? topSignal?.market_regime)
+                : "Neutral"
+        }
+        marketBiasDetail={
+          topSignal
+            ? signalHumanExplanation(topSignal)
+            : "Live research bias appears when a gold signal is available."
+        }
+        currentPrice={
+          topSignal
+            ? presentLevel(topSignal.mid ?? topSignal.price ?? topSignal.current_price)
+            : "—"
+        }
+        support={
+          topSignal ? presentLevel(topSignal.support ?? topSignal.key_support) : "—"
+        }
+        resistance={
+          topSignal
+            ? presentLevel(topSignal.resistance ?? topSignal.key_resistance)
+            : "—"
+        }
+        regime={
+          topSignal
+            ? presentField(topSignal.regime ?? topSignal.market_regime)
+            : "—"
+        }
+        confidencePct={confPct}
+        topSignal={topSignal}
       />
 
       <section

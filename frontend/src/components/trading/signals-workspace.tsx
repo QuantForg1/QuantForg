@@ -12,6 +12,7 @@ import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitive
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { DirectionBadge, SignalCard } from "@/components/trading/signal-card";
+import { SignalsReferenceDesk } from "@/components/trading/signals-reference-desk";
 import { marketUniverseApi, signalCenterApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
@@ -593,12 +594,35 @@ export function SignalsWorkspace() {
         />
       ) : (
         <>
+          <SignalsReferenceDesk
+            row={selected ?? sorted[0]}
+            connected={
+              connection.state === "CONNECTED" ||
+              session.connection_status === "CONNECTED" ||
+              session.connection_status === "RUNNING"
+            }
+          />
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <h3 className="text-sm font-semibold text-[var(--fg)]">All signals</h3>
+            <p className="text-xs text-[var(--fg-subtle)]">
+              Select a card to focus the desk above
+            </p>
+          </div>
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Signals">
             {feedRows.map((row, i) => {
               const symbol = str(row.broker_symbol || row.symbol, "N/A");
+              const active =
+                selected != null &&
+                str(selected.broker_symbol || selected.symbol) === symbol;
               return (
                 <li key={`${symbol}-${i}`}>
-                  <SignalCard row={row} onOpen={() => setSelected(row)} />
+                  <div
+                    className={cn(
+                      active && "rounded-[var(--radius-os)] ring-2 ring-[var(--accent)]",
+                    )}
+                  >
+                    <SignalCard row={row} onOpen={() => setSelected(row)} />
+                  </div>
                 </li>
               );
             })}

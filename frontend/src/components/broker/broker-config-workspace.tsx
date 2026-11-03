@@ -5,11 +5,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Cable,
+  CheckCircle2,
+  Copy,
   Loader2,
+  Plus,
   RefreshCw,
   Unplug,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -430,11 +434,49 @@ export function BrokerConfigWorkspace() {
     onReconnect();
   };
 
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Clipboard unavailable");
+    }
+  };
+
+  const statusChecks = [
+    {
+      label: "Account authorized",
+      ok: connected && connectionView.ownership === "owned",
+    },
+    {
+      label: "Server connected",
+      ok: connected && gatewayOnline,
+    },
+    {
+      label: "Account information loaded",
+      ok: connected && Boolean(session.balance && session.balance !== "—"),
+    },
+    {
+      label: "Trading ready",
+      ok: connected && liveTradingHint.label.toLowerCase().includes("enabled"),
+    },
+  ] as const;
+
   return (
     <div className="mx-auto w-full min-w-0 max-w-5xl space-y-4 px-1 sm:px-0">
       <PageHeader
         title="Broker Accounts"
         description="Connect and manage your MT5 broker account. Balance, server, and connection status come from the live session only."
+        actions={
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => setChangingAccount(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Connect New Account
+          </Button>
+        }
       />
 
       <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
@@ -450,161 +492,228 @@ export function BrokerConfigWorkspace() {
       />
 
       {connected && uxState !== "SESSION_MISMATCH" ? (
-        <Section
-          title="CONNECTED"
-          aside={
-            isLiveAccount ? (
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--warning)]">
-                Live account
-              </span>
-            ) : (
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-subtle)]">
-                Demo
-              </span>
-            )
-          }
-        >
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Broker
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">Weltrade / MT5</dd>
+        <>
+          <article className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px] sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] text-lg font-bold text-white shadow-[0_8px_20px_var(--accent-glow)]">
+                  WT
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-semibold tracking-tight">Weltrade</h2>
+                    <Badge tone="success">Connected</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                    MT5 · {isLiveAccount ? "Real Account" : "Demo Account"}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="flex items-center justify-end gap-2 text-sm font-medium text-[var(--success)]">
+                  <span className="h-2 w-2 rounded-full bg-[var(--success)]" aria-hidden />
+                  Connected
+                </p>
+                <p className="mt-1 text-xs text-[var(--fg-subtle)]">
+                  Last synced {connectionView.lastVerified || "—"}
+                </p>
+                <div className="mt-3">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => setChangingAccount(true)}
+                  >
+                    … Actions
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Server
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">{connectionView.server || "N/A"}</dd>
+            <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Account Login
+                </dt>
+                <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
+                  <span className="truncate">{connectionView.maskedLogin}</span>
+                  {connectionView.maskedLogin ? (
+                    <button
+                      type="button"
+                      className="text-[var(--fg-subtle)] hover:text-[var(--fg)]"
+                      aria-label="Copy account login"
+                      onClick={() =>
+                        void copyText(String(connectionView.maskedLogin), "Login")
+                      }
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </dd>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Server
+                </dt>
+                <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
+                  <span className="truncate">{connectionView.server || "N/A"}</span>
+                  {connectionView.server ? (
+                    <button
+                      type="button"
+                      className="text-[var(--fg-subtle)] hover:text-[var(--fg)]"
+                      aria-label="Copy server"
+                      onClick={() =>
+                        void copyText(String(connectionView.server), "Server")
+                      }
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </dd>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Account Balance
+                </dt>
+                <dd className="mt-1 text-sm font-semibold tabular">
+                  {session.balance && session.balance !== "—" ? session.balance : "N/A"}
+                </dd>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Currency
+                </dt>
+                <dd className="mt-1 text-sm font-medium">
+                  {str(tradingSnap.currency, "USD")}
+                </dd>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Account Type
+                </dt>
+                <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
+                  {isLiveAccount ? "Real" : "Demo"}
+                  <Badge tone={isLiveAccount ? "warning" : "neutral"}>
+                    {isLiveAccount ? "Live" : "Demo"}
+                  </Badge>
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => setChangingAccount(true)}
+              >
+                Change account
+              </Button>
+              <Button variant="secondary" disabled={busy} onClick={onReconnect}>
+                <RefreshCw className="h-4 w-4" />
+                Reconnect
+              </Button>
+              <Button variant="secondary" disabled={busy} onClick={onVerify}>
+                Verify connection
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => disconnectMut.mutate()}
+              >
+                <Unplug className="h-4 w-4" />
+                Disconnect
+              </Button>
             </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Account
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">{connectionView.maskedLogin}</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Balance
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {session.balance && session.balance !== "—" ? session.balance : "N/A"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Equity
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {session.equity && session.equity !== "—" ? session.equity : "N/A"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Free margin
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {session.freeMargin && session.freeMargin !== "—"
-                  ? session.freeMargin
-                  : "N/A"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Connection latency
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {latency === "—" ? "N/A" : latency}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Last verified
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {connectionView.lastVerified || "N/A"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                MT5 status
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {gatewayMt5Attached
-                  ? connected
-                    ? "Attached (owned)"
-                    : "Attached (not owned by you)"
-                  : "Not attached"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Gateway status
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {gatewayOnline
-                  ? "Online"
-                  : healthQ.isError
-                    ? "Unavailable"
-                    : "Offline"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Ownership
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {connectionView.ownership === "owned" ? "Owned by you" : "None"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Account mode
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {str(tradingSnap.account_mode) || "Unverified"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Trading authorization
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {str(tradingSnap.trading_authorization) || liveTradingHint.label}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Live trading
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
-            </div>
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => setChangingAccount(true)}
+          </article>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Section title="Connection Settings">
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Equity
+                  </dt>
+                  <dd className="text-sm text-[var(--fg)]">
+                    {session.equity && session.equity !== "—" ? session.equity : "N/A"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Free margin
+                  </dt>
+                  <dd className="text-sm text-[var(--fg)]">
+                    {session.freeMargin && session.freeMargin !== "—"
+                      ? session.freeMargin
+                      : "N/A"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Connection latency
+                  </dt>
+                  <dd className="text-sm text-[var(--fg)]">
+                    {latency === "—" ? "N/A" : latency}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Gateway status
+                  </dt>
+                  <dd className="text-sm text-[var(--fg)]">
+                    {gatewayOnline
+                      ? "Online"
+                      : healthQ.isError
+                        ? "Unavailable"
+                        : "Offline"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Ownership
+                  </dt>
+                  <dd className="text-sm text-[var(--fg)]">
+                    {connectionView.ownership === "owned" ? "Owned by you" : "None"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Live trading
+                  </dt>
+                  <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
+                </div>
+              </dl>
+            </Section>
+
+            <Section
+              title="Account Status"
+              aside={<Badge tone="success">Connected</Badge>}
             >
-              Change account
-            </Button>
-            <Button variant="secondary" disabled={busy} onClick={onReconnect}>
-              <RefreshCw className="h-4 w-4" />
-              Reconnect
-            </Button>
-            <Button variant="secondary" disabled={busy} onClick={onVerify}>
-              Verify connection
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => disconnectMut.mutate()}
-            >
-              <Unplug className="h-4 w-4" />
-              Disconnect
-            </Button>
+              <ul className="space-y-3">
+                {statusChecks.map((item) => (
+                  <li key={item.label} className="flex items-center gap-2.5 text-sm">
+                    <CheckCircle2
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        item.ok ? "text-[var(--success)]" : "text-[var(--fg-subtle)]",
+                      )}
+                      aria-hidden
+                    />
+                    <span className={item.ok ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"}>
+                      {item.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                className="mt-4 w-full"
+                variant="secondary"
+                disabled={busy}
+                onClick={onVerify}
+              >
+                <Cable className="h-4 w-4" />
+                Test Connection
+              </Button>
+            </Section>
           </div>
-        </Section>
+        </>
       ) : (
         <Section title="Connection">
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

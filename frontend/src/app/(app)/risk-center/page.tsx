@@ -8,7 +8,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
-import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,40 +82,98 @@ export default function RiskCenterPage() {
 
       <PageMotion className="space-y-4">
         <OwnerPolicySummary />
-        <Card>
-          <CardHeader>
-            <CardTitle>Live Risk Monitoring</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Account Equity"
-                value={Number.isFinite(equity) ? formatCurrency(equity) : "—"}
-              />
-              <StatCard
-                label="Free margin"
-                value={Number.isFinite(free) ? formatCurrency(free) : "—"}
-              />
-              <StatCard
-                label="Margin used"
-                value={
-                  Number.isFinite(used)
-                    ? formatCurrency(used)
-                    : Number.isFinite(margin)
-                      ? formatCurrency(margin)
-                      : "—"
-                }
-              />
-              <StatCard
-                label="Float drawdown"
-                value={Number.isFinite(ddPct) ? `${formatNumber(ddPct, 2)}%` : "—"}
-                tone={Number.isFinite(ddPct) && ddPct > 2 ? "down" : "neutral"}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Trading Rules</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5 text-sm">
+                <span>Stop trading at daily loss limit</span>
+                <span
+                  className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--hot)]"
+                  aria-hidden
+                >
+                  <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
+                </span>
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5 text-sm">
+                <span>Allow trading XAUUSD only</span>
+                <span
+                  className="relative h-6 w-11 shrink-0 rounded-full bg-[var(--hot)]"
+                  aria-hidden
+                >
+                  <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
+                </span>
+              </label>
+              <p className="text-xs text-[var(--fg-muted)]">
+                Rules mirror the saved owner policy. Toggles are display-only; editing stays on
+                Admin control.
+              </p>
+            </CardContent>
+          </Card>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Live Risk Monitoring</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--fg-muted)]">Account Balance</dt>
+                  <dd className="font-semibold tabular">
+                    {Number.isFinite(equity) ? formatCurrency(equity) : "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--fg-muted)]">Daily P&L</dt>
+                  <dd
+                    className={
+                      Number.isFinite(floating) && floating < 0
+                        ? "font-semibold tabular text-[var(--danger)]"
+                        : "font-semibold tabular text-[var(--success)]"
+                    }
+                  >
+                    {Number.isFinite(floating) ? formatCurrency(floating) : "—"}
+                    {Number.isFinite(ddPct) && floating < 0
+                      ? ` (−${formatNumber(ddPct, 1)}%)`
+                      : ""}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--fg-muted)]">Margin used</dt>
+                  <dd className="font-semibold tabular">
+                    {Number.isFinite(used)
+                      ? formatCurrency(used)
+                      : Number.isFinite(margin)
+                        ? formatCurrency(margin)
+                        : "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--fg-muted)]">Free margin</dt>
+                  <dd className="font-semibold tabular">
+                    {Number.isFinite(free) ? formatCurrency(free) : "—"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--fg-muted)]">Risk Status</dt>
+                  <dd className="inline-flex items-center gap-2 font-semibold">
+                    <span
+                      className={
+                        Number.isFinite(ddPct) && ddPct > 2
+                          ? "h-2 w-2 rounded-full bg-[var(--warning)]"
+                          : "h-2 w-2 rounded-full bg-[var(--success)]"
+                      }
+                      aria-hidden
+                    />
+                    {Number.isFinite(ddPct) && ddPct > 2 ? "Attention" : "Normal"}
+                  </dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+
           <Card className="max-w-xl lg:max-w-none">
             <CardHeader>
               <CardTitle>Risk check</CardTitle>
@@ -195,9 +252,9 @@ export default function RiskCenterPage() {
               </form>
             </CardContent>
           </Card>
-
-          <RiskRulesPanel risk={lastRisk} />
         </div>
+
+        <RiskRulesPanel risk={lastRisk} />
       </PageMotion>
     </div>
   );
