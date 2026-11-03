@@ -80,6 +80,9 @@ export default function StrategyPage() {
   const [maxTrades, setMaxTrades] = useState("5");
   const [dailyLoss, setDailyLoss] = useState("3");
   const [maxExposure, setMaxExposure] = useState("20");
+  const [configTab, setConfigTab] = useState<
+    "parameters" | "logic" | "entry" | "filters" | "risk"
+  >("parameters");
 
   const signalsQ = useQuery({
     queryKey: ["strategy-signals"],
@@ -409,23 +412,89 @@ export default function StrategyPage() {
                 >
                   Reset
                 </Button>
-                <Button size="sm" onClick={runEngine} disabled={engineRun.isPending}>
+                <Button
+                  className="qf-btn-hot border-0"
+                  size="sm"
+                  onClick={runEngine}
+                  disabled={engineRun.isPending}
+                >
                   Save Changes
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <textarea
-                className="min-h-[220px] w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-xs text-[var(--fg)]"
-                value={
-                  strategyKey === "custom_rules" ? customRulesJson : paramsJson
-                }
-                onChange={(e) =>
-                  strategyKey === "custom_rules"
-                    ? setCustomRulesJson(e.target.value)
-                    : setParamsJson(e.target.value)
-                }
-              />
+              <div
+                className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-2"
+                role="tablist"
+                aria-label="Strategy configuration"
+              >
+                {(
+                  [
+                    ["parameters", "Parameters"],
+                    ["logic", "Logic & Rules"],
+                    ["entry", "Entry & Exit"],
+                    ["filters", "Filters"],
+                    ["risk", "Risk Integration"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={configTab === id}
+                    onClick={() => setConfigTab(id)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      configTab === id
+                        ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                        : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {configTab === "parameters" ? (
+                <textarea
+                  className="min-h-[220px] w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-xs text-[var(--fg)]"
+                  value={
+                    strategyKey === "custom_rules" ? customRulesJson : paramsJson
+                  }
+                  onChange={(e) =>
+                    strategyKey === "custom_rules"
+                      ? setCustomRulesJson(e.target.value)
+                      : setParamsJson(e.target.value)
+                  }
+                />
+              ) : (
+                <div className="min-h-[220px] rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/35 p-4 text-sm text-[var(--fg-muted)]">
+                  {configTab === "logic" ? (
+                    <p>
+                      Logic follows the selected catalog plugin and any custom rules JSON.
+                      Orders still require risk and OMS approval.
+                    </p>
+                  ) : null}
+                  {configTab === "entry" ? (
+                    <p>
+                      Entry and exit levels come from live evaluate / MT5 bars — never sample
+                      prices. Run Evaluate to refresh.
+                    </p>
+                  ) : null}
+                  {configTab === "filters" ? (
+                    <p>
+                      Symbol {symbol} · timeframe {timeframe}. Filters stay advisory until the
+                      risk engine confirms.
+                    </p>
+                  ) : null}
+                  {configTab === "risk" ? (
+                    <ul className="space-y-2">
+                      <li>Max trades: {maxTrades}</li>
+                      <li>Daily loss %: {dailyLoss}</li>
+                      <li>Max exposure %: {maxExposure}</li>
+                      <li>Live path requires EXECUTION_ENABLED and owned broker session.</li>
+                    </ul>
+                  ) : null}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={validateEngine}>
                   Validate
@@ -486,72 +555,128 @@ export default function StrategyPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Context & Risk</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Symbol</Label>
-                <Input
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Timeframe</Label>
-                <Input
-                  value={timeframe}
-                  onChange={(e) => setTimeframe(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Max trades</Label>
-                <Input value={maxTrades} onChange={(e) => setMaxTrades(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Daily loss %</Label>
-                <Input value={dailyLoss} onChange={(e) => setDailyLoss(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Max exposure %</Label>
-                <Input
-                  value={maxExposure}
-                  onChange={(e) => setMaxExposure(e.target.value)}
-                />
-              </div>
-              <p className="text-xs text-[var(--fg-subtle)]">
-                Live path requires <code>EXECUTION_ENABLED=true</code>. Default is paper
-                trading. Engine never submits orders.
-              </p>
-              <p className="text-xs text-[var(--fg-subtle)]">
-                Backtest / walk-forward: reuse existing{" "}
-                <code>/backtests/run</code> and <code>/walkforward/run</code>.
-              </p>
-              <div className="border-t border-[var(--border)] pt-3">
-                <p className="mb-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
-                  Allocation
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Strategy Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-[var(--fg-muted)]">Type</span>
+                  <span className="font-medium">
+                    {str(selectedPlugin?.category) || strategyKey}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-[var(--fg-muted)]">Market</span>
+                  <span className="font-medium">{symbol}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-[var(--fg-muted)]">Timeframe</span>
+                  <span className="font-medium">{timeframe}</span>
+                </div>
+                <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
+                  {str(selectedPlugin?.description) ||
+                    "Strategy stays advisory until risk and OMS gates pass."}
                 </p>
-                {portfolioQ.isLoading ? (
-                  <DeskSkeleton rows={1} />
+                <div className="grid gap-2 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Symbol</Label>
+                    <Input
+                      value={symbol}
+                      onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Timeframe</Label>
+                    <Input
+                      value={timeframe}
+                      onChange={(e) => setTimeframe(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Max trades</Label>
+                    <Input value={maxTrades} onChange={(e) => setMaxTrades(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Daily loss %</Label>
+                    <Input value={dailyLoss} onChange={(e) => setDailyLoss(e.target.value)} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Performance</CardTitle>
+                <p className="text-xs text-[var(--fg-muted)]">
+                  Live evaluate result only — never sample backtests.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {signalBlock ? (
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                        Last action
+                      </dt>
+                      <dd className="mt-1 font-semibold">{str(signalBlock.action)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                        Confidence
+                      </dt>
+                      <dd className="mt-1 font-semibold tabular">
+                        {(numish(signalBlock.confidence) * 100).toFixed(0)}%
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                        Risk gate
+                      </dt>
+                      <dd className="mt-1 text-[var(--fg-muted)]">
+                        {lastResult?.risk
+                          ? asRecord(lastResult.risk).allowed
+                            ? "Allowed"
+                            : "Blocked"
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
                 ) : (
-                  <ul className="space-y-1 text-xs text-[var(--fg-muted)]">
-                    {asList(asRecord(portfolioQ.data).allocations).length === 0 ? (
-                      <li>No weights set — use API PUT /strategy/portfolio/allocations</li>
-                    ) : (
-                      asList(asRecord(portfolioQ.data).allocations)
-                        .map(asRecord)
-                        .map((a, i) => (
-                          <li key={i}>
-                            {str(a.strategy_key)} · {String(a.weight_pct)}%
-                          </li>
-                        ))
-                    )}
-                  </ul>
+                  <p className="text-sm text-[var(--fg-muted)]">
+                    Run Evaluate to load live performance for this strategy.
+                  </p>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Strategy Rules</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ol className="space-y-2 text-sm">
+                  {[
+                    `Only trade ${symbol}`,
+                    `Use timeframe ${timeframe}`,
+                    `Max trades ${maxTrades}`,
+                    `Daily loss ceiling ${dailyLoss}%`,
+                    `Max exposure ${maxExposure}%`,
+                    "Orders still pass risk and OMS gates",
+                  ].map((rule, i) => (
+                    <li key={rule} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--success)]" />
+                      <span>
+                        <span className="text-[var(--fg-subtle)]">{i + 1}. </span>
+                        {rule}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
+          </div>
           </div>
         </div>
       ) : (

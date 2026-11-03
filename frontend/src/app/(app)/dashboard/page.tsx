@@ -298,8 +298,12 @@ export default function DashboardPage() {
       ) : null}
       <PageHeader
         eyebrow="Overview"
-        title={`${greeting}${firstName ? " 👋" : ""}`}
-        description="Your trading system status, research opportunities, and account figures from the connected broker session."
+        title={`${greeting}${firstName ? `, ${firstName}` : ""}`}
+        description={
+          showMetrics
+            ? "Your trading system status and market overview from the connected broker session."
+            : "Connect your broker to load account figures. Research bias appears when a gold signal is available."
+        }
         actions={
           noBroker || sessionMismatch ? (
             <Button asChild>
@@ -385,9 +389,14 @@ export default function DashboardPage() {
         topSignal={topSignal}
       />
 
+      <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+          Desk details · signals, positions, and activity
+        </summary>
+        <div className="space-y-5 border-t border-[var(--border)] px-4 py-4">
       <section
         aria-label="Workspace status"
-        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/30 px-4 py-3 text-sm"
       >
         <span>
           <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
@@ -624,6 +633,8 @@ export default function DashboardPage() {
               Stop
             </Button>
           </div>
+        </div>
+      </details>
         </div>
       </details>
 

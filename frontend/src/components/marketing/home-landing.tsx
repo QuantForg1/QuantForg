@@ -150,100 +150,110 @@ function SectionTitle({
 function TerminalPreview() {
   return (
     <div className="relative mx-auto w-full max-w-xl">
-      <div className="rounded-[1.35rem] border border-[var(--border-strong)] bg-[#0a1628] p-2.5 shadow-[var(--shadow-elevated)]">
-        <div className="mb-2 flex items-center gap-1.5 px-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-          <span className="ml-2 text-[10px] text-[var(--fg-subtle)]">Live Trading Terminal</span>
-        </div>
-        <div className="grid grid-cols-[4.5rem_1fr] overflow-hidden rounded-[1rem] border border-[var(--border)] bg-[var(--bg-elevated)]">
-          <aside className="space-y-2 border-r border-[var(--border)] bg-[var(--surface)]/80 p-2 text-[9px] text-[var(--fg-subtle)]">
-            {[
-              "Dashboard",
-              "Positions",
-              "Strategies",
-              "Analysis",
-              "Risk",
-              "Broker",
-              "History",
-              "Settings",
-            ].map((item, i) => (
-              <p
-                key={item}
-                className={
-                  i === 0
-                    ? "rounded-md bg-[var(--accent-soft)] px-1.5 py-1 font-medium text-[var(--accent)]"
-                    : "px-1.5 py-1"
-                }
-              >
-                {item}
-              </p>
-            ))}
-          </aside>
-          <div className="space-y-2 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold">XAUUSD (Gold)</p>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--success)]/35 bg-[var(--success-soft)] px-2 py-0.5 text-[10px] text-[var(--success)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-                Live
-              </span>
-            </div>
-            <div
-              className="flex h-28 items-end gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2 py-2"
-              role="img"
-              aria-label="Decorative chart frame, not a price history"
-            >
-              {Array.from({ length: 22 }, (_, i) => {
-                const up = i % 3 !== 0;
-                const body = 16 + ((i * 13) % 48);
-                return (
-                  <span
-                    key={i}
-                    className="flex flex-1 flex-col items-center justify-end"
-                    style={{ height: "100%" }}
-                  >
-                    <span
-                      className={
-                        up
-                          ? "w-1.5 rounded-sm bg-[var(--success)]/75"
-                          : "w-1.5 rounded-sm bg-[var(--danger)]/75"
-                      }
-                      style={{ height: body }}
-                    />
-                  </span>
-                );
-              })}
-            </div>
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)]/70 p-2">
-              <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                AI Market Bias
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[var(--fg)]">
-                Appears after connection
-              </p>
-              <p className="mt-1 text-[10px] text-[var(--fg-muted)]">
-                Trend · Momentum · Volatility · Confidence stay empty until live research arrives.
-              </p>
-            </div>
-            <dl className="grid grid-cols-2 gap-1.5 text-[10px] sm:grid-cols-4">
+      <div
+        className="absolute -inset-x-6 -bottom-8 top-10 rounded-[2rem] bg-[radial-gradient(ellipse_at_center,rgba(0,212,224,0.18),transparent_65%)]"
+        aria-hidden
+      />
+      <div className="relative rounded-[1.6rem] border border-[#2a3a55] bg-gradient-to-b from-[#1a2438] to-[#0b1220] p-3 shadow-[0_30px_80px_rgba(2,8,24,0.55)]">
+        <div className="rounded-[1.25rem] border border-[var(--border-strong)] bg-[#0a1628] p-2.5">
+          <div className="mb-2 flex items-center gap-1.5 px-1">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+            <span className="ml-2 text-[10px] text-[var(--fg-subtle)]">
+              Live Trading Terminal
+            </span>
+          </div>
+          <div className="grid grid-cols-[4.5rem_1fr] overflow-hidden rounded-[1rem] border border-[var(--border)] bg-[var(--bg-elevated)]">
+            <aside className="space-y-2 border-r border-[var(--border)] bg-[var(--surface)]/80 p-2 text-[9px] text-[var(--fg-subtle)]">
               {[
-                ["Account Equity", "—"],
-                ["Open Positions", "—"],
-                ["Today’s P&L", "—"],
-                ["Win Rate", "—"],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-md border border-[var(--border)] bg-[var(--bg)]/40 px-2 py-1.5"
+                "Dashboard",
+                "Positions",
+                "Strategies",
+                "Analysis",
+                "Risk",
+                "Broker",
+                "History",
+                "Settings",
+              ].map((item, i) => (
+                <p
+                  key={item}
+                  className={
+                    i === 0
+                      ? "rounded-md bg-[var(--accent-soft)] px-1.5 py-1 font-medium text-[var(--accent)]"
+                      : "px-1.5 py-1"
+                  }
                 >
-                  <dt className="text-[var(--fg-subtle)]">{label}</dt>
-                  <dd className="mt-0.5 font-medium text-[var(--fg)]">{value}</dd>
-                </div>
+                  {item}
+                </p>
               ))}
-            </dl>
+            </aside>
+            <div className="space-y-2 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold">XAUUSD (Gold)</p>
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--success)]/35 bg-[var(--success-soft)] px-2 py-0.5 text-[10px] text-[var(--success)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+                  Live
+                </span>
+              </div>
+              <div
+                className="flex h-28 items-end gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2 py-2"
+                role="img"
+                aria-label="Decorative chart frame, not a price history"
+              >
+                {Array.from({ length: 22 }, (_, i) => {
+                  const up = i % 3 !== 0;
+                  const body = 16 + ((i * 13) % 48);
+                  return (
+                    <span
+                      key={i}
+                      className="flex flex-1 flex-col items-center justify-end"
+                      style={{ height: "100%" }}
+                    >
+                      <span
+                        className={
+                          up
+                            ? "w-1.5 rounded-sm bg-[var(--success)]/75"
+                            : "w-1.5 rounded-sm bg-[var(--danger)]/75"
+                        }
+                        style={{ height: body }}
+                      />
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)]/70 p-2">
+                <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  AI Market Bias
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--fg)]">
+                  Appears after connection
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--fg-muted)]">
+                  Trend · Momentum · Volatility · Confidence stay empty until live research
+                  arrives.
+                </p>
+              </div>
+              <dl className="grid grid-cols-2 gap-1.5 text-[10px] sm:grid-cols-4">
+                {[
+                  ["Account Equity", "—"],
+                  ["Open Positions", "—"],
+                  ["Today’s P&L", "—"],
+                  ["Win Rate", "—"],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-md border border-[var(--border)] bg-[var(--bg)]/40 px-2 py-1.5"
+                  >
+                    <dt className="text-[var(--fg-subtle)]">{label}</dt>
+                    <dd className="mt-0.5 font-medium text-[var(--fg)]">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           </div>
         </div>
+        <div className="mx-auto mt-2 h-1.5 w-16 rounded-full bg-[#2a3a55]" aria-hidden />
       </div>
     </div>
   );

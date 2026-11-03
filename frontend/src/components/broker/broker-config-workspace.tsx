@@ -467,7 +467,7 @@ export function BrokerConfigWorkspace() {
     <div className="mx-auto w-full min-w-0 max-w-5xl space-y-4 px-1 sm:px-0">
       <PageHeader
         title="Broker Accounts"
-        description="Connect and manage your MT5 broker account. Balance, server, and connection status come from the live session only."
+        description="Connect and manage your trading account. Your account runs independently with its own settings. Balance and status come from the live session only."
         actions={
           <Button
             size="sm"
@@ -625,66 +625,118 @@ export function BrokerConfigWorkspace() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Section title="Connection Settings">
-              <dl className="grid gap-3 sm:grid-cols-2">
+              <p className="mb-4 text-sm text-[var(--fg-muted)]">
+                Update credentials or server details. Saving reconnects through the existing
+                MT5 path — balances stay live session data only.
+              </p>
+              <div className="grid gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bw-settings-login">Account Login</Label>
+                  <Input
+                    id="bw-settings-login"
+                    inputMode="numeric"
+                    autoComplete="username"
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                    placeholder="Account number"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bw-settings-server">Server</Label>
+                  <select
+                    id="bw-settings-server"
+                    className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                    value={server}
+                    onChange={(e) => setServer(e.target.value)}
+                  >
+                    {serverOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bw-settings-password">
+                    Investor Password (Optional)
+                  </Label>
+                  <Input
+                    key={`settings-${passwordFieldKey}`}
+                    id="bw-settings-password"
+                    type="password"
+                    autoComplete="off"
+                    name="broker-investor-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Required only when reconnecting"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bw-settings-type">Account Type</Label>
+                  <select
+                    id="bw-settings-type"
+                    className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                    value={accountType}
+                    onChange={(e) => setAccountType(e.target.value as AccountType)}
+                  >
+                    <option value="live">Real Account</option>
+                    <option value="demo">Demo Account</option>
+                  </select>
+                </div>
+              </div>
+              <Button
+                className="qf-btn-hot mt-4 w-full border-0"
+                disabled={busy}
+                onClick={() => {
+                  setChangingAccount(true);
+                  onConnect();
+                }}
+              >
+                {connectMut.isPending || saveMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                Save Changes
+              </Button>
+              <dl className="mt-4 grid gap-2 border-t border-[var(--border)] pt-3 text-xs text-[var(--fg-muted)] sm:grid-cols-2">
                 <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Equity
-                  </dt>
-                  <dd className="text-sm text-[var(--fg)]">
+                  Equity:{" "}
+                  <span className="text-[var(--fg)]">
                     {session.equity && session.equity !== "—" ? session.equity : "N/A"}
-                  </dd>
+                  </span>
                 </div>
                 <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Free margin
-                  </dt>
-                  <dd className="text-sm text-[var(--fg)]">
+                  Free margin:{" "}
+                  <span className="text-[var(--fg)]">
                     {session.freeMargin && session.freeMargin !== "—"
                       ? session.freeMargin
                       : "N/A"}
-                  </dd>
+                  </span>
                 </div>
                 <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Connection latency
-                  </dt>
-                  <dd className="text-sm text-[var(--fg)]">
+                  Latency:{" "}
+                  <span className="text-[var(--fg)]">
                     {latency === "—" ? "N/A" : latency}
-                  </dd>
+                  </span>
                 </div>
                 <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Connection status
-                  </dt>
-                  <dd className="text-sm text-[var(--fg)]">
-                    {gatewayOnline
-                      ? "Online"
-                      : healthQ.isError
-                        ? "Unavailable"
-                        : "Offline"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Ownership
-                  </dt>
-                  <dd className="text-sm text-[var(--fg)]">
-                    {connectionView.ownership === "owned" ? "Owned by you" : "None"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    Live trading
-                  </dt>
-                  <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
+                  Live trading:{" "}
+                  <span className="text-[var(--fg)]">{liveTradingHint.label}</span>
                 </div>
               </dl>
             </Section>
 
             <Section
               title="Account Status"
-              aside={<Badge tone="success">Connected</Badge>}
+              aside={
+                <span className="inline-flex items-center gap-2 text-sm font-medium text-[var(--success)]">
+                  <span className="h-2 w-2 rounded-full bg-[var(--success)]" aria-hidden />
+                  Connected
+                </span>
+              }
             >
+              <p className="mb-4 text-sm text-[var(--fg-muted)]">
+                Your account is connected and ready for trading.
+              </p>
               <ul className="space-y-3">
                 {statusChecks.map((item) => (
                   <li key={item.label} className="flex items-center gap-2.5 text-sm">
