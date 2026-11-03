@@ -203,7 +203,7 @@ def build_robot_health_monitor(
     strategies: list[dict[str, Any]] = []
     for definition in ALL_STRATEGIES:
         sid = definition.strategy_id
-        perf = next(
+        perf: dict[str, Any] = next(
             (s for s in performance["strategies"] if s.get("strategy_id") == sid),
             {},
         )

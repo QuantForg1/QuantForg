@@ -113,9 +113,10 @@ def test_range_strategy_rejects_strong_trend_regime() -> None:
 
 @pytest.mark.unit
 def test_one_strategy_per_symbol_then_global_best() -> None:
-    score = _base_score()
+    # Prefer RR / SOE evidence gates need score context (net RR + MTF).
+    score = _base_score(net_reward_risk=2.2, expected_rr=2.2, mtf_alignment=75)
     evals = evaluate_all_strategies(score)
-    best = best_strategy_for_symbol(evals)
+    best = best_strategy_for_symbol(evals, score=score)
     assert best is not None
     # Only one winner per symbol
     winners = [best]

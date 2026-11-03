@@ -275,6 +275,11 @@ async def test_eligible_gold_becomes_best_eligible(
 async def test_scanner_clamps_non_gold_out_of_universe(
     gold_only: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from app.domain.institutional_trading.ai_scalping.symbol_state import (
+        get_symbol_state_book,
+    )
+
+    get_symbol_state_book().reset()
     scored: list[str] = []
 
     async def _fake_score(_adapter, symbol: str, **_k):
@@ -327,6 +332,8 @@ async def test_scanner_clamps_non_gold_out_of_universe(
         "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
         "NO_ELIGIBLE_SETUP",
         "DIRECTION_NONE",
+        # Gold desk key collapse may surface prior cooldown on XAUUSD/_i.
+        "SYMBOL_COOLDOWN_ACTIVE",
     }
     assert current.get("next_action") in {
         CandidateAction.NO_EXECUTABLE_FOCUS.value,
