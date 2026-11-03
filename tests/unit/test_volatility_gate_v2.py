@@ -120,10 +120,10 @@ def test_config_preserves_quality_confidence_floors() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.version.startswith("ai-scalping-v8")
     assert cfg.quality_baseline == "SCALPING_V1"
-    assert 72 <= cfg.normal_vol.quality <= 75
-    assert 70 <= cfg.normal_vol.confidence <= 72
-    assert 72 <= cfg.low_vol.quality <= 75
-    assert 70 <= cfg.low_vol.confidence <= 72
+    assert cfg.normal_vol.quality == 76
+    assert cfg.normal_vol.confidence == 73
+    assert cfg.low_vol.quality == 78
+    assert cfg.low_vol.confidence == 74
     assert cfg.atr_compression_floor_pct == Decimal("0.20")
     assert cfg.atr_exceptional_floor_pct == Decimal("0.08")
     assert cfg.atr_hard_min_pct == Decimal("0.08")

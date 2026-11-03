@@ -88,7 +88,7 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
     )
     snap = aggregate_portfolio_risk(one_open, config=DEFAULT_AI_SCALPING_CONFIG)
     assert snap.exposure_pct == Decimal("2.50")
-    assert snap.max_open_positions == 5
+    assert snap.max_open_positions == 1
     full = scan_multi_asset_portfolio(
         [_opp("EURUSD", ai_confidence=95, trade_quality=95)],
         account=one_open,

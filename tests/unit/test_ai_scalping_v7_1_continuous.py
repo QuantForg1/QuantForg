@@ -159,7 +159,7 @@ def test_max_open_is_owner_one_and_exposure_ceiling_still_binds() -> None:
         open_positions=5,
     )
     snap = aggregate_portfolio_risk(account, config=DEFAULT_AI_SCALPING_CONFIG)
-    assert snap.max_open_positions == 5
+    assert snap.max_open_positions == 1
     assert snap.max_exposure_pct == Decimal("5.00")
     assert snap.exposure_pct <= snap.max_exposure_pct
     assert snap.open_positions >= snap.max_open_positions
