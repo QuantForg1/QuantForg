@@ -311,8 +311,7 @@ def orchestrate_strategies(
 
     if solo:
         solo_ok = (
-            best.quality >= MIN_SOLO_QUALITY
-            or best.confidence >= MIN_SOLO_CONFIDENCE
+            best.quality >= MIN_SOLO_QUALITY or best.confidence >= MIN_SOLO_CONFIDENCE
         )
         if not solo_ok:
             for ev in selectable:

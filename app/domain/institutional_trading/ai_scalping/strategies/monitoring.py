@@ -86,7 +86,8 @@ def build_strategy_performance_monitor(
         )
 
     live_safe = not deteriorating and all(
-        int(s.get("accepted") or 0) == 0 or s.get("health", {}).get("status")
+        int(s.get("accepted") or 0) == 0
+        or s.get("health", {}).get("status")
         in {"healthy", "insufficient_sample", "unknown", "watch"}
         for s in strategies
     )

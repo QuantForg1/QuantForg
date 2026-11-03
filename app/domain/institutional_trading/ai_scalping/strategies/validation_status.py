@@ -120,9 +120,7 @@ def classify_strategy_health(row: dict[str, Any] | None) -> dict[str, Any]:
             status = "watch"
             reason = "Under-performing vs breakeven — reduced SOE influence"
         elif (
-            closed >= MIN_CLOSED_FOR_HEALTHY_CLAIM
-            and pf is not None
-            and pf >= PF_WATCH
+            closed >= MIN_CLOSED_FOR_HEALTHY_CLAIM and pf is not None and pf >= PF_WATCH
         ):
             status = "healthy"
             reason = "Adequate sample with non-negative profit factor"

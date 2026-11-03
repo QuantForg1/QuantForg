@@ -71,18 +71,14 @@ def evaluate_backtest_gate(
         dd = _f("max_drawdown")
     checks["drawdown"] = dd is not None and dd <= thresholds.max_drawdown_pct
     if not checks["drawdown"]:
-        reasons.append(
-            f"max_drawdown {dd} > {thresholds.max_drawdown_pct} or missing"
-        )
+        reasons.append(f"max_drawdown {dd} > {thresholds.max_drawdown_pct} or missing")
 
     wr = _f("win_rate")
     if wr is not None and wr <= 1.0:
         wr = wr * 100.0
     checks["win_rate"] = wr is not None and wr >= thresholds.min_win_rate_pct
     if not checks["win_rate"]:
-        reasons.append(
-            f"win_rate {wr} < {thresholds.min_win_rate_pct} or missing"
-        )
+        reasons.append(f"win_rate {wr} < {thresholds.min_win_rate_pct} or missing")
 
     if thresholds.require_oos_pass:
         oos = m.get("oos_passed")

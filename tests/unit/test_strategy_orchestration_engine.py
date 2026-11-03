@@ -76,11 +76,14 @@ def _base_score(**overrides):
 @pytest.mark.unit
 def test_momentum_floor_is_enforced() -> None:
     """Regression: min_momentum on StrategyDefinition must actually filter."""
-    score = _base_score(momentum=50, factors={
-        **_base_score()["factors"],
-        "momentum": 50,
-        "trend_strength": 50,
-    })
+    score = _base_score(
+        momentum=50,
+        factors={
+            **_base_score()["factors"],
+            "momentum": 50,
+            "trend_strength": 50,
+        },
+    )
     ev = evaluate_strategy(score, MOMENTUM_SCALPING)
     assert ev.passed is False
     assert "Momentum" in (ev.reject_reason or "")
@@ -218,9 +221,10 @@ def test_deteriorating_strategy_influence_veto(tmp_path: Path) -> None:
         next(r for r in snap["strategies"] if r["strategy_id"] == "smc_scalping")
     )
     assert health["status"] == "deteriorating"
-    assert influence_weight_for_strategy(
-        strategy_id="smc_scalping", health_row=health
-    ) == 0.0
+    assert (
+        influence_weight_for_strategy(strategy_id="smc_scalping", health_row=health)
+        == 0.0
+    )
 
     evals = evaluate_all_strategies(_base_score())
     verdict = orchestrate_strategies(evals, stats_snapshot=snap)

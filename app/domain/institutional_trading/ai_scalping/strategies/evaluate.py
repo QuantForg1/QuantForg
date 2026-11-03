@@ -111,9 +111,7 @@ def evaluate_strategy(
     structure_floor = max(
         int(cfg.min_structure_score), int(strategy.min_structure or 0)
     )
-    momentum_floor = max(
-        int(cfg.min_momentum_score), int(strategy.min_momentum or 0)
-    )
+    momentum_floor = max(int(cfg.min_momentum_score), int(strategy.min_momentum or 0))
     if strategy.min_structure or strategy.min_momentum:
         filters["structure_floor"] = comps["structure"] >= structure_floor
         if not filters["structure_floor"]:
