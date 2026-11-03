@@ -18,10 +18,11 @@ const base = {
 };
 
 // $50 equity -> cap $10.00. SL 9.70 + spread 0.30 = $10.00 accepted.
+// TP clears owner min reward:risk 1.50 (reward >= 15.0 on risk 10.0).
 const atCap = ticketRisk({
   ...base,
   stopLoss: 4123.3,
-  takeProfit: 4143.5,
+  takeProfit: 4148.0,
   spread: 0.3,
 });
 assert.equal(atCap.riskUsd, 10);
@@ -32,7 +33,7 @@ assert.deepEqual(atCap.violations, []);
 const over = ticketRisk({
   ...base,
   stopLoss: 4123.29,
-  takeProfit: 4144.0,
+  takeProfit: 4148.0,
   spread: 0.3,
 });
 assert.equal(over.riskUsd, 10.01);

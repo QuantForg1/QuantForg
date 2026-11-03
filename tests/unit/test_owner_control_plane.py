@@ -455,7 +455,7 @@ def test_worker_applies_saved_policy_version():
     )
     assert candidate["worker_confirmed"] is True
     assert candidate["document"]["min_reward_risk"] == "0.20"
-    assert candidate["enforced_min_reward_risk"] == "0.50"
+    assert candidate["enforced_min_reward_risk"] == "1.50"
     assert candidate["experimental_promoted"] is False
 
 
@@ -538,30 +538,23 @@ def test_disabling_the_full_utc_day_blocks_entry():
 
 
 @pytest.mark.unit
-def test_saved_position_cap_accepts_five_and_keeps_a_stricter_one():
+def test_saved_position_cap_is_one_and_rejects_higher():
     from app.domain.institutional_trading.runtime_policy import (
         active_max_open_positions,
     )
 
-    ceiling = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 5})
-    try:
-        assert active_max_open_positions() == 5
-    finally:
-        reset_runtime_policy(ceiling)
-    stricter = use_runtime_policy(
-        {**approved_baseline(), "max_concurrent_positions": 1}
-    )
+    baseline = use_runtime_policy(approved_baseline())
     try:
         assert active_max_open_positions() == 1
     finally:
-        reset_runtime_policy(stricter)
-    illegal = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 6})
+        reset_runtime_policy(baseline)
+    illegal = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 2})
     try:
-        assert active_max_open_positions() == 5
+        assert active_max_open_positions() == 1
     finally:
         reset_runtime_policy(illegal)
     rejected = validate_policy_changes(
-        approved_baseline(), {"max_concurrent_positions": 6}
+        approved_baseline(), {"max_concurrent_positions": 2}
     )
     assert rejected.ok is False
 

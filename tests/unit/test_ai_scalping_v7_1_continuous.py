@@ -39,7 +39,7 @@ def test_v71_config_preserves_quality_risk() -> None:
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.max_daily_exposure_pct == Decimal("5.00")
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")
-    assert cfg.max_open_trades == 5
+    assert cfg.max_open_trades == 1
     assert cfg.allow_martingale is False
     assert cfg.continuous_operation_enabled is True
     assert cfg.post_close_rescan_enabled is True

@@ -390,8 +390,8 @@ def test_multi_asset_scan_config_present() -> None:
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")
     # SCALPING_V1 professional floors
     assert cfg.quality_baseline == "SCALPING_V1"
-    assert cfg.normal_vol.quality == 74
-    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.quality == 76
+    assert cfg.normal_vol.confidence == 73
     assert cfg.absolute_max_hold_minutes == 12
 
 

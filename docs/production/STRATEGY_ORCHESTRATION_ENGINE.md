@@ -1,4 +1,4 @@
-# Strategy Orchestration Engine (SOE) — v1.1.0
+# Strategy Orchestration Engine (SOE) — v1.2.0
 
 **Status:** Production collaboration layer (upstream of Risk / OMS / MT5)  
 **Does not:** authorize `order_send`, weaken risk gates, enable grid/martingale, or auto-approve LIVE capital.
@@ -12,7 +12,7 @@ QuantForg evaluates the five live scalping profiles **and** advisory research en
 3. Measure agreement / disagreement — never manufacture consensus.
 4. Apply performance influence (deterioration → veto).
 5. Raise the evidence bar when advisory engines strongly disagree.
-6. Prefer **NO_TRADE** on weak solo setups, cost gates, or conflicts.
+6. Prefer **NO_TRADE** on weak solo setups, net RR &lt; 1.50, stale setups, false-breakout / momentum-exhaustion evidence, elevated spread, or conflicts.
 7. Select **one** coherent OMS-eligible winner (live pack only).
 
 **Operating objective:** LIVE trading through existing owner gates — not permanent SHADOW. SHADOW remains available; it is not required forever.

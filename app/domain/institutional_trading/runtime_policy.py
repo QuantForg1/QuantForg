@@ -137,7 +137,7 @@ def active_max_aggregate_open_risk_pct() -> Decimal:
 
 
 def active_max_open_positions() -> int:
-    """Saved concurrent-position cap. It cannot exceed five."""
+    """Saved concurrent-position cap. It cannot exceed the owner maximum (1)."""
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("unavailable"):
         return OWNER_MAX_OPEN_POSITIONS
@@ -199,15 +199,15 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
 
 
 def active_min_reward_risk() -> Decimal:
-    """Active floor is 0.50. See :func:`enforced_min_reward_risk`."""
+    """Active floor is 1.50. See :func:`enforced_min_reward_risk`."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
 
 def active_min_trade_quality() -> int:
-    """Unset policy stays 70. A saved integer from 70 to 100 is used.
+    """Unset policy stays 75. A saved integer from 75 to 100 is used.
 
-    Below 70 or a non-integer fails closed to 70.
+    Below 75 or a non-integer fails closed to 75.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_trade_quality,
@@ -305,7 +305,7 @@ def approved_baseline() -> dict[str, Any]:
         "min_lot": None,
         "max_lot": "0.01",
         "max_spread": "1.00",
-        "min_reward_risk": "0.50",
+        "min_reward_risk": str(OWNER_MIN_REWARD_RISK),
         "commission": owner_commission_configuration(),
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
         "stop_atr_multiplier": "1.00",

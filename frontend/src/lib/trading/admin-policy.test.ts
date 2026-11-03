@@ -33,7 +33,7 @@ const changes = buildPolicyChanges({
 
 assert.equal(changes.m1_micro_enabled, null);
 assert.equal(changes.m1_live_submit, null);
-assert.equal(changes.max_concurrent_positions, 5);
+assert.equal(changes.max_concurrent_positions, 1);
 assert.equal(
   (changes.commission as { amount_usd?: string; status?: string; source?: string }).amount_usd,
   "0.00",
@@ -86,23 +86,23 @@ assert.match(
 const active = validateActiveDraft({
   max_planned_risk_pct: "14",
   max_aggregate_open_risk_pct: "14",
-  min_trade_quality: "70",
+  min_trade_quality: "75",
   min_reward_risk: "1.50",
 });
 assert.deepEqual(active, []);
 const rejectedReward = validateActiveDraft({ min_reward_risk: "0.20" });
 assert.equal(rejectedReward.length, 1);
 assert.match(rejectedReward[0], /experimental/);
-const rejectedQuality = validateActiveDraft({ min_trade_quality: "69" });
-assert.match(rejectedQuality.join(" "), /70 to 100, not 75/);
+const rejectedQuality = validateActiveDraft({ min_trade_quality: "74" });
+assert.match(rejectedQuality.join(" "), /75 to 100/);
 const acceptedOwner = validateActiveDraft({
   max_planned_risk_pct: "20",
   max_aggregate_open_risk_pct: "30",
   daily_loss_pct: "48",
   max_spread: "1.00",
-  max_concurrent_positions: "5",
-  min_trade_quality: "70",
-  min_reward_risk: "0.50",
+  max_concurrent_positions: "1",
+  min_trade_quality: "75",
+  min_reward_risk: "1.50",
 });
 assert.deepEqual(acceptedOwner, []);
 const rejectedRisk = validateActiveDraft({ max_planned_risk_pct: "20.01" });
@@ -112,6 +112,8 @@ const rejectedBook = validateActiveDraft({
   max_aggregate_open_risk_pct: "30.01",
 });
 assert.match(rejectedBook.join(" "), /30%/);
+const rejectedPositions = validateActiveDraft({ max_concurrent_positions: "2" });
+assert.match(rejectedPositions.join(" "), /1 to 1/);
 
 const experimentDraft = {
   max_planned_risk_pct: "14",
@@ -120,7 +122,7 @@ const experimentDraft = {
   max_lot: "0.01",
   max_spread: "0.45",
   min_reward_risk: "0.20",
-  min_trade_quality: "70",
+  min_trade_quality: "75",
   stop_atr_multiplier: "1.00",
   max_concurrent_positions: "1",
 };
@@ -133,7 +135,7 @@ const experimentalChanges = buildExperimentalChanges(experimentDraft);
 assert.equal(experimentalChanges.promote_experimental, undefined);
 const nested = experimentalChanges.experimental as Record<string, unknown>;
 assert.equal(nested.min_reward_risk, "0.20");
-assert.equal(nested.min_trade_quality, 70);
+assert.equal(nested.min_trade_quality, 75);
 assert.equal("min_reward_risk" in buildPolicyChanges({
   draft: { ...experimentDraft, min_reward_risk: "1.50" },
   m1: "defer",

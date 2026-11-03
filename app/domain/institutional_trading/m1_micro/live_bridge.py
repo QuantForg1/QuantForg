@@ -323,6 +323,7 @@ def _submit_entry(
     )
 
     request_id = f"m1-{decision.signal_id}"[:64]
+    comment = f"m1:{decision.signal_id}"[:31]
     intent = parse_order_intent(
         symbol=symbol,
         side=str(decision.action),
@@ -331,7 +332,7 @@ def _submit_entry(
         stop_loss=str(decision.stop),
         take_profit=str(decision.target),
         magic=int(QUANTFORG_MAGIC),
-        comment=f"m1:{decision.signal_id}"[:31],
+        comment=comment,
     )
     result = submit_market(
         user_id=user_id,
@@ -349,6 +350,25 @@ def _submit_entry(
     )
     note["broker_ticket"] = int(ticket) if ticket else None
     note["broker_message"] = str(getattr(result, "message", "") or "")[:300]
+    # Stamp strategy_id for closed-loop StrategyStatsBook (MT5 comment unchanged).
+    from app.domain.institutional_trading.management.class_policy import (
+        comment_hash_suffix,
+        remember_fill_metadata,
+    )
+
+    remember_fill_metadata(
+        {
+            "trade_class": "SCALP",
+            "management_profile": "scalp",
+            "comment_hash": comment_hash_suffix(comment),
+            "strategy_id": "m1_micro",
+            "strategy_name": "M1 Micro",
+            "symbol": symbol,
+            "direction": str(decision.action).upper(),
+            "magic": int(QUANTFORG_MAGIC),
+            "comment": comment,
+        }
+    )
 
 
 def _maybe_close(

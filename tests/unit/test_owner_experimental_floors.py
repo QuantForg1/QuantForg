@@ -1,7 +1,7 @@
-"""Owner policy: 20% risk, 30% book, ATR 1.00, quality 70, net RR 0.50.
+"""Owner policy: 20% risk, 30% book, ATR 1.00, quality 75, net RR 1.50.
 
-The active reward:risk floor is 0.50. Candidates 0.10, 0.15, and 0.20 can be
-saved under experimental and stay inactive until promoted. Quality 70-100 and
+The active reward:risk floor is 1.50. Candidates 0.10, 0.15, and 0.20 can be
+saved under experimental and stay inactive until promoted. Quality 75-100 and
 ATR multipliers 1.00, 1.25, and 1.50 remain savable on the active document.
 Stops inside one ATR are rejected. Unknown commission is not zero. The
 planned-risk ceiling is 20% and the shared book ceiling is 30%. Daily loss
@@ -39,31 +39,31 @@ def _policy(**changes: object):
     return use_runtime_policy({**approved_baseline(), **changes})
 
 
-def test_owner_defaults_are_20_percent_atr_1_quality_70_and_zero_commission() -> None:
-    assert Decimal("0.50") == ol.OWNER_MIN_REWARD_RISK
-    assert ol.OWNER_MIN_TRADE_QUALITY == 70
+def test_owner_defaults_are_20_percent_atr_1_quality_75_and_zero_commission() -> None:
+    assert Decimal("1.50") == ol.OWNER_MIN_REWARD_RISK
+    assert ol.OWNER_MIN_TRADE_QUALITY == 75
     assert Decimal("1.00") == ol.OWNER_SL_ATR_MULTIPLIER
     assert Decimal("0.01") == ol.OWNER_MAX_LOT
     assert Decimal("20.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
     assert Decimal("30.0") == ol.OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
     assert Decimal("48.0") == ol.OWNER_DAILY_LOSS_PCT
-    assert ol.OWNER_MAX_OPEN_POSITIONS == 5
+    assert ol.OWNER_MAX_OPEN_POSITIONS == 1
     baseline = approved_baseline()
-    assert baseline["min_reward_risk"] == "0.50"
-    assert baseline["min_trade_quality"] == 70
+    assert baseline["min_reward_risk"] == "1.50"
+    assert baseline["min_trade_quality"] == 75
     assert baseline["stop_atr_multiplier"] == "1.00"
     assert baseline["max_planned_risk_pct"] == "20.0"
     assert baseline["max_aggregate_open_risk_pct"] == "30.0"
     assert baseline["daily_loss_pct"] == "48.0"
     assert baseline["max_spread"] == "1.00"
-    assert baseline["max_concurrent_positions"] == 5
+    assert baseline["max_concurrent_positions"] == 1
     commission = baseline["commission"]
     assert commission["amount_usd"] == "0.00"
     assert commission["status"] == "VERIFIED_BY_OWNER_SUPPORT"
     assert commission["source"] == "OWNER_CONFIRMED_WELTRADE_SUPPORT"
     assert commission["symbol"] == "XAUUSD"
-    assert active_min_reward_risk() == Decimal("0.50")
-    assert active_min_trade_quality() == 70
+    assert active_min_reward_risk() == Decimal("1.50")
+    assert active_min_trade_quality() == 75
     assert active_stop_atr_multiplier() == Decimal("1.00")
 
 
@@ -75,7 +75,7 @@ def _experiment(reward: str = "0.20") -> dict[str, object]:
         "max_lot": "0.01",
         "max_spread": "0.45",
         "min_reward_risk": reward,
-        "min_trade_quality": 70,
+        "min_trade_quality": 75,
         "stop_atr_multiplier": "1.00",
         "max_concurrent_positions": 1,
     }
@@ -83,10 +83,10 @@ def _experiment(reward: str = "0.20") -> dict[str, object]:
 
 def test_admin_accepts_only_the_authorized_experiment() -> None:
     base = approved_baseline()
-    for raw in ("0.50", "1.20", "1.49", "1.50", "2.00"):
+    for raw in ("1.50", "1.75", "2.00", "3.00"):
         saved = validate_policy_changes(base, {"min_reward_risk": raw})
         assert saved.ok, (raw, saved.errors)
-    for raw in ("0.10", "0.15", "0.20", "0.09", "0.11", "0.49"):
+    for raw in ("0.10", "0.15", "0.20", "0.09", "0.11", "0.49", "0.50", "1.20", "1.49"):
         saved = validate_policy_changes(base, {"min_reward_risk": raw})
         assert saved.ok is False
         assert any("min_reward_risk" in err for err in saved.errors)
@@ -94,12 +94,12 @@ def test_admin_accepts_only_the_authorized_experiment() -> None:
         saved = validate_policy_changes(base, {"experimental": _experiment(raw)})
         assert saved.ok, (raw, saved.errors)
         assert saved.document is not None
-        assert saved.document["min_reward_risk"] == "0.50"
+        assert saved.document["min_reward_risk"] == "1.50"
         assert saved.document["experimental_promoted"] is False
         assert saved.document["experimental"]["min_reward_risk"] == raw
-    assert validate_policy_changes(base, {"min_trade_quality": 70}).ok
+    assert validate_policy_changes(base, {"min_trade_quality": 75}).ok
     assert validate_policy_changes(base, {"min_trade_quality": 100}).ok
-    assert validate_policy_changes(base, {"min_trade_quality": 69}).ok is False
+    assert validate_policy_changes(base, {"min_trade_quality": 74}).ok is False
     for raw in ("1.00", "1.25", "1.50"):
         assert validate_policy_changes(base, {"stop_atr_multiplier": raw}).ok
     for raw in ("0.75", "0.90"):
@@ -125,8 +125,8 @@ def test_illegal_saved_values_fail_closed_to_the_published_default() -> None:
         stop_atr_multiplier="0.75",
     )
     try:
-        assert active_min_reward_risk() == Decimal("0.50")
-        assert active_min_trade_quality() == 70
+        assert active_min_reward_risk() == Decimal("1.50")
+        assert active_min_trade_quality() == 75
         assert active_stop_atr_multiplier() == Decimal("1.00")
     finally:
         reset_runtime_policy(token)
@@ -138,8 +138,8 @@ def test_saved_experiment_stays_inactive_until_promoted() -> None:
     assert saved.ok and saved.document is not None
     token = use_runtime_policy(saved.document)
     try:
-        assert active_min_reward_risk() == Decimal("0.50")
-        assert active_min_trade_quality() == 70
+        assert active_min_reward_risk() == Decimal("1.50")
+        assert active_min_trade_quality() == 75
     finally:
         reset_runtime_policy(token)
     promoted = validate_policy_changes(
@@ -159,12 +159,12 @@ def test_saved_experiment_stays_inactive_until_promoted() -> None:
         reset_runtime_policy(token)
     top_level = _policy(
         min_reward_risk="0.15",
-        min_trade_quality=70,
+        min_trade_quality=75,
         stop_atr_multiplier="1.25",
     )
     try:
-        assert active_min_reward_risk() == Decimal("0.50")
-        assert active_min_trade_quality() == 70
+        assert active_min_reward_risk() == Decimal("1.50")
+        assert active_min_trade_quality() == 75
         assert active_stop_atr_multiplier() == Decimal("1.25")
     finally:
         reset_runtime_policy(top_level)
@@ -174,27 +174,27 @@ def test_promoted_experiment_is_what_the_gates_enforce() -> None:
     token = _policy(
         min_reward_risk="0.15",
         experimental_promoted=True,
-        min_trade_quality=70,
+        min_trade_quality=80,
         stop_atr_multiplier="1.25",
     )
     try:
         assert active_min_reward_risk() == Decimal("0.15")
-        assert active_min_trade_quality() == 70
+        assert active_min_trade_quality() == 80
         assert active_stop_atr_multiplier() == Decimal("1.25")
-        passed = _gates(70)
+        passed = _gates(80)
         assert not any(
             r.startswith("OWNER_MIN_TRADE_QUALITY") for r in passed.hard_rejects
         )
-        low = _gates(69)
-        assert any("trade quality 69 < 70" in r for r in low.hard_rejects)
+        low = _gates(79)
+        assert any("trade quality 79 < 80" in r for r in low.hard_rejects)
     finally:
         reset_runtime_policy(token)
 
 
-def test_unset_quality_70_passes_and_69_is_rejected() -> None:
-    assert not any("OWNER_MIN_TRADE_QUALITY" in r for r in _gates(70).hard_rejects)
-    low = _gates(69)
-    assert any("trade quality 69 < 70" in r for r in low.hard_rejects)
+def test_unset_quality_75_passes_and_74_is_rejected() -> None:
+    assert not any("OWNER_MIN_TRADE_QUALITY" in r for r in _gates(75).hard_rejects)
+    low = _gates(74)
+    assert any("trade quality 74 < 75" in r for r in low.hard_rejects)
 
 
 def test_net_rr_includes_spread_slippage_and_known_commission_only() -> None:
@@ -268,18 +268,7 @@ def test_owner_entry_uses_the_saved_net_floor_and_slippage() -> None:
 
 def test_experimental_floor_can_select_a_structure_target_gross_rr_does_not() -> None:
     snapshot = _snapshot(highs=("4134.50", "4135.20", "4140.00"))
-    strict = _policy(min_reward_risk="1.50")
-    try:
-        blocked = compute_structure_targets(
-            snapshot,  # type: ignore[arg-type]
-            direction=TradeDirection.BUY,
-            entry=ENTRY,
-            atr=ATR,
-            config=AiScalpingConfig(),
-        )
-    finally:
-        reset_runtime_policy(strict)
-    assert blocked.take_profit is None
+    # Published / active floor 1.50 rejects near levels (net RR < 1.50).
     published = compute_structure_targets(
         snapshot,  # type: ignore[arg-type]
         direction=TradeDirection.BUY,
@@ -287,7 +276,7 @@ def test_experimental_floor_can_select_a_structure_target_gross_rr_does_not() ->
         atr=ATR,
         config=AiScalpingConfig(),
     )
-    assert published.take_profit == Decimal("4134.50")
+    assert published.take_profit is None
     token = _policy(min_reward_risk="0.10", experimental_promoted=True)
     try:
         chosen = compute_structure_targets(
@@ -370,17 +359,18 @@ def test_break_even_win_rate_rises_when_costs_lower_net_rr() -> None:
 
 
 def test_gross_precheck_follows_the_saved_floor() -> None:
+    # Active floor >= 1: gross precheck only requires TP profit > SL loss.
     assert ol.gross_distance_rr_block(
-        tp_distance=Decimal("0.40"), stop_distance=Decimal("1")
+        tp_distance=Decimal("1.00"), stop_distance=Decimal("1")
     )
-    assert ol.estimated_rr_block(Decimal("0.40"))
+    assert ol.estimated_rr_block(Decimal("1.00"))
     assert (
         ol.gross_distance_rr_block(
-            tp_distance=Decimal("0.50"), stop_distance=Decimal("1")
+            tp_distance=Decimal("1.50"), stop_distance=Decimal("1")
         )
         is None
     )
-    assert ol.estimated_rr_block(Decimal("0.50")) is None
+    assert ol.estimated_rr_block(Decimal("1.50")) is None
     token = _policy(min_reward_risk="0.10", experimental_promoted=True)
     try:
         assert (
