@@ -350,11 +350,16 @@ def select_owner_structure_tp(
     commission: Decimal | None = None,
     contract_size: Decimal | None = None,
     volume: Decimal | None = None,
+    spread_already_in_stop: bool = False,
 ) -> OwnerTpChoice:
     """Nearest of the first ``max_levels`` levels with RR after spread >= min.
 
     ``levels`` come from :func:`owner_tp_levels` (nearest first). Never looks
     past the second level and never stretches a TP beyond a real level.
+
+    When the stop was placed with the owner spread buffer already embedded in
+    ``stop_distance``, set ``spread_already_in_stop=True`` so net RR does not
+    double-count the spread (Phase-6 intelligence fix).
     """
     considered: list[tuple[int, Decimal, str, Decimal | None]] = []
     for idx, (price, src) in enumerate(levels[:max_levels], start=1):
@@ -366,6 +371,7 @@ def select_owner_structure_tp(
             commission=commission,
             contract_size=contract_size,
             volume=volume,
+            spread_already_in_stop=spread_already_in_stop,
         ).ratio
         considered.append((idx, price, src, rr))
         if rr is not None and rr >= min_rr:
@@ -706,6 +712,9 @@ def _owner_targets(
         entry=entry,
         merge_tolerance=spread if spread > 0 else Decimal("0.01"),
     )
+    # Owner SL placement already widens structure by the spread buffer
+    # (raw_distance = structure + spread). Do not add spread a second time in
+    # net RR — that falsely blocked otherwise valid >=1.50 setups.
     choice = select_owner_structure_tp(
         levels,
         entry=entry,
@@ -716,6 +725,7 @@ def _owner_targets(
         commission=fee,
         contract_size=Decimal("100"),
         volume=OWNER_MAX_LOT,
+        spread_already_in_stop=True,
     )
     tried = ", ".join(
         f"L{idx} {src} {price} RR "

@@ -335,7 +335,13 @@ def summarize_advisory_agreement(
     live_direction: str,
     votes: tuple[AdvisoryVote, ...] | list[AdvisoryVote],
 ) -> dict[str, Any]:
-    """Summarize how advisory engines relate to the live pack direction."""
+    """Summarize how advisory engines relate to the live pack direction.
+
+    Strong disagreement that raises SOE evidence bars requires opposite
+    BUY/SELL votes from *real* engines (plugins / alpha / m1). Score-factor
+    proxies alone must not invent disagreement that blocks otherwise valid
+    pack winners (Phase-6 collaboration fix).
+    """
     side = str(live_direction or "NONE").upper()
     agree = [
         v
@@ -352,6 +358,7 @@ def summarize_advisory_agreement(
         and v.direction != side
     ]
     hold = [v for v in votes if v.direction not in {"BUY", "SELL"}]
+    real_disagree = [v for v in disagree if v.source != "score_factor_advisory"]
     agree_conf = round(sum(v.confidence for v in agree) / len(agree)) if agree else 0
     return {
         "live_direction": side,
@@ -363,6 +370,7 @@ def summarize_advisory_agreement(
         "agree_ids": [v.strategy_id for v in agree],
         "disagree_ids": [v.strategy_id for v in disagree],
         "hold_ids": [v.strategy_id for v in hold],
-        "strong_disagreement": len(disagree) >= 2 and len(agree) == 0,
+        "strong_disagreement": len(real_disagree) >= 2 and len(agree) == 0,
         "supportive": len(agree) >= 2 and len(disagree) == 0,
+        "real_engine_disagree_count": len(real_disagree),
     }

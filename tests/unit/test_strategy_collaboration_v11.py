@@ -62,7 +62,7 @@ def _base_score(**overrides):
 
 @pytest.mark.unit
 def test_soe_version_is_v11() -> None:
-    assert ORCHESTRATION_VERSION == "soe-v1.3.0"
+    assert ORCHESTRATION_VERSION == "soe-v1.4.0"
 
 
 @pytest.mark.unit
@@ -142,9 +142,10 @@ def test_strong_advisory_disagreement_prefers_no_trade() -> None:
             "momentum_scalping",
         )
     ]
+    # Phase-6: strong disagreement requires real engines (not score-factor proxies).
     disagree = (
-        AdvisoryVote("rsi", "RSI", "SELL", 80, "disagree", "score_factor_advisory"),
-        AdvisoryVote("macd", "MACD", "SELL", 82, "disagree", "score_factor_advisory"),
+        AdvisoryVote("rsi", "RSI", "SELL", 80, "disagree", "institutional_alpha"),
+        AdvisoryVote("macd", "MACD", "SELL", 82, "disagree", "strategy_engine_plugin"),
     )
     verdict = orchestrate_strategies(
         (mid, *failed), advisory_votes=disagree, score=score

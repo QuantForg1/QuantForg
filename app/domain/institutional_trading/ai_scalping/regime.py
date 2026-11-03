@@ -27,6 +27,36 @@ class RegimeAssessment:
         }
 
 
+def _atr_vol_bands(
+    atr_pct: Decimal | None,
+    *,
+    symbol: str | None = None,
+) -> tuple[bool, bool, bool]:
+    """Return (high_vol, mid_vol, low_vol) using asset-class ATR band thresholds.
+
+    Absolute 0.4 / 1.5 %% floors never fire for XAUUSD M5/M15 tape (typical
+    ATR%% is 0.08-0.35), so breakout/expansion regimes were unreachable. Gold
+    uses classify_atr_band_thresholds (0.08 / 0.35); other classes keep the
+    legacy absolute bands when no symbol is supplied.
+    """
+    if atr_pct is None:
+        return False, False, False
+    low_thr = Decimal("0.4")
+    high_thr = Decimal("1.5")
+    if symbol:
+        from app.domain.institutional_trading.ai_scalping.asset_class import (
+            classify_atr_band_thresholds,
+        )
+
+        low_thr, high_thr = classify_atr_band_thresholds(
+            symbol, gold_low=low_thr, gold_high=high_thr
+        )
+    high_vol = atr_pct >= high_thr
+    low_vol = atr_pct <= low_thr
+    mid_vol = low_thr < atr_pct < high_thr
+    return high_vol, mid_vol, low_vol
+
+
 def classify_scalping_regime(
     *,
     alignment_score: int = 0,
@@ -36,12 +66,11 @@ def classify_scalping_regime(
     sweep_count: int = 0,
     range_like: bool = False,
     volume_expanding: bool = False,
+    symbol: str | None = None,
 ) -> RegimeAssessment:
     """Map structure + volatility artefacts → adaptive scalping regime."""
     reasons: list[str] = []
-    high_vol = atr_pct is not None and atr_pct >= Decimal("1.5")
-    low_vol = atr_pct is not None and atr_pct <= Decimal("0.4")
-    mid_vol = atr_pct is not None and Decimal("0.4") < atr_pct < Decimal("1.5")
+    high_vol, mid_vol, low_vol = _atr_vol_bands(atr_pct, symbol=symbol)
 
     # Compression first — quiet tape dominates behaviour
     if low_vol and (range_like or alignment_score < 55):
@@ -143,4 +172,5 @@ def regime_from_snapshot_factors(factors: dict[str, Any]) -> RegimeAssessment:
         sweep_count=int(factors.get("sweeps") or 0),
         range_like=bool(factors.get("range_like")),
         volume_expanding=bool(factors.get("volume_expanding")),
+        symbol=str(factors["symbol"]) if factors.get("symbol") else None,
     )

@@ -1149,6 +1149,8 @@ class InstitutionalExecutionEngine:
                             slippage=slip_price,
                             tick_size=fit_tick,
                             commission=known_fee,
+                            # Owner structure SL already embeds the spread buffer.
+                            stop_includes_spread_buffer=True,
                         )
                         owner_presend_ctx = (
                             account.equity,

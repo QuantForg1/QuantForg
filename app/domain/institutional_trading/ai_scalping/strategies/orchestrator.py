@@ -22,7 +22,7 @@ from app.domain.institutional_trading.ai_scalping.strategies.validation_status i
     strategy_health_snapshot,
 )
 
-ORCHESTRATION_VERSION = "soe-v1.3.0"
+ORCHESTRATION_VERSION = "soe-v1.4.0"
 
 # Solo passer must clear a higher quality bar (prefer no trade).
 MIN_SOLO_QUALITY = 82
@@ -491,11 +491,17 @@ def orchestrate_strategies(
     raw_confluence = len(selectable)
     # Independent thesis clusters only — trend pack passers are one vote.
     confluence_count = _effective_confluence_count(selectable)
+    # Same-direction multi-passer agreement inside one thesis cluster is real
+    # collaborative evidence (not independent confluence). It may clear the
+    # solo quality bar at MIN_CONFLUENT_QUALITY without lowering owner Q75.
+    pack_agreement = raw_confluence >= 2
     # Agreement quality: share of live pack that passed and remained selectable.
     confluence_score = max(
         0, min(100, round(100.0 * raw_confluence / max(1, len(evals))))
     )
     confluence_bonus = 4.0 if confluence_count >= MIN_CONFLUENCE_COUNT else 0.0
+    if pack_agreement and confluence_count < MIN_CONFLUENCE_COUNT:
+        confluence_bonus = max(confluence_bonus, 2.0)
 
     ranked = sorted(
         selectable,
@@ -579,6 +585,11 @@ def orchestrate_strategies(
             reasons.append(
                 f"advisory_supportive:{agreement.get('agree_count')} engines"
             )
+        # Multi-strategy pack agreement (same thesis cluster) — collaborative
+        # evidence without inventing independent confluence.
+        if pack_agreement and best.quality >= MIN_CONFLUENT_QUALITY:
+            solo_ok = True
+            reasons.append(f"pack_agreement:{raw_confluence}_strategies")
         # True single-passer (not a correlated multi-passer cluster) with RR
         # below preferred needs stronger quality evidence.
         rr_pref = _score_rr(score) if isinstance(score, dict) else None
