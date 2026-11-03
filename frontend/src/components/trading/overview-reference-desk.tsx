@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import {
+  Activity,
+  Coins,
+  Layers,
+  LineChart,
+  Shield,
+  Wallet,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
+import { OverviewTradePanel } from "@/components/trading/overview-trade-panel";
 import { TRADING_SYMBOL, displayTradingSymbol } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
@@ -11,17 +20,27 @@ function KpiCard({
   value,
   hint,
   bar,
+  icon,
 }: {
   label: string;
   value: string;
   hint?: string;
   bar?: number | null;
+  icon: ReactNode;
 }) {
   return (
     <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-        {label}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          {label}
+        </p>
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_55%,transparent)] text-[var(--accent)]"
+          aria-hidden
+        >
+          {icon}
+        </span>
+      </div>
       <p className="mt-2 text-xl font-semibold tabular tracking-tight text-[var(--fg)]">
         {value}
       </p>
@@ -41,8 +60,8 @@ function KpiCard({
 }
 
 /**
- * Reference Overview composition: KPI strip and live chart + AI panel.
- * Order ticket / pre-trade live on Terminal — not on Overview.
+ * Reference Overview composition: KPI strip, live chart + AI panel, and Trade ticket.
+ * Order entry reuses ExecutionOrderTicket — never a parallel engine.
  * All figures are caller-supplied live session / research values — never samples.
  */
 export function OverviewReferenceDesk({
@@ -61,6 +80,8 @@ export function OverviewReferenceDesk({
   resistance,
   regime,
   confidencePct,
+  sessionName,
+  lastUpdate,
   topSignal,
 }: {
   equity: string;
@@ -78,6 +99,8 @@ export function OverviewReferenceDesk({
   resistance: string;
   regime: string;
   confidencePct: number | null;
+  sessionName: string;
+  lastUpdate: string;
   topSignal: Record<string, unknown> | null;
 }) {
   const [timeframe, setTimeframe] = useState("M15");
@@ -100,13 +123,26 @@ export function OverviewReferenceDesk({
         aria-label="Account metrics"
         className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
       >
-        <KpiCard label="Account Equity" value={equity} />
-        <KpiCard label="Available Balance" value={balance} />
-        <KpiCard label="Today's P&L" value={todayPnl} />
+        <KpiCard
+          label="Account Equity"
+          value={equity}
+          icon={<Wallet className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Available Balance"
+          value={balance}
+          icon={<Coins className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Today's P&L"
+          value={todayPnl}
+          icon={<LineChart className="h-4 w-4" />}
+        />
         <KpiCard
           label="Open Positions"
           value={openPositions}
           hint={`${pendingOrders} pending orders`}
+          icon={<Layers className="h-4 w-4" />}
         />
         <KpiCard
           label="Account Risk"
@@ -117,39 +153,44 @@ export function OverviewReferenceDesk({
               : `${Math.round(accountRiskPct)}% of daily limit`
           }
           bar={accountRiskPct}
+          icon={<Shield className="h-4 w-4" />}
         />
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
-        <section className="min-h-[380px] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">
-                {displayTradingSymbol(TRADING_SYMBOL)}
-              </h2>
-              <span className="font-mono text-sm tabular text-[var(--fg-muted)]">
-                {currentPrice}
-              </span>
-              <Badge tone={connected ? "success" : "neutral"}>
-                {connected ? "LIVE" : "OFFLINE"}
-              </Badge>
+        <div className="space-y-4">
+          <section className="min-h-[380px] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold">
+                  {displayTradingSymbol(TRADING_SYMBOL)}
+                </h2>
+                <span className="font-mono text-lg font-semibold tabular tracking-tight text-[var(--fg)] sm:text-xl">
+                  {currentPrice}
+                </span>
+                <Badge tone={connected ? "success" : "neutral"}>
+                  {connected ? "LIVE" : "OFFLINE"}
+                </Badge>
+              </div>
             </div>
-          </div>
-          <WorkspaceChart
-            symbol={TRADING_SYMBOL}
-            connected={connected}
-            timeframe={timeframe}
-            onTimeframeChange={setTimeframe}
-            chartType={chartType}
-            onChartTypeChange={setChartType}
-            showVolume={showVolume}
-            onShowVolumeChange={setShowVolume}
-            fullscreen={fullscreen}
-            onFullscreenChange={setFullscreen}
-          />
-        </section>
+            <WorkspaceChart
+              symbol={TRADING_SYMBOL}
+              connected={connected}
+              timeframe={timeframe}
+              onTimeframeChange={setTimeframe}
+              chartType={chartType}
+              onChartTypeChange={setChartType}
+              showVolume={showVolume}
+              onShowVolumeChange={setShowVolume}
+              fullscreen={fullscreen}
+              onFullscreenChange={setFullscreen}
+            />
+          </section>
 
-        <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px]">
+          <OverviewTradePanel connected={connected} />
+        </div>
+
+        <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px] xl:self-start">
           <div
             className="flex gap-1 border-b border-[var(--border)] px-2 pt-2"
             role="tablist"
@@ -218,6 +259,14 @@ export function OverviewReferenceDesk({
                 <dt className="text-[var(--fg-muted)]">Market Regime</dt>
                 <dd className="font-medium">{regime}</dd>
               </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[var(--fg-muted)]">Session</dt>
+                <dd className="font-medium">{sessionName}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[var(--fg-muted)]">Last Update</dt>
+                <dd className="font-medium">{lastUpdate}</dd>
+              </div>
             </dl>
             <div>
               <div className="flex items-center justify-between gap-2">
@@ -237,10 +286,22 @@ export function OverviewReferenceDesk({
                 />
               </div>
             </div>
-            {intelTab === "signal" && topSignal ? (
+            {intelTab === "signal" ? (
+              topSignal ? (
+                <p className="text-xs text-[var(--fg-muted)]">
+                  Active research row for {displayTradingSymbol(TRADING_SYMBOL)}. Open Signals
+                  for the full desk.
+                </p>
+              ) : (
+                <p className="flex items-start gap-2 text-xs text-[var(--fg-muted)]">
+                  <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  No live gold signal is available right now.
+                </p>
+              )
+            ) : null}
+            {intelTab === "analysis" ? (
               <p className="text-xs text-[var(--fg-muted)]">
-                Active research row for {displayTradingSymbol(TRADING_SYMBOL)}. Open Signals
-                for the full desk.
+                Analysis detail uses the live research bias and levels shown above.
               </p>
             ) : null}
             {intelTab === "news" ? (

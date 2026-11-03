@@ -86,6 +86,8 @@ export const ExecutionOrderTicket = forwardRef<
     /** Catalogue/symbol known independently of quotes. */
     symbolAvailable?: boolean | null;
     dense?: boolean;
+    /** Parent supplies chrome (e.g. Overview Trade panel) — skip local title/border. */
+    embedded?: boolean;
   }
 >(function ExecutionOrderTicket(
   {
@@ -98,6 +100,7 @@ export const ExecutionOrderTicket = forwardRef<
     marketOpen = null,
     symbolAvailable = null,
     dense = false,
+    embedded = false,
   },
   ref,
 ) {
@@ -691,12 +694,14 @@ export const ExecutionOrderTicket = forwardRef<
   return (
     <div
       className={cn(
-        dense ? "border-0" : "rounded-[var(--radius-os)] border border-[var(--border)]",
+        dense || embedded
+          ? "border-0"
+          : "rounded-[var(--radius-os)] border border-[var(--border)]",
         execFlash && "qf-exec-flash",
       )}
       aria-busy={busy}
     >
-      {!dense ? (
+      {!dense && !embedded ? (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
           <h2 className="text-sm font-semibold tracking-tight">Order Ticket</h2>
           <Badge tone={connected ? "success" : "warning"}>

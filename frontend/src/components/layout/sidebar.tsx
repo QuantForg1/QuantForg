@@ -25,7 +25,7 @@ import {
   SHELL_SIDEBAR_MIN,
   type ShellChromeState,
 } from "@/lib/workspace/shell-chrome";
-import { BrandLogo, BrandMark } from "@/components/brand/brand-logo";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 
@@ -187,22 +187,11 @@ function NavBody({
   );
 }
 
-function Brand({ collapsed }: { collapsed?: boolean }) {
+/** Mobile drawer only — desktop brand lives once in the top header. */
+function MobileBrand() {
   return (
-    <div
-      className={cn(
-        "flex h-12 shrink-0 items-center border-b border-[var(--border)]",
-        collapsed ? "justify-center px-2" : "gap-2.5 px-3",
-      )}
-    >
-      {collapsed ? (
-        <>
-          <BrandMark size={28} />
-          <span className="sr-only">QuantForg Institutional Trading Intelligence</span>
-        </>
-      ) : (
-        <BrandLogo size={28} caption="Institutional Trading Intelligence" />
-      )}
+    <div className="flex h-12 shrink-0 items-center gap-2.5 px-3">
+      <BrandLogo size={28} caption="Institutional Trading Intelligence" />
     </div>
   );
 }
@@ -263,7 +252,6 @@ export function Sidebar() {
       className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
       aria-label="Workspace rail"
     >
-      <Brand collapsed={chrome.collapsed} />
       <Suspense fallback={<div className="flex-1" aria-hidden />}>
         <NavBody collapsed={chrome.collapsed} />
       </Suspense>
@@ -380,7 +368,7 @@ export function MobileNav() {
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pr-2">
               <div id={titleId}>
-                <Brand />
+                <MobileBrand />
               </div>
               <Button
                 ref={closeRef}
