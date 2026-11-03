@@ -11,6 +11,15 @@ from app.domain.institutional_trading.ai_scalping.strategies.models import (
     StrategyEvaluation,
     StrategyId,
 )
+from app.domain.institutional_trading.ai_scalping.strategies.monitoring import (
+    build_strategy_performance_monitor,
+)
+from app.domain.institutional_trading.ai_scalping.strategies.orchestrator import (
+    ORCHESTRATION_VERSION,
+    OrchestrationVerdict,
+    catalog_participation_policy,
+    orchestrate_strategies,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.registry import (
     ALL_STRATEGIES,
     BREAKOUT_SCALPING,
@@ -35,19 +44,24 @@ __all__ = [
     "ALL_STRATEGIES",
     "BREAKOUT_SCALPING",
     "MOMENTUM_SCALPING",
+    "ORCHESTRATION_VERSION",
     "RANGE_MEAN_REVERSION",
     "SMC_SCALPING",
     "STRATEGY_BY_ID",
     "TREND_CONTINUATION",
+    "OrchestrationVerdict",
     "StrategyDefinition",
     "StrategyEvaluation",
     "StrategyId",
     "StrategyStatsBook",
     "attach_strategies_to_scores",
     "best_strategy_for_symbol",
+    "build_strategy_performance_monitor",
+    "catalog_participation_policy",
     "evaluate_all_strategies",
     "evaluate_strategy",
     "get_strategy_stats_book",
     "list_strategy_ids",
+    "orchestrate_strategies",
     "select_global_best",
 ]

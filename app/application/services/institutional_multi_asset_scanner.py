@@ -1558,6 +1558,7 @@ async def _run_institutional_multi_asset_scan_body(
 
             book = get_strategy_stats_book()
             boosts = book.live_rank_boosts()
+            stats_snap = book.snapshot()
             by_sym: dict[str, Any] = {}
             for row in scored:
                 sym = str(row.get("symbol") or "").upper()
@@ -1566,9 +1567,28 @@ async def _run_institutional_multi_asset_scan_body(
                 for ev in evals:
                     book.record_evaluation(ev.strategy_id, passed=ev.passed)
             scored, strategy_global_best, strategy_winners = (
-                attach_strategies_to_scores(scored, evaluations_by_symbol=by_sym)
+                attach_strategies_to_scores(
+                    scored,
+                    evaluations_by_symbol=by_sym,
+                    live_boosts=boosts,
+                    stats_snapshot=stats_snap,
+                )
             )
+            soe_blocked = [
+                str(r.get("symbol") or "").upper()
+                for r in scored
+                if isinstance(r, dict) and r.get("soe_prefer_no_trade")
+            ]
             if strategy_global_best is not None:
+                orch = None
+                for r in scored:
+                    if (
+                        isinstance(r, dict)
+                        and str(r.get("symbol") or "").upper()
+                        == strategy_global_best.symbol
+                    ):
+                        orch = r.get("strategy_orchestration")
+                        break
                 logger.warning(
                     "multi_strategy_best_opportunity",
                     strategy_id=strategy_global_best.strategy_id,
@@ -1576,13 +1596,27 @@ async def _run_institutional_multi_asset_scan_body(
                     quality=strategy_global_best.quality,
                     confidence=strategy_global_best.confidence,
                     direction=strategy_global_best.direction,
+                    soe_confluence=(
+                        (orch or {}).get("confluence_count")
+                        if isinstance(orch, dict)
+                        else None
+                    ),
+                    orchestration_version=(
+                        (orch or {}).get("orchestration_version")
+                        if isinstance(orch, dict)
+                        else None
+                    ),
                 )
             else:
                 logger.warning(
                     "multi_strategy_no_passer",
                     strategies_evaluated=5,
                     symbols=len(scored),
-                    note="SCALPING_V1 floors unchanged — no forced trades",
+                    soe_prefer_no_trade_symbols=soe_blocked,
+                    note=(
+                        "SOE prefer-no-trade — SCALPING_V1 floors unchanged; "
+                        "no forced trades"
+                    ),
                 )
         except Exception:
             logger.exception("multi_strategy_evaluation_failed")
@@ -1668,12 +1702,22 @@ async def _run_institutional_multi_asset_scan_body(
     )
     from app.domain.trading.gold_only import same_gold_identity
 
+    # SOE prefer-no-trade symbols (multi-strategy pack) — never promote as
+    # unspecialized fallbacks. Risk/OMS unchanged.
+    soe_no_trade_symbols = {
+        str(r.get("symbol") or "").upper()
+        for r in scored
+        if isinstance(r, dict) and r.get("soe_prefer_no_trade")
+    }
+
     # Portfolio-ranked eligible set — never promote a true extra-reject.
     # Gold identity (XAUUSD vs XAUUSD_i) must not drop a scored scalp.
     portfolio_eligible = {
         str(r.get("symbol") or "").upper()
         for r in ranked
-        if isinstance(r, dict) and not r.get("reject")
+        if isinstance(r, dict)
+        and not r.get("reject")
+        and str(r.get("symbol") or "").upper() not in soe_no_trade_symbols
     }
     portfolio_rows = [r for r in (scan.get("rows") or []) if isinstance(r, dict)]
 
@@ -1690,6 +1734,7 @@ async def _run_institutional_multi_asset_scan_body(
                 _portfolio_has(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
+                and sym not in soe_no_trade_symbols
             ):
                 best = {**(best or {}), **row}
                 best["symbol"] = sym
@@ -1702,6 +1747,9 @@ async def _run_institutional_multi_asset_scan_body(
     )
     if best and bool(scan.get("blocked_by_portfolio")):
         best_symbol = None
+    if best_symbol and best_symbol in soe_no_trade_symbols:
+        best_symbol = None
+        best = None
 
     # Ranked eligible handoff list — independent symbols may all enter
     # (max_entries_per_cycle / max_open) without lowering quality.
@@ -1719,6 +1767,7 @@ async def _run_institutional_multi_asset_scan_body(
                 and _portfolio_has(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
+                and sym not in soe_no_trade_symbols
                 and sym not in seen_elig
             ):
                 eligible_symbols.append(sym)
@@ -1728,7 +1777,12 @@ async def _run_institutional_multi_asset_scan_body(
                 if not isinstance(r, dict) or r.get("reject"):
                     continue
                 sym = str(r.get("symbol") or "").upper()
-                if sym and sym not in seen_elig and not _already_open(sym):
+                if (
+                    sym
+                    and sym not in seen_elig
+                    and sym not in soe_no_trade_symbols
+                    and not _already_open(sym)
+                ):
                     eligible_symbols.append(sym)
                     seen_elig.add(sym)
         if best_symbol and best_symbol not in seen_elig:
