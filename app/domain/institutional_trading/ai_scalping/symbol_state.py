@@ -5,6 +5,7 @@ v7 multi-asset layer. Does not alter v6.3 quality floors or risk knobs.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -71,14 +72,12 @@ class SymbolStateBook:
         raw = (symbol or "").strip().upper()
         if not raw:
             return raw
-        try:
+        with contextlib.suppress(Exception):
             from app.domain.trading.gold_only import GOLD_SYMBOL, is_gold_symbol
 
             # One desk key for XAUUSD / XAUUSD_i / GOLD — cooldown & requalify.
             if is_gold_symbol(raw):
                 return GOLD_SYMBOL
-        except Exception:  # noqa: S110 — fall back to raw key if gold helpers unavailable
-            pass
         return raw
 
     def get(self, symbol: str) -> SymbolExecutionState:

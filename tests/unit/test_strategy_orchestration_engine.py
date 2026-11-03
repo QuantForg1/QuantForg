@@ -410,7 +410,7 @@ def test_weak_mtf_alignment_prefers_no_trade() -> None:
 
 @pytest.mark.unit
 def test_solo_below_preferred_rr_needs_higher_quality() -> None:
-    from app.domain.institutional_trading.ai_scalping.strategies.advisory_collaboration import (
+    from app.domain.institutional_trading.ai_scalping.strategies.advisory_collaboration import (  # noqa: E501
         AdvisoryVote,
     )
     from app.domain.institutional_trading.ai_scalping.strategies.models import (
@@ -439,7 +439,7 @@ def test_solo_below_preferred_rr_needs_higher_quality() -> None:
             "momentum_scalping",
         )
     )
-    # Non-empty HOLD-only advisory skips score-factor collection (keeps RR gate isolated).
+    # HOLD-only advisory skips score-factor collection (isolates RR gate).
     hold_only = (
         AdvisoryVote(
             "neutral", "Neutral", "HOLD", 40, "isolated", "score_factor_advisory"

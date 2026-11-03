@@ -6,6 +6,7 @@ remains the attachment facade used by the multi-asset scanner.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.strategies.models import (
@@ -77,7 +78,7 @@ def attach_strategies_to_scores(
             row["strategy_rank_score"] = best.quality + best.live_rank_boost
             row["strategy_confluence_count"] = verdict.confluence_count
             row["strategy_confluence_score"] = verdict.confluence_score
-            try:
+            with contextlib.suppress(Exception):
                 from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
                     record_soe_verdict,
                 )
@@ -91,8 +92,6 @@ def attach_strategies_to_scores(
                     reasons=verdict.reasons,
                     selected_strategy_id=best.strategy_id,
                 )
-            except Exception:  # noqa: S110 — cycle activity must not break selection
-                pass
         else:
             row["strategy_id"] = None
             row["strategy_name"] = None
@@ -115,7 +114,7 @@ def attach_strategies_to_scores(
                 row["opportunity_eligible"] = False
                 if not row.get("reject"):
                     row["soe_blocks_selection"] = True
-                try:
+                with contextlib.suppress(Exception):
                     from app.domain.institutional_trading.ai_scalping.strategies.cycle_activity import (  # noqa: E501
                         record_soe_verdict,
                     )
@@ -124,8 +123,6 @@ def attach_strategies_to_scores(
                         decision="NO_TRADE",
                         reasons=verdict.reasons or ("soe_prefer_no_trade",),
                     )
-                except Exception:  # noqa: S110 — cycle activity must not break selection
-                    pass
         out.append(row)
     global_best = select_global_best(winners)
     return out, global_best, winners
