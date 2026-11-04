@@ -84,7 +84,7 @@ def test_risk_limits_still_reject_outside_the_former_window(
     assert "OWNER_GOLD_ONLY" in _codes(_valid(now=moment, symbol="EURUSD"))
     assert "OWNER_GOLD_ONLY" in _codes(_valid(now=moment, symbol="XAUJPY"))
     assert "OWNER_SL_REQUIRED" in _codes(_valid(now=moment, stop_loss=None))
-    low_rr = _valid(now=moment, take_profit=D("3999.00"))
+    low_rr = _valid(now=moment, take_profit=D("3999.60"))
     assert "OWNER_MIN_RR" in _codes(low_rr)
     wide = _valid(
         now=moment,

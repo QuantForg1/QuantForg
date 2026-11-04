@@ -203,7 +203,7 @@ def test_owner_checks_still_apply_in_shadow_mode(
         order_type="market",
         volume="0.01",
         stop_loss="2319.00",
-        take_profit="2321.50",  # RR far below 1.50
+        take_profit="2320.95",  # net RR below owner floor 0.20
     )
     pipeline, _ = engine.run_submit(
         user_id=uuid4(),

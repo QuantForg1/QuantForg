@@ -345,6 +345,8 @@ def test_authorized_m1_submits_when_measured_rr_clears_the_owner_floor(
         stop_dist = ask - setup.stop
         floor = active_min_reward_risk()
         need = floor * (stop_dist + spread) + Decimal("0.05")
+        # Round-trip cost gate requires target >= 1.5x cost (0.30 -> 0.45).
+        need = max(need, Decimal("0.46"))
         return replace(setup, target=ask + need)
 
     monkeypatch.setattr(m1_engine, "detect_setup", _detect_with_owner_rr)
@@ -402,7 +404,7 @@ def test_authorized_m1_withholds_when_measured_rr_is_below_owner_floor(
     monkeypatch.setattr(
         live_bridge,
         "reward_risk_after_spread",
-        lambda **_k: Decimal("0.49"),
+        lambda **_k: Decimal("0.15"),
     )
     token = use_runtime_policy(approved_baseline())
     sent: list[dict] = []

@@ -76,7 +76,7 @@ def test_scalping_v1_rr_internally_consistent() -> None:
     """fixed_tp_r and min_expected_rr must never contradict."""
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.fixed_tp_r == Decimal("0.50")
-    assert cfg.min_expected_rr == Decimal("0.50")
+    assert cfg.min_expected_rr == Decimal("0.20")
     assert cfg.min_expected_rr <= cfg.fixed_tp_r
     # Regime bumps must not push RR above fixed TP
     for regime in ("range", "compression", "expansion", "strong_trend"):
@@ -111,7 +111,7 @@ def test_high_vol_rr_floor_not_above_atr_geometry() -> None:
         assessment, atr_pct=Decimal("2.00"), config=cfg
     )
     assert profile.min_expected_rr <= geom
-    assert profile.min_expected_rr >= Decimal("0.50")
+    assert profile.min_expected_rr >= Decimal("0.20")
     assert profile.min_expected_rr >= cfg.min_expected_rr
 
 

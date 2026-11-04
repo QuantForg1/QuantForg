@@ -68,7 +68,7 @@ def test_owner_policy_floors_stay_at_the_authorized_values() -> None:
     assert Decimal("20.0") == OWNER_MAX_PLANNED_RISK_PCT
     assert Decimal("30.0") == OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
     assert Decimal("48.0") == OWNER_DAILY_LOSS_PCT
-    assert Decimal("0.50") == OWNER_MIN_REWARD_RISK
+    assert Decimal("0.20") == OWNER_MIN_REWARD_RISK
     assert OWNER_MIN_TRADE_QUALITY == 70
     assert Decimal("0.01") == OWNER_MAX_LOT
     assert Decimal("1.00") == OWNER_MAX_SPREAD
@@ -136,7 +136,7 @@ def test_no_catalogue_does_not_invent_a_suffix(gold_only: None) -> None:
 
 def test_invalid_structure_is_not_stretched_to_clear_owner_floor() -> None:
     targets = compute_structure_targets(
-        _snapshot(highs=("4133.40", "4134.00", "4140.00")),  # type: ignore[arg-type]
+        _snapshot(highs=("4133.05", "4133.39", "4140.00")),  # type: ignore[arg-type]
         direction=TradeDirection.BUY,
         entry=ENTRY,
         atr=ATR,
@@ -144,7 +144,7 @@ def test_invalid_structure_is_not_stretched_to_clear_owner_floor() -> None:
     )
     assert targets.take_profit is None
     assert targets.expected_net_rr is not None
-    assert targets.expected_net_rr <= Decimal("0.50")
+    assert targets.expected_net_rr < Decimal("0.20")
     assert targets.expected_rr is not None
     assert "4140.00" not in targets.reason
     assert "TP not stretched" in targets.reason

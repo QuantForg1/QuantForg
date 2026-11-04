@@ -76,8 +76,8 @@ export const ACTIVE_DAILY_LOSS_CEILING = 48;
 export const ACTIVE_SPREAD_CEILING = 1;
 export const ACTIVE_POSITION_CEILING = 1;
 export const ACTIVE_QUALITY_FLOOR = 70;
-export const ACTIVE_REWARD_RISK_FLOOR = 0.5;
-export const EXPERIMENTAL_REWARD_RISK = [0.1, 0.15, 0.2] as const;
+export const ACTIVE_REWARD_RISK_FLOOR = 0.2;
+export const EXPERIMENTAL_REWARD_RISK = [0.1, 0.15] as const;
 
 export const EXPERIMENTAL_KEYS = [
   "max_planned_risk_pct",
@@ -98,7 +98,7 @@ export const EXPERIMENT_DEFAULTS: Record<(typeof EXPERIMENTAL_KEYS)[number], str
   daily_loss_pct: "48",
   max_lot: "0.01",
   max_spread: "1.00",
-  min_reward_risk: "0.20",
+  min_reward_risk: "0.10",
   min_trade_quality: "70",
   stop_atr_multiplier: "1.00",
   max_concurrent_positions: "1",
@@ -145,7 +145,7 @@ export function validateActiveDraft(draft: Record<string, string>): string[] {
   }
   if (reward != null && reward < ACTIVE_REWARD_RISK_FLOOR) {
     errors.push(
-      "Active minimum reward/risk stays 0.50. Candidates 0.10, 0.15, and 0.20 are experimental and are not activated by this save.",
+      "Active minimum reward/risk stays 0.20. Candidates 0.10 and 0.15 are experimental and are not activated by this save.",
     );
   }
   return errors;
@@ -160,7 +160,7 @@ export function validateExperimentalDraft(draft: Record<string, string>): string
   if (reward == null) {
     errors.push("Experimental reward/risk is required.");
   } else if (!EXPERIMENTAL_REWARD_RISK.some((item) => Math.abs(item - reward) < 1e-9)) {
-    errors.push("Experimental reward/risk must be 0.10, 0.15, or 0.20.");
+    errors.push("Experimental reward/risk must be 0.10 or 0.15.");
   }
   return errors;
 }
@@ -179,7 +179,7 @@ export function buildExperimentalChanges(
   return { experimental };
 }
 
-/** Experimental RR candidates below 0.50 cannot be promoted live. */
+/** Experimental RR candidates below 0.20 cannot be promoted live. */
 export function canPromoteExperimental(draft: Record<string, string>): string[] {
   const errors = validateExperimentalDraft(draft);
   const reward = numeric(draft.min_reward_risk || "");

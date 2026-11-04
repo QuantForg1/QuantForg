@@ -50,9 +50,9 @@ def test_price_rr_sides(
 
 
 def test_model_rr_cannot_pass_the_rr_gate() -> None:
-    # Screenshot prices clear 0.50. A closer target does not, and the model
+    # Screenshot prices clear 0.20. A closer target does not, and the model
     # value of 1.27 must not override that price ratio.
-    close_tp = ENTRY - Decimal("4.00")
+    close_tp = ENTRY - Decimal("2.00")
     req = LiveOrderRequest(
         symbol="XAUUSD",
         direction="SELL",

@@ -656,10 +656,12 @@ def test_quality_below_70_is_still_rejected() -> None:
 def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
     gates = _gates(70)
     assert gates.checks["owner_min_trade_quality"] is True
-    low_rr = _gates(90, expected_rr=Decimal("0.49"))
+    low_rr = _gates(90, expected_rr=Decimal("0.15"))
     assert low_rr.checks["min_rr"] is False
     assert low_rr.passed is False
-    assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=Decimal("101")))
+    assert any(
+        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=Decimal("100.30"))
+    )
     assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("1.01")))
     assert any(r.startswith("OWNER_MAX_LOT") for r in _entry(volume=Decimal("0.02")))
     assert any(r.startswith("OWNER_SL_REQUIRED") for r in _entry(stop_loss=None))
@@ -706,10 +708,10 @@ def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
     assert incomplete.allow_new_entry is False
 
 
-def test_reward_risk_below_0_50_stays_rejected() -> None:
-    assert Decimal("0.50") == OWNER_MIN_REWARD_RISK
-    reasons = _entry(take_profit=Decimal("100.90"))
-    assert any("0.50" in r for r in reasons)
+def test_reward_risk_below_0_20_stays_rejected() -> None:
+    assert Decimal("0.20") == OWNER_MIN_REWARD_RISK
+    reasons = _entry(take_profit=Decimal("100.35"))
+    assert any("0.20" in r for r in reasons)
     assert any(r.startswith("OWNER_MIN_RR") for r in reasons)
     cleared = _entry()
     assert not any(r.startswith("OWNER_MIN_RR") for r in cleared)

@@ -137,8 +137,8 @@ def test_first_level_used_when_it_clears_1_5() -> None:
 
 
 def test_second_level_chosen_only_when_first_fails() -> None:
-    # L1 4134.00: 1.00 / 2.30 = 0.43 fails 1.50; L2 4138.50: 5.50 / 2.30 = 2.39.
-    t = _targets(_snapshot(highs=("4134.00", "4138.50")))
+    # L1 4133.39: 0.39 / 2.00 = 0.195 fails 0.20; L2 4138.50 clears.
+    t = _targets(_snapshot(highs=("4133.39", "4138.50")))
     assert t.take_profit == Decimal("4138.50")
     assert t.tp_level == 2
     assert "TP structure level 2" in t.reason
@@ -146,16 +146,16 @@ def test_second_level_chosen_only_when_first_fails() -> None:
 
 
 def test_no_tp_beyond_the_second_level() -> None:
-    # Spread 0.30 merges levels closer than that. L1 0.40/2.30 = 0.17 and
-    # L2 1.00/2.30 = 0.43 both miss 1.50. L3 4140.00 is never used.
-    t = _targets(_snapshot(highs=("4133.40", "4134.00", "4140.00")))
+    # Stop risk 2.00: L1 0.10R and L2 0.39R both miss 0.20 (levels >0.30
+    # apart so they do not merge). L3 4140.00 is never used.
+    t = _targets(_snapshot(highs=("4133.05", "4133.39", "4140.00")))
     assert t.take_profit is None
     assert t.tp_level is None
     assert t.reason.startswith("OWNER_TP_NO_STRUCTURE_RR")
     assert "4140.00" not in t.reason
     assert "TP not stretched" in t.reason
     assert t.expected_net_rr is not None
-    assert t.expected_net_rr < Decimal("1.50")
+    assert t.expected_net_rr < Decimal("0.20")
     assert "best_net=" in t.reason
 
 
@@ -166,8 +166,8 @@ def test_no_level_beyond_entry_means_no_tp_not_atr_stretch() -> None:
 
 
 def test_liquidity_pool_counts_as_a_level() -> None:
-    # First swing 4134.00 is 1.00/2.30 = 0.43 and fails. The pool is level 2.
-    snap = _snapshot(highs=("4134.00",), pools=(("4139.00", "BUY_SIDE_HIGH"),))
+    # First swing 4133.39 is 0.39/2.00 = 0.195 and fails. The pool is level 2.
+    snap = _snapshot(highs=("4133.39",), pools=(("4139.00", "BUY_SIDE_HIGH"),))
     t = _targets(snap)
     assert t.take_profit == Decimal("4139.00")
     assert t.tp_level == 2
@@ -201,12 +201,12 @@ def test_sell_levels_sorted_nearest_first() -> None:
     assert [p for p, _ in levels] == [Decimal("4130.00"), Decimal("4120.00")]
 
 
-# --- RR boundary 0.50 after spread (stop 1.70 + spread 0.30 = 2.00) ----------
+# --- RR boundary 0.20 after spread (stop 1.70 + spread 0.30 = 2.00) ----------
 
 
 @pytest.mark.parametrize(
     ("tp_distance", "accepted"),
-    [("1.00", True), ("0.99", False)],  # 1.00/2.00 = 0.50; 0.99/2.00 = 0.495
+    [("0.40", True), ("0.39", False)],  # 0.40/2.00 = 0.20; 0.39/2.00 = 0.195
 )
 def test_rr_boundary(tp_distance: str, accepted: bool) -> None:
     entry = Decimal("100")
@@ -219,7 +219,7 @@ def test_rr_boundary(tp_distance: str, accepted: bool) -> None:
     assert (choice.level == 1) is accepted
 
 
-@pytest.mark.parametrize(("tp", "ok"), [("4134.00", True), ("4133.99", False)])
+@pytest.mark.parametrize(("tp", "ok"), [("4133.40", True), ("4133.39", False)])
 def test_final_owner_guard_uses_same_boundary(tp: str, ok: bool) -> None:
     reasons = ol.evaluate_owner_entry(
         symbol="XAUUSD",
@@ -227,7 +227,7 @@ def test_final_owner_guard_uses_same_boundary(tp: str, ok: bool) -> None:
         volume=Decimal("0.01"),
         entry=Decimal("4133.00"),
         stop_loss=Decimal("4131.30"),  # 1.70 + 0.30 spread = 2.00 risk
-        take_profit=Decimal(tp),  # 1.00 -> 0.50 ; 0.99 -> 0.495
+        take_profit=Decimal(tp),  # 0.40 -> 0.20 ; 0.39 -> 0.195
         spread=Decimal("0.30"),
         contract_size=Decimal("100"),
         equity=Decimal("50"),

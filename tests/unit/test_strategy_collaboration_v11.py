@@ -157,7 +157,7 @@ def test_strong_advisory_disagreement_prefers_no_trade() -> None:
 
 @pytest.mark.unit
 def test_elevated_spread_weak_rr_prefers_no_trade() -> None:
-    score = _base_score(spread=1.2, expected_rr=0.40)
+    score = _base_score(spread=1.2, expected_rr=0.15)
     evals = evaluate_all_strategies(score)
     verdict = orchestrate_strategies(evals, score=score)
     assert verdict.prefer_no_trade is True
@@ -168,7 +168,7 @@ def test_elevated_spread_weak_rr_prefers_no_trade() -> None:
 
 @pytest.mark.unit
 def test_net_rr_below_owner_floor_prefers_no_trade() -> None:
-    score = _base_score(expected_rr=0.40, spread=0.25)
+    score = _base_score(expected_rr=0.15, spread=0.25)
     evals = evaluate_all_strategies(score)
     verdict = orchestrate_strategies(evals, score=score)
     assert verdict.prefer_no_trade is True

@@ -68,9 +68,12 @@ def _highs(swings: object) -> set[Decimal]:
 
 
 def _choice(highs: set[Decimal]):
+    # Nearest structure first — matches owner_tp_levels ordering.
+    entry = Decimal("15")
+    ordered = sorted(highs, key=lambda price: abs(price - entry))
     return select_owner_structure_tp(
-        [(price, "swing_M5") for price in highs],
-        entry=Decimal("15"),
+        [(price, "swing_M5") for price in ordered],
+        entry=entry,
         stop_distance=Decimal("2"),
         spread=Decimal("0.2"),
     )
@@ -94,13 +97,16 @@ def test_forming_bar_is_not_swing_confirmation() -> None:
     assert Decimal("15.8") not in confirmed
     assert confirmed == {Decimal("15.4"), Decimal("22")}
 
+    # Nearest two raw levels are 15.8 then 15.4. At floor 0.20, 15.8 clears
+    # (0.8/2.2) so a forming-bar swing wrongly fills the target slot.
     blocked = _choice(raw)
     opened = _choice(confirmed)
-    assert blocked.price is None
+    assert blocked.price == Decimal("15.8")
+    # Confirmed nearest 15.4 fails 0.20 (0.4/2.2); level-2 22 clears.
     assert opened.price == Decimal("22")
     assert opened.level == 2
     assert opened.rr_after_spread is not None
-    assert opened.rr_after_spread >= Decimal("1.50")
+    assert opened.rr_after_spread >= Decimal("0.20")
 
 
 @pytest.mark.unit

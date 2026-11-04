@@ -173,11 +173,11 @@ def active_max_spread() -> Decimal:
 def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     """Floor a document actually applies after estimated trading costs.
 
-    Owner floor: the live minimum net reward:risk is **0.50**.
-    Candidates 0.10 / 0.15 / 0.20 may still be stored under ``experimental``
+    Owner floor: the live minimum net reward:risk is **0.20**.
+    Candidates 0.10 / 0.15 may still be stored under ``experimental``
     for documentation, but ``experimental_promoted`` must never lower the
     active enforcement floor below :data:`OWNER_MIN_REWARD_RISK`.
-    A stricter saved floor (≥ 0.50) remains allowed.
+    A stricter saved floor (≥ 0.20) remains allowed.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -196,14 +196,14 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     if authorized is None:
         return OWNER_MIN_REWARD_RISK
     # Never allow experimental promotion (or stale persisted candidates) to
-    # undercut the owner-approved 0.50 net RR floor.
+    # undercut the owner-approved 0.20 net RR floor.
     if authorized < OWNER_MIN_REWARD_RISK:
         return OWNER_MIN_REWARD_RISK
     return authorized
 
 
 def active_min_reward_risk() -> Decimal:
-    """Active floor is always ≥ 0.50. See :func:`enforced_min_reward_risk`."""
+    """Active floor is always ≥ 0.20. See :func:`enforced_min_reward_risk`."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
@@ -416,7 +416,7 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
     )
 
     if "min_reward_risk" not in raw:
-        errors.append("experimental min_reward_risk must be 0.10, 0.15, or 0.20")
+        errors.append("experimental min_reward_risk must be 0.10 or 0.15")
     else:
         try:
             rr = _dec(raw["min_reward_risk"])
@@ -425,9 +425,7 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
         else:
             authorized = authorized_min_reward_risk(rr)
             if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
-                errors.append(
-                    "experimental min_reward_risk must be 0.10, 0.15, or 0.20"
-                )
+                errors.append("experimental min_reward_risk must be 0.10 or 0.15")
     if "min_trade_quality" in raw:
         authorized_quality = authorized_min_trade_quality(raw.get("min_trade_quality"))
         if authorized_quality is None:
@@ -561,8 +559,8 @@ def validate_policy_changes(
             authorized = authorized_min_reward_risk(rr)
             if authorized is None or authorized < OWNER_MIN_REWARD_RISK:
                 errors.append(
-                    "active min_reward_risk must be at least 0.50. "
-                    "Candidates 0.10, 0.15, and 0.20 belong under experimental "
+                    "active min_reward_risk must be at least 0.20. "
+                    "Candidates 0.10 and 0.15 belong under experimental "
                     "and stay inactive until that experiment is promoted."
                 )
     if "min_trade_quality" in changes:
