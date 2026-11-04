@@ -2126,7 +2126,7 @@ class InstitutionalIteRuntime:
                                                 position_id=closed_ticket,
                                             )
                                             sid = str(meta.get("strategy_id") or "")
-                                            # Idempotent with broker missing_from_mt5_book path.
+                                            # Idempotent vs missing_from_mt5_book.
                                             _already = False
                                             try:
                                                 from app.application.services.close_attribution import (  # noqa: E501
