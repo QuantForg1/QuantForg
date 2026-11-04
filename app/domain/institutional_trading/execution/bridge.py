@@ -46,6 +46,41 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+def _canary_reject_is_abnormal(
+    oms_result: OmsSubmitResult,
+    abort_reason: BridgeAbortReason,
+) -> bool:
+    """Return True only for real broker/gateway failures that should halt canary.
+
+    ``order_check_only`` rejects with no MT5 retcode are institutional pretrade
+    gates (OWNER_MIN_RR, OWNER_SL_RISK, margin/lot checks, etc.). Those must
+    leave Auto Trading RUNNING so the desk keeps scanning; they are not
+    abnormal broker executions.
+    """
+    gw = str(oms_result.gateway_status or "").strip().lower()
+    if gw in {"order_check_only", "not_called"} and oms_result.retcode is None:
+        logger.warning(
+            "canary_halt_skipped_pretrade_reject",
+            gateway_status=gw,
+            abort_reason=abort_reason.value,
+            message=(oms_result.message or "")[:240],
+        )
+        return False
+    if abort_reason in {
+        BridgeAbortReason.GATEWAY_FAILURE,
+        BridgeAbortReason.MT5_REJECTION,
+    }:
+        return True
+    if oms_result.retcode is not None:
+        return True
+    # order_send path failed without a classified abort — keep fail-closed.
+    if "order_send" in gw or gw in {"failed", "error", "timeout"}:
+        return True
+    # Unknown OMS reject after a live submit attempt: fail-closed.
+    return True
+
+
 if TYPE_CHECKING:
     from app.domain.institutional_trading.operations.control_plane import (
         OperationsControlPlane,
@@ -1215,7 +1250,9 @@ class ExecutionBridge:
                 stop_loss=sl_txt,
                 take_profit=tp_txt,
             )
-            # Canary: immediate stop after abnormal execution
+            # Canary: fail-closed only on true execution abnormals.
+            # Owner-policy / order_check-only rejects (OWNER_MIN_RR, OWNER_SL_RISK,
+            # etc.) are expected NO_TRADE gates — do not arm kill or stop the robot.
             if (
                 mode is ExecutionMode.CANARY_LIVE
                 and self.ops_plane is not None
@@ -1224,6 +1261,7 @@ class ExecutionBridge:
                     ExecutionAttemptStatus.OMS_REJECTED,
                     ExecutionAttemptStatus.ABORTED,
                 }
+                and _canary_reject_is_abnormal(oms_result, abort_reason)
             ):
                 self.ops_plane.halt_on_abnormal_execution(
                     reason=(
