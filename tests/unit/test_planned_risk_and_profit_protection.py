@@ -142,7 +142,7 @@ class TestPositionSizingUsdTarget:
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
         assert Decimal("0") == MIN_PLANNED_RISK_USD
         assert Decimal("10.00") == MAX_PLANNED_SL_RISK_USD
-        assert Decimal("2.00") == PREFERRED_REWARD_RISK
+        assert Decimal("0.50") == PREFERRED_REWARD_RISK
 
     def test_tight_gold_stop_is_not_upsized_past_owner_max_lot(self) -> None:
         # $0.50 at 0.01: no floor, so it trades — at 0.01, never stepped up.
@@ -573,11 +573,12 @@ class TestRewardRisk:
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10090")))
         assert gate.passed is False
 
-    def test_preferred_two_rr_eligible(self) -> None:
-        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10400")))
+    def test_preferred_rr_eligible(self) -> None:
+        # Reward 0.0010 / risk 0.0020 = 0.50 at the preferred floor.
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10100")))
         assert gate.passed is True
         risk = Decimal("0.00200")
-        reward = Decimal("0.00400")
+        reward = Decimal("0.00100")
         assert reward / risk == PREFERRED_REWARD_RISK
 
 

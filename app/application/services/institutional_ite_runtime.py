@@ -3524,18 +3524,26 @@ class InstitutionalIteRuntime:
             from app.domain.institutional_trading.portfolio_intelligence.config import (
                 DEFAULT_PI_CONFIG,
             )
+            from app.domain.institutional_trading.runtime_policy import (
+                weekly_loss_limit_pct,
+            )
 
-            # Owner daily stop (max $5 / 3%, 10% cap) as a percent of equity.
+            # Owner daily stop as a percent of equity. Weekly/monthly follow
+            # runtime policy (0 = OFF) — never invent a PI-only weekly halt.
             _owner_daily_pct = daily_loss_cap_pct(
                 daily_pnl=Decimal(str(account.daily_pnl or 0)),
                 base_now=Decimal(str(account.equity or 0)),
                 pct=MAX_DAILY_LOSS_PCT,
             )
+            _owner_weekly_pct = float(weekly_loss_limit_pct())
             prot = evaluate_capital_protection(
                 st,
                 candidate_symbol=str(getattr(decision, "symbol", "") or ""),
                 config=_pi_replace(
-                    DEFAULT_PI_CONFIG, max_daily_loss_pct=float(_owner_daily_pct)
+                    DEFAULT_PI_CONFIG,
+                    max_daily_loss_pct=float(_owner_daily_pct),
+                    max_weekly_loss_pct=_owner_weekly_pct,
+                    max_monthly_loss_pct=0.0,
                 ),
             )
             _ai_opp_q = getattr(self.decision_pipeline, "_last_ai_score", None)

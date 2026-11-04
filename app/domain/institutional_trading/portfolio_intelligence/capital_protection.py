@@ -61,21 +61,27 @@ def evaluate_capital_protection(
         "leverage": state.leverage,
     }
 
-    # Hard stops
-    if daily >= cfg.max_daily_loss_pct:
+    # Hard stops. Ceiling <= 0 means the halt is OFF (owner weekly/monthly = 0).
+    if cfg.max_daily_loss_pct > 0 and daily >= cfg.max_daily_loss_pct:
         return ProtectionDecision(False, 0.0, ("max daily loss reached",), limits)
-    if weekly >= cfg.max_weekly_loss_pct:
+    if cfg.max_weekly_loss_pct > 0 and weekly >= cfg.max_weekly_loss_pct:
         return ProtectionDecision(False, 0.0, ("max weekly loss reached",), limits)
-    if monthly >= cfg.max_monthly_loss_pct:
+    if cfg.max_monthly_loss_pct > 0 and monthly >= cfg.max_monthly_loss_pct:
         return ProtectionDecision(False, 0.0, ("max monthly loss reached",), limits)
     if state.leverage >= cfg.max_leverage:
         return ProtectionDecision(False, 0.0, ("max leverage reached",), limits)
 
-    # Soft approach — reduce new exposure
-    if daily >= cfg.max_daily_loss_pct * cfg.approach_ratio:
+    # Soft approach — reduce new exposure (same 0 = off rule)
+    if (
+        cfg.max_daily_loss_pct > 0
+        and daily >= cfg.max_daily_loss_pct * cfg.approach_ratio
+    ):
         scale = min(scale, 0.5)
         reasons.append("approaching daily loss limit")
-    if weekly >= cfg.max_weekly_loss_pct * cfg.approach_ratio:
+    if (
+        cfg.max_weekly_loss_pct > 0
+        and weekly >= cfg.max_weekly_loss_pct * cfg.approach_ratio
+    ):
         scale = min(scale, 0.6)
         reasons.append("approaching weekly loss limit")
     if state.current_drawdown_pct >= cfg.drawdown_cut_pct:

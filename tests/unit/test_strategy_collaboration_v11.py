@@ -89,8 +89,8 @@ def test_advisory_votes_participate_without_oms_authority() -> None:
 
 @pytest.mark.unit
 def test_collaboration_attaches_advisory_to_verdict() -> None:
-    # Clear preferred-RR solo raise with net RR at preferred floor.
-    score = _base_score(expected_rr=2.0, net_reward_risk=2.0)
+    # Clear preferred-RR solo raise with net RR at preferred floor (0.50).
+    score = _base_score(expected_rr=0.50, net_reward_risk=0.50)
     evals = evaluate_all_strategies(score)
     verdict = orchestrate_strategies(evals, score=score)
     assert verdict.prefer_no_trade is False

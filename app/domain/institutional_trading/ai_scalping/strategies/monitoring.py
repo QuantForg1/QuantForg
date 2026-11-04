@@ -270,7 +270,7 @@ def build_robot_health_monitor(
             "last_trade_quality": activity.get("last_trade_quality"),
             "last_regime": activity.get("last_regime"),
             "owner_min_net_rr": 0.50,
-            "owner_preferred_rr": 2.00,
+            "owner_preferred_rr": 0.50,
             "owner_min_quality": 70,
             "note": (
                 "Phase-6: surfaces last-cycle ATR%/net RR/quality for reject "
@@ -289,7 +289,7 @@ def build_robot_health_monitor(
         "risk_policy_defaults": {
             "max_concurrent_positions": 1,
             "minimum_net_reward_risk": "0.50",
-            "preferred_reward_risk": "2.00",
+            "preferred_reward_risk": "0.50",
             "minimum_trade_quality": 70,
             "max_lot": "0.01",
             "daily_loss_halt_percent": "48",

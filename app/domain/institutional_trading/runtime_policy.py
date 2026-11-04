@@ -310,7 +310,7 @@ def approved_baseline() -> dict[str, Any]:
         "max_lot": "0.01",
         "max_spread": "1.00",
         "min_reward_risk": str(OWNER_MIN_REWARD_RISK),
-        "preferred_reward_risk": "2.00",
+        "preferred_reward_risk": "0.50",
         "commission": owner_commission_configuration(),
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
         "stop_atr_multiplier": "1.00",
