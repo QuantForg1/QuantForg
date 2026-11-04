@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MONTHLY_LOSS_PCT,
+    OWNER_WEEKLY_LOSS_PCT,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,10 +25,11 @@ class PortfolioIntelligenceConfig:
     budget_step_down: float = 0.5
     drawdown_cut_pct: float = 3.0
 
-    # Capital protection ceilings — daily loss matches ITE/Risk hard cap
+    # Capital protection ceilings — daily matches ITE/Risk; weekly/monthly
+    # 0 means OFF (owner policy). Never invent a nonzero weekly/monthly halt.
     max_daily_loss_pct: float = float(MAX_DAILY_LOSS_PCT)
-    max_weekly_loss_pct: float = 6.0
-    max_monthly_loss_pct: float = 12.0
+    max_weekly_loss_pct: float = float(OWNER_WEEKLY_LOSS_PCT)
+    max_monthly_loss_pct: float = float(OWNER_MONTHLY_LOSS_PCT)
     max_symbol_exposure_pct: float = 40.0
     max_correlated_exposure_pct: float = 50.0
     max_session_exposure_pct: float = 60.0

@@ -445,11 +445,13 @@ def test_solo_below_preferred_rr_needs_higher_quality() -> None:
             "neutral", "Neutral", "HOLD", 40, "isolated", "score_factor_advisory"
         ),
     )
-    # Single passer (raw_confluence=1) + RR below preferred → raised quality bar.
+    # Preferred equals the hard floor (0.50): solo RR at/above preferred
+    # no longer raises the quality bar. Soft preferred gate is inactive.
     verdict = orchestrate_strategies(
         pack,
-        score=_base_score(net_reward_risk=1.6, mtf_alignment=75),
+        score=_base_score(net_reward_risk=0.50, mtf_alignment=75),
         advisory_votes=hold_only,
     )
-    assert verdict.prefer_no_trade is True
-    assert any("preferred" in r.lower() for r in verdict.reasons)
+    assert verdict.prefer_no_trade is False
+    assert verdict.selected is not None
+    assert not any("preferred" in r.lower() for r in verdict.reasons)

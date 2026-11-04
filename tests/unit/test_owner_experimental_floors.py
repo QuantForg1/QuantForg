@@ -51,7 +51,7 @@ def test_owner_defaults_are_20_percent_atr_1_quality_70_and_zero_commission() ->
     baseline = approved_baseline()
     assert baseline["min_reward_risk"] == "0.50"
     assert baseline["min_trade_quality"] == 70
-    assert baseline["preferred_reward_risk"] == "2.00"
+    assert baseline["preferred_reward_risk"] == "0.50"
     assert baseline["stop_atr_multiplier"] == "1.00"
     assert baseline["max_planned_risk_pct"] == "20.0"
     assert baseline["max_aggregate_open_risk_pct"] == "30.0"

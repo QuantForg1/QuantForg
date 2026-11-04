@@ -88,6 +88,19 @@ def test_capital_protection_blocks_daily_loss() -> None:
 
 
 @pytest.mark.unit
+def test_capital_protection_weekly_halt_off_does_not_block() -> None:
+    # Owner weekly_loss_pct=0 means OFF. A large weekly loss must not invent
+    # a PORTFOLIO_REJECTED / "max weekly loss reached" hard stop.
+    assert DEFAULT_PI_CONFIG.max_weekly_loss_pct == 0.0
+    assert DEFAULT_PI_CONFIG.max_monthly_loss_pct == 0.0
+    state = build_portfolio_state(equity=22.63, weekly_pnl=-5.0, daily_pnl=0.0)
+    prot = evaluate_capital_protection(state)
+    assert prot.allow_new_exposure is True
+    assert "max weekly loss reached" not in prot.reasons
+    assert "approaching weekly loss limit" not in prot.reasons
+
+
+@pytest.mark.unit
 def test_capital_protection_scales_near_limit() -> None:
     # Approach band starts at 75% of the 48% halt, which is 36% of equity.
     state = build_portfolio_state(

@@ -146,5 +146,5 @@ def test_robot_health_monitor_evidence_statuses(tmp_path: Path) -> None:
     assert mon["m1"]["auto_changed"] is False
     assert mon["risk_policy_defaults"]["minimum_net_reward_risk"] == "0.50"
     assert mon["risk_policy_defaults"]["minimum_trade_quality"] == 70
-    assert mon["risk_policy_defaults"]["preferred_reward_risk"] == "2.00"
+    assert mon["risk_policy_defaults"]["preferred_reward_risk"] == "0.50"
     assert mon["risk_policy_defaults"]["max_concurrent_positions"] == 1

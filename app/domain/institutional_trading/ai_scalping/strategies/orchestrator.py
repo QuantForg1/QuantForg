@@ -48,7 +48,7 @@ MIN_RR_WHEN_SPREAD_ELEVATED = 0.50
 # Absolute net reward:risk floor aligned with owner policy (prefer NO_TRADE).
 MIN_NET_REWARD_RISK = 0.50
 # Owner preferred RR — solo setups below preferred need stronger quality.
-PREFERRED_NET_REWARD_RISK = 2.00
+PREFERRED_NET_REWARD_RISK = 0.50
 PREFERRED_RR_SOLO_MIN_QUALITY = 85
 # Setup freshness: stale quotes / expired setups → NO_TRADE.
 MAX_QUOTE_AGE_SECONDS = 8.0
