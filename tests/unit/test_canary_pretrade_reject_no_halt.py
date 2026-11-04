@@ -16,9 +16,7 @@ def test_owner_min_rr_order_check_only_is_not_abnormal() -> None:
         retcode=None,
         gateway_status="order_check_only",
     )
-    assert (
-        _canary_reject_is_abnormal(result, BridgeAbortReason.OMS_FAILURE) is False
-    )
+    assert _canary_reject_is_abnormal(result, BridgeAbortReason.OMS_FAILURE) is False
 
 
 def test_owner_sl_risk_order_check_only_is_not_abnormal() -> None:
@@ -31,9 +29,7 @@ def test_owner_sl_risk_order_check_only_is_not_abnormal() -> None:
         retcode=None,
         gateway_status="order_check_only",
     )
-    assert (
-        _canary_reject_is_abnormal(result, BridgeAbortReason.OMS_FAILURE) is False
-    )
+    assert _canary_reject_is_abnormal(result, BridgeAbortReason.OMS_FAILURE) is False
 
 
 def test_mt5_rejection_retcode_is_abnormal() -> None:
@@ -43,9 +39,7 @@ def test_mt5_rejection_retcode_is_abnormal() -> None:
         retcode=10006,
         gateway_status="order_send",
     )
-    assert (
-        _canary_reject_is_abnormal(result, BridgeAbortReason.MT5_REJECTION) is True
-    )
+    assert _canary_reject_is_abnormal(result, BridgeAbortReason.MT5_REJECTION) is True
 
 
 def test_gateway_failure_is_abnormal() -> None:
@@ -55,6 +49,4 @@ def test_gateway_failure_is_abnormal() -> None:
         retcode=10031,
         gateway_status="failed",
     )
-    assert (
-        _canary_reject_is_abnormal(result, BridgeAbortReason.GATEWAY_FAILURE) is True
-    )
+    assert _canary_reject_is_abnormal(result, BridgeAbortReason.GATEWAY_FAILURE) is True
