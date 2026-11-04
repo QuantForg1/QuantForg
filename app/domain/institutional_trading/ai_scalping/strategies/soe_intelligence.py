@@ -137,9 +137,9 @@ def sniper_chase_or_stale_reason(score: dict[str, Any] | None) -> str | None:
     sniper = score.get("sniper_entry")
     if not isinstance(sniper, dict):
         sniper = {}
-    state = str(
-        sniper.get("setup_state") or score.get("setup_state") or ""
-    ).strip().upper()
+    state = (
+        str(sniper.get("setup_state") or score.get("setup_state") or "").strip().upper()
+    )
     if state in {"CHASING", "STALE", "CONFLICT"}:
         return (
             f"Entry timing rejected: sniper setup_state={state} "

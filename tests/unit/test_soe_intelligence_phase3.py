@@ -137,9 +137,7 @@ def test_soe_demotes_tc_when_ltf_range_allows_smc() -> None:
     assert verdict.prefer_no_trade is False
     assert verdict.selected is not None
     assert verdict.selected.strategy_id == "smc_scalping"
-    gated = any(
-        "ltf_session_gate:trend_continuation" in r for r in verdict.reasons
-    )
+    gated = any("ltf_session_gate:trend_continuation" in r for r in verdict.reasons)
     rejected_ltf = any(
         "HTF/LTF" in (rj.reason or "") or "M5" in (rj.reason or "")
         for rj in verdict.rejected
