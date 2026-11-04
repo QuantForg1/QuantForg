@@ -2126,12 +2126,47 @@ class InstitutionalIteRuntime:
                                                 position_id=closed_ticket,
                                             )
                                             sid = str(meta.get("strategy_id") or "")
-                                            if sid:
+                                            # Idempotent vs missing_from_mt5_book.
+                                            _already = False
+                                            try:
+                                                from app.application.services.close_attribution import (  # noqa: E501
+                                                    get_close_attribution_ledger,
+                                                )
+
+                                                _ledger = get_close_attribution_ledger()
+                                                if (
+                                                    closed_ticket is not None
+                                                    and _ledger.already_recorded(
+                                                        int(closed_ticket)
+                                                    )
+                                                ):
+                                                    _already = True
+                                            except Exception:
+                                                logger.exception(
+                                                    "close_attribution_ledger_check_failed"
+                                                )
+                                            if sid and not _already:
                                                 get_strategy_stats_book().record_closed(
                                                     sid,
                                                     win=bool(pnl_close > 0),
                                                     pnl=float(pnl_close),
                                                 )
+                                            if (
+                                                closed_ticket is not None
+                                                and not _already
+                                            ):
+                                                try:
+                                                    from app.application.services.close_attribution import (  # noqa: E501
+                                                        get_close_attribution_ledger,
+                                                    )
+
+                                                    get_close_attribution_ledger().mark_recorded(
+                                                        int(closed_ticket)
+                                                    )
+                                                except Exception:
+                                                    logger.exception(
+                                                        "close_attribution_ledger_mark_failed"
+                                                    )
                                             try:
                                                 from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
                                                     get_strategy_attribution_store,

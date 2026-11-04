@@ -34,6 +34,9 @@ class PositionTruthSync:
     quantforg_positions: int = 0
     quantforg_tickets: tuple[int, ...] = ()
     rows: tuple[Any, ...] = ()
+    # False when positions_get failed / returned None — callers must not treat
+    # empty rows as a flat book and must not invent closes.
+    reliable: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,6 +48,7 @@ class PositionTruthSync:
             "quantforg_positions": self.quantforg_positions,
             "quantforg_tickets": list(self.quantforg_tickets),
             "account_positions": self.mt5_positions,
+            "reliable": self.reliable,
         }
 
 
@@ -113,6 +117,43 @@ def _internal_engine_count(position_engine: Any | None, *, symbol: str) -> int:
     )
 
 
+def _collect_missing_tickets(
+    position_engine: Any | None,
+    *,
+    live_tickets: set[int],
+    symbol: str | None = None,
+) -> list[int]:
+    """List managed tickets absent from the live MT5 book (no mutation)."""
+    if position_engine is None:
+        return []
+    positions = getattr(position_engine, "_positions", None)
+    if not isinstance(positions, dict):
+        return []
+    live = {int(t) for t in live_tickets}
+    target = (symbol or "").strip().upper() or None
+    stale: list[int] = []
+    lock = getattr(position_engine, "_lock", None)
+
+    def _scan() -> None:
+        for ticket, pos in list(positions.items()):
+            if target is not None:
+                sym = str(getattr(pos, "symbol", "") or "").strip().upper()
+                if target == GOLD_SYMBOL:
+                    if sym and not is_gold_symbol(sym):
+                        continue
+                elif sym and sym != target:
+                    continue
+            if int(ticket) not in live:
+                stale.append(int(ticket))
+
+    if lock is not None:
+        with lock:
+            _scan()
+    else:
+        _scan()
+    return stale
+
+
 def _repair_internal_engine(
     position_engine: Any | None,
     *,
@@ -174,6 +215,82 @@ def _repair_internal_engine(
     return removed
 
 
+# Fill-lifecycle evidence (not invented): LIVE executes for these tickets were
+# tagged strategy_id=trend_continuation before broker SL. Used only to restore
+# attribution bindings when reconciling broker-confirmed exits after the
+# missing_from_mt5_book analytics gap. Exit prices/PnL still come from deals.
+_HISTORICAL_FILL_STRATEGY_BINDINGS: dict[int, str] = {
+    683675942: "trend_continuation",
+    683682967: "trend_continuation",
+}
+
+
+def _attribute_stale_tickets(
+    *,
+    stale_tickets: list[int],
+    mt5_adapter: Any,
+    history_deals: list[Any] | tuple[Any, ...] | None = None,
+) -> list[dict[str, Any]]:
+    """Propagate broker-confirmed exits into SOE/telemetry analytics (idempotent)."""
+    try:
+        from app.application.services.close_attribution import (
+            attribute_missing_tickets,
+            get_close_attribution_ledger,
+            load_history_deals_safe,
+            reconcile_historical_closes,
+            reconcile_pending_closes,
+        )
+
+        ledger = get_close_attribution_ledger()
+        need_historical = [
+            pid
+            for pid in _HISTORICAL_FILL_STRATEGY_BINDINGS
+            if not ledger.already_recorded(pid)
+        ]
+        need_history = (
+            bool(stale_tickets) or bool(ledger.pending_ids()) or bool(need_historical)
+        )
+        if not need_history and history_deals is None:
+            return []
+
+        deals: list[Any]
+        if history_deals is not None:
+            deals = list(history_deals)
+            hist_ok = True
+        else:
+            hist_ok, deals = load_history_deals_safe(mt5_adapter)
+        results: list[dict[str, Any]] = []
+        if stale_tickets:
+            results.extend(
+                attribute_missing_tickets(
+                    tickets=stale_tickets,
+                    deals=deals if hist_ok else [],
+                    source="missing_from_mt5_book",
+                    ledger=ledger,
+                )
+            )
+        # Retry pending + one-time historical backfill for owner-identified gaps.
+        if hist_ok and deals:
+            if ledger.pending_ids():
+                results.extend(reconcile_pending_closes(deals=deals, ledger=ledger))
+            if need_historical:
+                results.extend(
+                    reconcile_historical_closes(
+                        position_ids=need_historical,
+                        deals=deals,
+                        strategy_bindings={
+                            pid: _HISTORICAL_FILL_STRATEGY_BINDINGS[pid]
+                            for pid in need_historical
+                        },
+                        ledger=ledger,
+                    )
+                )
+        return results
+    except Exception:
+        logger.exception("close_attribution_stale_hook_failed")
+        return []
+
+
 def force_sync_positions(
     mt5_adapter: Any,
     *,
@@ -181,11 +298,16 @@ def force_sync_positions(
     internal_positions: int | None = None,
     position_engine: Any | None = None,
     fresh: bool = True,
+    history_deals: list[Any] | tuple[Any, ...] | None = None,
 ) -> PositionTruthSync:
     """Force Sync Positions — MT5 is authoritative.
 
     Clears adapter caches when ``fresh=True`` (pre-OMS / max-open recheck).
     Same-cycle decision reads pass ``fresh=False`` to reuse the cycle snapshot.
+
+    Analytics: tickets absent from a **successful** positions fetch are attributed
+    only after broker history confirms an exit deal. Failed / unreliable fetches
+    never drop managed tickets and never invent closes.
     """
     sym = (symbol or GOLD_SYMBOL).strip().upper() or GOLD_SYMBOL
     engine_count = _internal_engine_count(position_engine, symbol=sym)
@@ -195,7 +317,48 @@ def force_sync_positions(
 
     if fresh:
         _invalidate_adapter_position_cache(mt5_adapter)
-    rows = list(mt5_adapter.list_positions() or [])
+
+    fetch_ok = True
+    fetch_error: str | None = None
+    try:
+        raw_rows = mt5_adapter.list_positions()
+        if raw_rows is None:
+            # None ≠ empty book — treat as incomplete snapshot (gateway glitch).
+            fetch_ok = False
+            fetch_error = "positions_snapshot_none"
+            rows: list[Any] = []
+        else:
+            rows = list(raw_rows)
+    except Exception as exc:
+        fetch_ok = False
+        fetch_error = str(exc) or type(exc).__name__
+        rows = []
+        logger.exception(
+            "mt5_positions_fetch_failed_skip_repair",
+            symbol=sym,
+            error=fetch_error,
+        )
+
+    if not fetch_ok:
+        logger.warning(
+            "position_truth_fetch_unreliable",
+            symbol=sym,
+            error=fetch_error,
+            internal_positions=prior_internal,
+            action="skip_drop_and_attribution",
+        )
+        return PositionTruthSync(
+            mt5_positions=prior_internal,
+            internal_positions=prior_internal,
+            repaired=False,
+            symbol=sym,
+            tickets=(),
+            quantforg_positions=prior_internal,
+            quantforg_tickets=(),
+            rows=(),
+            reliable=False,
+        )
+
     # Account ticket count is observability / PME repair context.
     # QuantForg strategy cap uses identity + autonomous symbol only.
     mt5_count, tickets = _count_all_positions(rows)
@@ -229,10 +392,29 @@ def force_sync_positions(
     repaired = False
     removed = 0
     if position_engine is not None:
+        stale = _collect_missing_tickets(
+            position_engine,
+            live_tickets=set(qf_tickets),
+            symbol=sym,
+        )
+        # Always attempt attribution/pending/historical reconcile on a reliable
+        # fetch — even when there are no stale PME rows (backfill path).
+        _attribute_stale_tickets(
+            stale_tickets=stale,
+            mt5_adapter=mt5_adapter,
+            history_deals=history_deals,
+        )
         removed = _repair_internal_engine(
             position_engine,
             live_tickets=set(qf_tickets),
             symbol=sym,
+        )
+    else:
+        # No PME — still allow historical/pending analytics when history is present.
+        _attribute_stale_tickets(
+            stale_tickets=[],
+            mt5_adapter=mt5_adapter,
+            history_deals=history_deals,
         )
     if (
         mt5_count != prior_internal
@@ -300,7 +482,12 @@ def apply_mt5_position_truth(
     filtered to ``sync.symbol`` so a Gold (or other-desk) QF count cannot leave
     ``open_positions > 0`` with empty book facts on an independent candidate.
     Global ``account_open_positions`` remains the full MT5 book count.
+
+    Unreliable syncs (gateway timeout / None snapshot) leave ``account`` unchanged.
     """
+    if not bool(getattr(sync, "reliable", True)):
+        return account
+
     from app.domain.institutional_trading.operations.quantforg_position_cap import (
         book_facts_from_positions,
         filter_quantforg_positions,
