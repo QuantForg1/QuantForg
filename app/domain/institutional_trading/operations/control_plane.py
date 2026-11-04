@@ -918,12 +918,36 @@ class OperationsControlPlane:
         """Fail-closed canary/live halt — arms kill + disables auto trading.
 
         Does not change SHADOW/CANARY/LIVE mode (operator-only transitions).
+        Syncs Phase A HALT_ALL so kill_switch_armed and phase_a.halt stay aligned.
         """
         with self._lock:
             self.kill_switch_armed = True
             was_auto = self.auto_trading_enabled
             self.auto_trading_enabled = False
             self.auto_trading_run_state = "stopped"
+        with contextlib.suppress(Exception):
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+            from app.domain.institutional_trading.phase_a.kill_state import (
+                HaltKind,
+                HaltMode,
+            )
+
+            get_phase_a_plane().set_halt(
+                HaltMode.HALT_ALL_TRADING,
+                actor="system:abnormal_halt",
+                reason=reason,
+                kind=HaltKind.OPERATOR_HALT,
+            )
+            get_phase_a_plane().sync_legacy_kill_flag(self)
+        with contextlib.suppress(Exception):
+            from app.application.services.ops_state_persistence import save_ops_state
+
+            save_ops_state(
+                {
+                    "auto_trading_enabled": False,
+                    "auto_trading_run_state": "stopped",
+                }
+            )
         self.flag_canary_failure(reason, now=now)
         self.alerts.raise_alert(
             kind=AlertKind.KILL_SWITCH,
