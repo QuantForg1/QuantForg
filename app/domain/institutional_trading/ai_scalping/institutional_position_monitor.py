@@ -62,8 +62,22 @@ def build_position_monitor(
         entry = _f(
             getattr(pos, "entry_price", None) or getattr(pos, "price_open", None)
         )
-        sl = _f(getattr(pos, "current_sl", None) or getattr(pos, "sl", None))
-        tp = _f(getattr(pos, "current_tp", None) or getattr(pos, "tp", None))
+        # PME ManagedPosition stores the live stop as current_stop (and the
+        # open protective level as initial_stop). Broker rows may use
+        # stop_loss / sl. Reading only current_sl left NOC rows with sl=null
+        # while TP (current_tp) rendered correctly.
+        sl = _f(
+            getattr(pos, "current_sl", None)
+            or getattr(pos, "sl", None)
+            or getattr(pos, "current_stop", None)
+            or getattr(pos, "stop_loss", None)
+            or getattr(pos, "initial_stop", None)
+        )
+        tp = _f(
+            getattr(pos, "current_tp", None)
+            or getattr(pos, "tp", None)
+            or getattr(pos, "take_profit", None)
+        )
         vol = _f(getattr(pos, "remaining_volume", None) or getattr(pos, "volume", None))
         risk_dist = _f(getattr(pos, "risk_distance", None))
         state = getattr(getattr(pos, "state", None), "value", None) or getattr(
