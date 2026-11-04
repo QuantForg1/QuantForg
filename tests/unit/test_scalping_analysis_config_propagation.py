@@ -659,7 +659,9 @@ def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
     low_rr = _gates(90, expected_rr=Decimal("0.15"))
     assert low_rr.checks["min_rr"] is False
     assert low_rr.passed is False
-    assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=Decimal("100.30")))
+    assert any(
+        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=Decimal("100.30"))
+    )
     assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("1.01")))
     assert any(r.startswith("OWNER_MAX_LOT") for r in _entry(volume=Decimal("0.02")))
     assert any(r.startswith("OWNER_SL_REQUIRED") for r in _entry(stop_loss=None))
