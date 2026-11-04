@@ -54,15 +54,15 @@ def test_slippage_buffer_defaults_to_zero() -> None:
 
 
 def test_trade_4_at_the_send_tick_is_refused() -> None:
-    # 1.700 / (3.168 + 0.424) = 0.473 < 0.50
-    reasons = _sell("4018.033", "4021.201", "4016.333", "0.424")
+    # 0.600 / (3.168 + 0.424) = 0.167 < 0.20
+    reasons = _sell("4018.033", "4021.201", "4017.433", "0.424")
     assert any(r.startswith("PRESEND OWNER_MIN_RR") for r in reasons), reasons
 
 
 def test_trade_1_is_refused_by_rr_not_by_the_drift_guard() -> None:
     # Plan 4019.155 -> stop 2.715; send tick 4018.853 -> 3.017 (wider, no
-    # drift). RR 1.700 / (3.017 + 0.424) = 0.494 < 0.50.
-    reasons = _sell("4018.853", "4021.870", "4017.153", "0.424", plan="4019.155")
+    # drift). RR 0.600 / (3.017 + 0.424) = 0.174 < 0.20.
+    reasons = _sell("4018.853", "4021.870", "4018.253", "0.424", plan="4019.155")
     assert any("OWNER_MIN_RR" in r for r in reasons), reasons
     assert not any("OWNER_PRICE_DRIFT" in r for r in reasons)
 
@@ -73,8 +73,10 @@ def test_trade_2_passes() -> None:
 
 
 def test_buffer_is_applied_to_rr_when_set() -> None:
-    # Trade 2 with B = 3.00: 3.100 / (3.057 + 3.00 + 0.344) = 0.484 < 0.50.
-    reasons = _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="3.00")
+    # Trade 2 with B = 8.00: 6.100-8 < 0 after buffer fails closed, use
+    # smaller TP so buffer pushes net under 0.20:
+    # 1.000 / (3.057 + 3.00 + 0.344) = 0.156 < 0.20.
+    reasons = _sell("4019.813", "4022.870", "4018.813", "0.344", buffer="3.00")
     assert reasons and reasons[0].startswith("PRESEND OWNER_MIN_RR_SLIPPAGE")
     assert _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="0.25") == []
 
@@ -142,9 +144,9 @@ def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
 def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ask 2322.45 at send tick: gross 1.85/3.45=0.536 clears the pre-send
-    # band; net 1.85/(3.45+0.30+0.10)=0.481 fails the owner floor of 0.50.
-    pipeline, sent, client = _run(monkeypatch, move="1.65")
+    # Ask 2323.38 at send tick: gross 0.92/4.38=0.210 clears the pre-send
+    # band; net 0.92/(4.38+0.30+0.10)=0.192 fails the owner floor of 0.20.
+    pipeline, sent, client = _run(monkeypatch, move="2.58")
     assert pipeline.outcome == "rejected"
     assert "PRESEND OWNER_MIN_RR" in pipeline.message
     assert sent == []
@@ -154,7 +156,7 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
         for s in pipeline.stages
         if (s.meta or {}).get("component") == "owner_presend_check"
     )
-    assert meta["check_price"] == "2322.45"
+    assert meta["check_price"] == "2323.38"
     assert meta["check_spread"] == "0.30"
 
 

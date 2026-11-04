@@ -27,9 +27,9 @@ PROFILE_ID = "SCALPING_V1"
 PROFILE_VERSION = "ai-scalping-v8.2.0+SCALPING_V1+UNIVERSE_GATE_FIX"
 
 # Professional scalping RR target — min gate MUST stay <= preferred TP R.
-# The owner minimum (0.50 net after costs) is enforced at submit by
+# The owner minimum (0.20 net after costs) is enforced at submit by
 # owner_live_limits.evaluate_owner_entry.
-_SCALP_RR = Decimal("0.50")
+_SCALP_RR = Decimal("0.20")
 
 
 def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalpingConfig:
@@ -61,7 +61,7 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         require_pa_confluence=True,
         require_tight_spread=True,
         require_valid_volatility=True,
-        # RR MUST not exceed preferred TP. Prefer 2.0R; min geometry 0.50R.
+        # RR MUST not exceed preferred TP. Prefer 0.50R; min geometry 0.20R.
         min_expected_rr=_SCALP_RR,
         fixed_tp_r=PREFERRED_REWARD_RISK,
         atr_tp_mult=Decimal("2.00"),

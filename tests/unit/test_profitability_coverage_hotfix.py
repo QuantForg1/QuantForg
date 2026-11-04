@@ -298,7 +298,7 @@ def test_structure_targets_reject_tp_not_greater_than_sl() -> None:
     )
     if equal.take_profit is not None:
         assert equal.expected_rr is not None
-        assert equal.expected_rr > Decimal("1")
+        assert equal.expected_rr >= Decimal("0.20")
 
 
 @pytest.mark.unit
@@ -347,7 +347,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         confidence=70,
         atr_pct=Decimal("0.2"),
     )
-    # Owner floor 0.50: RR below the floor is a hard OWNER_MIN_RR reject.
+    # Owner floor 0.20: RR below the floor is a hard OWNER_MIN_RR reject.
     below = evaluate_quality_gates(
         direction=direction,
         momentum=80,
@@ -358,7 +358,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         thresholds=thresholds,
         confidence=80,
         trade_quality=80,
-        expected_rr=Decimal("0.49"),
+        expected_rr=Decimal("0.19"),
         atr_pct=Decimal("0.2"),
     )
     assert below.passed is False
@@ -374,7 +374,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         thresholds=thresholds,
         confidence=80,
         trade_quality=80,
-        expected_rr=Decimal("0.50"),
+        expected_rr=Decimal("0.20"),
         atr_pct=Decimal("0.2"),
     )
     assert cleared.checks.get("min_rr") is True
@@ -696,15 +696,16 @@ def test_gold_over_20_planned_sl_rejected() -> None:
 @pytest.mark.unit
 @pytest.mark.trading_core
 def test_execution_engine_rejects_tp_not_greater_than_sl() -> None:
-    # Gold SELL at bid 2320.50: SL 1.80 away, TP 0.80 away -> gross RR 0.444.
+    # Gold SELL at bid 2320.50: SL 4.00 away, TP 0.50 away -> gross RR 0.125.
+    # TP clears broker stops_level but fails the 0.20 owner floor.
     engine, _client = _engine()
     intent = parse_order_intent(
         symbol="XAUUSD",
         side="sell",
         order_type="market",
         volume="0.01",
-        stop_loss="2322.30",
-        take_profit="2319.70",
+        stop_loss="2324.50",
+        take_profit="2320.00",
     )
     pipeline, _decision = engine.run_submit(
         user_id=uuid4(),

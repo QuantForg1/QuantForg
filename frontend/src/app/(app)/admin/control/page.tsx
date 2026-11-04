@@ -61,7 +61,7 @@ const FIELD_LABELS: Record<(typeof POLICY_NUMERIC_KEYS)[number], string> = {
   max_lot: "Max lot (ceiling 0.01)",
   max_spread: "Max spread (ceiling 1.00)",
   min_reward_risk:
-    "Active minimum net reward:risk (at least 0.50). 0.10, 0.15, and 0.20 stay experimental.",
+    "Active minimum net reward:risk (at least 0.20). 0.10 and 0.15 stay experimental.",
   min_trade_quality: "Minimum trade quality (70 to 100; default 70)",
   stop_atr_multiplier:
     "ATR stop multiplier (1.00, 1.25, or 1.50; default 1.00). 0.75 and 0.90 are rejected",
@@ -219,7 +219,7 @@ export default function AdminControlPage() {
     daily_loss_pct: "Experimental daily loss halt % (ceiling 48)",
     max_lot: "Experimental max lot (ceiling 0.01)",
     max_spread: "Experimental max spread (ceiling 1.00)",
-    min_reward_risk: "Experimental reward:risk (0.10, 0.15, or 0.20)",
+    min_reward_risk: "Experimental reward:risk (0.10 or 0.15)",
     min_trade_quality: "Experimental trade quality (70 to 100)",
     stop_atr_multiplier: "Experimental ATR stop multiplier (1.00, 1.25, or 1.50)",
     max_concurrent_positions: "Experimental max positions (1 to 5)",

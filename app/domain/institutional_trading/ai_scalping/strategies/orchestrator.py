@@ -44,9 +44,9 @@ ADVISORY_MIXED_MIN_CONFIDENCE = 82
 MIN_MTF_ALIGNMENT = 55
 # Small-account / cost gate: wide spread vs weak RR → prefer no trade.
 MAX_SPREAD_FOR_WEAK_RR = 0.80
-MIN_RR_WHEN_SPREAD_ELEVATED = 0.50
+MIN_RR_WHEN_SPREAD_ELEVATED = 0.20
 # Absolute net reward:risk floor aligned with owner policy (prefer NO_TRADE).
-MIN_NET_REWARD_RISK = 0.50
+MIN_NET_REWARD_RISK = 0.20
 # Owner preferred RR — solo setups below preferred need stronger quality.
 PREFERRED_NET_REWARD_RISK = 0.50
 PREFERRED_RR_SOLO_MIN_QUALITY = 85

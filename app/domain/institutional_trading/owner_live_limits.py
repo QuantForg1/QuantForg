@@ -19,8 +19,8 @@ layer may be stricter, never looser.
   A stop is never shrunk to fit the budget: too wide -> no trade. 1.00 is the
   noise boundary. A structural stop wider than that is kept. A setup whose
   1.00 x ATR stop is not a valid protective stop is rejected.
-- Active reward:risk floor is 0.50 after spread, expected slippage, and a
-  confirmed commission. Candidates 0.10, 0.15, and 0.20 can be saved as an
+- Active reward:risk floor is 0.20 after spread, expected slippage, and a
+  confirmed commission. Candidates 0.10 and 0.15 can be saved as an
   experiment only. They do not become the live floor unless that experiment is
   explicitly promoted. Net reward:risk includes those costs. Unknown
   commission is omitted and is not a verified net. TP is a real structure
@@ -79,15 +79,14 @@ OWNER_DAILY_LOSS_PCT = Decimal("48.0")
 # and monthly P/L are still computed for reporting (summaries, journal).
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
-OWNER_MIN_REWARD_RISK = Decimal("0.50")
-# Active floor is 0.50. These three values are the only floors below 0.50 an
+OWNER_MIN_REWARD_RISK = Decimal("0.20")
+# Active floor is 0.20. These two values are the only floors below 0.20 an
 # owner may save, and only inside the experimental block. They stay inactive
-# until that experiment is promoted. Any other value below 0.50 is rejected
-# and the active floor fails closed to 0.50.
+# until that experiment is promoted. Any other value below 0.20 is rejected
+# and the active floor fails closed to 0.20.
 OWNER_EXPERIMENTAL_REWARD_RISK = (
     Decimal("0.10"),
     Decimal("0.15"),
-    Decimal("0.20"),
 )
 OWNER_MIN_REWARD_RISK_FLOOR = Decimal("0.10")
 # Owner 2026-10-26: the fixed Monday-Friday 07:00-17:00 desk window is retired.
@@ -633,7 +632,7 @@ def _quantize_cent(value: Decimal) -> Decimal:
 def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
     """Return an enforceable net floor, or None when the saved value is illegal.
 
-    Any value at least 0.50 is allowed. Below that, only 0.10, 0.15, and 0.20.
+    Any value at least 0.20 is allowed. Below that, only 0.10 and 0.15.
     """
     try:
         rr = Decimal(str(value))
@@ -869,8 +868,8 @@ def evaluate_owner_entry(
     ``commission is None`` rejects the entry. It is not treated as zero.
     A known zero is included. Reward:risk counts the spread once, on the risk
     leg, plus order slippage and a known commission. The ratio must clear the
-    active owner floor (0.50; a promoted experiment may be 0.10, 0.15, or
-    0.20). A saved but unpromoted experiment stays at 0.50.
+    active owner floor (0.20; a promoted experiment may be 0.10 or 0.15).
+    A saved but unpromoted experiment stays at 0.20.
     When ``stop_includes_spread_buffer`` is True, ``|entry - sl|`` already embeds
     the owner spread buffer; spread is not added again to planned risk or net RR
     (Phase-6 — avoid double-count; slippage + commission still apply).

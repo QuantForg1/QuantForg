@@ -88,10 +88,10 @@ const active = validateActiveDraft({
   max_planned_risk_pct: "14",
   max_aggregate_open_risk_pct: "14",
   min_trade_quality: "70",
-  min_reward_risk: "0.50",
+  min_reward_risk: "0.20",
 });
 assert.deepEqual(active, []);
-const rejectedReward = validateActiveDraft({ min_reward_risk: "0.20" });
+const rejectedReward = validateActiveDraft({ min_reward_risk: "0.10" });
 assert.equal(rejectedReward.length, 1);
 assert.match(rejectedReward[0], /experimental/);
 const rejectedQuality = validateActiveDraft({ min_trade_quality: "69" });
@@ -103,7 +103,7 @@ const acceptedOwner = validateActiveDraft({
   max_spread: "1.00",
   max_concurrent_positions: "1",
   min_trade_quality: "70",
-  min_reward_risk: "0.50",
+  min_reward_risk: "0.20",
 });
 assert.deepEqual(acceptedOwner, []);
 const rejectedRisk = validateActiveDraft({ max_planned_risk_pct: "20.01" });
@@ -122,24 +122,24 @@ const experimentDraft = {
   daily_loss_pct: "19",
   max_lot: "0.01",
   max_spread: "0.45",
-  min_reward_risk: "0.20",
+  min_reward_risk: "0.10",
   min_trade_quality: "70",
   stop_atr_multiplier: "1.00",
   max_concurrent_positions: "1",
 };
 assert.deepEqual(validateExperimentalDraft(experimentDraft), []);
 assert.equal(
-  validateExperimentalDraft({ ...experimentDraft, min_reward_risk: "0.50" }).length > 0,
+  validateExperimentalDraft({ ...experimentDraft, min_reward_risk: "0.20" }).length > 0,
   true,
 );
 const experimentalChanges = buildExperimentalChanges(experimentDraft);
 assert.equal(experimentalChanges.promote_experimental, undefined);
 const nested = experimentalChanges.experimental as Record<string, unknown>;
-assert.equal(nested.min_reward_risk, "0.20");
+assert.equal(nested.min_reward_risk, "0.10");
 assert.equal(nested.min_trade_quality, 70);
 assert.match(canPromoteExperimental(experimentDraft).join(" "), /Promotion blocked/);
 assert.equal("min_reward_risk" in buildPolicyChanges({
-  draft: { ...experimentDraft, min_reward_risk: "0.50" },
+  draft: { ...experimentDraft, min_reward_risk: "0.20" },
   m1: "defer",
   m1Live: "defer",
 }), true);
@@ -149,19 +149,19 @@ const states = policyStateLines({
   applied_version: 2,
   worker_confirmed: false,
   experimental_promoted: false,
-  experimental: { min_reward_risk: "0.20" },
-  document: { min_reward_risk: "0.50", max_planned_risk_pct: "14" },
+  experimental: { min_reward_risk: "0.10" },
+  document: { min_reward_risk: "0.20", max_planned_risk_pct: "14" },
 });
 assert.match(states.experimental, /Saved experimental settings/);
 assert.match(states.experimental, /not the live floor/);
 assert.match(states.savedProduction, /not confirmed by the worker/);
 assert.match(states.workerLoaded, /has not confirmed version 4/);
-assert.doesNotMatch(states.workerLoaded, /0\.20/);
+assert.doesNotMatch(states.workerLoaded, /0\.10/);
 const loaded = policyStateLines({
   version: 4,
   applied_version: 4,
   worker_confirmed: true,
-  document: { min_reward_risk: "0.50", max_planned_risk_pct: "14" },
+  document: { min_reward_risk: "0.20", max_planned_risk_pct: "14" },
 });
 assert.match(loaded.workerLoaded, /Worker loaded version 4/);
 assert.match(loaded.savedProduction, /worker confirmed/i);
@@ -169,11 +169,11 @@ const storedCandidate = policyStateLines({
   version: 3,
   applied_version: 3,
   worker_confirmed: true,
-  document: { min_reward_risk: "0.20", max_planned_risk_pct: "14" },
-  enforced_min_reward_risk: "0.50",
+  document: { min_reward_risk: "0.10", max_planned_risk_pct: "14" },
+  enforced_min_reward_risk: "0.20",
 });
 assert.match(storedCandidate.workerLoaded, /not the live floor/);
-assert.match(storedCandidate.workerLoaded, /enforces 0.50/);
-assert.match(storedCandidate.savedProduction, /Stored min_reward_risk 0.20/);
+assert.match(storedCandidate.workerLoaded, /enforces 0.20/);
+assert.match(storedCandidate.savedProduction, /Stored min_reward_risk 0.10/);
 
 console.log("admin-policy.test.ts ok");

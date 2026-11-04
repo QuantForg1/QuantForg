@@ -38,7 +38,7 @@ TARGET_PLANNED_RISK_USD = OWNER_MAX_SL_RISK_USD
 TARGET_RISK_PER_TRADE_USD = TARGET_PLANNED_RISK_USD
 MAX_PLANNED_SL_RISK_USD = OWNER_MAX_SL_RISK_USD
 MAX_TOTAL_PLANNED_RISK_USD = max_aggregate_risk_usd(OWNER_RISK_REFERENCE_USD)
-# Reward must clear the active 0.50 floor after costs. Never stretch TP.
+# Reward must clear the active 0.20 floor after costs. Never stretch TP.
 MIN_REWARD_RISK = OWNER_MIN_REWARD_RISK
 PREFERRED_REWARD_RISK = Decimal("0.50")
 # Per-trade percent ceiling (20% of the risk reference).
