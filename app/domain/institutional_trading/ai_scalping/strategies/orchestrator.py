@@ -17,12 +17,18 @@ from typing import Any
 from app.domain.institutional_trading.ai_scalping.strategies.models import (
     StrategyEvaluation,
 )
+from app.domain.institutional_trading.ai_scalping.strategies.soe_intelligence import (
+    evidence_intelligence_reason,
+    filter_candidates_by_ltf_session,
+    ny_solo_bars,
+    regime_suitability_boost,
+)
 from app.domain.institutional_trading.ai_scalping.strategies.validation_status import (
     influence_weight_for_strategy,
     strategy_health_snapshot,
 )
 
-ORCHESTRATION_VERSION = "soe-v1.4.0"
+ORCHESTRATION_VERSION = "soe-v1.5.0"
 
 # Solo passer must clear a higher quality bar (prefer no trade).
 MIN_SOLO_QUALITY = 82
@@ -209,9 +215,19 @@ def _effective_confluence_count(candidates: list[StrategyEvaluation]) -> int:
 
 
 def _adjusted_rank(
-    ev: StrategyEvaluation, *, influence: float, confluence_bonus: float
+    ev: StrategyEvaluation,
+    *,
+    influence: float,
+    confluence_bonus: float,
+    score: dict[str, Any] | None = None,
 ) -> tuple[float, int, int]:
-    base = float(ev.quality) + float(ev.live_rank_boost)
+    # Regime suitability is a soft additive - never hardcodes a preferred
+    # strategy; quality x verified influence remain primary.
+    base = (
+        float(ev.quality)
+        + float(ev.live_rank_boost)
+        + regime_suitability_boost(str(ev.strategy_id), score)
+    )
     return (base * influence + confluence_bonus, ev.confidence, ev.quality)
 
 
@@ -313,6 +329,11 @@ def _evidence_gate_prefer_no_trade(score: dict[str, Any] | None) -> str | None:
             f"Momentum exhaustion risk: momentum {momentum:.0f} with weak "
             f"structure {structure:.0f} — prefer no trade"
         )
+
+    # Phase 3 intelligence: chase/stale sniper + ultra-short BUY exhaustion.
+    intel = evidence_intelligence_reason(score)
+    if intel:
+        return intel
     return None
 
 
@@ -453,6 +474,22 @@ def orchestrate_strategies(
     selectable, conflict_rejects = _resolve_regime_conflicts(selectable)
     rejected.extend(conflict_rejects)
 
+    # Phase 3: LTF/HTF disagreement + NY trend MTF — demote trendish misfits
+    # so SMC / breakout / range specialists can win when they pass.
+    selectable, ltf_demoted = filter_candidates_by_ltf_session(selectable, score)
+    for ev, why in ltf_demoted:
+        rejected.append(
+            RejectedCandidate(
+                strategy_id=ev.strategy_id,
+                name=ev.name,
+                reason=why,
+                quality=ev.quality,
+                confidence=ev.confidence,
+                influence_weight=weights.get(ev.strategy_id, 1.0),
+            )
+        )
+        reasons.append(f"ltf_session_gate:{ev.strategy_id}")
+
     if not selectable:
         return _no_trade(
             reasons_t=tuple(
@@ -509,6 +546,7 @@ def orchestrate_strategies(
             e,
             influence=weights.get(e.strategy_id, 1.0),
             confluence_bonus=confluence_bonus,
+            score=score if isinstance(score, dict) else None,
         ),
         reverse=True,
     )
@@ -576,9 +614,15 @@ def orchestrate_strategies(
         )
 
     if solo:
-        solo_ok = (
-            best.quality >= MIN_SOLO_QUALITY or best.confidence >= MIN_SOLO_CONFIDENCE
-        )
+        solo_q = MIN_SOLO_QUALITY
+        solo_c = MIN_SOLO_CONFIDENCE
+        # Phase 3 NY quality uplift — raise solo evidence bar (do not ban session).
+        ny_bars = ny_solo_bars(score if isinstance(score, dict) else None)
+        if ny_bars is not None:
+            solo_q = max(solo_q, int(ny_bars[0]))
+            solo_c = max(solo_c, int(ny_bars[1]))
+            reasons.append(f"ny_session_solo_bar:q>={solo_q}/c>={solo_c}")
+        solo_ok = best.quality >= solo_q or best.confidence >= solo_c
         # Supportive advisory can count as soft confluence for solo selectivity.
         if agreement.get("supportive") and best.quality >= MIN_CONFLUENT_QUALITY:
             solo_ok = True
@@ -619,8 +663,8 @@ def orchestrate_strategies(
                         name=ev.name,
                         reason=(
                             f"Solo strategy below selectivity bar "
-                            f"(need quality>={MIN_SOLO_QUALITY} or "
-                            f"confidence>={MIN_SOLO_CONFIDENCE}; "
+                            f"(need quality>={solo_q} or "
+                            f"confidence>={solo_c}; "
                             f"got q={ev.quality} c={ev.confidence})"
                         ),
                         quality=ev.quality,
