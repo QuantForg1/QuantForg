@@ -345,7 +345,7 @@ def test_authorized_m1_submits_when_measured_rr_clears_the_owner_floor(
         stop_dist = ask - setup.stop
         floor = active_min_reward_risk()
         need = floor * (stop_dist + spread) + Decimal("0.05")
-        # Round-trip cost gate requires target ≥ 1.5× cost (0.30 → 0.45).
+        # Round-trip cost gate requires target >= 1.5x cost (0.30 -> 0.45).
         need = max(need, Decimal("0.46"))
         return replace(setup, target=ask + need)
 

@@ -425,9 +425,7 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
         else:
             authorized = authorized_min_reward_risk(rr)
             if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
-                errors.append(
-                    "experimental min_reward_risk must be 0.10 or 0.15"
-                )
+                errors.append("experimental min_reward_risk must be 0.10 or 0.15")
     if "min_trade_quality" in raw:
         authorized_quality = authorized_min_trade_quality(raw.get("min_trade_quality"))
         if authorized_quality is None:
