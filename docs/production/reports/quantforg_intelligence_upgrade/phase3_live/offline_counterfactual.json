@@ -1,0 +1,39 @@
+{
+  "orchestration_version": "soe-v1.5.0",
+  "baseline": {
+    "broker_confirmed_closes_phase2": 13,
+    "net_pnl_phase2": -8.48,
+    "win_rate_phase2": 0.46,
+    "profit_factor_approx": 0.59,
+    "expectancy_approx": -0.65,
+    "equity_approx": 15.52,
+    "owner_sl_risk_ceiling_usd": 3.104,
+    "min_lot": 0.01,
+    "owner_sl_risk_note": "Preserve OWNER_SL_RISK. At equity ~15.52 USD, 20% ceiling is ~3.10 USD. Observed SL losses on 0.01 lots ranged ~1.55 to 4.01 USD; geometries above ceiling must continue to reject."
+  },
+  "counterfactual_attributed_tc_losers": [
+    {
+      "position_id": 683675942,
+      "strategy": "trend_continuation",
+      "net": -2.0,
+      "ltf_gate": "trend_continuation lacks M5 entry lean with MTF=72 (HTF/LTF disagreement)",
+      "soe_prefer_no_trade": true,
+      "blocked_by_phase3": true
+    },
+    {
+      "position_id": 683682967,
+      "strategy": "trend_continuation",
+      "net": -1.55,
+      "ltf_gate": "trend_continuation lacks M5 entry lean with MTF=72 (HTF/LTF disagreement)",
+      "soe_prefer_no_trade": true,
+      "blocked_by_phase3": true
+    }
+  ],
+  "counterfactual_avoided_usd_if_all_blocked": 3.55,
+  "ny_solo_bars": {
+    "quality": 86,
+    "confidence": 84
+  },
+  "chase_gate_smoke": "CHASING setup_state prefers no trade",
+  "disclaimer": "Counterfactual on reconstructed / attributed labels with assumed LTF factors matching Phase 2 narrative. Not a guarantee of future PnL. Historical data does not guarantee future profitability."
+}

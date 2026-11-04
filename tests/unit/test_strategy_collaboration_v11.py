@@ -62,7 +62,7 @@ def _base_score(**overrides):
 
 @pytest.mark.unit
 def test_soe_version_is_v11() -> None:
-    assert ORCHESTRATION_VERSION == "soe-v1.4.0"
+    assert ORCHESTRATION_VERSION == "soe-v1.5.0"
 
 
 @pytest.mark.unit

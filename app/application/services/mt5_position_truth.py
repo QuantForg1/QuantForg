@@ -225,6 +225,30 @@ _HISTORICAL_FILL_STRATEGY_BINDINGS: dict[int, str] = {
 }
 
 
+def _strategy_hints_for_tickets(tickets: list[int]) -> dict[int, str]:
+    """Resolve fill-time strategy IDs before bindings are cleared on close."""
+    hints: dict[int, str] = {}
+    if not tickets:
+        return hints
+    try:
+        from app.domain.institutional_trading.ai_scalping.strategies import (
+            attribution_store as _attr_mod,
+        )
+
+        store = _attr_mod.get_strategy_attribution_store()
+        for ticket in tickets:
+            pid = int(ticket)
+            if pid <= 0:
+                continue
+            bound = store.resolve(ticket=pid, position_id=pid)
+            sid = str(getattr(bound, "strategy_id", "") or "").strip()
+            if sid:
+                hints[pid] = sid
+    except Exception:
+        logger.exception("close_attribution_strategy_hint_resolve_failed")
+    return hints
+
+
 def _attribute_stale_tickets(
     *,
     stale_tickets: list[int],
@@ -260,11 +284,17 @@ def _attribute_stale_tickets(
         else:
             hist_ok, deals = load_history_deals_safe(mt5_adapter)
         results: list[dict[str, Any]] = []
+        # Capture strategy bindings before record_closed clears them.
+        hint_tickets = list(
+            {int(t) for t in list(stale_tickets) + list(ledger.pending_ids()) if int(t)}
+        )
+        strategy_hints = _strategy_hints_for_tickets(hint_tickets)
         if stale_tickets:
             results.extend(
                 attribute_missing_tickets(
                     tickets=stale_tickets,
                     deals=deals if hist_ok else [],
+                    strategy_hints=strategy_hints,
                     source="missing_from_mt5_book",
                     ledger=ledger,
                 )
@@ -272,7 +302,13 @@ def _attribute_stale_tickets(
         # Retry pending + one-time historical backfill for owner-identified gaps.
         if hist_ok and deals:
             if ledger.pending_ids():
-                results.extend(reconcile_pending_closes(deals=deals, ledger=ledger))
+                results.extend(
+                    reconcile_pending_closes(
+                        deals=deals,
+                        strategy_hints=strategy_hints,
+                        ledger=ledger,
+                    )
+                )
             if need_historical:
                 results.extend(
                     reconcile_historical_closes(
