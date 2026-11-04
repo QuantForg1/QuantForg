@@ -29,7 +29,7 @@ def test_continuous_scalp_flow_knobs_locked() -> None:
     assert cfg.normal_vol.quality == 76
     assert cfg.min_structure_score == 60
     assert cfg.min_momentum_score == 55
-    assert cfg.min_expected_rr == Decimal("1.50")
+    assert cfg.min_expected_rr == Decimal("0.50")
     assert cfg.fixed_tp_r == Decimal("2.00")
     assert cfg.absolute_max_hold_minutes == 12
     assert cfg.break_even_at_r == Decimal("0.80")

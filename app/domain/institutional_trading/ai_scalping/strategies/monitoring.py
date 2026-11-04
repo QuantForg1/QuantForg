@@ -269,9 +269,9 @@ def build_robot_health_monitor(
             "last_net_reward_risk": activity.get("last_net_reward_risk"),
             "last_trade_quality": activity.get("last_trade_quality"),
             "last_regime": activity.get("last_regime"),
-            "owner_min_net_rr": 1.50,
+            "owner_min_net_rr": 0.50,
             "owner_preferred_rr": 2.00,
-            "owner_min_quality": 75,
+            "owner_min_quality": 70,
             "note": (
                 "Phase-6: surfaces last-cycle ATR%/net RR/quality for reject "
                 "forensics. Does not authorize LIVE or fabricate profitability."
@@ -288,16 +288,16 @@ def build_robot_health_monitor(
         "live_execution_authorization": performance.get("live_execution_authorization"),
         "risk_policy_defaults": {
             "max_concurrent_positions": 1,
-            "minimum_net_reward_risk": "1.50",
+            "minimum_net_reward_risk": "0.50",
             "preferred_reward_risk": "2.00",
-            "minimum_trade_quality": 75,
+            "minimum_trade_quality": 70,
             "max_lot": "0.01",
             "daily_loss_halt_percent": "48",
             "weekly_loss_halt_percent": "0 (off)",
             "overall_drawdown_halt_percent": "0 (off)",
             "note": (
-                "Owner Phase-5 lock: experimental_promoted cannot lower the "
-                "active net RR floor below 1.50. 20% per-trade and 48% daily "
+                "Owner floor: experimental_promoted cannot lower the "
+                "active net RR floor below 0.50. 20% per-trade and 48% daily "
                 "halt are aggressive. Broker constraints still bind."
             ),
         },

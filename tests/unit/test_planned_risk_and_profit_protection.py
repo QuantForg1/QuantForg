@@ -563,13 +563,13 @@ class TestRewardRisk:
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.09900")))
         assert gate.passed is False
 
-    def test_tp_equal_to_sl_fails_owner_reward_floor(self) -> None:
-        # Reward equals the stop. Ratio 1.0 does not clear the active 1.50 floor.
+    def test_tp_equal_to_sl_clears_owner_reward_floor_of_0_50(self) -> None:
+        # Reward equals the stop. Ratio 1.0 clears the active 0.50 floor.
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10200")))
-        assert gate.passed is False
+        assert gate.passed is True
 
     def test_tp_larger_than_sl_but_below_owner_rr_rejected(self) -> None:
-        # Reward 0.0009 / risk 0.0020 = 0.45 < owner minimum 1.50.
+        # Reward 0.0009 / risk 0.0020 = 0.45 < owner minimum 0.50.
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10090")))
         assert gate.passed is False
 

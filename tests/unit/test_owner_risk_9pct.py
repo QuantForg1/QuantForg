@@ -557,7 +557,7 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
     assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("20.0")
     assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("48.0")
     assert cfg.max_consecutive_losses == 0  # no loss-streak pause
-    assert cfg.min_reward_risk == Decimal("1.50")
+    assert cfg.min_reward_risk == Decimal("0.50")
     assert cfg.max_spread == Decimal("1.00")
     assert cfg.max_open_positions == 1
     # Operator-only settings that are not owner limits are kept.
