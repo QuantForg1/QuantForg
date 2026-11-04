@@ -189,6 +189,33 @@ def test_position_monitor_real_positions_only() -> None:
 
 
 @pytest.mark.unit
+def test_position_monitor_reads_pme_current_stop_field() -> None:
+    """PME ManagedPosition exposes current_stop, not current_sl.
+
+    NOC previously rendered sl=null while tp (current_tp) was populated.
+    """
+    pos = SimpleNamespace(
+        ticket=683005462,
+        symbol="XAUUSD",
+        side="buy",
+        entry_price=4025.047,
+        current_stop=4022.229,
+        initial_stop=4022.229,
+        current_tp=4028.993,
+        remaining_volume=0.01,
+        risk_distance=2.818,
+        state=SimpleNamespace(value="OPEN"),
+    )
+    mon = build_position_monitor(
+        [pos], mid_price=4025.633, atr=1.5, market_session="london"
+    )
+    row = mon["rows"][0]
+    assert row["sl"] == 4022.229
+    assert row["tp"] == 4028.993
+    assert row["stop_distance"] is not None
+
+
+@pytest.mark.unit
 def test_operational_intelligence_warnings_only() -> None:
     ops = build_operational_intelligence()
     assert ops["stops_production"] is False
