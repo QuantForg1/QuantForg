@@ -96,7 +96,7 @@ def test_owner_constants_replace_80_percent_caps() -> None:
     assert reference_trade == MAX_PLANNED_SL_RISK_USD
     assert reference_trade == TARGET_PLANNED_RISK_USD
     assert MIN_PLANNED_RISK_USD == D("0") < TARGET_PLANNED_RISK_USD
-    assert D("1.50") == MIN_REWARD_RISK
+    assert D("0.50") == MIN_REWARD_RISK
     assert MicroAccountProfile().hard_max_risk_pct == D("20.0")
 
 
@@ -232,7 +232,8 @@ def test_valid_gold_entry_passes() -> None:
 
 
 def test_production_order_of_2026_10_20_is_rejected() -> None:
-    # SELL XAUUSD 0.02 sent at 23:37:07Z: 0.02 lot, $8.46 SL risk, RR 1.0.
+    # SELL XAUUSD 0.02 sent at 23:37:07Z: 0.02 lot, $8.46 SL risk, RR ~1.08.
+    # Lot still illegal; RR ~1.08 clears the owner floor of 0.50.
     reasons = _entry(
         symbol="XAUUSD",
         volume=D("0.02"),
@@ -242,7 +243,7 @@ def test_production_order_of_2026_10_20_is_rejected() -> None:
     codes = {r.split(":")[0] for r in reasons}
     assert "OWNER_MAX_LOT" in codes
     assert "OWNER_SL_RISK" not in codes
-    assert "OWNER_MIN_RR" in codes
+    assert "OWNER_MIN_RR" not in codes
 
 
 def test_volume_002_is_rejected() -> None:
@@ -251,7 +252,7 @@ def test_volume_002_is_rejected() -> None:
 
 def test_planned_risk_one_cent_over_20_percent_is_rejected() -> None:
     # Equity 50.84 -> cap $10.16. SL 9.78 + spread 0.38 = $10.16 allowed;
-    # SL 9.79 + 0.38 = $10.17 rejected. TP far enough for owner RR 1.50.
+    # SL 9.79 + 0.38 = $10.17 rejected. TP far enough for owner RR 0.50.
     assert any(
         r.startswith("OWNER_SL_RISK")
         for r in _entry(stop_loss=D("4126.22"), take_profit=D("4101.00"))
@@ -265,11 +266,11 @@ def test_reward_risk_below_0_50_after_spread_rejected() -> None:
 
 
 def test_reward_risk_counts_spread_once_boundary() -> None:
-    # SL $2.00 + spread 0.44 -> net loss 2.44; min TP distance 3.66 (RR 1.50).
+    # SL $2.00 + spread 0.44 -> net loss 2.44; min TP distance 1.22 (RR 0.50).
     kw = {"stop_loss": D("4118.43"), "spread": D("0.44")}
-    assert _entry(take_profit=D("4112.77"), **kw) == []
+    assert _entry(take_profit=D("4115.21"), **kw) == []
     assert any(
-        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4112.78"), **kw)
+        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4115.22"), **kw)
     )
 
 

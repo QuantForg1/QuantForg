@@ -455,7 +455,7 @@ def test_worker_applies_saved_policy_version():
     )
     assert candidate["worker_confirmed"] is True
     assert candidate["document"]["min_reward_risk"] == "0.20"
-    assert candidate["enforced_min_reward_risk"] == "1.50"
+    assert candidate["enforced_min_reward_risk"] == "0.50"
     assert candidate["experimental_promoted"] is False
 
 
