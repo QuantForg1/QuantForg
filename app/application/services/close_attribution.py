@@ -395,6 +395,37 @@ def resolve_strategy_id_for_ticket(
     return hint or None
 
 
+def _arm_durable_buy_cascade(evidence: BrokerExitEvidence) -> None:
+    """Persist a losing BUY anchor only from broker-confirmed full-close evidence."""
+    closed_at: datetime | None = None
+    raw_time = str(evidence.exit_time or "").strip()
+    if raw_time:
+        try:
+            closed_at = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+        except ValueError:
+            closed_at = None
+    try:
+        from app.domain.institutional_trading.ai_scalping.buy_cascade_anchor_store import (  # noqa: E501
+            record_losing_buy_close,
+        )
+
+        record_losing_buy_close(
+            symbol=evidence.symbol,
+            position_id=int(evidence.position_id),
+            entry_price=evidence.entry_price,
+            net_pnl=evidence.net_pnl,
+            closed_at=closed_at,
+            close_outcome=evidence.close_reason or "",
+            direction=evidence.side,
+            fully_closed=True,
+        )
+    except Exception:
+        logger.exception(
+            "buy_cascade_broker_anchor_failed",
+            position_id=evidence.position_id,
+        )
+
+
 def record_broker_confirmed_close(
     *,
     evidence: BrokerExitEvidence,
@@ -404,6 +435,7 @@ def record_broker_confirmed_close(
     ledger: CloseAttributionLedger | None = None,
 ) -> dict[str, Any]:
     """Record SOE + telemetry close analytics once for a confirmed broker exit."""
+    _arm_durable_buy_cascade(evidence)
     book = ledger or get_close_attribution_ledger()
     pid = int(evidence.position_id)
     if book.already_recorded(pid, exit_deal_id=evidence.exit_deal_id):
