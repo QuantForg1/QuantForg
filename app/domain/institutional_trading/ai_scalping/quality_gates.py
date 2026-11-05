@@ -172,9 +172,7 @@ def evaluate_quality_gates(
         # Both sides have LTF core evidence within margin → CONFLICT;
         # otherwise there is simply no qualifying LTF edge.
         kind = (
-            "CONFLICT"
-            if ltf_b > 0 and ltf_s > 0 and edge <= margin
-            else "NO_LTF_EDGE"
+            "CONFLICT" if ltf_b > 0 and ltf_s > 0 and edge <= margin else "NO_LTF_EDGE"
         )
         hard_rejects.append(
             "No clear BUY/SELL edge (balanced scores → reject; "
@@ -213,8 +211,7 @@ def evaluate_quality_gates(
     checks["owner_min_trade_quality"] = trade_quality >= quality_floor
     if not checks["owner_min_trade_quality"]:
         hard_rejects.append(
-            f"OWNER_MIN_TRADE_QUALITY: trade quality {trade_quality} "
-            f"< {quality_floor}"
+            f"OWNER_MIN_TRADE_QUALITY: trade quality {trade_quality} < {quality_floor}"
         )
 
     owner_floor = active_min_reward_risk()
