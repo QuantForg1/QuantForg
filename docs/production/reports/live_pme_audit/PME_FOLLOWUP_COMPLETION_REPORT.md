@@ -127,7 +127,7 @@ ruff check (touched modules) → clean
 | Deploy | ID / commit | Notes |
 |---|---|---|
 | #157 | Railway `75db8c3d` / `98f173a` | **Production verified** health/ready |
-| Follow-up PR (this work) | Pending merge/deploy | Flags default OFF — safe to merge; activations need owner |
+| #158 follow-up | Railway `e4807872` / `56c777a` | **Production verified** health/ready; activation flags remain OFF |
 
 ---
 
@@ -158,7 +158,7 @@ ruff check (touched modules) → clean
 | Bucket | Items |
 |---|---|
 | Completed and production verified | #157 class-aware recovery + comment scan |
-| Implemented, awaiting merge/deploy | Broker confirm (OFF), net BE (OFF), exit proposer, session gate, min-lot partial honesty, honest market_open |
+| Completed and production verified (#158) | Broker confirm path (OFF), net BE (OFF), exit proposer, session gate, min-lot partial honesty, honest market_open, MT5 reader attached |
 | Implemented, awaiting owner activation | Confirm flag, net BE flag, session flatten, LIVE reversal wiring |
 | Recommendations only | Owner YAML, Scenario B, capital growth scenarios |
-| Still missing | LIVE reversal context feed; full attribution coverage; confirm reader wired into ITE create |
+| Still missing | LIVE reversal context feed; full attribution coverage |
