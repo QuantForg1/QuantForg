@@ -171,9 +171,10 @@ pytest tests/unit/test_pme_broker_confirm_net_be.py
 | --- | --- |
 | Prior PME LIVE confirm+net BE | #160 → `95d7a582` (Railway SUCCESS) |
 | Prior docs | #161 → `a6b9ea57` |
-| This profitability engineering PR | [#162](https://github.com/QuantForg1/QuantForg/pull/162) `cb4bca4e` *(merge SHA after CI)* |
+| This profitability engineering PR | [#162](https://github.com/QuantForg1/QuantForg/pull/162) merge `3c8bd4f2` |
+| Railway deploy | `1fdef8ea` SUCCESS on `3c8bd4f` — `/health` `/ready` 200; LIVE running; positions 0; equity 14.92 |
 
-Frontend Vercel: **not required** for this backend-only change.
+Frontend Vercel: preview only for this PR; production frontend not required for backend-only change.
 
 ---
 
