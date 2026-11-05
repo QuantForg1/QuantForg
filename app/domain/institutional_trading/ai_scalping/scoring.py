@@ -15,6 +15,10 @@ from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
     ResolvedThresholds,
     resolve_adaptive_thresholds,
 )
+from app.domain.institutional_trading.ai_scalping.buy_cascade_guard import (
+    bullish_reversal_since,
+    buy_cascade_blocked,
+)
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     AiScalpingConfig,
@@ -728,6 +732,19 @@ def score_scalping_setup(
         if not fresh_ok:
             reject_list.append(REQUALIFY_REJECT)
             reasons.append(f"WAIT: {REQUALIFY_REJECT} ({fresh_why})")
+        book_state = get_symbol_state_book().get(sym_key)
+        entry_px = targets.entry if targets.entry is not None else mid
+        blocked, cascade_why = buy_cascade_blocked(
+            direction=direction_dec.direction.value,
+            entry_price=entry_px,
+            anchor=book_state.cascade_anchor,
+            reversal_confirmed=bullish_reversal_since(
+                snapshot, book_state.cascade_since
+            ),
+        )
+        if blocked:
+            reject_list.append(cascade_why)
+            reasons.append(f"WAIT: {cascade_why}")
     if not sniper.passed:
         wait_code = sniper.primary_reason or "WAIT_SNIPER"
         reject_list.append(wait_code)
