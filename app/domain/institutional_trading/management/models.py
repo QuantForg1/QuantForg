@@ -39,6 +39,7 @@ class ManageOutcome(StrEnum):
     OMS_FAILURE = "oms_failure"
     GATEWAY_FAILURE = "gateway_failure"
     MT5_FAILURE = "mt5_failure"
+    BROKER_CONFIRM_FAILURE = "broker_confirm_failure"
     SKIPPED = "skipped"
 
 
@@ -182,6 +183,10 @@ class PositionManageContext:
     # True only when the live position row parsed a stop <= 0.
     # None/unreadable stays False so a missing book is not treated as naked.
     broker_stop_missing: bool = False
+    # Optional cost inputs for net break-even (never invent zeros).
+    open_commission: Decimal | None = None
+    open_swap: Decimal | None = None
+    contract_size: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

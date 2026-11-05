@@ -110,6 +110,19 @@ def _oms_submit_path_healthy(probes: Any) -> bool:
     return bool(getattr(probes, "gateway_available", False))
 
 
+def _optional_decimal(raw: Any) -> Decimal | None:
+    """Parse a decimal cost field; None when missing or unreadable (never invent 0)."""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text or text.lower() in {"none", "nan"}:
+        return None
+    try:
+        return Decimal(text)
+    except Exception:
+        return None
+
+
 def _merge_cycle_diagnostics(
     ctx_diag: dict[str, Any] | None,
     cycle_diag: dict[str, Any] | None,
@@ -1511,13 +1524,24 @@ class InstitutionalIteRuntime:
             )
 
             book_sl, broker_stop_missing = broker_stop_fields(live)
+            # Honest market_open when known. Session flatten remains gated by
+            # PME config.session_flatten_on_market_closed (default False) so
+            # wiring truth does not auto-liquidate without owner approval.
+            market_open_flag = True
+            raw_mkt = getattr(account, "market_open", None)
+            if raw_mkt is True or raw_mkt is False:
+                market_open_flag = bool(raw_mkt)
+            else:
+                snap_mkt = getattr(snapshot, "market_open", None)
+                if snap_mkt is True or snap_mkt is False:
+                    market_open_flag = bool(snap_mkt)
             pctx = PositionManageContext(
                 now=datetime.now(UTC),
                 current_price=current_px,
                 atr=account.atr or Decimal("1"),
                 mid_price=current_px,
                 spread=coerce_spread_value(getattr(snapshot, "spread", None)),
-                market_open=True,
+                market_open=market_open_flag,
                 position_still_open=pos_still_open,
                 book_volume=book_vol,
                 book_stop=book_sl,
@@ -1535,6 +1559,12 @@ class InstitutionalIteRuntime:
                     or ""
                 )
                 or None,
+                open_commission=_optional_decimal(
+                    getattr(live, "commission", None) if live is not None else None
+                ),
+                open_swap=_optional_decimal(
+                    getattr(live, "swap", None) if live is not None else None
+                ),
             )
             result = self.position_management.evaluate(ticket, pctx)
             managed += 1
@@ -5442,9 +5472,7 @@ class InstitutionalIteRuntime:
                 logger.warning(
                     "execution_stop_detail",
                     function="InstitutionalExecutionEngine.run_submit",
-                    file=(
-                        "app/application/services/" "institutional_execution_engine.py"
-                    ),
+                    file=("app/application/services/institutional_execution_engine.py"),
                     line=309,
                     condition=(
                         "trade_mode in {'closeonly','close_only'} and not is_manage"
@@ -8605,7 +8633,17 @@ def build_ite_runtime(
     )
     execution.bridge.bind_ops(plane, reliability=reliability)
 
-    pme = InstitutionalPositionManagement.create(guarded_manage, ops_plane=plane)
+    # Reader always attached; require_broker_sl_confirm remains False until owner
+    # activates confirmation (OMS ok alone stays LIVE default).
+    from app.application.services.pme_broker_position_reader import (
+        Mt5BrokerPositionReader,
+    )
+
+    pme = InstitutionalPositionManagement.create(
+        guarded_manage,
+        ops_plane=plane,
+        broker_reader=Mt5BrokerPositionReader(mt5_adapter=mt5_adapter),
+    )
 
     probes = LiveProbeCollector(
         settings=settings, mt5_adapter=mt5_adapter, supabase=supabase

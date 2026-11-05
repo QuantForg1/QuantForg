@@ -12,6 +12,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from threading import Lock
 
+from app.domain.institutional_trading.management.broker_confirm import (
+    BrokerPositionReader,
+    BrokerPositionSnapshot,
+    confirm_sl_modification,
+)
 from app.domain.institutional_trading.management.config import (
     DEFAULT_PME_CONFIG,
     PositionManagementConfig,
@@ -62,6 +67,7 @@ class PositionManagementEngine:
     config: PositionManagementConfig = field(default_factory=lambda: DEFAULT_PME_CONFIG)
     journal: PositionManageJournal = field(default_factory=PositionManageJournal)
     metrics: PositionManageMetrics = field(default_factory=PositionManageMetrics)
+    broker_reader: BrokerPositionReader | None = None
     _positions: dict[int, ManagedPosition] = field(default_factory=dict, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
 
@@ -255,7 +261,8 @@ class PositionManagementEngine:
 
         t0 = time.perf_counter()
         # Min-lot positions cannot partial-close — advance lifecycle locally so
-        # trail / time-stop remain reachable (objectively broken otherwise).
+        # trail / time-stop remain reachable. Do NOT record a fictitious broker
+        # partial success or invent a closed volume.
         if plan.kind is ManageActionKind.PARTIAL_CLOSE and (
             plan.volume is None or plan.volume <= 0
         ):
@@ -266,23 +273,25 @@ class PositionManagementEngine:
                 )
                 position.state = plan.target_state
             latency = (time.perf_counter() - t0) * 1000.0
-            self.metrics.record_partial(success=True)
             rec = self._record(
                 position=position,
                 context=context,
                 plan=plan,
-                outcome=ManageOutcome.SUCCESS,
+                outcome=ManageOutcome.SKIPPED,
                 latency_ms=latency,
                 fingerprint=fp,
                 to_state=position.state,
-                comment=plan.reason,
+                comment=(
+                    plan.reason
+                    or "Partial skipped — below broker min lot; lifecycle advanced"
+                ),
             )
             position.last_manage_fingerprint = fp
             return PositionManageResult(
                 position=position,
                 action=plan.kind,
                 record=rec,
-                skipped=False,
+                skipped=True,
             )
 
         # BE already locked on broker/book — advance lifecycle without OMS modify.
@@ -346,6 +355,61 @@ class PositionManagementEngine:
                 oms_result=oms_result,
             )
 
+        confirm_note = ""
+        if (
+            bool(getattr(self.config, "require_broker_sl_confirm", False))
+            and plan.kind
+            in {
+                ManageActionKind.BREAK_EVEN,
+                ManageActionKind.TRAIL,
+            }
+            and plan.new_sl is not None
+        ):
+            confirm = self._confirm_broker_sl(position, context, plan)
+            if not confirm.confirmed:
+                if plan.kind is ManageActionKind.BREAK_EVEN:
+                    self.metrics.record_be(success=False)
+                elif plan.kind is ManageActionKind.TRAIL:
+                    self.metrics.record_trail(success=False)
+                rec = self._record(
+                    position=position,
+                    context=context,
+                    plan=plan,
+                    outcome=ManageOutcome.BROKER_CONFIRM_FAILURE,
+                    latency_ms=latency,
+                    fingerprint=fp,
+                    to_state=position.state,
+                    comment=confirm.reason,
+                    retcode=oms_result.retcode,
+                    oms=oms_result,
+                )
+                # No fingerprint — retry next cycle; do not lock local BE/trail.
+                logger.warning(
+                    "pme_broker_sl_confirm_failed",
+                    ticket=position.ticket,
+                    reason=confirm.reason,
+                    planned_sl=str(plan.new_sl),
+                    broker_sl=str(confirm.broker_sl),
+                    action=plan.kind.value,
+                )
+                return PositionManageResult(
+                    position=position,
+                    action=plan.kind,
+                    record=rec,
+                    oms_result=oms_result,
+                )
+            confirm_note = confirm.reason
+            if confirm.broker_sl is not None and confirm.broker_sl > 0:
+                # Prefer authoritative broker SL when it is at least as protective.
+                plan = PlannedAction(
+                    plan.kind,
+                    plan.reason,
+                    new_sl=confirm.broker_sl,
+                    new_tp=plan.new_tp,
+                    volume=plan.volume,
+                    target_state=plan.target_state,
+                )
+
         # Success — apply local state
         from_state = position.state
         old_sl = position.current_stop
@@ -383,7 +447,8 @@ class PositionManagementEngine:
             volume=plan.volume,
             r_multiple=r_now,
             retcode=oms_result.retcode,
-            comment=oms_result.message or plan.reason,
+            comment=(oms_result.message or plan.reason)
+            + (f" | {confirm_note}" if confirm_note else ""),
             fingerprint=fp,
             symbol=position.symbol,
             trade_class=str(getattr(position, "trade_class", "") or ""),
@@ -515,6 +580,54 @@ class PositionManagementEngine:
             position.remaining_volume = Decimal("0")
             position.exit_reason = plan.reason
         position.state = plan.target_state
+
+    def _confirm_broker_sl(
+        self,
+        position: ManagedPosition,
+        context: PositionManageContext,
+        plan: PlannedAction,
+    ):
+        """Re-read broker SL after OMS ok. Never invent confirmation."""
+        from app.domain.institutional_trading.management.broker_confirm import (
+            SlConfirmResult,
+        )
+
+        _ = context  # reserved for future login/user scoping
+        planned = plan.new_sl
+        assert planned is not None
+        if self.broker_reader is None:
+            return SlConfirmResult(
+                confirmed=False,
+                reason="broker_reader not configured — cannot confirm SL",
+            )
+        try:
+            snap = self.broker_reader.read_position(
+                position.ticket, symbol=position.symbol
+            )
+        except Exception as exc:
+            logger.exception("pme_broker_sl_reread_failed", ticket=position.ticket)
+            return SlConfirmResult(
+                confirmed=False,
+                reason=f"broker re-read exception: {type(exc).__name__}",
+            )
+        if not isinstance(snap, BrokerPositionSnapshot):
+            snap = BrokerPositionSnapshot(
+                ticket=position.ticket,
+                available=False,
+                reason="invalid broker snapshot type",
+            )
+        return confirm_sl_modification(
+            side=position.side,
+            planned_sl=planned,
+            planned_tp=plan.new_tp,
+            snapshot=snap,
+            price_tolerance=Decimal(
+                str(
+                    getattr(self.config, "broker_sl_confirm_tolerance", "0.02")
+                    or "0.02"
+                )
+            ),
+        )
 
     def _dispatch(
         self,

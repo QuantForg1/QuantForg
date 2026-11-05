@@ -19,6 +19,7 @@ from app.domain.institutional_trading.management.models import (
 from app.domain.institutional_trading.management.r_math import (
     break_even_stop,
     is_stop_improvement,
+    net_break_even_stop,
     partial_close_volume,
     signed_r,
     trail_distance,
@@ -198,18 +199,28 @@ def plan_action(
 
     # --- Emergency exit ---
     if context.structure_broken:
+        if getattr(config, "structure_trend_exits_enabled", True):
+            return PlannedAction(
+                ManageActionKind.EMERGENCY_EXIT,
+                "Structure break — emergency exit",
+                volume=position.remaining_volume,
+                target_state=PositionLifecycleState.EXITED,
+            )
         return PlannedAction(
-            ManageActionKind.EMERGENCY_EXIT,
-            "Structure break — emergency exit",
-            volume=position.remaining_volume,
-            target_state=PositionLifecycleState.EXITED,
+            ManageActionKind.NOOP,
+            "Structure break observed — LIVE structure exits disabled",
         )
     if context.trend_reversed:
+        if getattr(config, "structure_trend_exits_enabled", True):
+            return PlannedAction(
+                ManageActionKind.EMERGENCY_EXIT,
+                "Trend reverse — emergency exit",
+                volume=position.remaining_volume,
+                target_state=PositionLifecycleState.EXITED,
+            )
         return PlannedAction(
-            ManageActionKind.EMERGENCY_EXIT,
-            "Trend reverse — emergency exit",
-            volume=position.remaining_volume,
-            target_state=PositionLifecycleState.EXITED,
+            ManageActionKind.NOOP,
+            "Trend reverse observed — LIVE structure exits disabled",
         )
     if context.spread is not None and context.spread > config.emergency_spread_max:
         return PlannedAction(
@@ -219,11 +230,16 @@ def plan_action(
             target_state=PositionLifecycleState.EXITED,
         )
     if not context.market_open:
+        if getattr(config, "session_flatten_on_market_closed", False):
+            return PlannedAction(
+                ManageActionKind.EMERGENCY_EXIT,
+                "Market closed — emergency exit",
+                volume=position.remaining_volume,
+                target_state=PositionLifecycleState.EXITED,
+            )
         return PlannedAction(
-            ManageActionKind.EMERGENCY_EXIT,
-            "Market closed — emergency exit",
-            volume=position.remaining_volume,
-            target_state=PositionLifecycleState.EXITED,
+            ManageActionKind.NOOP,
+            "Market closed — session flatten disabled (owner gate)",
         )
     if not context.connection_stable:
         return PlannedAction(
@@ -412,6 +428,22 @@ def plan_action(
             break_even_offset_r=profile.break_even_offset_r,
         )
         new_sl = break_even_stop(position, be_cfg)
+        if getattr(config, "use_net_break_even", False):
+            net_sl, net_reason = net_break_even_stop(
+                position,
+                be_cfg,
+                spread=context.spread,
+                commission=getattr(context, "open_commission", None),
+                swap=getattr(context, "open_swap", None),
+                contract_size=getattr(context, "contract_size", None),
+            )
+            if net_sl is None:
+                # Incomplete costs — keep geometric BE; never claim net BE.
+                pass
+            elif is_stop_improvement(position, net_sl) or net_sl == new_sl:
+                new_sl = net_sl
+            # else keep geometric (net would not improve vs current)
+            _ = net_reason
         preserved_tp = position.current_tp if position.current_tp > 0 else None
         if not is_stop_improvement(position, new_sl):
             # Stop already at/better than BE — still advance so partial/trail run.

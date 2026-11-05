@@ -61,6 +61,73 @@ def break_even_stop(
     return (position.entry_price - offset).quantize(Decimal("0.01"))
 
 
+def _cost_price_units(
+    *,
+    money: Decimal | None,
+    contract_size: Decimal | None,
+    volume: Decimal | None,
+) -> Decimal | None:
+    """Convert a money cost to price units. None when conversion is impossible."""
+    if money is None or contract_size is None or volume is None:
+        return None
+    per = Decimal(str(contract_size)) * Decimal(str(volume))
+    if per <= 0:
+        return None
+    px = Decimal(str(money)) / per
+    return abs(px) if px != 0 else Decimal("0")
+
+
+def net_break_even_stop(
+    position: ManagedPosition,
+    config: PositionManagementConfig,
+    *,
+    spread: Decimal | None = None,
+    commission: Decimal | None = None,
+    swap: Decimal | None = None,
+    contract_size: Decimal | None = None,
+) -> tuple[Decimal | None, str]:
+    """Cost-aware BE stop, or (None, reason) when costs are incomplete.
+
+    Does not guess missing commission/swap/contract_size. Geometric offset_R is
+    the floor; known costs push the stop further into profit.
+    """
+    geometric = break_even_stop(position, config)
+    known_cost = Decimal("0")
+    missing: list[str] = []
+    # Spread: half-spread is a conservative round-trip proxy when provided.
+    if spread is None:
+        missing.append("spread")
+    else:
+        known_cost += max(Decimal(str(spread)), Decimal("0")) / Decimal("2")
+    fee = _cost_price_units(
+        money=commission,
+        contract_size=contract_size,
+        volume=position.remaining_volume or position.initial_volume,
+    )
+    if commission is not None and fee is None:
+        missing.append("commission_unconvertible")
+    elif commission is None:
+        missing.append("commission")
+    else:
+        known_cost += fee or Decimal("0")
+    sw = _cost_price_units(
+        money=swap,
+        contract_size=contract_size,
+        volume=position.remaining_volume or position.initial_volume,
+    )
+    if swap is not None and sw is None:
+        missing.append("swap_unconvertible")
+    elif swap is None:
+        missing.append("swap")
+    else:
+        known_cost += sw or Decimal("0")
+    if missing:
+        return None, "incomplete_costs:" + ",".join(missing)
+    if position.side.lower() == "buy":
+        return (geometric + known_cost).quantize(Decimal("0.01")), "net_be"
+    return (geometric - known_cost).quantize(Decimal("0.01")), "net_be"
+
+
 def is_stop_improvement(
     position: ManagedPosition,
     new_stop: Decimal,

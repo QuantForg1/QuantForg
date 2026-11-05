@@ -74,6 +74,19 @@ class PositionManagementConfig:
 
     slippage: int = 10
 
+    # --- Owner-gated LIVE hardening (defaults preserve current LIVE semantics) ---
+    # After OMS modify_sltp ok, re-read broker SL before locking BE/trail locally.
+    require_broker_sl_confirm: bool = False
+    broker_sl_confirm_tolerance: Decimal = Decimal("0.02")
+    # Prefer cost-aware BE when complete cost inputs are present on context/plan.
+    use_net_break_even: bool = False
+    # Flatten when market_open is False. Default False — wiring honest market_open
+    # must not silently activate session liquidation without owner approval.
+    session_flatten_on_market_closed: bool = False
+    # Structure / trend emergency exits from context flags (default already True
+    # in planner when flags are set). Keep False to refuse LIVE wiring until approved.
+    structure_trend_exits_enabled: bool = True
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
@@ -103,6 +116,11 @@ class PositionManagementConfig:
             "second_partial_at_r": str(self.second_partial_at_r),
             "second_partial_close_pct": str(self.second_partial_close_pct),
             "emergency_spread_max": str(self.emergency_spread_max),
+            "require_broker_sl_confirm": self.require_broker_sl_confirm,
+            "broker_sl_confirm_tolerance": str(self.broker_sl_confirm_tolerance),
+            "use_net_break_even": self.use_net_break_even,
+            "session_flatten_on_market_closed": self.session_flatten_on_market_closed,
+            "structure_trend_exits_enabled": self.structure_trend_exits_enabled,
         }
 
 
