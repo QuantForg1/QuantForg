@@ -363,6 +363,7 @@ class PositionManagementEngine:
             in {
                 ManageActionKind.BREAK_EVEN,
                 ManageActionKind.TRAIL,
+                ManageActionKind.RESTORE_STOP,
             }
             and plan.new_sl is not None
         ):
@@ -511,6 +512,49 @@ class PositionManagementEngine:
                 record=rec,
                 oms_result=oms_result,
             )
+        confirm_note = ""
+        if (
+            bool(getattr(self.config, "require_broker_sl_confirm", False))
+            and plan.new_sl is not None
+        ):
+            confirm = self._confirm_broker_sl(position, context, plan)
+            if not confirm.confirmed:
+                rec = self._record(
+                    position=position,
+                    context=context,
+                    plan=plan,
+                    outcome=ManageOutcome.BROKER_CONFIRM_FAILURE,
+                    latency_ms=latency,
+                    fingerprint="",
+                    to_state=position.state,
+                    comment=confirm.reason,
+                    retcode=oms_result.retcode,
+                    oms=oms_result,
+                )
+                logger.warning(
+                    "pme_broker_sl_confirm_failed",
+                    ticket=position.ticket,
+                    reason=confirm.reason,
+                    planned_sl=str(plan.new_sl),
+                    broker_sl=str(confirm.broker_sl),
+                    action=plan.kind.value,
+                )
+                return PositionManageResult(
+                    position=position,
+                    action=plan.kind,
+                    record=rec,
+                    oms_result=oms_result,
+                )
+            confirm_note = confirm.reason
+            if confirm.broker_sl is not None and confirm.broker_sl > 0:
+                plan = PlannedAction(
+                    plan.kind,
+                    plan.reason,
+                    new_sl=confirm.broker_sl,
+                    new_tp=plan.new_tp,
+                    volume=plan.volume,
+                    target_state=plan.target_state,
+                )
         old_sl = position.current_stop
         if plan.new_sl is not None:
             position.current_stop = plan.new_sl
@@ -530,7 +574,8 @@ class PositionManagementEngine:
             volume=plan.volume,
             r_multiple=signed_r(position, context.current_price),
             retcode=oms_result.retcode,
-            comment=oms_result.message or plan.reason,
+            comment=(oms_result.message or plan.reason)
+            + (f" | {confirm_note}" if confirm_note else ""),
             fingerprint="",
             symbol=position.symbol,
             trade_class=str(getattr(position, "trade_class", "") or ""),
