@@ -170,9 +170,7 @@ def _pme_ai_scores_from_factors(
 ) -> tuple[int | None, int | None]:
     """Map score factors → PME ai_momentum / ai_volatility (None if missing)."""
     mom = _optional_score_int(
-        factors.get("momentum")
-        if "momentum" in factors
-        else factors.get("Momentum")
+        factors.get("momentum") if "momentum" in factors else factors.get("Momentum")
     )
     vol = _optional_score_int(
         factors.get("volatility")
@@ -1672,9 +1670,7 @@ class InstitutionalIteRuntime:
                         note=f"manage:{reason}",
                     )
                 except Exception:
-                    logger.exception(
-                        "pme_shadow_outcome_mark_failed", ticket=ticket
-                    )
+                    logger.exception("pme_shadow_outcome_mark_failed", ticket=ticket)
             # Shadow reversal observation — never submits closes unless
             # live_reversal_exits_enabled (kept False until evidence exists).
             try:
