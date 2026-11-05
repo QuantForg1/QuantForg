@@ -1,0 +1,15 @@
+{
+  "n": 46,
+  "buy_n": 34,
+  "sell_n": 12,
+  "buy_net": -28.12,
+  "sell_net": -1.82,
+  "expectancy": {
+    "avg_win": 1.526,
+    "avg_loss": 2.326,
+    "wr": 0.4348,
+    "breakeven_wr": 0.6037,
+    "realized_rr": 0.6563,
+    "req_avg_win_for_be": 3.024
+  }
+}

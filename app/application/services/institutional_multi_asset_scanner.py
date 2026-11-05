@@ -354,6 +354,7 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
         return
     _sniper_value = row.get("sniper_entry")
     sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
+    factors = row.get("factors") if isinstance(row.get("factors"), dict) else {}
     action = str(
         row.get("signal_action")
         or sniper.get("action")
@@ -373,6 +374,12 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
         atr_pct=row.get("atr_pct"),
         bullish_score=row.get("buy_score") or row.get("bullish_score"),
         bearish_score=row.get("sell_score") or row.get("bearish_score"),
+        ltf_buy_score=row.get("ltf_buy_score"),
+        ltf_sell_score=row.get("ltf_sell_score"),
+        directional_edge=row.get("directional_edge"),
+        edge_margin=factors.get("edge_margin"),
+        direction_ok=str(row.get("direction") or "").upper() in {"BUY", "SELL"},
+        opportunity_eligible=row.get("opportunity_eligible"),
         opportunity_score=row.get("opportunity_score"),
         opportunity_threshold=row.get("opportunity_threshold") or 70,
         score_breakdown=row.get("score_breakdown"),

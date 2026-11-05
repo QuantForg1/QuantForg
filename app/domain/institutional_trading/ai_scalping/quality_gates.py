@@ -163,7 +163,23 @@ def evaluate_quality_gates(
 
     checks["clear_direction"] = direction_clear
     if not checks["clear_direction"]:
-        hard_rejects.append("No clear BUY/SELL edge (balanced scores → reject)")
+        # Keep the stable prefix for observability matchers; append LTF edge
+        # so LIVE logs distinguish CONFLICT (both sides) from no-edge (neither).
+        ltf_b = int(getattr(direction, "ltf_buy_score", 0) or 0)
+        ltf_s = int(getattr(direction, "ltf_sell_score", 0) or 0)
+        edge = int(getattr(direction, "directional_edge", 0) or 0)
+        margin = int(getattr(direction, "edge_margin", 5) or 5)
+        # Both sides have LTF core evidence within margin → CONFLICT;
+        # otherwise there is simply no qualifying LTF edge.
+        kind = (
+            "CONFLICT"
+            if ltf_b > 0 and ltf_s > 0 and edge <= margin
+            else "NO_LTF_EDGE"
+        )
+        hard_rejects.append(
+            "No clear BUY/SELL edge (balanced scores → reject; "
+            f"{kind} LTF BUY {ltf_b} vs SELL {ltf_s}, edge={edge}/{margin})"
+        )
 
     # Dual-score reconciliation remains for evidence quality, not an AND-kill.
     gate_confidence = confidence
