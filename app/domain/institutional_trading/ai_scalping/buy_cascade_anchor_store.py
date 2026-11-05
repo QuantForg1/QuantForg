@@ -27,6 +27,7 @@ _KNOWN: set[tuple[str, int]] = set()
 _LOADED = False
 _TRUSTED = True
 _FORCED_DOWN = False
+_LIVE_LOGIN: int | None = None
 
 _CREATE = """
 CREATE TABLE IF NOT EXISTS public.buy_cascade_anchor (
@@ -63,14 +64,20 @@ $lock$;
 
 _INSERT = """
 INSERT INTO public.buy_cascade_anchor (
-    symbol, position_id, entry_price, closed_at, net_pnl, close_outcome, status
-) VALUES ($1, $2, $3, $4, $5, $6, 'active')
+    symbol, position_id, entry_price, closed_at, net_pnl, close_outcome, status,
+    broker_login
+) VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)
 ON CONFLICT (symbol, position_id) DO NOTHING
+"""
+
+_ADD_LOGIN = """
+ALTER TABLE public.buy_cascade_anchor
+ADD COLUMN IF NOT EXISTS broker_login BIGINT
 """
 
 _SELECT_ACTIVE = """
 SELECT symbol, position_id, entry_price, closed_at, net_pnl, close_outcome, status,
-       created_at, updated_at
+       broker_login, created_at, updated_at
 FROM public.buy_cascade_anchor
 WHERE status = 'active'
 """
@@ -91,6 +98,7 @@ class CascadeAnchor:
     net_pnl: Decimal
     close_outcome: str
     status: str
+    broker_login: int | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> CascadeAnchor:
@@ -107,11 +115,16 @@ class CascadeAnchor:
             net_pnl=Decimal(str(row.get("net_pnl") or 0)),
             close_outcome=str(row.get("close_outcome") or ""),
             status=str(row.get("status") or "active"),
+            broker_login=(
+                int(row["broker_login"])
+                if row.get("broker_login") not in (None, "")
+                else None
+            ),
         )
 
 
 def reset_buy_cascade_store_for_tests() -> None:
-    global _LOADED, _TRUSTED, _FORCED_DOWN
+    global _LOADED, _TRUSTED, _FORCED_DOWN, _LIVE_LOGIN
     with _LOCK:
         _CACHE.clear()
         _DURABLE.clear()
@@ -119,6 +132,7 @@ def reset_buy_cascade_store_for_tests() -> None:
         _LOADED = False
         _TRUSTED = True
         _FORCED_DOWN = False
+        _LIVE_LOGIN = None
 
 
 def force_buy_cascade_store_unavailable_for_tests(down: bool) -> None:
@@ -162,6 +176,7 @@ def _ensure_schema() -> None:
     from app.infrastructure.persistence.direct_postgres import execute
 
     execute(_CREATE)
+    execute(_ADD_LOGIN)
     execute(_LOCKDOWN)
 
 
@@ -174,6 +189,7 @@ def _cache_put(anchor: CascadeAnchor) -> None:
         "net_pnl": anchor.net_pnl,
         "close_outcome": anchor.close_outcome,
         "status": anchor.status,
+        "broker_login": anchor.broker_login,
     }
     _CACHE[(anchor.symbol, anchor.position_id)] = payload
     _DURABLE[(anchor.symbol, anchor.position_id)] = dict(payload)
@@ -230,12 +246,23 @@ def load_active_anchors() -> tuple[list[CascadeAnchor], bool]:
     return anchors, True
 
 
-def active_anchors(symbol: str) -> tuple[list[CascadeAnchor], bool]:
+def _symbol_active(symbol: str) -> tuple[list[CascadeAnchor], bool]:
     anchors, trusted = load_active_anchors() if not _LOADED else _cached_active()
     if not trusted:
         return [], False
     key = _key(symbol)
     return [a for a in anchors if a.symbol == key], True
+
+
+def active_anchors(symbol: str) -> tuple[list[CascadeAnchor], bool]:
+    rows, trusted = _symbol_active(symbol)
+    if not trusted or _LIVE_LOGIN is None:
+        return rows, trusted
+    return [
+        row
+        for row in rows
+        if row.broker_login is None or row.broker_login == _LIVE_LOGIN
+    ], True
 
 
 def _cached_active() -> tuple[list[CascadeAnchor], bool]:
@@ -260,6 +287,7 @@ def record_losing_buy_close(
     close_outcome: str = "",
     direction: str = "BUY",
     fully_closed: bool = False,
+    broker_login: int | None = None,
 ) -> str:
     """Idempotent. Only a broker-confirmed full losing BUY creates an anchor."""
     side = str(direction or "").strip().upper()
@@ -298,6 +326,7 @@ def record_losing_buy_close(
         net_pnl=pnl,
         close_outcome=str(close_outcome or "")[:120],
         status="active",
+        broker_login=int(broker_login) if broker_login else None,
     )
     with _LOCK:
         if not _LOADED:
@@ -319,6 +348,7 @@ def record_losing_buy_close(
                 moment,
                 pnl,
                 anchor.close_outcome,
+                anchor.broker_login,
             )
         except Exception as exc:
             with _LOCK:
@@ -427,18 +457,27 @@ def reconcile_anchors(
     symbol: str,
     open_position_ids: set[int],
     broker_nets: dict[int, Decimal] | None,
+    covered_position_ids: set[int] | None = None,
+    coverage_from: datetime | None = None,
+    broker_login: int | None = None,
 ) -> dict[str, int]:
-    """Drop anchors that are still open or that the broker closed at a profit.
+    """Drop anchors that are still open, profitable, or absent from this account.
 
-    A ticket absent from ``broker_nets`` is kept. Missing history is not a win.
+    A ticket absent from ``broker_nets`` is kept. A ticket is released as
+    not-on-account only when deal history covers its close time and the
+    ticket is not in that history. An empty history does not clear anchors.
     """
     key = _key(symbol)
-    stats = {"still_open": 0, "broker_win": 0, "kept": 0}
-    anchors, trusted = active_anchors(key)
+    stats = {"still_open": 0, "broker_win": 0, "not_on_account": 0, "kept": 0}
+    anchors, trusted = _symbol_active(key)
     if not trusted:
         logger.warning("buy_cascade_reconcile_untrusted", symbol=key)
         return stats
     for anchor in anchors:
+        if broker_login and anchor.broker_login and anchor.broker_login != broker_login:
+            _mark_released(key, anchor.position_id, "released_account_mismatch")
+            stats["not_on_account"] += 1
+            continue
         if anchor.position_id in open_position_ids:
             _mark_released(key, anchor.position_id, "released_reconcile_open")
             stats["still_open"] += 1
@@ -450,6 +489,15 @@ def reconcile_anchors(
         ):
             _mark_released(key, anchor.position_id, "released_reconcile_win")
             stats["broker_win"] += 1
+            continue
+        if (
+            covered_position_ids is not None
+            and coverage_from is not None
+            and anchor.closed_at >= coverage_from
+            and anchor.position_id not in covered_position_ids
+        ):
+            _mark_released(key, anchor.position_id, "released_not_on_account")
+            stats["not_on_account"] += 1
             continue
         stats["kept"] += 1
     logger.warning("buy_cascade_reconciled", symbol=key, **stats)
@@ -571,11 +619,19 @@ def recover_buy_cascade_on_startup(adapter: Any | None = None) -> dict[str, Any]
         )
         broker_nets = None
         hist_ok = False
+    login = _adapter_login(adapter)
+    global _LIVE_LOGIN
+    if login is not None:
+        _LIVE_LOGIN = login
+    covered_ids, coverage_from = _deal_coverage(deals) if hist_ok else (None, None)
     for symbol in sorted({anchor.symbol for anchor in anchors}):
         summary["reconciled"][symbol] = reconcile_anchors(
             symbol=symbol,
             open_position_ids=open_ids,
             broker_nets=broker_nets,
+            covered_position_ids=covered_ids,
+            coverage_from=coverage_from,
+            broker_login=login,
         )
     summary["backfilled"] = 0
     if hist_ok:
@@ -588,6 +644,54 @@ def recover_buy_cascade_on_startup(adapter: Any | None = None) -> dict[str, Any]
             )
     logger.warning("buy_cascade_startup_recover", **summary)
     return summary
+
+
+def _adapter_login(adapter: Any) -> int | None:
+    try:
+        snap = adapter.account_snapshot()
+        login = int(getattr(snap, "login", 0) or 0)
+    except Exception as exc:
+        logger.warning(
+            "buy_cascade_login_unavailable",
+            error_type=type(exc).__name__,
+        )
+        return None
+    return login or None
+
+
+def _parse_deal_time(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _deal_coverage(deals: list[Any]) -> tuple[set[int] | None, datetime | None]:
+    """Return position ids and the oldest deal time. Empty history covers nothing."""
+    from app.application.services.close_attribution import deals_as_dicts
+
+    rows = deals_as_dicts(deals)
+    if not rows:
+        return None, None
+    ids: set[int] = set()
+    oldest: datetime | None = None
+    for row in rows:
+        try:
+            position_id = int(row.get("position_id") or 0)
+        except (TypeError, ValueError):
+            position_id = 0
+        if position_id > 0:
+            ids.add(position_id)
+        when = _parse_deal_time(row.get("time") or row.get("time_msc"))
+        if when is not None and (oldest is None or when < oldest):
+            oldest = when
+    return ids, oldest
 
 
 def _decimal_or_none(value: object) -> Decimal | None:
@@ -698,6 +802,7 @@ def _backfill_unresolved_losses(
                 close_outcome=evidence.close_reason or "broker_backfill",
                 direction="BUY",
                 fully_closed=True,
+                broker_login=_LIVE_LOGIN,
             )
             if result == "created":
                 created += 1
