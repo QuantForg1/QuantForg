@@ -15,6 +15,7 @@ from threading import Lock
 from app.domain.institutional_trading.management.broker_confirm import (
     BrokerPositionReader,
     BrokerPositionSnapshot,
+    SlConfirmResult,
     confirm_sl_modification,
 )
 from app.domain.institutional_trading.management.config import (
@@ -586,12 +587,8 @@ class PositionManagementEngine:
         position: ManagedPosition,
         context: PositionManageContext,
         plan: PlannedAction,
-    ):
+    ) -> SlConfirmResult:
         """Re-read broker SL after OMS ok. Never invent confirmation."""
-        from app.domain.institutional_trading.management.broker_confirm import (
-            SlConfirmResult,
-        )
-
         _ = context  # reserved for future login/user scoping
         planned = plan.new_sl
         assert planned is not None
