@@ -180,6 +180,41 @@ async def test_history_deals_ok_trusts_zero_daily_pnl(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_scan_purpose_skips_deals_without_fail_closed_alarm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """purpose=scan omits history by design — must not look like an outage."""
+    adapter = _ready_adapter(history_deals=None)
+
+    async def _fake_analyze(*_a, **_k):
+        return SimpleNamespace(
+            symbol="XAUUSD",
+            atr=Decimal("1"),
+            spread=Decimal("0.4"),
+            session=SimpleNamespace(
+                session=SimpleNamespace(value="london"),
+                allowed=True,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "app.application.services.ite_cycle_market_context."
+        "InstitutionalTradingAnalysisService.analyze_bars",
+        _fake_analyze,
+    )
+
+    ctx = await build_ite_cycle_market_context(adapter, purpose="scan")
+    assert ctx.ok is True
+    assert ctx.diagnostics.get("daily_pnl_skipped_scan") is True
+    assert ctx.diagnostics.get("daily_pnl_fail_closed") is not True
+    assert ctx.diagnostics.get("daily_pnl_trusted") is False
+    assert ctx.diagnostics.get("history_deals") == "SKIPPED_SCAN"
+    assert ctx.account is not None
+    assert ctx.account.daily_pnl == Decimal("0")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_book_facts_failure_with_open_positions_marks_incomplete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
