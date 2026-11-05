@@ -5,6 +5,7 @@ Does not send orders. Does not lower sniper / opportunity / risk gates.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -597,6 +598,93 @@ def test_magicmock_direction_still_maps_buy() -> None:
     out = decide_scalping_direction(snap)
     assert out.buy_score > 0
     assert out.direction is TradeDirection.BUY
+
+
+def _ltf_structure(*events: object) -> MagicMock:
+    structure = MagicMock()
+    structure.breaks_of_structure = list(events)
+    structure.changes_of_character = []
+    structure.swings = []
+    return structure
+
+
+def _bos(side: TrendDirection, when: datetime) -> object:
+    return _Struct(
+        trend_direction=side,
+        kind="BOS",
+        broken_at=when,
+    )
+
+
+def test_latest_m5_buy_beats_older_sell_in_the_same_window() -> None:
+    """An older opposite break must not tie a confirmed later break."""
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    t0 = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+    snap.structure_by_tf = {
+        "M5": _ltf_structure(
+            _bos(TrendDirection.DOWN, t0),
+            _bos(TrendDirection.DOWN, t0.replace(minute=5)),
+            _bos(TrendDirection.UP, t0.replace(minute=10)),
+        )
+    }
+    out = decide_scalping_direction(snap)
+    assert out.direction is TradeDirection.BUY
+    assert out.ltf_buy_score > out.ltf_sell_score + out.edge_margin
+
+
+def test_latest_m5_sell_beats_older_buy_in_the_same_window() -> None:
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    t0 = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+    snap.structure_by_tf = {
+        "M5": _ltf_structure(
+            _bos(TrendDirection.UP, t0),
+            _bos(TrendDirection.UP, t0.replace(minute=5)),
+            _bos(TrendDirection.DOWN, t0.replace(minute=10)),
+        )
+    }
+    out = decide_scalping_direction(snap)
+    assert out.direction is TradeDirection.SELL
+    assert out.ltf_sell_score > out.ltf_buy_score + out.edge_margin
+
+
+def test_conflicting_m1_and_m5_latest_structure_stays_none() -> None:
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    t0 = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+    snap.structure_by_tf = {
+        "M5": _ltf_structure(_bos(TrendDirection.UP, t0)),
+        "M1": _ltf_structure(_bos(TrendDirection.DOWN, t0.replace(minute=1))),
+    }
+    out = decide_scalping_direction(snap)
+    assert out.direction is TradeDirection.NONE
+    assert out.ltf_buy_score == out.ltf_sell_score
+    assert "CONFLICT" in " ".join(out.reasons)
+
+
+def test_missing_structure_does_not_invent_a_side() -> None:
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    snap.structure_by_tf = {}
+    snap.trade_quality.components = {}
+    out = decide_scalping_direction(snap)
+    assert out.direction is TradeDirection.NONE
+    assert out.ltf_buy_score == 0
+    assert out.ltf_sell_score == 0
+
+
+def test_confirmed_reversal_follows_the_latest_choch() -> None:
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    t0 = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+    structure = _ltf_structure(_bos(TrendDirection.UP, t0))
+    structure.changes_of_character = [
+        _Struct(
+            previous_trend=TrendDirection.UP,
+            kind="CHOCH",
+            broken_at=t0.replace(minute=15),
+        )
+    ]
+    snap.structure_by_tf = {"M5": structure}
+    out = decide_scalping_direction(snap)
+    assert out.direction is TradeDirection.SELL
+    assert out.ltf_sell_score > out.ltf_buy_score + out.edge_margin
 
 
 def test_wait_directional_edge_exposes_pipeline_not_reached() -> None:
