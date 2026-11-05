@@ -230,6 +230,9 @@ class RiskEngine:
             calculated_lot=raw_lots,
             min_lot=cfg.min_lot,
             lot_step=cfg.lot_step,
+            # Callers (risk_config_from_ite / LIVE pipeline) must pass an
+            # owner-authorized max_lot. This path stays config-faithful so
+            # non-gold unit fixtures can still exercise broker max > 0.01.
             max_lot=cfg.max_lot,
             equity=equity,
             stop_distance=stop,
@@ -1271,7 +1274,7 @@ class RiskEngine:
             if spread_limit > 0 and check.spread > spread_limit:
                 cls = asset_class_for_symbol(check.symbol)
                 reasons.append(
-                    f"spread {check.spread} exceeds max {spread_limit}" f" ({cls})"
+                    f"spread {check.spread} exceeds max {spread_limit} ({cls})"
                 )
             elif spread_limit <= 0 and check.spread > 0:
                 reasons.append(
@@ -1330,8 +1333,64 @@ class RiskEngine:
         from app.domain.institutional_trading.owner_live_limits import (
             max_aggregate_risk_usd,
             max_planned_risk_usd,
+            owner_authorized_lot_ceiling_violated,
             owner_risk_cap_usd,
         )
+        from app.domain.institutional_trading.runtime_policy import active_max_lot
+        from app.domain.trading.gold_only import is_gold_symbol
+
+        owner_lot_cap = active_max_lot()
+        apply_owner_lot_ceiling = is_gold_symbol(check.symbol)
+        broker_min_vs_owner = (
+            owner_authorized_lot_ceiling_violated(
+                volume=Decimal("0"),
+                broker_min=self.config.min_lot,
+            )
+            if apply_owner_lot_ceiling
+            else None
+        )
+        if broker_min_vs_owner is not None:
+            assessment = RiskAssessment.record(
+                user_id=check.user_id,
+                request_id=check.request_id,
+                symbol=check.symbol,
+                side=check.side,
+                decision=RiskDecision.REJECT,
+                risk_score=100,
+                risk_band=RiskScoreBand.BLOCKED,
+                approved_lots=Decimal("0"),
+                requested_lots=check.requested_lots or Decimal("0"),
+                sizing_method=check.sizing_method.value,
+                warnings=[],
+                reasons=[broker_min_vs_owner],
+                exposure={},
+                drawdown={},
+                checks={"owner_max_lot": False, "position_sizing": False},
+                rules=[],
+                request_snapshot={
+                    "requested_lots": (
+                        str(check.requested_lots) if check.requested_lots else None
+                    ),
+                    "stop_loss_distance": (
+                        str(check.stop_loss_distance)
+                        if check.stop_loss_distance is not None
+                        else None
+                    ),
+                    "owner_max_lot": str(owner_lot_cap),
+                    "broker_min_lot": str(self.config.min_lot),
+                },
+            )
+            self._events.append(
+                RiskRejected(
+                    user_id=check.user_id,
+                    assessment_id=assessment.id,
+                    request_id=check.request_id,
+                    symbol=check.symbol,
+                    risk_score=100,
+                    reasons=tuple(assessment.reasons),
+                )
+            )
+            return assessment
 
         # The book budget is the aggregate cap. The per-trade cap stays
         # separate, so five positions cannot each spend the per-trade maximum.
@@ -1504,10 +1563,43 @@ class RiskEngine:
         approved = size.approved_lots
         decision = RiskDecision.ALLOW
 
+        # Defense in depth for gold: never carry an approved lot above the
+        # owner ceiling into OWNER_SL_RISK / OMS if an upstream path omitted
+        # the clamp. Non-gold fixtures keep config max_lot semantics.
+        if apply_owner_lot_ceiling and approved > owner_lot_cap:
+            step = self.config.lot_step
+            steps = (owner_lot_cap / step).to_integral_value(rounding=ROUND_DOWN)
+            clamped = (steps * step).quantize(step)
+            if clamped < self.config.min_lot or clamped <= 0:
+                decision = RiskDecision.REJECT
+                approved = Decimal("0")
+                reasons.append(
+                    f"OWNER_MAX_LOT: sized volume {size.approved_lots} exceeds "
+                    f"owner max_lot {owner_lot_cap} and cannot be reduced to a "
+                    f"valid broker step"
+                )
+                checks["owner_max_lot"] = False
+            else:
+                reasons.append(
+                    f"OWNER_MAX_LOT_CLAMP: sized volume {size.approved_lots} "
+                    f"capped to owner max_lot {clamped}"
+                )
+                approved = clamped
+                checks["owner_max_lot"] = True
+                if size.requested_lots > approved:
+                    decision = RiskDecision.REDUCE_SIZE
+        elif apply_owner_lot_ceiling:
+            checks["owner_max_lot"] = True
+
         # Below broker min_lot (approved=0) is NOT a "reduce" path — it is an
         # execution block. Keep the safety reject; label it clearly so Signal
         # Center does not look like a missing signal.
-        if approved <= 0 and (size.capped or not checks.get("position_sizing", False)):
+        if checks.get("owner_max_lot") is False and approved <= 0:
+            decision = RiskDecision.REJECT
+            approved = Decimal("0")
+        elif approved <= 0 and (
+            size.capped or not checks.get("position_sizing", False)
+        ):
             decision = RiskDecision.REJECT
             approved = Decimal("0")
             lot_code = size.block_reason or "MIN_LOT_CONSTRAINT"
