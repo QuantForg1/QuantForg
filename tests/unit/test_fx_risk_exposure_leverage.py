@@ -88,19 +88,26 @@ def test_floors_are_owner_band() -> None:
 
 
 def test_hardcoded_100_leverage_halves_size_without_a_floor_reject() -> None:
-    """Leverage=100 → exposure halves the size; with no planned-risk floor the
-    reduced size is kept (REDUCE_SIZE), never rejected for being too small."""
+    """Owner max_lot from risk_config_from_ite is 0.01, so leverage exposure
+    cannot step below min_lot. Keep ALLOW/REDUCE at 0.01 — never floor-reject."""
+    cfg = risk_config_from_ite(
+        DEFAULT_ITE_CONFIG,
+        min_lot=Decimal("0.01"),
+        lot_step=Decimal("0.01"),
+        max_lot=Decimal("1000"),
+        contract_size=_USDCAD_CS,
+    )
+    assert cfg.max_lot == Decimal("0.01")
     result = _ite_engine().evaluate(
         _check(),
         account=_acct(leverage=100),
         positions=[],
         daily_pnl=Decimal("0"),
     )
-    assert result.decision is RiskDecision.REDUCE_SIZE
+    assert result.decision in {RiskDecision.ALLOW, RiskDecision.REDUCE_SIZE}
     hay = " ".join(result.reasons + result.warnings)
-    assert "symbol exposure" in hay
     assert CODE_MIN_PLANNED_RISK_NOT_REACHED not in hay
-    assert result.approved_lots > Decimal("0")
+    assert result.approved_lots == Decimal("0.01")
 
 
 def test_live_fx_leverage_keeps_planned_risk_in_six_to_twenty_band() -> None:

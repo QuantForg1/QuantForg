@@ -70,6 +70,9 @@ def risk_config_from_ite(
         MIN_PLANNED_RISK_USD,
         TARGET_PLANNED_RISK_USD,
     )
+    from app.domain.institutional_trading.owner_live_limits import (
+        owner_authorized_max_lot,
+    )
     from app.domain.trading.xauusd_specs import (
         CONTRACT_SIZE,
         VOLUME_MAX,
@@ -81,6 +84,13 @@ def risk_config_from_ite(
     min_usd = getattr(cfg, "min_planned_risk_usd", MIN_PLANNED_RISK_USD)
     max_usd = getattr(cfg, "max_planned_sl_risk_usd", MAX_PLANNED_SL_RISK_USD)
     agg_usd = getattr(cfg, "max_total_planned_risk_usd", MAX_TOTAL_PLANNED_RISK_USD)
+    resolved_min = min_lot if min_lot is not None and min_lot > 0 else VOLUME_MIN
+    resolved_step = lot_step if lot_step is not None and lot_step > 0 else VOLUME_STEP
+    resolved_broker_max = max_lot if max_lot is not None and max_lot > 0 else VOLUME_MAX
+    # Authoritative owner ceiling: never size above owner max_lot even when the
+    # broker volume_max (or a stale config) is larger. Target-risk math that
+    # would prefer 0.02 on micro equity must cap at 0.01 and re-check SL risk.
+    resolved_max = owner_authorized_max_lot(resolved_broker_max)
     return RiskEngineConfig(
         max_risk_per_trade_pct=cfg.risk_per_trade_pct,
         min_planned_risk_usd=(
@@ -100,9 +110,9 @@ def risk_config_from_ite(
         max_open_positions=cfg.max_open_trades,
         max_consecutive_losses=cfg.max_consecutive_losses,
         max_spread=cfg.max_spread_reject,
-        min_lot=min_lot if min_lot is not None and min_lot > 0 else VOLUME_MIN,
-        lot_step=lot_step if lot_step is not None and lot_step > 0 else VOLUME_STEP,
-        max_lot=max_lot if max_lot is not None and max_lot > 0 else VOLUME_MAX,
+        min_lot=resolved_min,
+        lot_step=resolved_step,
+        max_lot=resolved_max,
         contract_size=contract_size if contract_size is not None else CONTRACT_SIZE,
         max_atr_pct_of_price=Decimal("3.0"),
         enforce_session=True,
@@ -797,12 +807,17 @@ class InstitutionalDecisionPipeline:
         live_min, live_step, live_max, live_cs, live_tick, live_tick_val = (
             _live_broker_lot_specs(snapshot.symbol)
         )
+        from app.domain.institutional_trading.owner_live_limits import (
+            owner_authorized_max_lot,
+        )
+
+        owner_live_max = owner_authorized_max_lot(live_max)
         feasibility = self.evaluate_min_lot_feasibility_gate(
             stop_distance=stop_distance,
             equity=account.equity,
             min_lot=live_min,
             lot_step=live_step,
-            max_lot=live_max,
+            max_lot=owner_live_max,
             contract_size=live_cs,
             tick_size=live_tick,
             tick_value=live_tick_val,
@@ -854,7 +869,7 @@ class InstitutionalDecisionPipeline:
                 cfg,
                 min_lot=live_min,
                 lot_step=live_step,
-                max_lot=live_max,
+                max_lot=owner_live_max,
                 contract_size=live_cs,
             )
         )
@@ -977,7 +992,9 @@ class InstitutionalDecisionPipeline:
                 broker_spec = BrokerComplianceSpec(
                     min_lot=live_min,
                     lot_step=live_step,
-                    max_lot=min(live_max, scalp_cfg.broker_max_lot),
+                    max_lot=owner_authorized_max_lot(
+                        min(live_max, scalp_cfg.broker_max_lot)
+                    ),
                     contract_size=live_cs,
                 )
                 # Fail closed: open book without position rows cannot validate
@@ -1243,7 +1260,7 @@ class InstitutionalDecisionPipeline:
                         contract_size=live_cs,
                         min_lot=live_min,
                         lot_step=live_step,
-                        max_lot=live_max,
+                        max_lot=owner_live_max,
                         session_risk_multiplier=sess_risk,
                         daily_exposure_used_pct=portfolio_exp,
                         portfolio_exposure_pct=portfolio_exp,
@@ -1499,7 +1516,7 @@ class InstitutionalDecisionPipeline:
                     stop_distance=stop_distance,
                     min_lot=live_min,
                     lot_step=live_step,
-                    max_lot=live_max,
+                    max_lot=owner_live_max,
                 )
                 logger.info(
                     "planned_initial_sl_risk_rejected",
@@ -1509,7 +1526,7 @@ class InstitutionalDecisionPipeline:
                     initial_sl_distance=str(stop_distance),
                     broker_volume_min=str(live_min),
                     broker_volume_step=str(live_step),
-                    broker_volume_max=str(live_max),
+                    broker_volume_max=str(owner_live_max),
                     rejection_reason=band_reason,
                 )
                 risk_allowed = False

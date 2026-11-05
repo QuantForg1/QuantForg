@@ -542,6 +542,8 @@ def normalize_lots_against_broker(
     )
     # Owner cap is 20% of live equity. The book fallback is 30% of that
     # equity, not 20% times the position count. A stricter explicit cap stays.
+    # Owner max_lot is enforced by callers (risk_config_from_ite / RiskEngine /
+    # pipeline) via owner_authorized_max_lot — this helper stays broker-faithful.
     if equity > 0:
         from app.domain.institutional_trading.owner_live_limits import (
             max_aggregate_risk_usd,
@@ -621,10 +623,17 @@ def normalize_lots_against_broker(
             max_planned_sl_risk=per_trade_max,
         )
 
-    if min_lot <= 0 or lot_step <= 0 or max_lot <= 0 or min_lot > max_lot:
+    if min_lot <= 0 or lot_step <= 0 or max_lot <= 0:
         return _blank(
             status=STATUS_INVALID_SPEC,
             reason=CODE_INVALID_BROKER_SPEC,
+        )
+    if min_lot > max_lot:
+        # Typically broker volume_min above the owner-authorized ceiling.
+        return _blank(
+            status=STATUS_INVALID_SPEC,
+            reason=CODE_INVALID_BROKER_SPEC,
+            lot=Decimal("0"),
         )
 
     first_valid = first_valid_broker_lot(

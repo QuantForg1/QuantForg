@@ -190,6 +190,52 @@ def max_planned_risk_usd(equity: Decimal) -> Decimal:
 OWNER_MAX_SL_RISK_USD = max_planned_risk_usd(OWNER_RISK_REFERENCE_USD)
 
 
+def owner_authorized_max_lot(broker_max: Decimal | None = None) -> Decimal:
+    """Final executable lot ceiling for every strategy.
+
+    Never above the active owner max lot (hard ceiling ``OWNER_MAX_LOT``).
+    Never above the broker ``volume_max`` when that spec is known.
+    Callers must still reject when broker ``volume_min`` exceeds this ceiling.
+    """
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
+
+    cap = active_max_lot()
+    if broker_max is None:
+        return cap
+    try:
+        broker = Decimal(str(broker_max))
+    except Exception:
+        return cap
+    if broker <= 0:
+        return cap
+    return min(broker, cap)
+
+
+def owner_authorized_lot_ceiling_violated(
+    *,
+    volume: Decimal,
+    broker_min: Decimal | None = None,
+) -> str | None:
+    """Return a reject code when volume or broker min exceeds the owner lot cap."""
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
+
+    cap = active_max_lot()
+    vol = Decimal(str(volume or 0))
+    if broker_min is not None:
+        try:
+            floor = Decimal(str(broker_min))
+        except Exception:
+            floor = Decimal("0")
+        if floor > 0 and floor > cap:
+            return (
+                f"OWNER_BROKER_MIN_EXCEEDS_MAX_LOT: broker volume_min {floor} "
+                f"> owner max_lot {cap}"
+            )
+    if vol > cap:
+        return f"OWNER_MAX_LOT: volume {vol} > {cap}"
+    return None
+
+
 def owner_risk_cap_usd(
     *,
     equity: Decimal | None,

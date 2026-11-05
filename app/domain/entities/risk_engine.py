@@ -78,8 +78,11 @@ class RiskEngineConfig:
     enforce_atr: bool = True
 
     def __post_init__(self) -> None:
-        require(self.max_lot >= self.min_lot, "max_lot must be >= min_lot")
+        # max_lot may sit below min_lot when the owner ceiling (0.01) is below
+        # a broker volume_min. RiskEngine.evaluate rejects that pair; never
+        # inflate max_lot past the owner ceiling to satisfy this invariant.
         require(self.min_lot > 0, "min_lot must be > 0")
+        require(self.max_lot > 0, "max_lot must be > 0")
         require(self.lot_step > 0, "lot_step must be > 0")
         require(self.exposure_leverage > 0, "exposure_leverage must be > 0")
         require(self.max_consecutive_losses >= 0, "max_consecutive_losses >= 0")
