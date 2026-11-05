@@ -58,13 +58,17 @@ def encode_execution_comment(
 
 
 def trade_class_from_comment(comment: str | None) -> str | None:
-    """Proven class from MT5 comment marker, or None when unproven."""
+    """Proven class from MT5 comment marker, or None when unproven.
+
+    Comments are ``prefix:marker:digest`` (see ``encode_execution_comment``).
+    Scan colon parts for a single-character class marker so we do not rely on
+    a fixed index that breaks when the prefix itself contains colons.
+    """
     parts = str(comment or "").strip().split(":")
-    if len(parts) < 3:
-        return None
-    marker = parts[2].upper()
-    if marker in _COMMENT_CLASS_MARKERS and len(marker) == 1:
-        return _COMMENT_CLASS_MARKERS[marker]
+    for part in parts:
+        marker = part.upper()
+        if marker in _COMMENT_CLASS_MARKERS and len(marker) == 1:
+            return _COMMENT_CLASS_MARKERS[marker]
     return None
 
 
