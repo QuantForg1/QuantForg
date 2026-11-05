@@ -137,24 +137,58 @@ def _xau_contract_size(snapshot: Any, account: Any) -> Decimal:
     return CONTRACT_SIZE
 
 
-def _shadow_reversal_kwargs(snapshot: Any, pos: Any, pctx: Any) -> dict[str, Any]:
-    """Best-effort structure/AI inputs for shadow proposals — never invent BOS."""
-    factors: dict[str, Any] = {}
+def _snapshot_score_factors(snapshot: Any) -> dict[str, Any]:
+    """Best-effort factor dict from cycle snapshot — empty when unavailable."""
     for attr in ("ai_score", "last_ai_score", "score", "confluence"):
         obj = getattr(snapshot, attr, None)
         if obj is None:
             continue
         raw_f = getattr(obj, "factors", None)
         if isinstance(raw_f, dict):
-            factors = raw_f
-            break
+            return dict(raw_f)
         if isinstance(obj, dict) and isinstance(obj.get("factors"), dict):
-            factors = obj["factors"]
-            break
+            return dict(obj["factors"])
+    # Scanner-style score_breakdown on snapshot / nested opportunity.
+    for attr in ("score_breakdown", "last_score_breakdown"):
+        raw = getattr(snapshot, attr, None)
+        if isinstance(raw, dict):
+            return dict(raw)
+    return {}
+
+
+def _optional_score_int(raw: Any) -> int | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pme_ai_scores_from_factors(
+    factors: dict[str, Any],
+) -> tuple[int | None, int | None]:
+    """Map score factors → PME ai_momentum / ai_volatility (None if missing)."""
+    mom = _optional_score_int(
+        factors.get("momentum")
+        if "momentum" in factors
+        else factors.get("Momentum")
+    )
+    vol = _optional_score_int(
+        factors.get("volatility")
+        if "volatility" in factors
+        else factors.get("Volatility")
+    )
+    return mom, vol
+
+
+def _shadow_reversal_kwargs(snapshot: Any, pos: Any, pctx: Any) -> dict[str, Any]:
+    """Best-effort structure/AI inputs for shadow proposals — never invent BOS."""
+    factors = _snapshot_score_factors(snapshot)
     bos = int(factors.get("bos") or 0)
     choch = int(factors.get("choch") or 0)
     _ = pos  # reserved for future position-specific structure anchors
-    mtf = int(factors.get("mtf") or 0)
+    mtf = int(factors.get("mtf") or factors.get("mtf_alignment") or 0)
     mom = factors.get("momentum")
     # Against-position only when structure score is high; otherwise treat as noise.
     against = bos >= 70 or choch >= 70
@@ -1587,6 +1621,10 @@ class InstitutionalIteRuntime:
                 snap_mkt = getattr(snapshot, "market_open", None)
                 if snap_mkt is True or snap_mkt is False:
                     market_open_flag = bool(snap_mkt)
+            # Wire existing SCALP fade/collapse exits — previously never received
+            # scores because ai_momentum/ai_volatility stayed None on pctx.
+            _factors = _snapshot_score_factors(snapshot)
+            _ai_mom, _ai_vol = _pme_ai_scores_from_factors(_factors)
             pctx = PositionManageContext(
                 now=datetime.now(UTC),
                 current_price=current_px,
@@ -1618,7 +1656,25 @@ class InstitutionalIteRuntime:
                     getattr(live, "swap", None) if live is not None else None
                 ),
                 contract_size=_xau_contract_size(snapshot, account),
+                ai_momentum=_ai_mom,
+                ai_volatility=_ai_vol,
             )
+            # Shadow outcome mark when broker book confirms ticket closed.
+            if live_by_ticket and not pos_still_open:
+                try:
+                    from app.domain.institutional_trading.management import (
+                        shadow_exit_book as _shadow_out,
+                    )
+
+                    _shadow_out.mark_shadow_outcome(
+                        ticket=int(ticket),
+                        outcome="broker_closed",
+                        note=f"manage:{reason}",
+                    )
+                except Exception:
+                    logger.exception(
+                        "pme_shadow_outcome_mark_failed", ticket=ticket
+                    )
             # Shadow reversal observation — never submits closes unless
             # live_reversal_exits_enabled (kept False until evidence exists).
             try:
