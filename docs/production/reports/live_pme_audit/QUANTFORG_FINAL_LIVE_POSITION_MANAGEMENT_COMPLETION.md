@@ -121,12 +121,14 @@ ruff → clean on touched modules
 
 ---
 
-## L–M. Deploy / health (fill after #160 merge)
+## L–M. Deploy / health
 
 | Deploy | ID |
 |---|---|
-| Prior #158 | `e4807872` SUCCESS; `/health` `/ready` 200 |
-| This activation | *pending merge* |
+| Prior #158 | `e4807872` SUCCESS |
+| #160 activation | **`95d7a582-ef3b-44c0-a669-577d0ec244ba`** SUCCESS · commit `7cedf444` |
+| `/health` | HTTP 200 `{"status":"ok"}` (post-deploy probe) |
+| `/ready` | HTTP 200 routers complete (100 registered) |
 
 ---
 
