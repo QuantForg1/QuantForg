@@ -1133,6 +1133,7 @@ def presend_owner_violations(
     slippage: Decimal | None = None,
     tick_size: Decimal | None = None,
     commission: Decimal | None = None,
+    stop_includes_spread_buffer: bool = False,
 ) -> list[str]:
     """Final owner check on the exact tick the market request was built from.
 
@@ -1140,6 +1141,10 @@ def presend_owner_violations(
     spread, the stop-shrink guard against the plan price, and (when
     ``rr_buffer`` > 0) RR with the fill assumed ``rr_buffer`` worse.
     ``slippage`` is the order deviation in price units, not an extra spread.
+
+    Pass ``stop_includes_spread_buffer=True`` when the SL already embeds the
+    owner spread buffer (LIVE structure path) — otherwise spread is
+    double-counted and valid setups fail at ``order_send``.
     """
     spread = Decimal(str(ask)) - Decimal(str(bid))
     violations = evaluate_owner_entry(
@@ -1160,6 +1165,7 @@ def presend_owner_violations(
         slippage=slippage,
         tick_size=tick_size,
         commission=commission,
+        stop_includes_spread_buffer=stop_includes_spread_buffer,
     )
     drift = stop_shrink_violation(
         side=side,
@@ -1171,15 +1177,25 @@ def presend_owner_violations(
         violations.append(drift)
     buf = Decimal(str(rr_buffer or 0))
     if buf > 0 and stop_loss is not None and take_profit is not None:
-        rr = reward_risk_after_spread(
-            tp_distance=abs(Decimal(str(take_profit)) - request_price) - buf,
-            stop_distance=abs(request_price - Decimal(str(stop_loss))) + buf,
-            spread=spread,
-        ) or Decimal("0")
         from app.domain.institutional_trading.runtime_policy import (
             active_min_reward_risk,
         )
 
+        tp_dist = abs(Decimal(str(take_profit)) - request_price)
+        stop_dist = abs(request_price - Decimal(str(stop_loss)))
+        # Worse-fill buffer: shrink reward, widen risk. Reuse net_reward_risk so
+        # commission + spread-buffer flag match evaluate_owner_entry.
+        net = net_reward_risk(
+            tp_distance=max(tp_dist - buf, Decimal("0")),
+            stop_distance=stop_dist + buf,
+            spread=spread,
+            slippage=slippage,
+            commission=commission,
+            contract_size=contract_size,
+            volume=volume,
+            spread_already_in_stop=stop_includes_spread_buffer,
+        )
+        rr = net.ratio if net.ratio is not None else Decimal("0")
         rr_floor = active_min_reward_risk()
         if rr < rr_floor:
             violations.append(

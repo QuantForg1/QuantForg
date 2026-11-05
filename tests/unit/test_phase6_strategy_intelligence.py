@@ -144,6 +144,34 @@ def test_evaluate_owner_entry_respects_spread_buffer_flag() -> None:
 
 
 @pytest.mark.unit
+def test_presend_respects_stop_includes_spread_buffer() -> None:
+    """LIVE path embeds spread in SL; presend must not double-count it."""
+    from app.domain.institutional_trading.owner_live_limits import (
+        presend_owner_violations,
+    )
+
+    common = dict(
+        symbol="XAUUSD",
+        side="BUY",
+        volume=Decimal("0.01"),
+        request_price=Decimal("100"),
+        bid=Decimal("99.85"),
+        ask=Decimal("100.15"),  # spread 0.30
+        stop_loss=Decimal("98"),  # dist 2.00 already includes buffer
+        take_profit=Decimal("100.40"),
+        plan_price=Decimal("100"),
+        contract_size=Decimal("100"),
+        equity=Decimal("50"),
+        commission=Decimal("0"),
+        rr_buffer=Decimal("0"),
+    )
+    doubled = presend_owner_violations(**common, stop_includes_spread_buffer=False)
+    assert any("OWNER_MIN_RR" in r for r in doubled)
+    clear = presend_owner_violations(**common, stop_includes_spread_buffer=True)
+    assert not any("OWNER_MIN_RR" in r for r in clear)
+
+
+@pytest.mark.unit
 def test_gold_regime_breakout_reachable_at_realistic_atr() -> None:
     """XAUUSD ATR% ~0.30 must be able to classify breakout (was unreachable at 1.5)."""
     # Without symbol: legacy 1.5 high-vol → no breakout at 0.30.
