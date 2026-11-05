@@ -427,3 +427,85 @@ def test_released_anchor_is_not_recreated_from_broker_history() -> None:
     summary = recover_buy_cascade_on_startup(_HistoryAdapter(deals))
     assert summary["backfilled"] == 0
     assert active_anchors("XAUUSD")[0] == []
+
+
+class _AccountAdapter(_HistoryAdapter):
+    def __init__(
+        self,
+        deals: list[dict[str, object]],
+        login: int,
+    ) -> None:
+        super().__init__(deals)
+        self._login = login
+
+    def account_snapshot(self) -> object:
+        return type("Account", (), {"login": self._login})()
+
+
+def test_anchor_missing_from_this_accounts_history_does_not_block_buy() -> None:
+    assert _loss(position_id=9910, entry_price="4117.677") == "created"
+    other = _deal(
+        ticket=21,
+        position_id=1,
+        deal_type="entry_in",
+        price=4080,
+        profit=0,
+        minutes=-1440,
+    )
+    summary = recover_buy_cascade_on_startup(_AccountAdapter([other], 12479147))
+    assert summary["reconciled"]["XAUUSD"]["not_on_account"] == 1
+    blocked, why = evaluate_durable_buy_cascade(
+        symbol="XAUUSD",
+        direction="BUY",
+        entry_price=Decimal("4086"),
+        reversal_confirmed=False,
+    )
+    assert blocked is False
+    assert why == "no_losing_buy_anchor"
+
+
+def test_history_that_starts_after_the_close_keeps_the_anchor() -> None:
+    assert _loss(position_id=9911, entry_price="4117.677") == "created"
+    later = _deal(
+        ticket=22,
+        position_id=2,
+        deal_type="entry_in",
+        price=4088,
+        profit=0,
+        minutes=60,
+    )
+    summary = recover_buy_cascade_on_startup(_AccountAdapter([later], 12479147))
+    assert summary["reconciled"]["XAUUSD"]["kept"] == 1
+    blocked, why = evaluate_durable_buy_cascade(
+        symbol="XAUUSD",
+        direction="BUY",
+        entry_price=Decimal("4086"),
+        reversal_confirmed=False,
+    )
+    assert blocked is True
+    assert why == BUY_CASCADE_REJECT
+
+
+def test_anchor_from_another_login_does_not_block_the_current_account() -> None:
+    assert (
+        _loss(position_id=9912, entry_price="4117.677", broker_login=12260878)
+        == "created"
+    )
+    summary = recover_buy_cascade_on_startup(_AccountAdapter([], 12479147))
+    assert summary["reconciled"]["XAUUSD"]["not_on_account"] == 1
+    blocked, why = evaluate_durable_buy_cascade(
+        symbol="XAUUSD",
+        direction="SELL",
+        entry_price=Decimal("4086"),
+        reversal_confirmed=False,
+    )
+    assert blocked is False
+    assert why == "not_buy"
+    buy_blocked, buy_why = evaluate_durable_buy_cascade(
+        symbol="XAUUSD",
+        direction="BUY",
+        entry_price=Decimal("4086"),
+        reversal_confirmed=False,
+    )
+    assert buy_blocked is False
+    assert buy_why == "no_losing_buy_anchor"
