@@ -219,6 +219,48 @@ def test_rr_boundary(tp_distance: str, accepted: bool) -> None:
     assert (choice.level == 1) is accepted
 
 
+def test_prefers_second_level_when_it_meets_preferred_rr() -> None:
+    """Broker loss sample: nearest TP often ~0.2–0.4R while SL is ~1R.
+
+    When L2 is a real structure level that clears preferred 0.50, select it
+    instead of the nearest floor-only level — without raising the hard floor.
+    """
+    entry = Decimal("100")
+    choice = select_owner_structure_tp(
+        [
+            (entry + Decimal("0.50"), "swing_M1"),  # net RR ~0.25 with stop 2.00
+            (entry + Decimal("1.20"), "swing_M5"),  # net RR 0.60
+        ],
+        entry=entry,
+        stop_distance=Decimal("2.00"),
+        spread=Decimal("0.30"),
+        min_rr=Decimal("0.20"),
+        preferred_rr=Decimal("0.50"),
+        spread_already_in_stop=True,
+    )
+    assert choice.level == 2
+    assert choice.price == entry + Decimal("1.20")
+    assert choice.rr_after_spread == Decimal("0.6")
+
+
+def test_keeps_nearest_when_second_level_misses_preferred() -> None:
+    entry = Decimal("100")
+    choice = select_owner_structure_tp(
+        [
+            (entry + Decimal("0.50"), "swing_M1"),  # 0.25
+            (entry + Decimal("0.80"), "swing_M5"),  # 0.40 < preferred 0.50
+        ],
+        entry=entry,
+        stop_distance=Decimal("2.00"),
+        spread=Decimal("0.30"),
+        min_rr=Decimal("0.20"),
+        preferred_rr=Decimal("0.50"),
+        spread_already_in_stop=True,
+    )
+    assert choice.level == 1
+    assert choice.price == entry + Decimal("0.50")
+
+
 @pytest.mark.parametrize(("tp", "ok"), [("4133.40", True), ("4133.39", False)])
 def test_final_owner_guard_uses_same_boundary(tp: str, ok: bool) -> None:
     reasons = ol.evaluate_owner_entry(

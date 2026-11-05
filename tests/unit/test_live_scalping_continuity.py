@@ -271,7 +271,7 @@ def test_safety_blocked_still_manages_open_positions(
         risk_allowed=True,
     )
     assert result.abort_reason == "SAFETY_BLOCKED"
-    assert managed == ["safety_blocked_manage"]
+    assert managed == ["entry_safety_blocked_position_manage"]
     runtime._run_cycle.assert_not_called()
 
 
@@ -332,7 +332,8 @@ def test_failed_manage_does_not_fingerprint_block_retry() -> None:
             )
 
     engine = PositionManagementEngine(
-        oms=_FailOms(), config=DEFAULT_PME_CONFIG  # type: ignore[arg-type]
+        oms=_FailOms(),
+        config=DEFAULT_PME_CONFIG,  # type: ignore[arg-type]
     )
     pos = ManagedPosition(
         ticket=5,

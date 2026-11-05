@@ -81,3 +81,22 @@ def test_m1_comment_engine_tag_without_inventing_five_pack_id() -> None:
     )
     assert meta.get("attribution_engine") == "m1"
     assert meta.get("strategy_id") == "m1_micro"
+
+
+def test_live_fill_strategy_survives_sl_comment_overwrite() -> None:
+    meta = merge_position_metadata(
+        snapshot={"symbol": "XAUUSD", "ticket": 333, "position_id": 333},
+        comment="[sl 3920.000]",
+        live_meta={
+            "ticket": 333,
+            "position_id": 333,
+            "strategy_id": "momentum_scalping",
+            "strategy_name": "Momentum Scalping",
+            "attribution_engine": "soe",
+            "comment_hash": "deadbeef",
+        },
+        ticket=333,
+        position_id=333,
+    )
+    assert meta.get("strategy_id") == "momentum_scalping"
+    assert meta.get("attribution_engine") == "soe"

@@ -55,18 +55,29 @@ def is_high_quality_signal(
     quality: Any = None,
     confidence: Any = None,
 ) -> bool:
+    """Align with owner ``minimum_trade_quality`` (quality >= 70).
+
+    Confidence is recorded separately for telemetry. A tradable quality score
+    must not flip ``high_quality=False`` solely because confidence lagged the
+    quality slot (observed LIVE mismatch: quality 76 with high_quality False).
+    When quality is missing, confidence alone may still qualify the row.
+    """
     d = str(direction or "").strip().upper()
     if d not in {"BUY", "SELL"}:
         return False
     try:
-        q = int(quality) if quality is not None else 0
+        q = int(quality) if quality is not None else None
     except (TypeError, ValueError):
-        q = 0
+        q = None
     try:
-        c = int(confidence) if confidence is not None else 0
+        c = int(confidence) if confidence is not None else None
     except (TypeError, ValueError):
-        c = 0
-    return q >= HIGH_QUALITY_MIN and c >= HIGH_QUALITY_MIN
+        c = None
+    if q is not None:
+        return q >= HIGH_QUALITY_MIN
+    if c is not None:
+        return c >= HIGH_QUALITY_MIN
+    return False
 
 
 def classify_signal_final_state(

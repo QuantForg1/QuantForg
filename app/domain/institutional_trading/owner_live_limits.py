@@ -80,6 +80,9 @@ OWNER_DAILY_LOSS_PCT = Decimal("48.0")
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
 OWNER_MIN_REWARD_RISK = Decimal("0.20")
+# Soft geometry target used when a farther structure level already clears the
+# floor. Never raises the hard floor above OWNER_MIN_REWARD_RISK.
+OWNER_PREFERRED_REWARD_RISK = Decimal("0.50")
 # Active floor is 0.20. These two values are the only floors below 0.20 an
 # owner may save, and only inside the experimental block. They stay inactive
 # until that experiment is promoted. Any other value below 0.20 is rejected
@@ -113,8 +116,9 @@ OWNER_SL_ATR_MULTIPLIERS_INSIDE_NOISE = (
     Decimal("0.75"),
     Decimal("0.90"),
 )
-# TP may move to the second structure level only when the first misses the
-# active reward:risk floor.
+# TP may use the second structure level when the first misses the active
+# reward:risk floor, or when the second level meets OWNER_PREFERRED_REWARD_RISK
+# while the first only clears the hard floor (asymmetric-win repair).
 OWNER_TP_MAX_STRUCTURE_LEVELS = 2
 OWNER_SL_ATR_TIMEFRAME = (
     (os.environ.get("OWNER_SL_ATR_TIMEFRAME") or "M1").strip().upper()

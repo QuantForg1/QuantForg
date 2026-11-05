@@ -1,0 +1,3183 @@
+{
+  "account": {
+    "login": 12260878,
+    "balance": "18.3",
+    "equity": "18.3",
+    "margin": "0.0",
+    "free_margin": "18.3",
+    "margin_level": "0.0",
+    "profit": "0.0",
+    "leverage": 1000,
+    "currency": "USD",
+    "server": "Weltrade-Real",
+    "name": "P7 PROVIDER ",
+    "company": "Weltrade Ltd.",
+    "session_mode": "attached",
+    "account_mode": "real",
+    "trade_mode": "real",
+    "trade_mode_raw": 2,
+    "trade_allowed": true
+  },
+  "positions": {
+    "items": []
+  },
+  "deals_30_raw_type": "dict",
+  "deals_7_raw_type": "dict",
+  "orders_raw_type": "dict",
+  "deals_30_count": 95,
+  "deals_30": {
+    "balance_deals": [
+      {
+        "ticket": 657032916,
+        "order": 0,
+        "symbol": "",
+        "type": 2,
+        "entry": 0,
+        "volume": "0.0",
+        "price": "0",
+        "profit": "19.0",
+        "swap": "0",
+        "commission": "0.0",
+        "time": 1793626843,
+        "magic": 0,
+        "comment": "Deposit from #12439799",
+        "position_id": 0
+      },
+      {
+        "ticket": 660030614,
+        "order": 0,
+        "symbol": "",
+        "type": 2,
+        "entry": 0,
+        "volume": "0.0",
+        "price": "0",
+        "profit": "13.0",
+        "swap": "0",
+        "commission": "0.0",
+        "time": 1793754939,
+        "magic": 0,
+        "comment": "Deposit from #12439799",
+        "position_id": 0
+      },
+      {
+        "ticket": 663468718,
+        "order": 0,
+        "symbol": "",
+        "type": 2,
+        "entry": 0,
+        "volume": "0.0",
+        "price": "0",
+        "profit": "16.0",
+        "swap": "0",
+        "commission": "0.0",
+        "time": 1793902427,
+        "magic": 0,
+        "comment": "Deposit from #14302648",
+        "position_id": 0
+      }
+    ],
+    "trade_deal_count": 92,
+    "closed_positions": [
+      {
+        "position_id": 679243921,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3904.463]",
+        "deal_count": 2,
+        "profit": "-1.37",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.37",
+        "first_time": 1793626998,
+        "last_time": 1793627006,
+        "entry_prices": [
+          "3903.523"
+        ],
+        "exit_prices": [
+          "3904.897"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679248215,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3902.093]",
+        "deal_count": 2,
+        "profit": "2.25",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "2.25",
+        "first_time": 1793627182,
+        "last_time": 1793627900,
+        "entry_prices": [
+          "3904.343"
+        ],
+        "exit_prices": [
+          "3902.093"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679279646,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3900.433]",
+        "deal_count": 2,
+        "profit": "-1.06",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.06",
+        "first_time": 1793628424,
+        "last_time": 1793628457,
+        "entry_prices": [
+          "3899.373"
+        ],
+        "exit_prices": [
+          "3900.437"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679291783,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3906.143]",
+        "deal_count": 2,
+        "profit": "-1.02",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.02",
+        "first_time": 1793628855,
+        "last_time": 1793628879,
+        "entry_prices": [
+          "3905.123"
+        ],
+        "exit_prices": [
+          "3906.147"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679295733,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3905.823]",
+        "deal_count": 2,
+        "profit": "-2.6",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.6",
+        "first_time": 1793629002,
+        "last_time": 1793629091,
+        "entry_prices": [
+          "3903.453"
+        ],
+        "exit_prices": [
+          "3906.057"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679304307,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3903.623]",
+        "deal_count": 2,
+        "profit": "0.73",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "0.73",
+        "first_time": 1793629281,
+        "last_time": 1793629696,
+        "entry_prices": [
+          "3904.353"
+        ],
+        "exit_prices": [
+          "3903.623"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679425876,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3913.293]",
+        "deal_count": 2,
+        "profit": "-1.74",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.74",
+        "first_time": 1793633564,
+        "last_time": 1793633604,
+        "entry_prices": [
+          "3911.583"
+        ],
+        "exit_prices": [
+          "3913.327"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679537613,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3939.593]",
+        "deal_count": 2,
+        "profit": "1.07",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.07",
+        "first_time": 1793636486,
+        "last_time": 1793636513,
+        "entry_prices": [
+          "3940.663"
+        ],
+        "exit_prices": [
+          "3939.593"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679613636,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3963.863]",
+        "deal_count": 2,
+        "profit": "1.6600000000000001",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.6600000000000001",
+        "first_time": 1793638759,
+        "last_time": 1793638801,
+        "entry_prices": [
+          "3965.523"
+        ],
+        "exit_prices": [
+          "3963.863"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679668402,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3955.503]",
+        "deal_count": 2,
+        "profit": "1.49",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.49",
+        "first_time": 1793640512,
+        "last_time": 1793640581,
+        "entry_prices": [
+          "3956.993"
+        ],
+        "exit_prices": [
+          "3955.503"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679679006,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3953.973]",
+        "deal_count": 2,
+        "profit": "-2.65",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.65",
+        "first_time": 1793640804,
+        "last_time": 1793641159,
+        "entry_prices": [
+          "3951.473"
+        ],
+        "exit_prices": [
+          "3954.127"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679721555,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3956.903]",
+        "deal_count": 2,
+        "profit": "1.42",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.42",
+        "first_time": 1793642232,
+        "last_time": 1793642297,
+        "entry_prices": [
+          "3958.323"
+        ],
+        "exit_prices": [
+          "3956.903"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679735070,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3959.963]",
+        "deal_count": 2,
+        "profit": "2.19",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "2.19",
+        "first_time": 1793642678,
+        "last_time": 1793643036,
+        "entry_prices": [
+          "3957.777"
+        ],
+        "exit_prices": [
+          "3959.963"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679745203,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3962.073]",
+        "deal_count": 2,
+        "profit": "1.8900000000000001",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.8900000000000001",
+        "first_time": 1793643054,
+        "last_time": 1793643321,
+        "entry_prices": [
+          "3960.187"
+        ],
+        "exit_prices": [
+          "3962.073"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679762100,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3967.473]",
+        "deal_count": 2,
+        "profit": "1.8399999999999999",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.8399999999999999",
+        "first_time": 1793643673,
+        "last_time": 1793644297,
+        "entry_prices": [
+          "3965.637"
+        ],
+        "exit_prices": [
+          "3967.473"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679792377,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3967.373]",
+        "deal_count": 2,
+        "profit": "-2.45",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.45",
+        "first_time": 1793644812,
+        "last_time": 1793645158,
+        "entry_prices": [
+          "3969.787"
+        ],
+        "exit_prices": [
+          "3967.333"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679805777,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3966.693]",
+        "deal_count": 2,
+        "profit": "-2.9",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.9",
+        "first_time": 1793645346,
+        "last_time": 1793645829,
+        "entry_prices": [
+          "3969.597"
+        ],
+        "exit_prices": [
+          "3966.693"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679820680,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3966.283]",
+        "deal_count": 2,
+        "profit": "-2.33",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.33",
+        "first_time": 1793645981,
+        "last_time": 1793646919,
+        "entry_prices": [
+          "3968.547"
+        ],
+        "exit_prices": [
+          "3966.213"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679858017,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3962.803]",
+        "deal_count": 2,
+        "profit": "-2.48",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.48",
+        "first_time": 1793647535,
+        "last_time": 1793647614,
+        "entry_prices": [
+          "3965.247"
+        ],
+        "exit_prices": [
+          "3962.763"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680060486,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3944.263]",
+        "deal_count": 2,
+        "profit": "-1.75",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.75",
+        "first_time": 1793655574,
+        "last_time": 1793655603,
+        "entry_prices": [
+          "3946.007"
+        ],
+        "exit_prices": [
+          "3944.253"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680332040,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3951.443]",
+        "deal_count": 2,
+        "profit": "0.74",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "0.74",
+        "first_time": 1793672101,
+        "last_time": 1793672195,
+        "entry_prices": [
+          "3950.707"
+        ],
+        "exit_prices": [
+          "3951.443"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680433016,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3948.893]",
+        "deal_count": 2,
+        "profit": "1.12",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.12",
+        "first_time": 1793677428,
+        "last_time": 1793677468,
+        "entry_prices": [
+          "3947.777"
+        ],
+        "exit_prices": [
+          "3948.893"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680442733,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3950.203]",
+        "deal_count": 2,
+        "profit": "-2.0",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.0",
+        "first_time": 1793677995,
+        "last_time": 1793678172,
+        "entry_prices": [
+          "3952.177"
+        ],
+        "exit_prices": [
+          "3950.173"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680490476,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3944.223]",
+        "deal_count": 2,
+        "profit": "1.35",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.35",
+        "first_time": 1793680796,
+        "last_time": 1793680840,
+        "entry_prices": [
+          "3942.877"
+        ],
+        "exit_prices": [
+          "3944.223"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680495468,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3946.583]",
+        "deal_count": 2,
+        "profit": "0.93",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "0.93",
+        "first_time": 1793681077,
+        "last_time": 1793681232,
+        "entry_prices": [
+          "3945.657"
+        ],
+        "exit_prices": [
+          "3946.583"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680507455,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3950.163]",
+        "deal_count": 2,
+        "profit": "1.6800000000000002",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.6800000000000002",
+        "first_time": 1793681776,
+        "last_time": 1793681821,
+        "entry_prices": [
+          "3948.487"
+        ],
+        "exit_prices": [
+          "3950.163"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680510564,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3947.923]",
+        "deal_count": 2,
+        "profit": "-2.39",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.39",
+        "first_time": 1793681921,
+        "last_time": 1793681938,
+        "entry_prices": [
+          "3950.307"
+        ],
+        "exit_prices": [
+          "3947.913"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680520379,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3943.223]",
+        "deal_count": 2,
+        "profit": "-2.08",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.08",
+        "first_time": 1793682387,
+        "last_time": 1793682459,
+        "entry_prices": [
+          "3945.217"
+        ],
+        "exit_prices": [
+          "3943.133"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680523668,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3942.793]",
+        "deal_count": 2,
+        "profit": "-1.15",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.15",
+        "first_time": 1793682612,
+        "last_time": 1793682711,
+        "entry_prices": [
+          "3943.597"
+        ],
+        "exit_prices": [
+          "3942.443"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685427394,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4136.493]",
+        "deal_count": 2,
+        "profit": "1.47",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.47",
+        "first_time": 1793885961,
+        "last_time": 1793886252,
+        "entry_prices": [
+          "4135.027"
+        ],
+        "exit_prices": [
+          "4136.493"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685438375,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4134.419]",
+        "deal_count": 2,
+        "profit": "-2.41",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.41",
+        "first_time": 1793886335,
+        "last_time": 1793886600,
+        "entry_prices": [
+          "4136.677"
+        ],
+        "exit_prices": [
+          "4134.263"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685479304,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4130.393]",
+        "deal_count": 2,
+        "profit": "2.64",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "2.64",
+        "first_time": 1793887789,
+        "last_time": 1793887901,
+        "entry_prices": [
+          "4127.757"
+        ],
+        "exit_prices": [
+          "4130.393"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685486461,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4130.393]",
+        "deal_count": 2,
+        "profit": "1.76",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.76",
+        "first_time": 1793888022,
+        "last_time": 1793888105,
+        "entry_prices": [
+          "4128.637"
+        ],
+        "exit_prices": [
+          "4130.393"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685491523,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4125.909]",
+        "deal_count": 2,
+        "profit": "-3.3",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.3",
+        "first_time": 1793888188,
+        "last_time": 1793888759,
+        "entry_prices": [
+          "4129.107"
+        ],
+        "exit_prices": [
+          "4125.803"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685514312,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4122.249]",
+        "deal_count": 2,
+        "profit": "-2.99",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.99",
+        "first_time": 1793889039,
+        "last_time": 1793889223,
+        "entry_prices": [
+          "4125.217"
+        ],
+        "exit_prices": [
+          "4122.223"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685525389,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4119.809]",
+        "deal_count": 2,
+        "profit": "-1.75",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.75",
+        "first_time": 1793889345,
+        "last_time": 1793889362,
+        "entry_prices": [
+          "4121.507"
+        ],
+        "exit_prices": [
+          "4119.753"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685533296,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4114.869]",
+        "deal_count": 2,
+        "profit": "-3.13",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.13",
+        "first_time": 1793889558,
+        "last_time": 1793891990,
+        "entry_prices": [
+          "4117.997"
+        ],
+        "exit_prices": [
+          "4114.863"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686046032,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4118.076]",
+        "deal_count": 2,
+        "profit": "-2.76",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.76",
+        "first_time": 1793905385,
+        "last_time": 1793905523,
+        "entry_prices": [
+          "4120.797"
+        ],
+        "exit_prices": [
+          "4118.033"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686055124,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4124.783]",
+        "deal_count": 2,
+        "profit": "1.48",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.48",
+        "first_time": 1793905713,
+        "last_time": 1793905803,
+        "entry_prices": [
+          "4123.307"
+        ],
+        "exit_prices": [
+          "4124.783"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686061280,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4121.193]",
+        "deal_count": 2,
+        "profit": "1.54",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.54",
+        "first_time": 1793905965,
+        "last_time": 1793905990,
+        "entry_prices": [
+          "4119.657"
+        ],
+        "exit_prices": [
+          "4121.193"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686063406,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4118.798]",
+        "deal_count": 2,
+        "profit": "-3.07",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.07",
+        "first_time": 1793906053,
+        "last_time": 1793906161,
+        "entry_prices": [
+          "4121.847"
+        ],
+        "exit_prices": [
+          "4118.773"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686067251,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4119.483]",
+        "deal_count": 2,
+        "profit": "1.28",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.28",
+        "first_time": 1793906195,
+        "last_time": 1793906279,
+        "entry_prices": [
+          "4118.207"
+        ],
+        "exit_prices": [
+          "4119.483"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686073411,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4114.986]",
+        "deal_count": 2,
+        "profit": "-2.7",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.7",
+        "first_time": 1793906435,
+        "last_time": 1793906656,
+        "entry_prices": [
+          "4117.677"
+        ],
+        "exit_prices": [
+          "4114.973"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686080077,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4113.224]",
+        "deal_count": 2,
+        "profit": "-1.72",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.72",
+        "first_time": 1793906711,
+        "last_time": 1793906768,
+        "entry_prices": [
+          "4114.937"
+        ],
+        "exit_prices": [
+          "4113.213"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686083600,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4111.514]",
+        "deal_count": 2,
+        "profit": "-3.01",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.01",
+        "first_time": 1793906863,
+        "last_time": 1793906975,
+        "entry_prices": [
+          "4114.427"
+        ],
+        "exit_prices": [
+          "4111.413"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686098571,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4106.751]",
+        "deal_count": 2,
+        "profit": "-3.66",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.66",
+        "first_time": 1793907418,
+        "last_time": 1793907562,
+        "entry_prices": [
+          "4108.997"
+        ],
+        "exit_prices": [
+          "4105.333"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      }
+    ],
+    "metrics": {
+      "n_positions": 46,
+      "wins": 20,
+      "losses": 26,
+      "breakeven": 0,
+      "win_rate": 43.47826086956522,
+      "gross_profit": "30.5300000000000003",
+      "gross_loss": "60.47",
+      "net": "-29.9399999999999997",
+      "profit_factor": "0.5049",
+      "avg_win": "1.53",
+      "avg_loss": "-2.33",
+      "expectancy": "-0.65",
+      "total_commission": "0.0",
+      "total_swap": "0"
+    },
+    "sample_deal_keys": [
+      "ticket",
+      "order",
+      "symbol",
+      "type",
+      "entry",
+      "volume",
+      "price",
+      "profit",
+      "swap",
+      "commission",
+      "time",
+      "magic",
+      "comment",
+      "position_id"
+    ],
+    "sample_deal": {
+      "ticket": 657036214,
+      "order": 679243921,
+      "symbol": "XAUUSD",
+      "type": 1,
+      "entry": 0,
+      "volume": "0.01",
+      "price": "3903.523",
+      "profit": "0.0",
+      "swap": "0",
+      "commission": "0.0",
+      "time": 1793626998,
+      "magic": 260720,
+      "comment": "m1:mom-sell-3903.523",
+      "position_id": 679243921
+    }
+  },
+  "deals_7_count": 95,
+  "deals_7": {
+    "balance_deals": [
+      {
+        "ticket": 657032916,
+        "order": 0,
+        "symbol": "",
+        "type": 2,
+        "entry": 0,
+        "volume": "0.0",
+        "price": "0",
+        "profit": "19.0",
+        "swap": "0",
+        "commission": "0.0",
+        "time": 1793626843,
+        "magic": 0,
+        "comment": "Deposit from #12439799",
+        "position_id": 0
+      },
+      {
+        "ticket": 660030614,
+        "order": 0,
+        "symbol": "",
+        "type": 2,
+        "entry": 0,
+        "volume": "0.0",
+        "price": "0",
+        "profit": "13.0",
+        "swap": "0",
+        "commission": "0.0",
+        "time": 1793754939,
+        "magic": 0,
+        "comment": "Deposit from #12439799",
+        "position_id": 0
+      },
+      {
+        "ticket": 663468718,
+        "order": 0,
+        "symbol": "",
+        "type": 2,
+        "entry": 0,
+        "volume": "0.0",
+        "price": "0",
+        "profit": "16.0",
+        "swap": "0",
+        "commission": "0.0",
+        "time": 1793902427,
+        "magic": 0,
+        "comment": "Deposit from #14302648",
+        "position_id": 0
+      }
+    ],
+    "trade_deal_count": 92,
+    "closed_positions": [
+      {
+        "position_id": 679243921,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3904.463]",
+        "deal_count": 2,
+        "profit": "-1.37",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.37",
+        "first_time": 1793626998,
+        "last_time": 1793627006,
+        "entry_prices": [
+          "3903.523"
+        ],
+        "exit_prices": [
+          "3904.897"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679248215,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3902.093]",
+        "deal_count": 2,
+        "profit": "2.25",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "2.25",
+        "first_time": 1793627182,
+        "last_time": 1793627900,
+        "entry_prices": [
+          "3904.343"
+        ],
+        "exit_prices": [
+          "3902.093"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679279646,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3900.433]",
+        "deal_count": 2,
+        "profit": "-1.06",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.06",
+        "first_time": 1793628424,
+        "last_time": 1793628457,
+        "entry_prices": [
+          "3899.373"
+        ],
+        "exit_prices": [
+          "3900.437"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679291783,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3906.143]",
+        "deal_count": 2,
+        "profit": "-1.02",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.02",
+        "first_time": 1793628855,
+        "last_time": 1793628879,
+        "entry_prices": [
+          "3905.123"
+        ],
+        "exit_prices": [
+          "3906.147"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679295733,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3905.823]",
+        "deal_count": 2,
+        "profit": "-2.6",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.6",
+        "first_time": 1793629002,
+        "last_time": 1793629091,
+        "entry_prices": [
+          "3903.453"
+        ],
+        "exit_prices": [
+          "3906.057"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679304307,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3903.623]",
+        "deal_count": 2,
+        "profit": "0.73",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "0.73",
+        "first_time": 1793629281,
+        "last_time": 1793629696,
+        "entry_prices": [
+          "3904.353"
+        ],
+        "exit_prices": [
+          "3903.623"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679425876,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3913.293]",
+        "deal_count": 2,
+        "profit": "-1.74",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.74",
+        "first_time": 1793633564,
+        "last_time": 1793633604,
+        "entry_prices": [
+          "3911.583"
+        ],
+        "exit_prices": [
+          "3913.327"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679537613,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3939.593]",
+        "deal_count": 2,
+        "profit": "1.07",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.07",
+        "first_time": 1793636486,
+        "last_time": 1793636513,
+        "entry_prices": [
+          "3940.663"
+        ],
+        "exit_prices": [
+          "3939.593"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679613636,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3963.863]",
+        "deal_count": 2,
+        "profit": "1.6600000000000001",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.6600000000000001",
+        "first_time": 1793638759,
+        "last_time": 1793638801,
+        "entry_prices": [
+          "3965.523"
+        ],
+        "exit_prices": [
+          "3963.863"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679668402,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3955.503]",
+        "deal_count": 2,
+        "profit": "1.49",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.49",
+        "first_time": 1793640512,
+        "last_time": 1793640581,
+        "entry_prices": [
+          "3956.993"
+        ],
+        "exit_prices": [
+          "3955.503"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679679006,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3953.973]",
+        "deal_count": 2,
+        "profit": "-2.65",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.65",
+        "first_time": 1793640804,
+        "last_time": 1793641159,
+        "entry_prices": [
+          "3951.473"
+        ],
+        "exit_prices": [
+          "3954.127"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679721555,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3956.903]",
+        "deal_count": 2,
+        "profit": "1.42",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.42",
+        "first_time": 1793642232,
+        "last_time": 1793642297,
+        "entry_prices": [
+          "3958.323"
+        ],
+        "exit_prices": [
+          "3956.903"
+        ],
+        "sides": [
+          1,
+          0
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679735070,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3959.963]",
+        "deal_count": 2,
+        "profit": "2.19",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "2.19",
+        "first_time": 1793642678,
+        "last_time": 1793643036,
+        "entry_prices": [
+          "3957.777"
+        ],
+        "exit_prices": [
+          "3959.963"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679745203,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3962.073]",
+        "deal_count": 2,
+        "profit": "1.8900000000000001",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.8900000000000001",
+        "first_time": 1793643054,
+        "last_time": 1793643321,
+        "entry_prices": [
+          "3960.187"
+        ],
+        "exit_prices": [
+          "3962.073"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679762100,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3967.473]",
+        "deal_count": 2,
+        "profit": "1.8399999999999999",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.8399999999999999",
+        "first_time": 1793643673,
+        "last_time": 1793644297,
+        "entry_prices": [
+          "3965.637"
+        ],
+        "exit_prices": [
+          "3967.473"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679792377,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3967.373]",
+        "deal_count": 2,
+        "profit": "-2.45",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.45",
+        "first_time": 1793644812,
+        "last_time": 1793645158,
+        "entry_prices": [
+          "3969.787"
+        ],
+        "exit_prices": [
+          "3967.333"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679805777,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3966.693]",
+        "deal_count": 2,
+        "profit": "-2.9",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.9",
+        "first_time": 1793645346,
+        "last_time": 1793645829,
+        "entry_prices": [
+          "3969.597"
+        ],
+        "exit_prices": [
+          "3966.693"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679820680,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3966.283]",
+        "deal_count": 2,
+        "profit": "-2.33",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.33",
+        "first_time": 1793645981,
+        "last_time": 1793646919,
+        "entry_prices": [
+          "3968.547"
+        ],
+        "exit_prices": [
+          "3966.213"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 679858017,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3962.803]",
+        "deal_count": 2,
+        "profit": "-2.48",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.48",
+        "first_time": 1793647535,
+        "last_time": 1793647614,
+        "entry_prices": [
+          "3965.247"
+        ],
+        "exit_prices": [
+          "3962.763"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680060486,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3944.263]",
+        "deal_count": 2,
+        "profit": "-1.75",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.75",
+        "first_time": 1793655574,
+        "last_time": 1793655603,
+        "entry_prices": [
+          "3946.007"
+        ],
+        "exit_prices": [
+          "3944.253"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680332040,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3951.443]",
+        "deal_count": 2,
+        "profit": "0.74",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "0.74",
+        "first_time": 1793672101,
+        "last_time": 1793672195,
+        "entry_prices": [
+          "3950.707"
+        ],
+        "exit_prices": [
+          "3951.443"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680433016,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3948.893]",
+        "deal_count": 2,
+        "profit": "1.12",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.12",
+        "first_time": 1793677428,
+        "last_time": 1793677468,
+        "entry_prices": [
+          "3947.777"
+        ],
+        "exit_prices": [
+          "3948.893"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680442733,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3950.203]",
+        "deal_count": 2,
+        "profit": "-2.0",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.0",
+        "first_time": 1793677995,
+        "last_time": 1793678172,
+        "entry_prices": [
+          "3952.177"
+        ],
+        "exit_prices": [
+          "3950.173"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680490476,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3944.223]",
+        "deal_count": 2,
+        "profit": "1.35",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.35",
+        "first_time": 1793680796,
+        "last_time": 1793680840,
+        "entry_prices": [
+          "3942.877"
+        ],
+        "exit_prices": [
+          "3944.223"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680495468,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3946.583]",
+        "deal_count": 2,
+        "profit": "0.93",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "0.93",
+        "first_time": 1793681077,
+        "last_time": 1793681232,
+        "entry_prices": [
+          "3945.657"
+        ],
+        "exit_prices": [
+          "3946.583"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680507455,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 3950.163]",
+        "deal_count": 2,
+        "profit": "1.6800000000000002",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.6800000000000002",
+        "first_time": 1793681776,
+        "last_time": 1793681821,
+        "entry_prices": [
+          "3948.487"
+        ],
+        "exit_prices": [
+          "3950.163"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680510564,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3947.923]",
+        "deal_count": 2,
+        "profit": "-2.39",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.39",
+        "first_time": 1793681921,
+        "last_time": 1793681938,
+        "entry_prices": [
+          "3950.307"
+        ],
+        "exit_prices": [
+          "3947.913"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680520379,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3943.223]",
+        "deal_count": 2,
+        "profit": "-2.08",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.08",
+        "first_time": 1793682387,
+        "last_time": 1793682459,
+        "entry_prices": [
+          "3945.217"
+        ],
+        "exit_prices": [
+          "3943.133"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 680523668,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 3942.793]",
+        "deal_count": 2,
+        "profit": "-1.15",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.15",
+        "first_time": 1793682612,
+        "last_time": 1793682711,
+        "entry_prices": [
+          "3943.597"
+        ],
+        "exit_prices": [
+          "3942.443"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685427394,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4136.493]",
+        "deal_count": 2,
+        "profit": "1.47",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.47",
+        "first_time": 1793885961,
+        "last_time": 1793886252,
+        "entry_prices": [
+          "4135.027"
+        ],
+        "exit_prices": [
+          "4136.493"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685438375,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4134.419]",
+        "deal_count": 2,
+        "profit": "-2.41",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.41",
+        "first_time": 1793886335,
+        "last_time": 1793886600,
+        "entry_prices": [
+          "4136.677"
+        ],
+        "exit_prices": [
+          "4134.263"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685479304,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4130.393]",
+        "deal_count": 2,
+        "profit": "2.64",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "2.64",
+        "first_time": 1793887789,
+        "last_time": 1793887901,
+        "entry_prices": [
+          "4127.757"
+        ],
+        "exit_prices": [
+          "4130.393"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685486461,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4130.393]",
+        "deal_count": 2,
+        "profit": "1.76",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.76",
+        "first_time": 1793888022,
+        "last_time": 1793888105,
+        "entry_prices": [
+          "4128.637"
+        ],
+        "exit_prices": [
+          "4130.393"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685491523,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4125.909]",
+        "deal_count": 2,
+        "profit": "-3.3",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.3",
+        "first_time": 1793888188,
+        "last_time": 1793888759,
+        "entry_prices": [
+          "4129.107"
+        ],
+        "exit_prices": [
+          "4125.803"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685514312,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4122.249]",
+        "deal_count": 2,
+        "profit": "-2.99",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.99",
+        "first_time": 1793889039,
+        "last_time": 1793889223,
+        "entry_prices": [
+          "4125.217"
+        ],
+        "exit_prices": [
+          "4122.223"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685525389,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4119.809]",
+        "deal_count": 2,
+        "profit": "-1.75",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.75",
+        "first_time": 1793889345,
+        "last_time": 1793889362,
+        "entry_prices": [
+          "4121.507"
+        ],
+        "exit_prices": [
+          "4119.753"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 685533296,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4114.869]",
+        "deal_count": 2,
+        "profit": "-3.13",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.13",
+        "first_time": 1793889558,
+        "last_time": 1793891990,
+        "entry_prices": [
+          "4117.997"
+        ],
+        "exit_prices": [
+          "4114.863"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686046032,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4118.076]",
+        "deal_count": 2,
+        "profit": "-2.76",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.76",
+        "first_time": 1793905385,
+        "last_time": 1793905523,
+        "entry_prices": [
+          "4120.797"
+        ],
+        "exit_prices": [
+          "4118.033"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686055124,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4124.783]",
+        "deal_count": 2,
+        "profit": "1.48",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.48",
+        "first_time": 1793905713,
+        "last_time": 1793905803,
+        "entry_prices": [
+          "4123.307"
+        ],
+        "exit_prices": [
+          "4124.783"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686061280,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4121.193]",
+        "deal_count": 2,
+        "profit": "1.54",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.54",
+        "first_time": 1793905965,
+        "last_time": 1793905990,
+        "entry_prices": [
+          "4119.657"
+        ],
+        "exit_prices": [
+          "4121.193"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686063406,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4118.798]",
+        "deal_count": 2,
+        "profit": "-3.07",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.07",
+        "first_time": 1793906053,
+        "last_time": 1793906161,
+        "entry_prices": [
+          "4121.847"
+        ],
+        "exit_prices": [
+          "4118.773"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686067251,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[tp 4119.483]",
+        "deal_count": 2,
+        "profit": "1.28",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "1.28",
+        "first_time": 1793906195,
+        "last_time": 1793906279,
+        "entry_prices": [
+          "4118.207"
+        ],
+        "exit_prices": [
+          "4119.483"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686073411,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4114.986]",
+        "deal_count": 2,
+        "profit": "-2.7",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-2.7",
+        "first_time": 1793906435,
+        "last_time": 1793906656,
+        "entry_prices": [
+          "4117.677"
+        ],
+        "exit_prices": [
+          "4114.973"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686080077,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4113.224]",
+        "deal_count": 2,
+        "profit": "-1.72",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-1.72",
+        "first_time": 1793906711,
+        "last_time": 1793906768,
+        "entry_prices": [
+          "4114.937"
+        ],
+        "exit_prices": [
+          "4113.213"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686083600,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4111.514]",
+        "deal_count": 2,
+        "profit": "-3.01",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.01",
+        "first_time": 1793906863,
+        "last_time": 1793906975,
+        "entry_prices": [
+          "4114.427"
+        ],
+        "exit_prices": [
+          "4111.413"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      },
+      {
+        "position_id": 686098571,
+        "symbol": "XAUUSD",
+        "magic": 260720,
+        "comment": "[sl 4106.751]",
+        "deal_count": 2,
+        "profit": "-3.66",
+        "commission": "0.0",
+        "swap": "0",
+        "net": "-3.66",
+        "first_time": 1793907418,
+        "last_time": 1793907562,
+        "entry_prices": [
+          "4108.997"
+        ],
+        "exit_prices": [
+          "4105.333"
+        ],
+        "sides": [
+          0,
+          1
+        ],
+        "volumes": [
+          "0.01",
+          "0.01"
+        ]
+      }
+    ],
+    "metrics": {
+      "n_positions": 46,
+      "wins": 20,
+      "losses": 26,
+      "breakeven": 0,
+      "win_rate": 43.47826086956522,
+      "gross_profit": "30.5300000000000003",
+      "gross_loss": "60.47",
+      "net": "-29.9399999999999997",
+      "profit_factor": "0.5049",
+      "avg_win": "1.53",
+      "avg_loss": "-2.33",
+      "expectancy": "-0.65",
+      "total_commission": "0.0",
+      "total_swap": "0"
+    },
+    "sample_deal_keys": [
+      "ticket",
+      "order",
+      "symbol",
+      "type",
+      "entry",
+      "volume",
+      "price",
+      "profit",
+      "swap",
+      "commission",
+      "time",
+      "magic",
+      "comment",
+      "position_id"
+    ],
+    "sample_deal": {
+      "ticket": 657036214,
+      "order": 679243921,
+      "symbol": "XAUUSD",
+      "type": 1,
+      "entry": 0,
+      "volume": "0.01",
+      "price": "3903.523",
+      "profit": "0.0",
+      "swap": "0",
+      "commission": "0.0",
+      "time": 1793626998,
+      "magic": 260720,
+      "comment": "m1:mom-sell-3903.523",
+      "position_id": 679243921
+    }
+  },
+  "orders": {
+    "items": [
+      {
+        "ticket": 679243921,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679244079,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679248215,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679265791,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679279646,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679280399,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679291783,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679292215,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679295733,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679298294,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679304307,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679314768,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679425876,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679427069,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679537613,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679538548,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679613636,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679615214,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679668402,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679670630,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679679006,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679688960,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679721555,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679723323,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679735070,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679744752,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679745203,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679752287,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679762100,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679778339,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679792377,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679800678,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679805777,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679817941,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679820680,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679842673,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679858017,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 679859978,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680060486,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680061219,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680332040,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680333467,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680433016,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680433509,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680442733,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680445730,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680490476,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680491359,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680495468,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680497649,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680507455,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680508293,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680510564,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680510930,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680520379,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680521347,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680523668,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 680525076,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685427394,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685435553,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685438375,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685444972,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685479304,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685482373,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685486461,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685488996,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685491523,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685505846,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685514312,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685520362,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685525389,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685526082,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685533296,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 685603108,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686046032,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686049601,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686055124,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686057684,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686061280,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686062044,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686063406,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686066207,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686067251,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686069341,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686073411,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686078460,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686080077,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686081510,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686083600,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686086599,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686098571,
+        "symbol": "XAUUSD",
+        "state": 4
+      },
+      {
+        "ticket": 686101960,
+        "symbol": "XAUUSD",
+        "state": 4
+      }
+    ]
+  }
+}

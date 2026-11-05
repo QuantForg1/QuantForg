@@ -14,6 +14,7 @@ from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MIN_REWARD_RISK,
+    OWNER_PREFERRED_REWARD_RISK,
     OWNER_TP_MAX_STRUCTURE_LEVELS,
     net_reward_risk,
     owner_stop_distance,
@@ -345,6 +346,7 @@ def select_owner_structure_tp(
     stop_distance: Decimal,
     spread: Decimal,
     min_rr: Decimal = OWNER_MIN_REWARD_RISK,
+    preferred_rr: Decimal | None = OWNER_PREFERRED_REWARD_RISK,
     max_levels: int = OWNER_TP_MAX_STRUCTURE_LEVELS,
     slippage: Decimal | None = None,
     commission: Decimal | None = None,
@@ -352,16 +354,23 @@ def select_owner_structure_tp(
     volume: Decimal | None = None,
     spread_already_in_stop: bool = False,
 ) -> OwnerTpChoice:
-    """Nearest of the first ``max_levels`` levels with RR after spread >= min.
+    """Pick a real structure TP among the first ``max_levels`` levels.
 
     ``levels`` come from :func:`owner_tp_levels` (nearest first). Never looks
-    past the second level and never stretches a TP beyond a real level.
+    past ``max_levels`` and never stretches a TP beyond a real level.
+
+    Selection rule (evidence-based expectancy repair):
+    1. Collect every level whose net RR after spread meets ``min_rr``.
+    2. If ``preferred_rr`` is set and any eligible level also meets it, pick the
+       nearest such level (still a real structure price).
+    3. Otherwise keep the nearest level that only meets ``min_rr`` (owner floor).
 
     When the stop was placed with the owner spread buffer already embedded in
     ``stop_distance``, set ``spread_already_in_stop=True`` so net RR does not
     double-count the spread (Phase-6 intelligence fix).
     """
     considered: list[tuple[int, Decimal, str, Decimal | None]] = []
+    eligible: list[tuple[int, Decimal, str, Decimal]] = []
     for idx, (price, src) in enumerate(levels[:max_levels], start=1):
         rr = net_reward_risk(
             tp_distance=abs(price - entry),
@@ -375,8 +384,16 @@ def select_owner_structure_tp(
         ).ratio
         considered.append((idx, price, src, rr))
         if rr is not None and rr >= min_rr:
-            return OwnerTpChoice(idx, price, src, rr, tuple(considered))
-    return OwnerTpChoice(None, None, None, None, tuple(considered))
+            eligible.append((idx, price, src, rr))
+    if not eligible:
+        return OwnerTpChoice(None, None, None, None, tuple(considered))
+    pref = preferred_rr if preferred_rr is not None else None
+    if pref is not None and pref > min_rr:
+        for idx, price, src, rr in eligible:
+            if rr >= pref:
+                return OwnerTpChoice(idx, price, src, rr, tuple(considered))
+    idx, price, src, rr = eligible[0]
+    return OwnerTpChoice(idx, price, src, rr, tuple(considered))
 
 
 def compute_structure_targets(

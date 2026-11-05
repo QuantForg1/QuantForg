@@ -1140,15 +1140,15 @@ class InstitutionalIteRuntime:
                 and not account.already_in_trade
             )
             if not can_force:
-                # Entry blocked — still manage open MT5 positions.
+                # New entries blocked by safety — open positions still managed.
                 try:
                     self._sync_and_manage_open_positions(
                         snapshot=snapshot,
                         account=account,
-                        reason="safety_blocked_manage",
+                        reason="entry_safety_blocked_position_manage",
                     )
                 except Exception:
-                    logger.exception("safety_blocked_manage_failed")
+                    logger.exception("entry_safety_blocked_position_manage_failed")
                 from app.domain.institutional_trading.auto_trading import (
                     safety_blocks_decision,
                     safety_failure_scope,
@@ -1160,6 +1160,7 @@ class InstitutionalIteRuntime:
                         "risk_lock_scan_continues",
                         reasons=list(safety.failed_reasons),
                         daily_loss=bool(self.plane.daily_loss_exceeded),
+                        note="entries_blocked_position_management_continues",
                     )
                 elif scope == "symbol" or safety_blocks_decision(safety):
                     symbol_skip = scope == "symbol"
@@ -2333,52 +2334,64 @@ class InstitutionalIteRuntime:
                                                 logger.exception(
                                                     "close_attribution_ledger_check_failed"
                                                 )
+                                            # Only book SOE + ledger when strategy_id is
+                                            # known. Marking/clearing without sid caused
+                                            # LIVE strategy_id=None / soe_recorded=False
+                                            # and blocked broker reconcile.
                                             if sid and not _already:
                                                 get_strategy_stats_book().record_closed(
                                                     sid,
                                                     win=bool(pnl_close > 0),
                                                     pnl=float(pnl_close),
                                                 )
-                                            if (
-                                                closed_ticket is not None
-                                                and not _already
-                                            ):
-                                                try:
-                                                    from app.application.services.close_attribution import (  # noqa: E501
-                                                        get_close_attribution_ledger,
-                                                    )
+                                                if closed_ticket is not None:
+                                                    try:
+                                                        from app.application.services.close_attribution import (  # noqa: E501
+                                                            get_close_attribution_ledger,
+                                                        )
 
-                                                    get_close_attribution_ledger().mark_recorded(
-                                                        int(closed_ticket)
-                                                    )
-                                                except Exception:
-                                                    logger.exception(
-                                                        "close_attribution_ledger_mark_failed"
-                                                    )
-                                            try:
-                                                from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
-                                                    get_strategy_attribution_store,
-                                                )
+                                                        get_close_attribution_ledger().mark_recorded(
+                                                            int(closed_ticket)
+                                                        )
+                                                    except Exception:
+                                                        logger.exception(
+                                                            "close_attribution_ledger_mark_failed"
+                                                        )
+                                                    try:
+                                                        from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
+                                                            get_strategy_attribution_store,
+                                                        )
 
-                                                rem_vol = getattr(
-                                                    pos, "remaining_volume", None
-                                                )
-                                                fully = (
-                                                    rem_vol is None
-                                                    or float(rem_vol) <= 0
-                                                )
-                                                get_strategy_attribution_store().note_partial_close(
+                                                        rem_vol = getattr(
+                                                            pos,
+                                                            "remaining_volume",
+                                                            None,
+                                                        )
+                                                        fully = (
+                                                            rem_vol is None
+                                                            or float(rem_vol) <= 0
+                                                        )
+                                                        get_strategy_attribution_store().note_partial_close(
+                                                            ticket=closed_ticket,
+                                                            position_id=closed_ticket,
+                                                            closed_volume=float(
+                                                                getattr(
+                                                                    pos, "volume", 0
+                                                                )
+                                                                or 0
+                                                            )
+                                                            or None,
+                                                            fully_closed=fully,
+                                                        )
+                                                    except Exception:
+                                                        logger.exception(
+                                                            "strategy_attribution_close_failed"
+                                                        )
+                                            elif not sid and closed_ticket is not None:
+                                                logger.warning(
+                                                    "pme_close_attribution_deferred",
                                                     ticket=closed_ticket,
-                                                    position_id=closed_ticket,
-                                                    closed_volume=float(
-                                                        getattr(pos, "volume", 0) or 0
-                                                    )
-                                                    or None,
-                                                    fully_closed=fully,
-                                                )
-                                            except Exception:
-                                                logger.exception(
-                                                    "strategy_attribution_close_failed"
+                                                    reason="missing_strategy_id",
                                                 )
                                         except Exception:
                                             logger.exception(
@@ -2801,6 +2814,23 @@ class InstitutionalIteRuntime:
             quantforg_count=qf_count,
             broker_ready=True,
         )
+        # force_sync / account truth just ran above. risk_as_of must track that
+        # fresh account state — not the older market snapshot as_of — or the
+        # 8s STALE_RISK gate races the sync latency without weakening max age.
+        try:
+            from dataclasses import replace as _dc_replace_snap
+            from datetime import UTC as _UTC, datetime as _dt
+
+            from app.domain.institutional_trading.operations.decision_cycle import (
+                utc_stamp as _utc_stamp,
+            )
+
+            _fresh_risk = _utc_stamp(_dt.now(_UTC))
+            snap = _dc_replace_snap(
+                snap, risk_as_of=_fresh_risk, safety_as_of=_fresh_risk
+            )
+        except Exception:
+            logger.exception("same_cycle_risk_stamp_refresh_failed")
         diagnostics["authoritative_snapshot"] = snap.to_dict()
         stale = stale_authorization(snap)
         if stale:
