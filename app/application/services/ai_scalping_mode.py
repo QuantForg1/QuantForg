@@ -63,6 +63,14 @@ def pme_config_for_scalping(
         volatility_collapse_threshold=cfg.volatility_collapse_threshold,
         volume_step=cfg.broker_lot_step,
         min_volume=cfg.broker_min_lot,
+        # Preserve owner-authorized LIVE hardening from DEFAULT_PME_CONFIG.
+        require_broker_sl_confirm=DEFAULT_PME_CONFIG.require_broker_sl_confirm,
+        use_net_break_even=DEFAULT_PME_CONFIG.use_net_break_even,
+        session_flatten_on_market_closed=(
+            DEFAULT_PME_CONFIG.session_flatten_on_market_closed
+        ),
+        shadow_reversal_exits_enabled=DEFAULT_PME_CONFIG.shadow_reversal_exits_enabled,
+        live_reversal_exits_enabled=DEFAULT_PME_CONFIG.live_reversal_exits_enabled,
     )
 
 

@@ -174,6 +174,36 @@ class RecordingOmsManagePort:
         self._fail_as = fail_as
         self.fail_next = False
 
+    def as_broker_reader(self) -> Any:
+        """Echo last modify_sltp SL for unit tests under require_broker_sl_confirm."""
+        from app.domain.institutional_trading.management.broker_confirm import (
+            BrokerPositionSnapshot,
+        )
+
+        oms = self
+
+        class _Echo:
+            def read_position(
+                self, ticket: int, *, symbol: str
+            ) -> BrokerPositionSnapshot:
+                _ = symbol
+                for call in reversed(oms.calls):
+                    if call.get("method") == "modify_sltp" and int(
+                        call.get("position") or 0
+                    ) == int(ticket):
+                        return BrokerPositionSnapshot(
+                            ticket=ticket,
+                            available=True,
+                            stop_loss=call.get("stop_loss"),
+                            take_profit=call.get("take_profit"),
+                            reason="echo",
+                        )
+                return BrokerPositionSnapshot(
+                    ticket=ticket, available=False, reason="no prior modify"
+                )
+
+        return _Echo()
+
     def _maybe_fail(self) -> OmsManageResult:
         if self.fail_next:
             self.fail_next = False

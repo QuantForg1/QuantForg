@@ -92,7 +92,12 @@ def _svc(
     config: PositionManagementConfig | None = None,
 ) -> tuple[InstitutionalPositionManagement, RecordingOmsManagePort]:
     port = oms or RecordingOmsManagePort()
-    return InstitutionalPositionManagement.create(port, config=config), port
+    return (
+        InstitutionalPositionManagement.create(
+            port, config=config, broker_reader=port.as_broker_reader()
+        ),
+        port,
+    )
 
 
 @pytest.mark.unit

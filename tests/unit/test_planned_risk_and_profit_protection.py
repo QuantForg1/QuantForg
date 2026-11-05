@@ -615,7 +615,10 @@ class TestPmeProfitProtection:
         return PositionManageContext(**base)  # type: ignore[arg-type]
 
     def test_be_at_point_eight_r_not_tiny_fluctuation(self) -> None:
-        svc = InstitutionalPositionManagement.create(RecordingOmsManagePort())
+        oms = RecordingOmsManagePort()
+        svc = InstitutionalPositionManagement.create(
+            oms, broker_reader=oms.as_broker_reader()
+        )
         svc.engine.config = pme_config_for_scalping()
         pos = self._managed()
         pos.trade_class = "SCALP"
@@ -644,7 +647,10 @@ class TestPmeProfitProtection:
         }
 
     def test_be_idempotent_on_second_tick(self) -> None:
-        svc = InstitutionalPositionManagement.create(RecordingOmsManagePort())
+        oms = RecordingOmsManagePort()
+        svc = InstitutionalPositionManagement.create(
+            oms, broker_reader=oms.as_broker_reader()
+        )
         svc.engine.config = pme_config_for_scalping()
         pos = self._managed()
         pos.trade_class = "SCALP"
@@ -694,7 +700,9 @@ class TestPmeProfitProtection:
     def test_failed_pme_action_does_not_claim_success(self) -> None:
         oms = RecordingOmsManagePort(fail_as="failed")
         oms.fail_next = True
-        svc = InstitutionalPositionManagement.create(oms)
+        svc = InstitutionalPositionManagement.create(
+            oms, broker_reader=oms.as_broker_reader()
+        )
         svc.engine.config = pme_config_for_scalping()
         pos = self._managed()
         pos.trade_class = "SCALP"

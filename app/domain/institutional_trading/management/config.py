@@ -74,18 +74,22 @@ class PositionManagementConfig:
 
     slippage: int = 10
 
-    # --- Owner-gated LIVE hardening (defaults preserve current LIVE semantics) ---
+    # --- LIVE hardening (owner-authorized Nov 2026 completion) ---
     # After OMS modify_sltp ok, re-read broker SL before locking BE/trail locally.
-    require_broker_sl_confirm: bool = False
+    require_broker_sl_confirm: bool = True
     broker_sl_confirm_tolerance: Decimal = Decimal("0.02")
-    # Prefer cost-aware BE when complete cost inputs are present on context/plan.
-    use_net_break_even: bool = False
-    # Flatten when market_open is False. Default False — wiring honest market_open
-    # must not silently activate session liquidation without owner approval.
+    # Prefer cost-aware BE when complete cost inputs are present; else geometric.
+    use_net_break_even: bool = True
+    # Flatten when market_open is False. Kept False — temporary quote gaps must
+    # not auto-liquidate; requires verified session-closure policy separately.
     session_flatten_on_market_closed: bool = False
-    # Structure / trend emergency exits from context flags (default already True
-    # in planner when flags are set). Keep False to refuse LIVE wiring until approved.
+    # When planner receives structure/trend flags, honor them. LIVE ITE must not
+    # set those flags until shadow validation is complete (see shadow flag).
     structure_trend_exits_enabled: bool = True
+    # Observe-only reversal proposals (log/book). Never submits closes by itself.
+    shadow_reversal_exits_enabled: bool = True
+    # Feed structure_broken / trend_reversed into LIVE planner (requires evidence).
+    live_reversal_exits_enabled: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,6 +125,8 @@ class PositionManagementConfig:
             "use_net_break_even": self.use_net_break_even,
             "session_flatten_on_market_closed": self.session_flatten_on_market_closed,
             "structure_trend_exits_enabled": self.structure_trend_exits_enabled,
+            "shadow_reversal_exits_enabled": self.shadow_reversal_exits_enabled,
+            "live_reversal_exits_enabled": self.live_reversal_exits_enabled,
         }
 
 

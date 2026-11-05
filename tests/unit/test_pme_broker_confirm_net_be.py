@@ -205,6 +205,15 @@ class TestBrokerConfirmEngine:
         assert result.record.outcome is ManageOutcome.SUCCESS
         assert result.position.be_moved is True
 
+    def test_default_config_requires_broker_confirm_and_net_be(self) -> None:
+        from app.domain.institutional_trading.management.config import (
+            DEFAULT_PME_CONFIG,
+        )
+
+        assert DEFAULT_PME_CONFIG.require_broker_sl_confirm is True
+        assert DEFAULT_PME_CONFIG.use_net_break_even is True
+        assert DEFAULT_PME_CONFIG.live_reversal_exits_enabled is False
+
 
 @pytest.mark.unit
 @pytest.mark.trading_core

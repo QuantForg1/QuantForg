@@ -123,6 +123,58 @@ def _optional_decimal(raw: Any) -> Decimal | None:
         return None
 
 
+def _xau_contract_size(snapshot: Any, account: Any) -> Decimal:
+    """Verified XAU contract size: broker field when present, else desk specs."""
+    from app.domain.trading.xauusd_specs import CONTRACT_SIZE
+
+    for src in (snapshot, account):
+        raw = getattr(src, "contract_size", None)
+        if raw is None and isinstance(src, dict):
+            raw = src.get("contract_size")
+        parsed = _optional_decimal(raw)
+        if parsed is not None and parsed > 0:
+            return parsed
+    return CONTRACT_SIZE
+
+
+def _shadow_reversal_kwargs(snapshot: Any, pos: Any, pctx: Any) -> dict[str, Any]:
+    """Best-effort structure/AI inputs for shadow proposals — never invent BOS."""
+    factors: dict[str, Any] = {}
+    for attr in ("ai_score", "last_ai_score", "score", "confluence"):
+        obj = getattr(snapshot, attr, None)
+        if obj is None:
+            continue
+        raw_f = getattr(obj, "factors", None)
+        if isinstance(raw_f, dict):
+            factors = raw_f
+            break
+        if isinstance(obj, dict) and isinstance(obj.get("factors"), dict):
+            factors = obj["factors"]
+            break
+    bos = int(factors.get("bos") or 0)
+    choch = int(factors.get("choch") or 0)
+    _ = pos  # reserved for future position-specific structure anchors
+    mtf = int(factors.get("mtf") or 0)
+    mom = factors.get("momentum")
+    # Against-position only when structure score is high; otherwise treat as noise.
+    against = bos >= 70 or choch >= 70
+    htf = mtf >= 55
+    spread_f = None
+    if getattr(pctx, "spread", None) is not None:
+        spread_f = float(pctx.spread)
+    return {
+        "bos_against": against,
+        "choch_against": choch >= 70,
+        "htf_agrees_against": against and htf,
+        "ltf_only_noise": (bos > 0 or choch > 0) and not htf,
+        "momentum": int(mom) if mom is not None else None,
+        "ai_entry_confidence": getattr(pos, "ai_entry_confidence", None),
+        "ai_current_confidence": getattr(pctx, "ai_current_confidence", None),
+        "spread": spread_f,
+        "data_age_seconds": None,
+    }
+
+
 def _merge_cycle_diagnostics(
     ctx_diag: dict[str, Any] | None,
     cycle_diag: dict[str, Any] | None,
@@ -1565,7 +1617,61 @@ class InstitutionalIteRuntime:
                 open_swap=_optional_decimal(
                     getattr(live, "swap", None) if live is not None else None
                 ),
+                contract_size=_xau_contract_size(snapshot, account),
             )
+            # Shadow reversal observation — never submits closes unless
+            # live_reversal_exits_enabled (kept False until evidence exists).
+            try:
+                pme_cfg = getattr(
+                    getattr(self.position_management, "engine", None), "config", None
+                )
+                if pme_cfg is not None and bool(
+                    getattr(pme_cfg, "shadow_reversal_exits_enabled", False)
+                ):
+                    from app.domain.institutional_trading.management import (
+                        exit_context as _exit_ctx,
+                        shadow_exit_book as _shadow_book,
+                    )
+
+                    propose_reversal_exit = _exit_ctx.propose_reversal_exit
+                    record_shadow_exit = _shadow_book.record_shadow_exit
+
+                    side = str(getattr(pos, "side", "") or "buy")
+                    proposal = propose_reversal_exit(
+                        position_side=side,
+                        **_shadow_reversal_kwargs(snapshot, pos, pctx),
+                    )
+                    live_feed = bool(
+                        getattr(pme_cfg, "live_reversal_exits_enabled", False)
+                    )
+                    if live_feed and not proposal.stale_data:
+                        from dataclasses import replace as _dc_replace
+
+                        # Only feed planner when owner-enabled LIVE flag is on.
+                        pctx = _dc_replace(
+                            pctx,
+                            structure_broken=bool(proposal.structure_broken),
+                            trend_reversed=bool(proposal.trend_reversed),
+                        )
+                    record_shadow_exit(
+                        ticket=int(ticket),
+                        symbol=str(getattr(pos, "symbol", "") or ""),
+                        side=side,
+                        proposal=proposal,
+                        live_fed=live_feed
+                        and (proposal.structure_broken or proposal.trend_reversed),
+                        note="ite_manage_cycle",
+                    )
+                    logger.warning(
+                        "pme_shadow_reversal_exit",
+                        ticket=int(ticket),
+                        shadow_structure_broken=proposal.structure_broken,
+                        shadow_trend_reversed=proposal.trend_reversed,
+                        shadow_reason=proposal.reason,
+                        live_fed=live_feed,
+                    )
+            except Exception:
+                logger.exception("pme_shadow_reversal_failed", ticket=ticket)
             result = self.position_management.evaluate(ticket, pctx)
             managed += 1
             try:
@@ -8633,8 +8739,7 @@ def build_ite_runtime(
     )
     execution.bridge.bind_ops(plane, reliability=reliability)
 
-    # Reader always attached; require_broker_sl_confirm remains False until owner
-    # activates confirmation (OMS ok alone stays LIVE default).
+    # Reader always attached — required for require_broker_sl_confirm=True.
     from app.application.services.pme_broker_position_reader import (
         Mt5BrokerPositionReader,
     )

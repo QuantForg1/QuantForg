@@ -99,7 +99,12 @@ def _ctx(price: Decimal, **kwargs: object) -> PositionManageContext:
 
 def _svc() -> tuple[InstitutionalPositionManagement, RecordingOmsManagePort]:
     oms = RecordingOmsManagePort()
-    return InstitutionalPositionManagement.create(oms), oms
+    return (
+        InstitutionalPositionManagement.create(
+            oms, broker_reader=oms.as_broker_reader()
+        ),
+        oms,
+    )
 
 
 class _FakeClient:
@@ -281,6 +286,12 @@ def test_scalping_pme_knobs_locked() -> None:
     assert pme.partial_at_r == Decimal("1.20")
     assert pme.trail_after_r == Decimal("1.20")
     assert pme.absolute_max_hold_minutes == 12
+    assert DEFAULT_PME_CONFIG.require_broker_sl_confirm is True
+    assert DEFAULT_PME_CONFIG.use_net_break_even is True
+    assert pme.require_broker_sl_confirm is True
+    assert pme.use_net_break_even is True
+    assert pme.live_reversal_exits_enabled is False
+    assert pme.shadow_reversal_exits_enabled is True
 
 
 def test_pme_break_even_partial_trail_close_loop() -> None:
