@@ -24,7 +24,7 @@
 | #157 | Class-aware BE recovery + audit | Railway `75db8c3d` / `98f173a` |
 | #158 | Gated confirm/net-BE/session honesty (defaults OFF then) | Railway `e4807872` / `56c777a` |
 | #159 | Docs deploy evidence for #158 | Docs on main `e204a197` |
-| #160 (this) | **Activate** broker SL confirm + net BE; shadow reversal; contract_size | Pending CI → merge → Railway |
+| #160 | **Activate** broker SL confirm + net BE; shadow reversal; contract_size | Railway **`95d7a582`** / `7cedf444` SUCCESS |
 
 ---
 
