@@ -96,10 +96,15 @@ def _pick_trail_stop(
             ),
             config,
         )
-        # Session-aware: soften trail distance in weak sessions (profit protection)
+        # Session-aware: soften trail distance in weak/adverse sessions
         if getattr(config, "session_aware_management", False):
             sess = str(getattr(context, "market_session", "") or "").lower()
-            if sess in {"sydney", "tokyo", "asian"}:
+            weak = getattr(
+                config,
+                "weak_management_sessions",
+                ("sydney", "tokyo", "asian", "asia", "london_ny_overlap"),
+            )
+            if sess in {str(s).lower() for s in weak}:
                 scale = Decimal(
                     str(getattr(config, "weak_session_trail_scale", "0.85") or "0.85")
                 )
@@ -389,8 +394,13 @@ def plan_action(
     be_at = profile.break_even_at_r
     if trade_class == "SCALP" and getattr(config, "session_aware_management", False):
         sess = str(getattr(context, "market_session", "") or "").lower()
-        if sess in {"sydney", "tokyo", "asian"}:
-            # Earlier break-even timing in thin sessions (SCALP only).
+        weak = getattr(
+            config,
+            "weak_management_sessions",
+            ("sydney", "tokyo", "asian", "asia", "london_ny_overlap"),
+        )
+        if sess in {str(s).lower() for s in weak}:
+            # Earlier break-even in thin/adverse sessions (SCALP only).
             protect = Decimal(
                 str(getattr(config, "session_profit_protect_at_r", "1.5") or "1.5")
             )

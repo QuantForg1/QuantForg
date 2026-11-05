@@ -58,8 +58,17 @@ class PositionManagementConfig:
     # Session-aware management (soft — does not change entry strategy)
     session_aware_management: bool = True
     session_profit_protect_at_r: Decimal = Decimal("1.5")
-    # When session is weak (e.g. sydney/tokyo), tighten trail multiplier
+    # When session is weak / adverse for SCALP management, tighten trail
+    # and earlier BE. Includes thin Asia sessions plus london_ny_overlap
+    # (broker evidence: worst session PF in scalping audit n=7).
     weak_session_trail_scale: Decimal = Decimal("0.85")
+    weak_management_sessions: tuple[str, ...] = (
+        "sydney",
+        "tokyo",
+        "asian",
+        "asia",
+        "london_ny_overlap",
+    )
     # Second partial rung (scale-out) after first partial — optional
     second_partial_enabled: bool = True
     second_partial_at_r: Decimal = Decimal("3.0")
@@ -116,6 +125,7 @@ class PositionManagementConfig:
             "session_aware_management": self.session_aware_management,
             "session_profit_protect_at_r": str(self.session_profit_protect_at_r),
             "weak_session_trail_scale": str(self.weak_session_trail_scale),
+            "weak_management_sessions": list(self.weak_management_sessions),
             "second_partial_enabled": self.second_partial_enabled,
             "second_partial_at_r": str(self.second_partial_at_r),
             "second_partial_close_pct": str(self.second_partial_close_pct),
