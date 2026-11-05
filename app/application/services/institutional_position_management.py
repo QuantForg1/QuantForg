@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.domain.institutional_trading.management.broker_confirm import (
+    BrokerPositionReader,
+)
 from app.domain.institutional_trading.management.config import (
     DEFAULT_PME_CONFIG,
     PositionManagementConfig,
@@ -32,11 +35,13 @@ class InstitutionalPositionManagement:
         *,
         config: PositionManagementConfig | None = None,
         ops_plane: Any | None = None,
+        broker_reader: BrokerPositionReader | None = None,
     ) -> InstitutionalPositionManagement:
         return cls(
             engine=PositionManagementEngine(
                 oms=oms,
                 config=config or DEFAULT_PME_CONFIG,
+                broker_reader=broker_reader,
             ),
             ops_plane=ops_plane,
         )
@@ -84,5 +89,9 @@ class InstitutionalPositionManagement:
                 spread_at_entry=context.spread_at_entry,
                 entry_slippage=context.entry_slippage,
                 market_session=context.market_session,
+                broker_stop_missing=context.broker_stop_missing,
+                open_commission=context.open_commission,
+                open_swap=context.open_swap,
+                contract_size=context.contract_size,
             )
         return self.engine.evaluate(ticket, context)
