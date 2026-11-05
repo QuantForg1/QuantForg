@@ -1242,6 +1242,7 @@ async def build_ite_cycle_market_context(
         balance = Decimal(str(diag.get("balance") or 0))
         deals: list[Any] | None = None
         deals_fetch_ok = False
+        deals_note: str | None = None
         try:
             if isinstance(pre_deals, BaseException):
                 if isinstance(pre_deals, Exception):
@@ -1255,6 +1256,7 @@ async def build_ite_cycle_market_context(
             diag["history_deals"] = f"ERROR: {exc}"
             deals = None
             deals_fetch_ok = False
+            deals_note = None
 
         tracker = get_live_account_risk_tracker()
         if deals_fetch_ok and deals is not None:
@@ -1291,15 +1293,23 @@ async def build_ite_cycle_market_context(
             peak_equity = tracker.observe_equity(login=login, equity=equity)
             if balance > peak_equity:
                 peak_equity = tracker.observe_equity(login=login, equity=balance)
-            # Fail closed this cycle. Do not write a fabricated -40% PnL onto
-            # the account object — that value was treated as trusted by the
-            # execution bridge and could arm a durable daily-loss latch.
             daily_pnl = Decimal("0")
-            diag["daily_pnl_fail_closed"] = True
-            logger.warning(
-                "ite_cycle_daily_pnl_fail_closed",
-                reason="history_deals_unavailable",
-            )
+            # Scan purpose intentionally skips the deals stampede for cycle
+            # budget. That is not a risk-history outage — do not alarm or
+            # trip execution fail-closed telemetry on SKIPPED_SCAN.
+            if skip_account_bundle or deals_note == "SKIPPED_SCAN":
+                diag["daily_pnl_skipped_scan"] = True
+                diag["daily_pnl_trusted"] = False
+            else:
+                # Fail closed this cycle. Do not write a fabricated -40% PnL
+                # onto the account object — that value was treated as trusted
+                # by the execution bridge and could arm a durable daily-loss
+                # latch.
+                diag["daily_pnl_fail_closed"] = True
+                logger.warning(
+                    "ite_cycle_daily_pnl_fail_closed",
+                    reason=str(deals_note or "history_deals_unavailable"),
+                )
         diag["peak_equity"] = str(peak_equity)
         diag["daily_pnl"] = str(daily_pnl) if daily_pnl_trusted else None
         diag["daily_pnl_trusted"] = daily_pnl_trusted
