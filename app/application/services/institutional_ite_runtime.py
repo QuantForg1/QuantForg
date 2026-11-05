@@ -2269,6 +2269,36 @@ class InstitutionalIteRuntime:
                                         direction=side_raw,
                                         entry_price=cascade_entry,
                                     )
+                                    raw_close_pnl = getattr(pos, "realized_pnl", None)
+                                    if raw_close_pnl is None:
+                                        raw_close_pnl = getattr(pos, "profit", None)
+                                    rem_close = getattr(pos, "remaining_volume", None)
+                                    try:
+                                        cascade_fully_closed = (
+                                            rem_close is None or float(rem_close) <= 0
+                                        )
+                                    except (TypeError, ValueError):
+                                        cascade_fully_closed = False
+                                    if raw_close_pnl is not None:
+                                        try:
+                                            from app.domain.institutional_trading.ai_scalping.buy_cascade_anchor_store import (  # noqa: E501
+                                                record_losing_buy_close,
+                                            )
+
+                                            record_losing_buy_close(
+                                                symbol=closed_sym,
+                                                position_id=int(ticket),
+                                                entry_price=cascade_entry,
+                                                net_pnl=raw_close_pnl,
+                                                direction=side_raw,
+                                                fully_closed=cascade_fully_closed,
+                                                close_outcome="pme_position_closed",
+                                            )
+                                        except Exception:
+                                            logger.exception(
+                                                "buy_cascade_anchor_record_failed",
+                                                ticket=ticket,
+                                            )
                                     try:
                                         from app.domain.institutional_trading.ai_scalping.symbol_performance import (  # noqa: E501
                                             get_symbol_performance_book,
@@ -7767,6 +7797,14 @@ class InstitutionalIteRuntime:
                 ).mark_startup_resume()
         except Exception:
             logger.exception("continuous_ops_startup_resume_failed")
+        try:
+            from app.domain.institutional_trading.ai_scalping.buy_cascade_anchor_store import (  # noqa: E501
+                recover_buy_cascade_on_startup,
+            )
+
+            recover_buy_cascade_on_startup(self.mt5_adapter)
+        except Exception:
+            logger.exception("buy_cascade_startup_recover_failed")
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
             self._cycle_started_mono = time.monotonic()
