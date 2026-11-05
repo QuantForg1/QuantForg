@@ -67,6 +67,9 @@ def test_strong_buy_min_lot_is_blocked_not_silent_no_trade() -> None:
     assert state == SIGNAL_BLOCKED_MIN_LOT
     assert state != "NO_TRADE"
     assert is_high_quality_signal(direction="BUY", quality=92, confidence=82)
+    # Owner Q70 gate: quality alone qualifies even when confidence lags.
+    assert is_high_quality_signal(direction="BUY", quality=76, confidence=67)
+    assert not is_high_quality_signal(direction="BUY", quality=68, confidence=90)
 
 
 def test_strong_sell_min_lot_is_blocked_not_silent_no_trade() -> None:

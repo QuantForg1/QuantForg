@@ -62,6 +62,19 @@ def classify_exit_comment(comment: str | None) -> str:
     return "closed"
 
 
+def strategy_id_from_entry_comment(comment: str | None) -> str | None:
+    """Map broker *entry* comment engine tags only — never invent five-pack IDs."""
+    text = str(comment or "").strip()
+    if not text:
+        return None
+    lower = text.lower()
+    if lower.startswith("m1:") or lower.startswith("m1 "):
+        return "m1_micro"
+    if lower.startswith("ite:") or lower.startswith("ite "):
+        return "ite_primary"
+    return None
+
+
 def deals_as_dicts(deals: list[Any] | tuple[Any, ...] | None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for raw in deals or []:
@@ -95,6 +108,7 @@ class BrokerExitEvidence:
     side: str
     hold_seconds: float | None
     exit_comment: str = ""
+    entry_comment: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -143,13 +157,28 @@ def find_broker_exit_for_position(
     commission = 0.0
     swap = 0.0
     exit_comment = str(trade.get("comment") or "")
+    entry_comment = ""
     for d in group:
         profit += _f(d.get("profit"))
         commission += _f(d.get("commission"))
         swap += _f(d.get("swap"))
         dt = str(d.get("deal_type") or "").lower()
-        if "out" in dt and d.get("comment"):
-            exit_comment = str(d.get("comment") or exit_comment)
+        entry_flag = str(d.get("entry") if d.get("entry") is not None else "").lower()
+        raw_c = str(d.get("comment") or "").strip()
+        is_out = "out" in dt or entry_flag in {"1", "out", "deal_entry_out"}
+        is_in = ("in" in dt and "out" not in dt) or entry_flag in {
+            "0",
+            "in",
+            "deal_entry_in",
+        }
+        if is_out and raw_c:
+            exit_comment = raw_c
+        if is_in and raw_c and not raw_c.lower().startswith(("[sl", "[tp")):
+            entry_comment = raw_c
+    if not entry_comment:
+        entry_comment = str(
+            trade.get("entry_comment") or trade.get("open_comment") or ""
+        )
     net = profit + commission + swap
     hold = trade.get("holding_time_sec")
     try:
@@ -186,6 +215,7 @@ def find_broker_exit_for_position(
         side=str(trade.get("side") or "").lower(),
         hold_seconds=hold_f,
         exit_comment=exit_comment,
+        entry_comment=entry_comment,
     )
 
 
@@ -329,21 +359,23 @@ def resolve_strategy_id_for_ticket(
     ticket: int,
     position_id: int | None = None,
     strategy_hint: str | None = None,
+    entry_comment: str | None = None,
 ) -> str | None:
-    """Prefer attribution store; optional explicit hint (fill evidence only)."""
+    """Prefer attribution store / fill meta; optional hint or entry-comment tag."""
     hint = str(strategy_hint or "").strip()
     try:
         from app.domain.institutional_trading.ai_scalping.strategies import (
             attribution_store as _attr_mod,
         )
         from app.domain.institutional_trading.management.class_policy import (
+            last_fill_metadata,
             merge_position_metadata,
         )
 
         meta = merge_position_metadata(
             snapshot={"ticket": ticket, "position_id": position_id or ticket},
-            comment="",
-            live_meta={},
+            comment=str(entry_comment or ""),
+            live_meta=last_fill_metadata(),
             ticket=ticket,
             position_id=position_id or ticket,
         )
@@ -357,6 +389,9 @@ def resolve_strategy_id_for_ticket(
             return str(bound.strategy_id).strip()
     except Exception:
         logger.exception("close_attribution_strategy_resolve_failed", ticket=ticket)
+    tagged = strategy_id_from_entry_comment(entry_comment)
+    if tagged:
+        return tagged
     return hint or None
 
 
@@ -383,6 +418,7 @@ def record_broker_confirmed_close(
         ticket=pid,
         position_id=pid,
         strategy_hint=strategy_hint,
+        entry_comment=evidence.entry_comment,
     )
 
     # Mark ledger first so concurrent duplicate deliveries cannot double-count
@@ -414,6 +450,14 @@ def record_broker_confirmed_close(
                 position_id=pid,
                 strategy_id=sid,
             )
+    else:
+        logger.warning(
+            "close_attribution_missing_strategy_id",
+            position_id=pid,
+            exit_deal_id=evidence.exit_deal_id,
+            entry_comment=(evidence.entry_comment or "")[:80] or None,
+            source=source,
+        )
 
     telemetry_recorded = False
     try:
@@ -432,19 +476,22 @@ def record_broker_confirmed_close(
     except Exception:
         logger.exception("close_attribution_telemetry_observe_failed", position_id=pid)
 
-    try:
-        from app.domain.institutional_trading.ai_scalping.strategies import (
-            attribution_store as _attr_close,
-        )
+    # Clear fill binding only after strategy attribution succeeds. Premature
+    # clear caused LIVE soe_recorded=False / strategy_id=None races.
+    if sid:
+        try:
+            from app.domain.institutional_trading.ai_scalping.strategies import (
+                attribution_store as _attr_close,
+            )
 
-        _attr_close.get_strategy_attribution_store().note_partial_close(
-            ticket=pid,
-            position_id=pid,
-            closed_volume=float(evidence.volume or 0) or None,
-            fully_closed=True,
-        )
-    except Exception:
-        logger.exception("close_attribution_binding_clear_failed", position_id=pid)
+            _attr_close.get_strategy_attribution_store().note_partial_close(
+                ticket=pid,
+                position_id=pid,
+                closed_volume=float(evidence.volume or 0) or None,
+                fully_closed=True,
+            )
+        except Exception:
+            logger.exception("close_attribution_binding_clear_failed", position_id=pid)
 
     logger.warning(
         "broker_confirmed_close_attributed",

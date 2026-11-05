@@ -157,6 +157,25 @@ def merge_position_metadata(
         for key in keys:
             if out.get(key) in {None, ""} and live.get(key) not in {None, ""}:
                 out[key] = live[key]
+    # Broker SL/TP overwrites the open comment with ``[sl]`` / ``[tp]``. When the
+    # live fill ticket still matches this position, keep fill-time strategy_id
+    # even though the comment hash no longer matches.
+    live_ticket = live.get("ticket") or live.get("position_id")
+    want = {
+        str(v)
+        for v in (ticket, position_id, snap.get("ticket"), snap.get("position_id"))
+        if v not in {None, "", 0, "0"}
+    }
+    if live_ticket not in {None, "", 0, "0"} and str(live_ticket) in want:
+        for key in (
+            "strategy_id",
+            "strategy_name",
+            "attribution_engine",
+            "trade_class",
+            "management_profile",
+        ):
+            if out.get(key) in {None, ""} and live.get(key) not in {None, ""}:
+                out[key] = live[key]
     # Comment prefixes are advisory only for engine tagging — never invent
     # five-pack strategy_id from free-text alone.
     cl = comment_text.lower()
@@ -167,6 +186,8 @@ def merge_position_metadata(
                 out["strategy_id"] = "m1_micro"
         elif cl.startswith("ite:") or "ite:" in cl:
             out["attribution_engine"] = "ite"
+            if out.get("strategy_id") in {None, ""}:
+                out["strategy_id"] = "ite_primary"
     comment_class = trade_class_from_comment(comment_text)
     proven = proven_trade_class(out.get("trade_class"))
     if proven == TRADE_CLASS_UNKNOWN and comment_class in PROVEN_TRADE_CLASSES:

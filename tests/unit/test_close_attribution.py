@@ -16,6 +16,7 @@ from app.application.services.close_attribution import (
     reconcile_pending_closes,
     record_broker_confirmed_close,
     reset_close_attribution_ledger_for_tests,
+    strategy_id_from_entry_comment,
 )
 from app.application.services.mt5_position_truth import (
     apply_mt5_position_truth,
@@ -150,6 +151,52 @@ def attr_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         store,
     )
     return store
+
+
+def test_strategy_id_from_entry_comment_engine_tags_only() -> None:
+    assert strategy_id_from_entry_comment("m1:mom-sell-3903.523") == "m1_micro"
+    assert strategy_id_from_entry_comment("ite:v1:S:abc") == "ite_primary"
+    assert strategy_id_from_entry_comment("[sl 3904.463]") is None
+    assert strategy_id_from_entry_comment("momentum_scalping") is None
+
+
+def test_entry_comment_attributes_when_store_empty(
+    ledger, stats_book, attr_store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Broker entry comment survives after SL overwrites the open comment."""
+    pid = 679243921
+    deals = [
+        _deal(
+            ticket=657036214,
+            position_id=pid,
+            deal_type="entry_in",
+            price=3903.523,
+            comment="m1:mom-sell-3903.523",
+            minutes=0,
+        ),
+        _deal(
+            ticket=657036300,
+            position_id=pid,
+            deal_type="entry_out",
+            price=3904.897,
+            profit=-1.37,
+            comment="[sl 3904.463]",
+            side="buy",
+            minutes=1,
+        ),
+    ]
+    monkeypatch.setattr(
+        "app.application.services.strategy_performance_telemetry.get_strategy_performance_telemetry",
+        lambda: type("T", (), {"observe_close": staticmethod(lambda **_k: None)})(),
+    )
+    evidence = find_broker_exit_for_position(deals, position_id=pid)
+    assert evidence is not None
+    assert evidence.entry_comment.startswith("m1:")
+    result = record_broker_confirmed_close(
+        evidence=evidence, ledger=ledger, source="test_entry_comment"
+    )
+    assert result["strategy_id"] == "m1_micro"
+    assert result["soe_recorded"] is True
 
 
 def test_sl_closure_records_soe_once(
