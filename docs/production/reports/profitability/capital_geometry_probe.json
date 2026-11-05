@@ -1,0 +1,113 @@
+{
+  "account": {
+    "login": 12260878,
+    "server": "Weltrade-Real",
+    "currency": "USD",
+    "balance": "30.92",
+    "equity": "30.92",
+    "margin": "0.0",
+    "free_margin": "30.92",
+    "profit": "0.0",
+    "leverage": 1000,
+    "trade_allowed": true,
+    "deposit_vs_prior_14_92": "16.00"
+  },
+  "positions_count": 0,
+  "session": {
+    "connected": true,
+    "trade_allowed": true,
+    "mt5_autotrading_enabled": true,
+    "degraded": false
+  },
+  "xauusd": {
+    "volume_min": "0.01",
+    "volume_step": "0.01",
+    "contract_size": "100.0",
+    "tick_size": "0.001",
+    "tick_value": "0.1",
+    "stops_level": 0,
+    "freeze_level": 0,
+    "bid": "4102.913",
+    "ask": "4103.257",
+    "spread": "0.344",
+    "market_open": true
+  },
+  "owner_risk_pct": "20",
+  "max_monetary_risk_20pct": "6.18",
+  "max_allowed_stop_at_min_lot": "6.184",
+  "geometry_rows": [
+    {
+      "stop": "2.0",
+      "dollar_risk": "2.00",
+      "needed_pct": "6.47",
+      "classification": "FEASIBLE",
+      "infeasible": false
+    },
+    {
+      "stop": "3.0",
+      "dollar_risk": "3.00",
+      "needed_pct": "9.70",
+      "classification": "FEASIBLE",
+      "infeasible": false
+    },
+    {
+      "stop": "4.0",
+      "dollar_risk": "4.00",
+      "needed_pct": "12.94",
+      "classification": "FEASIBLE",
+      "infeasible": false
+    },
+    {
+      "stop": "5.065",
+      "dollar_risk": "5.06",
+      "needed_pct": "16.36",
+      "classification": "FEASIBLE",
+      "infeasible": false
+    },
+    {
+      "stop": "5.5",
+      "dollar_risk": "5.50",
+      "needed_pct": "17.79",
+      "classification": "FEASIBLE",
+      "infeasible": false
+    },
+    {
+      "stop": "6.0",
+      "dollar_risk": "6.00",
+      "needed_pct": "19.40",
+      "classification": "FEASIBLE",
+      "infeasible": false
+    },
+    {
+      "stop": "6.184",
+      "dollar_risk": "6.18",
+      "needed_pct": "19.99",
+      "classification": "MIN_LOT_INFEASIBLE",
+      "infeasible": true
+    },
+    {
+      "stop": "7.0",
+      "dollar_risk": "7.00",
+      "needed_pct": "22.64",
+      "classification": "MIN_LOT_INFEASIBLE",
+      "infeasible": true
+    },
+    {
+      "stop": "10.0",
+      "dollar_risk": "10.00",
+      "needed_pct": "32.34",
+      "classification": "MIN_LOT_INFEASIBLE",
+      "infeasible": true
+    }
+  ],
+  "prior_blocker_stop_5_065": {
+    "at_equity_14_92": {
+      "classification": "MIN_LOT_INFEASIBLE",
+      "infeasible": true
+    },
+    "at_current_equity": {
+      "classification": "FEASIBLE",
+      "infeasible": false
+    }
+  }
+}
