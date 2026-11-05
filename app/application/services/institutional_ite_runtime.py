@@ -2252,7 +2252,7 @@ class InstitutionalIteRuntime:
                                         or getattr(pos, "profit", None)
                                         or 0.0
                                     )
-                                    entry_px = (
+                                    cascade_entry = (
                                         getattr(pos, "entry_price", None)
                                         or getattr(pos, "price_open", None)
                                         or getattr(pos, "open_price", None)
@@ -2267,7 +2267,7 @@ class InstitutionalIteRuntime:
                                         pnl=pnl_close,
                                         fingerprint=fp,
                                         direction=side_raw,
-                                        entry_price=entry_px,
+                                        entry_price=cascade_entry,
                                     )
                                     try:
                                         from app.domain.institutional_trading.ai_scalping.symbol_performance import (  # noqa: E501
