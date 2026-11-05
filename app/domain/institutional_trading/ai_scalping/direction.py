@@ -396,9 +396,11 @@ def decide_scalping_direction(
             TradeDirection.BUY,
             buy_ltf_points,
             "bos",
-            "M1/M5 latest structure supports BUY"
-            if buy_ltf_points == 16
-            else "Older M1/M5 structure still shows BUY",
+            (
+                "M1/M5 latest structure supports BUY"
+                if buy_ltf_points == 16
+                else "Older M1/M5 structure still shows BUY"
+            ),
             core=True,
         )
     elif buy_m15_struct:
@@ -422,9 +424,11 @@ def decide_scalping_direction(
             TradeDirection.SELL,
             sell_ltf_points,
             "bos",
-            "M1/M5 latest structure supports SELL"
-            if sell_ltf_points == 16
-            else "Older M1/M5 structure still shows SELL",
+            (
+                "M1/M5 latest structure supports SELL"
+                if sell_ltf_points == 16
+                else "Older M1/M5 structure still shows SELL"
+            ),
             core=True,
         )
     elif sell_m15_struct:
