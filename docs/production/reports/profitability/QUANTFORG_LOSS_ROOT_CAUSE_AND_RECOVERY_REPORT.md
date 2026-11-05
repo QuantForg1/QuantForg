@@ -145,7 +145,14 @@ Ruff clean on touched modules after format/import fix.
 
 ## 10. Deployment (Phase 8)
 
-See PR / CI / Railway verification appended after merge. Production must show the release commit on `/ready` before claiming deploy success.
+| Item | Evidence |
+| --- | --- |
+| Git | `c4426f47` on `main` — PR [#166](https://github.com/QuantForg1/QuantForg/pull/166) squash-merged |
+| CI | Lint, Type Check, Unit Tests, Trading Core Regression, Frontend, Integration — **pass** |
+| Railway | Deployment `55889b8c` **SUCCESS** · service QuantForg · commit **c4426f4** · env production |
+| `/health` | `{"status":"ok"}` |
+| `/ready` | `{"status":"ok","detail":"routers_registered",...}` |
+| Owner floors | Unchanged in release (hard RR 0.20, Q70, max_lot 0.01, …) |
 
 ---
 
