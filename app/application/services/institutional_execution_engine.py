@@ -549,12 +549,10 @@ class InstitutionalExecutionEngine:
                     "oms_validation_abort",
                     result="FAIL",
                     function="InstitutionalExecutionEngine.run_submit",
-                    file=(
-                        "app/application/services/" "institutional_execution_engine.py"
-                    ),
+                    file=("app/application/services/institutional_execution_engine.py"),
                     line=309,
                     condition=(
-                        "trade_mode in {'closeonly','close_only'} " "and not is_manage"
+                        "trade_mode in {'closeonly','close_only'} and not is_manage"
                     ),
                     current=trade_mode,
                     required="full",
@@ -1090,8 +1088,7 @@ class InstitutionalExecutionEngine:
                     )
                     if not ok_final_vol:
                         risk_reject = [
-                            "final volume invalid after Risk approval: "
-                            f"{msg_final_vol}"
+                            f"final volume invalid after Risk approval: {msg_final_vol}"
                         ]
                 if not risk_reject and not _is_manage_intent(intent):
                     # Final owner guard on the exact intent that goes to the broker.
@@ -1370,11 +1367,9 @@ class InstitutionalExecutionEngine:
                         open_positions = list(self.gateway.adapter.list_positions())
                         exposure = entry_book_exposure(
                             open_positions,
-                            contract_size_for=lambda symbol: (
-                                contract_size_for_symbol(
-                                    str(symbol or intent.symbol),
-                                    default=band_cs if band_cs > 0 else Decimal("100"),
-                                )
+                            contract_size_for=lambda symbol: contract_size_for_symbol(
+                                str(symbol or intent.symbol),
+                                default=band_cs if band_cs > 0 else Decimal("100"),
                             ),
                         )
                         open_risk_unknown = exposure.blocked
@@ -1680,6 +1675,8 @@ class InstitutionalExecutionEngine:
                     p_tick,
                     p_fee,
                 ) = owner_presend_ctx
+                # Mirror evaluate_owner_entry on the LIVE structure path:
+                # SL already embeds the owner spread buffer.
                 presend_reject = presend_owner_violations(
                     symbol=intent.symbol,
                     side=intent.side.value,
@@ -1699,6 +1696,7 @@ class InstitutionalExecutionEngine:
                     slippage=p_slip,
                     tick_size=p_tick,
                     commission=p_fee,
+                    stop_includes_spread_buffer=True,
                 )
             except (
                 OSError,
@@ -2117,8 +2115,7 @@ class InstitutionalExecutionEngine:
         )
         persist_shadow_book(book)
         return (
-            f"SHADOW_MODE: recorded {trade.id} {trade.side} @ {trade.entry}; "
-            "not sent"
+            f"SHADOW_MODE: recorded {trade.id} {trade.side} @ {trade.entry}; not sent"
         )
 
     def run_cancel(

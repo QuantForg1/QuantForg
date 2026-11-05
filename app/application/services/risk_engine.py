@@ -1055,22 +1055,20 @@ class RiskEngine:
         if peak > 0 and equity < peak:
             dd = ((peak - equity) / peak * Decimal("100")).quantize(Decimal("0.01"))
 
-        def _loss_pct(pnl: Decimal) -> Decimal:
-            base = account.balance if account.balance > 0 else equity
-            if base <= 0 or pnl >= 0:
-                return Decimal("0")
-            return ((-pnl) / base * Decimal("100")).quantize(Decimal("0.01"))
-
         def _period_loss_pct(pnl: Decimal) -> Decimal:
             # Same basis as the owner daily stop: % of the period-start
-            # balance (current balance plus the realised period loss).
+            # balance (current balance + realised period loss when losing).
+            # Do NOT divide by current balance alone — that understates % vs
+            # the 48%-of-SOD halt denominator and misleads ops messaging.
             base = account.balance if account.balance > 0 else equity
             if base <= 0 or pnl >= 0:
                 return Decimal("0")
             start = base - pnl
+            if start <= 0:
+                return Decimal("0")
             return ((-pnl) / start * Decimal("100")).quantize(Decimal("0.01"))
 
-        daily = _loss_pct(daily_pnl)
+        daily = _period_loss_pct(daily_pnl)
         weekly = _period_loss_pct(weekly_pnl)
         monthly = _period_loss_pct(monthly_pnl)
         # max_drawdown_pct <= 0 disables the independent overall-drawdown limit

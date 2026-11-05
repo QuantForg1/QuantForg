@@ -103,8 +103,20 @@ def _rr_quality(rr: Any) -> int | None:
         value = float(rr)
     except (TypeError, ValueError):
         return None
-    # Map RR 1.0-2.5 to ~40-100. Below 1.0 still contributes (does not AND-kill).
-    mapped = round(40.0 + (value - 1.0) * 40.0)
+    # Owner LIVE geometry is sub-1.0 (floor 0.20, preferred 0.50). Mapping
+    # RR>=1.0 -> 40-100 systematically crushed opportunity_score for valid
+    # owner setups (e.g. RR 0.40 -> ~16). Map [0.20, 0.50] -> [40, 100]; above
+    # preferred continues toward 100; below floor still contributes weakly.
+    floor, preferred = 0.20, 0.50
+    if value <= floor:
+        mapped = round(max(0.0, value / floor) * 40.0)
+    elif value >= preferred:
+        # 0.50 → 100; stretch gently for RR > preferred (cap 100).
+        mapped = round(100.0 + min(value - preferred, 1.0) * 0.0)
+        mapped = 100
+    else:
+        # Linear 0.20→40 … 0.50→100
+        mapped = round(40.0 + (value - floor) / (preferred - floor) * 60.0)
     return max(0, min(100, mapped))
 
 

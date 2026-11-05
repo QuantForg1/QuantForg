@@ -144,20 +144,32 @@ def _run(monkeypatch: pytest.MonkeyPatch, *, move: str):
 def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ask 2323.38 at send tick: gross 0.92/4.38=0.210 clears the pre-send
-    # band; net 0.92/(4.38+0.30+0.10)=0.192 fails the owner floor of 0.20.
-    pipeline, sent, client = _run(monkeypatch, move="2.58")
-    assert pipeline.outcome == "rejected"
-    assert "PRESEND OWNER_MIN_RR" in pipeline.message
-    assert sent == []
-    assert client._positions == []
-    meta = next(
-        s.meta
-        for s in pipeline.stages
-        if (s.meta or {}).get("component") == "owner_presend_check"
+    # After Execution Check a band gate uses a fresh tick (gross RR). Presend
+    # then re-checks with stop_includes_spread_buffer=True + order slippage.
+    # Need gross RR >= 0.20 so the band does not fire first, but net RR with
+    # +0.10 slip < 0.20 so PRESEND refuses:
+    # stop ∈ (4.40, 4.4167] → move ≈ 2.61 from base ask 2320.80.
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
     )
-    assert meta["check_price"] == "2323.38"
-    assert meta["check_spread"] == "0.30"
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
+    _allow_broker_submit()
+    try:
+        pipeline, sent, client = _run(monkeypatch, move="2.61")
+        assert pipeline.outcome == "rejected"
+        assert "PRESEND OWNER_MIN_RR" in pipeline.message
+        assert sent == []
+        assert client._positions == []
+        meta = next(
+            s.meta
+            for s in pipeline.stages
+            if (s.meta or {}).get("component") == "owner_presend_check"
+        )
+        assert meta["check_price"] == "2323.41"
+        assert meta["check_spread"] == "0.30"
+    finally:
+        reset_live_trading_controller_for_tests()
 
 
 def test_run_submit_sends_the_exact_checked_request(

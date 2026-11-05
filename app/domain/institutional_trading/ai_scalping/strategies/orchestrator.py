@@ -31,8 +31,11 @@ from app.domain.institutional_trading.ai_scalping.strategies.validation_status i
 ORCHESTRATION_VERSION = "soe-v1.5.0"
 
 # Solo passer must clear a higher quality bar (prefer no trade).
-MIN_SOLO_QUALITY = 82
-MIN_SOLO_CONFIDENCE = 80
+# Aligned with MIN_CONFLUENT_QUALITY: LIVE audits showed Q76-81 setups that
+# already cleared owner Q70 + Probability Center were idle solely because
+# solo required 82/80. Owner absolute floor remains MIN_ABSOLUTE_QUALITY=70.
+MIN_SOLO_QUALITY = 76
+MIN_SOLO_CONFIDENCE = 76
 # With multi-strategy agreement, allow slightly lower quality (still at/above
 # owner minimum trade quality 70).
 MIN_CONFLUENT_QUALITY = 76
@@ -53,9 +56,10 @@ MAX_SPREAD_FOR_WEAK_RR = 0.80
 MIN_RR_WHEN_SPREAD_ELEVATED = 0.20
 # Absolute net reward:risk floor aligned with owner policy (prefer NO_TRADE).
 MIN_NET_REWARD_RISK = 0.20
-# Owner preferred RR — solo setups below preferred need stronger quality.
+# Owner preferred RR — solo setups below preferred need stronger quality
+# (still above owner Q70; was 85 and blocked many valid 0.20-0.49R fills).
 PREFERRED_NET_REWARD_RISK = 0.50
-PREFERRED_RR_SOLO_MIN_QUALITY = 85
+PREFERRED_RR_SOLO_MIN_QUALITY = 80
 # Setup freshness: stale quotes / expired setups → NO_TRADE.
 MAX_QUOTE_AGE_SECONDS = 8.0
 MAX_SETUP_AGE_SECONDS = 120.0
