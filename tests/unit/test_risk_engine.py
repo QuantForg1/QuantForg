@@ -277,7 +277,9 @@ class TestRiskEngineEvaluate:
         assert result.decision is RiskDecision.REJECT
         daily = next(r for r in result.rules if r.get("id") == "daily_loss")
         assert daily["status"] == "fail"
-        assert "5" in str(daily["current"]) or "5.00" in str(daily["current"])
+        # SOD basis: start = balance - daily_pnl = 10000 - (-500) = 10500
+        # → 500/10500 = 4.76% (not 5% of current balance).
+        assert "4.76" in str(daily["current"])
         assert daily.get("suggested_action")
 
 
