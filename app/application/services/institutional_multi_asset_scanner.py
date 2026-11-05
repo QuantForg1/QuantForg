@@ -355,9 +355,7 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
     _sniper_value = row.get("sniper_entry")
     sniper = _sniper_value if isinstance(_sniper_value, dict) else {}
     raw_factors = row.get("factors")
-    factors: dict[str, Any] = (
-        raw_factors if isinstance(raw_factors, dict) else {}
-    )
+    factors: dict[str, Any] = raw_factors if isinstance(raw_factors, dict) else {}
     action = str(
         row.get("signal_action")
         or sniper.get("action")
