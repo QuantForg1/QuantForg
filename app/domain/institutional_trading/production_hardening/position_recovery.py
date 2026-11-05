@@ -319,7 +319,12 @@ def recover_positions_from_mt5(
             )
             snap_risk = Decimal(str(snap.get("risk_distance") or 0))
             snap_initial = Decimal(str(snap.get("initial_stop") or 0))
-            be_offset = Decimal("0.2")
+            # Class-aware BE offset (SCALP 0.35R / HOLD 0.30R / UNKNOWN 0.2R).
+            # Hardcoding 0.2R inflated reconstructed risk for SCALP after restart.
+            trade_class_early = proven_trade_class(meta.get("trade_class"))
+            be_offset = resolve_class_management(trade_class_early).break_even_offset_r
+            if be_offset <= 0:
+                be_offset = Decimal("0.2")
             be_already = False
             # Broker SL on the profit side of entry ⇒ BE (or better) already applied.
             if (
@@ -333,7 +338,7 @@ def recover_positions_from_mt5(
                 be_already = True
 
             if be_already and broker_sl > 0:
-                # Reconstruct original 1R from BE geometry: BE ≈ entry ± 0.2R
+                # Reconstruct original 1R from BE geometry: BE ≈ entry ± offset_R
                 reconstructed = (abs(entry - broker_sl) / be_offset).quantize(
                     Decimal("0.0001")
                 )

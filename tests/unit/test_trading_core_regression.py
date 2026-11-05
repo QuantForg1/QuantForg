@@ -372,7 +372,54 @@ def test_position_recovery_broker_be_reconstruct() -> None:
     assert pos is not None
     assert pos.be_moved is True
     assert pos.state is PositionLifecycleState.BE_MOVED
+    # UNKNOWN class uses 0.2R offset → |entry-sl|/0.2 ≈ 6.365
     assert pos.risk_distance > Decimal("5")
+
+
+def test_position_recovery_scalp_be_uses_class_offset_not_hardcoded_02() -> None:
+    """SCALP BE is entry±0.35R. Recovery must not reconstruct 1R with 0.2R."""
+    from app.domain.institutional_trading.management.class_policy import (
+        SCALP_BREAK_EVEN_OFFSET_R,
+        encode_execution_comment,
+    )
+
+    entry = Decimal("4000.00")
+    # BUY BE is above entry: entry + 0.35R with risk=10 → SL=4003.5
+    risk = Decimal("10.00")
+    broker_sl = entry + (risk * SCALP_BREAK_EVEN_OFFSET_R)
+
+    class Row:
+        ticket = 900001
+        symbol = "XAUUSD"
+        side = "buy"
+        volume = Decimal("0.01")
+        open_price = entry
+        current_price = entry + Decimal("8")
+        stop_loss = broker_sl
+        take_profit = entry + Decimal("20")
+        profit = Decimal("8")
+        swap = Decimal("0")
+        magic = 260720
+        comment = encode_execution_comment("ite:v1", "cafebeefdead", "SCALP")
+        opened_at = OPENED
+
+    class Adap:
+        def list_positions(self):
+            return [Row()]
+
+        def invalidate_positions_cache(self) -> None:
+            return None
+
+    eng = PositionManagementEngine(oms=SimpleNamespace())  # type: ignore[arg-type]
+    result = recover_positions_from_mt5(mt5_adapter=Adap(), engine=eng, symbol="XAUUSD")
+    assert result["registered"] == 1
+    pos = eng.get(900001)
+    assert pos is not None
+    assert pos.be_moved is True
+    assert pos.trade_class == "SCALP"
+    # With correct 0.35R offset, reconstructed risk ≈ 10. Wrong 0.2R would yield 17.5.
+    assert abs(pos.risk_distance - risk) < Decimal("0.05")
+    assert pos.risk_distance < Decimal("12")
 
 
 def test_multi_asset_scan_config_present() -> None:
