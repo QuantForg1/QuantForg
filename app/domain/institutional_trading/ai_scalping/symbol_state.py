@@ -9,6 +9,7 @@ import contextlib
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
@@ -38,6 +39,10 @@ class SymbolExecutionState:
     last_closed: SetupFingerprint | None = None
     last_closed_pnl: float | None = None
     require_requalify: bool = False
+    # Losing BUY entry still unresolved. Cleared by a winning BUY or unused
+    # once price reclaims it / a bullish reversal prints.
+    cascade_anchor: Decimal | None = None
+    cascade_since: datetime | None = None
     _cooldown: AdaptiveCooldownGate = field(
         default_factory=AdaptiveCooldownGate, repr=False
     )
@@ -150,6 +155,9 @@ class SymbolStateBook:
         *,
         pnl: float | None = None,
         fingerprint: SetupFingerprint | None = None,
+        direction: str | None = None,
+        entry_price: Decimal | float | str | None = None,
+        closed_at: datetime | None = None,
     ) -> None:
         """Keep desk state after a close. Do not wipe cooldown or fingerprints."""
         state = self.get(symbol)
@@ -161,6 +169,22 @@ class SymbolStateBook:
                 except (TypeError, ValueError):
                     state.last_closed_pnl = None
             state.require_requalify = state.last_closed is not None
+            side = str(direction or "").strip().upper()
+            if side == "BUY":
+                try:
+                    pnl_f = float(pnl) if pnl is not None else 0.0
+                except (TypeError, ValueError):
+                    pnl_f = 0.0
+                if pnl_f < 0 and entry_price is not None:
+                    try:
+                        state.cascade_anchor = Decimal(str(entry_price))
+                        state.cascade_since = closed_at or datetime.now(UTC)
+                    except Exception:
+                        state.cascade_anchor = None
+                        state.cascade_since = None
+                elif pnl_f >= 0:
+                    state.cascade_anchor = None
+                    state.cascade_since = None
 
     def evaluate_requalification(
         self, symbol: str, current: SetupFingerprint
