@@ -764,8 +764,12 @@ def score_scalping_setup(
                 sell_cascade_guard as _sell_guard,
             )
 
-            sell_anchor, sell_trusted = _sell_store.active_sell_anchor(sym_key)
-            sell_since = sell_anchor.closed_at if sell_anchor is not None else None
+            sell_rows, sell_trusted = _sell_store.active_anchors(sym_key)
+            sell_since = (
+                max((row.closed_at for row in sell_rows), default=None)
+                if sell_trusted
+                else None
+            )
             sell_blocked, sell_why = _sell_store.evaluate_durable_sell_cascade(
                 symbol=sym_key,
                 direction=direction_dec.direction.value,
@@ -779,12 +783,19 @@ def score_scalping_setup(
                 reject_list.append(sell_why)
                 reasons.append(f"WAIT: {sell_why}")
         except Exception:
-            # Fail open for SELL cascade evaluation errors — never invent a block.
+            # Fail closed for SELL when the durable store path errors.
             from core.logging import get_logger as _get_logger
 
             _get_logger(__name__).exception(
                 "sell_cascade_evaluate_failed", symbol=sym_key
             )
+            if str(direction_dec.direction.value or "").upper() == "SELL":
+                from app.domain.institutional_trading.ai_scalping.sell_cascade_anchor_store import (  # noqa: E501
+                    PROTECTION_UNAVAILABLE as _SELL_PROT,
+                )
+
+                reject_list.append(_SELL_PROT)
+                reasons.append(f"WAIT: {_SELL_PROT}")
     if not sniper.passed:
         wait_code = sniper.primary_reason or "WAIT_SNIPER"
         reject_list.append(wait_code)
