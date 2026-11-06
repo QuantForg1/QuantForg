@@ -22,6 +22,10 @@ class ReversalExitProposal:
     against_side: str  # buy|sell side that would be hurt
     is_retracement: bool
     stale_data: bool
+    classification: str = "none"
+    # temporary_m1_pullback | genuine_momentum_change |
+    # confirmed_structure_reversal | htf_trend_reversal |
+    # false_reversal_noise | none
 
 
 def propose_reversal_exit(
@@ -48,6 +52,7 @@ def propose_reversal_exit(
     - Spread emergency is separate (caller handles via PME spread path).
     - Retracement: LTF noise without HTF/BOS/CHoCH confirmation.
     - Genuine: (BOS or CHoCH against) AND HTF agrees, or strong AI fade.
+    - One M1 candle / LTF-only noise never produces structure_broken.
     """
     side = (position_side or "").lower()
     against = side  # flags are already "against position"
@@ -60,6 +65,7 @@ def propose_reversal_exit(
             against_side=against,
             is_retracement=False,
             stale_data=True,
+            classification="none",
         )
     if spread is not None and spread > emergency_spread:
         return ReversalExitProposal(
@@ -70,6 +76,7 @@ def propose_reversal_exit(
             against_side=against,
             is_retracement=False,
             stale_data=False,
+            classification="none",
         )
     if ltf_only_noise and not bos_against and not choch_against:
         return ReversalExitProposal(
@@ -80,6 +87,19 @@ def propose_reversal_exit(
             against_side=against,
             is_retracement=True,
             stale_data=False,
+            classification="temporary_m1_pullback",
+        )
+    # LTF BOS without HTF = noise / false reversal, not an exit.
+    if (bos_against or choch_against) and not htf_agrees_against:
+        return ReversalExitProposal(
+            structure_broken=False,
+            trend_reversed=False,
+            confidence="low",
+            reason="ltf structure without htf confirmation — false reversal risk",
+            against_side=against,
+            is_retracement=True,
+            stale_data=False,
+            classification="false_reversal_noise",
         )
     structure = bool(bos_against or choch_against) and bool(htf_agrees_against)
     trend = structure
@@ -102,20 +122,27 @@ def propose_reversal_exit(
             against_side=against,
             is_retracement=bool(ltf_only_noise),
             stale_data=False,
+            classification=("temporary_m1_pullback" if ltf_only_noise else "none"),
         )
+    if structure and choch_against and htf_agrees_against:
+        classification = "htf_trend_reversal"
+        reason = "confirmed choch with htf agreement"
+    elif structure:
+        classification = "confirmed_structure_reversal"
+        reason = "confirmed structural reversal"
+    else:
+        classification = "genuine_momentum_change"
+        reason = "AI confidence fade with momentum deterioration"
     conf = "high" if structure and htf_agrees_against else "medium"
     return ReversalExitProposal(
         structure_broken=structure,
         trend_reversed=trend,
         confidence=conf,
-        reason=(
-            "confirmed structural reversal"
-            if structure
-            else "AI confidence fade with momentum deterioration"
-        ),
+        reason=reason,
         against_side=against,
         is_retracement=False,
         stale_data=False,
+        classification=classification,
     )
 
 
@@ -128,4 +155,5 @@ def shadow_log_fields(proposal: ReversalExitProposal) -> dict[str, Any]:
         "shadow_reason": proposal.reason,
         "shadow_is_retracement": proposal.is_retracement,
         "shadow_stale_data": proposal.stale_data,
+        "shadow_classification": proposal.classification,
     }
