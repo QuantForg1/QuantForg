@@ -143,14 +143,15 @@ Full CI required on PR.
 
 ## 11. Production verification
 
-Fill after merge:
-
 | Check | Value |
 | --- | --- |
-| GitHub main | _(post-merge)_ |
-| `/health.commit` | must match |
+| GitHub main | `8b7d2db01669549cedd7503cda41efa955201184` (Merge PR #186) |
+| `/health.commit` | `8b7d2db0…` **matches** |
 | `/ready` | ok |
-| LIVE / cascades / M1 submit | unchanged |
+| Attribution restore | `strategy_attribution_startup_recover` trusted=True · login=12479147 |
+| Outcome path | `strategy_trade_outcome_recorded` … `attribution_confidence=bound_five_pack` `strategy_id=trend_continuation` |
+| Worker | `RUNNING` |
+| LIVE / cascades / M1 submit | unchanged (`EXECUTION_ENABLED=true`, cascades restore trusted, `QUANTFORG_M1_MICRO_LIVE_SUBMIT=false`, `submitted=False`) |
 
 ---
 
