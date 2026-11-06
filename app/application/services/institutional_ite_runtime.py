@@ -242,19 +242,18 @@ def _shadow_reversal_kwargs(snapshot: Any, pos: Any, pctx: Any) -> dict[str, Any
                         choch_against = True
             try:
                 decision = decide_scalping_direction(snapshot)
-                htf_agrees_against = (
-                    "M15" in against_tfs
-                    or (
-                        decision.direction is against_dir
-                        and int(decision.directional_edge or 0)
-                        >= int(decision.edge_margin or 5)
-                    )
+                htf_agrees_against = "M15" in against_tfs or (
+                    decision.direction is against_dir
+                    and int(decision.directional_edge or 0)
+                    >= int(decision.edge_margin or 5)
                 )
             except Exception:
                 htf_agrees_against = "M15" in against_tfs
-            ltf_only_noise = bool(against_tfs) and not (
-                against_tfs & {"M5", "M15"}
-            ) and not htf_agrees_against
+            ltf_only_noise = (
+                bool(against_tfs)
+                and not (against_tfs & {"M5", "M15"})
+                and not htf_agrees_against
+            )
         as_of = getattr(snapshot, "as_of", None) or getattr(snapshot, "timestamp", None)
         if as_of is not None:
             try:
