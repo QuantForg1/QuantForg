@@ -132,6 +132,7 @@ const OPS_HREF_PREFIXES = [
   "/executions",
   "/execution-intel",
   "/strategy-diagnostics",
+  "/strategy-performance",
   "/strategy-intelligence-center",
   "/strategy-research",
   "/signal-intelligence",
@@ -1097,6 +1098,12 @@ export const appNav: NavGroup[] = [
         label: "Strategy Diagnostics",
         icon: ScanSearch,
         hint: "Why NO_TRADE · quality · confluence · MTF",
+      },
+      {
+        href: "/strategy-performance",
+        label: "Strategy Performance",
+        icon: LineChart,
+        hint: "Five-pack scorecards · attribution · post-#182 · OWNER/ADMIN",
       },
       {
         href: "/live-execution-explain",

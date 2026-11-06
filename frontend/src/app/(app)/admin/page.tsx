@@ -42,6 +42,11 @@ const ADMIN_SECTIONS = [
       { href: "/execution", label: "OMS status", hint: "Order management (authorized only)" },
       { href: "/portfolio", label: "Live orders / positions", hint: "Owned account exposure" },
       { href: "/strategy-diagnostics", label: "Trading blockers", hint: "Why NO_TRADE" },
+      {
+        href: "/strategy-performance",
+        label: "Strategy performance",
+        hint: "Five-pack scorecards · attribution · post-#182",
+      },
     ],
   },
   {
