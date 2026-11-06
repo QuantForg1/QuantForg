@@ -12,29 +12,25 @@ Trade quality 47 and opportunity 76–77 are different calculations. The executi
 
 `total = round(sum(score * weight) / sum(weight))`
 
-The weights sum to 100:
+The weights sum to 100. `score_ai_scalping` assigns `trade_quality = int(quality.total)`. The owner gate compares that integer with 70. The scan text is that comparison. Risk Engine and OMS do not recompute it.
 
-| Component | Weight | What it reads |
-| --- | ---: | --- |
-| trend | 20 | `trend.alignment_score`, raised to at least 75 only when `trend.aligned` is true |
-| liquidity | 15 | Liquidity v2: 85 with a sweep, 65 with other context, 20 with none |
-| order_block | 15 | 0 if the snapshot is missing; otherwise 20, 55, 75, or 85 |
-| fair_value_gap | 15 | 0 if missing; 25 if only closed gaps; 70 if one open gap; 85 if two or more |
-| market_structure | 15 | Primary-timeframe structure only. Base 30, then swings, BOS, CHOCH, and trend direction |
-| session | 10 | UTC session quality |
-| spread | 10 | Linear from full score to reject |
+The first complete component log is the XAUUSD scan at 2026-11-06T00:34:02Z, after this explainability deploy. `matches_published_total` is true. Weighted sum 4,735 rounds to 47.
 
-`score_ai_scalping` assigns `trade_quality = int(quality.total)`. The owner gate compares that integer with `active_min_trade_quality()`, which is 70 unless a saved policy sets 70–100. The scan text `trade quality 47 < 70` is that comparison. There is no second quality formula in the Risk Engine or OMS.
+| Component | Score | Weight | Weighted points | Observed input |
+| --- | ---: | ---: | ---: | --- |
+| trend | 0 | 20 | 0 | H1 range, M15 range, M5 up as timing only. Alignment score 0. Not aligned. |
+| liquidity | 65 | 15 | 975 | Active FVG context, no sweep |
+| order_block | 20 | 15 | 300 | No order blocks (`active=0 total=0`) |
+| fair_value_gap | 85 | 15 | 1,275 | 2 open gaps, 62 total |
+| market_structure | 45 | 15 | 675 | Primary M15: 68 swings, 0 BOS, 0 CHOCH, trend range. Base 30 plus 15 for swings. |
+| session | 55 | 10 | 550 | Tokyo, 2 stars |
+| spread | 96 | 10 | 960 | Spread 0.444. Full score ends at 0.40 and reject is 1.50. |
 
-### Inputs proven from the 00:09 UTC scan
+`4735 / 100 = 47.35`, which rounds to 47. The same scan still has LTF BUY 24 versus SELL 16, edge 8, opportunity 76, and `OWNER_MIN_TRADE_QUALITY`.
 
-The analysis config log shows `trading_mode=scalping`, timeframes `H1, M15, M5, M1`, primary `M15`, `requires_h4=False`.
+The 00:09 scans that prompted this audit published the same total, 47, before the component field existed. Their individual factors were not stored. The 00:34 scan is the first exact reconstruction, and it has the same direction, edge, quality, and rejection.
 
-The scalping spread band is full score at 0.40 and reject at 1.50. Spread 0.424 therefore scores `int(100 * (1 - (0.424 - 0.40) / 1.10)) = 97`. Weight 10 contributes 970 weighted points, 9.7 of the published total.
-
-2026-11-06 00:09 UTC is a Friday. `classify_session_utc` returns Tokyo. Tokyo has 2 stars and quality 55. Weight 10 contributes 550 weighted points, 5.5 of the published total.
-
-Those two components account for 1,520 of the weighted points. A published total of 47 requires the weighted sum to land in `[4650, 4750)`. The other five components therefore contributed about 3,130 to 3,230 points between them (an average component score near 40 on a combined weight of 80). Their individual scores were not in the scan log. They are not reconstructed here.
+Trend is the dominant gap. A weight of 20 at score 0 contributes nothing. Reaching 70 would require about 2,215 more weighted points. The M5 up print does not fill that gap: under the ranging rule, M5 is timing and scores only after H1 and M15 already agree. Both are range, so the timing bonus is 0. The M1/M5 break that produced the BUY edge is not the structure snapshot this score reads. That snapshot is M15, and it has no break of structure and no change of character.
 
 ## 3. Component status
 
@@ -110,7 +106,7 @@ Opportunity weights, from the logged breakdown:
 
 ## 7. Is 47 trustworthy?
 
-The integer is trustworthy as the weighted average of the seven evaluator components, and it is the value the gate used. It is not a measurement of the M1/M5 BUY edge. Until `quality_explanation` is in the logs, the five unpublished components cannot be named individually.
+Yes, as the weighted average above. The log recomputed 47 from the same seven inputs the gate used. It is not a measurement of the M1/M5 BUY edge. That edge can be 8 while H1 and M15 remain range and the M15 structure component stays at 45.
 
 ## 8. Remaining blockers
 
@@ -122,7 +118,7 @@ No quality weight, floor, lot size, risk percent, reward-to-risk floor, position
 
 ## 10. Next step
 
-Read one post-deploy `quality_explanation` and name the five components that make up the remaining ~31.5 points. Do not lower the floor of 70, and do not retune weights, until that split is observed. A later change that lets M1/M5 confirmation raise the M15-only structure component would be a behavior change and needs a separate owner decision.
+The component split is now observed. The next decision, if any, is whether M15 range with an M5 timing up print should remain a zero trend score while M1/M5 direction is BUY. Changing that would change who passes 70. It is not part of this change. Do not lower the floor.
 
 ## Limitation
 
