@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -208,6 +209,21 @@ def structure_event_side(event: Any) -> TradeDirection | None:
     return None
 
 
+def _structure_event_time(event: Any) -> datetime | None:
+    for name in ("broken_at", "timestamp", "time", "created_at"):
+        raw = getattr(event, name, None)
+        if isinstance(raw, datetime):
+            return raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+    return None
+
+
+def _ltf_event_sort(
+    row: tuple[str, TradeDirection, datetime | None, int],
+) -> tuple[datetime, int]:
+    when = row[2] or datetime.min.replace(tzinfo=UTC)
+    return (when, row[3])
+
+
 def decide_scalping_direction(
     snapshot: MarketAnalysisSnapshot,
     *,
@@ -324,49 +340,69 @@ def decide_scalping_direction(
     else:
         factors["m1_execution"] = 0
 
-    buy_m1m5_struct = m5_up or m1_up
-    sell_m1m5_struct = m5_down or m1_down
     buy_m15_struct = False
     sell_m15_struct = False
     bos_n = 0
     choch_n = 0
+    # (timeframe, side, when, sequence). Sequence preserves list order when
+    # a fixture event has no broken_at.
+    ltf_events: list[tuple[str, TradeDirection, datetime | None, int]] = []
+    seq = 0
     for tf, structure in iter_scalp_structure_entries(snapshot):
         bos_events = _seq(structure, "breaks_of_structure")
         choch_events = _seq(structure, "changes_of_character")
         bos_n += len(bos_events)
         choch_n += len(choch_events)
-        for br in bos_events[-3:]:
-            side = structure_event_side(br)
-            if side is TradeDirection.BUY:
-                if tf in {"M1", "M5"}:
-                    buy_m1m5_struct = True
-                else:
-                    buy_m15_struct = True
+        window = list(bos_events[-3:]) + list(choch_events[-2:])
+        for event in window:
+            side = structure_event_side(event)
+            if side is None:
+                continue
+            when = _structure_event_time(event)
+            if tf in {"M1", "M5"}:
+                ltf_events.append((tf, side, when, seq))
+            elif side is TradeDirection.BUY:
+                buy_m15_struct = True
             elif side is TradeDirection.SELL:
-                if tf in {"M1", "M5"}:
-                    sell_m1m5_struct = True
-                else:
-                    sell_m15_struct = True
-        for ch in choch_events[-2:]:
-            side = structure_event_side(ch)
-            if side is TradeDirection.BUY:
-                if tf in {"M1", "M5"}:
-                    buy_m1m5_struct = True
-                else:
-                    buy_m15_struct = True
-            elif side is TradeDirection.SELL:
-                if tf in {"M1", "M5"}:
-                    sell_m1m5_struct = True
-                else:
-                    sell_m15_struct = True
-    # One STRUCTURE family credit per side — M5 BOS + M1 BOS is not two families.
-    # M15 BOS/CHOCH is still a real structure event (core), not H1 context.
-    if buy_m1m5_struct:
-        _add(TradeDirection.BUY, 16, "bos", "M1/M5 BOS/CHOCH supports BUY", core=True)
-        if m5_up:
-            reasons.append("M5 entry UP")
-        if m1_up:
-            reasons.append("M1 execution UP")
+                sell_m15_struct = True
+            seq += 1
+    # Full M1/M5 credit follows the latest event on each timeframe. An older
+    # opposite break in the same window is evidence, not an equal vote.
+    # M1 and M5 disagreeing is a real conflict and keeps both at full credit.
+    latest_by_tf: dict[str, TradeDirection] = {}
+    for tf_name in ("M1", "M5"):
+        rows = [row for row in ltf_events if row[0] == tf_name]
+        if not rows:
+            continue
+        latest_by_tf[tf_name] = max(rows, key=_ltf_event_sort)[1]
+    latest_sides = set(latest_by_tf.values())
+    saw_buy = any(row[1] is TradeDirection.BUY for row in ltf_events)
+    saw_sell = any(row[1] is TradeDirection.SELL for row in ltf_events)
+    buy_ltf_points = 0
+    sell_ltf_points = 0
+    if latest_sides == {TradeDirection.BUY, TradeDirection.SELL}:
+        buy_ltf_points = 16
+        sell_ltf_points = 16
+    elif latest_sides == {TradeDirection.BUY}:
+        buy_ltf_points = 16
+        if saw_sell:
+            sell_ltf_points = 8
+    elif latest_sides == {TradeDirection.SELL}:
+        sell_ltf_points = 16
+        if saw_buy:
+            buy_ltf_points = 8
+    if buy_ltf_points:
+        _add(
+            TradeDirection.BUY,
+            buy_ltf_points,
+            "bos",
+            (
+                "M1/M5 latest structure supports BUY"
+                if buy_ltf_points == 16
+                else "Older M1/M5 structure still shows BUY"
+            ),
+            core=True,
+        )
     elif buy_m15_struct:
         _add(
             TradeDirection.BUY,
@@ -383,12 +419,18 @@ def decide_scalping_direction(
             "M5/M1 trend supports BUY",
             core=True,
         )
-    if sell_m1m5_struct:
-        _add(TradeDirection.SELL, 16, "bos", "M1/M5 BOS/CHOCH supports SELL", core=True)
-        if m5_down:
-            reasons.append("M5 entry DOWN")
-        if m1_down:
-            reasons.append("M1 execution DOWN")
+    if sell_ltf_points:
+        _add(
+            TradeDirection.SELL,
+            sell_ltf_points,
+            "bos",
+            (
+                "M1/M5 latest structure supports SELL"
+                if sell_ltf_points == 16
+                else "Older M1/M5 structure still shows SELL"
+            ),
+            core=True,
+        )
     elif sell_m15_struct:
         _add(
             TradeDirection.SELL,
