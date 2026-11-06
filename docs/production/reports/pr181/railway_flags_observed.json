@@ -1,0 +1,25 @@
+{
+  "source": "railway variables (filtered, 2026-11-06)",
+  "note": "Only non-secret feature flags listed. Absent means not set in Railway service variables.",
+  "flags": {
+    "EXECUTION_ENABLED": {"present": true, "value": "true"},
+    "QUANTFORG_M1_MICRO_SCALPING": {"present": true, "value": "true"},
+    "QUANTFORG_M1_MICRO_LIVE_SUBMIT": {"present": true, "value": "false"},
+    "QUANTFORG_LIVE_REVERSAL_EXITS": {
+      "present": false,
+      "value": null,
+      "effective_runtime_default_after_pr180": true,
+      "note": "Unset → live_reversal_exits_resolved(default=True) enables LIVE close-on-confirmed-reversal"
+    },
+    "ALLOW_RISK_LOCK_OVERRIDE": {"present": true, "value": "false"},
+    "OWNER_RISK_REFERENCE_USD": {"present": true, "value": "32.88"}
+  },
+  "not_found_in_railway_variable_table": [
+    "OWNER_MAX_PLANNED_RISK_PCT",
+    "OWNER_DAILY_LOSS_PCT",
+    "OWNER_MAX_LOT",
+    "OWNER_MIN_TRADE_QUALITY",
+    "OWNER_MIN_REWARD_RISK",
+    "RAILWAY_GIT_COMMIT_SHA (may be injected at deploy without listing)"
+  ]
+}

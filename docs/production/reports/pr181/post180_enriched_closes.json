@@ -1,0 +1,386 @@
+{
+  "count": 8,
+  "wins": 0,
+  "losses": 8,
+  "net_sum": -25.22,
+  "avg_loss": -3.1525,
+  "avg_hold_seconds": 346.5,
+  "all_sl_closes": true,
+  "sides": {
+    "BUY": 0,
+    "SELL": 8,
+    "OTHER": 0
+  },
+  "max_loss": -5.38,
+  "consecutive_losses": 8,
+  "positions": [
+    {
+      "position_id": 687174307,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4049.873",
+      "close_price": "4052.557",
+      "sl_from_comment": "4052.519",
+      "approx_planned_risk_usd": "2.64600",
+      "net_pnl": -2.68,
+      "loss_vs_planned_ratio": 1.0128495842781557,
+      "opened_at": "2026-11-06T09:51:29+00:00",
+      "closed_at": "2026-11-06T09:52:33+00:00",
+      "hold_seconds": 64.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:S:25d2d3d4a0ef",
+        "[sl 4052.519]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664588450,
+          "entry": null,
+          "type": 1,
+          "price": "4049.873",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793958689,
+          "comment": "ite:v1:S:25d2d3d4a0ef"
+        },
+        {
+          "ticket": 664589859,
+          "entry": 1,
+          "type": null,
+          "price": "4052.557",
+          "profit": "-2.68",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793958753,
+          "comment": "[sl 4052.519]"
+        }
+      ]
+    },
+    {
+      "position_id": 687177072,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4050.483",
+      "close_price": "4054.767",
+      "sl_from_comment": "4054.717",
+      "approx_planned_risk_usd": "4.23400",
+      "net_pnl": -4.28,
+      "loss_vs_planned_ratio": 1.0108644307982995,
+      "opened_at": "2026-11-06T09:53:05+00:00",
+      "closed_at": "2026-11-06T09:54:35+00:00",
+      "hold_seconds": 90.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:H:0e9530ae37a5",
+        "[sl 4054.717]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664591046,
+          "entry": null,
+          "type": 1,
+          "price": "4050.483",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793958785,
+          "comment": "ite:v1:H:0e9530ae37a5"
+        },
+        {
+          "ticket": 664593453,
+          "entry": 1,
+          "type": null,
+          "price": "4054.767",
+          "profit": "-4.28",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793958875,
+          "comment": "[sl 4054.717]"
+        }
+      ]
+    },
+    {
+      "position_id": 687180731,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4054.653",
+      "close_price": "4056.937",
+      "sl_from_comment": "4056.879",
+      "approx_planned_risk_usd": "2.22600",
+      "net_pnl": -2.2800000000000002,
+      "loss_vs_planned_ratio": 1.0242587601078168,
+      "opened_at": "2026-11-06T09:55:14+00:00",
+      "closed_at": "2026-11-06T09:55:26+00:00",
+      "hold_seconds": 12.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:H:73c7779d3d4b",
+        "[sl 4056.879]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664594645,
+          "entry": null,
+          "type": 1,
+          "price": "4054.653",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793958914,
+          "comment": "ite:v1:H:73c7779d3d4b"
+        },
+        {
+          "ticket": 664595041,
+          "entry": 1,
+          "type": null,
+          "price": "4056.937",
+          "profit": "-2.2800000000000002",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793958926,
+          "comment": "[sl 4056.879]"
+        }
+      ]
+    },
+    {
+      "position_id": 687184354,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4055.383",
+      "close_price": "4059.007",
+      "sl_from_comment": "4058.628",
+      "approx_planned_risk_usd": "3.24500",
+      "net_pnl": -3.62,
+      "loss_vs_planned_ratio": 1.115562403697997,
+      "opened_at": "2026-11-06T09:57:25+00:00",
+      "closed_at": "2026-11-06T10:15:21+00:00",
+      "hold_seconds": 1076.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:H:33ee8b073225",
+        "[sl 4058.628]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664598122,
+          "entry": null,
+          "type": 1,
+          "price": "4055.383",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793959045,
+          "comment": "ite:v1:H:33ee8b073225"
+        },
+        {
+          "ticket": 664622132,
+          "entry": 1,
+          "type": null,
+          "price": "4059.007",
+          "profit": "-3.62",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793960121,
+          "comment": "[sl 4058.628]"
+        }
+      ]
+    },
+    {
+      "position_id": 687225893,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4067.443",
+      "close_price": "4072.827",
+      "sl_from_comment": "4072.827",
+      "approx_planned_risk_usd": "5.38400",
+      "net_pnl": -5.38,
+      "loss_vs_planned_ratio": 0.9992570579494799,
+      "opened_at": "2026-11-06T10:23:44+00:00",
+      "closed_at": "2026-11-06T10:44:14+00:00",
+      "hold_seconds": 1230.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:H:0b9f406fc3b0",
+        "[sl 4072.827]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664637015,
+          "entry": null,
+          "type": 1,
+          "price": "4067.443",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793960624,
+          "comment": "ite:v1:H:0b9f406fc3b0"
+        },
+        {
+          "ticket": 664666559,
+          "entry": 1,
+          "type": null,
+          "price": "4072.827",
+          "profit": "-5.38",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793961854,
+          "comment": "[sl 4072.827]"
+        }
+      ]
+    },
+    {
+      "position_id": 687259338,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4070.973",
+      "close_price": "4072.737",
+      "sl_from_comment": "4072.559",
+      "approx_planned_risk_usd": "1.58600",
+      "net_pnl": -1.76,
+      "loss_vs_planned_ratio": 1.1097099621689785,
+      "opened_at": "2026-11-06T10:45:54+00:00",
+      "closed_at": "2026-11-06T10:46:55+00:00",
+      "hold_seconds": 61.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:H:bdb11b5d890c",
+        "[sl 4072.559]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664668741,
+          "entry": null,
+          "type": 1,
+          "price": "4070.973",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793961954,
+          "comment": "ite:v1:H:bdb11b5d890c"
+        },
+        {
+          "ticket": 664670026,
+          "entry": 1,
+          "type": null,
+          "price": "4072.737",
+          "profit": "-1.76",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793962015,
+          "comment": "[sl 4072.559]"
+        }
+      ]
+    },
+    {
+      "position_id": 687268349,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4070.023",
+      "close_price": "4072.927",
+      "sl_from_comment": "4072.719",
+      "approx_planned_risk_usd": "2.69600",
+      "net_pnl": -2.9,
+      "loss_vs_planned_ratio": 1.07566765578635,
+      "opened_at": "2026-11-06T10:52:20+00:00",
+      "closed_at": "2026-11-06T10:53:50+00:00",
+      "hold_seconds": 90.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:S:f5519cb1b484",
+        "[sl 4072.719]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664677425,
+          "entry": null,
+          "type": 1,
+          "price": "4070.023",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793962340,
+          "comment": "ite:v1:S:f5519cb1b484"
+        },
+        {
+          "ticket": 664679133,
+          "entry": 1,
+          "type": null,
+          "price": "4072.927",
+          "profit": "-2.9",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793962430,
+          "comment": "[sl 4072.719]"
+        }
+      ]
+    },
+    {
+      "position_id": 687270993,
+      "side": "SELL",
+      "volume": "0.01",
+      "open_price": "4072.093",
+      "close_price": "4074.417",
+      "sl_from_comment": "4074.409",
+      "approx_planned_risk_usd": "2.31600",
+      "net_pnl": -2.32,
+      "loss_vs_planned_ratio": 1.001727115716753,
+      "opened_at": "2026-11-06T10:54:24+00:00",
+      "closed_at": "2026-11-06T10:56:53+00:00",
+      "hold_seconds": 149.0,
+      "sl_broker_close": true,
+      "comments": [
+        "ite:v1:S:4ec210360dcb",
+        "[sl 4074.409]"
+      ],
+      "magic": [
+        260720
+      ],
+      "deal_dump": [
+        {
+          "ticket": 664679916,
+          "entry": null,
+          "type": 1,
+          "price": "4072.093",
+          "profit": "0.0",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793962464,
+          "comment": "ite:v1:S:4ec210360dcb"
+        },
+        {
+          "ticket": 664682604,
+          "entry": 1,
+          "type": null,
+          "price": "4074.417",
+          "profit": "-2.32",
+          "commission": "0.0",
+          "volume": "0.01",
+          "time": 1793962613,
+          "comment": "[sl 4074.409]"
+        }
+      ]
+    }
+  ]
+}
