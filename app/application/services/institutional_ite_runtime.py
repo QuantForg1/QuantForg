@@ -2421,6 +2421,25 @@ class InstitutionalIteRuntime:
                                                 "buy_cascade_anchor_record_failed",
                                                 ticket=ticket,
                                             )
+                                        try:
+                                            from app.domain.institutional_trading.ai_scalping.sell_cascade_anchor_store import (  # noqa: E501
+                                                record_losing_sell_close,
+                                            )
+
+                                            record_losing_sell_close(
+                                                symbol=closed_sym,
+                                                position_id=int(ticket),
+                                                entry_price=cascade_entry,
+                                                net_pnl=raw_close_pnl,
+                                                direction=side_raw,
+                                                fully_closed=cascade_fully_closed,
+                                                close_outcome="pme_position_closed",
+                                            )
+                                        except Exception:
+                                            logger.exception(
+                                                "sell_cascade_anchor_record_failed",
+                                                ticket=ticket,
+                                            )
                                     try:
                                         from app.domain.institutional_trading.ai_scalping.symbol_performance import (  # noqa: E501
                                             get_symbol_performance_book,
@@ -7927,6 +7946,14 @@ class InstitutionalIteRuntime:
             recover_buy_cascade_on_startup(self.mt5_adapter)
         except Exception:
             logger.exception("buy_cascade_startup_recover_failed")
+        try:
+            from app.domain.institutional_trading.ai_scalping.sell_cascade_anchor_store import (  # noqa: E501
+                recover_sell_cascade_on_startup,
+            )
+
+            recover_sell_cascade_on_startup(self.mt5_adapter)
+        except Exception:
+            logger.exception("sell_cascade_startup_recover_failed")
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
             self._cycle_started_mono = time.monotonic()

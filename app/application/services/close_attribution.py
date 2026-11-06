@@ -435,6 +435,7 @@ def _arm_durable_buy_cascade(evidence: BrokerExitEvidence) -> None:
             entry_price=evidence.entry_price,
             net_pnl=evidence.net_pnl,
             closed_at=closed_at,
+            close_outcome=evidence.close_reason or "",
             direction=evidence.side,
             fully_closed=True,
         )
