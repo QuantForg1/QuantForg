@@ -1,4 +1,4 @@
-# QUANTFORG PR #188 — LIVE Strategy Performance Dashboard & Monitoring
+﻿# QUANTFORG PR #188 — LIVE Strategy Performance Dashboard & Monitoring
 
 **Date:** 2026-11-06  
 **Instrument:** XAUUSD  
@@ -89,19 +89,19 @@ Route: **`/strategy-performance`** (ops deep-link; not a new primary rail desk)
 | Frontend ESLint | **pass** |
 | Frontend production build | **pass** |
 | Ruff (touched Python) | **pass** |
+| GitHub CI (Type Check, Trading Core, Unit, Frontend Build) | **pass** |
 
 ---
 
 ## 9. Production verification
 
-| Check | Expected |
+| Check | Value |
 | --- | --- |
-| Railway `/health.commit` | Unchanged trading semantics (may advance only if backend payload deploy) |
+| GitHub main | `8b54d0d4` (Merge PR #188) |
+| Railway `/health.commit` | `8b54d0d4…` **matches** |
 | `/ready` | ok |
-| Vercel production | `/strategy-performance` reachable for OWNER/ADMIN |
-| LIVE flags | Cascades ON · M1 submit OFF · reverse entry OFF |
-
-*(Fill exact commit SHAs after deploy.)*
+| Vercel production frontend | READY · sha `8b54d0d4` · `/strategy-performance` |
+| LIVE flags | Cascades ON · M1 submit OFF · reverse entry OFF · advisory dashboard only |
 
 ---
 
