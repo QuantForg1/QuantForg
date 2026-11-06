@@ -73,11 +73,12 @@ def build_performance_scorecard(
     avg_loss = (gross_loss / len(losses)) if losses else 0.0
     win_rate = (len(wins) / n) if n else 0.0
     if gross_loss < 0:
-        profit_factor: float | None = gross_profit / abs(gross_loss)
+        profit_factor = gross_profit / abs(gross_loss)
+        pf_out: float | None = round(profit_factor, 6)
     elif gross_profit > 0:
-        profit_factor = float("inf")
+        pf_out = None  # infinite PF represented as None
     else:
-        profit_factor = 0.0
+        pf_out = 0.0
     expectancy = (net / n) if n else 0.0
     be: float | None = None
     if avg_win > 0 and avg_loss < 0:
@@ -96,7 +97,6 @@ def build_performance_scorecard(
         equity += pnl
         peak = max(peak, equity)
         max_dd = min(max_dd, equity - peak)
-    pf_out = None if profit_factor == float("inf") else round(profit_factor, 6)
     return PerformanceScorecard(
         label=label,
         n=n,
