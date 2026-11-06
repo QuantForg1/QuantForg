@@ -11,9 +11,10 @@
 
 | Check | Evidence | Result |
 | --- | --- | --- |
-| GitHub `main` | `gh api .../commits/main` | `741a99ec` (docs PR #183 on top of trading `5df0a872`) |
-| Railway `/health.commit` | public GET | `5df0a87235e62f512101e0afb0349463a18e3efb` |
-| Trading code match | health == PR #182 merge | **Verified** (docs-only `741a99ec` not required on Railway) |
+| GitHub `main` (audit baseline) | `gh api` at start | `741a99ec` over trading `5df0a872` |
+| GitHub `main` (after PR #184 merge) | `gh api` | `8b4c7a1aba84c7a86021093854ca781a2ebde705` |
+| Railway `/health.commit` (post-merge) | public GET | `8b4c7a1aba84…` **matches main** |
+| Trading protections baseline | PR #182 | Cascades / LIVE / M1-submit policy unchanged by this audit |
 | `/ready` | public GET | ok · routers complete |
 | Railway service | `railway status` | Online |
 | Worker | logs `worker_state=RUNNING` | **Running** |
