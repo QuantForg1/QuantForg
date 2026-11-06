@@ -1,0 +1,2058 @@
+{
+  "generated_at": "2026-11-06T11:42:13.384214+00:00",
+  "broker_login": 12479147,
+  "account_snapshot": {
+    "login": 12479147,
+    "balance": "21.46",
+    "equity": "21.46",
+    "server": "Weltrade-Real",
+    "trade_allowed": true
+  },
+  "open_positions_count": 1,
+  "deal_count_raw": 129,
+  "closed_xau_positions": 63,
+  "cutoffs": {
+    "pr180_utc": "2026-11-06T09:51:00+00:00",
+    "pr182_utc": "2026-11-06T11:11:00+00:00"
+  },
+  "scorecards": {
+    "all_current_gateway_account": {
+      "label": "all_current_gateway_account",
+      "n": 63,
+      "wins": 32,
+      "losses": 31,
+      "flats": 0,
+      "win_rate": 0.5079,
+      "gross_profit": 80.08,
+      "gross_loss": -100.62,
+      "net_profit": -20.54,
+      "profit_factor": 0.7959,
+      "avg_win": 2.5025,
+      "avg_loss": -3.2458,
+      "expectancy": -0.326,
+      "breakeven_win_rate": 0.5647,
+      "max_consecutive_losses": 9,
+      "max_drawdown_trade_curve": -39.68,
+      "sl_closes": 31,
+      "tp_closes": 32,
+      "reversal_like_closes": 0,
+      "by_side": {
+        "BUY": {
+          "n": 13,
+          "net": -8.48,
+          "wins": 6,
+          "losses": 7
+        },
+        "SELL": {
+          "n": 50,
+          "net": -12.06,
+          "wins": 26,
+          "losses": 24
+        },
+        "UNKNOWN": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        }
+      },
+      "classification": "Negative expectancy"
+    },
+    "pre_pr180": {
+      "label": "pre_pr180",
+      "n": 55,
+      "wins": 32,
+      "losses": 23,
+      "flats": 0,
+      "win_rate": 0.5818,
+      "gross_profit": 80.08,
+      "gross_loss": -75.4,
+      "net_profit": 4.68,
+      "profit_factor": 1.0621,
+      "avg_win": 2.5025,
+      "avg_loss": -3.2783,
+      "expectancy": 0.0851,
+      "breakeven_win_rate": 0.5671,
+      "max_consecutive_losses": 3,
+      "max_drawdown_trade_curve": -14.46,
+      "sl_closes": 23,
+      "tp_closes": 32,
+      "reversal_like_closes": 0,
+      "by_side": {
+        "BUY": {
+          "n": 13,
+          "net": -8.48,
+          "wins": 6,
+          "losses": 7
+        },
+        "SELL": {
+          "n": 42,
+          "net": 13.16,
+          "wins": 26,
+          "losses": 16
+        },
+        "UNKNOWN": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        }
+      },
+      "classification": "Demonstrated positive expectancy"
+    },
+    "post_pr180_pre_pr182": {
+      "label": "post_pr180_pre_pr182",
+      "n": 8,
+      "wins": 0,
+      "losses": 8,
+      "flats": 0,
+      "win_rate": 0.0,
+      "gross_profit": 0,
+      "gross_loss": -25.22,
+      "net_profit": -25.22,
+      "profit_factor": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -3.1525,
+      "expectancy": -3.1525,
+      "breakeven_win_rate": null,
+      "max_consecutive_losses": 8,
+      "max_drawdown_trade_curve": -25.22,
+      "sl_closes": 8,
+      "tp_closes": 0,
+      "reversal_like_closes": 0,
+      "by_side": {
+        "BUY": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "SELL": {
+          "n": 8,
+          "net": -25.22,
+          "wins": 0,
+          "losses": 8
+        },
+        "UNKNOWN": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        }
+      },
+      "classification": "Negative expectancy (small sample \u2014 provisional)"
+    },
+    "post_pr182": {
+      "label": "post_pr182",
+      "n": 0,
+      "classification": "Insufficient data",
+      "note": "no closed trades in bucket"
+    },
+    "engine:ite_primary": {
+      "label": "engine:ite_primary",
+      "n": 63,
+      "wins": 32,
+      "losses": 31,
+      "flats": 0,
+      "win_rate": 0.5079,
+      "gross_profit": 80.08,
+      "gross_loss": -100.62,
+      "net_profit": -20.54,
+      "profit_factor": 0.7959,
+      "avg_win": 2.5025,
+      "avg_loss": -3.2458,
+      "expectancy": -0.326,
+      "breakeven_win_rate": 0.5647,
+      "max_consecutive_losses": 9,
+      "max_drawdown_trade_curve": -39.68,
+      "sl_closes": 31,
+      "tp_closes": 32,
+      "reversal_like_closes": 0,
+      "by_side": {
+        "BUY": {
+          "n": 13,
+          "net": -8.48,
+          "wins": 6,
+          "losses": 7
+        },
+        "SELL": {
+          "n": 50,
+          "net": -12.06,
+          "wins": 26,
+          "losses": 24
+        },
+        "UNKNOWN": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        }
+      },
+      "classification": "Negative expectancy"
+    },
+    "engine:m1_micro": {
+      "label": "engine:m1_micro",
+      "n": 0,
+      "classification": "Insufficient data",
+      "note": "no closed trades in bucket"
+    },
+    "engine:unknown": {
+      "label": "engine:unknown",
+      "n": 0,
+      "classification": "Insufficient data",
+      "note": "no closed trades in bucket"
+    },
+    "side:BUY": {
+      "label": "side:BUY",
+      "n": 13,
+      "wins": 6,
+      "losses": 7,
+      "flats": 0,
+      "win_rate": 0.4615,
+      "gross_profit": 12.4,
+      "gross_loss": -20.88,
+      "net_profit": -8.48,
+      "profit_factor": 0.5939,
+      "avg_win": 2.0667,
+      "avg_loss": -2.9829,
+      "expectancy": -0.6523,
+      "breakeven_win_rate": 0.5907,
+      "max_consecutive_losses": 2,
+      "max_drawdown_trade_curve": -10.25,
+      "sl_closes": 7,
+      "tp_closes": 6,
+      "reversal_like_closes": 0,
+      "by_side": {
+        "BUY": {
+          "n": 13,
+          "net": -8.48,
+          "wins": 6,
+          "losses": 7
+        },
+        "SELL": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "UNKNOWN": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        }
+      },
+      "classification": "Negative expectancy (small sample \u2014 provisional)"
+    },
+    "side:SELL": {
+      "label": "side:SELL",
+      "n": 50,
+      "wins": 26,
+      "losses": 24,
+      "flats": 0,
+      "win_rate": 0.52,
+      "gross_profit": 67.68,
+      "gross_loss": -79.74,
+      "net_profit": -12.06,
+      "profit_factor": 0.8488,
+      "avg_win": 2.6031,
+      "avg_loss": -3.3225,
+      "expectancy": -0.2412,
+      "breakeven_win_rate": 0.5607,
+      "max_consecutive_losses": 9,
+      "max_drawdown_trade_curve": -39.68,
+      "sl_closes": 24,
+      "tp_closes": 26,
+      "reversal_like_closes": 0,
+      "by_side": {
+        "BUY": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        },
+        "SELL": {
+          "n": 50,
+          "net": -12.06,
+          "wins": 26,
+          "losses": 24
+        },
+        "UNKNOWN": {
+          "n": 0,
+          "net": 0,
+          "wins": 0,
+          "losses": 0
+        }
+      },
+      "classification": "Negative expectancy"
+    }
+  },
+  "positions": [
+    {
+      "position_id": 683005462,
+      "side": "BUY",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4025.047",
+      "close_price": "4022.213",
+      "net_pnl": -2.83,
+      "profit": -2.83,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T09:38:23+00:00",
+      "closed_at": "2026-11-04T09:53:58+00:00",
+      "hold_seconds": 935.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:cd5167edfeb8",
+        "[sl 4022.229]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683117790,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4035.327",
+      "close_price": "4038.353",
+      "net_pnl": 3.03,
+      "profit": 3.03,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T10:51:01+00:00",
+      "closed_at": "2026-11-04T11:07:36+00:00",
+      "hold_seconds": 995.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:b2fff86f5834",
+        "[tp 4038.353]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683174794,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4046.307",
+      "close_price": "4047.873",
+      "net_pnl": 1.5699999999999998,
+      "profit": 1.5699999999999998,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T11:24:33+00:00",
+      "closed_at": "2026-11-04T11:27:04+00:00",
+      "hold_seconds": 151.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:bb86cb79e915",
+        "[tp 4047.873]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683675942,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4042.747",
+      "close_price": "4040.743",
+      "net_pnl": -2.0,
+      "profit": -2.0,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:11:20+00:00",
+      "closed_at": "2026-11-04T16:13:08+00:00",
+      "hold_seconds": 108.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:219753224df0",
+        "[sl 4040.749]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683682967,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4042.337",
+      "close_price": "4040.783",
+      "net_pnl": -1.55,
+      "profit": -1.55,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:15:17+00:00",
+      "closed_at": "2026-11-04T16:18:52+00:00",
+      "hold_seconds": 215.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:0d3f844242a6",
+        "[sl 4040.785]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683725317,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4044.547",
+      "close_price": "4047.043",
+      "net_pnl": 2.5,
+      "profit": 2.5,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:35:51+00:00",
+      "closed_at": "2026-11-04T16:37:02+00:00",
+      "hold_seconds": 71.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:1fcbeaa0bf5a",
+        "[tp 4047.043]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683740259,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4046.067",
+      "close_price": "4047.043",
+      "net_pnl": 0.98,
+      "profit": 0.98,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:41:52+00:00",
+      "closed_at": "2026-11-04T16:42:03+00:00",
+      "hold_seconds": 11.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:48648c48278c",
+        "[tp 4047.043]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683755423,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4044.317",
+      "close_price": "4040.403",
+      "net_pnl": -3.91,
+      "profit": -3.91,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:50:44+00:00",
+      "closed_at": "2026-11-04T16:52:39+00:00",
+      "hold_seconds": 115.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:ed653a7edda8",
+        "[sl 4040.508]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683761973,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4038.787",
+      "close_price": "4034.773",
+      "net_pnl": -4.01,
+      "profit": -4.01,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:54:29+00:00",
+      "closed_at": "2026-11-04T16:55:19+00:00",
+      "hold_seconds": 50.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:a248569118b5",
+        "[sl 4035.119]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683765557,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4036.707",
+      "close_price": "4039.953",
+      "net_pnl": 3.25,
+      "profit": 3.25,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T16:56:28+00:00",
+      "closed_at": "2026-11-04T17:00:30+00:00",
+      "hold_seconds": 242.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:cb1c948df4cf",
+        "[tp 4039.953]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683777777,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4038.677",
+      "close_price": "4034.823",
+      "net_pnl": -3.85,
+      "profit": -3.85,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T17:03:13+00:00",
+      "closed_at": "2026-11-04T17:06:03+00:00",
+      "hold_seconds": 170.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:70bfde9972f0",
+        "[sl 4035.069]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683822043,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4033.897",
+      "close_price": "4034.963",
+      "net_pnl": 1.07,
+      "profit": 1.07,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T17:28:56+00:00",
+      "closed_at": "2026-11-04T17:29:51+00:00",
+      "hold_seconds": 55.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:b3ed76137b1a",
+        "[tp 4034.963]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 683824905,
+      "side": "BUY",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4035.027",
+      "close_price": "4032.293",
+      "net_pnl": -2.73,
+      "profit": -2.73,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-04T17:30:36+00:00",
+      "closed_at": "2026-11-04T17:31:00+00:00",
+      "hold_seconds": 24.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:88f4a52ebc81",
+        "[sl 4032.386]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686749134,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4069.273",
+      "close_price": "4068.703",
+      "net_pnl": 0.57,
+      "profit": 0.57,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:31:08+00:00",
+      "closed_at": "2026-11-06T04:31:15+00:00",
+      "hold_seconds": 7.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:3345c4177614",
+        "[tp 4068.703]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686750925,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4066.623",
+      "close_price": "4063.823",
+      "net_pnl": 2.8,
+      "profit": 2.8,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:32:28+00:00",
+      "closed_at": "2026-11-06T04:34:01+00:00",
+      "hold_seconds": 93.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:0dc9cb1a18df",
+        "[tp 4063.823]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686753880,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4066.053",
+      "close_price": "4063.823",
+      "net_pnl": 2.23,
+      "profit": 2.23,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:35:00+00:00",
+      "closed_at": "2026-11-06T04:35:06+00:00",
+      "hold_seconds": 6.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:c49c3f3cfda6",
+        "[tp 4063.823]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686755212,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4065.873",
+      "close_price": "4063.823",
+      "net_pnl": 2.05,
+      "profit": 2.05,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:36:12+00:00",
+      "closed_at": "2026-11-06T04:41:21+00:00",
+      "hold_seconds": 309.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:68a469889a68",
+        "[tp 4063.823]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686764372,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4061.123",
+      "close_price": "4058.623",
+      "net_pnl": 2.5,
+      "profit": 2.5,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:44:16+00:00",
+      "closed_at": "2026-11-06T04:46:01+00:00",
+      "hold_seconds": 105.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:29329494ef6f",
+        "[tp 4058.623]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686772990,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4066.893",
+      "close_price": "4063.823",
+      "net_pnl": 3.07,
+      "profit": 3.07,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:50:21+00:00",
+      "closed_at": "2026-11-06T04:53:44+00:00",
+      "hold_seconds": 203.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:6a3926ecc2af",
+        "[tp 4063.823]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686780194,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4060.623",
+      "close_price": "4056.893",
+      "net_pnl": 3.73,
+      "profit": 3.73,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T04:55:45+00:00",
+      "closed_at": "2026-11-06T05:08:06+00:00",
+      "hold_seconds": 741.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:5c7a44b3859c",
+        "[tp 4056.893]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686809846,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4049.803",
+      "close_price": "4048.223",
+      "net_pnl": 1.58,
+      "profit": 1.58,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T05:18:30+00:00",
+      "closed_at": "2026-11-06T05:25:00+00:00",
+      "hold_seconds": 390.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:c257f4b02b05",
+        "[tp 4048.223]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686819151,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4050.003",
+      "close_price": "4048.703",
+      "net_pnl": 1.3,
+      "profit": 1.3,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T05:27:20+00:00",
+      "closed_at": "2026-11-06T05:30:02+00:00",
+      "hold_seconds": 162.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:e7b6cb23ad72",
+        "[tp 4048.703]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686822625,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4046.843",
+      "close_price": "4046.503",
+      "net_pnl": 0.34,
+      "profit": 0.34,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T05:30:37+00:00",
+      "closed_at": "2026-11-06T05:33:40+00:00",
+      "hold_seconds": 183.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:8191ffe2a099",
+        "[tp 4046.503]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686842193,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4043.243",
+      "close_price": "4040.373",
+      "net_pnl": 2.87,
+      "profit": 2.87,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T05:45:48+00:00",
+      "closed_at": "2026-11-06T06:04:06+00:00",
+      "hold_seconds": 1098.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:7cb79e8c9470",
+        "[tp 4040.373]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686872229,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4040.343",
+      "close_price": "4043.117",
+      "net_pnl": -2.77,
+      "profit": -2.77,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:11:37+00:00",
+      "closed_at": "2026-11-06T06:16:40+00:00",
+      "hold_seconds": 303.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:ea91b06b61e7",
+        "[sl 4042.922]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686878739,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4042.763",
+      "close_price": "4040.373",
+      "net_pnl": 2.39,
+      "profit": 2.39,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:17:26+00:00",
+      "closed_at": "2026-11-06T06:27:28+00:00",
+      "hold_seconds": 602.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:6c93246703d5",
+        "[tp 4040.373]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686890748,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4040.813",
+      "close_price": "4042.807",
+      "net_pnl": -1.99,
+      "profit": -1.99,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:28:09+00:00",
+      "closed_at": "2026-11-06T06:32:02+00:00",
+      "hold_seconds": 233.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:9af02dc1ff54",
+        "[sl 4042.641]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686896022,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4043.843",
+      "close_price": "4045.967",
+      "net_pnl": -2.12,
+      "profit": -2.12,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:33:04+00:00",
+      "closed_at": "2026-11-06T06:33:26+00:00",
+      "hold_seconds": 22.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:fa466c82135b",
+        "[sl 4045.964]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686898220,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4045.523",
+      "close_price": "4047.387",
+      "net_pnl": -1.8599999999999999,
+      "profit": -1.8599999999999999,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:34:03+00:00",
+      "closed_at": "2026-11-06T06:36:14+00:00",
+      "hold_seconds": 131.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:54c7577cf792",
+        "[sl 4047.189]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686902888,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4046.093",
+      "close_price": "4041.753",
+      "net_pnl": 4.34,
+      "profit": 4.34,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:38:15+00:00",
+      "closed_at": "2026-11-06T06:44:38+00:00",
+      "hold_seconds": 383.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:e4115891fe79",
+        "[tp 4041.753]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686911576,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4043.843",
+      "close_price": "4045.997",
+      "net_pnl": -2.15,
+      "profit": -2.15,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:45:57+00:00",
+      "closed_at": "2026-11-06T06:50:42+00:00",
+      "hold_seconds": 285.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:c2222bca44c7",
+        "[sl 4045.942]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686918609,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4045.703",
+      "close_price": "4048.447",
+      "net_pnl": -2.74,
+      "profit": -2.74,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T06:51:57+00:00",
+      "closed_at": "2026-11-06T07:04:59+00:00",
+      "hold_seconds": 782.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:f04f8d9b4642",
+        "[sl 4048.037]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686934957,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4049.363",
+      "close_price": "4044.083",
+      "net_pnl": 5.28,
+      "profit": 5.28,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:06:00+00:00",
+      "closed_at": "2026-11-06T07:15:27+00:00",
+      "hold_seconds": 567.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:50c0e2a4e346",
+        "[tp 4044.083]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686951799,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4044.033",
+      "close_price": "4042.883",
+      "net_pnl": 1.15,
+      "profit": 1.15,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:17:29+00:00",
+      "closed_at": "2026-11-06T07:20:09+00:00",
+      "hold_seconds": 160.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:7086341763a0",
+        "[tp 4042.883]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686956302,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4040.763",
+      "close_price": "4037.323",
+      "net_pnl": 3.44,
+      "profit": 3.44,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:20:51+00:00",
+      "closed_at": "2026-11-06T07:22:22+00:00",
+      "hold_seconds": 91.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:9601468fa3d0",
+        "[tp 4037.323]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686960281,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4038.933",
+      "close_price": "4037.323",
+      "net_pnl": 1.6099999999999999,
+      "profit": 1.6099999999999999,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:23:05+00:00",
+      "closed_at": "2026-11-06T07:30:00+00:00",
+      "hold_seconds": 415.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:3a1779d56ee1",
+        "[tp 4037.323]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686972930,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4039.413",
+      "close_price": "4044.537",
+      "net_pnl": -5.12,
+      "profit": -5.12,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:31:04+00:00",
+      "closed_at": "2026-11-06T07:31:23+00:00",
+      "hold_seconds": 19.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:593fda0d3f0e",
+        "[sl 4044.537]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686977238,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4039.703",
+      "close_price": "4044.997",
+      "net_pnl": -5.29,
+      "profit": -5.29,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:32:56+00:00",
+      "closed_at": "2026-11-06T07:36:36+00:00",
+      "hold_seconds": 220.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:1e56bb7abb57",
+        "[sl 4044.537]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686983462,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4045.063",
+      "close_price": "4042.883",
+      "net_pnl": 2.18,
+      "profit": 2.18,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:37:13+00:00",
+      "closed_at": "2026-11-06T07:37:29+00:00",
+      "hold_seconds": 16.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:69e383e7dc17",
+        "[tp 4042.883]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686984678,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4045.103",
+      "close_price": "4042.883",
+      "net_pnl": 2.22,
+      "profit": 2.22,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:38:12+00:00",
+      "closed_at": "2026-11-06T07:38:35+00:00",
+      "hold_seconds": 23.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:15e145e9d2ee",
+        "[tp 4042.883]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686986595,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4041.313",
+      "close_price": "4045.687",
+      "net_pnl": -4.37,
+      "profit": -4.37,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:39:34+00:00",
+      "closed_at": "2026-11-06T07:40:05+00:00",
+      "hold_seconds": 31.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:6be300c14ae3",
+        "[sl 4045.646]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686988674,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4045.993",
+      "close_price": "4042.883",
+      "net_pnl": 3.11,
+      "profit": 3.11,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:40:59+00:00",
+      "closed_at": "2026-11-06T07:42:32+00:00",
+      "hold_seconds": 93.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:91d3892903c3",
+        "[tp 4042.883]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686993547,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4041.283",
+      "close_price": "4045.887",
+      "net_pnl": -4.6,
+      "profit": -4.6,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:44:05+00:00",
+      "closed_at": "2026-11-06T07:45:54+00:00",
+      "hold_seconds": 109.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:82ed45bc9fe7",
+        "[sl 4045.766]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 686998411,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4046.053",
+      "close_price": "4042.883",
+      "net_pnl": 3.17,
+      "profit": 3.17,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:47:20+00:00",
+      "closed_at": "2026-11-06T07:56:25+00:00",
+      "hold_seconds": 545.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:0bbede5c4e73",
+        "[tp 4042.883]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687013090,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4043.113",
+      "close_price": "4040.373",
+      "net_pnl": 2.74,
+      "profit": 2.74,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:57:20+00:00",
+      "closed_at": "2026-11-06T07:57:39+00:00",
+      "hold_seconds": 19.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:166462878a6f",
+        "[tp 4040.373]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687015022,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4039.363",
+      "close_price": "4044.617",
+      "net_pnl": -5.25,
+      "profit": -5.25,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T07:58:21+00:00",
+      "closed_at": "2026-11-06T08:03:10+00:00",
+      "hold_seconds": 289.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:18eada7a7b0e",
+        "[sl 4044.537]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687025161,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4047.483",
+      "close_price": "4044.033",
+      "net_pnl": 3.45,
+      "profit": 3.45,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:04:19+00:00",
+      "closed_at": "2026-11-06T08:14:02+00:00",
+      "hold_seconds": 583.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:508b0dd79851",
+        "[tp 4044.033]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687040103,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4043.593",
+      "close_price": "4046.717",
+      "net_pnl": -3.12,
+      "profit": -3.12,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:14:43+00:00",
+      "closed_at": "2026-11-06T08:20:51+00:00",
+      "hold_seconds": 368.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:3d1dc85b4ed0",
+        "[sl 4046.705]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687049121,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4048.133",
+      "close_price": "4050.097",
+      "net_pnl": -1.96,
+      "profit": -1.96,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:21:27+00:00",
+      "closed_at": "2026-11-06T08:24:46+00:00",
+      "hold_seconds": 199.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:e2b4e3a03bf3",
+        "[sl 4050.083]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687055146,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4048.513",
+      "close_price": "4044.033",
+      "net_pnl": 4.48,
+      "profit": 4.48,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:25:47+00:00",
+      "closed_at": "2026-11-06T08:31:11+00:00",
+      "hold_seconds": 324.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:3829c435bd4b",
+        "[tp 4044.033]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687064392,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4045.633",
+      "close_price": "4048.837",
+      "net_pnl": -3.2,
+      "profit": -3.2,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:32:18+00:00",
+      "closed_at": "2026-11-06T08:35:49+00:00",
+      "hold_seconds": 211.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:1541d187d403",
+        "[sl 4048.794]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687069704,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4047.333",
+      "close_price": "4049.967",
+      "net_pnl": -2.63,
+      "profit": -2.63,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:36:21+00:00",
+      "closed_at": "2026-11-06T08:37:53+00:00",
+      "hold_seconds": 92.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:66128f35b346",
+        "[sl 4049.956]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687072671,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4048.673",
+      "close_price": "4044.033",
+      "net_pnl": 4.64,
+      "profit": 4.64,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T08:38:33+00:00",
+      "closed_at": "2026-11-06T09:29:30+00:00",
+      "hold_seconds": 3057.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:H:a2d67bdd8def",
+        "[tp 4044.033]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687140123,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4043.923",
+      "close_price": "4043.483",
+      "net_pnl": 0.44,
+      "profit": 0.44,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T09:30:18+00:00",
+      "closed_at": "2026-11-06T09:31:01+00:00",
+      "hold_seconds": 43.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": false,
+      "tp_close": true,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:d227ea740575",
+        "[tp 4043.483]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687142129,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4042.593",
+      "close_price": "4047.947",
+      "net_pnl": -5.35,
+      "profit": -5.35,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T09:31:37+00:00",
+      "closed_at": "2026-11-06T09:50:26+00:00",
+      "hold_seconds": 1129.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "pre_pr180",
+      "comments": [
+        "ite:v1:S:f1c031bf14bd",
+        "[sl 4047.937]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687174307,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4049.873",
+      "close_price": "4052.557",
+      "net_pnl": -2.68,
+      "profit": -2.68,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T09:51:29+00:00",
+      "closed_at": "2026-11-06T09:52:33+00:00",
+      "hold_seconds": 64.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:S:25d2d3d4a0ef",
+        "[sl 4052.519]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687177072,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4050.483",
+      "close_price": "4054.767",
+      "net_pnl": -4.28,
+      "profit": -4.28,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T09:53:05+00:00",
+      "closed_at": "2026-11-06T09:54:35+00:00",
+      "hold_seconds": 90.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:H:0e9530ae37a5",
+        "[sl 4054.717]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687180731,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4054.653",
+      "close_price": "4056.937",
+      "net_pnl": -2.2800000000000002,
+      "profit": -2.2800000000000002,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T09:55:14+00:00",
+      "closed_at": "2026-11-06T09:55:26+00:00",
+      "hold_seconds": 12.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:H:73c7779d3d4b",
+        "[sl 4056.879]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687184354,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4055.383",
+      "close_price": "4059.007",
+      "net_pnl": -3.62,
+      "profit": -3.62,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T09:57:25+00:00",
+      "closed_at": "2026-11-06T10:15:21+00:00",
+      "hold_seconds": 1076.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:H:33ee8b073225",
+        "[sl 4058.628]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687225893,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4067.443",
+      "close_price": "4072.827",
+      "net_pnl": -5.38,
+      "profit": -5.38,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T10:23:44+00:00",
+      "closed_at": "2026-11-06T10:44:14+00:00",
+      "hold_seconds": 1230.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:H:0b9f406fc3b0",
+        "[sl 4072.827]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687259338,
+      "side": "SELL",
+      "management_profile": "hold",
+      "volume": "0.01",
+      "open_price": "4070.973",
+      "close_price": "4072.737",
+      "net_pnl": -1.76,
+      "profit": -1.76,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T10:45:54+00:00",
+      "closed_at": "2026-11-06T10:46:55+00:00",
+      "hold_seconds": 61.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:H:bdb11b5d890c",
+        "[sl 4072.559]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687268349,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4070.023",
+      "close_price": "4072.927",
+      "net_pnl": -2.9,
+      "profit": -2.9,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T10:52:20+00:00",
+      "closed_at": "2026-11-06T10:53:50+00:00",
+      "hold_seconds": 90.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:S:f5519cb1b484",
+        "[sl 4072.719]"
+      ],
+      "magic": [
+        260720
+      ]
+    },
+    {
+      "position_id": 687270993,
+      "side": "SELL",
+      "management_profile": "scalp",
+      "volume": "0.01",
+      "open_price": "4072.093",
+      "close_price": "4074.417",
+      "net_pnl": -2.32,
+      "profit": -2.32,
+      "commission": 0.0,
+      "swap": 0.0,
+      "opened_at": "2026-11-06T10:54:24+00:00",
+      "closed_at": "2026-11-06T10:56:53+00:00",
+      "hold_seconds": 149.0,
+      "engine_tag": "ite_primary",
+      "strategy_id": null,
+      "sl_close": true,
+      "tp_close": false,
+      "looks_reversal_close": false,
+      "period": "post_pr180_pre_pr182",
+      "comments": [
+        "ite:v1:S:4ec210360dcb",
+        "[sl 4074.409]"
+      ],
+      "magic": [
+        260720
+      ]
+    }
+  ],
+  "account_12260878_note": "Not present on current gateway session. Do not merge with 12479147. Historical 12260878 figures, if any, must come from preserved prior evidence only.",
+  "five_pack_attribution_note": "Broker comments carry ite:/m1: engine tags only. Five-pack strategy_id is not recoverable from MT5 history \u2014 left null; classification uses engine_tag."
+}
