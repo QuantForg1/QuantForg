@@ -3250,18 +3250,22 @@ class InstitutionalIteRuntime:
                     get_strategy_attribution_store,
                 )
 
-                get_strategy_attribution_store().bind_fill(
-                    strategy_id=_fill_sid or "ite_primary",
-                    engine="soe" if _fill_sid else "ite",
-                    strategy_name=_fill_sname or "ITE",
-                    symbol=str(getattr(decision, "symbol", "") or ""),
-                    ticket=_fill_ticket,
-                    position_id=_fill_pos,
-                    meta={
-                        "cycle_id": plan.cycle_id,
-                        "trade_class": trade_class,
-                    },
-                )
+                # Bind only a real SOE five-pack id. Never invent "ite_primary"
+                # as a strategy_id — that engine tag already comes from the
+                # MT5 comment and would pollute strategy scorecards.
+                if _fill_sid:
+                    get_strategy_attribution_store().bind_fill(
+                        strategy_id=_fill_sid,
+                        engine="soe",
+                        strategy_name=_fill_sname or _fill_sid,
+                        symbol=str(getattr(decision, "symbol", "") or ""),
+                        ticket=_fill_ticket,
+                        position_id=_fill_pos,
+                        meta={
+                            "cycle_id": plan.cycle_id,
+                            "trade_class": trade_class,
+                        },
+                    )
             except Exception:
                 logger.exception("strategy_attribution_bind_fill_failed")
         diagnostics["time_from_signal_to_first_order_send"] = round(
