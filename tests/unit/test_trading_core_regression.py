@@ -290,7 +290,7 @@ def test_scalping_pme_knobs_locked() -> None:
     assert DEFAULT_PME_CONFIG.use_net_break_even is True
     assert pme.require_broker_sl_confirm is True
     assert pme.use_net_break_even is True
-    assert pme.live_reversal_exits_enabled is False
+    assert pme.live_reversal_exits_enabled is True
     assert pme.shadow_reversal_exits_enabled is True
 
 

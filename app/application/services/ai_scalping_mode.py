@@ -14,6 +14,7 @@ from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfi
 from app.domain.institutional_trading.management.config import (
     DEFAULT_PME_CONFIG,
     PositionManagementConfig,
+    live_reversal_exits_resolved,
 )
 from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_OPEN_POSITIONS
 from core.logging import get_logger
@@ -70,7 +71,9 @@ def pme_config_for_scalping(
             DEFAULT_PME_CONFIG.session_flatten_on_market_closed
         ),
         shadow_reversal_exits_enabled=DEFAULT_PME_CONFIG.shadow_reversal_exits_enabled,
-        live_reversal_exits_enabled=DEFAULT_PME_CONFIG.live_reversal_exits_enabled,
+        live_reversal_exits_enabled=live_reversal_exits_resolved(
+            default=DEFAULT_PME_CONFIG.live_reversal_exits_enabled
+        ),
     )
 
 

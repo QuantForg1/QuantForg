@@ -758,6 +758,33 @@ def score_scalping_setup(
         if blocked:
             reject_list.append(cascade_why)
             reasons.append(f"WAIT: {cascade_why}")
+        try:
+            from app.domain.institutional_trading.ai_scalping import (
+                sell_cascade_anchor_store as _sell_store,
+                sell_cascade_guard as _sell_guard,
+            )
+
+            sell_anchor, sell_trusted = _sell_store.active_sell_anchor(sym_key)
+            sell_since = sell_anchor.closed_at if sell_anchor is not None else None
+            sell_blocked, sell_why = _sell_store.evaluate_durable_sell_cascade(
+                symbol=sym_key,
+                direction=direction_dec.direction.value,
+                entry_price=entry_px,
+                reversal_confirmed=bool(
+                    sell_trusted
+                    and _sell_guard.bearish_reversal_since(snapshot, sell_since)
+                ),
+            )
+            if sell_blocked:
+                reject_list.append(sell_why)
+                reasons.append(f"WAIT: {sell_why}")
+        except Exception:
+            # Fail open for SELL cascade evaluation errors — never invent a block.
+            from core.logging import get_logger as _get_logger
+
+            _get_logger(__name__).exception(
+                "sell_cascade_evaluate_failed", symbol=sym_key
+            )
     if not sniper.passed:
         wait_code = sniper.primary_reason or "WAIT_SNIPER"
         reject_list.append(wait_code)

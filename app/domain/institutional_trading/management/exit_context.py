@@ -1,8 +1,9 @@
-"""Position-specific exit context builders — design / offline only.
+"""Position-specific exit context builders.
 
-LIVE ITE must not feed ``structure_broken`` / ``trend_reversed`` from these
-helpers until the owner explicitly approves activation. Functions are pure and
-deterministic for unit tests.
+Pure helpers used by shadow observation and, when
+``live_reversal_exits_enabled`` / ``QUANTFORG_LIVE_REVERSAL_EXITS`` allow it,
+to feed confirmed classifications into the LIVE PME planner. Pullbacks and
+false M1 noise never set ``structure_broken``.
 """
 
 from __future__ import annotations

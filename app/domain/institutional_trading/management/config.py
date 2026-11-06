@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
+
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
+
+
+def live_reversal_exits_resolved(default: bool = True) -> bool:
+    """Owner kill-switch for LIVE close-on-confirmed-reversal.
+
+    Unset → ``default`` (True after PR #180). Explicit false disables LIVE feed
+    without disabling shadow observation.
+    """
+    raw = (os.environ.get("QUANTFORG_LIVE_REVERSAL_EXITS") or "").strip().lower()
+    if not raw:
+        return bool(default)
+    if raw in _FALSE:
+        return False
+    if raw in _TRUE:
+        return True
+    return bool(default)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,8 +117,10 @@ class PositionManagementConfig:
     structure_trend_exits_enabled: bool = True
     # Observe-only reversal proposals (log/book). Never submits closes by itself.
     shadow_reversal_exits_enabled: bool = True
-    # Feed structure_broken / trend_reversed into LIVE planner (requires evidence).
-    live_reversal_exits_enabled: bool = False
+    # Feed confirmed structure_broken / trend_reversed into LIVE PME planner.
+    # Owner PR #180: close-on-confirmed-reversal is LIVE by default. Kill with
+    # QUANTFORG_LIVE_REVERSAL_EXITS=false. Reverse-entry stays separately gated.
+    live_reversal_exits_enabled: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -212,7 +212,8 @@ class TestBrokerConfirmEngine:
 
         assert DEFAULT_PME_CONFIG.require_broker_sl_confirm is True
         assert DEFAULT_PME_CONFIG.use_net_break_even is True
-        assert DEFAULT_PME_CONFIG.live_reversal_exits_enabled is False
+        # PR #180: close-on-confirmed-reversal is LIVE by default (kill-switch env).
+        assert DEFAULT_PME_CONFIG.live_reversal_exits_enabled is True
 
 
 @pytest.mark.unit

@@ -424,6 +424,25 @@ def _arm_durable_buy_cascade(evidence: BrokerExitEvidence) -> None:
             "buy_cascade_broker_anchor_failed",
             position_id=evidence.position_id,
         )
+    try:
+        from app.domain.institutional_trading.ai_scalping.sell_cascade_anchor_store import (  # noqa: E501
+            record_losing_sell_close,
+        )
+
+        record_losing_sell_close(
+            symbol=evidence.symbol,
+            position_id=int(evidence.position_id),
+            entry_price=evidence.entry_price,
+            net_pnl=evidence.net_pnl,
+            closed_at=closed_at,
+            direction=evidence.side,
+            fully_closed=True,
+        )
+    except Exception:
+        logger.exception(
+            "sell_cascade_broker_anchor_failed",
+            position_id=evidence.position_id,
+        )
 
 
 def record_broker_confirmed_close(

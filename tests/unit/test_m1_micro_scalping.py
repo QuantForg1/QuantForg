@@ -47,8 +47,17 @@ def _trend_bars() -> list[Bar]:
     return bars
 
 
-def test_module_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_module_evaluation_defaults_on_submit_stays_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
+    assert m1_micro_enabled() is True
+    assert m1_live_submit_enabled() is False
+
+
+def test_module_can_be_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "false")
     monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
     assert m1_micro_enabled() is False
     assert m1_live_submit_enabled() is False
@@ -210,7 +219,7 @@ def test_spike_regime_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_flag_off_ignores_open_risk_and_does_not_change_the_decision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "false")
     decision = evaluate_m1(
         _trend_bars(),
         bid=Decimal("2310"),
@@ -263,7 +272,7 @@ def test_flag_off_does_not_read_the_market_or_submit(
         consider_m1_complement,
     )
 
-    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "false")
     monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
 
     class _Boom:
@@ -554,7 +563,7 @@ def test_primary_block_still_evaluates_m1(monkeypatch: pytest.MonkeyPatch) -> No
         InstitutionalIteRuntime,
     )
 
-    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "false")
     monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
     cycle = inspect.getsource(InstitutionalIteRuntime._run_cycle)
     assert cycle.count("self._record_m1_complement(") == 4
@@ -768,7 +777,7 @@ def test_conflict_preview_holds_the_primary_and_cannot_send(
     assert plan["submit_primary"] is False
     assert plan["submit_m1"] is False
 
-    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "false")
 
     class _Boom:
         def __getattr__(self, name: str) -> object:
