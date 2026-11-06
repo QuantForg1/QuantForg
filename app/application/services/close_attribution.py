@@ -63,7 +63,12 @@ def classify_exit_comment(comment: str | None) -> str:
 
 
 def strategy_id_from_entry_comment(comment: str | None) -> str | None:
-    """Map broker *entry* comment engine tags only — never invent five-pack IDs."""
+    """Map broker *entry* comment to a strategy identity without inventing SOE IDs.
+
+    ``m1:*`` → ``m1_micro`` (M1 engine identity).
+    ``ite:*`` → ``None`` (five-pack unknown; engine is ``ite``, not a strategy).
+    Never returns fabricated ``ite_primary``.
+    """
     text = str(comment or "").strip()
     if not text:
         return None
@@ -71,7 +76,7 @@ def strategy_id_from_entry_comment(comment: str | None) -> str | None:
     if lower.startswith("m1:") or lower.startswith("m1 "):
         return "m1_micro"
     if lower.startswith("ite:") or lower.startswith("ite "):
-        return "ite_primary"
+        return None
     return None
 
 
@@ -472,6 +477,9 @@ def record_broker_confirmed_close(
         strategy_hint=strategy_hint,
         entry_comment=evidence.entry_comment,
     )
+    # Reject fabricated engine fallbacks — unknown stays unknown.
+    if sid in {"ite_primary", "unknown", "none"}:
+        sid = ""
 
     # Mark ledger first so concurrent duplicate deliveries cannot double-count
     # even if a downstream hook raises mid-flight.
@@ -528,8 +536,57 @@ def record_broker_confirmed_close(
     except Exception:
         logger.exception("close_attribution_telemetry_observe_failed", position_id=pid)
 
-    # Clear fill binding only after strategy attribution succeeds. Premature
-    # clear caused LIVE soe_recorded=False / strategy_id=None races.
+    # Durable outcome BEFORE clearing the fill binding (needs contributors/login).
+    outcome_status = "skipped"
+    try:
+        from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
+            FIVE_PACK_STRATEGY_IDS,
+            get_strategy_attribution_store,
+        )
+        from app.domain.institutional_trading.ai_scalping.strategies.trade_outcome_store import (  # noqa: E501
+            record_trade_outcome,
+        )
+
+        bound = get_strategy_attribution_store().resolve(ticket=pid, position_id=pid)
+        contributors = list(bound.contributors) if bound is not None else []
+        engine = (bound.engine if bound is not None else None) or (
+            "m1" if sid == "m1_micro" else "ite" if evidence.entry_comment else None
+        )
+        if sid and sid in FIVE_PACK_STRATEGY_IDS:
+            confidence = "bound_five_pack"
+        elif sid == "m1_micro":
+            confidence = "bound_m1"
+        elif sid:
+            confidence = "bound_other"
+        else:
+            confidence = "unknown"
+        costs_complete = evidence.commission is not None and evidence.swap is not None
+        outcome_status = record_trade_outcome(
+            position_id=pid,
+            exit_deal_id=int(evidence.exit_deal_id),
+            net_pnl=evidence.net_pnl,
+            strategy_id=sid,
+            engine=engine,
+            contributors=contributors,
+            symbol=evidence.symbol,
+            side=evidence.side,
+            volume=float(evidence.volume) if evidence.volume is not None else None,
+            profit=float(evidence.profit) if evidence.profit is not None else None,
+            commission=(
+                float(evidence.commission) if evidence.commission is not None else None
+            ),
+            swap=float(evidence.swap) if evidence.swap is not None else None,
+            costs_complete=costs_complete,
+            close_reason=evidence.close_reason or evidence.exit_comment,
+            attribution_confidence=confidence,
+            closed_at=evidence.exit_time,
+            broker_login=(bound.broker_login if bound is not None else None),
+        )
+    except Exception:
+        logger.exception("strategy_trade_outcome_hook_failed", position_id=pid)
+        outcome_status = "error"
+
+    # Clear fill binding only after strategy attribution + outcome succeed.
     if sid:
         try:
             from app.domain.institutional_trading.ai_scalping.strategies import (
@@ -555,6 +612,7 @@ def record_broker_confirmed_close(
         source=source,
         soe_recorded=soe_recorded,
         telemetry_recorded=telemetry_recorded,
+        outcome_status=outcome_status,
     )
     return {
         "status": "recorded" if (soe_recorded or telemetry_recorded) else "ledger_only",
@@ -570,6 +628,7 @@ def record_broker_confirmed_close(
         "volume": evidence.volume,
         "soe_recorded": soe_recorded,
         "telemetry_recorded": telemetry_recorded,
+        "outcome_status": outcome_status,
         "source": source,
         "fabricated": False,
     }

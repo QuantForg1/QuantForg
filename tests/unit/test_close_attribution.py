@@ -155,7 +155,8 @@ def attr_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def test_strategy_id_from_entry_comment_engine_tags_only() -> None:
     assert strategy_id_from_entry_comment("m1:mom-sell-3903.523") == "m1_micro"
-    assert strategy_id_from_entry_comment("ite:v1:S:abc") == "ite_primary"
+    # ite:* is engine-only — never invent ite_primary as a strategy_id.
+    assert strategy_id_from_entry_comment("ite:v1:S:abc") is None
     assert strategy_id_from_entry_comment("[sl 3904.463]") is None
     assert strategy_id_from_entry_comment("momentum_scalping") is None
 

@@ -1139,6 +1139,34 @@ def get_strategy_orchestration_monitor_ops(_user: OperatorUser) -> dict[str, Any
     return payload
 
 
+@router.get("/strategy-attribution-performance")
+def get_strategy_attribution_performance_ops(_user: OperatorUser) -> dict[str, Any]:
+    """Read-only post-PR #182 attribution + five-pack performance monitor.
+
+    Observability only — does not mutate Risk, OMS, cascades, or LIVE submit.
+    """
+    from app.domain.institutional_trading.ai_scalping.strategies import (
+        attribution_store as attr_mod,
+        performance_monitor as perf_mon,
+        registry as strat_reg,
+    )
+
+    store = attr_mod.get_strategy_attribution_store()
+    login = store.snapshot().get("live_login")
+    payload = perf_mon.build_post182_performance_monitor(
+        broker_login=int(login) if login else None
+    )
+    payload["five_pack_registry"] = [
+        {"strategy_id": s.strategy_id, "name": s.name} for s in strat_reg.ALL_STRATEGIES
+    ]
+    payload["attribution_bindings"] = store.snapshot()
+    payload["thresholds_changed"] = False
+    payload["mutates_engines"] = False
+    payload["advisory_only"] = True
+    payload["live_submit_unchanged"] = True
+    return payload
+
+
 @router.get("/robot-health-monitor")
 def get_robot_health_monitor_ops(_user: OperatorUser) -> dict[str, Any]:
     """Read-only LIVE robot operational health (strategies + SOE + M1 + data).
