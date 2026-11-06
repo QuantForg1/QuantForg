@@ -134,16 +134,16 @@ Owner policy assertions unchanged in existing trading-core tests.
 
 ---
 
-## 8. Production feature configuration (intended after deploy)
+## 8. Production feature configuration (verified after deploy)
 
 | Item | Value |
 | --- | --- |
-| SELL cascade durable Postgres | **ON** (code path; table auto-created) |
-| BUY cascade | Unchanged **ON** |
-| LIVE execution | Unchanged **ON** |
+| SELL cascade durable Postgres | **ON** — restore + backfill observed in Railway logs |
+| BUY cascade | **ON** — restore trusted |
+| LIVE execution | **ON** — worker RUNNING |
 | LIVE reversal close | Unchanged (PR #180 default) |
-| M1 evaluation | Unchanged |
-| M1 LIVE submit | **OFF** |
+| M1 evaluation | **ON** (`QUANTFORG_M1_MICRO_SCALPING=true`) |
+| M1 LIVE submit | **OFF** (`QUANTFORG_M1_MICRO_LIVE_SUBMIT=false`) |
 | Reverse entry | **OFF** |
 | Risk 20% / halt 48% / lot 0.01 / Q70 / RR floors | **Unchanged** |
 
@@ -151,17 +151,24 @@ Owner policy assertions unchanged in existing trading-core tests.
 
 ## 9. Verified deployment commit
 
-Fill after merge:
-
 | Check | Value |
 | --- | --- |
-| GitHub main | _(post-merge SHA)_ |
-| `/health.commit` | must match |
-| `/ready` | ok |
-| Railway Online | yes |
-| SELL table / restore logs | `sell_cascade_anchors_restored` / `sell_cascade_startup_recover` |
+| GitHub main | `5df0a87235e62f512101e0afb0349463a18e3efb` (Merge PR #182) |
+| PR #182 | https://github.com/QuantForg1/QuantForg/pull/182 — CI green, merged |
+| `/health.commit` | `5df0a87235e62f512101e0afb0349463a18e3efb` (matches main) |
+| `/ready` | `ok` / `routers_registered` |
+| Railway service | Online · deployment after merge |
+| Worker | `worker_state=RUNNING` (ITE `run_forever`) |
+| BUY cascade | `buy_cascade_startup_restore` trusted=True; backfill path active |
+| SELL cascade | `sell_cascade_startup_restore` trusted=True; `sell_cascade_startup_recover` history_ok=True |
+| SELL backfill | `sell_cascade_backfilled` count=9 on account **12479147** (includes PR #181 tickets 687174307…687270993) |
+| M1 LIVE submit | Railway `QUANTFORG_M1_MICRO_LIVE_SUBMIT=false`; logs `m1_complement … submitted=False` |
+| Reverse entry | Code path forced `live_reverse_entry_enabled=False` (unchanged) |
+| LIVE trading | Remains enabled; no emergency-stop / force-first-trade overrides |
 
-Do not claim LIVE enforcement from unit tests alone.
+Production evidence is from Railway logs at deploy ~2026-11-06T11:11Z, not from unit tests alone.
+
+**Note:** After backfill, scoring released the historical SELL anchors via `released_reversal` (bearish M1/M5 structure already present after those older closes). That matches documented release rules. Future broker-confirmed SELL losses will re-arm durable anchors and block unresolved re-entry until reclaim/reversal.
 
 ---
 
