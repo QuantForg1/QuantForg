@@ -1,4 +1,4 @@
-# QUANTFORG PR #188 — LIVE Strategy Performance Dashboard & Monitoring
+﻿# QUANTFORG PR #188 — LIVE Strategy Performance Dashboard & Monitoring
 
 **Date:** 2026-11-06  
 **Instrument:** XAUUSD  
@@ -89,6 +89,7 @@ Route: **`/strategy-performance`** (ops deep-link; not a new primary rail desk)
 | Frontend ESLint | **pass** |
 | Frontend production build | **pass** |
 | Ruff (touched Python) | **pass** |
+| GitHub CI (Type Check, Trading Core, Unit, Frontend Build) | **pass** |
 
 ---
 
