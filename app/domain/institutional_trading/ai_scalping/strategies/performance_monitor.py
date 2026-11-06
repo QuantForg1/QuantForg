@@ -237,18 +237,18 @@ def build_capital_protection_snapshot(
         )
 
         buy_anchors, buy_trusted = buy_store.load_active_anchors()
-        for a in buy_anchors:
-            if account is not None and a.broker_login not in (None, account):
+        for buy_anchor in buy_anchors:
+            if account is not None and buy_anchor.broker_login not in (None, account):
                 continue
             buy_active.append(
                 {
-                    "symbol": a.symbol,
-                    "position_id": a.position_id,
-                    "entry_price": float(a.entry_price),
-                    "net_pnl": float(a.net_pnl),
-                    "status": a.status,
-                    "broker_login": a.broker_login,
-                    "closed_at": a.closed_at.isoformat(),
+                    "symbol": buy_anchor.symbol,
+                    "position_id": buy_anchor.position_id,
+                    "entry_price": float(buy_anchor.entry_price),
+                    "net_pnl": float(buy_anchor.net_pnl),
+                    "status": buy_anchor.status,
+                    "broker_login": buy_anchor.broker_login,
+                    "closed_at": buy_anchor.closed_at.isoformat(),
                 }
             )
     except Exception as exc:  # pragma: no cover - defensive ops path
@@ -259,18 +259,21 @@ def build_capital_protection_snapshot(
         )
 
         sell_anchors, sell_trusted = sell_store.load_active_anchors()
-        for a in sell_anchors:
-            if account is not None and a.broker_login not in (None, account):
+        for sell_anchor in sell_anchors:
+            if account is not None and sell_anchor.broker_login not in (
+                None,
+                account,
+            ):
                 continue
             sell_active.append(
                 {
-                    "symbol": a.symbol,
-                    "position_id": a.position_id,
-                    "entry_price": float(a.entry_price),
-                    "net_pnl": float(a.net_pnl),
-                    "status": a.status,
-                    "broker_login": a.broker_login,
-                    "closed_at": a.closed_at.isoformat(),
+                    "symbol": sell_anchor.symbol,
+                    "position_id": sell_anchor.position_id,
+                    "entry_price": float(sell_anchor.entry_price),
+                    "net_pnl": float(sell_anchor.net_pnl),
+                    "status": sell_anchor.status,
+                    "broker_login": sell_anchor.broker_login,
+                    "closed_at": sell_anchor.closed_at.isoformat(),
                 }
             )
     except Exception as exc:  # pragma: no cover - defensive ops path
