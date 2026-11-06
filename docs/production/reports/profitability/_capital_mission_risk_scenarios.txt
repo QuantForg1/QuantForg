@@ -1,0 +1,12 @@
+equity=33.52 risk=20% per_trade=6.70 daily_halt=48% cap=16.09 recovery_after_halt_pct=92.3 full_risk_hits_to_zero~=5
+equity=33.52 risk=5% per_trade=1.68 daily_halt=10% cap=3.35 recovery_after_halt_pct=11.1 full_risk_hits_to_zero~=19
+equity=33.52 risk=2% per_trade=0.67 daily_halt=5% cap=1.68 recovery_after_halt_pct=5.3 full_risk_hits_to_zero~=50
+equity=33.52 risk=1% per_trade=0.34 daily_halt=3% cap=1.01 recovery_after_halt_pct=3.1 full_risk_hits_to_zero~=98
+equity=50 risk=20% per_trade=10.00 daily_halt=48% cap=24.00 recovery_after_halt_pct=92.3 full_risk_hits_to_zero~=5
+equity=50 risk=5% per_trade=2.50 daily_halt=10% cap=5.00 recovery_after_halt_pct=11.1 full_risk_hits_to_zero~=20
+equity=50 risk=2% per_trade=1.00 daily_halt=5% cap=2.50 recovery_after_halt_pct=5.3 full_risk_hits_to_zero~=50
+equity=50 risk=1% per_trade=0.50 daily_halt=3% cap=1.50 recovery_after_halt_pct=3.1 full_risk_hits_to_zero~=100
+equity=100 risk=20% per_trade=20.00 daily_halt=48% cap=48.00 recovery_after_halt_pct=92.3 full_risk_hits_to_zero~=5
+equity=100 risk=5% per_trade=5.00 daily_halt=10% cap=10.00 recovery_after_halt_pct=11.1 full_risk_hits_to_zero~=20
+equity=100 risk=2% per_trade=2.00 daily_halt=5% cap=5.00 recovery_after_halt_pct=5.3 full_risk_hits_to_zero~=50
+equity=100 risk=1% per_trade=1.00 daily_halt=3% cap=3.00 recovery_after_halt_pct=3.1 full_risk_hits_to_zero~=100
