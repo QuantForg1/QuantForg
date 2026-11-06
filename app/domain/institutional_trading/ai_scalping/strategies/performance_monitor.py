@@ -236,8 +236,8 @@ def build_capital_protection_snapshot(
             buy_cascade_anchor_store as buy_store,
         )
 
-        anchors, buy_trusted = buy_store.load_active_anchors()
-        for a in anchors:
+        buy_anchors, buy_trusted = buy_store.load_active_anchors()
+        for a in buy_anchors:
             if account is not None and a.broker_login not in (None, account):
                 continue
             buy_active.append(
@@ -258,8 +258,8 @@ def build_capital_protection_snapshot(
             sell_cascade_anchor_store as sell_store,
         )
 
-        anchors, sell_trusted = sell_store.load_active_anchors()
-        for a in anchors:
+        sell_anchors, sell_trusted = sell_store.load_active_anchors()
+        for a in sell_anchors:
             if account is not None and a.broker_login not in (None, account):
                 continue
             sell_active.append(
