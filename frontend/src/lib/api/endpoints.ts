@@ -1081,6 +1081,12 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-diagnostics?limit=${limit}`,
     ),
+  strategyAttributionPerformance: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/strategy-attribution-performance",
+    ),
+  robotHealthMonitor: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/robot-health-monitor"),
   liveExecutionExplain: (limit = 50) =>
     apiFetch<Record<string, unknown>>(
       `/ite/ops/live-execution-explain?limit=${limit}`,
