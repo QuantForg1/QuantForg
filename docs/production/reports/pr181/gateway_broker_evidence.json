@@ -1,0 +1,3239 @@
+{
+  "probed_at": "2026-11-06T10:03:44.313298Z",
+  "pr180_cutoff_utc": "2026-11-06T09:51:00Z",
+  "account": {
+    "login_last4": "9147",
+    "equity": "21.46",
+    "balance": "21.46",
+    "server": "Weltrade-Real",
+    "trade_allowed": true
+  },
+  "open_positions": {
+    "count": 0,
+    "positions": []
+  },
+  "deals_1d": {
+    "positions_reconstructed": 50,
+    "post_pr180_count": 8,
+    "pre_pr180_count": 42,
+    "post_pr180_net_sum": -25.22,
+    "post_pr180_wins": 0,
+    "post_pr180_losses": 8,
+    "post_pr180_flat": 0,
+    "post_pr180_win_rate": 0.0,
+    "post_pr180_avg_win": null,
+    "post_pr180_avg_loss": -3.1525,
+    "post_pr180_profit_factor": 0.0,
+    "post_pr180_expectancy": -3.1525,
+    "post_pr180_closes": [
+      {
+        "position_id": 687270993,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4074.417",
+        "net_pnl": -2.32,
+        "gross_profit": -2.32,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:54:24+00:00",
+        "last_deal_at": "2026-11-06T10:56:53+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4074.409]",
+          "ite:v1:S:4ec210360dcb"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687268349,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.927",
+        "net_pnl": -2.9,
+        "gross_profit": -2.9,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:52:20+00:00",
+        "last_deal_at": "2026-11-06T10:53:50+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.719]",
+          "ite:v1:S:f5519cb1b484"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687259338,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.737",
+        "net_pnl": -1.76,
+        "gross_profit": -1.76,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:45:54+00:00",
+        "last_deal_at": "2026-11-06T10:46:55+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.559]",
+          "ite:v1:H:bdb11b5d890c"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687225893,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.827",
+        "net_pnl": -5.38,
+        "gross_profit": -5.38,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:23:44+00:00",
+        "last_deal_at": "2026-11-06T10:44:14+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.827]",
+          "ite:v1:H:0b9f406fc3b0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687184354,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4059.007",
+        "net_pnl": -3.62,
+        "gross_profit": -3.62,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:57:25+00:00",
+        "last_deal_at": "2026-11-06T10:15:21+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4058.628]",
+          "ite:v1:H:33ee8b073225"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687180731,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4056.937",
+        "net_pnl": -2.2800000000000002,
+        "gross_profit": -2.2800000000000002,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:55:14+00:00",
+        "last_deal_at": "2026-11-06T09:55:26+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4056.879]",
+          "ite:v1:H:73c7779d3d4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687177072,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4054.767",
+        "net_pnl": -4.28,
+        "gross_profit": -4.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:53:05+00:00",
+        "last_deal_at": "2026-11-06T09:54:35+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4054.717]",
+          "ite:v1:H:0e9530ae37a5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687174307,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4052.557",
+        "net_pnl": -2.68,
+        "gross_profit": -2.68,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:51:29+00:00",
+        "last_deal_at": "2026-11-06T09:52:33+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4052.519]",
+          "ite:v1:S:25d2d3d4a0ef"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      }
+    ],
+    "recent_all": [
+      {
+        "position_id": 687270993,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4074.417",
+        "net_pnl": -2.32,
+        "gross_profit": -2.32,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:54:24+00:00",
+        "last_deal_at": "2026-11-06T10:56:53+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4074.409]",
+          "ite:v1:S:4ec210360dcb"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687268349,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.927",
+        "net_pnl": -2.9,
+        "gross_profit": -2.9,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:52:20+00:00",
+        "last_deal_at": "2026-11-06T10:53:50+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.719]",
+          "ite:v1:S:f5519cb1b484"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687259338,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.737",
+        "net_pnl": -1.76,
+        "gross_profit": -1.76,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:45:54+00:00",
+        "last_deal_at": "2026-11-06T10:46:55+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.559]",
+          "ite:v1:H:bdb11b5d890c"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687225893,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.827",
+        "net_pnl": -5.38,
+        "gross_profit": -5.38,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:23:44+00:00",
+        "last_deal_at": "2026-11-06T10:44:14+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.827]",
+          "ite:v1:H:0b9f406fc3b0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687184354,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4059.007",
+        "net_pnl": -3.62,
+        "gross_profit": -3.62,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:57:25+00:00",
+        "last_deal_at": "2026-11-06T10:15:21+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4058.628]",
+          "ite:v1:H:33ee8b073225"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687180731,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4056.937",
+        "net_pnl": -2.2800000000000002,
+        "gross_profit": -2.2800000000000002,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:55:14+00:00",
+        "last_deal_at": "2026-11-06T09:55:26+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4056.879]",
+          "ite:v1:H:73c7779d3d4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687177072,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4054.767",
+        "net_pnl": -4.28,
+        "gross_profit": -4.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:53:05+00:00",
+        "last_deal_at": "2026-11-06T09:54:35+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4054.717]",
+          "ite:v1:H:0e9530ae37a5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687174307,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4052.557",
+        "net_pnl": -2.68,
+        "gross_profit": -2.68,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:51:29+00:00",
+        "last_deal_at": "2026-11-06T09:52:33+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4052.519]",
+          "ite:v1:S:25d2d3d4a0ef"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687142129,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4047.947",
+        "net_pnl": -5.35,
+        "gross_profit": -5.35,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:31:37+00:00",
+        "last_deal_at": "2026-11-06T09:50:26+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4047.937]",
+          "ite:v1:S:f1c031bf14bd"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687140123,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4043.483",
+        "net_pnl": 0.44,
+        "gross_profit": 0.44,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:30:18+00:00",
+        "last_deal_at": "2026-11-06T09:31:01+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4043.483]",
+          "ite:v1:S:d227ea740575"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687072671,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 4.64,
+        "gross_profit": 4.64,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:38:33+00:00",
+        "last_deal_at": "2026-11-06T09:29:30+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:H:a2d67bdd8def"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687069704,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4049.967",
+        "net_pnl": -2.63,
+        "gross_profit": -2.63,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:36:21+00:00",
+        "last_deal_at": "2026-11-06T08:37:53+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4049.956]",
+          "ite:v1:H:66128f35b346"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687064392,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4048.837",
+        "net_pnl": -3.2,
+        "gross_profit": -3.2,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:32:18+00:00",
+        "last_deal_at": "2026-11-06T08:35:49+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4048.794]",
+          "ite:v1:S:1541d187d403"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687055146,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 4.48,
+        "gross_profit": 4.48,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:25:47+00:00",
+        "last_deal_at": "2026-11-06T08:31:11+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:H:3829c435bd4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687049121,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4050.097",
+        "net_pnl": -1.96,
+        "gross_profit": -1.96,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:21:27+00:00",
+        "last_deal_at": "2026-11-06T08:24:46+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4050.083]",
+          "ite:v1:H:e2b4e3a03bf3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687040103,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4046.717",
+        "net_pnl": -3.12,
+        "gross_profit": -3.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:14:43+00:00",
+        "last_deal_at": "2026-11-06T08:20:51+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4046.705]",
+          "ite:v1:S:3d1dc85b4ed0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687025161,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 3.45,
+        "gross_profit": 3.45,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:04:19+00:00",
+        "last_deal_at": "2026-11-06T08:14:02+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:S:508b0dd79851"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687015022,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.617",
+        "net_pnl": -5.25,
+        "gross_profit": -5.25,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:58:21+00:00",
+        "last_deal_at": "2026-11-06T08:03:10+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:18eada7a7b0e"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687013090,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.74,
+        "gross_profit": 2.74,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:57:20+00:00",
+        "last_deal_at": "2026-11-06T07:57:39+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:166462878a6f"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686998411,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 3.17,
+        "gross_profit": 3.17,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:47:20+00:00",
+        "last_deal_at": "2026-11-06T07:56:25+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:H:0bbede5c4e73"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686993547,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.887",
+        "net_pnl": -4.6,
+        "gross_profit": -4.6,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:44:05+00:00",
+        "last_deal_at": "2026-11-06T07:45:54+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.766]",
+          "ite:v1:S:82ed45bc9fe7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686988674,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 3.11,
+        "gross_profit": 3.11,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:40:59+00:00",
+        "last_deal_at": "2026-11-06T07:42:32+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:91d3892903c3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686986595,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.687",
+        "net_pnl": -4.37,
+        "gross_profit": -4.37,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:39:34+00:00",
+        "last_deal_at": "2026-11-06T07:40:05+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.646]",
+          "ite:v1:S:6be300c14ae3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686984678,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 2.22,
+        "gross_profit": 2.22,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:38:12+00:00",
+        "last_deal_at": "2026-11-06T07:38:35+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:15e145e9d2ee"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686983462,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 2.18,
+        "gross_profit": 2.18,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:37:13+00:00",
+        "last_deal_at": "2026-11-06T07:37:29+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:69e383e7dc17"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686977238,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.997",
+        "net_pnl": -5.29,
+        "gross_profit": -5.29,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:32:56+00:00",
+        "last_deal_at": "2026-11-06T07:36:36+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:1e56bb7abb57"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686972930,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.537",
+        "net_pnl": -5.12,
+        "gross_profit": -5.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:31:04+00:00",
+        "last_deal_at": "2026-11-06T07:31:23+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:593fda0d3f0e"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686960281,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4037.323",
+        "net_pnl": 1.6099999999999999,
+        "gross_profit": 1.6099999999999999,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:23:05+00:00",
+        "last_deal_at": "2026-11-06T07:30:00+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4037.323]",
+          "ite:v1:S:3a1779d56ee1"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686956302,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4037.323",
+        "net_pnl": 3.44,
+        "gross_profit": 3.44,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:20:51+00:00",
+        "last_deal_at": "2026-11-06T07:22:22+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4037.323]",
+          "ite:v1:S:9601468fa3d0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686951799,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 1.15,
+        "gross_profit": 1.15,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:17:29+00:00",
+        "last_deal_at": "2026-11-06T07:20:09+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:7086341763a0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686934957,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.083",
+        "net_pnl": 5.28,
+        "gross_profit": 5.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:06:00+00:00",
+        "last_deal_at": "2026-11-06T07:15:27+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.083]",
+          "ite:v1:S:50c0e2a4e346"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686918609,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4048.447",
+        "net_pnl": -2.74,
+        "gross_profit": -2.74,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:51:57+00:00",
+        "last_deal_at": "2026-11-06T07:04:59+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4048.037]",
+          "ite:v1:H:f04f8d9b4642"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686911576,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.997",
+        "net_pnl": -2.15,
+        "gross_profit": -2.15,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:45:57+00:00",
+        "last_deal_at": "2026-11-06T06:50:42+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.942]",
+          "ite:v1:H:c2222bca44c7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686902888,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4041.753",
+        "net_pnl": 4.34,
+        "gross_profit": 4.34,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:38:15+00:00",
+        "last_deal_at": "2026-11-06T06:44:38+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4041.753]",
+          "ite:v1:H:e4115891fe79"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686898220,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4047.387",
+        "net_pnl": -1.8599999999999999,
+        "gross_profit": -1.8599999999999999,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:34:03+00:00",
+        "last_deal_at": "2026-11-06T06:36:14+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4047.189]",
+          "ite:v1:H:54c7577cf792"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686896022,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.967",
+        "net_pnl": -2.12,
+        "gross_profit": -2.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:33:04+00:00",
+        "last_deal_at": "2026-11-06T06:33:26+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.964]",
+          "ite:v1:H:fa466c82135b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686890748,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.807",
+        "net_pnl": -1.99,
+        "gross_profit": -1.99,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:28:09+00:00",
+        "last_deal_at": "2026-11-06T06:32:02+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4042.641]",
+          "ite:v1:S:9af02dc1ff54"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686878739,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.39,
+        "gross_profit": 2.39,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:17:26+00:00",
+        "last_deal_at": "2026-11-06T06:27:28+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:6c93246703d5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686872229,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4043.117",
+        "net_pnl": -2.77,
+        "gross_profit": -2.77,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:11:37+00:00",
+        "last_deal_at": "2026-11-06T06:16:40+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4042.922]",
+          "ite:v1:S:ea91b06b61e7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686842193,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.87,
+        "gross_profit": 2.87,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T05:45:48+00:00",
+        "last_deal_at": "2026-11-06T06:04:06+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:7cb79e8c9470"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      }
+    ]
+  },
+  "deals_2d": {
+    "positions_reconstructed": 63,
+    "post_pr180_count": 8,
+    "pre_pr180_count": 55,
+    "post_pr180_net_sum": -25.22,
+    "post_pr180_wins": 0,
+    "post_pr180_losses": 8,
+    "post_pr180_flat": 0,
+    "post_pr180_win_rate": 0.0,
+    "post_pr180_avg_win": null,
+    "post_pr180_avg_loss": -3.1525,
+    "post_pr180_profit_factor": 0.0,
+    "post_pr180_expectancy": -3.1525,
+    "post_pr180_closes": [
+      {
+        "position_id": 687270993,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4074.417",
+        "net_pnl": -2.32,
+        "gross_profit": -2.32,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:54:24+00:00",
+        "last_deal_at": "2026-11-06T10:56:53+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4074.409]",
+          "ite:v1:S:4ec210360dcb"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687268349,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.927",
+        "net_pnl": -2.9,
+        "gross_profit": -2.9,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:52:20+00:00",
+        "last_deal_at": "2026-11-06T10:53:50+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.719]",
+          "ite:v1:S:f5519cb1b484"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687259338,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.737",
+        "net_pnl": -1.76,
+        "gross_profit": -1.76,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:45:54+00:00",
+        "last_deal_at": "2026-11-06T10:46:55+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.559]",
+          "ite:v1:H:bdb11b5d890c"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687225893,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.827",
+        "net_pnl": -5.38,
+        "gross_profit": -5.38,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:23:44+00:00",
+        "last_deal_at": "2026-11-06T10:44:14+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.827]",
+          "ite:v1:H:0b9f406fc3b0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687184354,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4059.007",
+        "net_pnl": -3.62,
+        "gross_profit": -3.62,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:57:25+00:00",
+        "last_deal_at": "2026-11-06T10:15:21+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4058.628]",
+          "ite:v1:H:33ee8b073225"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687180731,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4056.937",
+        "net_pnl": -2.2800000000000002,
+        "gross_profit": -2.2800000000000002,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:55:14+00:00",
+        "last_deal_at": "2026-11-06T09:55:26+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4056.879]",
+          "ite:v1:H:73c7779d3d4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687177072,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4054.767",
+        "net_pnl": -4.28,
+        "gross_profit": -4.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:53:05+00:00",
+        "last_deal_at": "2026-11-06T09:54:35+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4054.717]",
+          "ite:v1:H:0e9530ae37a5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687174307,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4052.557",
+        "net_pnl": -2.68,
+        "gross_profit": -2.68,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:51:29+00:00",
+        "last_deal_at": "2026-11-06T09:52:33+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4052.519]",
+          "ite:v1:S:25d2d3d4a0ef"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      }
+    ],
+    "recent_all": [
+      {
+        "position_id": 687270993,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4074.417",
+        "net_pnl": -2.32,
+        "gross_profit": -2.32,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:54:24+00:00",
+        "last_deal_at": "2026-11-06T10:56:53+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4074.409]",
+          "ite:v1:S:4ec210360dcb"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687268349,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.927",
+        "net_pnl": -2.9,
+        "gross_profit": -2.9,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:52:20+00:00",
+        "last_deal_at": "2026-11-06T10:53:50+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.719]",
+          "ite:v1:S:f5519cb1b484"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687259338,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.737",
+        "net_pnl": -1.76,
+        "gross_profit": -1.76,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:45:54+00:00",
+        "last_deal_at": "2026-11-06T10:46:55+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.559]",
+          "ite:v1:H:bdb11b5d890c"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687225893,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.827",
+        "net_pnl": -5.38,
+        "gross_profit": -5.38,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:23:44+00:00",
+        "last_deal_at": "2026-11-06T10:44:14+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.827]",
+          "ite:v1:H:0b9f406fc3b0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687184354,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4059.007",
+        "net_pnl": -3.62,
+        "gross_profit": -3.62,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:57:25+00:00",
+        "last_deal_at": "2026-11-06T10:15:21+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4058.628]",
+          "ite:v1:H:33ee8b073225"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687180731,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4056.937",
+        "net_pnl": -2.2800000000000002,
+        "gross_profit": -2.2800000000000002,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:55:14+00:00",
+        "last_deal_at": "2026-11-06T09:55:26+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4056.879]",
+          "ite:v1:H:73c7779d3d4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687177072,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4054.767",
+        "net_pnl": -4.28,
+        "gross_profit": -4.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:53:05+00:00",
+        "last_deal_at": "2026-11-06T09:54:35+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4054.717]",
+          "ite:v1:H:0e9530ae37a5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687174307,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4052.557",
+        "net_pnl": -2.68,
+        "gross_profit": -2.68,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:51:29+00:00",
+        "last_deal_at": "2026-11-06T09:52:33+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4052.519]",
+          "ite:v1:S:25d2d3d4a0ef"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687142129,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4047.947",
+        "net_pnl": -5.35,
+        "gross_profit": -5.35,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:31:37+00:00",
+        "last_deal_at": "2026-11-06T09:50:26+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4047.937]",
+          "ite:v1:S:f1c031bf14bd"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687140123,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4043.483",
+        "net_pnl": 0.44,
+        "gross_profit": 0.44,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:30:18+00:00",
+        "last_deal_at": "2026-11-06T09:31:01+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4043.483]",
+          "ite:v1:S:d227ea740575"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687072671,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 4.64,
+        "gross_profit": 4.64,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:38:33+00:00",
+        "last_deal_at": "2026-11-06T09:29:30+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:H:a2d67bdd8def"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687069704,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4049.967",
+        "net_pnl": -2.63,
+        "gross_profit": -2.63,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:36:21+00:00",
+        "last_deal_at": "2026-11-06T08:37:53+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4049.956]",
+          "ite:v1:H:66128f35b346"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687064392,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4048.837",
+        "net_pnl": -3.2,
+        "gross_profit": -3.2,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:32:18+00:00",
+        "last_deal_at": "2026-11-06T08:35:49+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4048.794]",
+          "ite:v1:S:1541d187d403"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687055146,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 4.48,
+        "gross_profit": 4.48,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:25:47+00:00",
+        "last_deal_at": "2026-11-06T08:31:11+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:H:3829c435bd4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687049121,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4050.097",
+        "net_pnl": -1.96,
+        "gross_profit": -1.96,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:21:27+00:00",
+        "last_deal_at": "2026-11-06T08:24:46+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4050.083]",
+          "ite:v1:H:e2b4e3a03bf3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687040103,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4046.717",
+        "net_pnl": -3.12,
+        "gross_profit": -3.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:14:43+00:00",
+        "last_deal_at": "2026-11-06T08:20:51+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4046.705]",
+          "ite:v1:S:3d1dc85b4ed0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687025161,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 3.45,
+        "gross_profit": 3.45,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:04:19+00:00",
+        "last_deal_at": "2026-11-06T08:14:02+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:S:508b0dd79851"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687015022,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.617",
+        "net_pnl": -5.25,
+        "gross_profit": -5.25,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:58:21+00:00",
+        "last_deal_at": "2026-11-06T08:03:10+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:18eada7a7b0e"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687013090,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.74,
+        "gross_profit": 2.74,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:57:20+00:00",
+        "last_deal_at": "2026-11-06T07:57:39+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:166462878a6f"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686998411,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 3.17,
+        "gross_profit": 3.17,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:47:20+00:00",
+        "last_deal_at": "2026-11-06T07:56:25+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:H:0bbede5c4e73"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686993547,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.887",
+        "net_pnl": -4.6,
+        "gross_profit": -4.6,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:44:05+00:00",
+        "last_deal_at": "2026-11-06T07:45:54+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.766]",
+          "ite:v1:S:82ed45bc9fe7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686988674,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 3.11,
+        "gross_profit": 3.11,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:40:59+00:00",
+        "last_deal_at": "2026-11-06T07:42:32+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:91d3892903c3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686986595,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.687",
+        "net_pnl": -4.37,
+        "gross_profit": -4.37,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:39:34+00:00",
+        "last_deal_at": "2026-11-06T07:40:05+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.646]",
+          "ite:v1:S:6be300c14ae3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686984678,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 2.22,
+        "gross_profit": 2.22,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:38:12+00:00",
+        "last_deal_at": "2026-11-06T07:38:35+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:15e145e9d2ee"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686983462,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 2.18,
+        "gross_profit": 2.18,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:37:13+00:00",
+        "last_deal_at": "2026-11-06T07:37:29+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:69e383e7dc17"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686977238,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.997",
+        "net_pnl": -5.29,
+        "gross_profit": -5.29,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:32:56+00:00",
+        "last_deal_at": "2026-11-06T07:36:36+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:1e56bb7abb57"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686972930,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.537",
+        "net_pnl": -5.12,
+        "gross_profit": -5.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:31:04+00:00",
+        "last_deal_at": "2026-11-06T07:31:23+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:593fda0d3f0e"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686960281,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4037.323",
+        "net_pnl": 1.6099999999999999,
+        "gross_profit": 1.6099999999999999,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:23:05+00:00",
+        "last_deal_at": "2026-11-06T07:30:00+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4037.323]",
+          "ite:v1:S:3a1779d56ee1"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686956302,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4037.323",
+        "net_pnl": 3.44,
+        "gross_profit": 3.44,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:20:51+00:00",
+        "last_deal_at": "2026-11-06T07:22:22+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4037.323]",
+          "ite:v1:S:9601468fa3d0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686951799,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 1.15,
+        "gross_profit": 1.15,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:17:29+00:00",
+        "last_deal_at": "2026-11-06T07:20:09+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:7086341763a0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686934957,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.083",
+        "net_pnl": 5.28,
+        "gross_profit": 5.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:06:00+00:00",
+        "last_deal_at": "2026-11-06T07:15:27+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.083]",
+          "ite:v1:S:50c0e2a4e346"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686918609,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4048.447",
+        "net_pnl": -2.74,
+        "gross_profit": -2.74,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:51:57+00:00",
+        "last_deal_at": "2026-11-06T07:04:59+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4048.037]",
+          "ite:v1:H:f04f8d9b4642"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686911576,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.997",
+        "net_pnl": -2.15,
+        "gross_profit": -2.15,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:45:57+00:00",
+        "last_deal_at": "2026-11-06T06:50:42+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.942]",
+          "ite:v1:H:c2222bca44c7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686902888,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4041.753",
+        "net_pnl": 4.34,
+        "gross_profit": 4.34,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:38:15+00:00",
+        "last_deal_at": "2026-11-06T06:44:38+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4041.753]",
+          "ite:v1:H:e4115891fe79"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686898220,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4047.387",
+        "net_pnl": -1.8599999999999999,
+        "gross_profit": -1.8599999999999999,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:34:03+00:00",
+        "last_deal_at": "2026-11-06T06:36:14+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4047.189]",
+          "ite:v1:H:54c7577cf792"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686896022,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.967",
+        "net_pnl": -2.12,
+        "gross_profit": -2.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:33:04+00:00",
+        "last_deal_at": "2026-11-06T06:33:26+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.964]",
+          "ite:v1:H:fa466c82135b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686890748,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.807",
+        "net_pnl": -1.99,
+        "gross_profit": -1.99,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:28:09+00:00",
+        "last_deal_at": "2026-11-06T06:32:02+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4042.641]",
+          "ite:v1:S:9af02dc1ff54"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686878739,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.39,
+        "gross_profit": 2.39,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:17:26+00:00",
+        "last_deal_at": "2026-11-06T06:27:28+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:6c93246703d5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686872229,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4043.117",
+        "net_pnl": -2.77,
+        "gross_profit": -2.77,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:11:37+00:00",
+        "last_deal_at": "2026-11-06T06:16:40+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4042.922]",
+          "ite:v1:S:ea91b06b61e7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686842193,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.87,
+        "gross_profit": 2.87,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T05:45:48+00:00",
+        "last_deal_at": "2026-11-06T06:04:06+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:7cb79e8c9470"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      }
+    ]
+  },
+  "deals_7d": {
+    "positions_reconstructed": 63,
+    "post_pr180_count": 8,
+    "pre_pr180_count": 55,
+    "post_pr180_net_sum": -25.22,
+    "post_pr180_wins": 0,
+    "post_pr180_losses": 8,
+    "post_pr180_flat": 0,
+    "post_pr180_win_rate": 0.0,
+    "post_pr180_avg_win": null,
+    "post_pr180_avg_loss": -3.1525,
+    "post_pr180_profit_factor": 0.0,
+    "post_pr180_expectancy": -3.1525,
+    "post_pr180_closes": [
+      {
+        "position_id": 687270993,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4074.417",
+        "net_pnl": -2.32,
+        "gross_profit": -2.32,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:54:24+00:00",
+        "last_deal_at": "2026-11-06T10:56:53+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4074.409]",
+          "ite:v1:S:4ec210360dcb"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687268349,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.927",
+        "net_pnl": -2.9,
+        "gross_profit": -2.9,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:52:20+00:00",
+        "last_deal_at": "2026-11-06T10:53:50+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.719]",
+          "ite:v1:S:f5519cb1b484"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687259338,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.737",
+        "net_pnl": -1.76,
+        "gross_profit": -1.76,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:45:54+00:00",
+        "last_deal_at": "2026-11-06T10:46:55+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.559]",
+          "ite:v1:H:bdb11b5d890c"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687225893,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.827",
+        "net_pnl": -5.38,
+        "gross_profit": -5.38,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:23:44+00:00",
+        "last_deal_at": "2026-11-06T10:44:14+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.827]",
+          "ite:v1:H:0b9f406fc3b0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687184354,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4059.007",
+        "net_pnl": -3.62,
+        "gross_profit": -3.62,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:57:25+00:00",
+        "last_deal_at": "2026-11-06T10:15:21+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4058.628]",
+          "ite:v1:H:33ee8b073225"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687180731,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4056.937",
+        "net_pnl": -2.2800000000000002,
+        "gross_profit": -2.2800000000000002,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:55:14+00:00",
+        "last_deal_at": "2026-11-06T09:55:26+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4056.879]",
+          "ite:v1:H:73c7779d3d4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687177072,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4054.767",
+        "net_pnl": -4.28,
+        "gross_profit": -4.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:53:05+00:00",
+        "last_deal_at": "2026-11-06T09:54:35+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4054.717]",
+          "ite:v1:H:0e9530ae37a5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687174307,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4052.557",
+        "net_pnl": -2.68,
+        "gross_profit": -2.68,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:51:29+00:00",
+        "last_deal_at": "2026-11-06T09:52:33+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4052.519]",
+          "ite:v1:S:25d2d3d4a0ef"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      }
+    ],
+    "recent_all": [
+      {
+        "position_id": 687270993,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4074.417",
+        "net_pnl": -2.32,
+        "gross_profit": -2.32,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:54:24+00:00",
+        "last_deal_at": "2026-11-06T10:56:53+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4074.409]",
+          "ite:v1:S:4ec210360dcb"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687268349,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.927",
+        "net_pnl": -2.9,
+        "gross_profit": -2.9,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:52:20+00:00",
+        "last_deal_at": "2026-11-06T10:53:50+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.719]",
+          "ite:v1:S:f5519cb1b484"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687259338,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.737",
+        "net_pnl": -1.76,
+        "gross_profit": -1.76,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:45:54+00:00",
+        "last_deal_at": "2026-11-06T10:46:55+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.559]",
+          "ite:v1:H:bdb11b5d890c"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687225893,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4072.827",
+        "net_pnl": -5.38,
+        "gross_profit": -5.38,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T10:23:44+00:00",
+        "last_deal_at": "2026-11-06T10:44:14+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4072.827]",
+          "ite:v1:H:0b9f406fc3b0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687184354,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4059.007",
+        "net_pnl": -3.62,
+        "gross_profit": -3.62,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:57:25+00:00",
+        "last_deal_at": "2026-11-06T10:15:21+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4058.628]",
+          "ite:v1:H:33ee8b073225"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687180731,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4056.937",
+        "net_pnl": -2.2800000000000002,
+        "gross_profit": -2.2800000000000002,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:55:14+00:00",
+        "last_deal_at": "2026-11-06T09:55:26+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4056.879]",
+          "ite:v1:H:73c7779d3d4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687177072,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4054.767",
+        "net_pnl": -4.28,
+        "gross_profit": -4.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:53:05+00:00",
+        "last_deal_at": "2026-11-06T09:54:35+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4054.717]",
+          "ite:v1:H:0e9530ae37a5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687174307,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4052.557",
+        "net_pnl": -2.68,
+        "gross_profit": -2.68,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:51:29+00:00",
+        "last_deal_at": "2026-11-06T09:52:33+00:00",
+        "post_pr180": true,
+        "comments": [
+          "[sl 4052.519]",
+          "ite:v1:S:25d2d3d4a0ef"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687142129,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4047.947",
+        "net_pnl": -5.35,
+        "gross_profit": -5.35,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:31:37+00:00",
+        "last_deal_at": "2026-11-06T09:50:26+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4047.937]",
+          "ite:v1:S:f1c031bf14bd"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687140123,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4043.483",
+        "net_pnl": 0.44,
+        "gross_profit": 0.44,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T09:30:18+00:00",
+        "last_deal_at": "2026-11-06T09:31:01+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4043.483]",
+          "ite:v1:S:d227ea740575"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687072671,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 4.64,
+        "gross_profit": 4.64,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:38:33+00:00",
+        "last_deal_at": "2026-11-06T09:29:30+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:H:a2d67bdd8def"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687069704,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4049.967",
+        "net_pnl": -2.63,
+        "gross_profit": -2.63,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:36:21+00:00",
+        "last_deal_at": "2026-11-06T08:37:53+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4049.956]",
+          "ite:v1:H:66128f35b346"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687064392,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4048.837",
+        "net_pnl": -3.2,
+        "gross_profit": -3.2,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:32:18+00:00",
+        "last_deal_at": "2026-11-06T08:35:49+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4048.794]",
+          "ite:v1:S:1541d187d403"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687055146,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 4.48,
+        "gross_profit": 4.48,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:25:47+00:00",
+        "last_deal_at": "2026-11-06T08:31:11+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:H:3829c435bd4b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687049121,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4050.097",
+        "net_pnl": -1.96,
+        "gross_profit": -1.96,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:21:27+00:00",
+        "last_deal_at": "2026-11-06T08:24:46+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4050.083]",
+          "ite:v1:H:e2b4e3a03bf3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687040103,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4046.717",
+        "net_pnl": -3.12,
+        "gross_profit": -3.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:14:43+00:00",
+        "last_deal_at": "2026-11-06T08:20:51+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4046.705]",
+          "ite:v1:S:3d1dc85b4ed0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687025161,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.033",
+        "net_pnl": 3.45,
+        "gross_profit": 3.45,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T08:04:19+00:00",
+        "last_deal_at": "2026-11-06T08:14:02+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.033]",
+          "ite:v1:S:508b0dd79851"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687015022,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.617",
+        "net_pnl": -5.25,
+        "gross_profit": -5.25,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:58:21+00:00",
+        "last_deal_at": "2026-11-06T08:03:10+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:18eada7a7b0e"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 687013090,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.74,
+        "gross_profit": 2.74,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:57:20+00:00",
+        "last_deal_at": "2026-11-06T07:57:39+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:166462878a6f"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686998411,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 3.17,
+        "gross_profit": 3.17,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:47:20+00:00",
+        "last_deal_at": "2026-11-06T07:56:25+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:H:0bbede5c4e73"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686993547,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.887",
+        "net_pnl": -4.6,
+        "gross_profit": -4.6,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:44:05+00:00",
+        "last_deal_at": "2026-11-06T07:45:54+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.766]",
+          "ite:v1:S:82ed45bc9fe7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686988674,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 3.11,
+        "gross_profit": 3.11,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:40:59+00:00",
+        "last_deal_at": "2026-11-06T07:42:32+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:91d3892903c3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686986595,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.687",
+        "net_pnl": -4.37,
+        "gross_profit": -4.37,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:39:34+00:00",
+        "last_deal_at": "2026-11-06T07:40:05+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.646]",
+          "ite:v1:S:6be300c14ae3"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686984678,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 2.22,
+        "gross_profit": 2.22,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:38:12+00:00",
+        "last_deal_at": "2026-11-06T07:38:35+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:15e145e9d2ee"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686983462,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 2.18,
+        "gross_profit": 2.18,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:37:13+00:00",
+        "last_deal_at": "2026-11-06T07:37:29+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:69e383e7dc17"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686977238,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.997",
+        "net_pnl": -5.29,
+        "gross_profit": -5.29,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:32:56+00:00",
+        "last_deal_at": "2026-11-06T07:36:36+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:1e56bb7abb57"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686972930,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.537",
+        "net_pnl": -5.12,
+        "gross_profit": -5.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:31:04+00:00",
+        "last_deal_at": "2026-11-06T07:31:23+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4044.537]",
+          "ite:v1:S:593fda0d3f0e"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686960281,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4037.323",
+        "net_pnl": 1.6099999999999999,
+        "gross_profit": 1.6099999999999999,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:23:05+00:00",
+        "last_deal_at": "2026-11-06T07:30:00+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4037.323]",
+          "ite:v1:S:3a1779d56ee1"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686956302,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4037.323",
+        "net_pnl": 3.44,
+        "gross_profit": 3.44,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:20:51+00:00",
+        "last_deal_at": "2026-11-06T07:22:22+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4037.323]",
+          "ite:v1:S:9601468fa3d0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686951799,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.883",
+        "net_pnl": 1.15,
+        "gross_profit": 1.15,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:17:29+00:00",
+        "last_deal_at": "2026-11-06T07:20:09+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4042.883]",
+          "ite:v1:S:7086341763a0"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686934957,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4044.083",
+        "net_pnl": 5.28,
+        "gross_profit": 5.28,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T07:06:00+00:00",
+        "last_deal_at": "2026-11-06T07:15:27+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4044.083]",
+          "ite:v1:S:50c0e2a4e346"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686918609,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4048.447",
+        "net_pnl": -2.74,
+        "gross_profit": -2.74,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:51:57+00:00",
+        "last_deal_at": "2026-11-06T07:04:59+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4048.037]",
+          "ite:v1:H:f04f8d9b4642"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686911576,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.997",
+        "net_pnl": -2.15,
+        "gross_profit": -2.15,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:45:57+00:00",
+        "last_deal_at": "2026-11-06T06:50:42+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.942]",
+          "ite:v1:H:c2222bca44c7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686902888,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4041.753",
+        "net_pnl": 4.34,
+        "gross_profit": 4.34,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:38:15+00:00",
+        "last_deal_at": "2026-11-06T06:44:38+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4041.753]",
+          "ite:v1:H:e4115891fe79"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686898220,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4047.387",
+        "net_pnl": -1.8599999999999999,
+        "gross_profit": -1.8599999999999999,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:34:03+00:00",
+        "last_deal_at": "2026-11-06T06:36:14+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4047.189]",
+          "ite:v1:H:54c7577cf792"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686896022,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4045.967",
+        "net_pnl": -2.12,
+        "gross_profit": -2.12,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:33:04+00:00",
+        "last_deal_at": "2026-11-06T06:33:26+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4045.964]",
+          "ite:v1:H:fa466c82135b"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686890748,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4042.807",
+        "net_pnl": -1.99,
+        "gross_profit": -1.99,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:28:09+00:00",
+        "last_deal_at": "2026-11-06T06:32:02+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4042.641]",
+          "ite:v1:S:9af02dc1ff54"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686878739,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.39,
+        "gross_profit": 2.39,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:17:26+00:00",
+        "last_deal_at": "2026-11-06T06:27:28+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:6c93246703d5"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686872229,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4043.117",
+        "net_pnl": -2.77,
+        "gross_profit": -2.77,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T06:11:37+00:00",
+        "last_deal_at": "2026-11-06T06:16:40+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[sl 4042.922]",
+          "ite:v1:S:ea91b06b61e7"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      },
+      {
+        "position_id": 686842193,
+        "deal_count": 2,
+        "side": null,
+        "open_price": null,
+        "close_price": "4040.373",
+        "net_pnl": 2.87,
+        "gross_profit": 2.87,
+        "commission": 0.0,
+        "swap": 0.0,
+        "first_deal_at": "2026-11-06T05:45:48+00:00",
+        "last_deal_at": "2026-11-06T06:04:06+00:00",
+        "post_pr180": false,
+        "comments": [
+          "[tp 4040.373]",
+          "ite:v1:S:7cb79e8c9470"
+        ],
+        "magic": [
+          260720
+        ],
+        "looks_reversal_close": false
+      }
+    ]
+  },
+  "auth_note": "API owner endpoints not probed \u2014 SUPABASE_* empty in local .env",
+  "account_login_last4": "9147"
+}
