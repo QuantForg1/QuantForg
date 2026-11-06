@@ -144,11 +144,13 @@ class AiScalpingScore:
     global_market_intelligence: dict[str, object] | None = None
     loss_streak_adaptation: dict[str, object] | None = None
     symbol_performance: dict[str, object] | None = None
+    quality_explanation: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "ai_confidence": self.confidence,
             "trade_quality": self.trade_quality,
+            "quality_explanation": dict(self.quality_explanation or {}),
             "confluence": self.confluence,
             "expected_rr": (
                 str(self.expected_rr) if self.expected_rr is not None else None
@@ -500,6 +502,9 @@ def score_scalping_setup(
     confidence = max(0, min(100, confidence))
 
     trade_quality = int(quality.total)
+    from app.domain.institutional_trading.trade_quality import explain_trade_quality
+
+    quality_explanation = explain_trade_quality(quality)
     confluence = confidence
 
     # Per-symbol key — used for regime ATR bands, cooldown, and gates.
@@ -1045,4 +1050,5 @@ def score_scalping_setup(
         global_market_intelligence=gmi.to_dict(),
         loss_streak_adaptation=adaptation.to_dict(),
         symbol_performance=perf_snap.to_dict(),
+        quality_explanation=quality_explanation,
     )

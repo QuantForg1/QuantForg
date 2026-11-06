@@ -390,6 +390,7 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
         fvg_age_bars=sniper.get("fvg_age_bars"),
         first_blocker=sniper.get("primary_reason") or row.get("reject_reason"),
         ai_confidence=row.get("ai_confidence") or row.get("confidence"),
+        quality_explanation=row.get("quality_explanation"),
         confluence=row.get("confluence"),
         decision=action,
         blocking_gate=payload.get("first_blocking_gate") or row.get("reject_reason"),

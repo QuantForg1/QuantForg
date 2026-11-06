@@ -39,6 +39,39 @@ _WEIGHTS = {
 }
 
 
+def explain_trade_quality(quality: TradeQualityScore) -> dict[str, object]:
+    """Show how the published total was weighted. Does not rescore."""
+    components: list[dict[str, object]] = []
+    weighted = 0
+    total_w = 0
+    for factor in quality.factors:
+        points = int(factor.score) * int(factor.weight)
+        weighted += points
+        total_w += int(factor.weight)
+        components.append(
+            {
+                "code": factor.code,
+                "score": int(factor.score),
+                "weight": int(factor.weight),
+                "weighted_points": points,
+                "detail": factor.detail,
+            }
+        )
+    recomputed = round(weighted / total_w) if total_w else 0
+    recomputed = max(0, min(100, recomputed))
+    return {
+        "total": int(quality.total),
+        "recomputed_total": recomputed,
+        "matches_published_total": recomputed == int(quality.total),
+        "weighted_sum": weighted,
+        "weight_sum": total_w,
+        "formula": "round(sum(score * weight) / sum(weight))",
+        "components": components,
+        "passed": bool(quality.passed),
+        "band": quality.band,
+    }
+
+
 def _band(total: int, *, min_pass: int, high: int) -> str:
     if total < min_pass:
         return "reject"
