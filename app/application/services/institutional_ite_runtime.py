@@ -181,29 +181,109 @@ def _pme_ai_scores_from_factors(
 
 
 def _shadow_reversal_kwargs(snapshot: Any, pos: Any, pctx: Any) -> dict[str, Any]:
-    """Best-effort structure/AI inputs for shadow proposals — never invent BOS."""
+    """Best-effort structure/AI inputs for shadow proposals — never invent BOS.
+
+    Side-aware: a high BOS/CHOCH *score* alone is not treated as against the
+    open position. Only structure events whose mapped side opposes the position
+    set ``bos_against`` / ``choch_against``. When structure is unavailable the
+    flags stay False (observe quieter, never invent opposition).
+    """
     factors = _snapshot_score_factors(snapshot)
-    bos = int(factors.get("bos") or 0)
-    choch = int(factors.get("choch") or 0)
-    _ = pos  # reserved for future position-specific structure anchors
-    mtf = int(factors.get("mtf") or factors.get("mtf_alignment") or 0)
     mom = factors.get("momentum")
-    # Against-position only when structure score is high; otherwise treat as noise.
-    against = bos >= 70 or choch >= 70
-    htf = mtf >= 55
     spread_f = None
     if getattr(pctx, "spread", None) is not None:
-        spread_f = float(pctx.spread)
+        try:
+            spread_f = float(pctx.spread)
+        except (TypeError, ValueError):
+            spread_f = None
+
+    side_raw = str(getattr(pos, "side", "") or "").strip().lower()
+    bos_against = False
+    choch_against = False
+    htf_agrees_against = False
+    ltf_only_noise = False
+    data_age_seconds: float | None = None
+
+    try:
+        from app.domain.institutional_trading.ai_scalping.direction import (
+            decide_scalping_direction,
+            iter_scalp_structure_entries,
+            structure_event_side,
+            structure_tfs_for_side,
+        )
+        from app.domain.institutional_trading.decision_models import TradeDirection
+
+        if side_raw.startswith("b"):
+            pos_dir = TradeDirection.BUY
+        elif side_raw.startswith("s"):
+            pos_dir = TradeDirection.SELL
+        else:
+            pos_dir = TradeDirection.NONE
+
+        if pos_dir in {TradeDirection.BUY, TradeDirection.SELL}:
+            against_dir = (
+                TradeDirection.SELL
+                if pos_dir is TradeDirection.BUY
+                else TradeDirection.BUY
+            )
+            against_tfs = structure_tfs_for_side(snapshot, against_dir)
+            for _tf, structure in iter_scalp_structure_entries(snapshot):
+                bos_events = list(
+                    getattr(structure, "breaks_of_structure", None) or []
+                )[-3:]
+                choch_events = list(
+                    getattr(structure, "changes_of_character", None) or []
+                )[-2:]
+                for event in bos_events:
+                    if structure_event_side(event) is against_dir:
+                        bos_against = True
+                for event in choch_events:
+                    if structure_event_side(event) is against_dir:
+                        choch_against = True
+            try:
+                decision = decide_scalping_direction(snapshot)
+                htf_agrees_against = (
+                    "M15" in against_tfs
+                    or (
+                        decision.direction is against_dir
+                        and int(decision.directional_edge or 0)
+                        >= int(decision.edge_margin or 5)
+                    )
+                )
+            except Exception:
+                htf_agrees_against = "M15" in against_tfs
+            ltf_only_noise = bool(against_tfs) and not (
+                against_tfs & {"M5", "M15"}
+            ) and not htf_agrees_against
+        as_of = getattr(snapshot, "as_of", None) or getattr(snapshot, "timestamp", None)
+        if as_of is not None:
+            try:
+                from datetime import UTC, datetime
+
+                if hasattr(as_of, "timestamp"):
+                    data_age_seconds = max(
+                        0.0,
+                        datetime.now(UTC).timestamp() - float(as_of.timestamp()),
+                    )
+            except Exception:
+                data_age_seconds = None
+    except Exception:
+        # Fail closed for opposition flags — never invent against-side from scores.
+        bos_against = False
+        choch_against = False
+        htf_agrees_against = False
+        ltf_only_noise = False
+
     return {
-        "bos_against": against,
-        "choch_against": choch >= 70,
-        "htf_agrees_against": against and htf,
-        "ltf_only_noise": (bos > 0 or choch > 0) and not htf,
+        "bos_against": bos_against,
+        "choch_against": choch_against,
+        "htf_agrees_against": htf_agrees_against,
+        "ltf_only_noise": ltf_only_noise,
         "momentum": int(mom) if mom is not None else None,
         "ai_entry_confidence": getattr(pos, "ai_entry_confidence", None),
         "ai_current_confidence": getattr(pctx, "ai_current_confidence", None),
         "spread": spread_f,
-        "data_age_seconds": None,
+        "data_age_seconds": data_age_seconds,
     }
 
 
@@ -1697,6 +1777,24 @@ class InstitutionalIteRuntime:
                     live_feed = bool(
                         getattr(pme_cfg, "live_reversal_exits_enabled", False)
                     )
+                    from app.domain.institutional_trading.management import (
+                        close_then_reverse as _ctr,
+                    )
+
+                    evaluate_close_then_reverse = _ctr.evaluate_close_then_reverse
+
+                    # Shadow sequence only. live_reverse_entry stays False until
+                    # owner approval after validation — never open opposite here.
+                    ctr_plan = evaluate_close_then_reverse(
+                        proposal=proposal,
+                        position_open_broker=True,
+                        close_request_sent=False,
+                        close_broker_confirmed=False,
+                        opposite_eligible=False,
+                        concurrent_positions=1,
+                        live_reversal_enabled=live_feed,
+                        live_reverse_entry_enabled=False,
+                    )
                     if live_feed and not proposal.stale_data:
                         from dataclasses import replace as _dc_replace
 
@@ -1713,7 +1811,10 @@ class InstitutionalIteRuntime:
                         proposal=proposal,
                         live_fed=live_feed
                         and (proposal.structure_broken or proposal.trend_reversed),
-                        note="ite_manage_cycle",
+                        note=(
+                            f"ite_manage_cycle|ctr:{ctr_plan.stage}:"
+                            f"{ctr_plan.reason}"
+                        ),
                     )
                     logger.warning(
                         "pme_shadow_reversal_exit",
@@ -1721,6 +1822,10 @@ class InstitutionalIteRuntime:
                         shadow_structure_broken=proposal.structure_broken,
                         shadow_trend_reversed=proposal.trend_reversed,
                         shadow_reason=proposal.reason,
+                        shadow_classification=proposal.classification,
+                        close_then_reverse_stage=ctr_plan.stage,
+                        close_then_reverse_submit_close=ctr_plan.submit_close,
+                        close_then_reverse_submit_opposite=ctr_plan.submit_opposite,
                         live_fed=live_feed,
                     )
             except Exception:
