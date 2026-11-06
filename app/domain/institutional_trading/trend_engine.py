@@ -86,6 +86,11 @@ class TrendEngine:
                 f"{why} | M15 semantics: {semantics.new_classification.value} — "
                 f"{semantics.reason}"
             )
+        # Role names inside the MTF sentence stay H4/H1/M15/M5. On the scalping
+        # stack those slots are H1/M15/M5/M1. The clock map is the timeframe
+        # that actually supplied each direction. It does not change the score.
+        clock = " ".join(f"{name}={direction}" for name, direction in frames.items())
+        why = f"{why} | clock {clock}"
 
         return TrendSnapshot(
             macro_bias=macro,
