@@ -1751,8 +1751,8 @@ class InstitutionalIteRuntime:
                     )
                 except Exception:
                     logger.exception("pme_shadow_outcome_mark_failed", ticket=ticket)
-            # Shadow reversal observation — never submits closes unless
-            # live_reversal_exits_enabled (kept False until evidence exists).
+            # Reversal observation + optional LIVE close-on-confirmed-reversal.
+            # Reverse-entry remains disabled. A close request is not confirmation.
             try:
                 pme_cfg = getattr(
                     getattr(self.position_management, "engine", None), "config", None
@@ -1761,29 +1761,44 @@ class InstitutionalIteRuntime:
                     getattr(pme_cfg, "shadow_reversal_exits_enabled", False)
                 ):
                     from app.domain.institutional_trading.management import (
+                        close_then_reverse as _ctr,
                         exit_context as _exit_ctx,
+                        reversal_close_dedup as _rev_dedup,
                         shadow_exit_book as _shadow_book,
+                    )
+                    from app.domain.institutional_trading.management.config import (
+                        live_reversal_exits_resolved,
                     )
 
                     propose_reversal_exit = _exit_ctx.propose_reversal_exit
                     record_shadow_exit = _shadow_book.record_shadow_exit
+                    evaluate_close_then_reverse = _ctr.evaluate_close_then_reverse
 
                     side = str(getattr(pos, "side", "") or "buy")
                     proposal = propose_reversal_exit(
                         position_side=side,
                         **_shadow_reversal_kwargs(snapshot, pos, pctx),
                     )
-                    live_feed = bool(
-                        getattr(pme_cfg, "live_reversal_exits_enabled", False)
+                    live_flag = live_reversal_exits_resolved(
+                        default=bool(
+                            getattr(pme_cfg, "live_reversal_exits_enabled", True)
+                        )
                     )
-                    from app.domain.institutional_trading.management import (
-                        close_then_reverse as _ctr,
+                    # LIVE close only on confirmed structure / HTF trend
+                    # classifications — never M1 pullback, false noise, or
+                    # AI-fade alone.
+                    confirmed_live = proposal.classification in {
+                        "confirmed_structure_reversal",
+                        "htf_trend_reversal",
+                    } and bool(proposal.structure_broken)
+                    allow_close = _rev_dedup.should_allow_reversal_close(int(ticket))
+                    live_feed = (
+                        live_flag
+                        and confirmed_live
+                        and not proposal.stale_data
+                        and allow_close
                     )
 
-                    evaluate_close_then_reverse = _ctr.evaluate_close_then_reverse
-
-                    # Shadow sequence only. live_reverse_entry stays False until
-                    # owner approval after validation — never open opposite here.
                     ctr_plan = evaluate_close_then_reverse(
                         proposal=proposal,
                         position_open_broker=True,
@@ -1794,25 +1809,26 @@ class InstitutionalIteRuntime:
                         live_reversal_enabled=live_feed,
                         live_reverse_entry_enabled=False,
                     )
-                    if live_feed and not proposal.stale_data:
+                    if live_feed:
                         from dataclasses import replace as _dc_replace
 
-                        # Only feed planner when owner-enabled LIVE flag is on.
                         pctx = _dc_replace(
                             pctx,
-                            structure_broken=bool(proposal.structure_broken),
-                            trend_reversed=bool(proposal.trend_reversed),
+                            structure_broken=True,
+                            trend_reversed=True,
                         )
+                        _rev_dedup.mark_reversal_close_requested(int(ticket))
+                    elif not pos_still_open:
+                        _rev_dedup.clear_reversal_close(int(ticket))
                     record_shadow_exit(
                         ticket=int(ticket),
                         symbol=str(getattr(pos, "symbol", "") or ""),
                         side=side,
                         proposal=proposal,
-                        live_fed=live_feed
-                        and (proposal.structure_broken or proposal.trend_reversed),
+                        live_fed=live_feed,
                         note=(
                             f"ite_manage_cycle|ctr:{ctr_plan.stage}:"
-                            f"{ctr_plan.reason}"
+                            f"{ctr_plan.reason}|live_flag={live_flag}"
                         ),
                     )
                     logger.warning(
@@ -1826,6 +1842,8 @@ class InstitutionalIteRuntime:
                         close_then_reverse_submit_close=ctr_plan.submit_close,
                         close_then_reverse_submit_opposite=ctr_plan.submit_opposite,
                         live_fed=live_feed,
+                        live_reversal_flag=live_flag,
+                        reversal_close_dedup_allowed=allow_close,
                     )
             except Exception:
                 logger.exception("pme_shadow_reversal_failed", ticket=ticket)

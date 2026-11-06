@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -21,6 +22,14 @@ from app.presentation.schemas.ops import MetricsResponse
 from core.config.settings import get_settings
 
 router = APIRouter(tags=["Health"])
+
+
+def _deployed_commit_sha() -> str:
+    for key in ("RAILWAY_GIT_COMMIT_SHA", "GITHUB_SHA", "VERCEL_GIT_COMMIT_SHA"):
+        value = (os.environ.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _readiness_payload(request: Request) -> dict[str, Any]:
@@ -61,7 +70,12 @@ def _maybe_503(response: Response, report_status: HealthStatus) -> None:
 )
 async def health_check() -> dict[str, str]:
     """Instant liveness — never blocks on DB, Redis, or MT5."""
-    return {"status": "ok"}
+    payload: dict[str, str] = {"status": "ok"}
+    sha = _deployed_commit_sha()
+    if sha:
+        payload["commit"] = sha
+        payload["commit_short"] = sha[:12]
+    return payload
 
 
 @router.get(

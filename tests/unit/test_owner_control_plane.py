@@ -473,7 +473,8 @@ def test_configured_weekly_limit_fails_closed_without_pnl():
 
 @pytest.mark.unit
 def test_m1_policy_cannot_bypass_a_disabled_deployment_flag(monkeypatch):
-    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    # Explicit deployment off — policy True must not re-enable evaluation/submit.
+    monkeypatch.setenv("QUANTFORG_M1_MICRO_SCALPING", "false")
     monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
     token = use_runtime_policy(
         {
@@ -484,6 +485,27 @@ def test_m1_policy_cannot_bypass_a_disabled_deployment_flag(monkeypatch):
     )
     try:
         assert m1_micro_enabled() is False
+        assert m1_live_submit_enabled() is False
+    finally:
+        reset_runtime_policy(token)
+
+
+@pytest.mark.unit
+def test_m1_submit_still_needs_explicit_env_when_evaluation_defaults_on(
+    monkeypatch,
+):
+    monkeypatch.delenv("QUANTFORG_M1_MICRO_SCALPING", raising=False)
+    monkeypatch.delenv("QUANTFORG_M1_MICRO_LIVE_SUBMIT", raising=False)
+    token = use_runtime_policy(
+        {
+            **approved_baseline(),
+            "m1_micro_enabled": True,
+            "m1_live_submit": True,
+        }
+    )
+    try:
+        assert m1_micro_enabled() is True
+        # Policy cannot turn submit on without QUANTFORG_M1_MICRO_LIVE_SUBMIT.
         assert m1_live_submit_enabled() is False
     finally:
         reset_runtime_policy(token)
