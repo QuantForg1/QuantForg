@@ -83,6 +83,39 @@ def test_m1_comment_engine_tag_without_inventing_five_pack_id() -> None:
     assert meta.get("strategy_id") == "m1_micro"
 
 
+def test_ite_comment_does_not_invent_ite_primary_strategy_id() -> None:
+    meta = merge_position_metadata(
+        snapshot={"symbol": "XAUUSD"},
+        comment="ite:v1:S:deadbeefcafe",
+        live_meta={},
+    )
+    assert meta.get("attribution_engine") == "ite"
+    assert meta.get("strategy_id") in {None, ""}
+
+
+def test_bind_fill_rejects_fabricated_ite_primary(tmp_path: Path) -> None:
+    store = StrategyAttributionStore(path=tmp_path / "attr_reject.json")
+    store.bind_fill(
+        strategy_id="ite_primary",
+        engine="ite",
+        ticket=444,
+        position_id=444,
+    )
+    assert store.resolve(ticket=444) is None
+    store.bind_fill(
+        strategy_id="smc_scalping",
+        engine="soe",
+        ticket=444,
+        position_id=444,
+        contributors=["momentum_scalping", "trend_continuation"],
+    )
+    hit = store.resolve(ticket=444)
+    assert hit is not None
+    assert hit.strategy_id == "smc_scalping"
+    assert "momentum_scalping" in hit.contributors
+    assert hit.attribution_confidence == "bound_five_pack"
+
+
 def test_live_fill_strategy_survives_sl_comment_overwrite() -> None:
     meta = merge_position_metadata(
         snapshot={"symbol": "XAUUSD", "ticket": 333, "position_id": 333},

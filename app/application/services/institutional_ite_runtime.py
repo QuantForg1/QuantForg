@@ -3196,6 +3196,10 @@ class InstitutionalIteRuntime:
                 diagnostics["strategy_confluence_count"] = attr.get(
                     "strategy_confluence_count"
                 )
+                if attr.get("strategy_contributors"):
+                    diagnostics["strategy_contributors"] = attr.get(
+                        "strategy_contributors"
+                    )
         _fill_sid = (
             str(
                 getattr(decision, "strategy_id", None)
@@ -3254,6 +3258,16 @@ class InstitutionalIteRuntime:
                 # as a strategy_id — that engine tag already comes from the
                 # MT5 comment and would pollute strategy scorecards.
                 if _fill_sid:
+                    contributors: list[str] = []
+                    raw_contrib = diagnostics.get("strategy_contributors") or getattr(
+                        decision, "strategy_contributors", None
+                    )
+                    if isinstance(raw_contrib, (list, tuple)):
+                        contributors = [
+                            str(c).strip()
+                            for c in raw_contrib
+                            if str(c).strip() and str(c).strip() != str(_fill_sid)
+                        ]
                     get_strategy_attribution_store().bind_fill(
                         strategy_id=_fill_sid,
                         engine="soe",
@@ -3261,9 +3275,13 @@ class InstitutionalIteRuntime:
                         symbol=str(getattr(decision, "symbol", "") or ""),
                         ticket=_fill_ticket,
                         position_id=_fill_pos,
+                        contributors=contributors,
                         meta={
                             "cycle_id": plan.cycle_id,
                             "trade_class": trade_class,
+                            "confluence_count": diagnostics.get(
+                                "strategy_confluence_count"
+                            ),
                         },
                     )
             except Exception:
@@ -7113,12 +7131,23 @@ class InstitutionalIteRuntime:
                 )
                 if not sid:
                     continue
+                weights = orch_d.get("influence_weights")
+                contributors: list[str] = []
+                if isinstance(weights, dict):
+                    contributors = [
+                        str(k).strip()
+                        for k, v in weights.items()
+                        if str(k).strip()
+                        and str(k).strip() != sid
+                        and float(v or 0) > 0
+                    ]
                 return {
                     "strategy_id": sid,
                     "strategy_name": row.get("strategy_name")
                     or orch_d.get("selected_strategy_name"),
                     "strategy_confluence_count": row.get("strategy_confluence_count")
                     or orch_d.get("confluence_count"),
+                    "strategy_contributors": contributors,
                 }
         return {}
 
@@ -7958,6 +7987,14 @@ class InstitutionalIteRuntime:
             recover_sell_cascade_on_startup(self.mt5_adapter)
         except Exception:
             logger.exception("sell_cascade_startup_recover_failed")
+        try:
+            from app.domain.institutional_trading.ai_scalping.strategies.attribution_store import (  # noqa: E501
+                recover_strategy_attribution_on_startup,
+            )
+
+            recover_strategy_attribution_on_startup(self.mt5_adapter)
+        except Exception:
+            logger.exception("strategy_attribution_startup_recover_failed")
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
             self._cycle_started_mono = time.monotonic()

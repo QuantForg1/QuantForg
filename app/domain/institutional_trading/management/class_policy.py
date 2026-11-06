@@ -177,17 +177,20 @@ def merge_position_metadata(
             if out.get(key) in {None, ""} and live.get(key) not in {None, ""}:
                 out[key] = live[key]
     # Comment prefixes are advisory only for engine tagging — never invent
-    # five-pack strategy_id from free-text alone.
+    # five-pack strategy_id (or ite_primary) from free-text alone.
     cl = comment_text.lower()
     if out.get("attribution_engine") in {None, ""}:
         if cl.startswith("m1:") or "m1:" in cl:
             out["attribution_engine"] = "m1"
+            # M1 engine identity is intentional when comment is m1:* and no
+            # stronger binding exists — not a five-pack SOE id.
             if out.get("strategy_id") in {None, ""}:
                 out["strategy_id"] = "m1_micro"
         elif cl.startswith("ite:") or "ite:" in cl:
             out["attribution_engine"] = "ite"
-            if out.get("strategy_id") in {None, ""}:
-                out["strategy_id"] = "ite_primary"
+            # Leave strategy_id unknown unless fill/store bound a real SOE id.
+            if out.get("strategy_id") == "ite_primary":
+                out["strategy_id"] = None
     comment_class = trade_class_from_comment(comment_text)
     proven = proven_trade_class(out.get("trade_class"))
     if proven == TRADE_CLASS_UNKNOWN and comment_class in PROVEN_TRADE_CLASSES:
