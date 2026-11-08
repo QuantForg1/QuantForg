@@ -316,7 +316,7 @@ export function SignalsWorkspace() {
                   (signalsQ.isFetching || refreshing) && "animate-spin",
                 )}
               />
-              Refresh
+              Refresh analysis
             </Button>
           </div>
         }
