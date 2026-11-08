@@ -39,7 +39,9 @@ if (!env.NEXT_PUBLIC_API_BASE_URL?.trim()) {
   );
 }
 
-const result = spawnSync("npx", ["next", "build"], {
+// Force webpack for production builds. Vercel Turbopack currently fails on
+// next/font/google ("queries have exactly one entry") for IBM Plex Sans.
+const result = spawnSync("npx", ["next", "build", "--webpack"], {
   cwd: frontendRoot,
   env,
   stdio: "inherit",
