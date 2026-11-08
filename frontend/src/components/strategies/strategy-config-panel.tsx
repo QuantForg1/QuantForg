@@ -109,7 +109,7 @@ export function StrategyConfigPanel({
           <p className="mt-1 text-xs text-[var(--fg-muted)]">{subtitle}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge tone="success">Active</Badge>
+          <Badge tone="neutral">Selected</Badge>
           <Button size="sm" variant="ghost" onClick={onReset}>
             Reset
           </Button>
@@ -119,7 +119,7 @@ export function StrategyConfigPanel({
             onClick={onSave}
             disabled={savePending}
           >
-            Save Changes
+            {savePending ? "Running…" : "Save & Run"}
           </Button>
         </div>
       </CardHeader>

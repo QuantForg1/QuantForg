@@ -213,6 +213,14 @@ export default function AdminPortalPage() {
     staleTime: 30_000,
   });
 
+  const auditQ = useQuery({
+    queryKey: ["admin-overview-audit"],
+    queryFn: () => customerOpsApi.audit(40),
+    enabled: allowed,
+    retry: false,
+    staleTime: 20_000,
+  });
+
   if (!allowed) {
     return (
       <DeskError
@@ -245,6 +253,8 @@ export default function AdminPortalPage() {
   const support = asRecord(data.support);
   const fleet = asRecord(fleetQ.data ?? data.fleet);
   const flags = asRecord(data.flags);
+  const auditRoot = asRecord(auditQ.data ?? data.audit);
+  const auditItems = asList(auditRoot.items ?? auditRoot.events);
 
   const usersTotal = num(analytics.total_customers, NaN);
   const usersActive = num(analytics.active_customers, NaN);
@@ -419,6 +429,46 @@ export default function AdminPortalPage() {
           </Button>
         </NocPanel>
       </div>
+
+      <NocPanel
+        title="Recent administrative activity"
+        action={
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/admin/customer-ops#audit">Full audit log</Link>
+          </Button>
+        }
+      >
+        {auditQ.isLoading && auditItems.length === 0 ? (
+          <DeskSkeleton rows={3} />
+        ) : auditItems.length === 0 ? (
+          <p className="text-[12px] text-[var(--fg-muted)]">
+            No COP audit events returned yet. License, support, and fleet actions
+            appear here when recorded.
+          </p>
+        ) : (
+          <ul className="space-y-1 text-[12px] text-[var(--fg)]">
+            {auditItems.slice(0, 12).map((row, i) => {
+              const r = asRecord(row);
+              return (
+                <li
+                  key={str(r.id ?? r.at, `audit-${i}`)}
+                  className="flex justify-between gap-2 border-b border-[var(--border)] py-1.5 last:border-0"
+                >
+                  <span className="truncate">
+                    {fmt(r.action ?? r.event ?? r.type)}
+                    {r.operator || r.by
+                      ? ` · ${fmt(r.operator ?? r.by)}`
+                      : ""}
+                  </span>
+                  <span className="shrink-0 text-[var(--fg-muted)]">
+                    {fmt(r.at ?? r.created_at).slice(0, 19)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </NocPanel>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
