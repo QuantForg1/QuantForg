@@ -34,8 +34,9 @@ const COLUMNS = [
   {
     title: "Legal",
     links: [
-      { href: "mailto:support@quantforg.com?subject=Privacy%20Policy", label: "Privacy" },
-      { href: "mailto:support@quantforg.com?subject=Terms%20of%20Service", label: "Terms" },
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
+      { href: "/risk-disclosure", label: "Risk disclosure" },
     ],
   },
 ] as const;
@@ -45,10 +46,10 @@ export function SiteFooter() {
     <footer className="border-t border-[var(--border)] bg-[var(--bg-elevated)]">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_2fr]">
         <div className="max-w-sm space-y-3">
-          <BrandLogo size={32} caption="Institutional Trading Intelligence" />
+          <BrandLogo size={32} caption="Trading Technology Platform" />
           <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
-            Connect your own broker account. QuantForg analyzes markets, applies your approved
-            risk settings, and sends orders only through the existing execution path.
+            QuantForg is trading technology available by subscription. Connect your own broker
+            account where supported. Software access is not a promise of trading profits.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-4">

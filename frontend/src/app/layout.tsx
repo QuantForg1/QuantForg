@@ -1,25 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 /**
- * One IBM Plex Sans loader only. Turbopack fails production builds when the
- * same next/font/google family is instantiated twice ("queries have exactly
- * one entry" / missing @vercel/turbopack-next font resolver). Display headings
- * reuse --font-sans via --font-display alias in globals.css.
+ * Self-hosted IBM Plex (latin) — avoids next/font/google fetch failures on Vercel
+ * and keeps CSP font-src on 'self'. Display headings reuse --font-sans via
+ * --font-display alias in globals.css.
  */
-const sans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const sans = localFont({
+  src: [
+    { path: "../fonts/IBMPlexSans-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/IBMPlexSans-Medium.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/IBMPlexSans-SemiBold.woff2", weight: "600", style: "normal" },
+  ],
   variable: "--font-sans",
   display: "swap",
   preload: true,
 });
 
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const mono = localFont({
+  src: [
+    { path: "../fonts/IBMPlexMono-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/IBMPlexMono-Medium.woff2", weight: "500", style: "normal" },
+  ],
   variable: "--font-mono",
   display: "swap",
   preload: true,
@@ -34,30 +38,33 @@ const SITE_URL =
       : "http://localhost:3000");
 
 export const viewport: Viewport = {
-  themeColor: "#061a38",
+  themeColor: "#111827",
   colorScheme: "dark",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "QuantForg — Institutional Trading OS",
+    default: "QuantForg — Trading Technology Platform",
     template: "%s · QuantForg",
   },
   description:
-    "Institutional trading terminal for operators who demand clarity. Live MT5 portfolio sync, risk before fill, research loop, and AI workspace — one operating system.",
+    "QuantForg is a trading technology SaaS platform for MT5 workflows, risk controls, research, and operator desks. Software access only — trading outcomes are not guaranteed.",
   applicationName: "QuantForg",
   authors: [{ name: "QuantForg" }],
   creator: "QuantForg",
   publisher: "QuantForg",
   keywords: [
     "QuantForg",
-    "institutional trading",
+    "trading technology",
     "MT5",
-    "trading terminal",
-    "portfolio risk",
-    "algorithmic trading",
+    "trading SaaS",
+    "risk management",
+    "algorithmic trading software",
   ],
+  alternates: {
+    canonical: SITE_URL,
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -75,23 +82,23 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "QuantForg",
-    title: "QuantForg — Institutional Trading OS",
+    title: "QuantForg — Trading Technology Platform",
     description:
-      "Institutional trading terminal for operators who demand clarity. Live MT5 portfolio, risk before fill, research, and AI — one operating system.",
+      "Subscription trading technology for MT5 workflows, risk controls, and operator desks. No profit guarantees.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "QuantForg — Institutional Trading OS",
+        alt: "QuantForg — Trading Technology Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuantForg — Institutional Trading OS",
+    title: "QuantForg — Trading Technology Platform",
     description:
-      "Institutional trading terminal for operators who demand clarity. Live MT5 portfolio, risk before fill, research, and AI.",
+      "Trading technology SaaS for MT5 workflows and risk-aware operator desks. Software access only.",
     images: ["/og-image.png"],
   },
   robots: {

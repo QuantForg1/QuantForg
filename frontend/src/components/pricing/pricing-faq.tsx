@@ -5,36 +5,32 @@ import { ChevronDown } from "lucide-react";
 
 const faqs = [
   {
-    q: "Why no subscription?",
-    a: "QuantForg is sold as a single institutional license. You pay once for lifetime access — no monthly fees, no renewals, no recurring charges.",
+    q: "What am I paying for?",
+    a: "A QuantForg subscription is software access to the trading technology platform and the support level for that plan. It is not a managed trading account, broker partnership, or profit share.",
   },
   {
-    q: "Do I own the software forever?",
-    a: "Yes. The Institutional License is a one-time purchase for lifetime software access for the entitled operator.",
+    q: "Do these prices guarantee trading performance?",
+    a: "No. QuantForg never promises profits, guaranteed returns, or risk-free trading. Market outcomes depend on markets, brokers, and your own decisions.",
   },
   {
-    q: "Can I use my MT5 broker?",
-    a: "Yes. QuantForg connects to your own MetaTrader 5 terminal and broker session. You keep control of accounts, credentials, and live execution gates.",
+    q: "Is annual billing available?",
+    a: "Not yet. Only monthly plan pricing is published. An annual option will appear only after a recurring billing provider is configured to support it.",
   },
   {
-    q: "Are future updates included?",
-    a: "Yes. Your license includes future updates to the QuantForg platform for as long as the product is supported — no upgrade fees for the licensed software.",
+    q: "Can I checkout online today?",
+    a: "Self-serve recurring checkout is not configured in this deployment. Choosing a plan creates an account request or sales conversation. Paid access is activated only after verified payment and license provisioning.",
   },
   {
-    q: "Can I install on multiple devices?",
-    a: "Access is intended for a single professional operator. You may sign in from the devices you use for desk work; concurrent multi-seat sharing is not included.",
+    q: "Can I use my own MT5 broker?",
+    a: "Yes, where your plan and secure infrastructure support it. You connect the MetaTrader 5 account you authorize. QuantForg does not assume every customer shares one MT5 account.",
   },
   {
-    q: "How do I purchase?",
-    a: "There is no online checkout. Contact QuantForg Support via the purchase request form. After your request is approved, our team sends payment instructions and creates your account manually after payment verification.",
+    q: "How do upgrades, downgrades, and cancellation work?",
+    a: "Until a payment provider webhook is live, plan changes and cancellations are handled through QuantForg support after identity verification. Entitlements never change from a client-side button alone.",
   },
   {
-    q: "Can I create an account myself?",
-    a: "No. Public registration is not available. Only the QuantForg team provisions accounts after payment verification.",
-  },
-  {
-    q: "Can I access all features after activation?",
-    a: "Yes. One license unlocks the complete QuantForg ecosystem — no tiers, no feature gates, no upsells after activation.",
+    q: "Where can I see my subscription status?",
+    a: "Signed-in customers can open Settings → Subscription for plan status. If no verified license exists, the page shows that clearly instead of inventing paid access.",
   },
 ];
 

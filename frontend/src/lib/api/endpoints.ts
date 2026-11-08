@@ -44,6 +44,23 @@ export const authApi = {
       method: "POST",
       body: { new_password },
     }),
+  /** Start Supabase OAuth (Google/GitHub). Returns IdP redirect URL. */
+  oauthStart: (provider: "google" | "github", redirect_to?: string) => {
+    const qs = new URLSearchParams();
+    if (redirect_to) qs.set("redirect_to", redirect_to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return apiFetch<{ provider: string; url: string }>(
+      `/auth/oauth/${provider}${suffix}`,
+      { auth: false },
+    );
+  },
+  /** Exchange OAuth authorization code for a QuantForg session. */
+  oauthCallback: (code: string, redirect_to?: string) =>
+    apiFetch<AuthSession>("/auth/oauth/callback", {
+      method: "POST",
+      body: { code, redirect_to },
+      auth: false,
+    }),
 };
 
 export const portfolioApi = {

@@ -270,21 +270,21 @@ export function HomeLanding() {
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)]">
                 <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
-                AI powered · MT5 · Institutional grade
+                Trading technology · MT5 workflows · Subscription access
               </p>
               <h1 className="mt-5 font-[family-name:var(--font-display)] text-4xl leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
                 Your Trading.
                 <span className="mt-1 block">Our Intelligence.</span>
-                <span className="mt-1 block text-[var(--hot)]">Fully Connected.</span>
+                <span className="mt-1 block text-[var(--accent)]">Fully Connected.</span>
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-[var(--fg-muted)] sm:text-lg">
-                Connect your broker. QuantForg analyzes the gold market, identifies research
-                opportunities, manages risk, and can execute only under the settings already
-                approved for your account.
+                QuantForg is a trading technology platform. Connect your own broker where supported,
+                run research and risk-aware workflows, and keep execution under settings you approve.
+                Software access is not a promise of profits.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/register" className={`${btn} qf-btn-hot h-12 px-5`}>
-                  Connect Your Broker
+                <Link href="/pricing" className={`${btn} qf-btn-primary h-12 px-5`}>
+                  View pricing
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <Link
@@ -619,15 +619,15 @@ export function HomeLanding() {
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.2fr_0.8fr]">
               <div>
                 <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Ready to Trade <span className="text-[var(--hot)]">Smarter?</span>
+                  Ready to operate <span className="text-[var(--accent)]">smarter?</span>
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--fg-muted)] sm:text-base">
-                  Connect your broker and let QuantForg handle analysis, risk checks, and execution
-                  under the settings you approve. Results are not guaranteed.
+                  Start with a subscription plan, create your account, and connect your broker when
+                  you are ready. Trading results are never guaranteed.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
-                  <Link href="/register" className={`${btn} qf-btn-hot h-11 px-5`}>
-                    Connect Your Broker
+                  <Link href="/register" className={`${btn} qf-btn-primary h-11 px-5`}>
+                    Create account
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                   <Link

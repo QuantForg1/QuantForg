@@ -221,7 +221,14 @@ async def oauth_start(
     settings: Annotated[Settings, Depends(get_settings)],
     redirect_to: str | None = None,
 ) -> OAuthUrlResponse:
+    from app.domain.exceptions.base import ValidationError
     from app.presentation.security.redirects import sanitize_redirect_to
+
+    if not settings.auth_oauth_enabled:
+        raise ValidationError(
+            "Google sign-in is disabled for this deployment. Use email and password.",
+            code="oauth_disabled",
+        )
 
     redirect = sanitize_redirect_to(redirect_to, settings=settings)
     result = await auth.oauth_url(
@@ -237,7 +244,14 @@ async def oauth_callback(
     auth: Annotated[AuthService, Depends(get_auth_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthSessionResponse:
+    from app.domain.exceptions.base import ValidationError
     from app.presentation.security.redirects import sanitize_redirect_to
+
+    if not settings.auth_oauth_enabled:
+        raise ValidationError(
+            "Google sign-in is disabled for this deployment. Use email and password.",
+            code="oauth_disabled",
+        )
 
     ip, ua = get_client_meta(request)
     redirect = sanitize_redirect_to(body.redirect_to, settings=settings)
