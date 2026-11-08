@@ -8,7 +8,6 @@ from typing import Any, Literal, Self
 from uuid import UUID
 
 from app.domain.entities._guards import require, require_state
-from app.domain.market_data.timeframe import Timeframe
 from app.domain.entities.base import Entity
 from app.domain.enums.platform import (
     ActivityCategory,
@@ -23,6 +22,7 @@ from app.domain.enums.platform import (
     UiTheme,
 )
 from app.domain.exceptions.base import ConflictError
+from app.domain.market_data.timeframe import Timeframe
 
 
 @dataclass(eq=False, kw_only=True)

@@ -83,9 +83,10 @@ def merge_plan_public(
     if override.get("grace_period_days") is not None:
         merged["grace_period_days"] = int(override["grace_period_days"])
     updated = override.get("updated_at")
-    merged["override_updated_at"] = (
-        updated.isoformat() if hasattr(updated, "isoformat") else updated
-    )
+    if updated is not None and hasattr(updated, "isoformat"):
+        merged["override_updated_at"] = updated.isoformat()
+    elif updated is not None:
+        merged["override_updated_at"] = updated
     return merged
 
 

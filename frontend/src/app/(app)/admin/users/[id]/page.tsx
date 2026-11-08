@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -98,10 +97,8 @@ export default function AdminUserDetailPage() {
   const supportTickets = asList(workspace.support_requests).map(asRecord);
   const loginHistory = asList(workspace.login_history).map(asRecord);
   const latestActivity = asList(workspace.latest_activity).map(asRecord);
-  const activityRows = useMemo(
-    () => (loginHistory.length > 0 ? loginHistory : latestActivity),
-    [loginHistory, latestActivity],
-  );
+  const activityRows =
+    loginHistory.length > 0 ? loginHistory : latestActivity;
 
   const titleEmail = fmt(profile.email || profile.display_name, customerId);
 

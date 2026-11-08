@@ -167,35 +167,31 @@ export default function SettingsPage() {
     if (!settingsQ.data || deskPrefsHydratedRef.current) return;
 
     const fromServer = deskPrefsFromSettings(asRecord(settingsQ.data));
-    const raw =
-      typeof window !== "undefined" ? localStorage.getItem(DESK_PREFS_KEY) : null;
+    const local = loadDeskPreferences();
+    const hasLocal =
+      typeof window !== "undefined" && Boolean(localStorage.getItem(DESK_PREFS_KEY));
 
-    if (raw) {
-      try {
-        const local = { ...DEFAULT_DESK_PREFS, ...(JSON.parse(raw) as Partial<DeskPreferencesV1>) };
-        deskPrefsHydratedRef.current = true;
-        void (async () => {
-          try {
-            await platformApi.updateSettings({
-              theme: "dark",
-              default_symbol: local.defaultSymbol,
-              default_timeframe: local.defaultTimeframe,
-              date_format: local.dateFormat,
-              time_format: local.timeFormat,
-            });
-            setDeskPrefs(local);
-            saveDeskPreferences(local);
-            await qc.invalidateQueries({ queryKey: ["settings"] });
-          } catch (e) {
-            deskPrefsHydratedRef.current = false;
-            setDeskPrefs(fromServer);
-            toast.error(e instanceof ApiError ? e.message : "Could not migrate desk preferences");
-          }
-        })();
-        return;
-      } catch {
-        localStorage.removeItem(DESK_PREFS_KEY);
-      }
+    if (hasLocal) {
+      deskPrefsHydratedRef.current = true;
+      void (async () => {
+        try {
+          await platformApi.updateSettings({
+            theme: "dark",
+            default_symbol: local.defaultSymbol,
+            default_timeframe: local.defaultTimeframe,
+            date_format: local.dateFormat,
+            time_format: local.timeFormat,
+          });
+          setDeskPrefs(local);
+          saveDeskPreferences(local);
+          await qc.invalidateQueries({ queryKey: ["settings"] });
+        } catch (e) {
+          deskPrefsHydratedRef.current = false;
+          setDeskPrefs(fromServer);
+          toast.error(e instanceof ApiError ? e.message : "Could not migrate desk preferences");
+        }
+      })();
+      return;
     }
 
     deskPrefsHydratedRef.current = true;
