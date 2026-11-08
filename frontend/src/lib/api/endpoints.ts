@@ -3200,6 +3200,14 @@ export const platformApi = {
     }),
   notificationPreferences: () =>
     apiFetch<unknown[]>("/notifications/preferences"),
+  updateNotificationPreference: (
+    category: string,
+    body: { in_app?: boolean; email?: boolean },
+  ) =>
+    apiFetch<Record<string, unknown>>(
+      `/notifications/preferences/${encodeURIComponent(category)}`,
+      { method: "PATCH", body },
+    ),
   organizations: () => apiFetch<unknown[]>("/organizations"),
   createOrganization: (body: { name: string; slug: string }) =>
     apiFetch<Record<string, unknown>>("/organizations", {
