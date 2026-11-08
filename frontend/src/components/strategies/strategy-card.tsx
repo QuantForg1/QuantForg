@@ -48,9 +48,18 @@ export function StrategyCard({
         <span className="mt-1 text-xs text-[var(--fg-subtle)]">
           {category || strategyKey}
         </span>
-        <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--success)]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" aria-hidden />
-          Active
+        <span
+          className={`mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium ${
+            selected ? "text-[var(--accent)]" : "text-[var(--fg-subtle)]"
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              selected ? "bg-[var(--accent)]" : "bg-[var(--fg-subtle)]"
+            }`}
+            aria-hidden
+          />
+          {selected ? "Selected" : "Available"}
         </span>
       </button>
     </li>
