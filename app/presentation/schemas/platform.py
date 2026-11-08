@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -41,6 +42,12 @@ class SettingsResponse(BaseModel):
     security_login_alerts: bool
     security_require_reauth: bool
     session_timeout_minutes: int
+    default_symbol: str = "XAUUSD"
+    default_timeframe: str = "M15"
+    date_format: str = "ymd"
+    time_format: str = "24h"
+    dashboard_prefs: dict[str, Any] = Field(default_factory=dict)
+    trading_ui_prefs: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -52,6 +59,15 @@ class UpdateSettingsRequest(BaseModel):
     security_login_alerts: bool | None = None
     security_require_reauth: bool | None = None
     session_timeout_minutes: int | None = Field(default=None, ge=5, le=525600)
+    default_symbol: str | None = Field(default=None, min_length=1, max_length=32)
+    default_timeframe: str | None = Field(
+        default=None,
+        pattern=r"^(M1|M5|M15|M30|H1|H4|D1|W1|MN1)$",
+    )
+    date_format: Literal["ymd", "dmy", "mdy"] | None = None
+    time_format: Literal["24h", "12h"] | None = None
+    dashboard_prefs: dict[str, Any] | None = None
+    trading_ui_prefs: dict[str, Any] | None = None
 
 
 class DeviceResponse(BaseModel):

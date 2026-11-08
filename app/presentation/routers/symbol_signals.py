@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -197,6 +198,19 @@ async def get_signals(
         enabled_only=enabled_only,
         active_only=active_only,
     )
+
+
+@router.post("/signals/research/refresh")
+async def signals_research_refresh(user: CurrentUser) -> dict[str, Any]:
+    """Run one research analysis cycle in a worker thread. Never OMS."""
+    _ = user
+    from app.application.services.research_analysis_worker import (
+        get_research_analysis_health,
+        run_research_analysis_once,
+    )
+
+    await asyncio.to_thread(run_research_analysis_once, mt5_adapter=None)
+    return get_research_analysis_health()
 
 
 # --- Signal Intelligence v2 (read-only LIVE analytics) ---

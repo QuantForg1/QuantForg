@@ -144,6 +144,35 @@ class BillingService:
             "disclaimer": BILLING_DISCLAIMER,
         }
 
+    async def list_plans_with_overrides(self) -> dict[str, Any]:
+        """Public plan catalog merged with admin DB overlays when available."""
+        from app.domain.billing.plan_overrides import list_plans_merged
+
+        days = int(self.settings.billing_trial_days)
+        plans = plans_public()
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            plans = await list_plans_merged(session)
+            await uow.rollback()
+        except Exception:
+            with contextlib.suppress(Exception):
+                await uow.rollback()
+            plans = plans_public()
+        active_plans = [p for p in plans if p.get("active", True) is not False]
+        return {
+            "plans": active_plans,
+            "all_plans": plans,
+            "trial": trial_public(days=days),
+            "comparison": comparison_public(),
+            "provider": billing_provider_status(self.settings),
+            "grace_days": int(self.settings.billing_grace_days),
+            "period_days": int(self.settings.billing_period_days),
+            "trial_days": days,
+            "payment_method_label": "Crypto Payment",
+            "disclaimer": BILLING_DISCLAIMER,
+        }
+
     def list_currencies(self) -> dict[str, Any]:
         client = self._client()
         try:
@@ -962,6 +991,245 @@ class BillingService:
         finally:
             with contextlib.suppress(Exception):
                 await uow.__aexit__(None, None, None)
+
+    async def admin_upsert_plan_override(
+        self,
+        *,
+        plan_id: str,
+        actor_user_id: UUID,
+        actor_email: str | None,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not is_designated_owner_email(actor_email or ""):
+            raise ValidationError(
+                "Only the designated owner may edit plan catalog overlays",
+                code="OWNER_PLAN_EDIT_FORBIDDEN",
+            )
+        from app.domain.billing.plan_overrides import upsert_override
+
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            row = await upsert_override(
+                session,
+                plan_id=plan_id,
+                actor_user_id=actor_user_id,
+                payload=payload,
+            )
+            await session.execute(
+                text("""
+                    INSERT INTO billing_admin_events (
+                      actor_user_id, target_user_id, target_email, action, reason,
+                      plan_id, details
+                    ) VALUES (
+                      :actor, :actor, :email, 'manual_license_adjust',
+                      'plan_override_upsert', :plan_id, CAST(:details AS jsonb)
+                    )
+                    """),
+                {
+                    "actor": str(actor_user_id),
+                    "email": normalize_email(actor_email or DESIGNATED_OWNER_EMAIL),
+                    "plan_id": plan_id,
+                    "details": __import__("json").dumps({"override": row}, default=str),
+                },
+            )
+            await uow.commit()
+            return {"ok": True, "override": row, "fabricated": False}
+        except ValueError as exc:
+            await uow.rollback()
+            raise ValidationError(str(exc), code="UNKNOWN_PLAN") from exc
+        except Exception:
+            await uow.rollback()
+            raise
+
+    async def admin_assign_plan(
+        self,
+        *,
+        target_user_id: UUID,
+        plan_id: str,
+        days: int,
+        actor_user_id: UUID,
+        actor_email: str | None,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Owner-only audited license assignment (does not invent payments)."""
+        if not is_designated_owner_email(actor_email or ""):
+            raise ValidationError(
+                "Only the designated owner may assign plans",
+                code="OWNER_ASSIGN_FORBIDDEN",
+            )
+        plan = get_plan(plan_id)
+        if plan is None:
+            raise ValidationError("Unknown plan", code="UNKNOWN_PLAN")
+        days_n = max(1, min(int(days), 3650))
+        reason_n = (reason or "").strip()
+        if len(reason_n) < 3:
+            raise ValidationError("Assignment reason required", code="REASON_REQUIRED")
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            user_row = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id, email, status FROM users WHERE id = :id LIMIT 1
+                        """),
+                        {"id": str(target_user_id)},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if user_row is None:
+                raise NotFoundError("User not found", code="USER_NOT_FOUND")
+            now = datetime.now(UTC)
+            period_end = now + timedelta(days=days_n)
+            notes = f"Admin assign plan={plan.plan_id} reason={reason_n}"
+            existing = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id FROM licenses
+                        WHERE user_id = :user_id
+                        ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,
+                                 created_at DESC
+                        LIMIT 1
+                        """),
+                        {"user_id": str(target_user_id)},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if existing is not None:
+                await session.execute(
+                    text("""
+                        UPDATE licenses
+                        SET tier = :tier, status = 'active', seats = 1,
+                            issued_at = COALESCE(issued_at, :issued_at),
+                            expires_at = :expires_at, revoked_at = NULL,
+                            notes = :notes, updated_at = timezone('utc', now())
+                        WHERE id = :id
+                        """),
+                    {
+                        "tier": plan.license_tier,
+                        "issued_at": now,
+                        "expires_at": period_end,
+                        "notes": notes,
+                        "id": str(existing["id"]),
+                    },
+                )
+                license_id = str(existing["id"])
+            else:
+                inserted = (
+                    (
+                        await session.execute(
+                            text("""
+                            INSERT INTO licenses (
+                              user_id, tier, status, seats, issued_at, expires_at, notes
+                            ) VALUES (
+                              :user_id, :tier, 'active', 1, :issued_at, :expires_at, :notes
+                            )
+                            RETURNING id
+                            """),
+                            {
+                                "user_id": str(target_user_id),
+                                "tier": plan.license_tier,
+                                "issued_at": now,
+                                "expires_at": period_end,
+                                "notes": notes,
+                            },
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                license_id = str(inserted["id"]) if inserted else ""
+            await session.execute(
+                text("""
+                    INSERT INTO billing_admin_events (
+                      actor_user_id, target_user_id, target_email, action, reason,
+                      plan_id, license_tier, details
+                    ) VALUES (
+                      :actor, :target, :email, 'manual_license_adjust', :reason,
+                      :plan_id, :tier, CAST(:details AS jsonb)
+                    )
+                    """),
+                {
+                    "actor": str(actor_user_id),
+                    "target": str(target_user_id),
+                    "email": normalize_email(str(user_row.get("email") or "")),
+                    "reason": reason_n,
+                    "plan_id": plan.plan_id,
+                    "tier": plan.license_tier,
+                    "details": __import__("json").dumps(
+                        {
+                            "license_id": license_id,
+                            "days": days_n,
+                            "expires_at": period_end.isoformat(),
+                            "payment_invented": False,
+                        }
+                    ),
+                },
+            )
+            await uow.commit()
+            return {
+                "ok": True,
+                "license_id": license_id,
+                "plan_id": plan.plan_id,
+                "expires_at": period_end.isoformat(),
+                "payment_invented": False,
+                "fabricated": False,
+            }
+        except Exception:
+            await uow.rollback()
+            raise
+
+    async def admin_revenue_snapshot(self) -> dict[str, Any]:
+        """MRR/revenue from real billing_orders only (no fabricated totals)."""
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            paid = (await session.execute(text("""
+                        SELECT COALESCE(SUM(amount_usd), 0) AS revenue,
+                               COUNT(*) AS paid_orders
+                        FROM billing_orders
+                        WHERE status = 'paid'
+                        """))).mappings().first()
+            pending = (await session.execute(text("""
+                        SELECT COUNT(*) AS pending_orders
+                        FROM billing_orders
+                        WHERE status IN ('pending_payment', 'confirming', 'partially_paid')
+                        """))).mappings().first()
+            active_licenses = (await session.execute(text("""
+                        SELECT COUNT(*) AS active_licenses
+                        FROM licenses WHERE status = 'active'
+                        """))).mappings().first()
+            recent = (await session.execute(text("""
+                        SELECT order_code, plan_id, amount_usd, currency, status,
+                               paid_at, created_at, user_id
+                        FROM billing_orders
+                        ORDER BY created_at DESC
+                        LIMIT 40
+                        """))).mappings().all()
+            await uow.rollback()
+            return {
+                "revenue_usd_paid": float(paid["revenue"]) if paid else 0.0,
+                "paid_orders": int(paid["paid_orders"] or 0) if paid else 0,
+                "pending_orders": int(pending["pending_orders"] or 0) if pending else 0,
+                "active_licenses": (
+                    int(active_licenses["active_licenses"] or 0)
+                    if active_licenses
+                    else 0
+                ),
+                "orders": [dict(r) for r in recent],
+                "fabricated": False,
+                "note": "Totals reflect recorded billing_orders only.",
+            }
+        except Exception:
+            with contextlib.suppress(Exception):
+                await uow.rollback()
+            raise
 
     async def reconcile_expired_trials(self, *, limit: int = 200) -> dict[str, Any]:
         """Expire due trials and revoke trial-only licenses (idempotent)."""

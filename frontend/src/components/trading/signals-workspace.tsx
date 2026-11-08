@@ -226,6 +226,14 @@ export function SignalsWorkspace() {
 
   const researchHealth = normalized.researchAnalysis ?? {};
   const workerStatus = String(researchHealth.status || "UNKNOWN").toUpperCase();
+  const degradedReason =
+    researchHealth.degraded_reason != null
+      ? String(researchHealth.degraded_reason).trim()
+      : "";
+  const researchDegraded =
+    workerStatus === "DEGRADED" ||
+    workerStatus === "STOPPED" ||
+    degradedReason.length > 0;
 
   const filtered = useMemo(() => {
     const next: SignalFilterState = { ...filters };
@@ -268,12 +276,23 @@ export function SignalsWorkspace() {
   async function refreshAnalysis() {
     setRefreshing(true);
     try {
+      if (researchDegraded) {
+        await signalCenterApi.refreshResearch();
+      }
       await signalsQ.refetch();
       await qc.invalidateQueries({ queryKey: SIGNAL_CENTER_QUERY_KEY });
     } finally {
       setRefreshing(false);
     }
   }
+
+  const researchBannerMessage =
+    degradedReason ||
+    (workerStatus === "STOPPED"
+      ? "Research analysis is stopped — signals may be stale until a refresh completes."
+      : workerStatus === "DEGRADED"
+        ? "Research analysis is degraded — live scan may be incomplete."
+        : "Research health reported an issue — retry to run one analysis cycle.");
 
   const researchFailed = Boolean(signalsQ.isError);
 
@@ -332,6 +351,35 @@ export function SignalsWorkspace() {
         <DeskMetric label="Active" value={String(summary.active)} />
         <DeskMetric label="Updated" value={lastUpdateRel} />
       </div>
+
+      {researchDegraded ? (
+        <div
+          className="flex flex-col gap-3 rounded-[var(--radius-os)] border border-[var(--warning-border,var(--border))] bg-[var(--surface)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[var(--fg)]">
+              Research feed {workerStatus === "STOPPED" ? "stopped" : "degraded"}
+            </p>
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">{researchBannerMessage}</p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            disabled={signalsQ.isFetching || refreshing}
+            onClick={() => void refreshAnalysis()}
+          >
+            <RefreshCw
+              className={cn(
+                "h-3.5 w-3.5",
+                (signalsQ.isFetching || refreshing) && "animate-spin",
+              )}
+            />
+            Retry research refresh
+          </Button>
+        </div>
+      ) : null}
 
       <div className="hidden md:block">
         <FilterControls

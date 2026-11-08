@@ -206,6 +206,12 @@ class UpdateSettingsUseCase:
                 security_login_alerts=command.security_login_alerts,
                 security_require_reauth=command.security_require_reauth,
                 session_timeout_minutes=command.session_timeout_minutes,
+                default_symbol=command.default_symbol,
+                default_timeframe=command.default_timeframe,
+                date_format=command.date_format,
+                time_format=command.time_format,
+                dashboard_prefs=command.dashboard_prefs,
+                trading_ui_prefs=command.trading_ui_prefs,
             )
             await uow.settings.update(settings)
             await uow.activity_events.add(

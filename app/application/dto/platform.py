@@ -81,6 +81,12 @@ class SettingsDTO:
     security_login_alerts: bool
     security_require_reauth: bool
     session_timeout_minutes: int
+    default_symbol: str
+    default_timeframe: str
+    date_format: str
+    time_format: str
+    dashboard_prefs: dict[str, Any]
+    trading_ui_prefs: dict[str, Any]
 
     @classmethod
     def from_entity(cls, settings: UserSettings) -> SettingsDTO:
@@ -94,6 +100,12 @@ class SettingsDTO:
             security_login_alerts=settings.security_login_alerts,
             security_require_reauth=settings.security_require_reauth,
             session_timeout_minutes=settings.session_timeout_minutes,
+            default_symbol=settings.default_symbol,
+            default_timeframe=settings.default_timeframe,
+            date_format=settings.date_format,
+            time_format=settings.time_format,
+            dashboard_prefs=dict(settings.dashboard_prefs),
+            trading_ui_prefs=dict(settings.trading_ui_prefs),
         )
 
 
@@ -108,6 +120,12 @@ class UpdateSettingsCommand:
     security_login_alerts: bool | None = None
     security_require_reauth: bool | None = None
     session_timeout_minutes: int | None = None
+    default_symbol: str | None = None
+    default_timeframe: str | None = None
+    date_format: str | None = None
+    time_format: str | None = None
+    dashboard_prefs: dict[str, Any] | None = None
+    trading_ui_prefs: dict[str, Any] | None = None
     ip_address: str = ""
     user_agent: str = ""
 
