@@ -152,7 +152,7 @@ export function Topbar({
         className="hidden shrink-0 lg:block"
         aria-label="QuantForg overview"
       >
-        <BrandLogo size={28} caption="Institutional Trading Intelligence" />
+        <BrandLogo size={28} />
       </Link>
       {!compact ? (
         <div className="hidden sm:block lg:hidden">

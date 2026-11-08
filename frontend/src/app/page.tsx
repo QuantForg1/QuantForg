@@ -4,11 +4,18 @@ import { PublicStructuredData } from "@/components/marketing/structured-data";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "QuantForg — Trading Technology Platform",
+    absolute: "QuantForg — Institutional AI Trading Platform",
   },
   description:
-    "QuantForg is a subscription trading technology platform for MT5 workflows, risk controls, research, and operator desks. Software functionality is not a promise of trading profits.",
+    "QuantForg connects traders to MetaTrader 5 broker accounts with market intelligence, strategy evaluation, risk management, and automated execution under approved settings. Software access is not a promise of trading profits.",
   alternates: { canonical: "/" },
+  openGraph: {
+    title: "QuantForg — Institutional AI Trading Platform",
+    description:
+      "Connect your MT5 broker, analyze markets, manage risk, and execute under approved settings.",
+    url: "/",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "QuantForg" }],
+  },
 };
 
 export default function LandingPage() {

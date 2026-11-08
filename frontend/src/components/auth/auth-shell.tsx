@@ -51,7 +51,7 @@ export function AuthShell({
       <MountainBackdrop withCandles />
       <header className="relative z-10 flex items-center justify-between px-4 py-5 sm:px-8">
         <Link href="/">
-          <BrandLogo size={36} caption="Trading Technology Platform" priority />
+          <BrandLogo size={36} priority />
         </Link>
         <span
           className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-[var(--fg-muted)] backdrop-blur-sm"
@@ -94,9 +94,9 @@ export function AuthShell({
             })}
           </ul>
         </section>
-        <section className="qf-auth-card rounded-[1.25rem] border border-white/15 bg-[color-mix(in_srgb,var(--surface)_78%,#111827)] p-6 shadow-[var(--shadow-elevated)] backdrop-blur-xl sm:p-8">
+        <section className="qf-auth-card rounded-[1.25rem] border border-white/15 bg-[color-mix(in_srgb,var(--surface)_78%,var(--brand-navy))] p-6 shadow-[var(--shadow-elevated)] backdrop-blur-xl sm:p-8">
           <div className="mb-6 flex flex-col items-center text-center">
-            <BrandLogo size={42} caption="Trading Technology Platform" />
+            <BrandLogo size={42} />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight">{title}</h1>
             <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">{subtitle}</p>
           </div>

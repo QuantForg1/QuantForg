@@ -1,6 +1,9 @@
 /**
  * Central QuantForg brand asset paths (QF monogram + lockups).
  * Prefer these constants over hardcoded strings.
+ *
+ * Visual source of truth: official Teal QF Finance / Market Trend logos.
+ * Surfaces: Premium Blue Hybrid navy + logo-derived teal/cyan.
  */
 
 export const BRAND_ASSETS = {
@@ -8,6 +11,8 @@ export const BRAND_ASSETS = {
   mark: "/brand/quantforg-mark-256.png",
   /** High-resolution mark for watermarks / large display. */
   markHiRes: "/brand/quantforg-mark.png",
+  /** Transparent mark for overlays. */
+  markTransparent: "/brand/quantforg-mark-transparent.png",
   /** Symbol-only (same QF monogram). */
   symbol: "/brand/quantforg-symbol-256.png",
   symbolHiRes: "/brand/quantforg-symbol.png",
@@ -20,15 +25,32 @@ export const BRAND_ASSETS = {
   logoDark: "/brand/quantforg-logo-dark.png",
   logoLight: "/brand/quantforg-logo-light.png",
   logoMono: "/brand/quantforg-logo-mono.png",
-  /** Social / PWA. */
+  /** Atmosphere. */
+  mountain: "/brand/mountain-backdrop.jpg",
+  /** Social / PWA / favicons. */
   ogImage: "/og-image.png",
+  faviconSvg: "/favicon.svg",
   favicon32: "/favicon-32x32.png",
+  favicon48: "/favicon-48x48.png",
   appleTouch: "/apple-touch-icon.png",
   icon192: "/icon-192.png",
   icon512: "/icon-512.png",
 } as const;
 
 export const BRAND_NAME = "QuantForg";
-export const BRAND_TAGLINE = "Trading Technology Platform";
+export const BRAND_TAGLINE = "Institutional AI Trading Platform";
+export const BRAND_CAPTION = "Institutional Trading Intelligence";
+
+/** Logo-derived cyan accent (official QF glow). */
 export const BRAND_ACCENT = "#00D4E0";
-export const BRAND_CHARCOAL = "#111827";
+/** Deeper teal sampled from the official QF stroke. */
+export const BRAND_TEAL = "#00CAC0";
+/** Premium Blue Hybrid deep navy (primary surface). */
+export const BRAND_NAVY = "#061B35";
+/** Primary institutional blue. */
+export const BRAND_PRIMARY_BLUE = "#0756A8";
+/** Electric blue highlight. */
+export const BRAND_ELECTRIC = "#087CFF";
+
+/** @deprecated Prefer BRAND_NAVY — kept for transitional imports. */
+export const BRAND_CHARCOAL = BRAND_NAVY;

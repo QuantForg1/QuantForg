@@ -191,7 +191,7 @@ function NavBody({
 function MobileBrand() {
   return (
     <div className="flex h-12 shrink-0 items-center gap-2.5 px-3">
-      <BrandLogo size={28} caption="Institutional Trading Intelligence" />
+      <BrandLogo size={28} />
     </div>
   );
 }

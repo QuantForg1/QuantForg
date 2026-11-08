@@ -40,7 +40,7 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#111827",
+          background: "#061B35",
           color: "#F5F8FF",
           fontFamily: "system-ui, sans-serif",
           padding: 24,
@@ -50,11 +50,11 @@ export default function GlobalError({
           style={{
             width: "100%",
             maxWidth: 440,
-            border: "1px solid rgba(200, 214, 229, 0.14)",
+            border: "1px solid rgba(186, 214, 240, 0.14)",
             borderRadius: 14,
-            background: "#1A2330",
+            background: "#0D2F55",
             padding: 24,
-            boxShadow: "0 24px 64px rgba(2, 6, 14, 0.55)",
+            boxShadow: "0 24px 64px rgba(2, 12, 28, 0.55)",
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
