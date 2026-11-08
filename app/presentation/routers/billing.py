@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, Field
@@ -49,7 +50,7 @@ class PlanOverrideRequest(BaseModel):
 
 
 class AdminAssignPlanRequest(BaseModel):
-    user_id: str = Field(min_length=8, max_length=64)
+    user_id: UUID
     plan_id: str = Field(min_length=3, max_length=40)
     days: int = Field(default=30, ge=1, le=3650)
     reason: str = Field(min_length=3, max_length=500)
@@ -166,8 +167,6 @@ async def billing_admin_assign_plan(
     user: OwnerAdminUser,
     svc: BillingSvc,
 ) -> dict[str, Any]:
-    from uuid import UUID
-
     email = str(getattr(user, "email", "") or "")
     if not is_designated_owner_email(email):
         raise ValidationError(
@@ -175,7 +174,7 @@ async def billing_admin_assign_plan(
             code="OWNER_ASSIGN_FORBIDDEN",
         )
     return await svc.admin_assign_plan(
-        target_user_id=UUID(body.user_id),
+        target_user_id=body.user_id,
         plan_id=body.plan_id,
         days=body.days,
         actor_user_id=user.id,
