@@ -1,0 +1,7 @@
+Payment issue
+
+Payment could not be confirmed.
+Retry from Settings → Subscription.
+
+— QuantForg
+https://www.quantforg.com

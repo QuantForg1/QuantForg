@@ -7,9 +7,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, Field
 
+from app.application.dto.auth import AuthUserDTO
 from app.application.services.billing_service import BillingService
+from app.domain.enums.user import UserRole
 from app.domain.exceptions.base import ValidationError
-from app.presentation.dependencies.auth import CurrentUser
+from app.domain.identity.designated_owner import is_designated_owner_email
+from app.presentation.dependencies.auth import CurrentUser, require_roles
 from core.config.settings import Settings, get_settings
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -71,14 +74,19 @@ async def billing_start_trial(
     ip = ""
     if request.client and request.client.host:
         ip = request.client.host
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        ip = forwarded.split(",", 1)[0].strip() or ip
     email = str(getattr(user, "email", "") or "")
-    # Active QuantForg profile implies email verification / activation completed.
     verified = str(getattr(user, "status", "") or "").lower() == "active"
+    ua = (request.headers.get("user-agent") or "")[:80]
+    fingerprint = f"{ip}|{ua}" if ip or ua else ""
     return await svc.start_trial(
         user_id=user.id,
         email=email,
         email_verified=verified,
         source_ip=ip,
+        claim_fingerprint=fingerprint,
     )
 
 
@@ -100,6 +108,52 @@ async def billing_checkout(
 @router.post("/cancel")
 async def billing_cancel(user: CurrentUser, svc: BillingSvc) -> dict[str, Any]:
     return await svc.cancel_subscription(user_id=user.id)
+
+
+OwnerAdminUser = Annotated[
+    AuthUserDTO, Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))
+]
+
+
+@router.post("/admin/owner-compensation-premium")
+async def billing_owner_compensation_premium(
+    user: OwnerAdminUser,
+    svc: BillingSvc,
+) -> dict[str, Any]:
+    """Grant Premium to the designated owner only. Target is not request-controlled."""
+    email = str(getattr(user, "email", "") or "")
+    role = str(getattr(user, "role", "") or "")
+    if not is_designated_owner_email(email):
+        raise ValidationError(
+            "Only the designated owner may execute this grant",
+            code="OWNER_GRANT_FORBIDDEN",
+        )
+    return await svc.grant_owner_compensation_premium(
+        actor_user_id=user.id,
+        actor_email=email,
+        actor_role=role,
+    )
+
+
+@router.post("/internal/reconcile-trials")
+async def billing_reconcile_trials(
+    svc: BillingSvc,
+    settings: Annotated[Settings, Depends(get_settings)],
+    x_quantforg_cron_secret: Annotated[
+        str | None, Header(alias="x-quantforg-cron-secret")
+    ] = None,
+) -> dict[str, Any]:
+    """Expire due trials. Protected by BILLING_CRON_SECRET."""
+    secret = settings.billing_cron_secret
+    expected = secret.get_secret_value() if secret else ""
+    if not expected:
+        raise ValidationError(
+            "BILLING_CRON_SECRET is not configured",
+            code="CRON_NOT_CONFIGURED",
+        )
+    if (x_quantforg_cron_secret or "") != expected:
+        raise ValidationError("Invalid cron secret", code="CRON_FORBIDDEN")
+    return await svc.reconcile_expired_trials()
 
 
 @router.post("/ipn/nowpayments")

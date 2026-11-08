@@ -1,6 +1,10 @@
 # Auth email brand guidance (Supabase Dashboard)
 
-QuantForg does not store HTML transactional email templates in this repository. Password reset and confirmations are sent by **Supabase Auth**.
+Reference HTML/TXT copies for Auth and product billing mail live under
+[`docs/auth/email-templates/`](./email-templates/README.md) (see that README for
+Supabase vs future ESP usage).
+
+Password reset and confirmations are sent by **Supabase Auth** (dashboard-hosted).
 
 Apply brand consistency in the Supabase project:
 
