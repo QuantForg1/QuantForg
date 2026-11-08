@@ -1690,9 +1690,7 @@ def _derive_subscription(
             "state": "trial" if tier == "trial" else "active",
             "subscription_type": "trial" if tier == "trial" else "paid",
             "plan_id": plan_id,
-            "plan_name": (
-                "Starter Trial" if tier == "trial" else _plan_name(plan_id)
-            ),
+            "plan_name": ("Starter Trial" if tier == "trial" else _plan_name(plan_id)),
             "activated_at": _iso(license_row.get("issued_at")),
             "period_end": _iso(license_row.get("expires_at")),
             "next_renewal_due": _iso(license_row.get("expires_at")),

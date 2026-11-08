@@ -22,7 +22,9 @@ async def _run() -> int:
     settings = Settings()
     service = BillingService(settings)
     try:
-        result = await service.grant_owner_compensation_premium(email=DESIGNATED_OWNER_EMAIL)
+        result = await service.grant_owner_compensation_premium(
+            email=DESIGNATED_OWNER_EMAIL
+        )
     except Exception as exc:  # noqa: BLE001 — operator CLI surfaces typed errors
         print(f"grant_failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
