@@ -37,6 +37,7 @@ export function AuthLayoutProviders({ children }: { children: React.ReactNode })
     <ThemeProvider
       attribute="class"
       defaultTheme="dark"
+      forcedTheme="dark"
       enableSystem={false}
       storageKey="qf.theme.v3"
     >

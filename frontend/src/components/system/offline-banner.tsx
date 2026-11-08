@@ -13,12 +13,20 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { platformApi } from "@/lib/api/endpoints";
 
+type OfflineBannerProps = {
+  /**
+   * Admin / ops shells may show confirmed API unreachable diagnostics.
+   * Customer shells only surface browser-offline — never raw infrastructure banners.
+   */
+  showApiDiagnostics?: boolean;
+};
+
 /**
- * Browser offline + confirmed API unreachable.
- * Degraded (slow/timeout under load) does NOT show the red unreachable strip —
- * that was the false "API offline" bug when heavy MT5 routes timed out.
+ * Connectivity chrome.
+ * - Customer UI: browser offline only (no "API unreachable" strip).
+ * - Admin UI: optional confirmed unreachable diagnostics (never degraded/slow).
  */
-export function OfflineBanner() {
+export function OfflineBanner({ showApiDiagnostics = false }: OfflineBannerProps) {
   const [browserOffline, setBrowserOffline] = useState(false);
   const [apiState, setApiState] = useState<ApiConnectionState>(() =>
     getApiConnectionState(),
@@ -37,7 +45,6 @@ export function OfflineBanner() {
 
   useEffect(() => subscribeApiConnection(setApiState), []);
 
-  // Independent lightweight liveness probe — never uses heavy MT5/weltrade routes.
   useEffect(() => {
     let cancelled = false;
     const probe = async () => {
@@ -49,7 +56,6 @@ export function OfflineBanner() {
         if (cancelled) return;
         if (e instanceof ApiError && e.code === "timeout") noteApiSlow();
         else if (e instanceof ApiError && e.status > 0) {
-          // HTTP error from a live process — API is reachable.
           markApiReachable();
         } else noteApiNetworkFailure();
       }
@@ -62,12 +68,6 @@ export function OfflineBanner() {
     };
   }, []);
 
-  const apiUnreachable = apiState === "unreachable";
-
-  // Degraded/slow latency stays in operator logs via connectivity markers —
-  // never surface raw backend diagnostics on the customer Overview shell.
-  if (!browserOffline && !apiUnreachable) return null;
-
   if (browserOffline) {
     return (
       <div
@@ -79,6 +79,8 @@ export function OfflineBanner() {
       </div>
     );
   }
+
+  if (!showApiDiagnostics || apiState !== "unreachable") return null;
 
   return (
     <div

@@ -49,7 +49,7 @@ assert.match(signalCard, /Take profit/);
 assert.match(signalCard, /signalExecutionStatusLabel/);
 assert.match(signalCard, /signalMt5Ticket/);
 assert.equal(signals.includes("Why this signal"), false);
-assert.match(signals, /live Gold candles/);
+assert.match(signals, /useState<StatusFilterId>\("ALL"\)/);
 
 assert.match(broker, /Connect MT5/);
 assert.match(broker, /Change account/);
