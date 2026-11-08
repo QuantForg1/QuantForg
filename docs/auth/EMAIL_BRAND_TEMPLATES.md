@@ -11,3 +11,12 @@ Apply brand consistency in the Supabase project:
 5. Subjects should say “QuantForg” without promising trading profits
 
 Suggested confirm button style: solid cyan (`#00D4E0`) on charcoal, IBM Plex / system sans, mobile-friendly single column ≤ 600px.
+
+## Product emails (future / optional)
+
+Subscription confirmation, payment pending/success/failed, renewal reminder, and
+cancellation notices should reuse the same RC4 palette when a transactional mail
+provider is connected. Until then, Auth emails remain Supabase-hosted; payment
+status is shown in Settings → Subscription after verified IPN.
+
+Do not invent an SMTP provider in code. Configure Supabase templates first.

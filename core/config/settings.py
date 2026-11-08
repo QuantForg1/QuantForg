@@ -228,6 +228,66 @@ class Settings(BaseSettings):
         Field(description="Expose Google/GitHub OAuth endpoints"),
     ] = True
 
+    # -- SaaS billing (NOWPayments LIVE only) ---------------------------------
+    nowpayments_api_key: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description="NOWPayments LIVE API key (server-side only)",
+            validation_alias=AliasChoices(
+                "NOWPAYMENTS_API_KEY",
+                "nowpayments_api_key",
+            ),
+        ),
+    ] = None
+    nowpayments_ipn_secret: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description="NOWPayments LIVE IPN secret for x-nowpayments-sig",
+            validation_alias=AliasChoices(
+                "NOWPAYMENTS_IPN_SECRET",
+                "nowpayments_ipn_secret",
+            ),
+        ),
+    ] = None
+    nowpayments_api_base: Annotated[
+        str,
+        Field(
+            description="NOWPayments API base URL (LIVE only — sandbox forbidden)",
+            validation_alias=AliasChoices(
+                "NOWPAYMENTS_API_BASE",
+                "nowpayments_api_base",
+            ),
+        ),
+    ] = "https://api.nowpayments.io/v1"
+    public_app_url: Annotated[
+        str,
+        Field(
+            description="Public frontend origin for billing redirects",
+            validation_alias=AliasChoices("PUBLIC_APP_URL", "public_app_url"),
+        ),
+    ] = "https://www.quantforg.com"
+    public_api_url: Annotated[
+        str,
+        Field(
+            description="Public API origin including /api/v1 for IPN callbacks",
+            validation_alias=AliasChoices("PUBLIC_API_URL", "public_api_url"),
+        ),
+    ] = "https://quantforg-production.up.railway.app/api/v1"
+    billing_period_days: Annotated[
+        int,
+        Field(ge=1, le=366, description="Paid subscription period length in days"),
+    ] = 30
+    billing_grace_days: Annotated[
+        int,
+        Field(
+            ge=0,
+            le=30,
+            description="Grace days after period_end before entitlement expires",
+        ),
+    ] = 3
+
     # -- Redis ----------------------------------------------------------------
     redis_host: Annotated[str, Field(description="Redis hostname")] = "localhost"
     redis_port: Annotated[int, Field(ge=1, le=65535, description="Redis port")] = 6379
