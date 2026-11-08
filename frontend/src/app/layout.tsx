@@ -1,25 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 /**
- * One IBM Plex Sans loader only. Turbopack fails production builds when the
- * same next/font/google family is instantiated twice ("queries have exactly
- * one entry" / missing @vercel/turbopack-next font resolver). Display headings
- * reuse --font-sans via --font-display alias in globals.css.
+ * Self-hosted IBM Plex (latin) — avoids next/font/google fetch failures on Vercel
+ * and keeps CSP font-src on 'self'. Display headings reuse --font-sans via
+ * --font-display alias in globals.css.
  */
-const sans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const sans = localFont({
+  src: [
+    { path: "../fonts/IBMPlexSans-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/IBMPlexSans-Medium.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/IBMPlexSans-SemiBold.woff2", weight: "600", style: "normal" },
+  ],
   variable: "--font-sans",
   display: "swap",
   preload: true,
 });
 
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const mono = localFont({
+  src: [
+    { path: "../fonts/IBMPlexMono-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/IBMPlexMono-Medium.woff2", weight: "500", style: "normal" },
+  ],
   variable: "--font-mono",
   display: "swap",
   preload: true,
