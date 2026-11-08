@@ -439,6 +439,24 @@ class BillingService:
                 user_id=str(user_id),
                 expires_at=expires.isoformat(),
             )
+            with contextlib.suppress(Exception):
+                from app.application.services.billing_email_service import (
+                    queue_billing_email,
+                )
+
+                await queue_billing_email(
+                    user_id=user_id,
+                    email_norm=email_norm,
+                    template_key="trial_activated",
+                    dedupe_key=f"trial_activated:{trial_id_row['id']}",
+                    related_trial_id=str(trial_id_row["id"]),
+                    payload={
+                        "summary": (
+                            f"Your {days}-day Starter trial is active until "
+                            f"{expires.date().isoformat()} UTC."
+                        )
+                    },
+                )
             return {
                 "started": True,
                 "trial": {
@@ -675,6 +693,37 @@ class BillingService:
                 plan_id=plan.plan_id,
                 provider_invoice_id=invoice_id,
             )
+            with contextlib.suppress(Exception):
+                from app.application.services.billing_email_service import (
+                    queue_billing_email,
+                )
+                from app.domain.identity.designated_owner import normalize_email as _ne
+
+                email_row = (
+                    (
+                        await session.execute(
+                            text("SELECT email FROM users WHERE id = :id LIMIT 1"),
+                            {"id": str(user_id)},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                email_norm = _ne(str((email_row or {}).get("email") or ""))
+                if email_norm and row is not None:
+                    await queue_billing_email(
+                        user_id=user_id,
+                        email_norm=email_norm,
+                        template_key="invoice_created",
+                        dedupe_key=f"invoice_created:{row['id']}",
+                        related_order_id=str(row["id"]),
+                        payload={
+                            "summary": (
+                                f"Invoice for {plan.name} "
+                                f"(${plan.amount_usd} USD) is ready for Crypto Payment."
+                            )
+                        },
+                    )
             return {
                 "reused": False,
                 "order": _row_order(row),
@@ -734,6 +783,37 @@ class BillingService:
                 {"user_id": str(user_id)},
             )
             await session.commit()
+            with contextlib.suppress(Exception):
+                from app.application.services.billing_email_service import (
+                    queue_billing_email,
+                )
+                from app.domain.identity.designated_owner import normalize_email as _ne
+
+                email_row = (
+                    (
+                        await session.execute(
+                            text("SELECT email FROM users WHERE id = :id LIMIT 1"),
+                            {"id": str(user_id)},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                email_norm = _ne(str((email_row or {}).get("email") or ""))
+                if email_norm:
+                    await queue_billing_email(
+                        user_id=user_id,
+                        email_norm=email_norm,
+                        template_key="subscription_cancelled",
+                        dedupe_key=f"subscription_cancelled:{row['id']}",
+                        related_order_id=str(row["id"]),
+                        payload={
+                            "summary": (
+                                "Your paid subscription was cancelled. "
+                                "Access remains until the current period ends."
+                            )
+                        },
+                    )
             return {
                 "cancelled": True,
                 "order_code": row["order_code"],
@@ -964,15 +1044,22 @@ class BillingService:
                 await uow.__aexit__(None, None, None)
 
     async def reconcile_expired_trials(self, *, limit: int = 200) -> dict[str, Any]:
-        """Expire due trials and revoke trial-only licenses (idempotent)."""
+        """Expire due trials, queue notices, and drain email queue (idempotent)."""
+        from app.application.services.billing_email_service import (
+            process_billing_email_queue,
+            queue_billing_email,
+            queue_trial_expiring_reminders,
+        )
+
         uow = await _uow()
+        expired_rows: list[dict[str, Any]] = []
         try:
             session = uow._require_session()
             due = (
                 (
                     await session.execute(
                         text("""
-                        SELECT id, user_id, license_id
+                        SELECT id, user_id, license_id, email_norm
                         FROM billing_trials
                         WHERE status = 'active'
                           AND expires_at <= timezone('utc', now())
@@ -987,14 +1074,17 @@ class BillingService:
             )
             expired = 0
             for row in due:
-                await session.execute(
+                result = await session.execute(
                     text("""
                         UPDATE billing_trials
                         SET status = 'expired', updated_at = timezone('utc', now())
                         WHERE id = :id AND status = 'active'
+                        RETURNING id
                         """),
                     {"id": str(row["id"])},
                 )
+                if result.mappings().first() is None:
+                    continue
                 if row.get("license_id") is not None:
                     await session.execute(
                         text("""
@@ -1018,11 +1108,42 @@ class BillingService:
                     {"user_id": str(row["user_id"])},
                 )
                 expired += 1
+                expired_rows.append(dict(row))
             await session.commit()
-            return {"ok": True, "expired_count": expired}
         finally:
             with contextlib.suppress(Exception):
                 await uow.__aexit__(None, None, None)
+
+        for row in expired_rows:
+            with contextlib.suppress(Exception):
+                await queue_billing_email(
+                    user_id=str(row["user_id"]),
+                    email_norm=str(row.get("email_norm") or ""),
+                    template_key="trial_expired",
+                    dedupe_key=f"trial_expired:{row['id']}",
+                    related_trial_id=str(row["id"]),
+                    payload={
+                        "summary": (
+                            "Your Starter trial has ended. "
+                            "Choose a paid plan via Crypto Payment to continue."
+                        )
+                    },
+                )
+
+        expiring_queued = 0
+        with contextlib.suppress(Exception):
+            expiring_queued = await queue_trial_expiring_reminders(within_hours=48)
+
+        email_result: dict[str, Any] = {"ok": True, "processed": 0}
+        with contextlib.suppress(Exception):
+            email_result = await process_billing_email_queue(self.settings)
+
+        return {
+            "ok": True,
+            "expired_count": expired,
+            "trial_expiring_queued": expiring_queued,
+            "email_queue": email_result,
+        }
 
     async def handle_ipn(
         self,
@@ -1265,10 +1386,95 @@ class BillingService:
                 payment_status=payment_status,
                 result=result,
             )
+            with contextlib.suppress(Exception):
+                await self._queue_ipn_emails(
+                    order=order,
+                    payment_status=payment_status,
+                    result=result,
+                )
             return {"ok": True, "duplicate": False, "result": result}
         finally:
             with contextlib.suppress(Exception):
                 await uow.__aexit__(None, None, None)
+
+    async def _queue_ipn_emails(
+        self,
+        *,
+        order: Any,
+        payment_status: str,
+        result: str,
+    ) -> None:
+        from app.application.services.billing_email_service import queue_billing_email
+        from app.domain.identity.designated_owner import normalize_email as _ne
+
+        email_raw = ""
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            email_row = (
+                (
+                    await session.execute(
+                        text("SELECT email FROM users WHERE id = :id LIMIT 1"),
+                        {"id": str(order["user_id"])},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            email_raw = str((email_row or {}).get("email") or "")
+        finally:
+            with contextlib.suppress(Exception):
+                await uow.__aexit__(None, None, None)
+        email_norm = _ne(email_raw)
+        if not email_norm:
+            return
+        order_id = str(order["id"])
+        user_id = str(order["user_id"])
+        if result == "activated":
+            await queue_billing_email(
+                user_id=user_id,
+                email_norm=email_norm,
+                template_key="payment_confirmed",
+                dedupe_key=f"payment_confirmed:{order_id}",
+                related_order_id=order_id,
+                payload={"summary": "Your Crypto Payment was confirmed."},
+            )
+            await queue_billing_email(
+                user_id=user_id,
+                email_norm=email_norm,
+                template_key="subscription_activated",
+                dedupe_key=f"subscription_activated:{order_id}",
+                related_order_id=order_id,
+                payload={
+                    "summary": (
+                        f"Your {order.get('plan_id')} subscription is now active."
+                    )
+                },
+            )
+        elif payment_status in FAILED_STATUSES:
+            key = "payment_expired" if payment_status == "expired" else "payment_failed"
+            await queue_billing_email(
+                user_id=user_id,
+                email_norm=email_norm,
+                template_key=key,
+                dedupe_key=f"{key}:{order_id}:{payment_status}",
+                related_order_id=order_id,
+                payload={
+                    "summary": (
+                        "Your Crypto Payment did not complete. "
+                        "Open Billing → Invoices to try again."
+                    )
+                },
+            )
+        elif payment_status in PENDING_STATUSES:
+            await queue_billing_email(
+                user_id=user_id,
+                email_norm=email_norm,
+                template_key="payment_pending",
+                dedupe_key=f"payment_pending:{order_id}:{payment_status}",
+                related_order_id=order_id,
+                payload={"summary": "Your Crypto Payment is pending confirmation."},
+            )
 
     async def _fulfill_finished(
         self,

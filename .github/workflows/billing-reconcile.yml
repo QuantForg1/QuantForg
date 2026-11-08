@@ -1,0 +1,44 @@
+# Hourly SaaS trial/email reconciliation against production API.
+# Requires repository secret BILLING_CRON_SECRET (same value as Railway).
+# Authorization header: x-quantforg-cron-secret (not Bearer).
+
+name: Billing Reconcile
+
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: billing-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile-trials:
+    name: Reconcile expired trials
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call production reconcile endpoint
+        env:
+          BILLING_CRON_SECRET: ${{ secrets.BILLING_CRON_SECRET }}
+          BILLING_API_BASE: https://quantforg-production.up.railway.app/api/v1
+        run: |
+          set -euo pipefail
+          if [ -z "${BILLING_CRON_SECRET:-}" ]; then
+            echo "BILLING_CRON_SECRET repository secret is not configured" >&2
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/billing-reconcile.json -w "%{http_code}" \
+            -X POST "${BILLING_API_BASE}/billing/internal/reconcile-trials" \
+            -H "x-quantforg-cron-secret: ${BILLING_CRON_SECRET}" \
+            -H "content-type: application/json" \
+            --max-time 60)
+          echo "HTTP ${code}"
+          # Never echo the secret; response body is operational only.
+          python3 - <<'PY'
+          import json, pathlib, sys
+          raw = pathlib.Path("/tmp/billing-reconcile.json").read_text(encoding="utf-8")
+          print(raw[:2000])
+          PY
+          test "${code}" = "200"
