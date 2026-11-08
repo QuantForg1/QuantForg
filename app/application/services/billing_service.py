@@ -66,25 +66,29 @@ def _configured(settings: Settings) -> bool:
 
 
 def billing_provider_status(settings: Settings) -> dict[str, Any]:
+    """Customer-safe payment method status. Provider brand stays internal."""
     configured = _configured(settings)
     return {
         "configured": configured,
-        "provider": "nowpayments" if configured else None,
+        "payment_method": "crypto",
+        "payment_method_label": "Crypto Payment",
         "mode": "live" if configured else None,
         "recurring_supported": False,
         "recurring_note": (
-            "NOWPayments recurring crypto billing is not enabled for this deployment. "
-            "Customers pay via one-time LIVE invoices and renew with a new invoice."
+            "Automatic monthly crypto charging is not enabled. "
+            "Customers renew by paying a new invoice before the period ends."
         ),
         "note": (
-            "LIVE NOWPayments checkout is configured."
+            "Crypto Payment is available. Paid access activates only after "
+            "QuantForg verifies a completed payment — never from a browser redirect alone."
             if configured
             else (
-                "NOWPayments LIVE credentials are not configured. Set "
-                "NOWPAYMENTS_API_KEY and NOWPAYMENTS_IPN_SECRET on Railway "
-                "(production API only — sandbox is forbidden)."
+                "Crypto Payment is not configured on the API yet. "
+                "Checkout will remain unavailable until production credentials are set."
             )
         ),
+        # Internal processor id for operators/logs — UI must not render this label.
+        "processor": "nowpayments" if configured else None,
     }
 
 
@@ -132,7 +136,12 @@ class BillingService:
                 code="NOWPAYMENTS_CURRENCIES_UNAVAILABLE",
                 details={"error": str(exc)},
             ) from exc
-        return {"currencies": currencies, "provider": "nowpayments", "mode": "live"}
+        return {
+            "currencies": currencies,
+            "payment_method": "crypto",
+            "payment_method_label": "Crypto Payment",
+            "mode": "live",
+        }
 
     async def get_customer_billing(self, *, user_id: UUID) -> dict[str, Any]:
         uow = await _uow()
@@ -181,13 +190,226 @@ class BillingService:
                 .mappings()
                 .all()
             )
+            trial_row = None
+            try:
+                trial_row = (
+                    (
+                        await session.execute(
+                            text("""
+                            SELECT id, plan_id, status, started_at, expires_at,
+                                   converted_at, cancelled_at
+                            FROM billing_trials
+                            WHERE user_id = :user_id
+                            LIMIT 1
+                            """),
+                            {"user_id": str(user_id)},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+            except Exception:
+                # Migration 20261108193000 not applied yet.
+                await session.rollback()
+                trial_row = None
+            trial = await _sync_trial_row(session, trial_row)
             return {
                 "provider": billing_provider_status(self.settings),
+                "payment_method_label": "Crypto Payment",
                 "license": _row_license(license_row),
                 "orders": [_row_order(r) for r in orders],
+                "invoices": [_row_invoice(r) for r in orders],
+                "trial": trial,
                 "subscription": _derive_subscription(
-                    license_row, orders, self.settings
+                    license_row, orders, self.settings, trial=trial
                 ),
+            }
+        finally:
+            with contextlib.suppress(Exception):
+                await uow.__aexit__(None, None, None)
+
+    async def start_trial(
+        self,
+        *,
+        user_id: UUID,
+        email: str,
+        email_verified: bool,
+        source_ip: str = "",
+    ) -> dict[str, Any]:
+        if not email_verified:
+            raise ValidationError(
+                "Verify your email before starting a free trial",
+                code="TRIAL_EMAIL_UNVERIFIED",
+            )
+        email_norm = email.strip().lower()
+        if not email_norm or "@" not in email_norm:
+            raise ValidationError("Valid email required", code="TRIAL_EMAIL_INVALID")
+        days = int(self.settings.billing_trial_days)
+        now = datetime.now(UTC)
+        expires = now + timedelta(days=days)
+
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            existing = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id, status, started_at, expires_at
+                        FROM billing_trials
+                        WHERE user_id = :user_id OR email_norm = :email_norm
+                        LIMIT 1
+                        """),
+                        {"user_id": str(user_id), "email_norm": email_norm},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if existing is not None:
+                raise ValidationError(
+                    "A free trial was already used for this account",
+                    code="TRIAL_ALREADY_USED",
+                    details={"status": existing.get("status")},
+                )
+
+            active_paid = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id FROM billing_orders
+                        WHERE user_id = :user_id AND status = 'active'
+                        LIMIT 1
+                        """),
+                        {"user_id": str(user_id)},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if active_paid is not None:
+                raise ValidationError(
+                    "An active paid subscription already covers this account",
+                    code="TRIAL_PAID_ACTIVE",
+                )
+
+            await session.execute(
+                text("""
+                    INSERT INTO licenses (
+                      user_id, tier, status, seats, issued_at, expires_at, notes
+                    ) VALUES (
+                      :user_id, 'trial', 'active', 1, :issued_at, :expires_at,
+                      :notes
+                    )
+                    """),
+                {
+                    "user_id": str(user_id),
+                    "issued_at": now,
+                    "expires_at": expires,
+                    "notes": "Starter trial — no payment required; expires automatically",
+                },
+            )
+            lic = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id FROM licenses
+                        WHERE user_id = :user_id AND tier = 'trial'
+                        ORDER BY created_at DESC LIMIT 1
+                        """),
+                        {"user_id": str(user_id)},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            await session.execute(
+                text("""
+                    INSERT INTO billing_trials (
+                      user_id, email_norm, plan_id, status, started_at, expires_at,
+                      license_id, source_ip
+                    ) VALUES (
+                      :user_id, :email_norm, 'starter', 'active', :started_at,
+                      :expires_at, :license_id, :source_ip
+                    )
+                    """),
+                {
+                    "user_id": str(user_id),
+                    "email_norm": email_norm,
+                    "started_at": now,
+                    "expires_at": expires,
+                    "license_id": str(lic["id"]) if lic else None,
+                    "source_ip": (source_ip or "")[:120],
+                },
+            )
+            await session.execute(
+                text("""
+                    UPDATE users
+                    SET subscription_plan_id = 'starter',
+                        subscription_status = 'trial',
+                        subscription_expires_at = :expires_at,
+                        trial_started_at = :started_at,
+                        trial_expires_at = :expires_at,
+                        trial_status = 'active',
+                        updated_at = timezone('utc', now())
+                    WHERE id = :user_id
+                    """),
+                {
+                    "user_id": str(user_id),
+                    "started_at": now,
+                    "expires_at": expires,
+                },
+            )
+            await session.commit()
+            logger.info(
+                "billing_trial_started",
+                user_id=str(user_id),
+                expires_at=expires.isoformat(),
+            )
+            return {
+                "started": True,
+                "trial": {
+                    "status": "active",
+                    "plan_id": "starter",
+                    "plan_name": "Starter Trial",
+                    "started_at": now.isoformat(),
+                    "expires_at": expires.isoformat(),
+                    "days_total": days,
+                    "days_remaining": days,
+                    "payment_required": False,
+                },
+            }
+        finally:
+            with contextlib.suppress(Exception):
+                await uow.__aexit__(None, None, None)
+
+    async def get_invoice(self, *, user_id: UUID, order_code: str) -> dict[str, Any]:
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            row = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id, order_code, plan_id, license_tier, amount_usd, currency,
+                               status, provider_status, invoice_url, provider_invoice_id,
+                               provider_payment_id, pay_currency, period_start, period_end,
+                               paid_at, cancelled_at, expires_at, created_at
+                        FROM billing_orders
+                        WHERE user_id = :user_id AND order_code = :order_code
+                        LIMIT 1
+                        """),
+                        {"user_id": str(user_id), "order_code": order_code},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if row is None:
+                raise NotFoundError("Invoice not found", code="INVOICE_NOT_FOUND")
+            return {
+                "invoice": _row_invoice(row),
+                "payment_method_label": "Crypto Payment",
             }
         finally:
             with contextlib.suppress(Exception):
@@ -229,7 +451,9 @@ class BillingService:
                     await session.execute(
                         text("""
                         SELECT id, order_code, invoice_url, status, provider_invoice_id,
-                               amount_usd, plan_id, created_at
+                               amount_usd, plan_id, license_tier, currency, provider_status,
+                               provider_payment_id, pay_currency, period_start, period_end,
+                               paid_at, cancelled_at, expires_at, created_at
                         FROM billing_orders
                         WHERE user_id = :user_id
                           AND plan_id = :plan_id
@@ -249,12 +473,18 @@ class BillingService:
                 return {
                     "reused": True,
                     "order": _row_order(existing),
+                    "invoice": _row_invoice(existing),
                     "invoice_url": existing["invoice_url"],
-                    "provider": "nowpayments",
+                    "payment_method": "crypto",
+                    "payment_method_label": "Crypto Payment",
                     "mode": "live",
                 }
 
             code = _order_code()
+            invoice_number = (
+                f"INV-{datetime.now(UTC).strftime('%Y%m%d')}-"
+                f"{secrets.token_hex(4).upper()}"
+            )
             await session.execute(
                 text("""
                     INSERT INTO billing_orders (
@@ -273,6 +503,16 @@ class BillingService:
                     "amount_usd": str(plan.amount_usd),
                 },
             )
+            # Optional column from 20261108193000 — ignore if migration not yet applied.
+            with contextlib.suppress(Exception):
+                await session.execute(
+                    text("""
+                        UPDATE billing_orders
+                        SET invoice_number = :invoice_number
+                        WHERE order_code = :order_code
+                        """),
+                    {"invoice_number": invoice_number, "order_code": code},
+                )
             await session.commit()
 
             body: dict[str, Any] = {
@@ -302,8 +542,8 @@ class BillingService:
                 )
                 await session.commit()
                 raise ServiceUnavailableError(
-                    "Unable to create NOWPayments LIVE invoice",
-                    code="NOWPAYMENTS_INVOICE_FAILED",
+                    "Unable to create Crypto Payment invoice",
+                    code="CRYPTO_INVOICE_FAILED",
                     details={"error": str(exc)},
                 ) from exc
 
@@ -311,8 +551,8 @@ class BillingService:
             invoice_url = str(invoice.get("invoice_url") or "")
             if not invoice_url:
                 raise ServiceUnavailableError(
-                    "NOWPayments returned no invoice URL",
-                    code="NOWPAYMENTS_INVOICE_INCOMPLETE",
+                    "Crypto Payment did not return an invoice URL",
+                    code="CRYPTO_INVOICE_INCOMPLETE",
                 )
 
             await session.execute(
@@ -365,8 +605,10 @@ class BillingService:
             return {
                 "reused": False,
                 "order": _row_order(row),
+                "invoice": _row_invoice(row),
                 "invoice_url": invoice_url,
-                "provider": "nowpayments",
+                "payment_method": "crypto",
+                "payment_method_label": "Crypto Payment",
                 "mode": "live",
             }
         finally:
@@ -851,6 +1093,7 @@ def _row_order(row: Any) -> dict[str, Any] | None:
     return {
         "id": str(row["id"]) if row.get("id") is not None else None,
         "order_code": row.get("order_code"),
+        "invoice_number": row.get("invoice_number") or row.get("order_code"),
         "plan_id": row.get("plan_id"),
         "license_tier": row.get("license_tier"),
         "amount_usd": (
@@ -863,12 +1106,96 @@ def _row_order(row: Any) -> dict[str, Any] | None:
         "provider_invoice_id": row.get("provider_invoice_id"),
         "provider_payment_id": row.get("provider_payment_id"),
         "pay_currency": row.get("pay_currency"),
+        "payment_method_label": "Crypto Payment",
         "period_start": _iso(row.get("period_start")),
         "period_end": _iso(row.get("period_end")),
         "paid_at": _iso(row.get("paid_at")),
         "cancelled_at": _iso(row.get("cancelled_at")),
         "expires_at": _iso(row.get("expires_at")),
         "created_at": _iso(row.get("created_at")),
+    }
+
+
+def _row_invoice(row: Any) -> dict[str, Any] | None:
+    """Customer invoice projection (no processor brand)."""
+    base = _row_order(row)
+    if base is None:
+        return None
+    status = str(base.get("status") or "")
+    display = {
+        "pending_payment": "Awaiting payment",
+        "confirming": "Confirming",
+        "partially_paid": "Partially paid",
+        "active": "Paid",
+        "renewal_due": "Renewal due",
+        "past_due": "Past due",
+        "payment_failed": "Failed",
+        "cancelled": "Cancelled",
+        "expired": "Expired",
+        "suspended": "Suspended",
+        "refunded": "Refunded",
+    }.get(status, status.replace("_", " ").title() or "Unknown")
+    return {
+        **base,
+        "status_label": display,
+        "payment_method_label": "Crypto Payment",
+    }
+
+
+async def _sync_trial_row(session: Any, trial_row: Any) -> dict[str, Any] | None:
+    if trial_row is None:
+        return None
+    status = str(trial_row.get("status") or "")
+    expires = trial_row.get("expires_at")
+    now = datetime.now(UTC)
+    if status == "active" and isinstance(expires, datetime) and expires <= now:
+        await session.execute(
+            text("""
+                UPDATE billing_trials
+                SET status = 'expired', updated_at = timezone('utc', now())
+                WHERE id = :id AND status = 'active'
+                """),
+            {"id": str(trial_row["id"])},
+        )
+        await session.execute(
+            text("""
+                UPDATE licenses
+                SET status = 'expired', updated_at = timezone('utc', now())
+                WHERE id = (
+                  SELECT license_id FROM billing_trials WHERE id = :id
+                )
+                AND status = 'active' AND tier = 'trial'
+                """),
+            {"id": str(trial_row["id"])},
+        )
+        await session.execute(
+            text("""
+                UPDATE users
+                SET trial_status = 'expired',
+                    subscription_status = CASE
+                      WHEN subscription_status = 'trial' THEN 'expired'
+                      ELSE subscription_status
+                    END,
+                    updated_at = timezone('utc', now())
+                WHERE id = (
+                  SELECT user_id FROM billing_trials WHERE id = :id
+                )
+                """),
+            {"id": str(trial_row["id"])},
+        )
+        await session.commit()
+        status = "expired"
+    days_remaining = 0
+    if isinstance(expires, datetime) and status == "active":
+        days_remaining = max(0, int((expires - now).total_seconds() // 86400))
+    return {
+        "status": status,
+        "plan_id": trial_row.get("plan_id") or "starter",
+        "plan_name": "Starter Trial",
+        "started_at": _iso(trial_row.get("started_at")),
+        "expires_at": _iso(expires),
+        "days_remaining": days_remaining,
+        "payment_required": False,
     }
 
 
@@ -887,7 +1214,11 @@ def _row_license(row: Any) -> dict[str, Any] | None:
 
 
 def _derive_subscription(
-    license_row: Any, orders: Any, settings: Settings
+    license_row: Any,
+    orders: Any,
+    settings: Settings,
+    *,
+    trial: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     active_order = next((o for o in orders if o.get("status") == "active"), None)
     cancelled = next((o for o in orders if o.get("status") == "cancelled"), None)
@@ -899,12 +1230,16 @@ def _derive_subscription(
         ),
         None,
     )
+    grace = int(settings.billing_grace_days)
     if active_order is not None:
         return {
             "state": "active",
             "plan_id": active_order.get("plan_id"),
+            "period_start": _iso(active_order.get("period_start")),
             "period_end": _iso(active_order.get("period_end")),
-            "grace_days": int(settings.billing_grace_days),
+            "billing_frequency": "monthly",
+            "payment_method_label": "Crypto Payment",
+            "grace_days": grace,
         }
     if cancelled is not None and cancelled.get("period_end"):
         end = cancelled["period_end"]
@@ -913,27 +1248,52 @@ def _derive_subscription(
                 "state": "cancelled",
                 "plan_id": cancelled.get("plan_id"),
                 "period_end": _iso(end),
-                "grace_days": int(settings.billing_grace_days),
+                "payment_method_label": "Crypto Payment",
+                "grace_days": grace,
             }
     if pending is not None:
         return {
             "state": "pending_payment",
             "plan_id": pending.get("plan_id"),
             "period_end": None,
-            "grace_days": int(settings.billing_grace_days),
+            "invoice_url": pending.get("invoice_url"),
+            "order_code": pending.get("order_code"),
+            "payment_method_label": "Crypto Payment",
+            "grace_days": grace,
+        }
+    if trial and trial.get("status") == "active":
+        return {
+            "state": "trial",
+            "plan_id": "starter",
+            "period_end": trial.get("expires_at"),
+            "trial": True,
+            "days_remaining": trial.get("days_remaining"),
+            "payment_method_label": "Crypto Payment",
+            "grace_days": grace,
+        }
+    if trial and trial.get("status") == "expired":
+        return {
+            "state": "trial_expired",
+            "plan_id": "starter",
+            "period_end": trial.get("expires_at"),
+            "payment_method_label": "Crypto Payment",
+            "grace_days": grace,
         }
     if license_row is not None and str(license_row.get("status")) == "active":
+        tier = str(license_row.get("tier") or "")
         return {
-            "state": "active",
-            "plan_id": None,
+            "state": "trial" if tier == "trial" else "active",
+            "plan_id": "starter" if tier == "trial" else None,
             "period_end": _iso(license_row.get("expires_at")),
-            "grace_days": int(settings.billing_grace_days),
+            "payment_method_label": "Crypto Payment",
+            "grace_days": grace,
         }
     return {
         "state": "none",
         "plan_id": None,
         "period_end": None,
-        "grace_days": int(settings.billing_grace_days),
+        "payment_method_label": "Crypto Payment",
+        "grace_days": grace,
     }
 
 

@@ -287,6 +287,18 @@ class Settings(BaseSettings):
             description="Grace days after period_end before entitlement expires",
         ),
     ] = 3
+    billing_trial_days: Annotated[
+        int,
+        Field(
+            ge=1,
+            le=30,
+            description="Free Starter trial length in calendar days (UTC)",
+            validation_alias=AliasChoices(
+                "BILLING_TRIAL_DAYS",
+                "billing_trial_days",
+            ),
+        ),
+    ] = 7
 
     # -- Redis ----------------------------------------------------------------
     redis_host: Annotated[str, Field(description="Redis hostname")] = "localhost"
