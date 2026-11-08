@@ -18,7 +18,22 @@ type BrandLogoProps = {
   priority?: boolean;
   /** Prefer compact mark for dense chrome. */
   compact?: boolean;
+  /** Use opaque navy-backed mark (favicons / rare surfaces). */
+  opaque?: boolean;
 };
+
+function transparentMarkSrc(size: number, compact: boolean, hiRes: boolean) {
+  if (compact) return BRAND_ASSETS.compactTransparent;
+  if (hiRes || size > 256) return BRAND_ASSETS.markTransparent;
+  return BRAND_ASSETS.markTransparentUi;
+}
+
+function opaqueMarkSrc(compact: boolean) {
+  return compact ? BRAND_ASSETS.compact : BRAND_ASSETS.mark;
+}
+
+const MARK_SHADOW =
+  "drop-shadow-[0_2px_12px_rgba(0,212,224,0.35)] drop-shadow-[0_1px_4px_rgba(2,12,28,0.45)]";
 
 /**
  * Official QuantForg QF brand mark + optional wordmark.
@@ -31,8 +46,11 @@ export function BrandLogo({
   caption = BRAND_CAPTION,
   priority = false,
   compact = false,
+  opaque = false,
 }: BrandLogoProps) {
-  const src = compact ? BRAND_ASSETS.compact : BRAND_ASSETS.mark;
+  const src = opaque
+    ? opaqueMarkSrc(compact)
+    : transparentMarkSrc(size, compact, false);
   const captionText = caption === false ? null : caption;
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
@@ -41,7 +59,7 @@ export function BrandLogo({
         alt={BRAND_NAME}
         width={size}
         height={size}
-        className="shrink-0 object-contain"
+        className={cn("shrink-0 object-contain", !opaque && MARK_SHADOW)}
         priority={priority}
       />
       {wordmark ? (
@@ -66,6 +84,7 @@ export function BrandMark({
   priority = false,
   hiRes = false,
   compact = false,
+  opaque = false,
 }: {
   className?: string;
   size?: number;
@@ -73,19 +92,22 @@ export function BrandMark({
   /** Use full-resolution mark for large decorative watermarks. */
   hiRes?: boolean;
   compact?: boolean;
+  opaque?: boolean;
 }) {
-  const src = compact
-    ? BRAND_ASSETS.compact
-    : hiRes || size > 128
-      ? BRAND_ASSETS.markHiRes
-      : BRAND_ASSETS.mark;
+  const src = opaque
+    ? compact
+      ? BRAND_ASSETS.compact
+      : hiRes || size > 128
+        ? BRAND_ASSETS.markHiRes
+        : BRAND_ASSETS.mark
+    : transparentMarkSrc(size, compact, hiRes || size > 128);
   return (
     <Image
       src={src}
       alt={BRAND_NAME}
       width={size}
       height={size}
-      className={cn("shrink-0 object-contain", className)}
+      className={cn("shrink-0 object-contain", !opaque && MARK_SHADOW, className)}
       priority={priority}
     />
   );
