@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, apiFetch } from "@/lib/api/client";
+import { useAuth } from "@/providers/auth-provider";
 import {
   EXPERIMENT_DEFAULTS,
   EXPERIMENTAL_KEYS,
@@ -73,6 +74,7 @@ function text(value: unknown): string {
 }
 
 export default function AdminControlPage() {
+  const { opsReady, isAuthenticated, refreshMe } = useAuth();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -81,48 +83,61 @@ export default function AdminControlPage() {
   const [m1, setM1] = useState<M1Choice>("defer");
   const [m1Live, setM1Live] = useState<M1Choice>("defer");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const body = await apiFetch<Overview>("/admin/control/overview");
-    setOverview(body);
-    const doc = body.policy?.document || {};
-    const next: Record<string, string> = {};
-    for (const key of POLICY_NUMERIC_KEYS) {
-      const raw = doc[key];
-      if (key === "min_reward_risk" && body.policy?.enforced_min_reward_risk) {
-        next[key] = body.policy.enforced_min_reward_risk;
-      } else if (key === "max_drawdown_pct" && (raw == null || raw === "")) {
-        next[key] = "0";
-      } else {
-        next[key] = raw == null ? "" : String(raw);
+    setLoading(true);
+    setError("");
+    try {
+      const body = await apiFetch<Overview>("/admin/control/overview");
+      setOverview(body);
+      const doc = body.policy?.document || {};
+      const next: Record<string, string> = {};
+      for (const key of POLICY_NUMERIC_KEYS) {
+        const raw = doc[key];
+        if (key === "min_reward_risk" && body.policy?.enforced_min_reward_risk) {
+          next[key] = body.policy.enforced_min_reward_risk;
+        } else if (key === "max_drawdown_pct" && (raw == null || raw === "")) {
+          next[key] = "0";
+        } else {
+          next[key] = raw == null ? "" : String(raw);
+        }
       }
+      setDraft(next);
+      const savedExperiment =
+        doc.experimental && typeof doc.experimental === "object"
+          ? (doc.experimental as Record<string, unknown>)
+          : {};
+      const experiment: Record<string, string> = { ...EXPERIMENT_DEFAULTS };
+      for (const key of EXPERIMENTAL_KEYS) {
+        const raw = savedExperiment[key];
+        if (raw != null && String(raw) !== "") experiment[key] = String(raw);
+      }
+      setExperimentalDraft(experiment);
+      setM1(m1ChoiceFromDocument(doc.m1_micro_enabled));
+      setM1Live(m1ChoiceFromDocument(doc.m1_live_submit));
+    } catch (exc: unknown) {
+      if (exc instanceof ApiError) {
+        if (exc.status === 401 || exc.status === 403) {
+          setError(
+            "Owner authorization required for control center. Sign in as the designated owner and retry.",
+          );
+        } else {
+          setError(exc.message);
+        }
+      } else {
+        setError(exc instanceof Error ? exc.message : "Overview unavailable");
+      }
+      setOverview(null);
+    } finally {
+      setLoading(false);
     }
-    setDraft(next);
-    const savedExperiment =
-      doc.experimental && typeof doc.experimental === "object"
-        ? (doc.experimental as Record<string, unknown>)
-        : {};
-    const experiment: Record<string, string> = { ...EXPERIMENT_DEFAULTS };
-    for (const key of EXPERIMENTAL_KEYS) {
-      const raw = savedExperiment[key];
-      if (raw != null && String(raw) !== "") experiment[key] = String(raw);
-    }
-    setExperimentalDraft(experiment);
-    setM1(m1ChoiceFromDocument(doc.m1_micro_enabled));
-    setM1Live(m1ChoiceFromDocument(doc.m1_live_submit));
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    load().catch((exc: unknown) => {
-      if (!cancelled) {
-        setError(exc instanceof Error ? exc.message : "Overview unavailable");
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [load]);
+    if (!opsReady || !isAuthenticated) return;
+    void load();
+  }, [opsReady, isAuthenticated, load]);
 
   async function savePolicy() {
     const version = overview?.policy?.version ?? 0;
@@ -228,14 +243,35 @@ export default function AdminControlPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        eyebrow="Owner"
-        title="Admin control center"
+        eyebrow="Trading & Robot"
+        title="Owner control & robot"
         description="Account, risk, strategy, and live authorization. Opening this page does not enable live trading."
+        actions={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={loading || !opsReady}
+            onClick={() => {
+              void refreshMe().finally(() => {
+                void load();
+              });
+            }}
+          >
+            {loading ? "Loading…" : "Retry API"}
+          </Button>
+        }
       />
       {error ? (
-        <p className="rounded-[var(--radius-os)] border border-[var(--danger)] px-3 py-2 text-sm" role="alert">
-          {error}
-        </p>
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-os)] border border-[var(--danger)] px-3 py-2 text-sm"
+          role="alert"
+        >
+          <p>{error}</p>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void load()}>
+            Retry
+          </Button>
+        </div>
       ) : null}
       {notice ? (
         <p className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm" role="status">

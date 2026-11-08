@@ -57,7 +57,7 @@ function blockerCopy(code: string): string {
 }
 
 export function LiveTradingControlPanel() {
-  const { user } = useAuth();
+  const { user, opsReady, isAuthenticated } = useAuth();
   const qc = useQueryClient();
   const [reason, setReason] = useState("operator live-trading control");
   const [phrase, setPhrase] = useState("");
@@ -67,8 +67,10 @@ export function LiveTradingControlPanel() {
   const statusQ = useQuery({
     queryKey: ["live-trading-control"],
     queryFn: liveTradingControlApi.status,
-    retry: false,
-    refetchInterval: 12_000,
+    enabled: opsReady && isAuthenticated,
+    retry: 1,
+    retryDelay: 1_500,
+    refetchInterval: opsReady ? 12_000 : false,
   });
 
   const invalidate = () => {
@@ -125,7 +127,9 @@ export function LiveTradingControlPanel() {
     onSuccess: invalidate,
   });
 
-  if (statusQ.isLoading) return <DeskSkeleton rows={6} />;
+  if (!opsReady || !isAuthenticated || statusQ.isLoading || statusQ.isPending) {
+    return <DeskSkeleton rows={6} />;
+  }
   if (statusQ.isError) {
     return (
       <DeskError
@@ -134,6 +138,7 @@ export function LiveTradingControlPanel() {
           statusQ.error,
           "Live trading controls",
         )}
+        onRetry={() => void statusQ.refetch()}
       />
     );
   }
