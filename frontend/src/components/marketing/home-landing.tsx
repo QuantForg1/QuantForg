@@ -261,15 +261,15 @@ function TerminalPreview() {
 
 export function HomeLanding() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[var(--bg)] text-[var(--fg)]">
+    <div className="min-h-screen overflow-x-clip text-[var(--fg)]">
       <SiteHeader active="home" />
       <main id="main-content" tabIndex={-1}>
         <section id="platform" className="relative overflow-hidden">
-          <MountainBackdrop withCandles />
+          <MountainBackdrop withCandles intensity="vivid" />
           <div className="relative mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
             <div>
-              <p className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)]">
-                <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
+              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)] backdrop-blur-md">
+                <Sparkles className="h-3.5 w-3.5 text-[var(--cta)]" aria-hidden />
                 Institutional AI Trading · MT5 · 24/5 gold session
               </p>
               <h1 className="mt-5 font-[family-name:var(--font-display)] text-4xl leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
@@ -284,13 +284,13 @@ export function HomeLanding() {
                 not a promise of profits.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/pricing" className={`${btn} qf-btn-primary h-12 px-5`}>
-                  View pricing
+                <Link href="/register" className={`${btn} qf-btn-cta h-12 px-5`}>
+                  Connect Your Broker
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <Link
                   href="/#how-it-works"
-                  className={`${btn} h-12 border border-[var(--border-strong)] bg-[var(--surface)]/60 px-5 text-[var(--fg)] hover:bg-[var(--surface-2)]`}
+                  className={`${btn} qf-glass-card h-12 border-0 px-5 text-[var(--fg)] hover:bg-[color-mix(in_srgb,var(--surface-2)_72%,transparent)]`}
                 >
                   <Play className="h-4 w-4" aria-hidden />
                   Explore How It Works
@@ -323,7 +323,7 @@ export function HomeLanding() {
             return (
               <article
                 key={item.title}
-                className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4"
+                className="qf-glass-card qf-glass-card--hover p-4"
               >
                 <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
                   <Icon className="h-5 w-5" aria-hidden />
@@ -342,7 +342,7 @@ export function HomeLanding() {
             body="You connect the account you already have. QuantForg does not open a broker account for you."
           />
           <ol className="grid gap-4 lg:grid-cols-3">
-            <li className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
+            <li className="qf-glass-card qf-glass-card--hover p-5">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-semibold text-white">
                 1
               </span>
@@ -364,7 +364,7 @@ export function HomeLanding() {
                 </div>
               </div>
             </li>
-            <li className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
+            <li className="qf-glass-card qf-glass-card--hover p-5">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-semibold text-white">
                 2
               </span>
@@ -390,7 +390,7 @@ export function HomeLanding() {
                 </div>
               </div>
             </li>
-            <li className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
+            <li className="qf-glass-card qf-glass-card--hover p-5">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-semibold text-white">
                 3
               </span>
@@ -429,7 +429,7 @@ export function HomeLanding() {
           <ol className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-stretch">
             {ROBOT.map((step, index) => (
               <li key={step.title} className="flex min-w-0 flex-1 items-stretch gap-2">
-                <div className="min-w-0 flex-1 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3">
+                <div className="qf-glass-card min-w-0 flex-1 p-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
                     {String(index + 1).padStart(2, "0")}
                   </p>
@@ -457,7 +457,7 @@ export function HomeLanding() {
             {STRATEGIES.map((name) => (
               <li
                 key={name}
-                className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4"
+                className="qf-glass-card qf-glass-card--hover p-4"
               >
                 <Workflow className="mb-2 h-4 w-4 text-[var(--accent)]" aria-hidden />
                 <h3 className="font-semibold">{name}</h3>
@@ -479,7 +479,7 @@ export function HomeLanding() {
             {RISK_CONTROLS.map(([title, value]) => (
               <li
                 key={title}
-                className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4"
+                className="qf-glass-card qf-glass-card--hover p-4"
               >
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--hot)]">
                   {title}
@@ -509,7 +509,7 @@ export function HomeLanding() {
             ].map((label) => (
               <div
                 key={label}
-                className="rounded-[var(--radius-os)] border border-dashed border-[var(--border-strong)] bg-[var(--bg-elevated)] p-4"
+                className="qf-glass-card border-dashed p-4"
               >
                 <p className="text-xs uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
                 <p className="mt-2 text-lg font-semibold">—</p>
@@ -547,7 +547,7 @@ export function HomeLanding() {
             ].map((item) => (
               <li
                 key={item}
-                className="flex gap-3 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--fg-muted)]"
+                className="qf-glass-card flex gap-3 p-4 text-sm text-[var(--fg-muted)]"
               >
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]" aria-hidden />
                 <span>{item}</span>
@@ -563,7 +563,7 @@ export function HomeLanding() {
             body="Weltrade through MetaTrader 5 is the production broker path."
           />
           <div className="grid gap-3 sm:grid-cols-2">
-            <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
+            <article className="qf-glass-card qf-glass-card--hover p-5">
               <WeltradeLogo size={44} variant="wordmark" className="mb-3 rounded-xl" />
               <h3 className="text-lg font-semibold">Weltrade</h3>
               <p className="mt-2 text-sm text-[var(--fg-muted)]">
@@ -571,7 +571,7 @@ export function HomeLanding() {
                 balance, and sync status from that session.
               </p>
             </article>
-            <article className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
+            <article className="qf-glass-card qf-glass-card--hover p-5">
               <CircleDollarSign className="mb-3 h-5 w-5 text-[var(--accent)]" aria-hidden />
               <h3 className="text-lg font-semibold">MetaTrader 5</h3>
               <p className="mt-2 text-sm text-[var(--fg-muted)]">
@@ -594,7 +594,7 @@ export function HomeLanding() {
               return (
                 <article
                   key={item.title}
-                  className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4"
+                  className="qf-glass-card qf-glass-card--hover p-4"
                 >
                   <Icon className="mb-3 h-5 w-5 text-[var(--success)]" aria-hidden />
                   <h3 className="font-semibold">{item.title}</h3>
@@ -615,25 +615,25 @@ export function HomeLanding() {
         </section>
 
         <section className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
-          <div className="relative overflow-hidden rounded-[1.25rem] border border-[var(--border)] px-6 py-10 sm:px-10">
-            <MountainBackdrop className="rounded-[1.25rem]" />
+          <div className="qf-glass-card qf-glass-card--hero relative overflow-hidden px-6 py-10 sm:px-10">
+            <MountainBackdrop className="rounded-[1.25rem]" intensity="vivid" />
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.2fr_0.8fr]">
               <div>
                 <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Ready to operate <span className="text-[var(--accent)]">smarter?</span>
+                  Ready to Trade <span className="text-[var(--accent)]">Smarter?</span>
                 </h2>
                 <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--fg-muted)] sm:text-base">
                   Start with a subscription plan, create your account, and connect your broker when
                   you are ready. Trading results are never guaranteed.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
-                  <Link href="/register" className={`${btn} qf-btn-primary h-11 px-5`}>
-                    Create account
+                  <Link href="/register" className={`${btn} qf-btn-cta h-11 px-5`}>
+                    Connect Your Broker
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                   <Link
                     href="/pricing"
-                    className={`${btn} h-11 border border-[var(--border-strong)] bg-[var(--surface)]/50 px-5 backdrop-blur-sm`}
+                    className={`${btn} qf-glass-card h-11 border-0 px-5`}
                   >
                     View Pricing
                   </Link>

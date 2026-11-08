@@ -5,12 +5,12 @@
    Light remains on .light for theme switching. */
 :root,
 .dark {
-  --bg: #061b35;
-  --bg-elevated: #0a2748;
-  --surface: #0d2f55;
-  --surface-2: #123a66;
-  --surface-3: #184575;
-  --surface-elevated: #1a4d82;
+  --bg: rgba(6, 27, 53, 0.52);
+  --bg-elevated: rgba(10, 39, 72, 0.46);
+  --surface: rgba(13, 47, 85, 0.4);
+  --surface-2: rgba(18, 58, 102, 0.44);
+  --surface-3: rgba(24, 69, 117, 0.48);
+  --surface-elevated: rgba(26, 77, 130, 0.5);
   --border: rgba(186, 214, 240, 0.14);
   --border-strong: rgba(186, 214, 240, 0.28);
   --fg: #f5f8ff;
@@ -31,6 +31,13 @@
   --hot: #00d4e0;
   --hot-soft: rgba(0, 212, 224, 0.14);
 
+  --cta: #f59e3b;
+  --cta-hover: #fbbf24;
+  --cta-active: #d97706;
+  --cta-fg: #1a1208;
+  --cta-soft: rgba(245, 158, 59, 0.16);
+  --cta-gradient: linear-gradient(180deg, #fbbf24 0%, #f59e3b 48%, #d97706 100%);
+
   --success: #00c9a7;
   --success-soft: rgba(0, 201, 167, 0.12);
   --warning: #e0a93a;
@@ -50,10 +57,15 @@
   --radius-sm: 0.65rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 60% 36% at 88% -8%, rgba(8, 124, 255, 0.16), transparent 58%),
-    radial-gradient(ellipse 38% 24% at 8% 0%, rgba(0, 212, 224, 0.1), transparent 52%),
-    radial-gradient(ellipse 48% 26% at 50% 100%, rgba(7, 86, 168, 0.18), transparent 55%),
-    linear-gradient(180deg, #0a2748 0%, #061b35 48%, #041426 100%);
+    linear-gradient(
+      180deg,
+      rgba(4, 20, 38, 0.5) 0%,
+      rgba(6, 27, 53, 0.72) 46%,
+      rgba(4, 20, 38, 0.86) 100%
+    ),
+    radial-gradient(ellipse 60% 36% at 88% -8%, rgba(8, 124, 255, 0.08), transparent 58%),
+    radial-gradient(ellipse 38% 24% at 8% 0%, rgba(0, 212, 224, 0.06), transparent 52%),
+    url("/brand/mountain-backdrop.jpg");
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
@@ -113,6 +125,12 @@
   --brand-teal: #00cac0;
   --hot: #0891a8;
   --hot-soft: rgba(8, 145, 168, 0.12);
+  --cta: #ea580c;
+  --cta-hover: #f97316;
+  --cta-active: #c2410c;
+  --cta-fg: #ffffff;
+  --cta-soft: rgba(234, 88, 12, 0.12);
+  --cta-gradient: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
   --success: #0f9f86;
   --success-soft: rgba(15, 159, 134, 0.12);
   --warning: #d97706;
@@ -157,8 +175,11 @@ body {
   margin: 0;
   /* Keep display typography on the one loaded Plex Sans face. */
   --font-display: var(--font-sans);
-  background: var(--bg);
+  background-color: var(--bg);
   background-image: var(--bg-ambient);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -509,6 +530,16 @@ body {
 }
 
 .qf-btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.qf-btn-cta {
+  background-image: var(--cta-gradient);
+  color: var(--cta-fg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cta) 40%, transparent);
+}
+
+.qf-btn-cta:hover {
   filter: brightness(1.06);
 }
 

@@ -13,11 +13,15 @@ export const BRAND_ASSETS = {
   markHiRes: "/brand/quantforg-mark.png",
   /** Transparent mark for overlays. */
   markTransparent: "/brand/quantforg-mark-transparent.png",
+  /** Web UI default — transparent mark without black tile. */
+  markTransparentUi: "/brand/quantforg-mark-transparent-256.png",
   /** Symbol-only (same QF monogram). */
   symbol: "/brand/quantforg-symbol-256.png",
   symbolHiRes: "/brand/quantforg-symbol.png",
+  symbolTransparent: "/brand/quantforg-symbol-transparent-256.png",
   /** Compact / small-size optimized. */
   compact: "/brand/quantforg-compact.png",
+  compactTransparent: "/brand/quantforg-compact-transparent.png",
   /** Horizontal lockups. */
   horizontalDark: "/brand/quantforg-logo-horizontal.png",
   horizontalLight: "/brand/quantforg-logo-horizontal-light.png",

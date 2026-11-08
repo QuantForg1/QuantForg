@@ -25,8 +25,10 @@ ASSETS = Path(
 
 # Official supplied references (current filenames on disk).
 SRC_ICON = ASSETS / "Teal_QF_Finance_Logo_Icon-7f5e3a38-ffac-4aa7-ac34-1bbf062d910d.png"
-SRC_TREND = ASSETS / "Teal_QF_Market_Trend_Logo-20e56062-f566-4baa-a2fd-23c821abbd83.png"
-SRC_MOUNTAIN = ASSETS / "Cinematic_Blue_Mountain_Sunrise-e90adaa4-5339-4c21-931d-1a21678bc36c.jpg"
+SRC_TREND = ASSETS / "Teal_QF_Market_Trend_Logo-30882642-d459-4442-9da4-c82a5b4f1aad.png"
+SRC_MOUNTAIN = ASSETS / "Cinematic_Blue_Mountain_Sunrise-4774b2f6-75b9-44f0-856d-2364fc64ffa2.jpg"
+SRC_TREND_ALT = ASSETS / "Teal_QF_Market_Trend_Logo-20e56062-f566-4baa-a2fd-23c821abbd83.png"
+SRC_MOUNTAIN_ALT = ASSETS / "Cinematic_Blue_Mountain_Sunrise-e90adaa4-5339-4c21-931d-1a21678bc36c.jpg"
 SRC_DASHBOARD = (
     ASSETS / "QuantForg_Gold_Trading_Overview-68f11af4-817d-42b5-8647-489e74e3f80c.jpg"
 )
@@ -129,12 +131,16 @@ def write_favicon_svg(mark_png: Image.Image, path: Path) -> None:
 def main() -> None:
     if not SRC_ICON.exists():
         raise SystemExit(f"Missing official icon source: {SRC_ICON}")
-    if not SRC_TREND.exists():
+    if not SRC_TREND.exists() and SRC_TREND_ALT.exists():
+        trend = SRC_TREND_ALT
+    else:
+        trend = SRC_TREND
+    if not trend.exists():
         raise SystemExit(f"Missing official trend source: {SRC_TREND}")
 
-    # Square app icon is primary mark; market-trend is secondary source/archive.
-    src = SRC_ICON
-    alt = SRC_TREND
+    # Square app icon is primary mark; market-trend is secondary / transparent source.
+    src = SRC_ICON if SRC_ICON.exists() else trend
+    alt = trend
     img = Image.open(src).convert("RGBA")
     print(f"primary source {src.name} {img.size}")
     print(f"secondary source {alt.name}")
@@ -165,11 +171,25 @@ def main() -> None:
         BRAND / "quantforg-logo-light.png",
     )
 
-    # Transparent mark for overlays / favicon SVG
-    transparent = knock_near_black(
-        fit_square(img, 512, bg=(0, 0, 0, 0), pad_ratio=0.04)
+    # Transparent marks for overlays (market-trend source knocks black tile)
+    trend_img = Image.open(alt).convert("RGBA")
+    transparent_src = trend_img if alt != src else img
+    transparent_hi = knock_near_black(
+        fit_square(transparent_src, 1024, bg=(0, 0, 0, 0), pad_ratio=0.04)
     )
-    save_png(transparent, BRAND / "quantforg-mark-transparent.png")
+    save_png(transparent_hi, BRAND / "quantforg-mark-transparent.png")
+    transparent = knock_near_black(
+        fit_square(transparent_src, 256, bg=(0, 0, 0, 0), pad_ratio=0.04)
+    )
+    save_png(transparent, BRAND / "quantforg-mark-transparent-256.png")
+    save_png(
+        knock_near_black(fit_square(transparent_src, 256, bg=(0, 0, 0, 0), pad_ratio=0.04)),
+        BRAND / "quantforg-symbol-transparent-256.png",
+    )
+    save_png(
+        knock_near_black(fit_square(transparent_src, 192, bg=(0, 0, 0, 0), pad_ratio=0.04)),
+        BRAND / "quantforg-compact-transparent.png",
+    )
 
     mono = transparent.copy()
     px = mono.load()
@@ -276,8 +296,9 @@ def main() -> None:
     save_png(og, BRAND / "og-image.png")
 
     # Cinematic mountain backdrop (marketing / auth atmosphere)
-    if SRC_MOUNTAIN.exists():
-        mountain = Image.open(SRC_MOUNTAIN).convert("RGB")
+    mountain_path = SRC_MOUNTAIN if SRC_MOUNTAIN.exists() else SRC_MOUNTAIN_ALT
+    if mountain_path.exists():
+        mountain = Image.open(mountain_path).convert("RGB")
         mountain.save(BRAND / "mountain-backdrop.jpg", format="JPEG", quality=88, optimize=True)
         print(f"wrote {BRAND / 'mountain-backdrop.jpg'}")
 

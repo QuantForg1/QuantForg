@@ -9,9 +9,9 @@ const LINKS = [
   { href: "/#features", label: "Features" },
   { href: "/#platform", label: "Platform" },
   { href: "/#how-it-works", label: "How it works" },
+  { href: "/#strategies", label: "Strategies" },
   { href: "/#security", label: "Security" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/contact", label: "Contact" },
 ] as const;
 
 export function SiteHeader({
@@ -22,10 +22,10 @@ export function SiteHeader({
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_55%,transparent)] backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="min-w-0" onClick={() => setOpen(false)}>
-          <BrandLogo size={34} priority />
+          <BrandLogo size={34} priority caption={false} />
         </Link>
         <nav className="hidden items-center gap-5 text-sm text-[var(--fg-muted)] lg:flex" aria-label="Marketing">
           {LINKS.map((item) => {
@@ -45,15 +45,15 @@ export function SiteHeader({
         <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/login"
-            className="hidden h-10 items-center rounded-[var(--radius-sm)] border border-[var(--border)] px-4 text-sm font-medium text-[var(--fg)] hover:bg-[var(--surface-2)] sm:inline-flex"
+            className="hidden h-10 items-center rounded-[var(--radius-sm)] border border-[var(--border)] px-4 text-sm font-medium text-[var(--fg)] hover:bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)] sm:inline-flex"
           >
             Sign In
           </Link>
           <Link
             href="/register"
-            className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
+            className="qf-btn-cta inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
           >
-            Get started
+            Connect Your Broker
           </Link>
           <button
             type="button"
@@ -74,7 +74,7 @@ export function SiteHeader({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="block rounded-[var(--radius-sm)] px-3 py-2 text-sm text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+                  className="block rounded-[var(--radius-sm)] px-3 py-2 text-sm text-[var(--fg-muted)] hover:bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)] hover:text-[var(--fg)]"
                   onClick={() => setOpen(false)}
                 >
                   {item.label}
@@ -84,7 +84,7 @@ export function SiteHeader({
             <li>
               <Link
                 href="/login"
-                className="block rounded-[var(--radius-sm)] px-3 py-2 text-sm text-[var(--fg)] hover:bg-[var(--surface-2)] sm:hidden"
+                className="block rounded-[var(--radius-sm)] px-3 py-2 text-sm text-[var(--fg)] hover:bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)] sm:hidden"
                 onClick={() => setOpen(false)}
               >
                 Sign In
