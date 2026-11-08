@@ -127,7 +127,9 @@ class NowPaymentsLiveClient:
         if not url.startswith("https://"):
             msg = "NOWPayments client only allows HTTPS LIVE endpoints"
             raise ValueError(msg)
-        req = Request(url, data=data, headers=headers, method=method.upper())  # noqa: S310
+        req = Request(
+            url, data=data, headers=headers, method=method.upper()
+        )  # noqa: S310
         try:
             with urlopen(req, timeout=timeout) as resp:  # noqa: S310
                 raw = resp.read().decode("utf-8")
