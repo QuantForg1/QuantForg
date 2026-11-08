@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   PricingFooter,
   PricingHeader,
@@ -19,13 +19,37 @@ export default function BillingInvoiceDetailPage() {
   const params = useParams();
   const orderCode = String(params.orderCode || "");
   const { isAuthenticated, loading } = useAuth();
-  const invQ = useQuery({
-    queryKey: ["billing-invoice", orderCode],
-    queryFn: () => billingApi.invoice(orderCode),
-    enabled: isAuthenticated && Boolean(orderCode),
-    retry: false,
-  });
-  const invoice = asRecord(asRecord(invQ.data).invoice);
+  const [invoice, setInvoice] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (loading || !orderCode) return;
+      if (!isAuthenticated) {
+        setInvoice(null);
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const data = asRecord(await billingApi.invoice(orderCode));
+        if (!cancelled) setInvoice(asRecord(data.invoice));
+      } catch {
+        if (!cancelled) {
+          setError("Invoice not found or you do not have access.");
+          setInvoice(null);
+        }
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, loading, orderCode]);
 
   return (
     <div className="min-h-screen overflow-x-clip">
@@ -45,11 +69,11 @@ export default function BillingInvoiceDetailPage() {
               Sign in
             </Link>
           </p>
-        ) : invQ.isLoading ? (
+        ) : busy ? (
           <p className="text-sm text-[var(--fg-muted)]">Loading invoice…</p>
-        ) : invQ.isError || !invoice.order_code ? (
-          <p className="text-sm text-[var(--danger)]">
-            Invoice not found or you do not have access.
+        ) : error || !invoice?.order_code ? (
+          <p className="text-sm text-[var(--danger)]" role="alert">
+            {error || "Invoice not found or you do not have access."}
           </p>
         ) : (
           <article className="qf-glass-card space-y-5 p-6 print:border print:shadow-none">

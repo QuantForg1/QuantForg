@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   PricingFooter,
   PricingHeader,
@@ -15,15 +15,36 @@ import { useAuth } from "@/providers/auth-provider";
 
 export default function BillingInvoicesPage() {
   const { isAuthenticated, loading } = useAuth();
-  const meQ = useQuery({
-    queryKey: ["billing-me"],
-    queryFn: () => billingApi.me(),
-    enabled: isAuthenticated,
-    retry: false,
-  });
-  const invoices = asList(asRecord(meQ.data).invoices ?? asRecord(meQ.data).orders).map(
-    asRecord,
-  );
+  const [invoices, setInvoices] = useState<Record<string, unknown>[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (loading) return;
+      if (!isAuthenticated) {
+        setInvoices([]);
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const me = asRecord(await billingApi.me());
+        if (!cancelled) {
+          setInvoices(asList(me.invoices ?? me.orders).map(asRecord));
+        }
+      } catch {
+        if (!cancelled) setError("Unable to load invoices right now.");
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, loading]);
 
   return (
     <div className="min-h-screen overflow-x-clip">
@@ -51,8 +72,12 @@ export default function BillingInvoicesPage() {
               Sign in
             </Link>
           </div>
-        ) : meQ.isLoading ? (
+        ) : busy ? (
           <p className="mt-8 text-sm text-[var(--fg-muted)]">Loading invoices…</p>
+        ) : error ? (
+          <p className="mt-8 text-sm text-[var(--danger)]" role="alert">
+            {error}
+          </p>
         ) : invoices.length === 0 ? (
           <div className="mt-8 rounded-[var(--radius-os)] border border-[var(--border)] p-5 text-sm text-[var(--fg-muted)]">
             No invoices yet.
