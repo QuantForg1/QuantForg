@@ -18,9 +18,9 @@ from app.application.use_cases.mt5 import (
     GetResearchMarketTickUseCase,
     ListMT5SymbolsUseCase,
 )
-from app.domain.exceptions.base import ServiceUnavailableError
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.events.mt5 import CandleReceived, MarketDataUpdated, TickReceived
+from app.domain.exceptions.base import ServiceUnavailableError
 from app.domain.market_data.timeframe import Timeframe
 from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 from app.infrastructure.persistence.memory_broker import MemoryBrokerUnitOfWorkFactory

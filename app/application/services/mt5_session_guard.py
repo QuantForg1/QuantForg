@@ -359,7 +359,10 @@ async def require_platform_market_feed(adapter: MT5Adapter) -> None:
             with contextlib.suppress(Exception):
                 attached = await _adapter_call(adapter.attach, path="")
                 live = (attached or "").strip()
-                if live and not (getattr(adapter, "_live_session_ref", None) or "").strip():
+                if (
+                    live
+                    and not (getattr(adapter, "_live_session_ref", None) or "").strip()
+                ):
                     adapter._live_session_ref = live
         if live and adapter.is_live_session(live):
             return
