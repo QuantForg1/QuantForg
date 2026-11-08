@@ -1,10 +1,10 @@
 {
   "name": "QuantForg",
   "short_name": "QuantForg",
-  "description": "Trading technology platform — MT5 workflows, risk controls, research, and operator desks.",
+  "description": "Institutional AI Trading Platform — MT5 connectivity, market intelligence, risk controls, and automated execution under approved settings.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#111827",
+  "background_color": "#061B35",
   "theme_color": "#00D4E0",
   "icons": [
     {

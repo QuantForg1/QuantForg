@@ -46,10 +46,11 @@ export function SiteFooter() {
     <footer className="border-t border-[var(--border)] bg-[var(--bg-elevated)]">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_2fr]">
         <div className="max-w-sm space-y-3">
-          <BrandLogo size={32} caption="Trading Technology Platform" />
+          <BrandLogo size={32} />
           <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
-            QuantForg is trading technology available by subscription. Connect your own broker
-            account where supported. Software access is not a promise of trading profits.
+            QuantForg is an Institutional AI Trading Platform available by subscription.
+            Connect your own MetaTrader 5 broker account where supported. Software access is
+            not a promise of trading profits.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-4">

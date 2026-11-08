@@ -154,8 +154,8 @@ function TerminalPreview() {
         className="absolute -inset-x-6 -bottom-8 top-10 rounded-[2rem] bg-[radial-gradient(ellipse_at_center,rgba(0,212,224,0.18),transparent_65%)]"
         aria-hidden
       />
-      <div className="relative rounded-[1.6rem] border border-[#2a3a55] bg-gradient-to-b from-[#1a2438] to-[#0b1220] p-3 shadow-[0_30px_80px_rgba(2,8,24,0.55)]">
-        <div className="rounded-[1.25rem] border border-[var(--border-strong)] bg-[#0a1628] p-2.5">
+      <div className="relative rounded-[1.6rem] border border-[color-mix(in_srgb,var(--brand-electric)_35%,var(--border))] bg-gradient-to-b from-[var(--surface)] to-[var(--brand-navy)] p-3 shadow-[0_30px_80px_rgba(2,12,28,0.55)]">
+        <div className="rounded-[1.25rem] border border-[var(--border-strong)] bg-[var(--bg-elevated)] p-2.5">
           <div className="mb-2 flex items-center gap-1.5 px-1">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
@@ -253,7 +253,7 @@ function TerminalPreview() {
             </div>
           </div>
         </div>
-        <div className="mx-auto mt-2 h-1.5 w-16 rounded-full bg-[#2a3a55]" aria-hidden />
+        <div className="mx-auto mt-2 h-1.5 w-16 rounded-full bg-[var(--surface-3)]" aria-hidden />
       </div>
     </div>
   );
@@ -270,7 +270,7 @@ export function HomeLanding() {
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)]">
                 <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
-                Trading technology · MT5 workflows · Subscription access
+                Institutional AI Trading · MT5 · 24/5 gold session
               </p>
               <h1 className="mt-5 font-[family-name:var(--font-display)] text-4xl leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
                 Your Trading.
@@ -278,9 +278,10 @@ export function HomeLanding() {
                 <span className="mt-1 block text-[var(--accent)]">Fully Connected.</span>
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-[var(--fg-muted)] sm:text-lg">
-                QuantForg is a trading technology platform. Connect your own broker where supported,
-                run research and risk-aware workflows, and keep execution under settings you approve.
-                Software access is not a promise of profits.
+                QuantForg is an Institutional AI Trading Platform that connects traders to their
+                broker accounts and provides market intelligence, strategy evaluation, risk
+                management, and automated execution under approved settings. Software access is
+                not a promise of profits.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/pricing" className={`${btn} qf-btn-primary h-12 px-5`}>

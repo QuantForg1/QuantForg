@@ -38,29 +38,34 @@ const SITE_URL =
       : "http://localhost:3000");
 
 export const viewport: Viewport = {
-  themeColor: "#111827",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#061B35" },
+    { media: "(prefers-color-scheme: light)", color: "#061B35" },
+  ],
   colorScheme: "dark",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "QuantForg — Trading Technology Platform",
+    default: "QuantForg — Institutional AI Trading Platform",
     template: "%s · QuantForg",
   },
   description:
-    "QuantForg is a trading technology SaaS platform for MT5 workflows, risk controls, research, and operator desks. Software access only — trading outcomes are not guaranteed.",
+    "QuantForg connects traders to MetaTrader 5 broker accounts with market intelligence, strategy evaluation, risk management, and automated execution under approved settings. Software access only — trading outcomes are not guaranteed.",
   applicationName: "QuantForg",
   authors: [{ name: "QuantForg" }],
   creator: "QuantForg",
   publisher: "QuantForg",
   keywords: [
     "QuantForg",
-    "trading technology",
+    "institutional AI trading",
     "MT5",
+    "Weltrade",
+    "XAUUSD",
     "trading SaaS",
     "risk management",
-    "algorithmic trading software",
+    "automated trading software",
   ],
   alternates: {
     canonical: SITE_URL,
@@ -68,8 +73,10 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
       { url: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+      { url: "/favicon-48x48.png", type: "image/png", sizes: "48x48" },
       { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
       { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
       { url: "/favicon.ico", sizes: "any" },
@@ -82,23 +89,23 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "QuantForg",
-    title: "QuantForg — Trading Technology Platform",
+    title: "QuantForg — Institutional AI Trading Platform",
     description:
-      "Subscription trading technology for MT5 workflows, risk controls, and operator desks. No profit guarantees.",
+      "Connect your MT5 broker, analyze markets, manage risk, and execute under approved settings. No profit guarantees.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "QuantForg — Trading Technology Platform",
+        alt: "QuantForg — Institutional AI Trading Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuantForg — Trading Technology Platform",
+    title: "QuantForg — Institutional AI Trading Platform",
     description:
-      "Trading technology SaaS for MT5 workflows and risk-aware operator desks. Software access only.",
+      "Institutional AI trading software for MT5 workflows, market intelligence, and risk-aware execution. Software access only.",
     images: ["/og-image.png"],
   },
   robots: {

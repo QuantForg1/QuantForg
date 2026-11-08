@@ -18,7 +18,7 @@ export default async function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#111827",
+          background: "#061B35",
           borderRadius: 36,
         }}
       >

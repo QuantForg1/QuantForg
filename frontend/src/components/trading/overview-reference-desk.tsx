@@ -7,7 +7,6 @@ import {
   Gauge,
   Layers,
   LineChart,
-  Shield,
   Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -73,8 +72,6 @@ export function OverviewReferenceDesk({
   todayPnl,
   openPositions,
   pendingOrders,
-  accountRiskLabel,
-  accountRiskHint,
   dailyRiskLabel,
   dailyRiskHint,
   brokerConnected,
@@ -96,7 +93,8 @@ export function OverviewReferenceDesk({
   todayPnl: string;
   openPositions: string;
   pendingOrders: string;
-  accountRiskLabel: string;
+  /** @deprecated Prefer dailyRiskLabel — Account Risk card removed per overview reference. */
+  accountRiskLabel?: string;
   accountRiskHint?: string;
   dailyRiskLabel: string;
   dailyRiskHint?: string;
@@ -116,7 +114,7 @@ export function OverviewReferenceDesk({
 }) {
   const [timeframe, setTimeframe] = useState("M15");
   const [chartType, setChartType] = useState<"candles" | "line" | "area">("candles");
-  const [showVolume, setShowVolume] = useState(true);
+  const [showVolume, setShowVolume] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [intelTab, setIntelTab] = useState<"overview" | "signal" | "analysis" | "news">(
     "overview",
@@ -132,7 +130,7 @@ export function OverviewReferenceDesk({
     <div className="space-y-4">
       <section
         aria-label="Account metrics"
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5"
       >
         <KpiCard
           label="Account Equity"
@@ -158,12 +156,6 @@ export function OverviewReferenceDesk({
               : `${pendingOrders} pending orders`
           }
           icon={<Layers className="h-3.5 w-3.5" />}
-        />
-        <KpiCard
-          label="Account Risk"
-          value={accountRiskLabel}
-          hint={accountRiskHint}
-          icon={<Shield className="h-3.5 w-3.5" />}
         />
         <KpiCard
           label="Daily Risk"

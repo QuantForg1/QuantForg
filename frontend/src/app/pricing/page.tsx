@@ -19,13 +19,14 @@ import {
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "QuantForg subscription plans for trading technology access — Starter, Professional, and Premium. Software access only; trading outcomes are not guaranteed.",
+    "QuantForg subscription plans for Institutional AI Trading Platform access — Starter, Professional, and Premium. Software access only; trading outcomes are not guaranteed.",
   alternates: { canonical: "/pricing" },
   openGraph: {
-    title: "QuantForg Pricing",
+    title: "QuantForg Pricing — Institutional AI Trading Platform",
     description:
-      "Proposed monthly plans for QuantForg trading technology platform access. No profit guarantees.",
+      "Proposed monthly plans for QuantForg platform access. No profit guarantees.",
     url: "/pricing",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "QuantForg" }],
   },
 };
 

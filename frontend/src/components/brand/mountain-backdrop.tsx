@@ -1,8 +1,11 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { BRAND_ASSETS } from "@/lib/brand/assets";
 
 /**
- * Decorative charcoal / cyan atmosphere used on public + auth surfaces.
- * Pure CSS/SVG — no photographic asset, no fabricated market data.
+ * Premium Blue Hybrid atmosphere for public + auth surfaces.
+ * Uses the official cinematic mountain reference under a navy veil —
+ * decorative only; no fabricated market data.
  */
 export function MountainBackdrop({
   className,
@@ -16,25 +19,33 @@ export function MountainBackdrop({
       className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
       aria-hidden
     >
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_12%,rgba(0,212,224,0.14),transparent_42%),radial-gradient(ellipse_at_82%_0%,rgba(94,246,255,0.1),transparent_48%),linear-gradient(180deg,#151b23_0%,#111827_58%,#0d1219_100%)]" />
+      <Image
+        src={BRAND_ASSETS.mountain}
+        alt=""
+        fill
+        priority={false}
+        sizes="100vw"
+        className="object-cover object-[center_35%] opacity-55"
+      />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_12%,rgba(0,212,224,0.16),transparent_42%),radial-gradient(ellipse_at_82%_0%,rgba(8,124,255,0.18),transparent_48%),linear-gradient(180deg,rgba(6,27,53,0.55)_0%,rgba(6,27,53,0.82)_52%,#061b35_100%)]" />
       <svg
-        className="absolute inset-x-0 bottom-0 h-[48%] w-full opacity-90"
+        className="absolute inset-x-0 bottom-0 h-[42%] w-full opacity-80"
         viewBox="0 0 1440 420"
         preserveAspectRatio="none"
       >
         <defs>
           <linearGradient id="qf-mtn-a" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#283344" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#111827" stopOpacity="1" />
+            <stop offset="0%" stopColor="#184575" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#061b35" stopOpacity="1" />
           </linearGradient>
           <linearGradient id="qf-mtn-b" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1a2330" stopOpacity="0.92" />
-            <stop offset="100%" stopColor="#0d1219" stopOpacity="1" />
+            <stop offset="0%" stopColor="#0d2f55" stopOpacity="0.92" />
+            <stop offset="100%" stopColor="#041426" stopOpacity="1" />
           </linearGradient>
           <linearGradient id="qf-mtn-glow" x1="0" y1="0" x2="1" y2="0">
             <stop offset="35%" stopColor="#00d4e0" stopOpacity="0" />
-            <stop offset="50%" stopColor="#00d4e0" stopOpacity="0.28" />
-            <stop offset="65%" stopColor="#00d4e0" stopOpacity="0" />
+            <stop offset="50%" stopColor="#00d4e0" stopOpacity="0.3" />
+            <stop offset="65%" stopColor="#087cff" stopOpacity="0" />
           </linearGradient>
         </defs>
         <rect x="0" y="180" width="1440" height="40" fill="url(#qf-mtn-glow)" />

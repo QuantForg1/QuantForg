@@ -25,7 +25,7 @@ export function SiteHeader({
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="min-w-0" onClick={() => setOpen(false)}>
-          <BrandLogo size={34} caption="Trading Technology Platform" priority />
+          <BrandLogo size={34} priority />
         </Link>
         <nav className="hidden items-center gap-5 text-sm text-[var(--fg-muted)] lg:flex" aria-label="Marketing">
           {LINKS.map((item) => {
