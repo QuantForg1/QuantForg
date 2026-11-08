@@ -20,14 +20,12 @@ import {
   Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
-import { cn, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { candleLoadErrorMessage } from "@/lib/trading/market-status";
 import { useTradingSession } from "@/providers/trading-session-provider";
-import { useConnectMt5 } from "@/hooks/use-connect-mt5";
-import { Cable } from "lucide-react";
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const;
 
@@ -63,7 +61,6 @@ function parseCandles(raw: unknown): CandlePoint[] {
     });
   }
   points.sort((a, b) => a.time - b.time);
-  // Deduplicate identical timestamps (lightweight-charts requires unique ascending times)
   const dedup: CandlePoint[] = [];
   for (const p of points) {
     if (dedup.length && dedup[dedup.length - 1].time === p.time) {
@@ -78,6 +75,7 @@ function parseCandles(raw: unknown): CandlePoint[] {
 export const WorkspaceChart = memo(function WorkspaceChart({
   symbol,
   connected,
+  marketFeedEnabled = true,
   timeframe,
   onTimeframeChange,
   chartType,
@@ -90,7 +88,10 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   hideSymbolLabel = false,
 }: {
   symbol: string;
+  /** Customer broker session — kept for callers; chart feed is independent. */
   connected: boolean;
+  /** When true, load platform research candles without requiring MT5 ownership. */
+  marketFeedEnabled?: boolean;
   timeframe: string;
   onTimeframeChange: (tf: string) => void;
   chartType: ChartType;
@@ -104,7 +105,8 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   hideSymbolLabel?: boolean;
 }) {
   const session = useTradingSession();
-  const { connect: connectMt5, pending: connectPending } = useConnectMt5();
+  // Broker ownership remains available to callers; candles use the platform feed.
+  void connected;
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const mainRef = useRef<ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | ISeriesApi<"Area"> | null>(
@@ -115,21 +117,22 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   const candlesCache = useRef<CandlePoint[]>([]);
 
   const candlesQ = useQuery({
-    queryKey: ["mt5-candles", symbol, timeframe],
-    queryFn: () => mt5Api.candles(symbol, timeframe, 400),
-    retry: false,
-    enabled: connected && Boolean(symbol),
+    queryKey: ["research-candles", symbol, timeframe],
+    queryFn: () => mt5Api.researchCandles(symbol, timeframe, 400),
+    retry: 1,
+    enabled: marketFeedEnabled && Boolean(symbol),
     staleTime: 60_000,
+    refetchInterval: marketFeedEnabled ? 60_000 : false,
   });
 
   const candles = useMemo(() => parseCandles(candlesQ.data), [candlesQ.data]);
+  const feedLive = candlesQ.isSuccess && candles.length > 0;
 
   useEffect(() => {
     candlesCache.current = candles;
     if (candles.length) setOhlc(candles[candles.length - 1]);
   }, [candles]);
 
-  // Live last-price update on the forming candle (no candle polling)
   useEffect(() => {
     if (!Number.isFinite(lastPrice) || lastPrice == null || !mainRef.current) return;
     const series = candlesCache.current;
@@ -164,12 +167,12 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#AFC4E2",
-        fontFamily: "inherit",
+        textColor: "rgba(226, 232, 240, 0.72)",
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: "rgba(143, 184, 232, 0.12)" },
-        horzLines: { color: "rgba(143, 184, 232, 0.12)" },
+        vertLines: { color: "rgba(148, 163, 184, 0.08)" },
+        horzLines: { color: "rgba(148, 163, 184, 0.08)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderVisible: false },
@@ -177,78 +180,63 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     });
     chartRef.current = chart;
 
-    const applySeries = () => {
-      if (mainRef.current) {
-        chart.removeSeries(mainRef.current);
-        mainRef.current = null;
-      }
-      if (volumeRef.current) {
-        chart.removeSeries(volumeRef.current);
-        volumeRef.current = null;
-      }
+    let main: ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | ISeriesApi<"Area">;
+    if (chartType === "candles") {
+      main = chart.addSeries(CandlestickSeries, {
+        upColor: "#14b8a6",
+        downColor: "#f43f5e",
+        borderUpColor: "#14b8a6",
+        borderDownColor: "#f43f5e",
+        wickUpColor: "#14b8a6",
+        wickDownColor: "#f43f5e",
+      });
+      main.setData(
+        candles.map((c) => ({
+          time: c.time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        })),
+      );
+    } else if (chartType === "line") {
+      main = chart.addSeries(LineSeries, {
+        color: "#00D4E0",
+        lineWidth: 2,
+      });
+      main.setData(candles.map((c) => ({ time: c.time, value: c.close })));
+    } else {
+      main = chart.addSeries(AreaSeries, {
+        lineColor: "#00D4E0",
+        topColor: "rgba(0, 212, 224, 0.28)",
+        bottomColor: "rgba(0, 212, 224, 0.02)",
+        lineWidth: 2,
+      });
+      main.setData(candles.map((c) => ({ time: c.time, value: c.close })));
+    }
+    mainRef.current = main;
 
-      const data = candlesCache.current;
-      if (chartType === "candles") {
-        const s = chart.addSeries(CandlestickSeries, {
-          upColor: "#00D6B0",
-          downColor: "#FF5364",
-          borderVisible: false,
-          wickUpColor: "#00D6B0",
-          wickDownColor: "#FF5364",
-        });
-        s.setData(
-          data.map((c) => ({
-            time: c.time,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close,
-          })),
-        );
-        mainRef.current = s;
-      } else if (chartType === "line") {
-        const s = chart.addSeries(LineSeries, {
-          color: "#168BFF",
-          lineWidth: 2,
-        });
-        s.setData(data.map((c) => ({ time: c.time, value: c.close })));
-        mainRef.current = s;
-      } else {
-        const s = chart.addSeries(AreaSeries, {
-          lineColor: "#168BFF",
-          topColor: "rgba(22, 139, 255, 0.22)",
-          bottomColor: "rgba(22, 139, 255, 0.02)",
-          lineWidth: 2,
-        });
-        s.setData(data.map((c) => ({ time: c.time, value: c.close })));
-        mainRef.current = s;
-      }
+    if (showVolume) {
+      const volume = chart.addSeries(HistogramSeries, {
+        priceFormat: { type: "volume" },
+        priceScaleId: "volume",
+      });
+      chart.priceScale("volume").applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      });
+      volume.setData(
+        candles.map((c) => ({
+          time: c.time,
+          value: c.volume,
+          color:
+            c.close >= c.open
+              ? "rgba(20, 184, 166, 0.35)"
+              : "rgba(244, 63, 94, 0.35)",
+        })),
+      );
+      volumeRef.current = volume;
+    }
 
-      if (showVolume) {
-        const v = chart.addSeries(HistogramSeries, {
-          priceFormat: { type: "volume" },
-          priceScaleId: "volume",
-        });
-        chart.priceScale("volume").applyOptions({
-          scaleMargins: { top: 0.82, bottom: 0 },
-        });
-        v.setData(
-          data.map((c) => ({
-            time: c.time,
-            value: c.volume,
-            color:
-              c.close >= c.open ? "rgba(0,214,176,0.45)" : "rgba(255,83,100,0.45)",
-          })),
-        );
-        volumeRef.current = v;
-      }
-
-      chart.timeScale().fitContent();
-    };
-
-    applySeries();
-
-    // Ensure the host has layout before the first paint (overview desks use flex height).
     if (el.clientWidth > 0 && el.clientHeight > 0) {
       chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
       chart.timeScale().fitContent();
@@ -277,7 +265,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
       aria-label={`${displayTradingSymbol(symbol)} chart workspace`}
     >
-      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[var(--border)]/70 px-2">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--border)]/70 px-2">
         {!hideSymbolLabel ? (
           <>
             <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">
@@ -285,20 +273,21 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             </p>
             <span
               className="qf-status-dot"
-              data-state={connected ? "ok" : "warn"}
-              aria-label={connected ? "Live" : "Offline"}
+              data-state={feedLive ? "ok" : "warn"}
+              aria-label={feedLive ? "Live" : "Offline"}
             />
           </>
         ) : null}
         {ohlc ? (
-          <p className="hidden tabular text-[10px] text-[var(--fg-muted)] md:inline" aria-live="polite">
+          <p
+            className="hidden min-w-0 truncate tabular text-[10px] text-[var(--fg-muted)] lg:inline"
+            aria-live="polite"
+          >
             O {formatNumber(ohlc.open, 2)} · H {formatNumber(ohlc.high, 2)} · L{" "}
             {formatNumber(ohlc.low, 2)} · C {formatNumber(ohlc.close, 2)}
           </p>
-        ) : (
-          <span className="inline-block h-3 w-40" aria-hidden />
-        )}
-        <div className="ml-auto flex flex-wrap items-center gap-0.5">
+        ) : null}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <div className="flex gap-0.5" role="group" aria-label="Timeframe">
             {TIMEFRAMES.map((tf) => (
               <Button
@@ -308,7 +297,6 @@ export const WorkspaceChart = memo(function WorkspaceChart({
                 className="h-6 min-w-[1.75rem] px-1.5 text-[10px]"
                 data-compact
                 onClick={() => onTimeframeChange(tf)}
-                disabled={!connected}
                 aria-pressed={timeframe === tf}
               >
                 {tf}
@@ -361,24 +349,12 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       </div>
 
       <div className="relative min-h-[280px] flex-1">
-        {!connected ? (
-          <div className="absolute inset-0 flex items-center justify-center p-6">
-            <DeskEmpty
-              icon={Cable}
-              title="Broker not connected"
-              description="Connect your MT5 account to start receiving live market data and trading signals."
-              actionLabel={connectPending ? "Connecting…" : "Connect MT5"}
-              onAction={() => {
-                void connectMt5();
-              }}
-            />
-          </div>
-        ) : candlesQ.isLoading ? (
+        {candlesQ.isLoading ? (
           <div className="p-4">
             <DeskSkeleton rows={6} />
           </div>
         ) : candlesQ.isError ? (
-          <div className="p-4">
+          <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
             <DeskError
               message={candleLoadErrorMessage(
                 candlesQ.error,
@@ -387,6 +363,10 @@ export const WorkspaceChart = memo(function WorkspaceChart({
               )}
               onRetry={() => candlesQ.refetch()}
             />
+            <p className="max-w-sm text-xs text-[var(--fg-muted)]">
+              Market chart uses the platform feed and does not require your personal MT5
+              account.
+            </p>
           </div>
         ) : candles.length === 0 ? (
           <div className="flex h-full min-h-[280px] items-center justify-center p-6 text-sm text-[var(--fg-muted)]">

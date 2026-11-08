@@ -20,7 +20,10 @@ from app.application.dto.mt5 import (
     MT5TickDTO,
 )
 from app.application.services.mt5_market_data import MT5MarketDataService
-from app.application.services.mt5_session_guard import require_live_mt5_connection
+from app.application.services.mt5_session_guard import (
+    require_live_mt5_connection,
+    require_platform_market_feed,
+)
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5 import MT5Connection
 from app.domain.enums.audit import AuditAction, AuditOutcome
@@ -389,6 +392,70 @@ class GetMT5CandlesUseCase:
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 "Failed to read MT5 candles",
+                details={"symbol": symbol, "error": str(exc)},
+            ) from exc
+        return [MT5CandleDTO.from_rate(r) for r in rates]
+
+
+@dataclass(frozen=True, slots=True)
+class GetResearchMarketTickUseCase:
+    """Gold tick from the platform market feed — no customer MT5 ownership."""
+
+    market_data: MT5MarketDataService
+
+    async def execute(self, *, symbol: str) -> MT5TickDTO:
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        symbol = resolve_trading_symbol(symbol)
+        await require_platform_market_feed(self.market_data.adapter)
+        try:
+            tick = self.market_data.latest_tick(symbol)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValidationError(
+                "Failed to read market tick",
+                details={"symbol": symbol, "error": str(exc)},
+            ) from exc
+        return MT5TickDTO.from_tick(tick)
+
+
+@dataclass(frozen=True, slots=True)
+class GetResearchMarketCandlesUseCase:
+    """Gold candles from the platform market feed — no customer MT5 ownership."""
+
+    market_data: MT5MarketDataService
+
+    async def execute(
+        self,
+        *,
+        symbol: str,
+        timeframe: str = "H1",
+        count: int = 100,
+        start_pos: int | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[MT5CandleDTO]:
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        symbol = resolve_trading_symbol(symbol)
+        await require_platform_market_feed(self.market_data.adapter)
+        tf = Timeframe.parse(timeframe)
+        if count < 1 or count > 5000:
+            raise ValidationError(
+                "count must be between 1 and 5000",
+                details={"count": count},
+            )
+        try:
+            rates = self.market_data.historical_candles(
+                symbol,
+                tf,
+                date_from=date_from,
+                date_to=date_to,
+                count=count,
+                start_pos=start_pos,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValidationError(
+                "Failed to read market candles",
                 details={"symbol": symbol, "error": str(exc)},
             ) from exc
         return [MT5CandleDTO.from_rate(r) for r in rates]

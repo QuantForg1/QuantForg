@@ -41,12 +41,12 @@ export function SymbolExperienceWorkspace({ code }: { code: string }) {
   const [fullscreen, setFullscreen] = useState(false);
 
   const tickQ = useQuery({
-    queryKey: ["mt5-tick", symbol, "symbol-page"],
-    queryFn: () => mt5Api.tick(symbol),
+    queryKey: ["research-tick", symbol, "symbol-page"],
+    queryFn: () => mt5Api.researchTick(symbol),
     enabled: Boolean(symbol),
     staleTime: 3_000,
     refetchInterval: 5_000,
-    retry: false,
+    retry: 1,
   });
   const signalQ = useQuery({
     queryKey: ["signal-center", symbol],

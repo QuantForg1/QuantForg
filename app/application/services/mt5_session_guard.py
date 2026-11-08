@@ -340,6 +340,46 @@ def _unavailable_for_failed_heal(adapter: MT5Adapter) -> ServiceUnavailableError
     )
 
 
+async def require_platform_market_feed(adapter: MT5Adapter) -> None:
+    """Require a live shared-terminal feed for public market reads.
+
+    Candles and ticks are market prices, not account data. Authenticated
+    callers may read gold market data when the platform gateway/terminal is
+    live without owning the connected MT5 login.
+    """
+    live = _live_ref(adapter)
+    if live and adapter.is_live_session(live):
+        return
+
+    if _is_gateway_backed(adapter):
+        with contextlib.suppress(Exception):
+            await _adapter_call(adapter.health)
+        live = _live_ref(adapter)
+        if not live and _client_connected(adapter):
+            with contextlib.suppress(Exception):
+                attached = await _adapter_call(adapter.attach, path="")
+                live = (attached or "").strip()
+                if live and not (getattr(adapter, "_live_session_ref", None) or "").strip():
+                    adapter._live_session_ref = live
+        if live and adapter.is_live_session(live):
+            return
+        raise ServiceUnavailableError(
+            "Market data feed unavailable",
+            code="MARKET_FEED_UNAVAILABLE",
+            details={"reason": "gateway_or_terminal_offline"},
+        )
+
+    # Local / mock terminals: any live session may serve market rates.
+    live = _live_ref(adapter)
+    if live and adapter.is_live_session(live):
+        return
+    raise ServiceUnavailableError(
+        "Market data feed unavailable",
+        code="MARKET_FEED_UNAVAILABLE",
+        details={"reason": "terminal_offline"},
+    )
+
+
 async def require_live_mt5_connection(
     uow_factory: Any,
     adapter: MT5Adapter,

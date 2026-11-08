@@ -147,6 +147,18 @@ async def mt5_latest_tick(
     return MT5TickResponse(**dto_to_dict(dto))
 
 
+@router.get("/research/ticks/{symbol}", response_model=MT5TickResponse)
+async def mt5_research_tick(
+    symbol: str,
+    user: CurrentUser,
+    mt5: MT5Svc,
+) -> MT5TickResponse:
+    """Public gold market tick from the platform feed (no customer MT5 ownership)."""
+    _ = user
+    dto = await mt5.get_research_tick.execute(symbol=symbol)
+    return MT5TickResponse(**dto_to_dict(dto))
+
+
 @router.get("/candles/{symbol}", response_model=list[MT5CandleResponse])
 async def mt5_candles(
     symbol: str,
@@ -160,6 +172,30 @@ async def mt5_candles(
 ) -> list[MT5CandleResponse]:
     items = await mt5.get_candles.execute(
         user_id=user.id,
+        symbol=symbol,
+        timeframe=timeframe,
+        count=count,
+        start_pos=start_pos,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return [MT5CandleResponse(**dto_to_dict(i)) for i in items]
+
+
+@router.get("/research/candles/{symbol}", response_model=list[MT5CandleResponse])
+async def mt5_research_candles(
+    symbol: str,
+    user: CurrentUser,
+    mt5: MT5Svc,
+    timeframe: str = Query(default="H1"),
+    count: int = Query(default=100, ge=1, le=5000),
+    start_pos: int | None = Query(default=None, ge=0),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+) -> list[MT5CandleResponse]:
+    """Public gold candles from the platform feed (no customer MT5 ownership)."""
+    _ = user
+    items = await mt5.get_research_candles.execute(
         symbol=symbol,
         timeframe=timeframe,
         count=count,

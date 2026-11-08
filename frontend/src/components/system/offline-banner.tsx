@@ -63,9 +63,10 @@ export function OfflineBanner() {
   }, []);
 
   const apiUnreachable = apiState === "unreachable";
-  const apiDegraded = apiState === "degraded";
 
-  if (!browserOffline && !apiUnreachable && !apiDegraded) return null;
+  // Degraded/slow latency stays in operator logs via connectivity markers —
+  // never surface raw backend diagnostics on the customer Overview shell.
+  if (!browserOffline && !apiUnreachable) return null;
 
   if (browserOffline) {
     return (
@@ -79,28 +80,15 @@ export function OfflineBanner() {
     );
   }
 
-  if (apiUnreachable) {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="bg-[var(--warning)] px-4 py-2 text-center text-sm font-medium text-[var(--accent-fg)]"
-      >
-        {env.apiBaseIsLocalFallback
-          ? "API unreachable at local fallback (127.0.0.1:8000). Start the API or set NEXT_PUBLIC_API_BASE_URL."
-          : "QuantForg API unreachable. Trading and sync pause until the backend responds."}
-      </div>
-    );
-  }
-
-  // Degraded: soft notice — backend may be busy (ITE/gateway), not dead.
   return (
     <div
       role="status"
       aria-live="polite"
-      className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 text-center text-xs text-[var(--fg-muted)]"
+      className="bg-[var(--warning)] px-4 py-2 text-center text-sm font-medium text-[var(--accent-fg)]"
     >
-      API latency elevated. Backend may be busy — broker and gateway status are independent.
+      {env.apiBaseIsLocalFallback
+        ? "API unreachable at local fallback (127.0.0.1:8000). Start the API or set NEXT_PUBLIC_API_BASE_URL."
+        : "QuantForg API unreachable. Trading and sync pause until the backend responds."}
     </div>
   );
 }

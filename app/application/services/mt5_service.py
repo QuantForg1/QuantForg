@@ -14,6 +14,8 @@ from app.application.use_cases.mt5 import (
     GetMT5StatusUseCase,
     GetMT5SymbolUseCase,
     GetMT5TickUseCase,
+    GetResearchMarketCandlesUseCase,
+    GetResearchMarketTickUseCase,
     ListMT5SymbolsUseCase,
 )
 from app.application.use_cases.mt5_order import (
@@ -32,6 +34,8 @@ class MT5Service:
     get_symbol: GetMT5SymbolUseCase
     get_tick: GetMT5TickUseCase
     get_candles: GetMT5CandlesUseCase
+    get_research_tick: GetResearchMarketTickUseCase
+    get_research_candles: GetResearchMarketCandlesUseCase
     market_data: MT5MarketDataService
     order_validation: MT5OrderValidationService
     validate_order: ValidateMT5OrderUseCase

@@ -17,6 +17,8 @@ from app.application.use_cases.mt5 import (
     GetMT5StatusUseCase,
     GetMT5SymbolUseCase,
     GetMT5TickUseCase,
+    GetResearchMarketCandlesUseCase,
+    GetResearchMarketTickUseCase,
     ListMT5SymbolsUseCase,
 )
 from app.application.use_cases.mt5_order import (
@@ -86,6 +88,8 @@ def get_mt5_service() -> MT5Service:
         get_candles=GetMT5CandlesUseCase(
             uow_factory=uow_factory, market_data=market_data
         ),
+        get_research_tick=GetResearchMarketTickUseCase(market_data=market_data),
+        get_research_candles=GetResearchMarketCandlesUseCase(market_data=market_data),
         market_data=market_data,
         order_validation=order_validation,
         validate_order=ValidateMT5OrderUseCase(

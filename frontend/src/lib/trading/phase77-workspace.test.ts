@@ -32,8 +32,10 @@ const detail = readFileSync(
 assert.equal(dash.includes("Unable to load your trading session."), false);
 assert.equal(dash.includes("Trading session temporarily unavailable"), false);
 assert.equal(dash.includes("reachable broker Gateway"), false);
-assert.match(dash, /Broker connection unavailable/);
-assert.match(dash, /market overview/);
+assert.equal(dash.includes("Broker connection unavailable"), false);
+assert.equal(dash.includes("Account session could not be loaded"), false);
+assert.match(dash, /researchTick/);
+assert.match(dash, /market overview|platform feed/);
 assert.equal(dash.includes('href="/markets"'), false);
 assert.match(dash, /OverviewReferenceDesk/);
 assert.equal(dash.includes("ExecutionOrderTicket"), false);
