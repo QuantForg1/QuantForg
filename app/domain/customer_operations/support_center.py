@@ -133,7 +133,8 @@ def _ensure_messages(ticket: dict[str, Any]) -> list[dict[str, Any]]:
 
 def customer_ticket_view(ticket: dict[str, Any]) -> dict[str, Any]:
     """Strip operator-only fields for client support desk."""
-    out = redact(dict(ticket))
+    redacted = redact(dict(ticket))
+    out: dict[str, Any] = redacted if isinstance(redacted, dict) else dict(ticket)
     out["messages"] = [
         m
         for m in _ensure_messages(ticket)
@@ -342,7 +343,7 @@ def request_human_on_ticket(
 
 
 def _tokenize(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z0-9]{3,}", text.lower())}
+    return set(re.findall(r"[a-z0-9]{3,}", text.lower()))
 
 
 def answer_support_faq(
@@ -422,9 +423,14 @@ def update_support_ticket(
 
     def mutator(row: dict[str, Any]) -> dict[str, Any]:
         if status:
-            row["status"] = _normalize_status(status, default=str(row.get("status") or "open"))
+            default_status = str(row.get("status") or "open")
+            row["status"] = _normalize_status(status, default=default_status)
             row.setdefault("resolution_timeline", []).append(
-                {"at": utc_iso(), "event": f"status:{row['status']}", "by": operator}
+                {
+                    "at": utc_iso(),
+                    "event": f"status:{row['status']}",
+                    "by": operator,
+                }
             )
         if human_accepted is not None:
             row["human_accepted"] = bool(human_accepted)

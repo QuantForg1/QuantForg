@@ -1,5 +1,6 @@
 "use client";
 
+import { createElement } from "react";
 import type { LucideIcon } from "lucide-react";
 import { strategyIconForKey } from "@/components/strategies/strategy-icons";
 import { asRecord, str } from "@/lib/desk";
@@ -21,7 +22,7 @@ export function StrategyCard({
   onSelect,
   icon,
 }: StrategyCardProps) {
-  const Icon = icon ?? strategyIconForKey(strategyKey);
+  const iconType = icon ?? strategyIconForKey(strategyKey);
   return (
     <li>
       <button
@@ -41,7 +42,7 @@ export function StrategyCard({
               : "bg-[var(--accent-soft)] text-[var(--accent)]"
           }`}
         >
-          <Icon className="h-4 w-4" aria-hidden />
+          {createElement(iconType, { className: "h-4 w-4", "aria-hidden": true })}
         </span>
         <span className="text-sm font-semibold text-[var(--fg)]">{name}</span>
         <span className="mt-1 text-xs text-[var(--fg-subtle)]">

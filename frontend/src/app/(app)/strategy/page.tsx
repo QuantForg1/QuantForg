@@ -88,7 +88,7 @@ export default function StrategyPage() {
   const [customRulesJson, setCustomRulesJson] = useState(defaultCustomRules);
   const [maxTrades, setMaxTrades] = useState("5");
   const [dailyLoss, setDailyLoss] = useState("3");
-  const [maxExposure, setMaxExposure] = useState("20");
+  const [maxExposure] = useState("20");
   const [configTab, setConfigTab] = useState<
     "parameters" | "logic" | "entry" | "filters" | "risk"
   >("parameters");
