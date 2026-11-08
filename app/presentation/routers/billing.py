@@ -53,6 +53,35 @@ async def billing_me(user: CurrentUser, svc: BillingSvc) -> dict[str, Any]:
     return await svc.get_customer_billing(user_id=user.id)
 
 
+@router.get("/invoices/{order_code}")
+async def billing_invoice(
+    order_code: str,
+    user: CurrentUser,
+    svc: BillingSvc,
+) -> dict[str, Any]:
+    return await svc.get_invoice(user_id=user.id, order_code=order_code)
+
+
+@router.post("/trial/start", status_code=status.HTTP_201_CREATED)
+async def billing_start_trial(
+    request: Request,
+    user: CurrentUser,
+    svc: BillingSvc,
+) -> dict[str, Any]:
+    ip = ""
+    if request.client and request.client.host:
+        ip = request.client.host
+    email = str(getattr(user, "email", "") or "")
+    # Active QuantForg profile implies email verification / activation completed.
+    verified = str(getattr(user, "status", "") or "").lower() == "active"
+    return await svc.start_trial(
+        user_id=user.id,
+        email=email,
+        email_verified=verified,
+        source_ip=ip,
+    )
+
+
 @router.post("/checkout", status_code=status.HTTP_201_CREATED)
 async def billing_checkout(
     body: CheckoutRequest,

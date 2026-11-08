@@ -1,11 +1,11 @@
 /**
  * QuantForg SaaS plan catalog (marketing + entitlement keys).
  *
- * Server-side NOWPayments LIVE checkout creates invoices; paid access is granted
+ * Server-side Crypto Payment (LIVE) creates invoices; paid access is granted
  * only after verified IPN (`payment_status=finished`). Client clicks never activate access.
  *
- * DB license tiers: starter / professional / enterprise.
- * Marketing "Premium" maps to the existing `enterprise` license tier.
+ * DB license tiers: starter / professional / enterprise (Premium → enterprise).
+ * Free trial uses license tier `trial` with Starter entitlements for 7 days.
  */
 
 export type PlanId = "starter" | "professional" | "premium";
@@ -22,16 +22,21 @@ export type BillingPlan = {
   ctaLabel: string;
 };
 
-/** Recurring billing provider status for this deployment (honest defaults). */
+/** Customer-facing payment method — never display processor brand in UI. */
+export const PAYMENT_METHOD_LABEL = "Crypto Payment";
+
+/** Honest defaults for customer UI until `/billing/provider` responds. */
 export const BILLING_PROVIDER = {
-  /** Flipped true when `/billing/provider` reports configured LIVE NOWPayments. */
   configured: true,
-  provider: "nowpayments" as const,
+  paymentMethod: "crypto" as const,
+  paymentMethodLabel: PAYMENT_METHOD_LABEL,
   mode: "live" as const,
   recurringSupported: false,
   note:
-    "Crypto checkout uses NOWPayments LIVE invoices. Paid access activates only after the backend verifies a finished payment notification — never from a browser redirect alone. Automatic recurring crypto billing is not enabled; renew with a new invoice.",
+    "Pay with Crypto Payment. Paid access activates only after QuantForg verifies a completed payment — never from a browser redirect alone. Automatic monthly crypto charging is not enabled; renew with a new invoice.",
 } as const;
+
+export const TRIAL_DAYS = 7;
 
 export const BILLING_PLANS: BillingPlan[] = [
   {
@@ -39,13 +44,13 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "starter",
     name: "Starter",
     monthlyPriceUsd: 49,
-    positioning: "Entry-level access for customers exploring the platform.",
-    ctaLabel: "Start with Starter",
+    positioning: "Essential QuantForg platform access for individual operators.",
+    ctaLabel: "Choose Starter",
     entitlements: [
       "Authenticated workspace access",
       "MT5 broker connection workflows",
       "Core market research surfaces",
-      "Risk controls already enforced by the platform",
+      "Standard risk controls enforced by the platform",
       "Email support",
     ],
   },
@@ -54,7 +59,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "professional",
     name: "Professional",
     monthlyPriceUsd: 99,
-    positioning: "Advanced access for customers who need more platform functionality.",
+    positioning: "Advanced platform functionality for active desks.",
     highlighted: true,
     ctaLabel: "Choose Professional",
     entitlements: [
@@ -95,7 +100,5 @@ export function formatUsd(amount: number): string {
   }).format(amount);
 }
 
-/**
- * Annual billing is not offered until a recurring provider supports it.
- */
+/** Annual billing is not offered until a recurring provider supports it. */
 export const ANNUAL_BILLING_SUPPORTED = false;

@@ -1,44 +1,33 @@
-# Billing & entitlements (NOWPayments LIVE)
+# Billing & entitlements (Crypto Payment + Starter trial)
 
 ## What exists
 
-- Marketing plans: Starter ($49), Professional ($99), Premium ($199) in `frontend/src/lib/billing/plans.ts` and `app/domain/billing/plans.py`
-- Pricing UI + checkout at `/pricing` and `/billing/checkout`
-- Settings → Subscription reads `/billing/me`
-- LIVE NOWPayments invoice creation: `POST /api/v1/billing/checkout`
-- LIVE IPN webhook: `POST /api/v1/billing/ipn/nowpayments` (HMAC `x-nowpayments-sig`)
-- Tables: `billing_orders`, `billing_webhook_events`, `contact_leads`
-- License activation on verified `payment_status=finished` only
-- Manual renewal model (new invoice) — automatic recurring crypto is **not** claimed
+- Plans: Starter ($49), Professional ($99), Premium ($199)
+- 7-day Starter free trial (one per verified customer) — no automatic charge
+- Customer-facing payment method label: **Crypto Payment** (processor brand stays internal)
+- Checkout at `/billing/checkout` (requires AuthProvider layout)
+- Return at `/billing/return`
+- Invoices at `/billing/invoices` and `/billing/invoices/[orderCode]`
+- Settings → Subscription reflects server trial / paid / pending / expired state
+- LIVE invoice creation + IPN verification; entitlements only on verified `finished`
 
 ## Safe rules
 
 1. Never grant paid access from a client-side button or return URL.
-2. Entitlement changes only after verified IPN + signature + amount/order checks.
-3. Do not invent payment credentials or use the sandbox host.
-4. Contact / register may record plan **intent** only until payment finishes.
+2. Never display the payment processor brand in normal customer UI.
+3. Trial does not auto-charge and cannot be claimed twice per identity.
+4. Automatic monthly crypto charging is **not** enabled — renew with a new invoice.
 
-## Railway secrets (required for LIVE checkout)
+## Railway secrets
 
 | Variable | Purpose |
 |----------|---------|
-| `NOWPAYMENTS_API_KEY` | LIVE API key |
+| `NOWPAYMENTS_API_KEY` | LIVE API key (server-only) |
 | `NOWPAYMENTS_IPN_SECRET` | LIVE IPN HMAC secret |
-| `NOWPAYMENTS_API_BASE` | Must remain `https://api.nowpayments.io/v1` |
+| `NOWPAYMENTS_API_BASE` | `https://api.nowpayments.io/v1` |
 | `PUBLIC_APP_URL` | `https://www.quantforg.com` |
-| `PUBLIC_API_URL` | Public API base including `/api/v1` for IPN |
+| `PUBLIC_API_URL` | Public API base including `/api/v1` |
+| `BILLING_TRIAL_DAYS` | Optional (default 7) |
+| `BILLING_GRACE_DAYS` | Optional (default 3) |
 
-NOWPayments dashboard IPN / callback URL:
-
-`https://<your-public-api>/api/v1/billing/ipn/nowpayments`
-
-## Recurring billing
-
-Automatic NOWPayments recurring subscriptions are **not** enabled in this deployment.
-Customers renew by creating a new LIVE invoice. If the merchant later enables recurring
-APIs, integrate only after confirming the official contract — do not invent endpoints.
-
-## Migrations
-
-- `supabase/migrations/20261108180000_saas_billing.sql`
-- `supabase/migrations/20261108180100_saas_billing_rls.sql`
+IPN callback: `{PUBLIC_API_URL}/billing/ipn/nowpayments`

@@ -109,13 +109,22 @@ export const tradingSessionApi = {
     }),
 };
 
-/** SaaS billing — NOWPayments LIVE invoices (server-side only). */
+/** SaaS billing — Crypto Payment LIVE invoices (server-side processor). */
 export const billingApi = {
   plans: () => apiFetch<Record<string, unknown>>("/billing/plans", { auth: false }),
   provider: () =>
     apiFetch<Record<string, unknown>>("/billing/provider", { auth: false }),
   currencies: () => apiFetch<Record<string, unknown>>("/billing/currencies"),
   me: () => apiFetch<Record<string, unknown>>("/billing/me"),
+  invoice: (orderCode: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/billing/invoices/${encodeURIComponent(orderCode)}`,
+    ),
+  startTrial: () =>
+    apiFetch<Record<string, unknown>>("/billing/trial/start", {
+      method: "POST",
+      body: {},
+    }),
   checkout: (body: {
     plan_id: string;
     pay_currency?: string;

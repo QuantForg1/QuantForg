@@ -17,6 +17,7 @@ import {
   BILLING_PROVIDER,
   formatUsd,
   getPlan,
+  PAYMENT_METHOD_LABEL,
   type PlanId,
 } from "@/lib/billing/plans";
 import { useAuth } from "@/providers/auth-provider";
@@ -32,7 +33,7 @@ function CheckoutInner() {
   const [accepted, setAccepted] = useState(false);
 
   async function startCheckout() {
-    if (!plan || !accepted) return;
+    if (!plan || !accepted || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -44,18 +45,26 @@ function CheckoutInner() {
           cancel_url: `${origin}/billing/return?status=cancel`,
         }),
       );
-      const url = str(result.invoice_url);
-      if (!url) {
-        setError("Checkout did not return a payment URL. Credentials may be missing.");
+      const url = str(result.invoice_url, "");
+      if (!url || url === "—") {
+        setError(
+          "Checkout did not return a payment URL. Crypto Payment may be temporarily unavailable.",
+        );
         setBusy(false);
         return;
       }
       window.location.assign(url);
     } catch (e) {
-      const msg =
-        e instanceof ApiError
-          ? e.message || e.code || "Checkout failed"
-          : "Checkout failed";
+      let msg = "Checkout failed";
+      if (e instanceof ApiError) {
+        if (e.code === "UNKNOWN_PLAN") msg = "That plan is not available.";
+        else if (e.code === "CRYPTO_INVOICE_FAILED" || e.code === "NOWPAYMENTS_INVOICE_FAILED")
+          msg = "Unable to create a Crypto Payment invoice. Please retry in a moment.";
+        else if (e.code === "NOWPAYMENTS_NOT_CONFIGURED" || e.status === 503)
+          msg = "Crypto Payment is not available right now. Please try again later.";
+        else if (e.status === 401) msg = "Your session expired. Sign in again to continue checkout.";
+        else msg = e.message || e.code || msg;
+      }
       setError(msg);
       setBusy(false);
     }
@@ -69,6 +78,8 @@ function CheckoutInner() {
     );
   }
 
+  const nextPath = `/billing/checkout?plan=${plan.id}`;
+
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div className="text-center">
@@ -77,8 +88,8 @@ function CheckoutInner() {
           Confirm subscription
         </h1>
         <p className="mt-2 text-sm text-[var(--fg-muted)]">
-          Pay with cryptocurrency through NOWPayments LIVE. Access activates only after QuantForg
-          verifies a finished payment notification.
+          Pay with {PAYMENT_METHOD_LABEL}. Access activates only after QuantForg verifies a
+          completed payment — not from this page alone.
         </p>
       </div>
 
@@ -93,20 +104,16 @@ function CheckoutInner() {
         <p className="text-sm text-[var(--fg-muted)]">{plan.positioning}</p>
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
-            <dt className="text-[var(--fg-muted)]">Provider</dt>
-            <dd className="font-medium">NOWPayments Crypto (LIVE)</dd>
+            <dt className="text-[var(--fg-muted)]">Payment method</dt>
+            <dd className="font-medium">{PAYMENT_METHOD_LABEL}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-[var(--fg-muted)]">Amount due</dt>
             <dd className="font-mono tabular">{formatUsd(plan.monthlyPriceUsd)} USD</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="text-[var(--fg-muted)]">License tier</dt>
-            <dd className="font-medium">{plan.licenseTier}</dd>
-          </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-[var(--fg-muted)]">Renewal</dt>
-            <dd className="font-medium">Manual invoice (no auto-charge)</dd>
+            <dt className="text-[var(--fg-muted)]">Billing</dt>
+            <dd className="font-medium">Monthly · manual renewal invoice</dd>
           </div>
         </dl>
         <p className="text-xs leading-relaxed text-[var(--fg-subtle)]">{BILLING_PROVIDER.note}</p>
@@ -114,18 +121,17 @@ function CheckoutInner() {
 
       {!loading && !isAuthenticated ? (
         <div className="rounded-[var(--radius-os)] border border-[var(--border)] p-4 text-sm">
-          <p className="text-[var(--fg-muted)]">Sign in to create a LIVE payment invoice.</p>
+          <p className="text-[var(--fg-muted)]">
+            Sign in to create a Crypto Payment invoice. Your selected plan will be preserved.
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
-              href={`/login?next=${encodeURIComponent(`/billing/checkout?plan=${plan.id}`)}`}
+              href={`/login?next=${encodeURIComponent(nextPath)}`}
               className={pricingBtnPrimary}
             >
               Sign in
             </Link>
-            <Link
-              href={`/register?plan=${plan.id}`}
-              className={pricingBtnSecondary}
-            >
+            <Link href={`/register?plan=${plan.id}`} className={pricingBtnSecondary}>
               Create account
             </Link>
           </div>
@@ -156,7 +162,10 @@ function CheckoutInner() {
             </span>
           </label>
           {error ? (
-            <p className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
+            <p
+              className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]"
+              role="alert"
+            >
               {error}
             </p>
           ) : null}
@@ -168,7 +177,7 @@ function CheckoutInner() {
               void startCheckout();
             }}
           >
-            {busy ? "Creating LIVE invoice…" : "Continue to NOWPayments"}
+            {busy ? "Creating payment invoice…" : `Continue with ${PAYMENT_METHOD_LABEL}`}
           </button>
           <button
             type="button"
@@ -187,7 +196,11 @@ export default function BillingCheckoutPage() {
   return (
     <div className="min-h-screen overflow-x-clip">
       <PricingHeader />
-      <main id="main-content" className="mx-auto w-full max-w-6xl px-4 pb-20 pt-8 sm:px-6" tabIndex={-1}>
+      <main
+        id="main-content"
+        className="mx-auto w-full max-w-6xl px-4 pb-20 pt-8 sm:px-6"
+        tabIndex={-1}
+      >
         <Suspense fallback={<p className="text-center text-sm text-[var(--fg-muted)]">Loading…</p>}>
           <CheckoutInner />
         </Suspense>
