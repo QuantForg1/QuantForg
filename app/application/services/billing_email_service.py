@@ -5,9 +5,6 @@ Without a provider key, notifications stay queued / marked skipped — never
 falsely reported as delivered.
 """
 
-# HTML fallbacks and Resend payload assembly intentionally exceed 88 cols.
-# ruff: noqa: E501
-
 from __future__ import annotations
 
 import contextlib
@@ -73,27 +70,37 @@ async def _uow() -> Any:
     return uow
 
 
+def _fallback_html(template_key: str, payload: dict[str, Any]) -> str:
+    """Minimal branded HTML when on-disk templates are unavailable."""
+    title = TEMPLATE_SUBJECTS.get(template_key, "QuantForg billing update")
+    detail = str(payload.get("summary") or "See Settings → Subscription for details.")
+    return (
+        '<!DOCTYPE html><html><body style="background:#111827;color:#F3F4F6;'
+        'font-family:IBM Plex Sans,Segoe UI,Helvetica,Arial,sans-serif;padding:32px">'
+        f'<div style="max-width:600px;margin:0 auto;background:#151B23;'
+        f'border:1px solid #202938;border-radius:12px;padding:28px">'
+        f'<h1 style="color:#F3F4F6;font-size:20px">{title}</h1>'
+        f'<p style="color:#9CA3AF;line-height:1.6">{detail}</p>'
+        '<p style="margin-top:24px"><a href="https://www.quantforg.com/settings" '
+        'style="color:#00D4E0">Open Subscription settings</a></p>'
+        "</div></body></html>"
+    )
+
+
 def _load_html(template_key: str, payload: dict[str, Any]) -> str:
     filename = _TEMPLATE_FILES.get(template_key)
     if not filename:
-        # Minimal branded fallback for keys without a dedicated HTML file.
-        title = TEMPLATE_SUBJECTS.get(template_key, "QuantForg billing update")
-        detail = str(
-            payload.get("summary") or "See Settings → Subscription for details."
-        )
-        return (
-            '<!DOCTYPE html><html><body style="background:#111827;color:#F3F4F6;'
-            'font-family:IBM Plex Sans,Segoe UI,Helvetica,Arial,sans-serif;padding:32px">'
-            f'<div style="max-width:600px;margin:0 auto;background:#151B23;'
-            f'border:1px solid #202938;border-radius:12px;padding:28px">'
-            f'<h1 style="color:#F3F4F6;font-size:20px">{title}</h1>'
-            f'<p style="color:#9CA3AF;line-height:1.6">{detail}</p>'
-            '<p style="margin-top:24px"><a href="https://www.quantforg.com/settings" '
-            'style="color:#00D4E0">Open Subscription settings</a></p>'
-            "</div></body></html>"
-        )
+        return _fallback_html(template_key, payload)
     path = _TEMPLATE_ROOT / filename
-    html = path.read_text(encoding="utf-8")
+    try:
+        html = path.read_text(encoding="utf-8")
+    except OSError:
+        logger.warning(
+            "billing_email_template_missing",
+            template_key=template_key,
+            path=str(path),
+        )
+        return _fallback_html(template_key, payload)
     # Safe substitutions only for known non-secret placeholders in product templates.
     for key, value in payload.items():
         if key.startswith("_"):

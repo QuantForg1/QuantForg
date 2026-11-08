@@ -36,6 +36,8 @@ COPY core ./core
 COPY services ./services
 COPY alembic ./alembic
 COPY alembic.ini ./
+# Billing transactional HTML (loaded by billing_email_service at runtime).
+COPY docs/auth/email-templates ./docs/auth/email-templates
 
 RUN poetry install --only main
 
@@ -76,6 +78,7 @@ COPY --from=builder /build/core ./core
 COPY --from=builder /build/services ./services
 COPY --from=builder /build/alembic ./alembic
 COPY --from=builder /build/alembic.ini ./alembic.ini
+COPY --from=builder /build/docs/auth/email-templates ./docs/auth/email-templates
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 COPY scripts/railway_self_check.py ./scripts/railway_self_check.py
 
