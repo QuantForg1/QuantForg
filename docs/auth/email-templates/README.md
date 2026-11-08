@@ -1,14 +1,26 @@
 # QuantForg email templates
 
-Reference copies for **Supabase Auth** (dashboard-hosted) and **product billing** mail (future transactional provider). Apply HTML in Supabase **Authentication → Email Templates** for auth messages; product templates are for a future ESP when subscription notifications are wired.
+Reference copies for **Supabase Auth** (Management API / dashboard) and **product billing** mail (`billing_email_notifications` + Resend).
 
 ## Auth templates (Supabase)
 
-Paste from `confirm-signup`, `welcome`, `reset-password`, and `change-email`. Preserve Go template variables such as `{{ .ConfirmationURL }}` and `{{ .Token }}` exactly — they are required for links to work.
+Apply with:
+
+```bash
+export SUPABASE_ACCESS_TOKEN="…"   # Dashboard → Account → Access Tokens
+export SUPABASE_PROJECT_REF="otqyhlmwaifokrczryrc"
+python scripts/apply_supabase_auth_email_templates.py
+```
+
+Sources: `confirm-signup`, `welcome`, `reset-password`, `change-email`. Preserve Go variables such as `{{ .ConfirmationURL }}` and `{{ .Token }}` exactly.
+
+Production already enables email confirmations and Google OAuth (verified via `supabase config pull --dry-run`).
 
 ## Product templates (billing lifecycle)
 
-`trial-activated`, `trial-expiring`, `trial-expired`, `payment-received`, `subscription-activated`, `invoice-created`, `payment-failed`, `subscription-renewal-reminder`, `subscription-expired`, `subscription-cancelled` describe SaaS state changes. Do not send these until a product email pipeline exists; until then, customers see status in **Settings → Subscription** and **Billing → Invoices**.
+Queued into `billing_email_notifications` by the billing service. Delivery uses **Resend** when `RESEND_API_KEY` is set on Railway (`BILLING_EMAIL_FROM` optional). Without the key, queued rows are marked `skipped` with `email_provider_not_configured` — never reported as delivered.
+
+Keys: trial activated/expiring/expired, invoice created, payment pending/confirmed/failed/expired, subscription activated/upgraded/downgraded/past due/expired/cancelled, renewal reminder.
 
 ## Brand (RC4)
 

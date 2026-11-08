@@ -310,6 +310,36 @@ class Settings(BaseSettings):
             ),
         ),
     ] = None
+    billing_reconcile_interval_seconds: Annotated[
+        int,
+        Field(
+            ge=60,
+            le=86400,
+            description="In-process interval for trial/email reconciliation loop",
+            validation_alias=AliasChoices(
+                "BILLING_RECONCILE_INTERVAL_SECONDS",
+                "billing_reconcile_interval_seconds",
+            ),
+        ),
+    ] = 3600
+    resend_api_key: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description="Resend API key for transactional billing email delivery",
+            validation_alias=AliasChoices("RESEND_API_KEY", "resend_api_key"),
+        ),
+    ] = None
+    billing_email_from: Annotated[
+        str,
+        Field(
+            description="From address for transactional billing emails",
+            validation_alias=AliasChoices(
+                "BILLING_EMAIL_FROM",
+                "billing_email_from",
+            ),
+        ),
+    ] = "QuantForg <noreply@quantforg.com>"
 
     # -- Redis ----------------------------------------------------------------
     redis_host: Annotated[str, Field(description="Redis hostname")] = "localhost"

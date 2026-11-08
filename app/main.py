@@ -441,10 +441,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     shadow_task: asyncio.Task[Any] | None = None
     research_task: asyncio.Task[Any] | None = None
     operator_task: asyncio.Task[Any] | None = None
+    billing_reconcile_task: asyncio.Task[Any] | None = None
     boot_task: asyncio.Task[Any] | None = None
 
     async def _deferred_boot() -> None:
-        nonlocal shadow_task, research_task, operator_task
+        nonlocal shadow_task, research_task, operator_task, billing_reconcile_task
         # Finish mounting non-core routers after listen (production path).
         pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
         if pending:
@@ -667,6 +668,66 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 )
             except Exception:
                 logger.exception("research_analysis_worker_start_failed")
+            # SaaS trial/email reconciliation — uses BILLING_CRON_SECRET presence
+            # as enable gate; never logs the secret.
+            try:
+                cron_secret = getattr(settings, "billing_cron_secret", None)
+                cron_configured = False
+                if cron_secret is not None:
+                    with contextlib.suppress(Exception):
+                        cron_configured = bool(cron_secret.get_secret_value().strip())
+                if cron_configured and not settings.is_testing:
+
+                    async def _billing_reconcile_loop() -> None:
+                        from app.application.services.billing_service import (
+                            BillingService,
+                        )
+
+                        interval = max(
+                            60,
+                            int(
+                                getattr(
+                                    settings,
+                                    "billing_reconcile_interval_seconds",
+                                    3600,
+                                )
+                            ),
+                        )
+                        svc = BillingService(settings)
+                        # Stagger first run so boot is not competing with ITE.
+                        await asyncio.sleep(min(120, interval))
+                        while True:
+                            try:
+                                result = await svc.reconcile_expired_trials()
+                                logger.info(
+                                    "billing_reconcile_loop_ok",
+                                    expired_count=result.get("expired_count"),
+                                    email_processed=(
+                                        (result.get("email_queue") or {}).get(
+                                            "processed"
+                                        )
+                                    ),
+                                )
+                            except Exception:
+                                logger.exception("billing_reconcile_loop_failed")
+                            await asyncio.sleep(interval)
+
+                    billing_reconcile_task = asyncio.create_task(
+                        _billing_reconcile_loop(),
+                        name="billing-reconcile-loop",
+                    )
+                    logger.info(
+                        "billing_reconcile_loop_started",
+                        interval_seconds=int(
+                            getattr(
+                                settings,
+                                "billing_reconcile_interval_seconds",
+                                3600,
+                            )
+                        ),
+                    )
+            except Exception:
+                logger.exception("billing_reconcile_loop_start_failed")
             total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
             logger.info("startup_complete", startup_total_ms=total_ms)
             print(f"Startup Total: {total_ms}ms", flush=True)
@@ -721,6 +782,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             operator_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await operator_task
+        if billing_reconcile_task is not None:
+            billing_reconcile_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await billing_reconcile_task
         await container.shutdown()
     except Exception as exc:
         logger.warning("application_shutdown_error", error=str(exc))
