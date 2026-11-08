@@ -109,6 +109,39 @@ export const tradingSessionApi = {
     }),
 };
 
+/** SaaS billing — NOWPayments LIVE invoices (server-side only). */
+export const billingApi = {
+  plans: () => apiFetch<Record<string, unknown>>("/billing/plans", { auth: false }),
+  provider: () =>
+    apiFetch<Record<string, unknown>>("/billing/provider", { auth: false }),
+  currencies: () => apiFetch<Record<string, unknown>>("/billing/currencies"),
+  me: () => apiFetch<Record<string, unknown>>("/billing/me"),
+  checkout: (body: {
+    plan_id: string;
+    pay_currency?: string;
+    success_url?: string;
+    cancel_url?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/billing/checkout", {
+      method: "POST",
+      body,
+    }),
+  cancel: () =>
+    apiFetch<Record<string, unknown>>("/billing/cancel", {
+      method: "POST",
+      body: {},
+    }),
+};
+
+export const contactApi = {
+  submitLead: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/contact/leads", {
+      method: "POST",
+      body,
+      auth: false,
+    }),
+};
+
 export const mt5Api = {
   status: () => apiFetch<Record<string, unknown>>("/mt5/status"),
   connect: (body: {
