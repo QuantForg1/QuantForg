@@ -299,6 +299,17 @@ class Settings(BaseSettings):
             ),
         ),
     ] = 7
+    billing_cron_secret: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description="Shared secret for billing reconciliation cron endpoints",
+            validation_alias=AliasChoices(
+                "BILLING_CRON_SECRET",
+                "billing_cron_secret",
+            ),
+        ),
+    ] = None
 
     # -- Redis ----------------------------------------------------------------
     redis_host: Annotated[str, Field(description="Redis hostname")] = "localhost"

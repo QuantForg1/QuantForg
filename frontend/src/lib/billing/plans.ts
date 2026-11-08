@@ -22,6 +22,14 @@ export type BillingPlan = {
   ctaLabel: string;
 };
 
+export type PlanComparisonRow = {
+  feature: string;
+  trial: string;
+  starter: string;
+  professional: string;
+  premium: string;
+};
+
 /** Customer-facing payment method — never display processor brand in UI. */
 export const PAYMENT_METHOD_LABEL = "Crypto Payment";
 
@@ -38,19 +46,111 @@ export const BILLING_PROVIDER = {
 
 export const TRIAL_DAYS = 7;
 
+export const TRIAL_POSITIONING = `${TRIAL_DAYS}-day Starter access without payment details. One claim per customer. Does not auto-convert to a paid plan.`;
+
+export const TRIAL_EXPIRES_BEHAVIOR =
+  "When the trial ends, trial-only entitlements are revoked. Your account, profile, invoices, and history are preserved. Choose a paid plan to continue — you will not be charged automatically.";
+
+export const TRIAL_FEATURES: readonly string[] = [
+  "Access to QuantForg dashboard",
+  "Live market research and chart access",
+  "Strategy and signal exploration",
+  "Controlled introduction to automated trading",
+  "Auto-trading only through explicitly enabled, approved broker and risk configurations",
+  "Basic portfolio and position visibility",
+  "Essential risk visibility",
+  "Limited research and support",
+];
+
+export const PLAN_COMPARISON_ROWS: readonly PlanComparisonRow[] = [
+  {
+    feature: "Dashboard & workspace",
+    trial: "Included",
+    starter: "Essential",
+    professional: "Full",
+    premium: "Full",
+  },
+  {
+    feature: "Market research & charts",
+    trial: "Included",
+    starter: "Core",
+    professional: "Expanded",
+    premium: "Advanced",
+  },
+  {
+    feature: "Strategy & signal exploration",
+    trial: "Exploration",
+    starter: "Standard",
+    professional: "Expanded",
+    premium: "Advanced",
+  },
+  {
+    feature: "Broker connection workflows",
+    trial: "Guided intro",
+    starter: "Included",
+    professional: "Included",
+    premium: "Included",
+  },
+  {
+    feature: "Automated trading access",
+    trial: "Controlled intro",
+    starter: "Core (risk-gated)",
+    professional: "Enhanced (risk-gated)",
+    premium: "Full eligible (risk-gated)",
+  },
+  {
+    feature: "Portfolio & positions",
+    trial: "Basic",
+    starter: "Standard",
+    professional: "Full workspace",
+    premium: "Advanced",
+  },
+  {
+    feature: "Risk controls",
+    trial: "Essential visibility",
+    starter: "Standard (enforced)",
+    professional: "Standard (enforced)",
+    premium: "Standard (enforced)",
+  },
+  {
+    feature: "Analytics & monitoring",
+    trial: "Limited",
+    starter: "Core",
+    professional: "Advanced",
+    premium: "Enhanced",
+  },
+  {
+    feature: "Support",
+    trial: "Limited",
+    starter: "Email",
+    professional: "Priority",
+    premium: "Priority + onboarding",
+  },
+  {
+    feature: "License management",
+    trial: "Trial license",
+    starter: "Standard",
+    professional: "Standard",
+    premium: "Advanced",
+  },
+];
+
 export const BILLING_PLANS: BillingPlan[] = [
   {
     id: "starter",
     licenseTier: "starter",
     name: "Starter",
     monthlyPriceUsd: 49,
-    positioning: "Essential QuantForg platform access for individual operators.",
+    positioning: "Essential QuantForg workspace for individual operators.",
     ctaLabel: "Choose Starter",
     entitlements: [
-      "Authenticated workspace access",
-      "MT5 broker connection workflows",
-      "Core market research surfaces",
-      "Standard risk controls enforced by the platform",
+      "Essential QuantForg workspace",
+      "Core market research and chart access",
+      "Standard strategy access",
+      "Broker connection workflows",
+      "Core automated trading capabilities (subject to eligibility and risk checks)",
+      "Standard portfolio and position visibility",
+      "Standard risk controls (never bypassed by plan)",
       "Email support",
     ],
   },
@@ -59,15 +159,17 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "professional",
     name: "Professional",
     monthlyPriceUsd: 99,
-    positioning: "Advanced platform functionality for active desks.",
+    positioning: "Expanded tools for active professional desks.",
     highlighted: true,
     ctaLabel: "Choose Professional",
     entitlements: [
       "Everything in Starter",
-      "Expanded strategy and research tooling",
+      "Expanded strategy and research tools",
+      "Advanced analytics surfaces",
       "Portfolio and performance workspaces",
+      "Enhanced trading insights and monitoring",
       "Priority product support",
-      "Seat for a professional operator",
+      "Professional operator features",
     ],
   },
   {
@@ -75,14 +177,17 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "enterprise",
     name: "Premium",
     monthlyPriceUsd: 199,
-    positioning: "Higher-tier platform access and enhanced support.",
+    positioning: "Full eligible platform access with enhanced support.",
     ctaLabel: "Choose Premium",
     entitlements: [
       "Everything in Professional",
-      "Enhanced onboarding assistance",
-      "Priority support response",
-      "License center coordination for operators",
-      "Best-effort account isolation guidance",
+      "Full eligible platform feature access",
+      "Advanced research and strategy tools",
+      "Enhanced analytics and reporting",
+      "Advanced monitoring and account management",
+      "Priority support",
+      "Premium onboarding assistance",
+      "Advanced license management",
     ],
   },
 ];
@@ -98,6 +203,19 @@ export function formatUsd(amount: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+/** ISO timestamps from billing API — UTC calendar dates for customer-facing UI. */
+export function formatBillingDate(iso: string | null | undefined): string {
+  if (!iso || !iso.trim()) return "—";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(parsed);
 }
 
 /** Annual billing is not offered until a recurring provider supports it. */

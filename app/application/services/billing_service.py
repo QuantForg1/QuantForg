@@ -21,11 +21,23 @@ from app.domain.billing.nowpayments import (
     NowPaymentsLiveClient,
     verify_ipn_signature,
 )
-from app.domain.billing.plans import get_plan, plans_public
+from app.domain.billing.plans import (
+    BILLING_DISCLAIMER,
+    comparison_public,
+    get_plan,
+    plan_id_for_license_tier,
+    plans_public,
+    trial_public,
+)
 from app.domain.exceptions.base import (
     NotFoundError,
     ServiceUnavailableError,
     ValidationError,
+)
+from app.domain.identity.designated_owner import (
+    DESIGNATED_OWNER_EMAIL,
+    is_designated_owner_email,
+    normalize_email,
 )
 from core.config.settings import Settings
 from core.logging import get_logger
@@ -119,11 +131,17 @@ class BillingService:
         )
 
     def list_plans(self) -> dict[str, Any]:
+        days = int(self.settings.billing_trial_days)
         return {
             "plans": plans_public(),
+            "trial": trial_public(days=days),
+            "comparison": comparison_public(),
             "provider": billing_provider_status(self.settings),
             "grace_days": int(self.settings.billing_grace_days),
             "period_days": int(self.settings.billing_period_days),
+            "trial_days": days,
+            "payment_method_label": "Crypto Payment",
+            "disclaimer": BILLING_DISCLAIMER,
         }
 
     def list_currencies(self) -> dict[str, Any]:
@@ -235,22 +253,28 @@ class BillingService:
         email: str,
         email_verified: bool,
         source_ip: str = "",
+        claim_fingerprint: str = "",
     ) -> dict[str, Any]:
         if not email_verified:
             raise ValidationError(
                 "Verify your email before starting a free trial",
                 code="TRIAL_EMAIL_UNVERIFIED",
             )
-        email_norm = email.strip().lower()
+        email_norm = normalize_email(email)
         if not email_norm or "@" not in email_norm:
             raise ValidationError("Valid email required", code="TRIAL_EMAIL_INVALID")
         days = int(self.settings.billing_trial_days)
         now = datetime.now(UTC)
         expires = now + timedelta(days=days)
+        fingerprint = (claim_fingerprint or source_ip or "")[:160]
 
         uow = await _uow()
         try:
             session = uow._require_session()
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+                {"lock_key": f"trial:{email_norm}:{user_id}"},
+            )
             existing = (
                 (
                     await session.execute(
@@ -268,9 +292,31 @@ class BillingService:
             )
             if existing is not None:
                 raise ValidationError(
-                    "A free trial was already used for this account",
+                    "A free trial was already used for this account. "
+                    "Choose a paid plan to continue.",
                     code="TRIAL_ALREADY_USED",
                     details={"status": existing.get("status")},
+                )
+            prior_trial_license = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id FROM licenses
+                        WHERE user_id = :user_id AND tier = 'trial'
+                        LIMIT 1
+                        """),
+                        {"user_id": str(user_id)},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if prior_trial_license is not None:
+                raise ValidationError(
+                    "A free trial was already used for this account. "
+                    "Choose a paid plan to continue.",
+                    code="TRIAL_ALREADY_USED",
+                    details={"status": "license_history"},
                 )
 
             active_paid = (
@@ -323,25 +369,52 @@ class BillingService:
                 .mappings()
                 .first()
             )
-            await session.execute(
-                text("""
-                    INSERT INTO billing_trials (
-                      user_id, email_norm, plan_id, status, started_at, expires_at,
-                      license_id, source_ip
-                    ) VALUES (
-                      :user_id, :email_norm, 'starter', 'active', :started_at,
-                      :expires_at, :license_id, :source_ip
-                    )
-                    """),
-                {
-                    "user_id": str(user_id),
-                    "email_norm": email_norm,
-                    "started_at": now,
-                    "expires_at": expires,
-                    "license_id": str(lic["id"]) if lic else None,
-                    "source_ip": (source_ip or "")[:120],
-                },
-            )
+            try:
+                inserted = await session.execute(
+                    text("""
+                        INSERT INTO billing_trials (
+                          user_id, email_norm, plan_id, status, started_at, expires_at,
+                          license_id, source_ip
+                        ) VALUES (
+                          :user_id, :email_norm, 'starter', 'active', :started_at,
+                          :expires_at, :license_id, :source_ip
+                        )
+                        ON CONFLICT (user_id) DO NOTHING
+                        RETURNING id
+                        """),
+                    {
+                        "user_id": str(user_id),
+                        "email_norm": email_norm,
+                        "started_at": now,
+                        "expires_at": expires,
+                        "license_id": str(lic["id"]) if lic else None,
+                        "source_ip": (source_ip or "")[:120],
+                    },
+                )
+                trial_id_row = inserted.mappings().first()
+            except Exception as exc:
+                raise ValidationError(
+                    "A free trial was already used for this account. "
+                    "Choose a paid plan to continue.",
+                    code="TRIAL_ALREADY_USED",
+                    details={"status": "conflict"},
+                ) from exc
+            if trial_id_row is None:
+                raise ValidationError(
+                    "A free trial was already used for this account. "
+                    "Choose a paid plan to continue.",
+                    code="TRIAL_ALREADY_USED",
+                    details={"status": "conflict"},
+                )
+            with contextlib.suppress(Exception):
+                await session.execute(
+                    text("""
+                        UPDATE billing_trials
+                        SET claim_fingerprint = :fp
+                        WHERE id = :id
+                        """),
+                    {"fp": fingerprint, "id": str(trial_id_row["id"])},
+                )
             await session.execute(
                 text("""
                     UPDATE users
@@ -669,6 +742,283 @@ class BillingService:
                 ),
                 "note": "Access remains until the paid period ends unless suspended by an operator.",
             }
+        finally:
+            with contextlib.suppress(Exception):
+                await uow.__aexit__(None, None, None)
+
+    async def grant_owner_compensation_premium(
+        self,
+        *,
+        email: str | None = None,
+        actor_user_id: UUID | None = None,
+        actor_email: str | None = None,
+        actor_role: str | None = None,
+    ) -> dict[str, Any]:
+        """Grant Premium to DESIGNATED_OWNER_EMAIL only (audited)."""
+        _ = actor_role
+        if actor_email and not is_designated_owner_email(actor_email):
+            if not is_designated_owner_email(email or ""):
+                raise ValidationError(
+                    "Only the designated owner may execute this grant",
+                    code="OWNER_GRANT_FORBIDDEN",
+                )
+        if email and not is_designated_owner_email(email):
+            raise ValidationError(
+                "Owner compensation applies only to the designated owner email",
+                code="OWNER_COMPENSATION_FORBIDDEN",
+                details={"expected": DESIGNATED_OWNER_EMAIL},
+            )
+        plan = get_plan("premium")
+        if plan is None:
+            raise ServiceUnavailableError(
+                "Premium plan is not configured",
+                code="PLAN_UNAVAILABLE",
+            )
+        target_email = DESIGNATED_OWNER_EMAIL
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            user_row = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id, email, status, auth_user_id
+                        FROM users
+                        WHERE lower(trim(email)) = :email
+                        LIMIT 1
+                        """),
+                        {"email": target_email},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if user_row is None:
+                raise NotFoundError(
+                    "Designated owner account was not found in trusted user records",
+                    code="OWNER_ACCOUNT_NOT_FOUND",
+                )
+            auth_ok = None
+            if user_row.get("auth_user_id") is not None:
+                with contextlib.suppress(Exception):
+                    auth_row = (
+                        (
+                            await session.execute(
+                                text("""
+                                SELECT id, email FROM auth.users
+                                WHERE id = :auth_id LIMIT 1
+                                """),
+                                {"auth_id": str(user_row["auth_user_id"])},
+                            )
+                        )
+                        .mappings()
+                        .first()
+                    )
+                    if auth_row is None:
+                        raise ValidationError(
+                            "Owner auth identity could not be verified",
+                            code="OWNER_AUTH_MISSING",
+                        )
+                    if normalize_email(auth_row.get("email")) != target_email:
+                        raise ValidationError(
+                            "Owner auth email does not match designated owner",
+                            code="OWNER_AUTH_EMAIL_MISMATCH",
+                        )
+                    auth_ok = True
+            user_id = str(user_row["id"])
+            now = datetime.now(UTC)
+            period_end = now + timedelta(days=3650)
+            notes = f"Premium grant reason=owner_compensation (auth_verified={auth_ok})"
+            existing = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id FROM licenses
+                        WHERE user_id = :user_id
+                        ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,
+                                 created_at DESC
+                        LIMIT 1
+                        """),
+                        {"user_id": user_id},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if existing is not None:
+                await session.execute(
+                    text("""
+                        UPDATE licenses
+                        SET tier = :tier, status = 'active', seats = 1,
+                            issued_at = COALESCE(issued_at, :issued_at),
+                            expires_at = :expires_at, revoked_at = NULL,
+                            notes = :notes, updated_at = timezone('utc', now())
+                        WHERE id = :id
+                        """),
+                    {
+                        "tier": plan.license_tier,
+                        "issued_at": now,
+                        "expires_at": period_end,
+                        "notes": notes,
+                        "id": str(existing["id"]),
+                    },
+                )
+                license_id = str(existing["id"])
+            else:
+                await session.execute(
+                    text("""
+                        INSERT INTO licenses (
+                          user_id, tier, status, seats, issued_at, expires_at, notes
+                        ) VALUES (
+                          :user_id, :tier, 'active', 1, :issued_at, :expires_at, :notes
+                        )
+                        """),
+                    {
+                        "user_id": user_id,
+                        "tier": plan.license_tier,
+                        "issued_at": now,
+                        "expires_at": period_end,
+                        "notes": notes,
+                    },
+                )
+                lic = (
+                    (
+                        await session.execute(
+                            text("""
+                            SELECT id FROM licenses
+                            WHERE user_id = :user_id AND tier = 'enterprise'
+                            ORDER BY created_at DESC LIMIT 1
+                            """),
+                            {"user_id": user_id},
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
+                license_id = str(lic["id"]) if lic else None
+            await session.execute(
+                text("""
+                    UPDATE users
+                    SET subscription_plan_id = :plan_id,
+                        subscription_status = 'active',
+                        subscription_expires_at = :expires_at,
+                        subscription_provider = 'owner_compensation',
+                        updated_at = timezone('utc', now())
+                    WHERE id = :user_id
+                    """),
+                {
+                    "plan_id": plan.plan_id,
+                    "expires_at": period_end,
+                    "user_id": user_id,
+                },
+            )
+            with contextlib.suppress(Exception):
+                await session.execute(
+                    text("""
+                        INSERT INTO billing_admin_events (
+                          actor_user_id, target_user_id, target_email, action, reason,
+                          plan_id, license_tier, details
+                        ) VALUES (
+                          :actor_user_id, :target_user_id, :target_email,
+                          'owner_compensation_premium_grant', 'owner_compensation',
+                          'premium', 'enterprise', CAST(:details AS jsonb)
+                        )
+                        """),
+                    {
+                        "actor_user_id": (
+                            str(actor_user_id) if actor_user_id else None
+                        ),
+                        "target_user_id": user_id,
+                        "target_email": target_email,
+                        "details": _json_dump(
+                            {
+                                "license_id": license_id,
+                                "auth_verified": auth_ok,
+                                "period_end": period_end.isoformat(),
+                            }
+                        ),
+                    },
+                )
+            await session.commit()
+            logger.info(
+                "billing_owner_compensation_premium_granted",
+                user_id=user_id,
+                license_id=license_id,
+            )
+            return {
+                "granted": True,
+                "plan_id": plan.plan_id,
+                "license_tier": plan.license_tier,
+                "reason": "owner_compensation",
+                "target_user_id": user_id,
+                "license_id": license_id,
+                "period_end": period_end.isoformat(),
+                "grace_end": period_end.isoformat(),
+                "auth_verified": auth_ok,
+                "payment_method_label": "Crypto Payment",
+                "note": notes,
+            }
+        finally:
+            with contextlib.suppress(Exception):
+                await uow.__aexit__(None, None, None)
+
+    async def reconcile_expired_trials(self, *, limit: int = 200) -> dict[str, Any]:
+        """Expire due trials and revoke trial-only licenses (idempotent)."""
+        uow = await _uow()
+        try:
+            session = uow._require_session()
+            due = (
+                (
+                    await session.execute(
+                        text("""
+                        SELECT id, user_id, license_id
+                        FROM billing_trials
+                        WHERE status = 'active'
+                          AND expires_at <= timezone('utc', now())
+                        ORDER BY expires_at ASC
+                        LIMIT :limit
+                        """),
+                        {"limit": max(1, min(int(limit), 500))},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            expired = 0
+            for row in due:
+                await session.execute(
+                    text("""
+                        UPDATE billing_trials
+                        SET status = 'expired', updated_at = timezone('utc', now())
+                        WHERE id = :id AND status = 'active'
+                        """),
+                    {"id": str(row["id"])},
+                )
+                if row.get("license_id") is not None:
+                    await session.execute(
+                        text("""
+                            UPDATE licenses
+                            SET status = 'expired', updated_at = timezone('utc', now())
+                            WHERE id = :id AND tier = 'trial' AND status = 'active'
+                            """),
+                        {"id": str(row["license_id"])},
+                    )
+                await session.execute(
+                    text("""
+                        UPDATE users
+                        SET trial_status = 'expired',
+                            subscription_status = CASE
+                              WHEN subscription_status = 'trial' THEN 'expired'
+                              ELSE subscription_status
+                            END,
+                            updated_at = timezone('utc', now())
+                        WHERE id = :user_id
+                        """),
+                    {"user_id": str(row["user_id"])},
+                )
+                expired += 1
+            await session.commit()
+            return {"ok": True, "expired_count": expired}
         finally:
             with contextlib.suppress(Exception):
                 await uow.__aexit__(None, None, None)
@@ -1036,6 +1386,17 @@ class BillingService:
                 "user_id": user_id,
             },
         )
+        await session.execute(
+            text("""
+                UPDATE billing_trials
+                SET status = 'converted',
+                    converted_at = COALESCE(converted_at, :now),
+                    updated_at = timezone('utc', now())
+                WHERE user_id = :user_id
+                  AND status IN ('active', 'expired')
+                """),
+            {"now": now, "user_id": user_id},
+        )
         logger.info(
             "billing_entitlement_activated",
             user_id=user_id,
@@ -1213,6 +1574,13 @@ def _row_license(row: Any) -> dict[str, Any] | None:
     }
 
 
+def _plan_name(plan_id: str | None) -> str | None:
+    if not plan_id:
+        return None
+    plan = get_plan(str(plan_id))
+    return plan.name if plan else str(plan_id).replace("_", " ").title()
+
+
 def _derive_subscription(
     license_row: Any,
     orders: Any,
@@ -1222,6 +1590,14 @@ def _derive_subscription(
 ) -> dict[str, Any]:
     active_order = next((o for o in orders if o.get("status") == "active"), None)
     cancelled = next((o for o in orders if o.get("status") == "cancelled"), None)
+    failed = next(
+        (
+            o
+            for o in orders
+            if o.get("status") in {"payment_failed", "expired", "suspended"}
+        ),
+        None,
+    )
     pending = next(
         (
             o
@@ -1231,69 +1607,113 @@ def _derive_subscription(
         None,
     )
     grace = int(settings.billing_grace_days)
+    base = {
+        "payment_method_label": "Crypto Payment",
+        "billing_frequency": "Monthly invoice (no automatic crypto charge)",
+        "grace_days": grace,
+        "renewal_instructions": (
+            "Before your period ends, open Subscription or Invoices and pay a new "
+            "Crypto Payment invoice for your plan. Access renews only after verified payment."
+        ),
+    }
     if active_order is not None:
+        period_end = active_order.get("period_end")
         return {
+            **base,
             "state": "active",
+            "subscription_type": "paid",
             "plan_id": active_order.get("plan_id"),
+            "plan_name": _plan_name(active_order.get("plan_id")),
+            "activated_at": _iso(active_order.get("paid_at")),
             "period_start": _iso(active_order.get("period_start")),
-            "period_end": _iso(active_order.get("period_end")),
-            "billing_frequency": "monthly",
-            "payment_method_label": "Crypto Payment",
-            "grace_days": grace,
+            "period_end": _iso(period_end),
+            "next_renewal_due": _iso(period_end),
+            "grace_ends_at": _iso(active_order.get("expires_at")),
+            "invoice_url": active_order.get("invoice_url"),
+            "order_code": active_order.get("order_code"),
         }
     if cancelled is not None and cancelled.get("period_end"):
         end = cancelled["period_end"]
         if isinstance(end, datetime) and end > datetime.now(UTC):
             return {
+                **base,
                 "state": "cancelled",
+                "subscription_type": "paid",
                 "plan_id": cancelled.get("plan_id"),
+                "plan_name": _plan_name(cancelled.get("plan_id")),
                 "period_end": _iso(end),
-                "payment_method_label": "Crypto Payment",
-                "grace_days": grace,
+                "grace_ends_at": _iso(cancelled.get("expires_at")),
+                "access_until": _iso(end),
             }
     if pending is not None:
         return {
+            **base,
             "state": "pending_payment",
+            "subscription_type": "paid_pending",
             "plan_id": pending.get("plan_id"),
+            "plan_name": _plan_name(pending.get("plan_id")),
             "period_end": None,
             "invoice_url": pending.get("invoice_url"),
             "order_code": pending.get("order_code"),
-            "payment_method_label": "Crypto Payment",
-            "grace_days": grace,
         }
     if trial and trial.get("status") == "active":
         return {
+            **base,
             "state": "trial",
+            "subscription_type": "trial",
             "plan_id": "starter",
+            "plan_name": "Starter Trial",
+            "activated_at": trial.get("started_at"),
+            "trial_started_at": trial.get("started_at"),
+            "trial_expires_at": trial.get("expires_at"),
             "period_end": trial.get("expires_at"),
-            "trial": True,
             "days_remaining": trial.get("days_remaining"),
-            "payment_method_label": "Crypto Payment",
-            "grace_days": grace,
+            "trial": True,
         }
     if trial and trial.get("status") == "expired":
         return {
+            **base,
             "state": "trial_expired",
+            "subscription_type": "trial",
             "plan_id": "starter",
+            "plan_name": "Starter Trial",
+            "trial_started_at": trial.get("started_at"),
+            "trial_expires_at": trial.get("expires_at"),
             "period_end": trial.get("expires_at"),
-            "payment_method_label": "Crypto Payment",
-            "grace_days": grace,
         }
     if license_row is not None and str(license_row.get("status")) == "active":
         tier = str(license_row.get("tier") or "")
+        plan_id = plan_id_for_license_tier(tier)
         return {
+            **base,
             "state": "trial" if tier == "trial" else "active",
-            "plan_id": "starter" if tier == "trial" else None,
+            "subscription_type": "trial" if tier == "trial" else "paid",
+            "plan_id": plan_id,
+            "plan_name": (
+                "Starter Trial" if tier == "trial" else _plan_name(plan_id)
+            ),
+            "activated_at": _iso(license_row.get("issued_at")),
             "period_end": _iso(license_row.get("expires_at")),
-            "payment_method_label": "Crypto Payment",
-            "grace_days": grace,
+            "next_renewal_due": _iso(license_row.get("expires_at")),
+        }
+    if failed is not None:
+        return {
+            **base,
+            "state": str(failed.get("status") or "payment_failed"),
+            "subscription_type": "paid_pending",
+            "plan_id": failed.get("plan_id"),
+            "plan_name": _plan_name(failed.get("plan_id")),
+            "period_end": _iso(failed.get("period_end")),
+            "order_code": failed.get("order_code"),
+            "invoice_url": failed.get("invoice_url"),
         }
     return {
+        **base,
         "state": "none",
+        "subscription_type": None,
         "plan_id": None,
+        "plan_name": None,
         "period_end": None,
-        "payment_method_label": "Crypto Payment",
-        "grace_days": grace,
     }
 
 

@@ -1,0 +1,8 @@
+Confirm your email
+
+Confirm your QuantForg email:
+{{ .ConfirmationURL }}
+If you did not sign up, ignore this email.
+
+— QuantForg
+https://www.quantforg.com

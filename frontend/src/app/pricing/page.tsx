@@ -15,7 +15,11 @@ import {
   BILLING_PROVIDER,
   formatUsd,
   PAYMENT_METHOD_LABEL,
+  PLAN_COMPARISON_ROWS,
   TRIAL_DAYS,
+  TRIAL_EXPIRES_BEHAVIOR,
+  TRIAL_FEATURES,
+  TRIAL_POSITIONING,
 } from "@/lib/billing/plans";
 
 export const metadata: Metadata = {
@@ -31,46 +35,6 @@ export const metadata: Metadata = {
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "QuantForg" }],
   },
 };
-
-const comparisonRows: { feature: string; starter: string; professional: string; premium: string }[] =
-  [
-    {
-      feature: "Platform workspace",
-      starter: "Included",
-      professional: "Included",
-      premium: "Included",
-    },
-    {
-      feature: "MT5 connection workflows",
-      starter: "Included",
-      professional: "Included",
-      premium: "Included",
-    },
-    {
-      feature: "Research & strategy tools",
-      starter: "Core",
-      professional: "Expanded",
-      premium: "Expanded",
-    },
-    {
-      feature: "Portfolio surfaces",
-      starter: "Essential",
-      professional: "Full",
-      premium: "Full",
-    },
-    {
-      feature: "Support",
-      starter: "Email",
-      professional: "Priority",
-      premium: "Enhanced",
-    },
-    {
-      feature: "Onboarding assistance",
-      starter: "Self-serve",
-      professional: "Guided",
-      premium: "Enhanced",
-    },
-  ];
 
 export default function PricingPage() {
   return (
@@ -102,7 +66,44 @@ export default function PricingPage() {
             ) : null}
           </div>
 
-          <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          <div className="mt-12 grid gap-5 lg:grid-cols-4">
+            <article className="qf-glass-card relative flex flex-col p-6 sm:p-7 ring-1 ring-[var(--accent)]/60">
+              <span className="qf-lifetime-badge absolute -top-3 left-1/2 -translate-x-1/2">
+                Free trial
+              </span>
+              <h2 className="text-xl font-semibold tracking-tight">Free Trial</h2>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">
+                {TRIAL_POSITIONING}
+              </p>
+              <p className="mt-6 flex items-baseline gap-1">
+                <span className="qf-num-lg text-4xl font-semibold">$0</span>
+                <span className="text-sm text-[var(--fg-subtle)]">/ {TRIAL_DAYS} days</span>
+              </p>
+              <p className="mt-1 text-xs text-[var(--fg-subtle)]">No payment details required</p>
+              <ul className="mt-6 flex-1 space-y-2.5">
+                {TRIAL_FEATURES.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm text-[var(--fg-muted)]">
+                    <Check
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]"
+                      aria-hidden
+                    />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 space-y-2">
+                <Link href="/register" className={`${pricingBtnPrimary} w-full`}>
+                  Create account & start trial
+                </Link>
+                <Link href="/settings" className={`${pricingBtnSecondary} w-full`}>
+                  Start trial from Subscription
+                </Link>
+                <p className="text-center text-xs text-[var(--fg-subtle)]">
+                  {TRIAL_EXPIRES_BEHAVIOR}
+                </p>
+              </div>
+            </article>
+
             {BILLING_PLANS.map((plan) => (
               <article
                 key={plan.id}
@@ -177,21 +178,23 @@ export default function PricingPage() {
             Compare plans
           </h2>
           <div className="mt-8 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)]">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
               <thead className="bg-[var(--surface)]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Capability</th>
+                  <th className="px-4 py-3 font-medium">Free Trial</th>
                   <th className="px-4 py-3 font-medium">Starter</th>
                   <th className="px-4 py-3 font-medium">Professional</th>
                   <th className="px-4 py-3 font-medium">Premium</th>
                 </tr>
               </thead>
               <tbody>
-                {comparisonRows.map((row) => (
+                {PLAN_COMPARISON_ROWS.map((row) => (
                   <tr key={row.feature} className="border-t border-[var(--border)]">
                     <th scope="row" className="px-4 py-3 font-medium text-[var(--fg)]">
                       {row.feature}
                     </th>
+                    <td className="px-4 py-3 text-[var(--fg-muted)]">{row.trial}</td>
                     <td className="px-4 py-3 text-[var(--fg-muted)]">{row.starter}</td>
                     <td className="px-4 py-3 text-[var(--fg-muted)]">{row.professional}</td>
                     <td className="px-4 py-3 text-[var(--fg-muted)]">{row.premium}</td>

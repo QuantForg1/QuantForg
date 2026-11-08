@@ -1,0 +1,7 @@
+Confirm email change
+
+Confirm your new email:
+{{ .ConfirmationURL }}
+
+— QuantForg
+https://www.quantforg.com
