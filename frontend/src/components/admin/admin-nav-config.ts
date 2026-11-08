@@ -7,6 +7,7 @@ import {
   Headphones,
   LayoutDashboard,
   Radio,
+  ScrollText,
   Settings2,
   Shield,
   SlidersHorizontal,
@@ -33,78 +34,92 @@ export type AdminNavGroup = {
   items: AdminNavItem[];
 };
 
+/**
+ * Enterprise Admin navigation.
+ * Deep links into existing COP / ops routes — no parallel business logic.
+ */
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     title: "Overview",
     items: [
       {
-        label: "Overview",
+        label: "Dashboard",
         href: "/admin",
-        hint: "Platform KPIs and health",
+        hint: "Platform KPIs, health, recent admin activity",
         icon: LayoutDashboard,
       },
     ],
   },
   {
-    title: "Customers",
+    title: "User Management",
     items: [
       {
-        label: "User Management",
+        label: "Users",
         href: "/admin/customer-ops#fleet",
-        hint: "Fleet and customer workspace",
+        hint: "Fleet, status, search, suspend",
         icon: Users,
       },
       {
-        label: "Plans & Subscriptions",
+        label: "Customer workspace",
+        href: "/admin/customer-ops#workspace",
+        hint: "Profile, brokers, support history",
+        icon: Users,
+      },
+    ],
+  },
+  {
+    title: "Plans & Subscriptions",
+    items: [
+      {
+        label: "Licenses & plans",
         href: "/admin/customer-ops#licenses",
-        hint: "License center",
+        hint: "Assignment, expiry, renewal status",
         icon: CreditCard,
       },
       {
-        label: "Broker Management",
+        label: "Enterprise billing",
+        href: "/admin/enterprise",
+        hint: "SaaS controls and entitlements",
+        icon: CreditCard,
+      },
+    ],
+  },
+  {
+    title: "Broker Management",
+    items: [
+      {
+        label: "Connected brokers",
         href: "/admin/customer-ops#brokers",
-        hint: "Broker connections",
+        hint: "Ownership, health, sync (credentials redacted)",
         icon: Building2,
       },
     ],
   },
   {
-    title: "Operations",
+    title: "Trading & Robot",
     items: [
       {
-        label: "Trading & Robot",
+        label: "Live trading control",
         href: "/admin/live-trading",
-        hint: "Read-only live trading overview",
+        hint: "DISABLED · ARM · ENABLE · KILL (safeguards intact)",
         icon: Radio,
       },
       {
-        label: "Risk & Configuration",
-        href: "/admin/control",
-        hint: "Owner policy and risk gates",
-        icon: SlidersHorizontal,
-      },
-      {
-        label: "Support Management",
-        href: "/admin/support",
-        hint: "Tickets, status, and replies",
-        icon: Headphones,
-      },
-      {
-        label: "Notifications",
-        href: "/admin/customer-ops#notifications",
-        hint: "Institutional notification center",
-        icon: Bell,
+        label: "NOC / workers",
+        href: "/admin/noc",
+        hint: "Observe-only operations command",
+        icon: Activity,
       },
     ],
   },
   {
-    title: "System",
+    title: "Risk & Configuration",
     items: [
       {
-        label: "Enterprise",
-        href: "/admin/enterprise",
-        hint: "SaaS platform controls",
-        icon: Settings2,
+        label: "Owner control",
+        href: "/admin/control",
+        hint: "Policy, risk gates, live authorization",
+        icon: SlidersHorizontal,
       },
       {
         label: "Reliability",
@@ -112,11 +127,50 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         hint: "Safety gates and readiness",
         icon: Shield,
       },
+    ],
+  },
+  {
+    title: "Support Management",
+    items: [
       {
-        label: "NOC",
-        href: "/admin/noc",
-        hint: "Operations command observe-only",
-        icon: Activity,
+        label: "Support desk",
+        href: "/admin/support",
+        hint: "Tickets, AI history, human handoff",
+        icon: Headphones,
+      },
+      {
+        label: "COP support queue",
+        href: "/admin/customer-ops#support",
+        hint: "Institutional support store",
+        icon: Headphones,
+      },
+    ],
+  },
+  {
+    title: "Notifications",
+    items: [
+      {
+        label: "Platform notifications",
+        href: "/admin/customer-ops#notifications",
+        hint: "User and administrative alerts",
+        icon: Bell,
+      },
+    ],
+  },
+  {
+    title: "System Settings",
+    items: [
+      {
+        label: "Enterprise settings",
+        href: "/admin/enterprise",
+        hint: "Feature access and SaaS config",
+        icon: Settings2,
+      },
+      {
+        label: "Audit logs",
+        href: "/admin/customer-ops#audit",
+        hint: "Administrative action history",
+        icon: ScrollText,
       },
     ],
   },
