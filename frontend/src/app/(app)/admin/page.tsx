@@ -294,8 +294,8 @@ export default function AdminPortalPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        eyebrow="Admin Portal"
-        title="Overview"
+        eyebrow="Overview"
+        title="Operations dashboard"
         description="Enterprise operations dashboard — production COP data only. Trading engine, MT5, and execution paths are not modified from this surface."
         actions={
           <Button asChild size="sm" variant="outline">

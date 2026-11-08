@@ -4,6 +4,7 @@ import {
   Bell,
   Building2,
   CreditCard,
+  FileSearch,
   Headphones,
   LayoutDashboard,
   Radio,
@@ -35,7 +36,7 @@ export type AdminNavGroup = {
 };
 
 /**
- * Enterprise Admin navigation.
+ * Canonical Admin Portal navigation.
  * Deep links into existing COP / ops routes — no parallel business logic.
  */
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
@@ -60,15 +61,9 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon: Users,
       },
       {
-        label: "COP fleet (legacy)",
-        href: "/admin/customer-ops#fleet",
-        hint: "Original Customer Operations fleet tab",
-        icon: Users,
-      },
-      {
-        label: "COP workspace",
-        href: "/admin/customer-ops#workspace",
-        hint: "UUID lookup in Customer Operations",
+        label: "Customer Operations",
+        href: "/admin/customer-ops",
+        hint: "Fleet, workspace, licenses, brokers, support",
         icon: Users,
       },
     ],
@@ -83,15 +78,9 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon: CreditCard,
       },
       {
-        label: "Licenses (COP)",
+        label: "Licenses",
         href: "/admin/customer-ops#licenses",
         hint: "Assignment, expiry, renewal status",
-        icon: CreditCard,
-      },
-      {
-        label: "Enterprise billing",
-        href: "/admin/enterprise",
-        hint: "SaaS controls and entitlements",
         icon: CreditCard,
       },
     ],
@@ -111,6 +100,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     title: "Trading & Robot",
     items: [
       {
+        label: "Owner control & robot",
+        href: "/admin/control",
+        hint: "Policy, risk gates, live authorization panel",
+        icon: SlidersHorizontal,
+      },
+      {
         label: "Live trading control",
         href: "/admin/live-trading",
         hint: "DISABLED · ARM · ENABLE · KILL (safeguards intact)",
@@ -122,17 +117,17 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         hint: "Observe-only operations command",
         icon: Activity,
       },
+      {
+        label: "Live trading evidence",
+        href: "/admin/live-trading-evidence",
+        hint: "Evidence program — observe only",
+        icon: FileSearch,
+      },
     ],
   },
   {
     title: "Risk & Configuration",
     items: [
-      {
-        label: "Owner control",
-        href: "/admin/control",
-        hint: "Policy, risk gates, live authorization",
-        icon: SlidersHorizontal,
-      },
       {
         label: "Reliability",
         href: "/admin/reliability",
@@ -170,13 +165,19 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     ],
   },
   {
-    title: "System Settings",
+    title: "System",
     items: [
       {
         label: "Enterprise settings",
         href: "/admin/enterprise",
-        hint: "Feature access and SaaS config",
+        hint: "SaaS controls, access, compliance",
         icon: Settings2,
+      },
+      {
+        label: "Continuous improvement",
+        href: "/admin/continuous-improvement",
+        hint: "CIP desk — observe only",
+        icon: Activity,
       },
       {
         label: "Audit logs",

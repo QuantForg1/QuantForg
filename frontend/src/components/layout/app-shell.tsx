@@ -228,7 +228,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
-      {!(compactChrome && isTerminal) ? <SupportWidget /> : null}
+      {pathname === "/support" || pathname.startsWith("/support/") ? (
+        <SupportWidget />
+      ) : null}
     </div>
   );
 }

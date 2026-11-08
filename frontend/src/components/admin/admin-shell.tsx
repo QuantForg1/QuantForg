@@ -163,13 +163,12 @@ function AdminTopbar() {
   return (
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_72%,transparent)] px-3 backdrop-blur-xl sm:px-4">
       <AdminMobileNav />
-      <BrandLogo size={26} className="hidden shrink-0 lg:block" />
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
-          QuantForg
-        </p>
+      <div className="min-w-0 flex-1 lg:pl-1">
         <p className="truncate text-sm font-semibold text-[var(--fg)]">
-          Admin Portal
+          Admin control center
+        </p>
+        <p className="truncate text-[11px] text-[var(--fg-muted)]">
+          Owner-verified operations
         </p>
       </div>
       <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
@@ -216,14 +215,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         aria-label="Admin Portal sidebar"
       >
         <div className="shrink-0 border-b border-[var(--border)] px-4 py-4">
-          <BrandLogo size={32} />
-          <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
-            Enterprise
-          </p>
-          <p className="text-sm font-semibold text-[var(--fg)]">Admin Portal</p>
-          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-            Internal operations · owner verified
-          </p>
+          <div className="flex items-center gap-3">
+            <BrandLogo size={32} />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
+                QuantForg
+              </p>
+              <p className="truncate text-sm font-semibold text-[var(--fg)]">
+                Admin Portal
+              </p>
+            </div>
+          </div>
         </div>
         <AdminNavBody className="flex-1" />
         <div className="shrink-0 border-t border-[var(--border)] p-3">

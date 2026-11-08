@@ -29,33 +29,32 @@ export function SupportWidget() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
 
-  const hidden = useMemo(() => {
+  /** Floating widget is Support-desk only — never on trader desks or /admin. */
+  const onSupportDesk = useMemo(() => {
     if (!pathname) return false;
-    return (
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/register") ||
-      pathname.startsWith("/forgot-password") ||
-      pathname.startsWith("/reset-password")
-    );
+    return pathname === "/support" || pathname.startsWith("/support/");
   }, [pathname]);
 
   const faq = useQuery({
     queryKey: ["support-desk", "faq"],
     queryFn: supportDeskApi.faq,
-    enabled: open,
+    enabled: onSupportDesk && open,
     staleTime: 60_000,
   });
 
   const ticketsQ = useQuery({
     queryKey: ["support-desk", "tickets"],
     queryFn: supportDeskApi.tickets,
-    enabled: open && (panel === "tickets" || panel === "thread" || panel === "menu"),
+    enabled:
+      onSupportDesk &&
+      open &&
+      (panel === "tickets" || panel === "thread" || panel === "menu"),
   });
 
   const threadQ = useQuery({
     queryKey: ["support-desk", "ticket", selectedId],
     queryFn: () => supportDeskApi.ticket(selectedId!),
-    enabled: open && panel === "thread" && !!selectedId,
+    enabled: onSupportDesk && open && panel === "thread" && !!selectedId,
   });
 
   const chatMut = useMutation({
@@ -112,13 +111,15 @@ export function SupportWidget() {
     onError: () => toast.error("Unable to request human agent"),
   });
 
-  if (hidden) return null;
-
   const tickets = asList(ticketsQ.data?.tickets).map(asRecord);
   const thread = asRecord(threadQ.data);
   const messages = asList(thread.messages).map(asRecord);
   const humanConnected = thread.human_agent_connected === true;
   const suggested = asList(faq.data?.suggested_questions).map((x) => str(x));
+
+  if (!onSupportDesk) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 pointer-events-none">
