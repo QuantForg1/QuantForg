@@ -16,7 +16,11 @@ htmlcov
 .env
 .env.*
 !.env.example
-docs
+# Exclude docs from the image except Auth/billing HTML templates required at runtime.
+docs/*
+!docs/auth/
+docs/auth/*
+!docs/auth/email-templates/
 tests
 # Exclude helper scripts; keep entrypoint(s) needed by the runtime image.
 scripts/*
