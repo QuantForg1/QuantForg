@@ -90,7 +90,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       {
         label: "Connected brokers",
-        href: "/admin/customer-ops#brokers",
+        href: "/admin/brokers",
         hint: "Ownership, health, sync (credentials redacted)",
         icon: Building2,
       },

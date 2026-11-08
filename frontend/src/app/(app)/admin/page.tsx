@@ -24,8 +24,8 @@ const ADMIN_SECTIONS = [
     items: [
       {
         href: "/admin/control",
-        label: "Control center",
-        hint: "Owner policy, broker, risk, live authorization",
+        label: "Owner control & robot",
+        hint: "Policy, risk gates, live authorization",
       },
       {
         href: "/admin/live-trading",
@@ -33,24 +33,24 @@ const ADMIN_SECTIONS = [
         hint: "DISABLED · ARM · ENABLE · KILL",
       },
       {
-        href: "/ops",
-        label: "Execution sessions",
-        hint: "Robot run state · control plane",
+        href: "/admin/noc",
+        label: "NOC / workers",
+        hint: "Observe-only operations command",
       },
       {
         href: "/admin/customer-ops",
-        label: "Account bindings",
-        hint: "Owned broker accounts",
+        label: "Customer Operations",
+        hint: "Fleet, licenses, support, audit",
       },
       {
-        href: "/ops",
-        label: "Robot operations",
-        hint: "Institutional robot controls",
+        href: "/admin/reliability",
+        label: "Reliability",
+        hint: "Safety gates and readiness",
       },
       {
-        href: "/risk-center",
-        label: "Trading controls",
-        hint: "Risk locks and desk controls",
+        href: "/admin/enterprise",
+        label: "Enterprise settings",
+        hint: "SaaS controls and access",
       },
     ],
   },
@@ -58,19 +58,19 @@ const ADMIN_SECTIONS = [
     title: "Broker Infrastructure",
     items: [
       {
-        href: "/gateway",
-        label: "Gateway diagnostics",
-        hint: "MT5 gateway connectivity",
+        href: "/admin/brokers",
+        label: "Connected brokers",
+        hint: "Ownership and connection health",
       },
       {
-        href: "/broker-connectivity",
-        label: "Broker health",
-        hint: "Connection health",
+        href: "/admin/customer-ops#brokers",
+        label: "COP broker center",
+        hint: "Fleet broker snapshot",
       },
       {
-        href: "/execution/diagnostics",
-        label: "Connection diagnostics",
-        hint: "Session diagnostics",
+        href: "/admin/control",
+        label: "Owner broker status",
+        hint: "Control-center broker probe",
       },
     ],
   },
@@ -78,24 +78,24 @@ const ADMIN_SECTIONS = [
     title: "Research",
     items: [
       {
-        href: "/research",
-        label: "Research engine status",
-        hint: "Universe worker and diagnostics",
+        href: "/admin/live-trading-evidence",
+        label: "Live trading evidence",
+        hint: "Evidence program — observe only",
       },
       {
-        href: "/markets",
-        label: "Universe discovery",
-        hint: "Broker catalogue instruments",
+        href: "/admin/continuous-improvement",
+        label: "Continuous improvement",
+        hint: "CIP desk — observe only",
       },
       {
-        href: "/signals",
-        label: "Analysis coverage",
-        hint: "Global market intelligence desk",
+        href: "/admin/plans",
+        label: "Plans & subscriptions",
+        hint: "Catalog pricing and licenses",
       },
       {
-        href: "/signal-center",
-        label: "Signal health",
-        hint: "Operator signal board",
+        href: "/admin/users",
+        label: "Users",
+        hint: "Search, filters, fleet CRM",
       },
     ],
   },
@@ -113,24 +113,14 @@ const ADMIN_SECTIONS = [
         hint: "research_can_execute · promotion · OMS",
       },
       {
-        href: "/execution",
-        label: "OMS status",
-        hint: "Order management (authorized only)",
+        href: "/admin/control",
+        label: "Risk policy",
+        hint: "Owner ceilings and kill-switch state",
       },
       {
-        href: "/portfolio",
-        label: "Live orders / positions",
-        hint: "Owned account exposure",
-      },
-      {
-        href: "/strategy-diagnostics",
-        label: "Trading blockers",
-        hint: "Why NO_TRADE",
-      },
-      {
-        href: "/strategy-performance",
-        label: "Strategy performance",
-        hint: "Five-pack scorecards · attribution · post-#182",
+        href: "/admin/live-trading-evidence",
+        label: "Evidence desk",
+        hint: "Observe-only trade evidence",
       },
     ],
   },
@@ -138,24 +128,24 @@ const ADMIN_SECTIONS = [
     title: "System Health",
     items: [
       {
-        href: "/monitoring",
-        label: "API health",
-        hint: "Health · latency · readiness",
-      },
-      {
         href: "/admin/noc",
         label: "Worker health",
         hint: "NOC operations command",
       },
       {
-        href: "/logs",
-        label: "Deployment diagnostics",
-        hint: "Operational logs",
+        href: "/admin/support",
+        label: "Support desk",
+        hint: "Tickets and human handoff",
       },
       {
-        href: "/admin/customer-ops",
+        href: "/admin/customer-ops#audit",
         label: "Audit",
-        hint: "Users and account operations",
+        hint: "Administrative action history",
+      },
+      {
+        href: "/admin/customer-ops#notifications",
+        label: "Platform notifications",
+        hint: "User and administrative alerts",
       },
     ],
   },
@@ -194,21 +184,22 @@ function KpiCard({
 }
 
 export default function AdminPortalPage() {
-  const { user } = useAuth();
+  const { user, opsReady, isAuthenticated } = useAuth();
   const allowed = canAccessIteOps(user);
+  const ready = allowed && opsReady && isAuthenticated;
 
   const platformQ = useQuery({
     queryKey: ["admin-overview-platform"],
     queryFn: () => customerOpsApi.platform(),
-    enabled: allowed,
-    refetchInterval: 20_000,
-    retry: false,
+    enabled: ready,
+    refetchInterval: ready ? 20_000 : false,
+    retry: 1,
   });
 
   const fleetQ = useQuery({
     queryKey: ["admin-overview-fleet"],
     queryFn: () => customerOpsApi.fleet(),
-    enabled: allowed,
+    enabled: ready,
     retry: false,
     staleTime: 30_000,
   });
@@ -216,7 +207,7 @@ export default function AdminPortalPage() {
   const auditQ = useQuery({
     queryKey: ["admin-overview-audit"],
     queryFn: () => customerOpsApi.audit(40),
-    enabled: allowed,
+    enabled: ready,
     retry: false,
     staleTime: 20_000,
   });
@@ -229,7 +220,7 @@ export default function AdminPortalPage() {
     );
   }
 
-  if (platformQ.isLoading && !platformQ.data) {
+  if (!opsReady || (platformQ.isLoading && !platformQ.data)) {
     return <DeskSkeleton variant="page" />;
   }
 
@@ -241,6 +232,7 @@ export default function AdminPortalPage() {
           platformQ.error,
           "Admin Overview",
         )}
+        onRetry={() => void platformQ.refetch()}
       />
     );
   }
@@ -296,11 +288,16 @@ export default function AdminPortalPage() {
       <PageHeader
         eyebrow="Overview"
         title="Operations dashboard"
-        description="Enterprise operations dashboard — production COP data only. Trading engine, MT5, and execution paths are not modified from this surface."
+        description="Production COP metrics only. Opening Admin never enables live trading or changes MT5 / OMS paths."
         actions={
-          <Button asChild size="sm" variant="outline">
-            <Link href="/admin/customer-ops">Customer Operations</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/admin/control">Owner control</Link>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <Link href="/admin/customer-ops">Customer Operations</Link>
+            </Button>
+          </div>
         }
       />
 
@@ -494,12 +491,12 @@ export default function AdminPortalPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Research</CardTitle>
+            <CardTitle className="text-sm">Robot</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
-            <p>Global catalogue discovery is advisory</p>
-            <p>Signals are not trade tickets</p>
-            <Badge tone="neutral">Advisory only</Badge>
+            <p>Live authorization stays on Owner control</p>
+            <p>Timeouts never arm or enable trading</p>
+            <Badge tone="neutral">Safeguards intact</Badge>
           </CardContent>
         </Card>
       </div>

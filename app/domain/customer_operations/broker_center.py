@@ -43,6 +43,7 @@ async def build_broker_connection_center() -> dict[str, Any]:
                 "last_heartbeat": c.get("last_heartbeat"),
                 "trading_permission": c.get("trading_permission"),
                 "auto_trading_status": c.get("auto_trading_status"),
+                "last_error": c.get("last_error"),
                 "user_id": c.get("user_id"),
                 "id": c.get("id"),
                 "credentials_exposed": False,

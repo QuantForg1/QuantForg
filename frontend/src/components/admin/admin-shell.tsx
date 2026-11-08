@@ -165,10 +165,10 @@ function AdminTopbar() {
       <AdminMobileNav />
       <div className="min-w-0 flex-1 lg:pl-1">
         <p className="truncate text-sm font-semibold text-[var(--fg)]">
-          Admin control center
+          Admin Portal
         </p>
         <p className="truncate text-[11px] text-[var(--fg-muted)]">
-          Owner-verified operations
+          Owner-verified · internal operations
         </p>
       </div>
       <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
@@ -216,7 +216,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       >
         <div className="shrink-0 border-b border-[var(--border)] px-4 py-4">
           <div className="flex items-center gap-3">
-            <BrandLogo size={32} />
+            <BrandLogo size={32} wordmark={false} caption={false} />
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
                 QuantForg
