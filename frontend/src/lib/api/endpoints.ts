@@ -168,9 +168,19 @@ export const mt5Api = {
     apiFetch<Record<string, unknown>>(
       `/mt5/ticks/${encodeURIComponent(resolveTradingSymbol(symbol))}`,
     ),
+  /** Platform market tick — no customer MT5 ownership required. */
+  researchTick: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/mt5/research/ticks/${encodeURIComponent(resolveTradingSymbol(symbol))}`,
+    ),
   candles: (symbol: string, timeframe = "H1", count = 48) =>
     apiFetch<unknown[]>(
       `/mt5/candles/${encodeURIComponent(resolveTradingSymbol(symbol))}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
+    ),
+  /** Platform market candles — no customer MT5 ownership required. */
+  researchCandles: (symbol: string, timeframe = "H1", count = 48) =>
+    apiFetch<unknown[]>(
+      `/mt5/research/candles/${encodeURIComponent(resolveTradingSymbol(symbol))}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
     ),
   validateOrder: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/mt5/order/validate", {

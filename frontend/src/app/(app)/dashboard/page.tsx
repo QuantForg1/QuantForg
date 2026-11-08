@@ -139,12 +139,11 @@ export default function DashboardPage() {
   });
 
   const tickQ = useQuery({
-    queryKey: ["dashboard-tick", TRADING_SYMBOL],
-    queryFn: () => mt5Api.tick(TRADING_SYMBOL),
-    enabled: connection.connected && !sessionMismatch,
-    retry: false,
+    queryKey: ["research-tick", TRADING_SYMBOL],
+    queryFn: () => mt5Api.researchTick(TRADING_SYMBOL),
+    retry: 1,
     staleTime: 5_000,
-    refetchInterval: connection.connected && !sessionMismatch ? 10_000 : false,
+    refetchInterval: 10_000,
   });
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -285,7 +284,35 @@ export default function DashboardPage() {
       ? Math.round(confRaw * 100)
       : Math.round(confRaw)
     : null;
-  const todayPnlRaw = num(session.profit ?? session.daily_pnl ?? session.today_pnl);
+  const floatingFromPositions = positions.reduce((sum, row) => {
+    const p = num(row.profit);
+    return Number.isFinite(p) ? sum + p : sum;
+  }, 0);
+  const sessionProfit = num(session.profit ?? session.daily_pnl ?? session.today_pnl);
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const closedTodayPnl = deals.reduce((sum, deal) => {
+    const stamp = Date.parse(str(deal.time ?? deal.close_time ?? deal.deal_time));
+    if (!Number.isFinite(stamp) || stamp < todayStart.getTime()) return sum;
+    const p = num(deal.profit);
+    return Number.isFinite(p) ? sum + p : sum;
+  }, 0);
+  const todayPnlRaw = Number.isFinite(sessionProfit)
+    ? sessionProfit
+    : showMetrics && !positionsUnavailable && !activityUnavailable
+      ? floatingFromPositions + closedTodayPnl
+      : showMetrics && !positionsUnavailable && positions.length > 0
+        ? floatingFromPositions
+        : NaN;
+  const equityNum = num(session.equity);
+  const dailyLossAmount =
+    Number.isFinite(todayPnlRaw) && todayPnlRaw < 0 ? Math.abs(todayPnlRaw) : null;
+  const dailyLossPctOfEquity =
+    dailyLossAmount != null &&
+    Number.isFinite(equityNum) &&
+    equityNum > 0
+      ? (dailyLossAmount / equityNum) * 100
+      : null;
   const riskPctRaw = num(session.risk_pct ?? session.daily_risk_pct);
   const riskPct = Number.isFinite(riskPctRaw) ? riskPctRaw : null;
   const accountCurrency = str(session.currency, "USD");
@@ -300,6 +327,7 @@ export default function DashboardPage() {
         : Number.isFinite(tickAsk)
           ? tickAsk
           : NaN;
+  const marketLive = tickQ.isSuccess && Number.isFinite(tickMid);
   const liveMarketPrice = Number.isFinite(tickMid)
     ? priceDisplay(tickMid, XAUUSD_SPECS.digits)
     : topSignal
@@ -317,42 +345,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-w-0 space-y-5">
-      {sessionQ.isError ? (
-        <div
-          role="status"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-[var(--fg)]">Broker connection unavailable</p>
-            <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
-              Account session could not be loaded. Research stays available; reconnect when ready.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button variant="secondary" size="sm" asChild>
-              <Link href="/broker">
-                <Cable className="h-4 w-4" /> Open Broker
-              </Link>
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                void sessionQ.refetch();
-              }}
-            >
-              Retry
-            </Button>
-          </div>
-        </div>
-      ) : null}
       <PageHeader
         eyebrow="Overview"
         title={greeting}
         description={
           showMetrics
             ? "Your trading system is running smoothly. Here's your market overview."
-            : "Connect your broker to load account figures. Research bias appears when a gold signal is available."
+            : "Account figures appear when your broker session is available. Market research and the chart use the platform feed independently."
         }
         actions={
           noBroker || sessionMismatch ? (
@@ -371,17 +370,14 @@ export default function DashboardPage() {
 
       <OverviewReferenceDesk
         equity={moneyOrDash(session.equity, showMetrics, accountCurrency)}
-        balance={moneyOrDash(
-          session.free_margin ?? session.margin_free,
-          showMetrics,
-          accountCurrency,
-        )}
+        balance={moneyOrDash(session.balance, showMetrics, accountCurrency)}
         todayPnl={
           showMetrics && Number.isFinite(todayPnlRaw)
-            ? formatCurrency(todayPnlRaw, accountCurrency === "—" ? "USD" : accountCurrency)
-            : showMetrics
-              ? formatCurrency(0, accountCurrency === "—" ? "USD" : accountCurrency)
-              : "—"
+            ? formatCurrency(
+                todayPnlRaw,
+                accountCurrency === "—" ? "USD" : accountCurrency,
+              )
+            : "—"
         }
         openPositions={
           noBroker || sessionMismatch || positionsUnavailable
@@ -402,8 +398,34 @@ export default function DashboardPage() {
                 ? "Moderate"
                 : "Elevated"
         }
-        accountRiskPct={riskPct}
-        connected={showMetrics}
+        accountRiskHint={
+          riskPct == null
+            ? "Unavailable from session"
+            : `${Math.round(riskPct)}% session risk`
+        }
+        dailyRiskLabel={
+          !showMetrics
+            ? "—"
+            : dailyLossAmount != null
+              ? formatCurrency(
+                  dailyLossAmount,
+                  accountCurrency === "—" ? "USD" : accountCurrency,
+                )
+              : Number.isFinite(todayPnlRaw) && todayPnlRaw >= 0
+                ? "Clear"
+                : "—"
+        }
+        dailyRiskHint={
+          !showMetrics
+            ? "Requires broker session"
+            : dailyLossPctOfEquity != null
+              ? `${dailyLossPctOfEquity.toFixed(1)}% of equity today`
+              : Number.isFinite(todayPnlRaw) && todayPnlRaw >= 0
+                ? "No daily loss recorded"
+                : "Unavailable"
+        }
+        brokerConnected={showMetrics}
+        marketLive={marketLive}
         marketBias={
           biasDir === "BUY"
             ? "Bullish"

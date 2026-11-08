@@ -243,10 +243,10 @@ export function TerminalShell() {
   ]);
 
   const tickQ = useQuery({
-    queryKey: ["mt5-tick", symbol],
-    queryFn: () => mt5Api.tick(symbol),
-    retry: false,
-    enabled: connected && Boolean(symbol),
+    queryKey: ["research-tick", symbol],
+    queryFn: () => mt5Api.researchTick(symbol),
+    retry: 1,
+    enabled: Boolean(symbol),
     staleTime: 2_500,
     refetchInterval: false,
   });

@@ -94,10 +94,12 @@ export function WorkspaceShell() {
   const connected = session.connected;
 
   const tickQ = useQuery({
-    queryKey: ["mt5-tick", symbol],
-    queryFn: () => mt5Api.tick(symbol),
-    retry: false,
-    enabled: connected && Boolean(symbol),
+    queryKey: ["research-tick", symbol],
+    queryFn: () => mt5Api.researchTick(symbol),
+    retry: 1,
+    enabled: Boolean(symbol),
+    staleTime: 5_000,
+    refetchInterval: 10_000,
   });
   const symbolsQ = useQuery({
     queryKey: ["mt5-symbols", "", 0],

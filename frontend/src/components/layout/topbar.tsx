@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Coins, LogOut, Search, Wallet } from "lucide-react";
+import { Bell, LogOut, Search, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/auth-provider";
 import { usePathname, useRouter } from "next/navigation";
@@ -10,14 +10,9 @@ import { MobileNav } from "@/components/layout/sidebar";
 import { isPrimaryActive, primaryRail } from "@/components/layout/nav-config";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { cn, formatCurrency, formatNumber } from "@/lib/utils";
-import { mt5Api, platformApi } from "@/lib/api/endpoints";
-import { asList, asRecord, num } from "@/lib/desk";
-import {
-  displayTradingSymbolCode,
-  TRADING_SYMBOL,
-  XAUUSD_SPECS,
-} from "@/lib/trading/gold-only";
+import { cn, formatCurrency } from "@/lib/utils";
+import { platformApi } from "@/lib/api/endpoints";
+import { asList, num } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 
 function workspaceLabel(pathname: string): string {
@@ -33,60 +28,9 @@ function sessionWindow(at: Date): string {
   return "Sydney";
 }
 
-function serverClock(raw: string): { label: string; at: Date } | null {
-  if (!raw) return null;
-  const asNum = Number(raw);
-  const ms = Number.isFinite(asNum)
-    ? asNum > 1e12
-      ? asNum
-      : asNum > 1e9
-        ? asNum * 1000
-        : NaN
-    : Date.parse(raw);
-  if (!Number.isFinite(ms)) return null;
-  const at = new Date(ms);
-  const label = at.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
-  return { label: `${label} UTC`, at };
-}
-
 function MarketChrome() {
   const session = useTradingSession();
-  const tickQ = useQuery({
-    queryKey: ["shell-tick", TRADING_SYMBOL],
-    queryFn: () => mt5Api.tick(TRADING_SYMBOL),
-    enabled: session.connected,
-    retry: false,
-    staleTime: 10_000,
-    refetchInterval: session.connected ? 15_000 : false,
-  });
-  const tick = asRecord(tickQ.data);
-  const bid = num(tick.bid);
-  const ask = num(tick.ask);
-  const mid =
-    Number.isFinite(bid) && Number.isFinite(ask)
-      ? (bid + ask) / 2
-      : Number.isFinite(bid)
-        ? bid
-        : Number.isFinite(ask)
-          ? ask
-          : NaN;
-  const xauLabel = Number.isFinite(mid)
-    ? formatNumber(mid, XAUUSD_SPECS.digits)
-    : session.connected && tickQ.isLoading
-      ? "Loading"
-      : "—";
-
-  const rawTime = (value: unknown) =>
-    value == null || value === "" ? "" : String(value);
-  const clock = serverClock(rawTime(tick.time) || rawTime(tick.time_msc));
-  const sessionAt = clock?.at ?? new Date();
+  const sessionAt = new Date();
   const sessionName = sessionWindow(sessionAt);
   const weekday = sessionAt.getUTCDay();
   const weekdaySession = weekday >= 1 && weekday <= 5;
@@ -102,24 +46,17 @@ function MarketChrome() {
         ? balanceRaw
         : "—";
 
-  const xauDisplay =
-    xauLabel === "—" || xauLabel === "Loading" ? xauLabel : `$${xauLabel}`;
-  const symbolCode = displayTradingSymbolCode(TRADING_SYMBOL);
   const balanceTitle = session.connected
     ? `Broker balance${currency ? ` (${currency})` : ""}`
-    : "Broker not connected";
-  const xauTitle = session.connected
-    ? "Live mid from broker tick"
     : "Broker not connected";
 
   return (
     <>
-      {/* Phone: dense dual readout — balance and mid stay independently labeled */}
       <div
-        className="flex min-w-0 max-w-[11.5rem] items-center gap-1.5 sm:max-w-none md:hidden"
-        aria-label="Account balance and live gold mid"
+        className="flex min-w-0 max-w-[7.5rem] items-center sm:max-w-none md:hidden"
+        aria-label="Account balance"
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <p className="truncate text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
             Balance
           </p>
@@ -128,18 +65,6 @@ function MarketChrome() {
             title={balanceTitle}
           >
             {balanceLabel}
-          </p>
-        </div>
-        <span className="h-6 w-px shrink-0 bg-[var(--border)]" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-            {symbolCode}
-          </p>
-          <p
-            className="truncate text-[11px] font-semibold tabular text-[var(--fg)]"
-            title={xauTitle}
-          >
-            {xauDisplay}
           </p>
         </div>
       </div>
@@ -164,26 +89,6 @@ function MarketChrome() {
             </p>
           </div>
         </div>
-        <span className="h-7 w-px bg-[var(--border)] lg:h-8" aria-hidden />
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--warning-soft)_55%,transparent)] text-[var(--warning)] lg:h-9 lg:w-9 lg:rounded-xl"
-            aria-hidden
-          >
-            <Coins className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)] lg:text-[10px]">
-              {symbolCode}
-            </p>
-            <p
-              className="truncate text-xs font-semibold tabular text-[var(--fg)] lg:text-sm"
-              title={xauTitle}
-            >
-              {xauDisplay}
-            </p>
-          </div>
-        </div>
         <span className="hidden h-8 w-px bg-[var(--border)] lg:block" aria-hidden />
         <div className="hidden lg:block">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
@@ -199,13 +104,6 @@ function MarketChrome() {
             />
             {sessionName}
           </p>
-        </div>
-        <span className="hidden h-8 w-px bg-[var(--border)] xl:block" aria-hidden />
-        <div className="hidden xl:block">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-            Server time
-          </p>
-          <p className="text-sm font-medium text-[var(--fg)]">{clock?.label ?? "—"}</p>
         </div>
       </div>
     </>
@@ -312,10 +210,9 @@ export function Topbar({
           onClick={async () => {
             try {
               await logout();
-            } catch {
-              /* session cleared server-side or offline — still leave the desk */
+            } finally {
+              router.replace("/login");
             }
-            router.replace("/login");
           }}
         >
           <LogOut className="h-4 w-4" />

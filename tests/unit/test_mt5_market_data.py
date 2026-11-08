@@ -14,10 +14,13 @@ from app.application.use_cases.mt5 import (
     GetMT5CandlesUseCase,
     GetMT5SymbolUseCase,
     GetMT5TickUseCase,
+    GetResearchMarketCandlesUseCase,
+    GetResearchMarketTickUseCase,
     ListMT5SymbolsUseCase,
 )
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.events.mt5 import CandleReceived, MarketDataUpdated, TickReceived
+from app.domain.exceptions.base import ServiceUnavailableError
 from app.domain.market_data.timeframe import Timeframe
 from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 from app.infrastructure.persistence.memory_broker import MemoryBrokerUnitOfWorkFactory
@@ -151,3 +154,39 @@ class TestMT5MarketDataUseCases:
         )
         assert len(candles) == 12
         assert candles[0].timeframe == "H1"
+
+
+@pytest.mark.unit
+class TestResearchMarketFeed:
+    @pytest.mark.asyncio
+    async def test_research_tick_and_candles_without_user_ownership(self) -> None:
+        """Platform feed serves gold market data without a caller MT5 login."""
+        adapter = MT5Adapter(client=MockMT5Client())
+        from app.domain.interfaces.mt5_client import MT5LoginRequest
+
+        adapter.initialize()
+        adapter.login(MT5LoginRequest(login=9001, password="p", server="Demo"))
+        market = MT5MarketDataService(adapter=adapter)
+
+        tick = await GetResearchMarketTickUseCase(market_data=market).execute(
+            symbol="XAUUSD"
+        )
+        assert tick.bid
+        assert tick.ask
+
+        candles = await GetResearchMarketCandlesUseCase(market_data=market).execute(
+            symbol="XAUUSD",
+            timeframe="M15",
+            count=8,
+        )
+        assert len(candles) == 8
+
+    @pytest.mark.asyncio
+    async def test_research_feed_unavailable_when_terminal_offline(self) -> None:
+        adapter = MT5Adapter(client=MockMT5Client())
+        market = MT5MarketDataService(adapter=adapter)
+        with pytest.raises(ServiceUnavailableError) as exc:
+            await GetResearchMarketTickUseCase(market_data=market).execute(
+                symbol="XAUUSD"
+            )
+        assert exc.value.code == "MARKET_FEED_UNAVAILABLE"
