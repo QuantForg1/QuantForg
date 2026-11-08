@@ -110,9 +110,14 @@ async def billing_cancel(user: CurrentUser, svc: BillingSvc) -> dict[str, Any]:
     return await svc.cancel_subscription(user_id=user.id)
 
 
+OwnerAdminUser = Annotated[
+    AuthUserDTO, Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))
+]
+
+
 @router.post("/admin/owner-compensation-premium")
 async def billing_owner_compensation_premium(
-    user: Annotated[AuthUserDTO, Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))],
+    user: OwnerAdminUser,
     svc: BillingSvc,
 ) -> dict[str, Any]:
     """Grant Premium to the designated owner only. Target is not request-controlled."""

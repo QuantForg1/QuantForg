@@ -756,13 +756,14 @@ class BillingService:
     ) -> dict[str, Any]:
         """Grant Premium to DESIGNATED_OWNER_EMAIL only (audited)."""
         _ = actor_role
-        if actor_email and not is_designated_owner_email(actor_email):
-            if not is_designated_owner_email(email or ""):
-                raise ValidationError(
-                    "Only the designated owner may execute this grant",
-                    code="OWNER_GRANT_FORBIDDEN",
-                )
-        if email and not is_designated_owner_email(email):
+        actor_ok = is_designated_owner_email(actor_email or "")
+        email_ok = is_designated_owner_email(email or "")
+        if actor_email and not actor_ok and not email_ok:
+            raise ValidationError(
+                "Only the designated owner may execute this grant",
+                code="OWNER_GRANT_FORBIDDEN",
+            )
+        if email and not email_ok:
             raise ValidationError(
                 "Owner compensation applies only to the designated owner email",
                 code="OWNER_COMPENSATION_FORBIDDEN",
@@ -895,7 +896,7 @@ class BillingService:
                     .mappings()
                     .first()
                 )
-                license_id = str(lic["id"]) if lic else None
+                license_id = str(lic["id"]) if lic is not None else ""
             await session.execute(
                 text("""
                     UPDATE users
