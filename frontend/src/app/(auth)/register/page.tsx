@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
 import { AuthShell } from "@/components/auth/auth-shell";
-import { GoogleAuthNote } from "@/components/auth/google-auth-note";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -194,7 +194,7 @@ export default function RegisterPage() {
           {form.formState.isSubmitting ? "Creating account…" : "Create Account"}
         </Button>
       </form>
-      <GoogleAuthNote />
+      <GoogleAuthButton />
       <p className="mt-4 text-center text-sm text-[var(--fg-muted)]">
         Already have an account?{" "}
         <Link href="/login" className="text-[var(--accent)]">

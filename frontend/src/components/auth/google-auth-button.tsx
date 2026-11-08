@@ -8,9 +8,9 @@ import { getClientAppOrigin } from "@/lib/env";
 /**
  * Google OAuth via existing Railway auth API → Supabase Auth.
  * Requires Google provider + redirect URLs configured in Supabase / Google Cloud.
- * Never invents credentials; surfaces clear configuration errors.
+ * Surfaces real OAuth/config errors only — no static marketing copy under the button.
  */
-export function GoogleAuthNote() {
+export function GoogleAuthButton() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -50,20 +50,21 @@ export function GoogleAuthNote() {
         type="button"
         onClick={() => void startGoogle()}
         disabled={busy}
-        aria-describedby="google-auth-status"
+        aria-describedby={status ? "google-auth-status" : undefined}
         className="flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-transparent text-sm font-medium text-[var(--fg)] transition-colors hover:bg-[var(--surface-2)] disabled:cursor-wait disabled:opacity-70"
       >
         <GoogleGlyph />
         {busy ? "Redirecting to Google…" : "Continue with Google"}
       </button>
-      <p
-        id="google-auth-status"
-        className="mt-2 text-center text-xs leading-relaxed text-[var(--fg-muted)]"
-        role={status ? "alert" : undefined}
-      >
-        {status ??
-          "Uses your Google account through QuantForg’s existing authentication service. Email and password remain available."}
-      </p>
+      {status ? (
+        <p
+          id="google-auth-status"
+          className="mt-2 text-center text-xs leading-relaxed text-[var(--danger)]"
+          role="alert"
+        >
+          {status}
+        </p>
+      ) : null}
     </div>
   );
 }
