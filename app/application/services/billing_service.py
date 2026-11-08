@@ -102,8 +102,15 @@ class BillingService:
                     "api_host": "https://api.nowpayments.io/v1",
                 },
             )
+        api_key = self.settings.nowpayments_api_key
+        if api_key is None:
+            raise ServiceUnavailableError(
+                "NOWPayments LIVE credentials are not configured",
+                code="NOWPAYMENTS_NOT_CONFIGURED",
+                details={"required": ["NOWPAYMENTS_API_KEY"]},
+            )
         return NowPaymentsLiveClient(
-            api_key=self.settings.nowpayments_api_key.get_secret_value(),
+            api_key=api_key.get_secret_value(),
             base_url=self.settings.nowpayments_api_base,
         )
 
@@ -831,8 +838,10 @@ async def _mark_event(
 def _iso(value: Any) -> str | None:
     if value is None:
         return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        result = isoformat()
+        return str(result) if result is not None else None
     return str(value)
 
 
