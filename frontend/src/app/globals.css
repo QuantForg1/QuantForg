@@ -1,29 +1,33 @@
 @import "tailwindcss";
 
-/* QuantForg — QF brand shell (charcoal + cyan).
-   Logo-derived surfaces; cyan accent; silver text hierarchy.
+/* QuantForg — Premium Blue Hybrid + Institutional Teal.
+   Official QF logo cyan/teal on layered navy surfaces.
    Light remains on .light for theme switching. */
 :root,
 .dark {
-  --bg: #111827;
-  --bg-elevated: #151b23;
-  --surface: #1a2330;
-  --surface-2: #202938;
-  --surface-3: #283344;
-  --surface-elevated: #2a3444;
-  --border: rgba(200, 214, 229, 0.12);
-  --border-strong: rgba(200, 214, 229, 0.24);
+  --bg: #061b35;
+  --bg-elevated: #0a2748;
+  --surface: #0d2f55;
+  --surface-2: #123a66;
+  --surface-3: #184575;
+  --surface-elevated: #1a4d82;
+  --border: rgba(186, 214, 240, 0.14);
+  --border-strong: rgba(186, 214, 240, 0.28);
   --fg: #f5f8ff;
-  --fg-muted: #a8b4c4;
-  --fg-subtle: #7b8798;
+  --fg-muted: #a8c0d8;
+  --fg-subtle: #7a96b0;
 
   --accent: #00d4e0;
   --accent-hover: #5ef6ff;
-  --accent-active: #0891a8;
-  --accent-fg: #041018;
+  --accent-active: #00cac0;
+  --accent-fg: #031018;
   --accent-soft: rgba(0, 212, 224, 0.14);
-  --accent-glow: rgba(0, 212, 224, 0.18);
-  --accent-gradient: linear-gradient(180deg, #5ef6ff 0%, #00d4e0 48%, #0891a8 100%);
+  --accent-glow: rgba(0, 212, 224, 0.2);
+  --accent-gradient: linear-gradient(180deg, #5ef6ff 0%, #00d4e0 48%, #00cac0 100%);
+  --brand-navy: #061b35;
+  --brand-blue: #0756a8;
+  --brand-electric: #087cff;
+  --brand-teal: #00cac0;
   --hot: #00d4e0;
   --hot-soft: rgba(0, 212, 224, 0.14);
 
@@ -33,23 +37,23 @@
   --warning-soft: rgba(224, 169, 58, 0.12);
   --danger: #e45764;
   --danger-soft: rgba(228, 87, 100, 0.12);
-  --info: #00d4e0;
-  --info-soft: rgba(0, 212, 224, 0.12);
+  --info: #087cff;
+  --info-soft: rgba(8, 124, 255, 0.14);
   --buy: #00c9a7;
   --sell: #e45764;
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 28px rgba(2, 6, 14, 0.42);
-  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 32px rgba(2, 6, 14, 0.5);
-  --shadow-elevated: 0 20px 48px rgba(2, 6, 14, 0.56);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 28px rgba(2, 12, 28, 0.45);
+  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 32px rgba(2, 12, 28, 0.55);
+  --shadow-elevated: 0 20px 48px rgba(2, 12, 28, 0.6);
   --ring: rgba(0, 212, 224, 0.45);
   --radius-os: 0.9rem;
   --radius-sm: 0.65rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 60% 36% at 88% -8%, rgba(0, 212, 224, 0.12), transparent 58%),
-    radial-gradient(ellipse 38% 24% at 8% 0%, rgba(94, 246, 255, 0.06), transparent 52%),
-    radial-gradient(ellipse 48% 26% at 50% 100%, rgba(8, 145, 168, 0.05), transparent 55%),
-    linear-gradient(180deg, #151b23 0%, #111827 48%, #0d1219 100%);
+    radial-gradient(ellipse 60% 36% at 88% -8%, rgba(8, 124, 255, 0.16), transparent 58%),
+    radial-gradient(ellipse 38% 24% at 8% 0%, rgba(0, 212, 224, 0.1), transparent 52%),
+    radial-gradient(ellipse 48% 26% at 50% 100%, rgba(7, 86, 168, 0.18), transparent 55%),
+    linear-gradient(180deg, #0a2748 0%, #061b35 48%, #041426 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
@@ -85,17 +89,17 @@
 }
 
 .light {
-  --bg: #f7f9fc;
+  --bg: #f4f8fc;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #e8eef5;
+  --surface-2: #eef4fb;
+  --surface-3: #e2ebf5;
   --surface-elevated: #ffffff;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --fg: #111827;
-  --fg-muted: #64748b;
-  --fg-subtle: #94a3b8;
+  --border: #d5e2ef;
+  --border-strong: #b7c9db;
+  --fg: #061b35;
+  --fg-muted: #4a6580;
+  --fg-subtle: #7a96b0;
   --accent: #0891a8;
   --accent-hover: #00d4e0;
   --accent-active: #0e7490;
@@ -103,6 +107,10 @@
   --accent-soft: rgba(8, 145, 168, 0.1);
   --accent-glow: rgba(0, 212, 224, 0.16);
   --accent-gradient: linear-gradient(180deg, #22d3ee 0%, #0891a8 100%);
+  --brand-navy: #061b35;
+  --brand-blue: #0756a8;
+  --brand-electric: #087cff;
+  --brand-teal: #00cac0;
   --hot: #0891a8;
   --hot-soft: rgba(8, 145, 168, 0.12);
   --success: #0f9f86;
@@ -111,17 +119,18 @@
   --warning-soft: rgba(217, 119, 6, 0.12);
   --danger: #e11d48;
   --danger-soft: rgba(225, 29, 72, 0.1);
-  --info: #0891a8;
-  --info-soft: rgba(8, 145, 168, 0.1);
+  --info: #0756a8;
+  --info-soft: rgba(7, 86, 168, 0.1);
   --buy: #0f9f86;
   --sell: #e11d48;
-  --shadow-card: 0 1px 0 rgba(17, 24, 39, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
-  --shadow-card-hover: 0 1px 0 rgba(17, 24, 39, 0.05), 0 12px 32px rgba(15, 23, 42, 0.1);
-  --shadow-elevated: 0 24px 56px rgba(15, 23, 42, 0.14);
+  --shadow-card: 0 1px 0 rgba(6, 27, 53, 0.04), 0 8px 24px rgba(6, 27, 53, 0.06);
+  --shadow-card-hover: 0 1px 0 rgba(6, 27, 53, 0.05), 0 12px 32px rgba(6, 27, 53, 0.1);
+  --shadow-elevated: 0 24px 56px rgba(6, 27, 53, 0.14);
   --ring: rgba(8, 145, 168, 0.45);
   --bg-ambient:
-    radial-gradient(ellipse 70% 50% at 92% 0%, rgba(0, 212, 224, 0.08), transparent 52%),
-    linear-gradient(180deg, #f8fafc 0%, #f7f9fc 42%, #eef2f7 100%);
+    radial-gradient(ellipse 70% 50% at 92% 0%, rgba(8, 124, 255, 0.08), transparent 52%),
+    radial-gradient(ellipse 40% 30% at 8% 0%, rgba(0, 212, 224, 0.06), transparent 50%),
+    linear-gradient(180deg, #f7fafc 0%, #f4f8fc 42%, #e8f0f8 100%);
 }
 
 @theme inline {

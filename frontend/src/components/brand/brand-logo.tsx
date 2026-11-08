@@ -1,6 +1,11 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { BRAND_ASSETS, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand/assets";
+import {
+  BRAND_ASSETS,
+  BRAND_CAPTION,
+  BRAND_NAME,
+  BRAND_TAGLINE,
+} from "@/lib/brand/assets";
 
 type BrandLogoProps = {
   className?: string;
@@ -8,8 +13,8 @@ type BrandLogoProps = {
   size?: number;
   /** Show wordmark next to mark. */
   wordmark?: boolean;
-  /** Compact wordmark caption under name. */
-  caption?: string;
+  /** Compact wordmark caption under name. Defaults to institutional caption. */
+  caption?: string | false;
   priority?: boolean;
   /** Prefer compact mark for dense chrome. */
   compact?: boolean;
@@ -23,11 +28,12 @@ export function BrandLogo({
   className,
   size = 32,
   wordmark = true,
-  caption,
+  caption = BRAND_CAPTION,
   priority = false,
   compact = false,
 }: BrandLogoProps) {
   const src = compact ? BRAND_ASSETS.compact : BRAND_ASSETS.mark;
+  const captionText = caption === false ? null : caption;
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <Image
@@ -43,8 +49,8 @@ export function BrandLogo({
           <span className="block truncate text-[0.95rem] font-semibold tracking-tight text-[var(--fg)]">
             {BRAND_NAME}
           </span>
-          {caption ? (
-            <span className="qf-caption block truncate">{caption}</span>
+          {captionText ? (
+            <span className="qf-caption block truncate">{captionText}</span>
           ) : null}
         </span>
       ) : (
