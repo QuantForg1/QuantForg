@@ -589,6 +589,34 @@ export const auditGovernanceApi = {
   exportUrl: "/audit-governance/export",
 };
 
+/** Client Support Desk — authenticated user tickets + FAQ chat. */
+export const supportDeskApi = {
+  faq: () => apiFetch<Record<string, unknown>>("/support-desk/faq"),
+  tickets: () => apiFetch<Record<string, unknown>>("/support-desk/tickets"),
+  ticket: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/support-desk/tickets/${encodeURIComponent(id)}`),
+  createTicket: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/support-desk/tickets", {
+      method: "POST",
+      body,
+    }),
+  postMessage: (id: string, body: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/support-desk/tickets/${encodeURIComponent(id)}/messages`,
+      { method: "POST", body: { body } },
+    ),
+  requestHuman: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/support-desk/tickets/${encodeURIComponent(id)}/request-human`,
+      { method: "POST", body: {} },
+    ),
+  aiChat: (message: string, aiSessionId?: string) =>
+    apiFetch<Record<string, unknown>>("/support-desk/ai/chat", {
+      method: "POST",
+      body: { message, ai_session_id: aiSessionId },
+    }),
+};
+
 /** Institutional Customer Operations Platform — OWNER/ADMIN, never trading. */
 export const customerOpsApi = {
   platform: () => apiFetch<Record<string, unknown>>("/customer-ops/platform"),

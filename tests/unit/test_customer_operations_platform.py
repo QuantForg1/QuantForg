@@ -12,8 +12,12 @@ from app.domain.customer_operations.notifications_center import (
     publish_notification,
 )
 from app.domain.customer_operations.support_center import (
+    answer_support_faq,
     build_support_center,
     create_support_ticket,
+    get_ticket_for_user,
+    list_tickets_for_user,
+    ticket_owned_by,
     update_support_ticket,
 )
 
@@ -58,23 +62,57 @@ def test_support_ticket_lifecycle() -> None:
         operator="admin@quantforg.com",
         ip="10.0.0.1",
     )
-    assert ticket["status"] == "pending"
+    assert ticket["status"] == "open"
+    assert ticket.get("user_id") == "user-1"
     assert ticket["priority"] == "high"
     updated = update_support_ticket(
         ticket_id=ticket["id"],
         operator="admin@quantforg.com",
-        status="assigned",
+        status="in_progress",
         assigned_staff="desk-1",
         internal_note="Investigating gateway",
         attachment_name="screenshot.png",
     )
     assert updated is not None
-    assert updated["status"] == "assigned"
+    assert updated["status"] == "in_progress"
     assert updated["assigned_staff"] == "desk-1"
     assert len(updated["internal_notes"]) >= 1
     assert len(updated["attachments"]) >= 1
     center = build_support_center()
     assert center["count"] >= 1
+
+
+def test_support_ticket_ownership_and_customer_view() -> None:
+    alice = create_support_ticket(
+        subject="Billing",
+        customer_id="alice-id",
+        user_id="alice-id",
+        operator="alice@example.com",
+        body="Invoice question",
+    )
+    bob = create_support_ticket(
+        subject="MT5",
+        customer_id="bob-id",
+        user_id="bob-id",
+        operator="bob@example.com",
+        body="Gateway",
+    )
+    assert ticket_owned_by(alice, "alice-id")
+    assert not ticket_owned_by(alice, "bob-id")
+    alice_list = list_tickets_for_user("alice-id")
+    assert any(t["id"] == alice["id"] for t in alice_list)
+    assert all(t["id"] != bob["id"] for t in alice_list)
+    assert get_ticket_for_user(alice["id"], "alice-id") is not None
+    assert get_ticket_for_user(bob["id"], "alice-id") is None
+    view = get_ticket_for_user(alice["id"], "alice-id")
+    assert view is not None
+    assert "internal_notes" not in view
+
+
+def test_support_ai_refuses_trading_actions() -> None:
+    out = answer_support_faq(message="Please place a buy order on XAUUSD now")
+    assert out["executes_actions"] is False
+    assert out["suggest_ticket"] is True
 
 
 def test_notifications_channels() -> None:
