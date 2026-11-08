@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
@@ -125,6 +125,20 @@ export function CustomerOperationsPlatform() {
     [],
   );
 
+  const sectionIds = useMemo(() => new Set(sections.map(([id]) => id)), [sections]);
+
+  useEffect(() => {
+    const applyHash = () => {
+      const fragment = window.location.hash.replace(/^#/, "");
+      if (fragment && sectionIds.has(fragment as Section)) {
+        setSection(fragment as Section);
+      }
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, [sectionIds]);
+
   if (!allowed) {
     return (
       <DeskError
@@ -173,7 +187,10 @@ export function CustomerOperationsPlatform() {
           <button
             key={id}
             type="button"
-            onClick={() => setSection(id)}
+            onClick={() => {
+              setSection(id);
+              window.history.replaceState(null, "", `#${id}`);
+            }}
             className={
               section === id
                 ? "bg-[var(--accent)]/15 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[var(--accent)]"

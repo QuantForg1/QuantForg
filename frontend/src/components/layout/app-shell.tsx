@@ -15,6 +15,9 @@ import { cn } from "@/lib/utils";
 import { labelForHref, pushRecentPage } from "@/lib/workspace/nav-memory";
 import { visiblePrimaryRail } from "@/components/layout/nav-config";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
+import { SupportWidget } from "@/components/platform/support-widget";
+import { AdminShell } from "@/components/admin/admin-shell";
+import { isAdminPath } from "@/components/admin/admin-nav-config";
 
 /** Full-bleed zero-scroll operating surfaces. */
 const OS_FULLBLEED_PATHS = [
@@ -84,9 +87,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const isFullBleed = OS_FULLBLEED_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
+  const adminPortal = isAdminPath(pathname);
+  const isFullBleed =
+    !adminPortal &&
+    OS_FULLBLEED_PATHS.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    );
   const isTerminal = deskId(pathname) === "terminal";
   const compactChrome = isTerminal || isFullBleed;
 
@@ -168,6 +174,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  if (adminPortal) {
+    return <AdminShell>{children}</AdminShell>;
+  }
+
   return (
     <div className="relative flex min-h-screen text-[var(--fg)]">
       <Sidebar />
@@ -218,6 +228,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
+      {!(compactChrome && isTerminal) ? <SupportWidget /> : null}
     </div>
   );
 }

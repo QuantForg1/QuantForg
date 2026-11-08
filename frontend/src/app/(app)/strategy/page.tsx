@@ -5,6 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Copy, Play, Trash2, Sparkles } from "lucide-react";
+import { strategyCardFromRecord } from "@/components/strategies/strategy-card";
+import { StrategyConfigPanel } from "@/components/strategies/strategy-config-panel";
+import { StrategySidePanels } from "@/components/strategies/strategy-side-panels";
+import { serializeParams } from "@/components/strategies/strategy-utils";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +19,12 @@ import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives
 import { strategyApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import {
+  AUTONOMOUS_QUICK_SYMBOLS,
+  displayTradingSymbol,
+  tradingInstrumentDescription,
+  TRADING_SYMBOL,
+} from "@/lib/trading/gold-only";
 
 type Mode = "ict" | "engine";
 
@@ -238,32 +247,18 @@ export default function StrategyPage() {
   const toggle = (key: keyof RuleFlags) =>
     setRules((r) => ({ ...r, [key]: !r[key] }));
 
-  const signalBlock = lastResult ? asRecord(lastResult.signal) : null;
-  const explanations = signalBlock
-    ? asList(signalBlock.explanations).map(asRecord)
-    : [];
+  const onSelectStrategy = (key: string, defaultParams: Record<string, unknown>) => {
+    setStrategyKey(key);
+    setParamsJson(serializeParams(defaultParams));
+  };
 
   return (
     <div>
       <PageHeader
-        title="Strategies"
-        description={`Configure and evaluate modules for ${symbol}. Parameters stay advisory until risk and OMS gates pass — Evaluate never bypasses live safeguards.`}
+        title="Trading Strategies"
+        description={`Institutional modules for ${displayTradingSymbol(symbol)} (${tradingInstrumentDescription(symbol)}). Parameters stay advisory until Risk Center and OMS gates pass — Evaluate never bypasses live safeguards.`}
         actions={
           <>
-            <Button
-              size="sm"
-              variant={mode === "engine" ? "default" : "secondary"}
-              onClick={() => setMode("engine")}
-            >
-              TA Engine
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "ict" ? "default" : "secondary"}
-              onClick={() => setMode("ict")}
-            >
-              ICT Runtime
-            </Button>
             <Button
               size="sm"
               onClick={mode === "engine" ? runEngine : runIct}
@@ -312,6 +307,46 @@ export default function StrategyPage() {
         }
       />
 
+      <div
+        className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-3 py-2"
+        role="toolbar"
+        aria-label="Strategy desk mode"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-subtle)]">
+          Desk
+        </span>
+        <Button
+          size="sm"
+          variant={mode === "engine" ? "default" : "secondary"}
+          onClick={() => setMode("engine")}
+        >
+          TA Engine
+        </Button>
+        <Button
+          size="sm"
+          variant={mode === "ict" ? "default" : "secondary"}
+          onClick={() => setMode("ict")}
+        >
+          ICT Runtime
+        </Button>
+        <span className="mx-1 hidden h-5 w-px bg-[var(--border)] sm:inline-block" aria-hidden />
+        <Label htmlFor="strategy-asset" className="sr-only">
+          Asset
+        </Label>
+        <select
+          id="strategy-asset"
+          className="h-8 min-w-[11rem] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm text-[var(--fg)]"
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value)}
+        >
+          {AUTONOMOUS_QUICK_SYMBOLS.map((s) => (
+            <option key={s} value={s}>
+              {displayTradingSymbol(s)}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {mode === "engine" ? (
         <div className="space-y-4">
           <section aria-labelledby="strategy-grid-heading">
@@ -340,343 +375,66 @@ export default function StrategyPage() {
               />
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
-                {catalog.map((c) => {
-                  const key = str(c.key);
-                  const selected = strategyKey === key;
-                  return (
-                    <li key={key}>
-                      <button
-                        type="button"
-                        className={`flex h-full w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition ${
-                          selected
-                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
-                            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--accent)]/40"
-                        }`}
-                        onClick={() => {
-                          setStrategyKey(key);
-                          setParamsJson(
-                            JSON.stringify(asRecord(c.default_params), null, 2),
-                          );
-                        }}
-                      >
-                        <span
-                          className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-                            selected
-                              ? "bg-[var(--accent)] text-[var(--accent-fg)]"
-                              : "bg-[var(--accent-soft)] text-[var(--accent)]"
-                          }`}
-                        >
-                          <Sparkles className="h-4 w-4" aria-hidden />
-                        </span>
-                        <span className="text-sm font-semibold text-[var(--fg)]">
-                          {str(c.name)}
-                        </span>
-                        <span className="mt-1 text-xs text-[var(--fg-subtle)]">
-                          {str(c.category) || key}
-                        </span>
-                        <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--success)]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-                          Active
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {catalog.map((c) =>
+                  strategyCardFromRecord(c, strategyKey, onSelectStrategy),
+                )}
               </ul>
             )}
           </section>
 
           <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-          <Card>
-            <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>
-                  {str(selectedPlugin?.name) ||
-                    (strategyKey === "custom_rules" ? "Rule Tree" : "Parameters")}
-                </CardTitle>
-                <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                  {str(selectedPlugin?.description) ||
-                    "Select a strategy. Bars load from MT5 when connected — never fabricated."}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge tone="success">Active</Badge>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setParamsJson("{}");
-                    setCustomRulesJson(defaultCustomRules);
-                    toast.message("Parameters reset");
-                  }}
-                >
-                  Reset
-                </Button>
-                <Button
-                  className="qf-btn-hot border-0"
-                  size="sm"
-                  onClick={runEngine}
-                  disabled={engineRun.isPending}
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div
-                className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-2"
-                role="tablist"
-                aria-label="Strategy configuration"
-              >
-                {(
-                  [
-                    ["parameters", "Parameters"],
-                    ["logic", "Logic & Rules"],
-                    ["entry", "Entry & Exit"],
-                    ["filters", "Filters"],
-                    ["risk", "Risk Integration"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={configTab === id}
-                    onClick={() => setConfigTab(id)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                      configTab === id
-                        ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {configTab === "parameters" ? (
-                <textarea
-                  className="min-h-[220px] w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-xs text-[var(--fg)]"
-                  value={
-                    strategyKey === "custom_rules" ? customRulesJson : paramsJson
-                  }
-                  onChange={(e) =>
-                    strategyKey === "custom_rules"
-                      ? setCustomRulesJson(e.target.value)
-                      : setParamsJson(e.target.value)
-                  }
-                />
-              ) : (
-                <div className="min-h-[220px] rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/35 p-4 text-sm text-[var(--fg-muted)]">
-                  {configTab === "logic" ? (
-                    <p>
-                      Logic follows the selected catalog plugin and any custom rules JSON.
-                      Orders still require risk and OMS approval.
-                    </p>
-                  ) : null}
-                  {configTab === "entry" ? (
-                    <p>
-                      Entry and exit levels come from live evaluate / MT5 bars — never sample
-                      prices. Run Evaluate to refresh.
-                    </p>
-                  ) : null}
-                  {configTab === "filters" ? (
-                    <p>
-                      Symbol {symbol} · timeframe {timeframe}. Filters stay advisory until the
-                      risk engine confirms.
-                    </p>
-                  ) : null}
-                  {configTab === "risk" ? (
-                    <ul className="space-y-2">
-                      <li>Max trades: {maxTrades}</li>
-                      <li>Daily loss %: {dailyLoss}</li>
-                      <li>Max exposure %: {maxExposure}</li>
-                      <li>Live path requires EXECUTION_ENABLED and owned broker session.</li>
-                    </ul>
-                  ) : null}
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={validateEngine}>
-                  Validate
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={runEngine}
-                  disabled={engineRun.isPending}
-                >
-                  <Play className="h-3.5 w-3.5" /> Run (MT5 bars)
-                </Button>
-              </div>
-              {signalBlock ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="accent">{str(signalBlock.action)}</Badge>
-                    <span className="text-xs text-[var(--fg-subtle)]">
-                      conf {(numish(signalBlock.confidence) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
-                    Explainability
-                  </p>
-                  <ul className="mt-1 space-y-2 text-xs text-[var(--fg-muted)]">
-                    {explanations.length === 0 ? (
-                      asList(signalBlock.reasons).map((r, i) => (
-                        <li key={i}>• {String(r)}</li>
-                      ))
-                    ) : (
-                      explanations.map((e, i) => (
-                        <li key={i} className="rounded-md border border-[var(--border)] p-2">
-                          <p className="font-medium text-[var(--fg)]">{str(e.reason)}</p>
-                          <p>
-                            {str(e.indicator)} · threshold {str(e.threshold)}
-                            {e.value ? ` · value ${str(e.value)}` : ""}
-                          </p>
-                          <p className="text-[var(--fg-subtle)]">{str(e.market_context)}</p>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                  {lastResult?.risk ? (
-                    <p className="mt-2 text-xs text-[var(--fg-subtle)]">
-                      Risk:{" "}
-                      {asRecord(lastResult.risk).allowed ? "allowed" : "blocked"} ·{" "}
-                      {asList(asRecord(lastResult.risk).reasons)
-                        .slice(0, 2)
-                        .map(String)
-                        .join("; ")}
-                    </p>
-                  ) : null}
-                </motion.div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Strategy Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-[var(--fg-muted)]">Type</span>
-                  <span className="font-medium">
-                    {str(selectedPlugin?.category) || strategyKey}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-[var(--fg-muted)]">Market</span>
-                  <span className="font-medium">{symbol}</span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-[var(--fg-muted)]">Timeframe</span>
-                  <span className="font-medium">{timeframe}</span>
-                </div>
-                <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
-                  {str(selectedPlugin?.description) ||
-                    "Strategy stays advisory until risk and OMS gates pass."}
-                </p>
-                <div className="grid gap-2 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>Symbol</Label>
-                    <Input
-                      value={symbol}
-                      onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Timeframe</Label>
-                    <Input
-                      value={timeframe}
-                      onChange={(e) => setTimeframe(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Max trades</Label>
-                    <Input value={maxTrades} onChange={(e) => setMaxTrades(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Daily loss %</Label>
-                    <Input value={dailyLoss} onChange={(e) => setDailyLoss(e.target.value)} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Performance</CardTitle>
-                <p className="text-xs text-[var(--fg-muted)]">
-                  Live evaluate result only — never sample backtests.
-                </p>
-              </CardHeader>
-              <CardContent>
-                {signalBlock ? (
-                  <dl className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                        Last action
-                      </dt>
-                      <dd className="mt-1 font-semibold">{str(signalBlock.action)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                        Confidence
-                      </dt>
-                      <dd className="mt-1 font-semibold tabular">
-                        {(numish(signalBlock.confidence) * 100).toFixed(0)}%
-                      </dd>
-                    </div>
-                    <div className="col-span-2">
-                      <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                        Risk gate
-                      </dt>
-                      <dd className="mt-1 text-[var(--fg-muted)]">
-                        {lastResult?.risk
-                          ? asRecord(lastResult.risk).allowed
-                            ? "Allowed"
-                            : "Blocked"
-                          : "—"}
-                      </dd>
-                    </div>
-                  </dl>
-                ) : (
-                  <p className="text-sm text-[var(--fg-muted)]">
-                    Run Evaluate to load live performance for this strategy.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Strategy Rules</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ol className="space-y-2 text-sm">
-                  {[
-                    `Only trade ${symbol}`,
-                    `Use timeframe ${timeframe}`,
-                    `Max trades ${maxTrades}`,
-                    `Daily loss ceiling ${dailyLoss}%`,
-                    `Max exposure ${maxExposure}%`,
-                    "Orders still pass risk and OMS gates",
-                  ].map((rule, i) => (
-                    <li key={rule} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--success)]" />
-                      <span>
-                        <span className="text-[var(--fg-subtle)]">{i + 1}. </span>
-                        {rule}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </CardContent>
-            </Card>
-          </div>
+            <StrategyConfigPanel
+              title={
+                str(selectedPlugin?.name) ||
+                (strategyKey === "custom_rules" ? "Rule Tree" : "Parameters")
+              }
+              subtitle={
+                str(selectedPlugin?.description) ||
+                "Select a strategy. Bars load from MT5 when connected — never fabricated."
+              }
+              configTab={configTab}
+              onConfigTab={setConfigTab}
+              strategyKey={strategyKey}
+              paramsJson={paramsJson}
+              customRulesJson={customRulesJson}
+              onParamsJson={setParamsJson}
+              onCustomRulesJson={setCustomRulesJson}
+              defaultParams={
+                selectedPlugin ? asRecord(selectedPlugin.default_params) : undefined
+              }
+              symbol={symbol}
+              timeframe={timeframe}
+              maxTrades={maxTrades}
+              dailyLoss={dailyLoss}
+              maxExposure={maxExposure}
+              onReset={() => {
+                setParamsJson("{}");
+                setCustomRulesJson(defaultCustomRules);
+                toast.message("Parameters reset");
+              }}
+              onSave={runEngine}
+              savePending={engineRun.isPending}
+              onValidate={validateEngine}
+              onRun={runEngine}
+              runPending={engineRun.isPending}
+              lastResult={lastResult}
+            />
+            <StrategySidePanels
+              strategyKey={strategyKey}
+              category={str(selectedPlugin?.category)}
+              description={str(selectedPlugin?.description)}
+              symbol={symbol}
+              timeframe={timeframe}
+              maxTrades={maxTrades}
+              dailyLoss={dailyLoss}
+              maxExposure={maxExposure}
+              onSymbol={setSymbol}
+              onTimeframe={setTimeframe}
+              onMaxTrades={setMaxTrades}
+              onDailyLoss={setDailyLoss}
+              lastResult={lastResult}
+              portfolioData={portfolioQ.data}
+            />
           </div>
         </div>
       ) : (

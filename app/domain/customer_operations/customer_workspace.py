@@ -47,6 +47,7 @@ async def build_customer_workspace(customer_id: str) -> dict[str, Any]:
         t
         for t in build_support_center().get("tickets") or []
         if str(t.get("customer_id")) == str(customer_id)
+        or str(t.get("user_id")) == str(customer_id)
     ]
     devices = [
         d for d in _devices().list(limit=200) if str(d.get("customer_id")) == cid

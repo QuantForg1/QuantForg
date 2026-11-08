@@ -144,10 +144,13 @@ async def support_create(
     return create_support_ticket(
         subject=str(payload.get("subject") or ""),
         customer_id=payload.get("customer_id"),
+        user_id=payload.get("user_id") or payload.get("customer_id"),
+        category=payload.get("category"),
         priority=str(payload.get("priority") or "normal"),
         operator=_operator(user),
         ip=_ip(request),
         body=str(payload.get("body") or ""),
+        ai_session_id=payload.get("ai_session_id"),
     )
 
 
@@ -167,6 +170,8 @@ async def support_update(
         priority=payload.get("priority"),
         internal_note=payload.get("internal_note"),
         attachment_name=payload.get("attachment_name"),
+        public_message=payload.get("public_message") or payload.get("staff_reply"),
+        human_accepted=payload.get("human_accepted"),
     )
     return updated or {"ok": False, "error": "not_found"}
 
