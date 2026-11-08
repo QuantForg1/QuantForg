@@ -135,20 +135,10 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
         "greps for 'Verify Connection'",
     ),
     _G
-    + "test_phase62_trader_ux.py::test_signals_are_broker_independent": (
-        "ui-copy",
-        "forbids marketUniverseApi import in signals page",
-    ),
-    _G
     + "test_phase63_trader_ux.py::"
     + "test_analysis_does_not_auto_start_live_trading_robot": (
         "ui-copy",
         "greps for 'never automatic'",
-    ),
-    _G
-    + "test_phase63_trader_ux.py::test_signals_desk_is_broker_independent_and_honest": (
-        "ui-copy",
-        "forbids marketUniverseApi import in signals desk",
     ),
     # --- owner-policy: fixed by FT-1 (#66); remove when it merges ---
     _G

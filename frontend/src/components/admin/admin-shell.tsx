@@ -242,7 +242,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         style={{ paddingLeft: undefined }}
       >
         <div className="lg:pl-[var(--shell-sidebar-width,16.5rem)]">
-          <OfflineBanner />
+          <OfflineBanner showApiDiagnostics />
           <AdminTopbar />
           <main
             id="main-content"

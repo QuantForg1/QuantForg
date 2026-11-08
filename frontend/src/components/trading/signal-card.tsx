@@ -32,7 +32,7 @@ export function DirectionBadge({
   return (
     <Badge
       tone={
-        dir === "BUY" ? "success" : dir === "SELL" ? "danger" : dir === "NEUTRAL" ? "warning" : "neutral"
+        dir === "BUY" ? "success" : dir === "SELL" ? "danger" : "neutral"
       }
       className={cn("font-semibold tracking-[0.08em]", className)}
       aria-label={`Signal direction ${dir}`}
