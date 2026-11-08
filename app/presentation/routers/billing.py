@@ -25,6 +25,9 @@ def get_billing_service(
 
 
 BillingSvc = Annotated[BillingService, Depends(get_billing_service)]
+OwnerAdminUser = Annotated[
+    AuthUserDTO, Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))
+]
 
 
 class CheckoutRequest(BaseModel):
@@ -34,9 +37,27 @@ class CheckoutRequest(BaseModel):
     cancel_url: str | None = Field(default=None, max_length=500)
 
 
+class PlanOverrideRequest(BaseModel):
+    active: bool | None = None
+    monthly_price_usd: float | None = None
+    annual_price_usd: float | None = None
+    billing_interval: str | None = Field(default=None, max_length=16)
+    trial_days: int | None = Field(default=None, ge=0, le=90)
+    positioning: str | None = Field(default=None, max_length=500)
+    entitlements: list[str] | None = None
+    grace_period_days: int | None = Field(default=None, ge=0, le=30)
+
+
+class AdminAssignPlanRequest(BaseModel):
+    user_id: str = Field(min_length=8, max_length=64)
+    plan_id: str = Field(min_length=3, max_length=40)
+    days: int = Field(default=30, ge=1, le=3650)
+    reason: str = Field(min_length=3, max_length=500)
+
+
 @router.get("/plans")
 async def billing_plans(svc: BillingSvc) -> dict[str, Any]:
-    return svc.list_plans()
+    return await svc.list_plans_with_overrides()
 
 
 @router.get("/provider")
@@ -110,9 +131,65 @@ async def billing_cancel(user: CurrentUser, svc: BillingSvc) -> dict[str, Any]:
     return await svc.cancel_subscription(user_id=user.id)
 
 
-OwnerAdminUser = Annotated[
-    AuthUserDTO, Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))
-]
+@router.get("/admin/plans")
+async def billing_admin_plans(user: OwnerAdminUser, svc: BillingSvc) -> dict[str, Any]:
+    _ = user
+    data = await svc.list_plans_with_overrides()
+    data["admin"] = True
+    return data
+
+
+@router.patch("/admin/plans/{plan_id}")
+async def billing_admin_upsert_plan(
+    plan_id: str,
+    body: PlanOverrideRequest,
+    user: OwnerAdminUser,
+    svc: BillingSvc,
+) -> dict[str, Any]:
+    email = str(getattr(user, "email", "") or "")
+    if not is_designated_owner_email(email):
+        raise ValidationError(
+            "Only the designated owner may edit plans",
+            code="OWNER_PLAN_EDIT_FORBIDDEN",
+        )
+    return await svc.admin_upsert_plan_override(
+        plan_id=plan_id,
+        actor_user_id=user.id,
+        actor_email=email,
+        payload=body.model_dump(exclude_unset=True),
+    )
+
+
+@router.post("/admin/assign-plan")
+async def billing_admin_assign_plan(
+    body: AdminAssignPlanRequest,
+    user: OwnerAdminUser,
+    svc: BillingSvc,
+) -> dict[str, Any]:
+    from uuid import UUID
+
+    email = str(getattr(user, "email", "") or "")
+    if not is_designated_owner_email(email):
+        raise ValidationError(
+            "Only the designated owner may assign plans",
+            code="OWNER_ASSIGN_FORBIDDEN",
+        )
+    return await svc.admin_assign_plan(
+        target_user_id=UUID(body.user_id),
+        plan_id=body.plan_id,
+        days=body.days,
+        actor_user_id=user.id,
+        actor_email=email,
+        reason=body.reason,
+    )
+
+
+@router.get("/admin/revenue")
+async def billing_admin_revenue(
+    user: OwnerAdminUser, svc: BillingSvc
+) -> dict[str, Any]:
+    _ = user
+    return await svc.admin_revenue_snapshot()
 
 
 @router.post("/admin/owner-compensation-premium")

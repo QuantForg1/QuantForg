@@ -140,6 +140,23 @@ export const billingApi = {
       method: "POST",
       body: {},
     }),
+  adminPlans: () => apiFetch<Record<string, unknown>>("/billing/admin/plans"),
+  upsertPlan: (planId: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      `/billing/admin/plans/${encodeURIComponent(planId)}`,
+      { method: "PATCH", body },
+    ),
+  assignPlan: (body: {
+    user_id: string;
+    plan_id: string;
+    days: number;
+    reason: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/billing/admin/assign-plan", {
+      method: "POST",
+      body,
+    }),
+  revenue: () => apiFetch<Record<string, unknown>>("/billing/admin/revenue"),
 };
 
 export const contactApi = {
@@ -305,6 +322,11 @@ export const signalCenterApi = {
     apiFetch<Record<string, unknown>>(
       `/signals/${encodeURIComponent(symbol)}`,
     ),
+  refreshResearch: () =>
+    apiFetch<Record<string, unknown>>("/signals/research/refresh", {
+      method: "POST",
+      body: {},
+    }),
 };
 
 /** Signal Intelligence v2 — LIVE history, outcomes, heat map, analytics. */

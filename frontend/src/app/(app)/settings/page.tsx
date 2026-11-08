@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
@@ -44,8 +44,23 @@ const DEFAULT_DESK_PREFS: DeskPreferencesV1 = {
   timeFormat: "24h",
   dateFormat: "ymd",
   defaultSymbol: TRADING_SYMBOL,
-  defaultTimeframe: "H1",
+  defaultTimeframe: "M15",
 };
+
+function deskPrefsFromSettings(record: Record<string, unknown>): DeskPreferencesV1 {
+  const timeFormat = str(record.time_format, DEFAULT_DESK_PREFS.timeFormat);
+  const dateFormat = str(record.date_format, DEFAULT_DESK_PREFS.dateFormat);
+  return {
+    timeFormat:
+      timeFormat === "12h" || timeFormat === "24h" ? timeFormat : DEFAULT_DESK_PREFS.timeFormat,
+    dateFormat:
+      dateFormat === "mdy" || dateFormat === "dmy" || dateFormat === "ymd"
+        ? dateFormat
+        : DEFAULT_DESK_PREFS.dateFormat,
+    defaultSymbol: str(record.default_symbol, DEFAULT_DESK_PREFS.defaultSymbol),
+    defaultTimeframe: str(record.default_timeframe, DEFAULT_DESK_PREFS.defaultTimeframe),
+  };
+}
 
 function loadDeskPreferences(): DeskPreferencesV1 {
   if (typeof window === "undefined") return DEFAULT_DESK_PREFS;
@@ -130,12 +145,9 @@ export default function SettingsPage() {
   });
 
   const [deskPrefs, setDeskPrefs] = useState<DeskPreferencesV1>(DEFAULT_DESK_PREFS);
+  const deskPrefsHydratedRef = useRef(false);
   const [newPassword, setNewPassword] = useState("");
   const [deletionNote, setDeletionNote] = useState("");
-
-  useEffect(() => {
-    setDeskPrefs(loadDeskPreferences());
-  }, []);
 
   useEffect(() => {
     if (!settingsQ.data) return;
@@ -150,6 +162,41 @@ export default function SettingsPage() {
       session_timeout_minutes: Number(s.session_timeout_minutes ?? 60),
     });
   }, [settingsQ.data]);
+
+  useEffect(() => {
+    if (!settingsQ.data || deskPrefsHydratedRef.current) return;
+
+    const fromServer = deskPrefsFromSettings(asRecord(settingsQ.data));
+    const local = loadDeskPreferences();
+    const hasLocal =
+      typeof window !== "undefined" && Boolean(localStorage.getItem(DESK_PREFS_KEY));
+
+    if (hasLocal) {
+      deskPrefsHydratedRef.current = true;
+      void (async () => {
+        try {
+          await platformApi.updateSettings({
+            theme: "dark",
+            default_symbol: local.defaultSymbol,
+            default_timeframe: local.defaultTimeframe,
+            date_format: local.dateFormat,
+            time_format: local.timeFormat,
+          });
+          setDeskPrefs(local);
+          saveDeskPreferences(local);
+          await qc.invalidateQueries({ queryKey: ["settings"] });
+        } catch (e) {
+          deskPrefsHydratedRef.current = false;
+          setDeskPrefs(fromServer);
+          toast.error(e instanceof ApiError ? e.message : "Could not migrate desk preferences");
+        }
+      })();
+      return;
+    }
+
+    deskPrefsHydratedRef.current = true;
+    setDeskPrefs(fromServer);
+  }, [settingsQ.data, qc]);
 
   useEffect(() => {
     if (!profileQ.data) return;
@@ -174,6 +221,25 @@ export default function SettingsPage() {
       await qc.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Save failed"),
+  });
+
+  const saveDeskPrefs = useMutation({
+    mutationFn: () =>
+      platformApi.updateSettings({
+        theme: "dark",
+        default_symbol: deskPrefs.defaultSymbol,
+        default_timeframe: deskPrefs.defaultTimeframe,
+        date_format: deskPrefs.dateFormat,
+        time_format: deskPrefs.timeFormat,
+      }),
+    onSuccess: async () => {
+      saveDeskPreferences(deskPrefs);
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("settings_change", "success", "Desk preferences updated");
+      toast.success("Desk preferences saved");
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Desk preferences save failed"),
   });
 
   const saveProfile = useMutation({
@@ -250,7 +316,7 @@ export default function SettingsPage() {
 
   const onHeaderSave = () => {
     if (tab === "Preferences") {
-      saveDeskPreferences(deskPrefs);
+      saveDeskPrefs.mutate();
       saveProfile.mutate();
       return;
     }
@@ -291,7 +357,7 @@ export default function SettingsPage() {
               size="sm"
               disabled={
                 tab === "Preferences"
-                  ? saveProfile.isPending
+                  ? saveProfile.isPending || saveDeskPrefs.isPending
                   : saveSettings.isPending
               }
               onClick={onHeaderSave}
@@ -688,8 +754,8 @@ export default function SettingsPage() {
                     onChange={(v) => setDeskPrefs((p) => ({ ...p, defaultTimeframe: v }))}
                   />
                   <p className="sm:col-span-2 text-xs text-[var(--fg-subtle)]">
-                    Saved in this browser only ({DESK_PREFS_KEY}). Clearing site data removes these
-                    defaults.
+                    Synced to your account. A local copy ({DESK_PREFS_KEY}) is kept for offline
+                    fallback after a successful save.
                   </p>
                 </CardContent>
               </Card>

@@ -46,6 +46,12 @@ async def update_settings(
             security_login_alerts=body.security_login_alerts,
             security_require_reauth=body.security_require_reauth,
             session_timeout_minutes=body.session_timeout_minutes,
+            default_symbol=body.default_symbol,
+            default_timeframe=body.default_timeframe,
+            date_format=body.date_format,
+            time_format=body.time_format,
+            dashboard_prefs=body.dashboard_prefs,
+            trading_ui_prefs=body.trading_ui_prefs,
             ip_address=ip,
             user_agent=ua,
         )

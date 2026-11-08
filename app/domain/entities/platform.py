@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Any, Literal, Self
 from uuid import UUID
 
 from app.domain.entities._guards import require, require_state
@@ -22,6 +22,7 @@ from app.domain.enums.platform import (
     UiTheme,
 )
 from app.domain.exceptions.base import ConflictError
+from app.domain.market_data.timeframe import Timeframe
 
 
 @dataclass(eq=False, kw_only=True)
@@ -85,6 +86,13 @@ class UserProfile(Entity):
         self.touch()
 
 
+DeskDateFormat = Literal["ymd", "dmy", "mdy"]
+DeskTimeFormat = Literal["24h", "12h"]
+
+_DESK_DATE_FORMATS: frozenset[str] = frozenset({"ymd", "dmy", "mdy"})
+_DESK_TIME_FORMATS: frozenset[str] = frozenset({"24h", "12h"})
+
+
 @dataclass(eq=False, kw_only=True)
 class UserSettings(Entity):
     user_id: UUID
@@ -96,25 +104,52 @@ class UserSettings(Entity):
     security_login_alerts: bool = True
     security_require_reauth: bool = False
     session_timeout_minutes: int = 10080
+    default_symbol: str = "XAUUSD"
+    default_timeframe: str = "M15"
+    date_format: DeskDateFormat = "ymd"
+    time_format: DeskTimeFormat = "24h"
+    dashboard_prefs: dict[str, Any] = field(default_factory=dict)
+    trading_ui_prefs: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        require(
-            5 <= self.session_timeout_minutes <= 525600,
-            "session_timeout_minutes out of range",
-        )
+        self._normalize_desk_fields()
+        self._validate()
 
     @classmethod
     def create_default(cls, *, user_id: UUID) -> Self:
         return cls(user_id=user_id, id=user_id)
 
-    def update_fields(self, **kwargs: object) -> None:
-        for key, value in kwargs.items():
-            if value is not None and hasattr(self, key):
-                setattr(self, key, value)
+    def _normalize_desk_fields(self) -> None:
+        self.default_symbol = self.default_symbol.strip().upper()
+        self.default_timeframe = self.default_timeframe.strip().upper()
+        self.date_format = self.date_format.strip().lower()  # type: ignore[assignment]
+        self.time_format = self.time_format.strip().lower()  # type: ignore[assignment]
+
+    def _validate(self) -> None:
         require(
             5 <= self.session_timeout_minutes <= 525600,
             "session_timeout_minutes out of range",
         )
+        require(
+            1 <= len(self.default_symbol) <= 32,
+            "default_symbol length must be 1-32",
+        )
+        Timeframe.parse(self.default_timeframe)
+        require(
+            self.date_format in _DESK_DATE_FORMATS,
+            "date_format must be ymd, dmy, or mdy",
+        )
+        require(
+            self.time_format in _DESK_TIME_FORMATS,
+            "time_format must be 24h or 12h",
+        )
+
+    def update_fields(self, **kwargs: object) -> None:
+        for key, value in kwargs.items():
+            if value is not None and hasattr(self, key):
+                setattr(self, key, value)
+        self._normalize_desk_fields()
+        self._validate()
         self.touch()
 
 

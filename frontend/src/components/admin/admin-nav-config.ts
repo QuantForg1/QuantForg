@@ -55,14 +55,20 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       {
         label: "Users",
-        href: "/admin/customer-ops#fleet",
-        hint: "Fleet, status, search, suspend",
+        href: "/admin/users",
+        hint: "Search, filters, fleet CRM table",
         icon: Users,
       },
       {
-        label: "Customer workspace",
+        label: "COP fleet (legacy)",
+        href: "/admin/customer-ops#fleet",
+        hint: "Original Customer Operations fleet tab",
+        icon: Users,
+      },
+      {
+        label: "COP workspace",
         href: "/admin/customer-ops#workspace",
-        hint: "Profile, brokers, support history",
+        hint: "UUID lookup in Customer Operations",
         icon: Users,
       },
     ],
@@ -71,7 +77,13 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     title: "Plans & Subscriptions",
     items: [
       {
-        label: "Licenses & plans",
+        label: "Plans & subscriptions",
+        href: "/admin/plans",
+        hint: "Catalog pricing, revenue KPIs, manual license grant",
+        icon: CreditCard,
+      },
+      {
+        label: "Licenses (COP)",
         href: "/admin/customer-ops#licenses",
         hint: "Assignment, expiry, renewal status",
         icon: CreditCard,
