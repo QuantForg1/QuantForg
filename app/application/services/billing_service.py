@@ -1190,60 +1190,28 @@ class BillingService:
         uow = await _uow()
         try:
             session = uow._require_session()
-            paid = (
-                (
-                    await session.execute(
-                        text("""
+            paid = (await session.execute(text("""
                         SELECT COALESCE(SUM(amount_usd), 0) AS revenue,
                                COUNT(*) AS paid_orders
                         FROM billing_orders
                         WHERE status = 'paid'
-                        """)
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            pending = (
-                (
-                    await session.execute(
-                        text("""
+                        """))).mappings().first()
+            pending = (await session.execute(text("""
                         SELECT COUNT(*) AS pending_orders
                         FROM billing_orders
                         WHERE status IN ('pending_payment', 'confirming', 'partially_paid')
-                        """)
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            active_licenses = (
-                (
-                    await session.execute(
-                        text("""
+                        """))).mappings().first()
+            active_licenses = (await session.execute(text("""
                         SELECT COUNT(*) AS active_licenses
                         FROM licenses WHERE status = 'active'
-                        """)
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            recent = (
-                (
-                    await session.execute(
-                        text("""
+                        """))).mappings().first()
+            recent = (await session.execute(text("""
                         SELECT order_code, plan_id, amount_usd, currency, status,
                                paid_at, created_at, user_id
                         FROM billing_orders
                         ORDER BY created_at DESC
                         LIMIT 40
-                        """)
-                    )
-                )
-                .mappings()
-                .all()
-            )
+                        """))).mappings().all()
             await uow.rollback()
             return {
                 "revenue_usd_paid": float(paid["revenue"]) if paid else 0.0,
