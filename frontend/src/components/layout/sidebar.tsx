@@ -246,10 +246,19 @@ export function Sidebar() {
 
   const width = chrome.collapsed ? SHELL_SIDEBAR_COLLAPSED : chrome.width;
 
+  useEffect(() => {
+    if (!hydrated) return;
+    const root = document.documentElement;
+    root.style.setProperty("--shell-sidebar-width", `${width}px`);
+    return () => {
+      root.style.removeProperty("--shell-sidebar-width");
+    };
+  }, [width, hydrated]);
+
   return (
     <aside
       style={{ width }}
-      className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
+      className="fixed inset-y-0 left-0 z-30 hidden border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_62%,transparent)] shadow-[4px_0_24px_rgba(2,12,28,0.18)] backdrop-blur-xl transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
       aria-label="Workspace rail"
     >
       <Suspense fallback={<div className="flex-1" aria-hidden />}>

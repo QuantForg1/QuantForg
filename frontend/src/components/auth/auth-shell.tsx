@@ -47,11 +47,11 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[var(--bg)]">
-      <MountainBackdrop withCandles />
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      <MountainBackdrop withCandles intensity="vivid" />
       <header className="relative z-10 flex items-center justify-between px-4 py-5 sm:px-8">
         <Link href="/">
-          <BrandLogo size={36} priority />
+          <BrandLogo size={36} priority caption={false} />
         </Link>
         <span
           className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-[var(--fg-muted)] backdrop-blur-sm"
@@ -94,16 +94,16 @@ export function AuthShell({
             })}
           </ul>
         </section>
-        <section className="qf-auth-card rounded-[1.25rem] border border-white/15 bg-[color-mix(in_srgb,var(--surface)_78%,var(--brand-navy))] p-6 shadow-[var(--shadow-elevated)] backdrop-blur-xl sm:p-8">
+        <section className="qf-auth-card qf-glass-card rounded-[1.25rem] border border-white/15 p-6 shadow-[var(--shadow-elevated)] sm:p-8">
           <div className="mb-6 flex flex-col items-center text-center">
-            <BrandLogo size={42} />
+            <BrandLogo size={42} wordmark={false} />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight">{title}</h1>
             <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">{subtitle}</p>
           </div>
           {children}
         </section>
       </main>
-      <footer className="relative z-10 border-t border-[var(--border)] bg-[var(--bg-elevated)]/80 backdrop-blur-sm">
+      <footer className="relative z-10 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_55%,transparent)] backdrop-blur-xl">
         <ul className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-4">
           {TRUST.map(([titleText, body]) => (
             <li key={titleText} className="flex gap-3">

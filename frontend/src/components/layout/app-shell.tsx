@@ -115,7 +115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="flex w-full max-w-sm flex-col items-center gap-4 p-6">
           <BrandMark size={48} className="opacity-90" />
           <div className="w-full space-y-3">
@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated) {
     if (bootError || authPhase === "AUTH_REQUIRED" || authPhase === "AUTH_TIMEOUT") {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4">
+        <div className="flex min-h-screen items-center justify-center px-4">
           <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
             <BrandMark size={48} className="opacity-90" />
             <p className="text-sm text-[var(--fg-muted)]">
@@ -169,54 +169,52 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--bg)] text-[var(--fg)]">
-      {bootError ? (
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--fg-muted)]">
-          <span>{bootError}</span>
-          <button
-            type="button"
-            className="shrink-0 text-[var(--accent)] disabled:opacity-60"
-            disabled={retrying}
-            onClick={() => {
-              setRetrying(true);
-              void refreshMe().finally(() => setRetrying(false));
-            }}
-          >
-            {retrying ? "Retrying…" : "Retry"}
-          </button>
-        </div>
-      ) : null}
-      <OfflineBanner />
-      <Topbar onOpenCommand={() => setCmdOpen(true)} compact={compactChrome} />
-      <div className="flex min-h-0 flex-1">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main
-            id="main-content"
-            data-desk={deskId(pathname)}
-            className={cn(
-              "flex min-h-0 flex-1 flex-col",
-              isFullBleed
-                ? "overflow-hidden p-0"
-                : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
-              "pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0",
-            )}
-            tabIndex={-1}
-          >
-            <ErrorBoundary>
-              <div
-                key={pathname}
-                className={cn(
-                  isFullBleed
-                    ? "min-h-0 w-full max-w-none flex-1 qf-motion-desk"
-                    : "mx-auto w-full max-w-[1600px] qf-motion-desk",
-                )}
-              >
-                {children}
-              </div>
-            </ErrorBoundary>
-          </main>
-        </div>
+    <div className="relative flex min-h-screen text-[var(--fg)]">
+      <Sidebar />
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-[var(--shell-sidebar-width,15rem)]">
+        {bootError ? (
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-2 text-sm text-[var(--fg-muted)] backdrop-blur-md">
+            <span>{bootError}</span>
+            <button
+              type="button"
+              className="shrink-0 text-[var(--accent)] disabled:opacity-60"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                void refreshMe().finally(() => setRetrying(false));
+              }}
+            >
+              {retrying ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        ) : null}
+        <OfflineBanner />
+        <Topbar onOpenCommand={() => setCmdOpen(true)} compact={compactChrome} />
+        <main
+          id="main-content"
+          data-desk={deskId(pathname)}
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            isFullBleed
+              ? "overflow-hidden p-0"
+              : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
+            "pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0",
+          )}
+          tabIndex={-1}
+        >
+          <ErrorBoundary>
+            <div
+              key={pathname}
+              className={cn(
+                isFullBleed
+                  ? "min-h-0 w-full max-w-none flex-1 qf-motion-desk"
+                  : "mx-auto w-full max-w-[1600px] qf-motion-desk",
+              )}
+            >
+              {children}
+            </div>
+          </ErrorBoundary>
+        </main>
       </div>
       <MobileTabBar />
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />

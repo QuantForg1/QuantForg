@@ -43,10 +43,10 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-[var(--border)] bg-[var(--bg-elevated)]">
+    <footer className="border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_55%,transparent)] backdrop-blur-xl">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_2fr]">
         <div className="max-w-sm space-y-3">
-          <BrandLogo size={32} />
+          <BrandLogo size={32} caption={false} />
           <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
             QuantForg is an Institutional AI Trading Platform available by subscription.
             Connect your own MetaTrader 5 broker account where supported. Software access is
