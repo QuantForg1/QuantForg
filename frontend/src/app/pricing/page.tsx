@@ -14,6 +14,8 @@ import {
   BILLING_PLANS,
   BILLING_PROVIDER,
   formatUsd,
+  PAYMENT_METHOD_LABEL,
+  TRIAL_DAYS,
 } from "@/lib/billing/plans";
 
 export const metadata: Metadata = {
@@ -88,10 +90,14 @@ export default function PricingPage() {
               QuantForg is trading technology sold through subscription. Plans describe software
               access and support — not trading profits, returns, or risk-free outcomes.
             </p>
+            <p className="mt-3 text-sm text-[var(--accent)]">
+              New customers: start a {TRIAL_DAYS}-day Starter free trial (no payment required).
+              Upgrade anytime with {PAYMENT_METHOD_LABEL}.
+            </p>
             {!ANNUAL_BILLING_SUPPORTED ? (
               <p className="mt-3 text-sm text-[var(--fg-subtle)]">
-                Monthly pricing shown. Annual billing will appear only when a recurring payment
-                provider supports it.
+                Monthly pricing shown. Automatic monthly crypto charging is not enabled — renew
+                with a new invoice.
               </p>
             ) : null}
           </div>
@@ -120,7 +126,7 @@ export default function PricingPage() {
                   <span className="text-sm text-[var(--fg-subtle)]">/ month</span>
                 </p>
                 <p className="mt-1 text-xs text-[var(--fg-subtle)]">
-                  Monthly USD price · paid via NOWPayments LIVE crypto invoice
+                  Monthly USD price · paid via {PAYMENT_METHOD_LABEL}
                 </p>
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {plan.entitlements.map((item) => (

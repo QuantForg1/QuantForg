@@ -17,12 +17,16 @@ const faqs = [
     a: "Not yet. Only monthly plan pricing is published. An annual option will appear only after a recurring billing provider is configured to support it.",
   },
   {
+    q: "Is there a free trial?",
+    a: "Eligible new customers can start one 7-day Starter trial after email verification. No payment is required to start. The trial does not auto-charge. When it ends, choose a plan and pay with Crypto Payment to continue paid features.",
+  },
+  {
     q: "Can I checkout online today?",
-    a: "Yes — signed-in customers can start a NOWPayments LIVE crypto invoice from Billing checkout. Paid access activates only after QuantForg receives and verifies a finished payment notification. A browser return page never grants access by itself.",
+    a: "Yes — signed-in customers can start a Crypto Payment invoice from Billing checkout. Paid access activates only after QuantForg verifies a completed payment. A browser return page never grants access by itself.",
   },
   {
     q: "Is crypto billing automatic every month?",
-    a: "Not yet. Automatic recurring crypto billing is not enabled for this merchant account. After your paid period, renew with a new invoice from Settings → Subscription.",
+    a: "No. Automatic monthly crypto charging is not enabled. After your paid period, renew with a new invoice from Settings → Subscription.",
   },
   {
     q: "Can I use my own MT5 broker?",
