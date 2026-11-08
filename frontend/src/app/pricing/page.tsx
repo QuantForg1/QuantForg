@@ -120,7 +120,7 @@ export default function PricingPage() {
                   <span className="text-sm text-[var(--fg-subtle)]">/ month</span>
                 </p>
                 <p className="mt-1 text-xs text-[var(--fg-subtle)]">
-                  Proposed starting price · billed monthly when checkout is enabled
+                  Monthly USD price · paid via NOWPayments LIVE crypto invoice
                 </p>
                 <ul className="mt-6 flex-1 space-y-2.5">
                   {plan.entitlements.map((item) => (
@@ -135,16 +135,16 @@ export default function PricingPage() {
                 </ul>
                 <div className="mt-8 space-y-2">
                   <Link
-                    href={`/register?plan=${plan.id}`}
+                    href={`/billing/checkout?plan=${plan.id}`}
                     className={`${plan.highlighted ? pricingBtnPrimary : pricingBtnSecondary} w-full`}
                   >
                     {plan.ctaLabel}
                   </Link>
                   <Link
-                    href={`/contact?plan=${plan.id}`}
+                    href={`/register?plan=${plan.id}`}
                     className="block text-center text-xs text-[var(--fg-subtle)] hover:text-[var(--fg-muted)]"
                   >
-                    Talk to sales about {plan.name}
+                    Create account first, then checkout
                   </Link>
                 </div>
               </article>

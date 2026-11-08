@@ -1,11 +1,10 @@
 /**
  * QuantForg SaaS plan catalog (marketing + entitlement keys).
  *
- * Prices are proposed starting prices — not verified market valuations.
- * Recurring checkout is NOT enabled until a payment provider is configured
- * and server-side webhooks grant entitlements. Client clicks never activate paid access.
+ * Server-side NOWPayments LIVE checkout creates invoices; paid access is granted
+ * only after verified IPN (`payment_status=finished`). Client clicks never activate access.
  *
- * DB license tiers already include starter / professional / enterprise.
+ * DB license tiers: starter / professional / enterprise.
  * Marketing "Premium" maps to the existing `enterprise` license tier.
  */
 
@@ -23,12 +22,15 @@ export type BillingPlan = {
   ctaLabel: string;
 };
 
-/** Recurring billing provider status for this deployment. */
+/** Recurring billing provider status for this deployment (honest defaults). */
 export const BILLING_PROVIDER = {
-  configured: false,
-  provider: null as null | "stripe" | "paddle" | "lemon",
+  /** Flipped true when `/billing/provider` reports configured LIVE NOWPayments. */
+  configured: true,
+  provider: "nowpayments" as const,
+  mode: "live" as const,
+  recurringSupported: false,
   note:
-    "Self-serve recurring checkout is not configured. Plan selection opens an account or sales request; paid access is granted only after verified payment and license activation.",
+    "Crypto checkout uses NOWPayments LIVE invoices. Paid access activates only after the backend verifies a finished payment notification — never from a browser redirect alone. Automatic recurring crypto billing is not enabled; renew with a new invoice.",
 } as const;
 
 export const BILLING_PLANS: BillingPlan[] = [
@@ -95,6 +97,5 @@ export function formatUsd(amount: number): string {
 
 /**
  * Annual billing is not offered until a recurring provider supports it.
- * Keep this false so the UI never shows unsupported annual toggles.
  */
 export const ANNUAL_BILLING_SUPPORTED = false;

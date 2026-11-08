@@ -18,7 +18,11 @@ const faqs = [
   },
   {
     q: "Can I checkout online today?",
-    a: "Self-serve recurring checkout is not configured in this deployment. Choosing a plan creates an account request or sales conversation. Paid access is activated only after verified payment and license provisioning.",
+    a: "Yes — signed-in customers can start a NOWPayments LIVE crypto invoice from Billing checkout. Paid access activates only after QuantForg receives and verifies a finished payment notification. A browser return page never grants access by itself.",
+  },
+  {
+    q: "Is crypto billing automatic every month?",
+    a: "Not yet. Automatic recurring crypto billing is not enabled for this merchant account. After your paid period, renew with a new invoice from Settings → Subscription.",
   },
   {
     q: "Can I use my own MT5 broker?",
@@ -26,7 +30,7 @@ const faqs = [
   },
   {
     q: "How do upgrades, downgrades, and cancellation work?",
-    a: "Until a payment provider webhook is live, plan changes and cancellations are handled through QuantForg support after identity verification. Entitlements never change from a client-side button alone.",
+    a: "Upgrade or change plans by creating a new LIVE invoice for the target plan. Cancel from Settings → Subscription to stop renewal intent; access remains until the paid period ends unless an operator suspends the license. Entitlements never change from a client-side button alone.",
   },
   {
     q: "Where can I see my subscription status?",

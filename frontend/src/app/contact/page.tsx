@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { BrandMark } from "@/components/brand/brand-logo";
 import {
   PricingFooter,
@@ -10,6 +10,9 @@ import {
   pricingBtnPrimary,
   pricingBtnSecondary,
 } from "@/components/pricing/marketing-chrome";
+import { contactApi } from "@/lib/api/endpoints";
+import { ApiError } from "@/lib/api/client";
+import { asRecord, str } from "@/lib/desk";
 
 const EXPERIENCE = [
   "Beginner",
@@ -21,10 +24,13 @@ const EXPERIENCE = [
 
 const CONTACT_METHODS = ["Email", "Phone", "WhatsApp"] as const;
 
-export default function ContactPurchasePage() {
+function ContactForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  const planIntent = params.get("plan") || params.get("topic") || "";
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen overflow-x-clip">
@@ -48,19 +54,62 @@ export default function ContactPurchasePage() {
               Subscription request
             </h2>
             <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              Frontend request form for sales follow-up. Self-serve recurring checkout is not
-              configured in this deployment.
+              Messages are stored securely for QuantForg follow-up. For self-serve payment, use{" "}
+              <Link href="/billing/checkout" className="text-[var(--accent)] underline">
+                crypto checkout
+              </Link>
+              .
             </p>
 
             <form
               className="mt-6 space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!accepted) return;
+                if (!accepted || submitting) return;
+                const form = e.currentTarget;
+                const data = new FormData(form);
                 setSubmitting(true);
-                window.setTimeout(() => {
-                  router.push("/contact/success");
-                }, 400);
+                setError(null);
+                void (async () => {
+                  try {
+                    const result = asRecord(
+                      await contactApi.submitLead({
+                        full_name: String(data.get("full_name") || ""),
+                        email: String(data.get("email") || ""),
+                        company: String(data.get("company") || ""),
+                        country: String(data.get("country") || ""),
+                        phone: String(data.get("phone") || ""),
+                        experience: String(data.get("experience") || ""),
+                        contact_method: String(data.get("contact_method") || ""),
+                        subject: planIntent
+                          ? `Plan interest: ${planIntent}`
+                          : "Sales / support request",
+                        message: [
+                          String(data.get("message") || ""),
+                          data.get("broker")
+                            ? `Broker: ${String(data.get("broker"))}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join("\n\n"),
+                        plan_intent: planIntent,
+                      }),
+                    );
+                    if (!result.stored) {
+                      setError("Lead was not stored. Please try again.");
+                      setSubmitting(false);
+                      return;
+                    }
+                    router.push("/contact/success");
+                  } catch (err) {
+                    setError(
+                      err instanceof ApiError
+                        ? err.message || str(err.code, "Submit failed")
+                        : "Submit failed",
+                    );
+                    setSubmitting(false);
+                  }
+                })();
               }}
             >
               <div className="grid gap-4 sm:grid-cols-2">
@@ -174,6 +223,12 @@ export default function ContactPurchasePage() {
                 </span>
               </label>
 
+              {error ? (
+                <p className="rounded-lg border border-[var(--danger)]/40 bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
+                  {error}
+                </p>
+              ) : null}
+
               <button
                 type="submit"
                 disabled={submitting || !accepted}
@@ -195,7 +250,7 @@ export default function ContactPurchasePage() {
             </p>
             <ul className="mt-6 space-y-2.5 text-sm text-[var(--fg-muted)]">
               {[
-                "Recurring checkout not configured yet",
+                "NOWPayments LIVE crypto checkout available when signed in",
                 "Verified payment required for paid access",
                 "Software access — not profit guarantees",
                 "Risk disclosure applies to all trading",
@@ -223,6 +278,14 @@ export default function ContactPurchasePage() {
 
       <PricingFooter />
     </div>
+  );
+}
+
+export default function ContactPurchasePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[var(--bg)]" />}>
+      <ContactForm />
+    </Suspense>
   );
 }
 

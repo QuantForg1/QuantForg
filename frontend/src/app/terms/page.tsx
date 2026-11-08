@@ -27,6 +27,30 @@ export default function TermsPage() {
         Subscription or license entitlements are granted only after verified payment confirmation
         and server-side provisioning. Client-side plan selection alone does not create paid access.
       </p>
+      <h2 className="text-lg font-semibold text-[var(--fg)]">Subscriptions & crypto payments</h2>
+      <ul className="list-disc space-y-2 pl-5">
+        <li>Published plans: Starter ($49), Professional ($99), Premium ($199) per month in USD.</li>
+        <li>
+          Crypto invoices are processed by NOWPayments in LIVE production mode. Supported coins
+          and networks are those enabled on the QuantForg merchant account.
+        </li>
+        <li>
+          Automatic recurring crypto billing is not enabled unless separately announced. Renew by
+          creating a new invoice before or after the paid period ends.
+        </li>
+        <li>
+          A configurable grace period may apply after period end before paid entitlements expire.
+          Temporary webhook delay alone does not immediately revoke access.
+        </li>
+        <li>
+          Cancellation stops renewal intent; access typically continues until the paid period ends
+          unless the account is suspended for abuse or risk.
+        </li>
+        <li>
+          Refunds, if any, follow QuantForg’s then-current refund policy and payment-processor
+          constraints. Browser redirects never prove payment.
+        </li>
+      </ul>
       <h2 className="text-lg font-semibold text-[var(--fg)]">Acceptable use</h2>
       <ul className="list-disc space-y-2 pl-5">
         <li>Do not attempt to access another customer’s data or broker credentials.</li>

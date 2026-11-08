@@ -25,7 +25,16 @@ export default function PrivacyPage() {
           workflows. Credentials are handled through the existing secure infrastructure and are
           not meant to be shared across unrelated customers.
         </li>
-        <li>Support messages and purchase or subscription requests you send to us.</li>
+        <li>
+          Subscription and payment references for crypto invoices processed by NOWPayments (plan,
+          amount, currency, invoice and payment identifiers, and payment status). We do not store
+          full wallet private keys.
+        </li>
+        <li>Support messages and contact form submissions you send to us.</li>
+        <li>
+          Trading operational data generated while you use authenticated desks (for example
+          positions and order history associated with your own broker session).
+        </li>
       </ul>
       <h2 className="text-lg font-semibold text-[var(--fg)]">How we use information</h2>
       <p>
@@ -36,8 +45,16 @@ export default function PrivacyPage() {
       <h2 className="text-lg font-semibold text-[var(--fg)]">Sharing</h2>
       <p>
         We do not sell personal information. Infrastructure processors (for example hosting,
-        authentication, and email delivery providers) may process data solely to run QuantForg.
-        We do not publish another customer’s MT5 account, positions, balances, or credentials.
+        authentication, email delivery, and NOWPayments as the crypto payment processor) may
+        process data solely to run QuantForg. We do not publish another customer’s MT5 account,
+        positions, balances, or credentials. Cross-customer access is blocked by server-side
+        authorization and Row Level Security where configured.
+      </p>
+      <h2 className="text-lg font-semibold text-[var(--fg)]">Cookies and sessions</h2>
+      <p>
+        We use session and authentication cookies or tokens required to keep you signed in and to
+        protect the workspace. Analytics cookies are used only if explicitly enabled in a given
+        deployment.
       </p>
       <h2 className="text-lg font-semibold text-[var(--fg)]">Retention & security</h2>
       <p>

@@ -47,6 +47,8 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("version", "app.presentation.routers.version"),
     ("beta_access", "app.presentation.routers.beta_access"),
     ("auth", "app.presentation.routers.auth"),
+    ("billing", "app.presentation.routers.billing"),
+    ("contact", "app.presentation.routers.contact"),
     ("profile", "app.presentation.routers.profile"),
     ("settings", "app.presentation.routers.settings"),
     ("notifications", "app.presentation.routers.notifications"),
