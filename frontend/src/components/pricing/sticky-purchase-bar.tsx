@@ -4,18 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { pricingBtnPrimary } from "@/components/pricing/marketing-chrome";
 
-/** Floating CTA — appears after scrolling past the hero price card. */
+/** Floating CTA — appears after scrolling past the plan cards. */
 export function StickyPurchaseBar() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const onScroll = () => {
-      const hero = document.getElementById("license");
-      if (!hero) {
-        setVisible(window.scrollY > 480);
-        return;
-      }
-      setVisible(hero.getBoundingClientRect().bottom < 0);
+      setVisible(window.scrollY > 520);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -34,21 +29,18 @@ export function StickyPurchaseBar() {
       <div className="mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-[var(--border-strong)] bg-[var(--bg-elevated)]/95 px-4 py-3 shadow-[var(--shadow-elevated)] backdrop-blur-md sm:gap-5 sm:px-5">
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium uppercase tracking-[0.12em] text-[var(--accent)] sm:text-[0.7rem]">
-            Lifetime License
+            QuantForg plans
           </p>
-          <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0">
-            <span className="font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight sm:text-2xl">
-              $2,499
-            </span>
-            <span className="text-xs text-[var(--fg-muted)] sm:text-sm">One-Time Payment</span>
+          <p className="mt-0.5 text-sm text-[var(--fg-muted)]">
+            From $49 / month · software access only
           </p>
         </div>
         <Link
-          href="/contact"
+          href="/pricing"
           className={`${pricingBtnPrimary} h-11 shrink-0 px-3 text-sm sm:px-5`}
           tabIndex={visible ? 0 : -1}
         >
-          Contact Support to Purchase
+          View pricing
         </Link>
       </div>
     </div>

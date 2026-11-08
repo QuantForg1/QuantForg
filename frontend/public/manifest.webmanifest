@@ -1,11 +1,11 @@
 {
   "name": "QuantForg",
   "short_name": "QuantForg",
-  "description": "Institutional trading terminal — live MT5 portfolio, risk, research, and AI workspace.",
+  "description": "Trading technology platform — MT5 workflows, risk controls, research, and operator desks.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B1120",
-  "theme_color": "#FF5A1F",
+  "background_color": "#111827",
+  "theme_color": "#00D4E0",
   "icons": [
     {
       "src": "/icon-192.png",

@@ -177,13 +177,13 @@ export default function RegisterPage() {
           />
           <span>
             I accept the{" "}
-            <a className="text-[var(--accent)]" href="mailto:support@quantforg.com?subject=Terms%20of%20Service">
+            <Link className="text-[var(--accent)]" href="/terms">
               Terms
-            </a>{" "}
+            </Link>{" "}
             and{" "}
-            <a className="text-[var(--accent)]" href="mailto:support@quantforg.com?subject=Privacy%20Policy">
+            <Link className="text-[var(--accent)]" href="/privacy">
               Privacy Policy
-            </a>
+            </Link>
             .
           </span>
         </label>

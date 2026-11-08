@@ -34,30 +34,33 @@ const SITE_URL =
       : "http://localhost:3000");
 
 export const viewport: Viewport = {
-  themeColor: "#061a38",
+  themeColor: "#111827",
   colorScheme: "dark",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "QuantForg — Institutional Trading OS",
+    default: "QuantForg — Trading Technology Platform",
     template: "%s · QuantForg",
   },
   description:
-    "Institutional trading terminal for operators who demand clarity. Live MT5 portfolio sync, risk before fill, research loop, and AI workspace — one operating system.",
+    "QuantForg is a trading technology SaaS platform for MT5 workflows, risk controls, research, and operator desks. Software access only — trading outcomes are not guaranteed.",
   applicationName: "QuantForg",
   authors: [{ name: "QuantForg" }],
   creator: "QuantForg",
   publisher: "QuantForg",
   keywords: [
     "QuantForg",
-    "institutional trading",
+    "trading technology",
     "MT5",
-    "trading terminal",
-    "portfolio risk",
-    "algorithmic trading",
+    "trading SaaS",
+    "risk management",
+    "algorithmic trading software",
   ],
+  alternates: {
+    canonical: SITE_URL,
+  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -75,23 +78,23 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "QuantForg",
-    title: "QuantForg — Institutional Trading OS",
+    title: "QuantForg — Trading Technology Platform",
     description:
-      "Institutional trading terminal for operators who demand clarity. Live MT5 portfolio, risk before fill, research, and AI — one operating system.",
+      "Subscription trading technology for MT5 workflows, risk controls, and operator desks. No profit guarantees.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "QuantForg — Institutional Trading OS",
+        alt: "QuantForg — Trading Technology Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuantForg — Institutional Trading OS",
+    title: "QuantForg — Trading Technology Platform",
     description:
-      "Institutional trading terminal for operators who demand clarity. Live MT5 portfolio, risk before fill, research, and AI.",
+      "Trading technology SaaS for MT5 workflows and risk-aware operator desks. Software access only.",
     images: ["/og-image.png"],
   },
   robots: {

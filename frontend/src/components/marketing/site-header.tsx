@@ -8,10 +8,10 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 const LINKS = [
   { href: "/#features", label: "Features" },
   { href: "/#platform", label: "Platform" },
-  { href: "/#how-it-works", label: "How It Works" },
-  { href: "/#strategies", label: "Strategies" },
+  { href: "/#how-it-works", label: "How it works" },
   { href: "/#security", label: "Security" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/contact", label: "Contact" },
 ] as const;
 
 export function SiteHeader({
@@ -25,7 +25,7 @@ export function SiteHeader({
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="min-w-0" onClick={() => setOpen(false)}>
-          <BrandLogo size={34} caption="Institutional Trading Intelligence" priority />
+          <BrandLogo size={34} caption="Trading Technology Platform" priority />
         </Link>
         <nav className="hidden items-center gap-5 text-sm text-[var(--fg-muted)] lg:flex" aria-label="Marketing">
           {LINKS.map((item) => {
@@ -51,9 +51,9 @@ export function SiteHeader({
           </Link>
           <Link
             href="/register"
-            className="qf-btn-hot inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
+            className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
           >
-            Connect Your Broker
+            Get started
           </Link>
           <button
             type="button"

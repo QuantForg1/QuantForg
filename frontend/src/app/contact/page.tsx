@@ -32,23 +32,24 @@ export default function ContactPurchasePage() {
 
       <main id="main-content" className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6" tabIndex={-1}>
         <div className="qf-fade-in mx-auto max-w-2xl text-center">
-          <p className="qf-label text-[var(--accent)]">Institutional sales</p>
+          <p className="qf-label text-[var(--accent)]">Sales & support</p>
           <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl tracking-tight sm:text-4xl">
-            Contact Support to Purchase
+            Contact QuantForg
           </h1>
           <p className="mt-3 text-[var(--fg-muted)]">
-            To obtain a QuantForg Institutional Lifetime License, please contact our team.
-            Your license will be created manually after payment verification.
+            Ask about Starter, Professional, or Premium subscription access. Paid entitlements are
+            activated only after verified payment — never from a client-side click alone.
           </p>
         </div>
 
         <div className="mx-auto mt-10 grid max-w-5xl gap-5 lg:grid-cols-[1.15fr_0.85fr]">
           <section className="qf-glass-card p-6 sm:p-8" aria-labelledby="contact-form-heading">
             <h2 id="contact-form-heading" className="text-base font-semibold tracking-tight">
-              Purchase request
+              Subscription request
             </h2>
             <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              Frontend-only form — our team reviews every request manually. No online payment.
+              Frontend request form for sales follow-up. Self-serve recurring checkout is not
+              configured in this deployment.
             </p>
 
             <form
@@ -168,8 +169,8 @@ export default function ContactPurchasePage() {
                   required
                 />
                 <span>
-                  I understand that QuantForg licenses are activated manually after payment
-                  verification.
+                  I understand paid access is activated only after verified payment and server-side
+                  license provisioning — not from this form alone.
                 </span>
               </label>
 
@@ -178,26 +179,26 @@ export default function ContactPurchasePage() {
                 disabled={submitting || !accepted}
                 className={`${pricingBtnPrimary} qf-btn-elevate h-12 w-full text-base disabled:opacity-50`}
               >
-                {submitting ? "Submitting…" : "Request Purchase"}
+                {submitting ? "Submitting…" : "Submit request"}
               </button>
             </form>
           </section>
 
           <aside className="qf-glass-card h-fit border-[var(--accent)]/20 p-6 sm:p-8">
             <BrandMark size={40} />
-            <p className="qf-label mt-4 text-[var(--accent)]">Institutional License</p>
+            <p className="qf-label mt-4 text-[var(--accent)]">Subscription plans</p>
             <p className="mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight">
-              $2,499
+              From $49
             </p>
             <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              Lifetime License · One-Time Payment
+              Starter · Professional · Premium · monthly
             </p>
             <ul className="mt-6 space-y-2.5 text-sm text-[var(--fg-muted)]">
               {[
-                "No online checkout",
-                "Manual payment verification",
-                "Account created by QuantForg",
-                "Lifetime access after activation",
+                "Recurring checkout not configured yet",
+                "Verified payment required for paid access",
+                "Software access — not profit guarantees",
+                "Risk disclosure applies to all trading",
               ].map((line) => (
                 <li key={line} className="flex gap-2">
                   <span className="text-[var(--accent)]" aria-hidden>

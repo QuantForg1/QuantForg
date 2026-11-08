@@ -18,9 +18,11 @@ import { clearSession } from "@/lib/auth/session";
 
 import { useTheme } from "next-themes";
 import { useAuth } from "@/providers/auth-provider";
+import { SubscriptionPanel } from "@/components/settings/subscription-panel";
 
 const TABS = [
   "Account",
+  "Subscription",
   "Security",
   "Notifications",
   "Appearance",
@@ -124,7 +126,7 @@ export default function SettingsPage() {
         title="Settings"
         description="Account, security, notifications, appearance, and workspace preferences. Engineering controls live in Admin."
         actions={
-          tab !== "Danger Zone" ? (
+          tab !== "Danger Zone" && tab !== "Subscription" ? (
             <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
               Save changes
             </Button>
@@ -199,6 +201,8 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           ) : null}
+
+          {tab === "Subscription" ? <SubscriptionPanel /> : null}
 
           {tab === "Appearance" ? (
             <Card className="qf-card-interactive">
