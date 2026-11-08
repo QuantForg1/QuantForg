@@ -137,6 +137,12 @@ def _settings_from_row(row: Any) -> UserSettings:
         security_login_alerts=bool(row["security_login_alerts"]),
         security_require_reauth=bool(row["security_require_reauth"]),
         session_timeout_minutes=int(row["session_timeout_minutes"] or 10080),
+        default_symbol=str(row.get("default_symbol") or "XAUUSD"),
+        default_timeframe=str(row.get("default_timeframe") or "M15"),
+        date_format=str(row.get("date_format") or "ymd"),  # type: ignore[arg-type]
+        time_format=str(row.get("time_format") or "24h"),  # type: ignore[arg-type]
+        dashboard_prefs=json_dict(row.get("dashboard_prefs")) or {},
+        trading_ui_prefs=json_dict(row.get("trading_ui_prefs")) or {},
         created_at=parse_datetime(row["created_at"]),
         updated_at=parse_datetime(row["updated_at"]),
     )
@@ -501,11 +507,15 @@ class PostgresSettingsRepository:
                     user_id, theme, notifications_enabled, email_marketing,
                     email_security, email_product, security_login_alerts,
                     security_require_reauth, session_timeout_minutes,
+                    default_symbol, default_timeframe, date_format, time_format,
+                    dashboard_prefs, trading_ui_prefs,
                     created_at, updated_at
                 ) VALUES (
                     :user_id, :theme, :notifications_enabled, :email_marketing,
                     :email_security, :email_product, :security_login_alerts,
                     :security_require_reauth, :session_timeout_minutes,
+                    :default_symbol, :default_timeframe, :date_format, :time_format,
+                    CAST(:dashboard_prefs AS jsonb), CAST(:trading_ui_prefs AS jsonb),
                     :created_at, :updated_at
                 )
                 ON CONFLICT (user_id) DO UPDATE SET
@@ -517,6 +527,12 @@ class PostgresSettingsRepository:
                     security_login_alerts = EXCLUDED.security_login_alerts,
                     security_require_reauth = EXCLUDED.security_require_reauth,
                     session_timeout_minutes = EXCLUDED.session_timeout_minutes,
+                    default_symbol = EXCLUDED.default_symbol,
+                    default_timeframe = EXCLUDED.default_timeframe,
+                    date_format = EXCLUDED.date_format,
+                    time_format = EXCLUDED.time_format,
+                    dashboard_prefs = EXCLUDED.dashboard_prefs,
+                    trading_ui_prefs = EXCLUDED.trading_ui_prefs,
                     updated_at = EXCLUDED.updated_at
                 """),
             {
@@ -529,6 +545,12 @@ class PostgresSettingsRepository:
                 "security_login_alerts": settings.security_login_alerts,
                 "security_require_reauth": settings.security_require_reauth,
                 "session_timeout_minutes": settings.session_timeout_minutes,
+                "default_symbol": settings.default_symbol,
+                "default_timeframe": settings.default_timeframe,
+                "date_format": settings.date_format,
+                "time_format": settings.time_format,
+                "dashboard_prefs": as_json(settings.dashboard_prefs),
+                "trading_ui_prefs": as_json(settings.trading_ui_prefs),
                 "created_at": settings.created_at,
                 "updated_at": settings.updated_at,
             },

@@ -94,10 +94,18 @@ class TestProfileAndSettings:
                 theme=UiTheme.DARK,
                 email_marketing=True,
                 session_timeout_minutes=60,
+                default_symbol="XAUUSD",
+                default_timeframe="H1",
+                date_format="dmy",
+                time_format="12h",
+                dashboard_prefs={"book": {"compact": True}},
             )
         )
         assert settings.theme == "dark"
         assert settings.session_timeout_minutes == 60
+        assert settings.default_timeframe == "H1"
+        assert settings.date_format == "dmy"
+        assert settings.dashboard_prefs == {"book": {"compact": True}}
 
         activity = await ListActivityUseCase(uow_factory=factory).execute(
             user_id=user_id
@@ -284,3 +292,5 @@ class TestOrganizationsNotificationsAvatar:
             user_id=user_id
         )
         assert settings.theme == "system"
+        assert settings.default_symbol == "XAUUSD"
+        assert settings.default_timeframe == "M15"
