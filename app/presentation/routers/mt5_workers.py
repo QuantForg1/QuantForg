@@ -20,6 +20,7 @@ from app.presentation.schemas.mt5_workers import (
     WorkerHostRegisterRequest,
     WorkerIdRequest,
     WorkerRegisterRequest,
+    WorkerVerificationReport,
 )
 
 router = APIRouter(prefix="/mt5-workers", tags=["mt5-workers"])
@@ -149,3 +150,22 @@ async def claim_sealed_credentials(
 ) -> dict[str, Any]:
     """Issue opaque sealed envelope for assigned worker. No plaintext password field."""
     return api.claim_sealed_credentials(worker_id=body.worker_id)
+
+
+@router.post("/verification/report")
+async def report_verification(
+    body: WorkerVerificationReport,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> dict[str, Any]:
+    """Accept redacted Windows MT5 verification evidence. Never accepts passwords."""
+    return api.report_verification(body.model_dump())
+
+
+@router.get("/ops/summary")
+async def worker_ops_summary(
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> dict[str, Any]:
+    """Worker + verification ops snapshot for operators (no passwords)."""
+    return api.ops_summary()
