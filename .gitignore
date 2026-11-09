@@ -274,3 +274,7 @@ backups/
 docs/production/validation/
 docs/production/reports/*_[0-9]*T[0-9]*Z.*
 docs/production/execution/execution_history.*
+
+# Local MT5 worker agent secrets + portable slot trees (outside or inside workspace)
+deploy/mt5_worker_agent/local.env
+mt5_worker_slots/
