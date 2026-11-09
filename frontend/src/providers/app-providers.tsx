@@ -10,7 +10,6 @@ import {
   BetaInviteGate,
   MaintenanceGate,
 } from "@/components/platform/beta-controls";
-import { FirstRunChecklist } from "@/components/platform/first-run-checklist";
 import { ProductTour } from "@/components/platform/product-tour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -25,7 +24,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           <BetaInviteGate>
             <div className="flex min-h-0 flex-1 flex-col">
               <BetaBanner />
-              <FirstRunChecklist />
+              {/* ProductTour stays available from Settings / Get Started — never auto-opens after login. */}
               <ProductTour />
               <AppShell>{children}</AppShell>
             </div>

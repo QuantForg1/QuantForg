@@ -1,0 +1,30 @@
+/**
+ * Broker Accounts shell refinements — logo placement + guide popup removed.
+ */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "../../");
+const sidebar = readFileSync(join(root, "components/layout/sidebar.tsx"), "utf8");
+const topbar = readFileSync(join(root, "components/layout/topbar.tsx"), "utf8");
+const providers = readFileSync(join(root, "providers/app-providers.tsx"), "utf8");
+const brokerLogo = readFileSync(join(root, "components/broker/broker-logo.tsx"), "utf8");
+const broker = readFileSync(
+  join(root, "components/broker/broker-config-workspace.tsx"),
+  "utf8",
+);
+
+assert.match(sidebar, /BrandLogo/);
+assert.match(sidebar, /href=\"\/dashboard\"/);
+assert.equal(topbar.includes("BrandLogo"), false);
+assert.equal(providers.includes("FirstRunChecklist"), false);
+assert.match(providers, /ProductTour/);
+assert.match(brokerLogo, /metatrader5-logo\.png/);
+assert.match(broker, /AES-256-GCM/);
+assert.match(broker, /connectable/);
+assert.match(broker, /Search verified servers/);
+assert.equal(broker.includes("RealLive"), false);
+
+console.log("broker-shell-refine: ok");

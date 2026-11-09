@@ -27,9 +27,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrokerLogo, Mt5BrandMark } from "@/components/broker/broker-logo";
-import { mt5Api, marketUniverseApi, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
+import {
+  brokerConnectivityApi,
+  mt5Api,
+  marketUniverseApi,
+  tradingSessionApi,
+  weltradeApi,
+} from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
-import { asRecord, str } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import {
   MARKET_UNIVERSE_QUERY_KEY,
   SIGNAL_CENTER_QUERY_KEY,
@@ -46,7 +52,9 @@ import {
   MT5_BROKER_OPTIONS,
   type Mt5BrokerOption,
   type Mt5BrokerSlug,
+  type Mt5ServerRow,
   brokerBySlug,
+  mapRegistryBrokers,
   matchBrokerByServer,
   serversForBroker,
 } from "@/lib/broker/mt5-broker-catalog";
@@ -80,13 +88,13 @@ function FieldShell({
 
 function SecurityFooter() {
   return (
-    <div className="mt-6 flex items-start gap-3 rounded-xl border border-[color-mix(in_srgb,var(--success)_35%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-4 py-3">
-      <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--success)]" aria-hidden />
-      <p className="text-[12px] leading-relaxed text-[color-mix(in_srgb,var(--success)_75%,var(--fg))]">
+    <div className="mt-6 flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_55%,transparent)] px-4 py-3">
+      <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--accent)]" aria-hidden />
+      <p className="text-[12px] leading-relaxed text-[var(--fg-muted)]">
         <span className="font-semibold text-[var(--fg)]">Secure &amp; Private Connection</span>
         {" — "}
-        Your credentials are encrypted (AES-256), stored securely, and never exposed in logs or
-        browser responses.
+        Trading passwords are encrypted at rest with AES-256-GCM, never returned in browser
+        responses, and never written to application logs.
       </p>
     </div>
   );
@@ -94,23 +102,25 @@ function SecurityFooter() {
 
 function BrokerSelect({
   value,
+  options,
   onChange,
   disabled,
 }: {
   value: Mt5BrokerSlug | null;
+  options: readonly Mt5BrokerOption[];
   onChange: (broker: Mt5BrokerOption) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
-  const selected = value ? brokerBySlug(value) : undefined;
+  const selected = options.find((b) => b.slug === value) ?? (value ? brokerBySlug(value) : undefined);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return MT5_BROKER_OPTIONS;
-    return MT5_BROKER_OPTIONS.filter((b) => b.name.toLowerCase().includes(q));
-  }, [query]);
+    if (!q) return options;
+    return options.filter((b) => b.name.toLowerCase().includes(q));
+  }, [query, options]);
 
   useEffect(() => {
     if (!open) return;
@@ -203,6 +213,16 @@ function BrokerSelect({
                     <span className="rounded-md border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent)]">
                       MT5
                     </span>
+                    <span
+                      className={cn(
+                        "rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
+                        broker.connectable
+                          ? "bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-[var(--success)]"
+                          : "bg-[var(--surface-2)] text-[var(--fg-subtle)]",
+                      )}
+                    >
+                      {broker.connectable ? "Verified" : "Pending"}
+                    </span>
                     {active ? (
                       <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
                     ) : (
@@ -269,10 +289,20 @@ export function BrokerConfigWorkspace() {
     staleTime: 60_000,
     retry: false,
   });
+  const registryQ = useQuery({
+    queryKey: ["mt5-broker-registry"],
+    queryFn: brokerConnectivityApi.mt5BrokerRegistry,
+    staleTime: 60_000,
+    retry: false,
+  });
 
   const health = asRecord(healthQ.data);
   const mt5 = asRecord(mt5Q.data);
   const profile = asRecord(profileQ.data);
+  const brokerOptions = useMemo(
+    () => mapRegistryBrokers(asList(asRecord(registryQ.data).brokers)),
+    [registryQ.data],
+  );
 
   const tradingSnapEarly = asRecord(tradingSessionQ.data);
   const connectionEarly = resolveConnectionPresentation(tradingSnapEarly, {
@@ -290,6 +320,7 @@ export function BrokerConfigWorkspace() {
   const [brokerSlug, setBrokerSlug] = useState<Mt5BrokerSlug | null>("weltrade");
   const [accountType, setAccountType] = useState<AccountType>("live");
   const [server, setServer] = useState("Weltrade-Real");
+  const [serverQuery, setServerQuery] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -299,7 +330,35 @@ export function BrokerConfigWorkspace() {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [changingAccount, setChangingAccount] = useState(false);
 
-  const selectedBroker = brokerSlug ? brokerBySlug(brokerSlug) : undefined;
+  const selectedBroker =
+    brokerOptions.find((b) => b.slug === brokerSlug) ??
+    (brokerSlug ? brokerBySlug(brokerSlug) : undefined);
+
+  const serversQ = useQuery({
+    queryKey: ["mt5-servers", brokerSlug],
+    queryFn: () => brokerConnectivityApi.mt5Servers(String(brokerSlug)),
+    enabled: Boolean(brokerSlug),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const apiServerRows = useMemo(() => {
+    const rows = asList(asRecord(serversQ.data).servers);
+    return rows
+      .map((item) => {
+        const row = asRecord(item);
+        const name = str(row.name, "");
+        if (!name) return null;
+        const env = str(row.environment, "live").toLowerCase() === "demo" ? "demo" : "live";
+        return {
+          name,
+          environment: env,
+          source: str(row.source, "unknown"),
+          verified_at: row.verified_at ? String(row.verified_at) : null,
+        } satisfies Mt5ServerRow;
+      })
+      .filter((row): row is Mt5ServerRow => row !== null);
+  }, [serversQ.data]);
 
   const profileServerList = useMemo(() => {
     const servers = asRecord(asRecord(profile).servers);
@@ -309,15 +368,17 @@ export function BrokerConfigWorkspace() {
     return list.map(String).filter(Boolean);
   }, [profile, accountType]);
 
-  const serverOptions = useMemo(
-    () =>
-      serversForBroker(
-        selectedBroker,
-        accountType,
-        selectedBroker?.slug === "weltrade" ? profileServerList : undefined,
-      ),
-    [selectedBroker, accountType, profileServerList],
-  );
+  const serverOptions = useMemo(() => {
+    const base = serversForBroker(
+      selectedBroker,
+      accountType,
+      selectedBroker?.slug === "weltrade" ? profileServerList : undefined,
+      apiServerRows,
+    );
+    const q = serverQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((s) => s.toLowerCase().includes(q));
+  }, [selectedBroker, accountType, profileServerList, apiServerRows, serverQuery]);
 
   useEffect(() => {
     if (!serverOptions.includes(server)) {
@@ -492,6 +553,12 @@ export function BrokerConfigWorkspace() {
       toast.error("Select a broker");
       return;
     }
+    if (!selectedBroker.connectable) {
+      toast.error(
+        `${selectedBroker.name} is not production-verified yet. Connect Weltrade, or wait for a verified Windows gateway worker for this broker.`,
+      );
+      return;
+    }
     if (!server) {
       toast.error("Select server");
       return;
@@ -633,6 +700,7 @@ export function BrokerConfigWorkspace() {
 
   const onBrokerPicked = (broker: Mt5BrokerOption) => {
     setBrokerSlug(broker.slug);
+    setServerQuery("");
     const nextServers = serversForBroker(
       broker,
       accountType,
@@ -663,15 +731,15 @@ export function BrokerConfigWorkspace() {
         </header>
 
         {connected && !showConnectForm ? (
-          <div className="space-y-5">
-            <div className="relative overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--success)_35%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-4 py-4 sm:px-5">
-              <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--success)_45%,transparent)] bg-[color-mix(in_srgb,var(--success)_18%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)] shadow-[0_0_16px_rgba(0,255,163,0.25)]">
+          <div className="space-y-4">
+            <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-4 sm:px-5">
+              <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--success)_40%,var(--border))] bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" aria-hidden />
                 Connected
               </span>
               <div className="flex items-start gap-3 pr-24">
-                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--success)_22%,transparent)] text-[var(--success)] shadow-[0_0_20px_rgba(0,255,163,0.35)]">
-                  <CheckCircle2 className="h-6 w-6" aria-hidden />
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-[var(--success)]">
+                  <CheckCircle2 className="h-5 w-5" aria-hidden />
                 </span>
                 <div>
                   <p className="text-base font-semibold text-[var(--fg)]">MT5 Account Connected</p>
@@ -682,87 +750,66 @@ export function BrokerConfigWorkspace() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  Broker
-                </p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  {connectedBroker ? (
-                    <BrokerLogo
-                      src={connectedBroker.logoSrc}
-                      name={connectedBroker.name}
-                      size={28}
-                      rounded="full"
-                    />
-                  ) : null}
-                  <span className="truncate text-sm font-medium">
-                    {connectedBroker?.name || "MT5"}
-                  </span>
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {(
+                [
+                  {
+                    label: "Broker",
+                    value: connectedBroker?.name || "MT5",
+                    icon: connectedBroker ? (
+                      <BrokerLogo
+                        src={connectedBroker.logoSrc}
+                        name={connectedBroker.name}
+                        size={24}
+                        rounded="full"
+                      />
+                    ) : (
+                      <Building2 className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />
+                    ),
+                  },
+                  {
+                    label: "Server",
+                    value: connectionView.server || "—",
+                    icon: <Server className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "MT5 Login",
+                    value: loginDisplay,
+                    icon: <UserRound className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "Account Balance",
+                    value: balanceDisplay,
+                    icon: <Wallet className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "Currency",
+                    value: currencyDisplay,
+                    icon: <Coins className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "Account Type",
+                    value: isLiveAccount ? "Real / Live" : "Demo",
+                    icon: <Layers className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                ] as const
+              ).map((cell) => (
+                <div
+                  key={cell.label}
+                  className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] px-3.5 py-3"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                    {cell.label}
+                  </p>
+                  <div className="mt-2 flex min-w-0 items-center gap-2.5">
+                    {cell.icon}
+                    <span className="truncate text-sm font-medium text-[var(--fg)]">{cell.value}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  Server
-                </p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                  <span className="truncate text-sm font-medium">
-                    {connectionView.server || "—"}
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  MT5 Login
-                </p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <UserRound className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                  <span className="truncate font-mono text-sm font-medium">{loginDisplay}</span>
-                </div>
-              </div>
+              ))}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  Account Balance
-                </p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <Wallet className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                  <span className="text-sm font-semibold tabular">{balanceDisplay}</span>
-                </div>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  Currency
-                </p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <Coins className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                  <span className="text-sm font-medium">{currencyDisplay}</span>
-                </div>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  Account Type
-                </p>
-                <div className="mt-2 flex items-center gap-2.5">
-                  <Layers className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                  <span
-                    className={cn(
-                      "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                      isLiveAccount
-                        ? "bg-[color-mix(in_srgb,var(--success)_18%,transparent)] text-[var(--success)]"
-                        : "bg-[var(--surface-2)] text-[var(--fg-muted)]",
-                    )}
-                  >
-                    {isLiveAccount ? "RealLive" : "Demo"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-2.5 sm:grid-cols-3">
               {(
                 [
                   {
@@ -784,19 +831,20 @@ export function BrokerConfigWorkspace() {
               ).map((row) => (
                 <div
                   key={row.label}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3"
+                  className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] px-3.5 py-3"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                     {row.label}
                   </p>
                   <div className="mt-2 flex items-center gap-2 text-sm font-medium">
-                    <CheckCircle2
-                      className={cn(
-                        "h-4 w-4 shrink-0",
-                        row.ok ? "text-[var(--success)]" : "text-[var(--fg-subtle)]",
-                      )}
-                      aria-hidden
-                    />
+                    {row.ok ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--success)]" aria-hidden />
+                    ) : (
+                      <span
+                        className="inline-block h-2 w-2 shrink-0 rounded-full bg-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    )}
                     <span className={row.ok ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"}>
                       {row.value}
                     </span>
@@ -860,11 +908,19 @@ export function BrokerConfigWorkspace() {
               </p>
             ) : null}
 
+            {selectedBroker && !selectedBroker.connectable ? (
+              <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--fg-muted)]">
+                {selectedBroker.name} appears for discovery planning only. Connect is disabled until a
+                QuantForg Windows MT5 worker verifies this broker. Use Weltrade for production connect.
+              </p>
+            ) : null}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-medium text-[var(--fg-subtle)]">Broker</label>
                 <BrokerSelect
                   value={brokerSlug}
+                  options={brokerOptions.length ? brokerOptions : MT5_BROKER_OPTIONS}
                   disabled={busy}
                   onChange={onBrokerPicked}
                 />
@@ -873,34 +929,59 @@ export function BrokerConfigWorkspace() {
                 <label htmlFor="bw-server" className="text-[11px] font-medium text-[var(--fg-subtle)]">
                   Server
                 </label>
-                <div className="relative">
+                <div className="space-y-2">
                   <FieldShell>
-                    <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                    <select
-                      id="bw-server"
-                      disabled={busy || !serverOptions.length}
-                      className="h-full w-full min-w-0 appearance-none bg-transparent pr-6 text-sm outline-none disabled:opacity-60"
-                      value={server}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setServer(next);
-                        setAccountType(inferAccountType(next));
-                      }}
-                    >
-                      {!server ? (
-                        <option value="">Select server</option>
-                      ) : null}
-                      {serverOptions.map((s) => (
-                        <option key={s} value={s} className="bg-[var(--bg-elevated)] text-[var(--fg)]">
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      className="pointer-events-none absolute right-3 h-4 w-4 text-[var(--fg-subtle)]"
-                      aria-hidden
+                    <Search className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                    <input
+                      value={serverQuery}
+                      disabled={busy}
+                      onChange={(e) => setServerQuery(e.target.value)}
+                      placeholder="Search verified servers..."
+                      className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
                     />
                   </FieldShell>
+                  <div className="relative">
+                    <FieldShell>
+                      <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                      <select
+                        id="bw-server"
+                        disabled={busy || !serverOptions.length}
+                        className="h-full w-full min-w-0 appearance-none bg-transparent pr-6 text-sm outline-none disabled:opacity-60"
+                        value={server}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setServer(next);
+                          setAccountType(inferAccountType(next));
+                        }}
+                      >
+                        {!serverOptions.length ? (
+                          <option value="">No verified servers yet</option>
+                        ) : !server ? (
+                          <option value="">Select server</option>
+                        ) : null}
+                        {serverOptions.map((s) => {
+                          const meta = apiServerRows.find((row) => row.name === s);
+                          const tag =
+                            meta?.environment === "demo" || inferAccountType(s) === "demo"
+                              ? "Demo"
+                              : "Live";
+                          return (
+                            <option
+                              key={s}
+                              value={s}
+                              className="bg-[var(--bg-elevated)] text-[var(--fg)]"
+                            >
+                              {s} · {tag}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <ChevronDown
+                        className="pointer-events-none absolute right-3 h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    </FieldShell>
+                  </div>
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -1012,7 +1093,7 @@ export function BrokerConfigWorkspace() {
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 className="qf-btn-hot h-12 w-full border-0 text-[15px] font-semibold text-[var(--brand-navy)]"
-                disabled={busy}
+                disabled={busy || Boolean(selectedBroker && !selectedBroker.connectable)}
                 onClick={onConnect}
               >
                 {connectMut.isPending || saveMut.isPending ? (

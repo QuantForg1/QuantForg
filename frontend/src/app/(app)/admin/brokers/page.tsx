@@ -15,7 +15,7 @@ import {
   DeskTable,
 } from "@/components/desk/primitives";
 import { NocPanel } from "@/components/ops/noc/noc-primitives";
-import { customerOpsApi } from "@/lib/api/endpoints";
+import { brokerConnectivityApi, customerOpsApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { useAuth } from "@/providers/auth-provider";
 import {
@@ -54,6 +54,13 @@ export default function AdminBrokersPage() {
   const fleetQ = useQuery({
     queryKey: ["admin-brokers-fleet"],
     queryFn: () => customerOpsApi.fleet(),
+    enabled: allowed && opsReady && isAuthenticated,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const registryQ = useQuery({
+    queryKey: ["admin-mt5-broker-registry"],
+    queryFn: brokerConnectivityApi.mt5BrokerRegistry,
     enabled: allowed && opsReady && isAuthenticated,
     retry: false,
     staleTime: 60_000,
@@ -101,6 +108,10 @@ export default function AdminBrokersPage() {
   const history = asList(data.connection_history);
   const connected = num(data.connected, NaN);
   const total = num(data.count, connections.length);
+  const registry = asRecord(registryQ.data);
+  const registryBrokers = asList(registry.brokers);
+  const registryServers = asRecord(registry.servers);
+  const gatewayMeta = asRecord(registry.gateway);
 
   const selected =
     connections.find((row) => {
@@ -147,6 +158,50 @@ export default function AdminBrokersPage() {
           <Badge tone="warning">Synthetic payload</Badge>
         ) : null}
       </div>
+
+      <NocPanel title="MT5 broker registry & verified servers">
+        <p className="mb-3 text-[12px] text-[var(--fg-muted)]">
+          {fmt(
+            gatewayMeta.note,
+            "Windows MT5 terminal required. Passwords are never shown here.",
+          )}
+        </p>
+        {registryQ.isError ? (
+          <p className="text-[12px] text-[var(--danger)]">
+            Registry unavailable. Connected inventory below still uses the existing COP path.
+          </p>
+        ) : (
+          <DeskTable
+            columns={["Broker", "Status", "Connectable", "Verified servers", "Last verified"]}
+            rows={registryBrokers.map((row) => {
+              const r = asRecord(row);
+              const slug = str(r.slug, "");
+              const serverRows = asList(registryServers[slug]);
+              const latest = serverRows
+                .map((s) => str(asRecord(s).verified_at, ""))
+                .filter(Boolean)
+                .sort()
+                .at(-1);
+              const names = serverRows
+                .map((s) => str(asRecord(s).name, ""))
+                .filter(Boolean)
+                .join(", ");
+              return [
+                fmt(r.name, slug || "—"),
+                <Badge
+                  key={`${slug}-status`}
+                  tone={r.connection_status === "production_verified" ? "success" : "neutral"}
+                >
+                  {fmt(r.connection_status, "not_verified")}
+                </Badge>,
+                r.connectable === true ? "Yes" : "No",
+                names || "—",
+                latest ? latest.slice(0, 19) : "—",
+              ];
+            })}
+          />
+        )}
+      </NocPanel>
 
       {connections.length === 0 ? (
         <DeskEmpty

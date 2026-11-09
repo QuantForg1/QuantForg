@@ -66,6 +66,72 @@ async def mt5_ecosystem(
     return svc.ecosystem()
 
 
+@router.get("/mt5-broker-registry")
+async def mt5_broker_registry(_user: CurrentUser) -> dict[str, Any]:
+    """Honest multi-broker registry — connectable only when production-verified."""
+    from app.domain.broker_connectivity.mt5_server_catalogue import catalogue_snapshot
+
+    discovered: dict[str, list[str]] = {}
+    try:
+        from app.presentation.dependencies.weltrade import get_weltrade_service
+
+        profile = get_weltrade_service().profile()
+        servers = profile.get("servers") if isinstance(profile, dict) else None
+        if isinstance(servers, dict):
+            names: list[str] = []
+            for key in ("live", "demo"):
+                block = servers.get(key)
+                if isinstance(block, list):
+                    names.extend(str(item) for item in block if item)
+            if names:
+                discovered["weltrade"] = names
+    except Exception:
+        # Profile unavailable — registry still returns verified Weltrade rows.
+        pass
+    return catalogue_snapshot(discovered_by_broker=discovered)
+
+
+@router.get("/mt5-servers")
+async def mt5_servers(
+    _user: CurrentUser,
+    broker: str = Query(..., min_length=1, description="Broker slug, e.g. weltrade"),
+) -> dict[str, Any]:
+    """Verified / discovered MT5 servers for one broker — never invents names."""
+    from app.domain.broker_connectivity.mt5_server_catalogue import (
+        broker_registry_rows,
+        documented_hints_for_admin,
+        verified_servers_for_broker,
+    )
+
+    slug = broker.strip().lower()
+    meta = next((row for row in broker_registry_rows() if row["slug"] == slug), None)
+    discovered: list[str] = []
+    if slug == "weltrade":
+        try:
+            from app.presentation.dependencies.weltrade import get_weltrade_service
+
+            profile = get_weltrade_service().profile()
+            servers = profile.get("servers") if isinstance(profile, dict) else None
+            if isinstance(servers, dict):
+                for key in ("live", "demo"):
+                    block = servers.get(key)
+                    if isinstance(block, list):
+                        discovered.extend(str(item) for item in block if item)
+        except Exception:
+            pass
+    rows = verified_servers_for_broker(slug, discovered=discovered)
+    return {
+        "broker": slug,
+        "connection_status": (
+            meta["connection_status"] if meta else "not_verified"
+        ),
+        "connectable": bool(meta["connectable"]) if meta else False,
+        "servers": rows,
+        # Documented search hints are admin diagnostics only — not connect options.
+        "documented_search_hints": documented_hints_for_admin(slug),
+    }
+
+
 @router.get("/compatibility")
 async def broker_compatibility(
     _user: CurrentUser,
