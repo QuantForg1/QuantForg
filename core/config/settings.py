@@ -777,6 +777,32 @@ class Settings(BaseSettings):
             ),
         ),
     ] = False
+    worker_service_token: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description=(
+                "Shared bearer token for Windows MT5 worker agent → Railway "
+                "control-plane APIs. Never log or expose. Rotate via Railway env."
+            ),
+            validation_alias=AliasChoices(
+                "WORKER_SERVICE_TOKEN",
+                "worker_service_token",
+            ),
+        ),
+    ] = None
+    worker_heartbeat_stale_seconds: Annotated[
+        int,
+        Field(
+            ge=15,
+            le=600,
+            description="Seconds without heartbeat before a worker is stale",
+            validation_alias=AliasChoices(
+                "WORKER_HEARTBEAT_STALE_SECONDS",
+                "worker_heartbeat_stale_seconds",
+            ),
+        ),
+    ] = 45
 
     # -- Phase A institutional safety hardening (rollback = set False) -------
     phase_a_kill_persistence_enabled: Annotated[

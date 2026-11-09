@@ -44,6 +44,9 @@ class SlotRuntimeState:
     last_heartbeat_at: str | None = None
     verified_login: str = ""
     verified_server: str = ""
+    worker_id: str = ""
+    railway_ok: bool = False
+    revoked: bool = False
 
 
 @dataclass
@@ -129,9 +132,62 @@ class LocalWorkerSupervisor:
                     "ready": st.ready,
                     "last_error": st.last_error,
                     "terminal_exe": status.terminal_exe,
+                    "worker_id": st.worker_id,
+                    "railway_ok": st.railway_ok,
+                    "revoked": st.revoked,
                 }
             )
         return rows
+
+    def register_with_railway(self) -> dict[str, Any]:
+        """Register host + each slot with the Railway control plane."""
+        if self.railway is None:
+            return {"ok": False, "error": "railway_client_unavailable"}
+        host = self.railway.register_host(
+            host_code=self.host_code,
+            max_terminals=max(4, len(self.slot_ids)),
+        )
+        results: dict[str, Any] = {"host": host, "slots": {}}
+        for slot_id in self.slot_ids:
+            st = self.states[slot_id]
+            if st.revoked:
+                results["slots"][slot_id] = {"ok": False, "error": "revoked"}
+                continue
+            resp = self.railway.register_worker(
+                host_code=self.host_code, slot_id=slot_id
+            )
+            ok = bool(resp.get("ok")) and bool(resp.get("worker_id"))
+            if ok:
+                st.worker_id = str(resp["worker_id"])
+                st.railway_ok = True
+                st.lifecycle = str(resp.get("lifecycle") or st.lifecycle)
+                st.revoked = bool(resp.get("revoked"))
+            else:
+                st.railway_ok = False
+                st.last_error = str(resp.get("error") or "register_failed")
+            results["slots"][slot_id] = resp
+            logger.info(
+                "railway_register slot=%s ok=%s worker_id=%s",
+                slot_id,
+                ok,
+                st.worker_id or "-",
+            )
+        return {"ok": all(v.get("ok") for v in results["slots"].values()), **results}
+
+    def fetch_assignments(self) -> dict[str, Any]:
+        if self.railway is None:
+            return {"ok": False, "error": "railway_client_unavailable"}
+        out: dict[str, Any] = {}
+        for slot_id, st in self.states.items():
+            if not st.worker_id:
+                out[slot_id] = {"ok": False, "error": "not_registered"}
+                continue
+            resp = self.railway.get_assignment(worker_id=st.worker_id)
+            if resp.get("status") == 401 or resp.get("status") == 403:
+                st.revoked = True
+                st.railway_ok = False
+            out[slot_id] = resp
+        return out
 
     def heartbeat_once(self) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
@@ -151,15 +207,37 @@ class LocalWorkerSupervisor:
                 ],
                 "host_memory": host_memory_summary(),
             },
+            "railway": {},
         }
         for slot_id, st in self.states.items():
             st.last_heartbeat_at = now
-            if self.railway is not None:
-                self.railway.heartbeat(
-                    worker_id=f"{self.host_code}:{slot_id}",
-                    slot_id=slot_id,
-                    lifecycle=st.lifecycle,
-                    ready=st.ready,
+            if self.railway is None or not st.worker_id or st.revoked:
+                continue
+            hb = self.railway.heartbeat(
+                worker_id=st.worker_id,
+                slot_id=slot_id,
+                lifecycle=st.lifecycle,
+                ready=st.ready,
+            )
+            payload["railway"][slot_id] = {
+                "ok": bool(hb.get("ok")),
+                "status": hb.get("status"),
+                "error": hb.get("error"),
+            }
+            if hb.get("status") in {401, 403} or hb.get("revoked"):
+                st.revoked = True
+                st.railway_ok = False
+                st.last_error = "revoked_or_unauthorized"
+                logger.warning("railway_heartbeat_revoked slot=%s", slot_id)
+            elif hb.get("ok"):
+                st.railway_ok = True
+            else:
+                st.railway_ok = False
+                # Network blip — keep worker_id for reconnect; do not clear.
+                logger.warning(
+                    "railway_heartbeat_failed slot=%s error=%s",
+                    slot_id,
+                    hb.get("error"),
                 )
         return payload
 
@@ -169,14 +247,22 @@ class LocalWorkerSupervisor:
             self.host_code,
             ",".join(self.slot_ids),
         )
+        if self.railway is not None:
+            reg = self.register_with_railway()
+            logger.info(
+                "railway_register_complete ok=%s",
+                reg.get("ok"),
+            )
         while True:
             report = self.heartbeat_once()
             ready_count = sum(1 for s in report["slots"] if s.get("ready"))
             running = sum(1 for s in report["slots"] if s.get("process_running"))
+            railway_ok = sum(1 for s in report["slots"] if s.get("railway_ok"))
             logger.info(
-                "local_supervisor_tick ready=%s running=%s terminals=%s",
+                "local_supervisor_tick ready=%s running=%s railway_ok=%s terminals=%s",
                 ready_count,
                 running,
+                railway_ok,
                 len(report["resources"]["terminals"]),
             )
             time.sleep(interval_seconds)

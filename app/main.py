@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 # Minimal routers required before Railway healthchecks. Everything else is
 # registered after the server is listening (see lifespan deferred boot).
 _CORE_ROUTER_NAMES: frozenset[str] = frozenset(
-    {"health", "version", "auth", "beta_access"}
+    {"health", "version", "auth", "beta_access", "mt5_workers"}
 )
 
 # Routers are registered one-by-one (lazy import) so a single broken module
@@ -57,6 +57,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("broker_accounts", "app.presentation.routers.broker_accounts"),
     ("broker_connections", "app.presentation.routers.broker_connections"),
     ("mt5", "app.presentation.routers.mt5"),
+    ("mt5_workers", "app.presentation.routers.mt5_workers"),
     ("trading_session", "app.presentation.routers.trading_session"),
     ("execution", "app.presentation.routers.execution"),
     ("portfolio", "app.presentation.routers.portfolio"),
