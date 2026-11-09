@@ -25,14 +25,21 @@ function KpiCard({
   value,
   hint,
   icon,
+  tone,
+  title,
 }: {
   label: string;
   value: string;
   hint?: string;
   icon: ReactNode;
+  tone?: "success" | "danger" | "neutral";
+  title?: string;
 }) {
   return (
-    <article className="flex min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-[8px]">
+    <article
+      title={title}
+      className="flex min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-[8px]"
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
           {label}
@@ -44,7 +51,14 @@ function KpiCard({
           {icon}
         </span>
       </div>
-      <p className="mt-1.5 truncate text-base font-semibold tabular tracking-tight text-[var(--fg)] sm:text-lg">
+      <p
+        className={cn(
+          "mt-1.5 truncate text-base font-semibold tabular tracking-tight sm:text-lg",
+          tone === "success" && "text-[var(--success)]",
+          tone === "danger" && "text-[var(--danger)]",
+          (!tone || tone === "neutral") && "text-[var(--fg)]",
+        )}
+      >
         {value}
       </p>
       {hint ? (
@@ -70,10 +84,12 @@ export function OverviewReferenceDesk({
   equity,
   balance,
   todayPnl,
+  todayPnlTone,
   openPositions,
   pendingOrders,
   dailyRiskLabel,
   dailyRiskHint,
+  metricsUpdatedAt,
   brokerConnected,
   marketLive,
   marketBias,
@@ -91,6 +107,7 @@ export function OverviewReferenceDesk({
   equity: string;
   balance: string;
   todayPnl: string;
+  todayPnlTone?: "success" | "danger" | "neutral";
   openPositions: string;
   pendingOrders: string;
   /** @deprecated Prefer dailyRiskLabel — Account Risk card removed per overview reference. */
@@ -98,6 +115,7 @@ export function OverviewReferenceDesk({
   accountRiskHint?: string;
   dailyRiskLabel: string;
   dailyRiskHint?: string;
+  metricsUpdatedAt?: string;
   brokerConnected: boolean;
   marketLive: boolean;
   marketBias: string;
@@ -135,16 +153,27 @@ export function OverviewReferenceDesk({
         <KpiCard
           label="Account Equity"
           value={equity}
+          hint={metricsUpdatedAt ? `Updated ${metricsUpdatedAt}` : undefined}
+          title="Live account equity from your authorized broker session."
           icon={<Wallet className="h-3.5 w-3.5" />}
         />
         <KpiCard
           label="Available Balance"
           value={balance}
+          hint={metricsUpdatedAt ? `Updated ${metricsUpdatedAt}` : undefined}
+          title="Account balance available for margin from the broker session."
           icon={<Coins className="h-3.5 w-3.5" />}
         />
         <KpiCard
           label="Today's P&L"
           value={todayPnl}
+          tone={todayPnlTone}
+          hint={
+            todayPnl === "—"
+              ? "Unavailable until session or deals load"
+              : "Realized today + floating where available"
+          }
+          title="Today's combined realized and floating profit or loss."
           icon={<LineChart className="h-3.5 w-3.5" />}
         />
         <KpiCard
@@ -155,12 +184,14 @@ export function OverviewReferenceDesk({
               ? "Pending unavailable"
               : `${pendingOrders} pending orders`
           }
+          title="Open positions on your authorized account."
           icon={<Layers className="h-3.5 w-3.5" />}
         />
         <KpiCard
           label="Daily Risk"
           value={dailyRiskLabel}
           hint={dailyRiskHint}
+          title="Daily loss usage versus the owner daily-loss halt ceiling."
           icon={<Gauge className="h-3.5 w-3.5" />}
         />
       </section>
