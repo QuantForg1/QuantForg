@@ -7,9 +7,15 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OWNER_RISK_POLICY_DISPLAY } from "../trading/owner-risk-policy-display.ts";
+import {
+  netDealPnl,
+  periodWindowMs,
+  startOfUtcDayMs,
+} from "./performance-math.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../");
 const perf = readFileSync(join(root, "lib/dashboard/performance-window.ts"), "utf8");
+const mathSrc = readFileSync(join(root, "lib/dashboard/performance-math.ts"), "utf8");
 const risk = readFileSync(join(root, "lib/dashboard/risk-intelligence.ts"), "utf8");
 const policy = readFileSync(
   join(root, "lib/trading/owner-risk-policy-display.ts"),
@@ -24,7 +30,9 @@ const desk = readFileSync(
 assert.match(perf, /computePerformanceWindow/);
 assert.match(perf, /realizedPnl/);
 assert.match(perf, /floatingPnl/);
-assert.match(perf, /commission/);
+assert.match(mathSrc, /commission/);
+assert.match(mathSrc, /startOfUtcDayMs/);
+assert.match(mathSrc, /setUTCHours/);
 assert.match(risk, /deriveRiskIntelligence/);
 assert.match(risk, /Healthy/);
 assert.match(risk, /Halted/);
@@ -37,6 +45,8 @@ assert.match(dash, /RiskIntelligencePanel/);
 assert.match(dash, /RobotActivityPanel/);
 assert.match(dash, /RecentActivityPanel/);
 assert.match(dash, /NotificationsStrip/);
+assert.match(dash, /netDealPnl/);
+assert.match(dash, /startOfUtcDayMs/);
 assert.match(desk, /todayPnlTone/);
 assert.match(desk, /metricsUpdatedAt/);
 
@@ -53,5 +63,28 @@ assert.equal(OWNER_RISK_POLICY_DISPLAY.martingale, false);
   const usedPct = (Math.abs(todayPnl) / equity) * 100;
   assert.ok(usedPct >= OWNER_RISK_POLICY_DISPLAY.dailyLossHaltPercent);
 }
+
+// netDealPnl includes commission + swap; missing profit stays unavailable (NaN).
+{
+  assert.equal(
+    netDealPnl({ profit: 10, commission: -0.5, swap: -0.25, fee: 0 }),
+    9.25,
+  );
+  assert.ok(Number.isNaN(netDealPnl({ commission: -1 })));
+}
+
+// Today window is UTC-bounded (not local timezone).
+{
+  const now = Date.parse("2026-11-09T15:00:00.000Z");
+  const windowMs = periodWindowMs("today", now);
+  assert.equal(windowMs, now - startOfUtcDayMs(now));
+  assert.equal(startOfUtcDayMs(now), Date.parse("2026-11-09T00:00:00.000Z"));
+}
+
+// Risk contract: source must gate Halted on daily halt ceiling and risk lock.
+assert.match(risk, /dailyLossHaltPercent/);
+assert.match(risk, /riskLocked/);
+assert.match(risk, /emergencyStop/);
+assert.match(risk, /available: false/);
 
 console.log("dashboard intelligence contract ok");
