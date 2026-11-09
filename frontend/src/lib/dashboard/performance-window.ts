@@ -3,50 +3,25 @@
  * Never invents metrics — returns NaN / empty when data is insufficient.
  */
 
-import { isTradeDeal } from "@/lib/dashboard/deal-stats";
-import { buildEquitySeries, sparkFromSeries, sumPnlInWindow } from "@/lib/dashboard/derive";
-import { num, str } from "@/lib/desk";
+import { isTradeDeal } from "./deal-stats";
+import { buildEquitySeries, sparkFromSeries, sumPnlInWindow } from "./derive";
+import { num, str } from "../desk";
+import {
+  netDealPnl,
+  periodWindowMs,
+  type PerformancePeriod,
+} from "./performance-math";
 
-export type PerformancePeriod = "today" | "7d" | "30d" | "90d" | "all";
-
-const DAY_MS = 86_400_000;
-
-export const PERFORMANCE_PERIODS: { id: PerformancePeriod; label: string }[] = [
-  { id: "today", label: "Today" },
-  { id: "7d", label: "7 Days" },
-  { id: "30d", label: "30 Days" },
-  { id: "90d", label: "90 Days" },
-  { id: "all", label: "All Time" },
-];
-
-export function periodWindowMs(period: PerformancePeriod, now = Date.now()): number | null {
-  if (period === "all") return null;
-  if (period === "today") {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    return now - d.getTime();
-  }
-  if (period === "7d") return 7 * DAY_MS;
-  if (period === "30d") return 30 * DAY_MS;
-  return 90 * DAY_MS;
-}
+export type { PerformancePeriod };
+export {
+  PERFORMANCE_PERIODS,
+  netDealPnl,
+  periodWindowMs,
+  startOfUtcDayMs,
+} from "./performance-math";
 
 function dealTimeMs(deal: Record<string, unknown>): number {
   return Date.parse(str(deal.time ?? deal.close_time ?? deal.deal_time, ""));
-}
-
-function netDealPnl(deal: Record<string, unknown>): number {
-  const profit = num(deal.profit);
-  if (!Number.isFinite(profit)) return NaN;
-  const commission = num(deal.commission, 0);
-  const swap = num(deal.swap, 0);
-  const fee = num(deal.fee, 0);
-  return (
-    profit +
-    (Number.isFinite(commission) ? commission : 0) +
-    (Number.isFinite(swap) ? swap : 0) +
-    (Number.isFinite(fee) ? fee : 0)
-  );
 }
 
 export type PerformanceWindowStats = {

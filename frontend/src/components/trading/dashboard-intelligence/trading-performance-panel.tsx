@@ -167,8 +167,8 @@ export function TradingPerformancePanel({
         </p>
       ) : stats.insufficient ? (
         <p className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/40 px-3 py-4 text-sm text-[var(--fg-muted)]">
-          Insufficient closed-trade history for this period. Floating P&amp;L is
-          still shown when positions are open.
+          Insufficient closed-trade history for this period. Metrics stay
+          unavailable rather than showing fabricated zeros.
         </p>
       ) : (
         <>
