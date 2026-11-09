@@ -51,8 +51,10 @@ assert.match(signalCard, /signalMt5Ticket/);
 assert.equal(signals.includes("Why this signal"), false);
 assert.match(signals, /useState<StatusFilterId>\("ALL"\)/);
 
-assert.match(broker, /Connect MT5/);
+assert.match(broker, /Connect MT5 Account/);
 assert.match(broker, /Change account/);
+assert.match(broker, /Select a broker/);
+assert.match(broker, /MT5_BROKER_OPTIONS|mt5-broker-catalog/);
 assert.match(broker, /weltradeApi\.exposure/);
 assert.match(
   broker,
@@ -61,6 +63,7 @@ assert.match(
 assert.match(broker, /Use Connect MT5 to claim ownership/);
 assert.match(broker, /Live trading/);
 assert.match(broker, /Password is never displayed/);
+assert.match(broker, /AES-256/);
 assert.equal(broker.includes("password="), false);
 assert.equal(/\bhunter2\b/.test(broker), false);
 
