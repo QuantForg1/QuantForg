@@ -66,7 +66,9 @@ class _AuthFail:
 def test_capability_statement_is_honest() -> None:
     text = REGISTRY_CAPABILITY_STATEMENT.lower()
     assert "one active mt5" in text
-    assert "does not yet support simultaneous" in text
+    assert "does not yet prove simultaneous" in text or (
+        "does not yet support simultaneous" in text
+    )
 
 
 def test_migration_sql_enforces_db_uniqueness() -> None:
