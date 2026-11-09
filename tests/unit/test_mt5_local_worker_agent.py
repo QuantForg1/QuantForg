@@ -146,7 +146,56 @@ def test_cli_status_does_not_require_token(
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["note"].startswith("Status only")
-    assert "password" not in json.dumps(payload).lower()
+    dumped = json.dumps(payload).lower()
+    assert "password" not in dumped
+    assert payload.get("credentials_exposed") is False
+
+
+def test_status_redacts_nested_credential_fields() -> None:
+    from services.mt5_worker_agent.safe_status import public_status_payload
+
+    dirty = {
+        "slots": [
+            {
+                "slot_id": "demo-a",
+                "password": "super-secret",
+                "master_password": "x",
+                "nested": {"access_token": "tok", "ok": True},
+            }
+        ],
+        "error": "login failed password=leaked",
+        "refresh_token": "abc",
+        "queue": {"depth": 0, "password_included": False},
+        "note": "Status only",
+    }
+    clean = public_status_payload(dirty)
+    dumped = json.dumps(clean).lower()
+    assert "password" not in dumped
+    assert "super-secret" not in dumped
+    assert "tok" not in dumped
+    assert "leaked" not in dumped
+    assert "abc" not in dumped
+    assert clean["slots"][0]["slot_id"] == "demo-a"
+    assert clean["slots"][0]["nested"]["ok"] is True
+    assert clean["credentials_exposed"] is False
+    assert clean["error"] == "[redacted]"
+
+
+def test_status_redacts_bearer_and_secret_phrases() -> None:
+    from services.mt5_worker_agent.safe_status import redact_secrets
+
+    payload = {
+        "detail": "Authorization: Bearer eyJhbGciOi",
+        "meta": {"secret=value": "nope", "safe": 1},
+        "items": [{"token": "x", "slot": "a"}],
+    }
+    cleaned = redact_secrets(payload)
+    dumped = json.dumps(cleaned).lower()
+    assert "password" not in dumped
+    assert "bearer" not in dumped or cleaned["detail"] == "[redacted]"
+    assert "token" not in dumped
+    assert cleaned["items"][0]["slot"] == "a"
+    assert cleaned["meta"]["safe"] == 1
 
 
 def test_main_dispatch_prepare_slots(monkeypatch: pytest.MonkeyPatch) -> None:

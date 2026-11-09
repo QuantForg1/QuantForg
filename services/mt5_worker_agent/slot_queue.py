@@ -64,7 +64,7 @@ def enqueue(
         "queued": True,
         "position": position,
         "item": asdict(item),
-        "password_included": False,
+        "credentials_exposed": False,
     }
 
 
@@ -82,7 +82,7 @@ def dequeue_if_capacity() -> dict[str, Any] | None:
         "queued": False,
         "item": asdict(item),
         "reason": "dequeued",
-        "password_included": False,
+        "credentials_exposed": False,
     }
 
 
@@ -92,7 +92,7 @@ def snapshot() -> dict[str, Any]:
     return {
         "depth": len(items),
         "items": items,
-        "password_included": False,
+        "credentials_exposed": False,
     }
 
 

@@ -89,25 +89,30 @@ def cmd_status() -> int:
         host_memory_summary,
         sample_terminal_processes,
     )
+    from services.mt5_worker_agent.safe_status import public_status_payload
     from services.mt5_worker_agent.slot_queue import snapshot as queue_snapshot
 
     sup = LocalWorkerSupervisor()
-    report = {
-        "slots": sup.refresh_status(),
-        "terminals": [
-            {
-                "pid": s.pid,
-                "exe_path": s.exe_path,
-                "working_set_mb": s.working_set_mb,
-                "cpu_seconds": s.cpu_seconds,
-            }
-            for s in sample_terminal_processes()
-        ],
-        "host_memory": host_memory_summary(),
-        "capacity": measure_host_capacity().to_dict(),
-        "queue": queue_snapshot(),
-        "note": "Status only — ready=false until connect-demo succeeds for a slot",
-    }
+    report = public_status_payload(
+        {
+            "slots": sup.refresh_status(),
+            "terminals": [
+                {
+                    "pid": s.pid,
+                    "exe_path": s.exe_path,
+                    "working_set_mb": s.working_set_mb,
+                    "cpu_seconds": s.cpu_seconds,
+                }
+                for s in sample_terminal_processes()
+            ],
+            "host_memory": host_memory_summary(),
+            "capacity": measure_host_capacity().to_dict(),
+            "queue": queue_snapshot(),
+            "note": (
+                "Status only - ready=false until connect-demo succeeds for a slot"
+            ),
+        }
+    )
     print(json.dumps(report, indent=2))
     return 0
 
