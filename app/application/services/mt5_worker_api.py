@@ -349,6 +349,59 @@ class Mt5WorkerApiFacade:
             "workers": [self._public(w) for w in stale],
         }
 
+    def report_verification(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Persist redacted broker verification evidence. Never stores passwords."""
+        from app.domain.broker_connectivity.broker_verification_evidence import (
+            ingest_worker_report,
+            ops_snapshot,
+        )
+
+        entry = ingest_worker_report(payload)
+        try:
+            from app.infrastructure.persistence import (
+                postgres_mt5_broker_verification as ver_store,
+            )
+
+            ver_store.upsert_evidence(entry)
+        except Exception:
+            logger.warning("mt5_broker_verification_pg_persist_failed")
+        return {
+            "ok": True,
+            "password_included": False,
+            "broker_slug": entry.get("broker_slug"),
+            "connectable": bool(entry.get("connectable")),
+            "connection_status": entry.get("connection_status"),
+            "evidence": ops_snapshot(),
+        }
+
+    def ops_summary(self) -> dict[str, Any]:
+        """Admin/ops snapshot of workers + verification evidence (no passwords)."""
+        from app.domain.broker_connectivity.broker_verification_evidence import (
+            ops_snapshot,
+        )
+        from app.domain.broker_connectivity.mt5_server_catalogue import (
+            catalogue_snapshot,
+        )
+
+        assert self.plane.provisioner is not None
+        by_id = getattr(self.plane.provisioner, "_by_id", {})
+        workers = [self._public(w) for w in by_id.values()]
+        hosts = self.plane.capacity.summary()
+        return {
+            "ok": True,
+            "password_included": False,
+            "live_submit_enabled": multi_account_live_submit_allowed(),
+            "hosts": hosts,
+            "workers": workers,
+            "worker_count": len(workers),
+            "verification": ops_snapshot(),
+            "registry": catalogue_snapshot(),
+            "note": (
+                "Windows MT5 workers report heartbeats outbound to Railway. "
+                "Brokers stay connectable=false until verification evidence exists."
+            ),
+        }
+
     def authorize_credentials(self, *, worker_id: UUID) -> dict[str, Any]:
         """Confirm assignment may access vault — never returns plaintext password."""
         worker = self.require_worker(worker_id)

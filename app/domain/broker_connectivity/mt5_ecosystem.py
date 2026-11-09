@@ -196,14 +196,22 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         account_types=("standard", "raw_spread", "zero", "pro", "demo"),
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("exness",),
-        server_hints=("Exness-MT5", "Exness-MT5Real", "Exness-Trial"),
+        # Documented search prefixes only — numbered shards are account-assigned
+        # and MUST be copied from Personal Area (never invented as verified).
+        server_hints=(
+            "Exness-MT5Trial",
+            "Exness-MT5Real",
+            "ExnessSC-MT5Trial",
+            "ExnessSC-MT5Real",
+        ),
         onboarding=_mt5_onboarding(
             brand="Exness",
             website="https://www.exness.com",
-            search_terms="Exness, Exness MT5",
+            search_terms="Exness, Exness-MT5Trial, Exness-MT5Real",
             server_note=(
-                "Use the Personal Area server assignment. Demo and live "
-                "clusters are distinct."
+                "Copy the exact Personal Area server (often Exness-MT5TrialN / "
+                "Exness-MT5RealN). Demo uses Trial; live uses Real. Do not guess "
+                "the shard number."
             ),
         ),
         notes="Priority MT5 retail brand — high leverage accounts still MT5-gated.",
@@ -259,6 +267,36 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         ),
         notes="Priority MT5 retail brand — Razor/Standard map to MT5 accounts.",
         priority=5,
+    ),
+    MT5BrokerProfile(
+        slug="hfm",
+        name="HFM",
+        website="https://www.hfm.com",
+        regions=("Global", "EU", "SA", "KE", "UK"),
+        account_types=("premium", "pro", "cent", "demo"),
+        order_types=("market", "limit", "stop", "stop_limit"),
+        server_match_patterns=("hfm", "hfmarkets", "hotforex"),
+        # Official HFM connect guide names (documented search hints only).
+        server_hints=(
+            "HFMarketsGlobal-Demo",
+            "HFMarketsGlobal-Demo3",
+            "HFMarketsGlobal-Demo4",
+            "HFMarketsGlobal-Live1",
+            "HFMarketsGlobal-Live3",
+            "HFMarkets-Demo",
+            "HFMarkets-Live1",
+        ),
+        onboarding=_mt5_onboarding(
+            brand="HFM",
+            website="https://www.hfm.com",
+            search_terms="HFMarketsGlobal, HFMarkets, HFM",
+            server_note=(
+                "Use the exact server from the HFM welcome email / myHF area "
+                "(e.g. HFMarketsGlobal-Demo). Live and Demo clusters differ."
+            ),
+        ),
+        notes="HFM (HF Markets) MT5 — connectable only after Windows demo verify.",
+        priority=6,
     ),
 )
 

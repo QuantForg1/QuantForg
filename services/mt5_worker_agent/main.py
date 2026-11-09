@@ -7,6 +7,8 @@ Modes:
   status          — print slot + resource status (no secrets)
   supervise       — local supervisor heartbeat loop
   connect-demo    — real MT5 login+verify for one slot (requires env creds)
+  verify-broker   — Exness/HFM/Weltrade demo verify + evidence write
+  reject-demo     — negative credential test (expects failure)
   railway-ping    — outbound HTTPS health check to Railway/API
 
 Never attaches to the LIVE Program Files terminal by default.
@@ -21,6 +23,7 @@ import logging
 import os
 import sys
 import time
+from typing import Any
 
 logging.basicConfig(
     level=logging.INFO,
@@ -163,71 +166,269 @@ def cmd_railway_heartbeat() -> int:
     return 0
 
 
-def cmd_connect_demo(slot_id: str) -> int:
-    """Real MT5 authenticate+verify for one portable slot.
-
-    Requires:
-      QF_DEMO_LOGIN / QF_DEMO_PASSWORD / QF_DEMO_SERVER
-    Never invents success without MetaTrader5 login.
-    """
+def _prepare_slot_terminal(slot_id: str) -> str:
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
-    from services.mt5_worker_agent.mt5_session import authenticate_and_verify
     from services.mt5_worker_agent.slot_manager import (
         prepare_portable_slot,
         start_slot_terminal,
     )
 
-    login_raw = (os.environ.get("QF_DEMO_LOGIN") or "").strip()
-    password = os.environ.get("QF_DEMO_PASSWORD") or ""
-    server = (os.environ.get("QF_DEMO_SERVER") or "").strip()
-    if not login_raw or not password.strip() or not server:
-        logger.error(
-            "Missing QF_DEMO_LOGIN / QF_DEMO_PASSWORD / QF_DEMO_SERVER — "
-            "cannot claim a real authenticated session"
+    prepare_portable_slot(slot_id)
+    start_slot_terminal(slot_id)
+    time.sleep(5)
+    return LocalWorkerSupervisor().terminal_exe_for(slot_id)
+
+
+def _persist_and_report_evidence(payload: dict[str, Any]) -> dict[str, Any]:
+    """Write local evidence and best-effort report to Railway (no passwords)."""
+    from app.domain.broker_connectivity.broker_verification_evidence import (
+        ingest_worker_report,
+    )
+
+    local = ingest_worker_report(payload)
+    railway_result: dict[str, Any] = {"skipped": True}
+    try:
+        from services.mt5_worker_agent.railway_client import (
+            RailwayClientConfig,
+            RailwayWorkerClient,
         )
+
+        client = RailwayWorkerClient(RailwayClientConfig.from_env())
+        railway_result = client.report_verification(payload)
+    except Exception as exc:
+        railway_result = {"ok": False, "error": type(exc).__name__}
+        logger.warning(
+            "railway_verification_report_skipped error=%s", type(exc).__name__
+        )
+    return {"local_evidence": local, "railway": railway_result}
+
+
+def cmd_connect_demo(slot_id: str, broker: str | None = None) -> int:
+    """Real MT5 authenticate+verify for one portable slot.
+
+    Requires broker-specific or generic QF_DEMO_* credentials.
+    Never invents success without MetaTrader5 login.
+    """
+    from services.mt5_worker_agent.broker_demo_adapters import (
+        classify_environment,
+        missing_credential_keys,
+        normalize_broker_slug,
+        resolve_demo_credentials,
+        server_matches_broker,
+        supported_brokers,
+    )
+    from services.mt5_worker_agent.mt5_session import authenticate_and_verify
+
+    slug = normalize_broker_slug(broker) if broker else None
+    if broker and slug is None:
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "authenticated_demo_accounts": 0,
-                    "error": "demo_credentials_not_provided",
-                    "required_env": [
-                        "QF_DEMO_LOGIN",
-                        "QF_DEMO_PASSWORD",
-                        "QF_DEMO_SERVER",
-                    ],
+                    "error": "unsupported_broker",
+                    "supported": list(supported_brokers()),
                 },
                 indent=2,
             )
         )
         return 2
 
-    prepare_portable_slot(slot_id)
-    start_slot_terminal(slot_id)
-    # Give the portable terminal a moment to boot IPC.
-    time.sleep(5)
-    exe = LocalWorkerSupervisor().terminal_exe_for(slot_id)
+    creds = resolve_demo_credentials(slug or "exness") if slug else None
+    if creds is None and not slug:
+        # Generic path for backward-compatible connect-demo.
+        login_raw = (os.environ.get("QF_DEMO_LOGIN") or "").strip()
+        password = os.environ.get("QF_DEMO_PASSWORD") or ""
+        server = (os.environ.get("QF_DEMO_SERVER") or "").strip()
+        if not login_raw or not password.strip() or not server:
+            logger.error(
+                "Missing QF_DEMO_LOGIN / QF_DEMO_PASSWORD / QF_DEMO_SERVER — "
+                "cannot claim a real authenticated session"
+            )
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "authenticated_demo_accounts": 0,
+                        "error": "demo_credentials_not_provided",
+                        "required_env": [
+                            "QF_DEMO_LOGIN",
+                            "QF_DEMO_PASSWORD",
+                            "QF_DEMO_SERVER",
+                        ],
+                        "or_broker_specific": [
+                            "QF_DEMO_EXNESS_*",
+                            "QF_DEMO_HFM_*",
+                            "QF_DEMO_WELTRADE_*",
+                        ],
+                    },
+                    indent=2,
+                )
+            )
+            return 2
+        from services.mt5_worker_agent.broker_demo_adapters import DemoCredentialBundle
+
+        creds = DemoCredentialBundle(
+            broker_slug="weltrade",
+            environment=classify_environment(server),
+            login=login_raw,
+            password=password,
+            server=server,
+        )
+    elif creds is None:
+        missing = missing_credential_keys(slug or "exness")
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "authenticated_demo_accounts": 0,
+                    "broker": slug,
+                    "error": "demo_credentials_not_provided",
+                    "missing_env": missing,
+                    "note": (
+                        "Provide approved demo credentials on the Windows host. "
+                        "Do not invent server names. connectable stays false."
+                    ),
+                },
+                indent=2,
+            )
+        )
+        return 2
+
+    exe = _prepare_slot_terminal(slot_id)
     result = authenticate_and_verify(
         terminal_exe=exe,
-        login=int(login_raw),
-        password=password,
-        server=server,
+        login=int(creds.login),
+        password=creds.password,
+        server=creds.server,
     )
-    payload = {
-        "ok": result.ok,
+    broker_ok = True
+    if slug and result.ok:
+        broker_ok = server_matches_broker(
+            broker_slug=creds.broker_slug, server=result.server or creds.server
+        )
+        result_error = "server_broker_mismatch" if not broker_ok else result.error
+    else:
+        result_error = result.error
+
+    success = bool(result.ok and result.trade_allowed and broker_ok)
+    evidence_payload = {
+        "ok": success,
+        "broker_slug": creds.broker_slug if slug else (slug or "unknown"),
+        "environment": classify_environment(result.server or creds.server),
+        "server": result.server or creds.server,
+        "login": result.login,
         "trade_allowed": result.trade_allowed,
+        "market_data_ok": result.market_data_ok,
+        "balance": result.balance,
+        "equity": result.equity,
+        "currency": result.currency,
+        "symbols_total": result.symbols_total,
+        "quote_symbol": result.quote_symbol,
+        "host_code": os.environ.get("QF_WORKER_HOST_CODE") or "local-windows-1",
+        "slot_id": slot_id,
+        "source": "windows_mt5_demo_verify",
+        "error": result_error if not success else "",
+    }
+    # Only persist evidence when a broker was explicitly targeted.
+    evidence_meta: dict[str, Any] = {}
+    if slug:
+        if not success:
+            evidence_payload["broker_slug"] = slug
+        evidence_meta = _persist_and_report_evidence(evidence_payload)
+
+    payload = {
+        "ok": success,
+        "trade_allowed": result.trade_allowed,
+        "market_data_ok": result.market_data_ok,
         "login": result.login,
         "server": result.server,
         "name": result.name,
         "balance": result.balance,
         "equity": result.equity,
         "currency": result.currency,
-        "error": result.error,
+        "symbols_total": result.symbols_total,
+        "quote_symbol": result.quote_symbol,
+        "quote_bid": result.quote_bid,
+        "error": result_error,
         "slot_id": slot_id,
+        "broker": slug or creds.broker_slug,
+        "environment": evidence_payload["environment"],
+        "connectable_promoted": bool(slug and success),
+        "evidence": evidence_meta,
         "note": "Password not included. Mock sessions are not used here.",
+        "orders_submitted": False,
+        "live_trading_enabled": False,
     }
     print(json.dumps(payload, indent=2))
-    return 0 if result.ok and result.trade_allowed else 1
+    return 0 if success else 1
+
+
+def cmd_verify_broker(broker: str, slot_id: str) -> int:
+    return cmd_connect_demo(slot_id=slot_id, broker=broker)
+
+
+def cmd_reject_demo(broker: str, slot_id: str) -> int:
+    """Negative test: deliberately wrong password must fail closed."""
+    from services.mt5_worker_agent.broker_demo_adapters import (
+        missing_credential_keys,
+        normalize_broker_slug,
+        resolve_demo_credentials,
+        supported_brokers,
+    )
+    from services.mt5_worker_agent.mt5_session import authenticate_and_verify
+
+    slug = normalize_broker_slug(broker)
+    if slug is None:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "unsupported_broker",
+                    "supported": list(supported_brokers()),
+                },
+                indent=2,
+            )
+        )
+        return 2
+    creds = resolve_demo_credentials(slug)
+    if creds is None:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "demo_credentials_not_provided",
+                    "missing_env": missing_credential_keys(slug),
+                    "note": (
+                        "Cannot run invalid-credential rejection "
+                        "without a real login/server."
+                    ),
+                },
+                indent=2,
+            )
+        )
+        return 2
+    exe = _prepare_slot_terminal(slot_id)
+    result = authenticate_and_verify(
+        terminal_exe=exe,
+        login=int(creds.login),
+        password=creds.password + "__invalid__",
+        server=creds.server,
+    )
+    rejected = not result.ok
+    print(
+        json.dumps(
+            {
+                "ok": rejected,
+                "broker": slug,
+                "invalid_credentials_rejected": rejected,
+                "error": result.error,
+                "password_included": False,
+                "slot_id": slot_id,
+            },
+            indent=2,
+        )
+    )
+    return 0 if rejected else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -245,6 +446,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("railway-heartbeat")
     p_conn = sub.add_parser("connect-demo")
     p_conn.add_argument("--slot", default="demo-a")
+    p_conn.add_argument(
+        "--broker",
+        default=None,
+        help="Optional broker slug (exness|hfm|weltrade). Writes evidence when set.",
+    )
+    p_verify = sub.add_parser("verify-broker")
+    p_verify.add_argument(
+        "--broker", required=True, choices=["exness", "hfm", "weltrade"]
+    )
+    p_verify.add_argument("--slot", default="demo-a")
+    p_reject = sub.add_parser("reject-demo")
+    p_reject.add_argument(
+        "--broker", required=True, choices=["exness", "hfm", "weltrade"]
+    )
+    p_reject.add_argument("--slot", default="demo-a")
     return parser
 
 
@@ -274,7 +490,11 @@ def main(argv: list[str] | None = None) -> int:
     if command == "railway-heartbeat":
         return cmd_railway_heartbeat()
     if command == "connect-demo":
-        return cmd_connect_demo(str(args.slot))
+        return cmd_connect_demo(str(args.slot), broker=getattr(args, "broker", None))
+    if command == "verify-broker":
+        return cmd_verify_broker(str(args.broker), str(args.slot))
+    if command == "reject-demo":
+        return cmd_reject_demo(str(args.broker), str(args.slot))
     parser.error(f"unknown command: {command}")
     return 2
 

@@ -112,8 +112,8 @@ class TestCertificationRun:
         )
         assert out["session"]["connected"] is False
         assert len(out["certified"]) == 0
-        assert len(out["pending"]) == 5
-        assert len(store.history()) == 5
+        assert len(out["pending"]) == 6
+        assert len(store.history()) == 6
         assert all(
             b["state"] == CertificationState.PENDING_SESSION.value
             for b in out["brokers"]
@@ -181,7 +181,7 @@ class TestBrokerConnectivityCertificationApi:
         svc = BrokerConnectivityService.create(mt5=None, paper_available=False)
         dash = svc.certification_dashboard()
         assert dash["title"]
-        assert len(dash["pending_brokers"]) == 5
+        assert len(dash["pending_brokers"]) == 6
         assert dash["certified_brokers"] == []
         run = svc.run_certification(tester="ops")
         assert run["pending"]

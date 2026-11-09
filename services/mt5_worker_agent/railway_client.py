@@ -201,3 +201,21 @@ class RailwayWorkerClient:
 
     def scan_stale(self) -> dict[str, Any]:
         return self._request("POST", "/api/v1/mt5-workers/stale/scan", {})
+
+    def report_verification(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Report redacted demo/live verification evidence. Never send passwords."""
+        safe = {
+            k: v
+            for k, v in dict(payload or {}).items()
+            if "password" not in str(k).lower()
+            and "secret" not in str(k).lower()
+            and "token" not in str(k).lower()
+        }
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/verification/report",
+            safe,
+        )
+
+    def ops_summary(self) -> dict[str, Any]:
+        return self._request("GET", "/api/v1/mt5-workers/ops/summary")

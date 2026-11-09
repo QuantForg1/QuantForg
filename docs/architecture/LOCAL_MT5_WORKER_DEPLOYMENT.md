@@ -51,14 +51,23 @@ poetry run python -m services.mt5_worker_agent.main status
 ### Real demo authentication (not mock)
 
 ```powershell
+# Generic one-shot
 $env:QF_DEMO_LOGIN="..."
 $env:QF_DEMO_PASSWORD="..."
 $env:QF_DEMO_SERVER="..."
 poetry run python -m services.mt5_worker_agent.main connect-demo --slot demo-a
+
+# Broker-specific (writes verification evidence; may flip connectable)
+# QF_DEMO_EXNESS_LOGIN / PASSWORD / SERVER  — exact Personal Area server
+# QF_DEMO_HFM_LOGIN / PASSWORD / SERVER     — exact myHF server
+.\deploy\mt5_worker_agent\verify_demo_broker.ps1 -Broker exness -Slot demo-a
+.\deploy\mt5_worker_agent\verify_demo_broker.ps1 -Broker hfm -Slot demo-b
+.\deploy\mt5_worker_agent\health_check.ps1
 ```
 
 If credentials are absent, the command exits non-zero and reports
 `demo_credentials_not_provided` — it does **not** invent success.
+Exness/HFM stay `connectable=false` until a real portable MT5 login succeeds.
 
 ## Railway communication
 
