@@ -165,7 +165,7 @@ def test_status_redacts_nested_credential_fields() -> None:
         ],
         "error": "login failed password=leaked",
         "refresh_token": "abc",
-        "queue": {"depth": 0, "password_included": False},
+        "queue": {"depth": 0, "credentials_exposed": False},
         "note": "Status only",
     }
     clean = public_status_payload(dirty)

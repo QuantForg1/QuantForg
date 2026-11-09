@@ -105,7 +105,7 @@ def build_verification_matrix() -> dict[str, Any]:
     return {
         "brokers": rows,
         "evidence_updated_at": store.get("updated_at"),
-        "password_included": False,
+        "credentials_exposed": False,
         "live_orders_submitted": False,
         "note": (
             "PASS requires a real Windows MT5 authenticate+verify. "

@@ -34,7 +34,7 @@ def seal_credential_material(
     if not password.strip():
         return {
             "authorized": False,
-            "password_included": False,
+            "credentials_exposed": False,
             "sealed": False,
             "error": "credential_unavailable",
         }
@@ -50,7 +50,7 @@ def seal_credential_material(
     token = f.encrypt(payload).decode("ascii")
     return {
         "authorized": True,
-        "password_included": False,
+        "credentials_exposed": False,
         "sealed": True,
         "envelope_version": 1,
         "worker_id": str(worker_id),

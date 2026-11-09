@@ -77,7 +77,8 @@ def test_resolve_exness_bundle(monkeypatch) -> None:
     assert bundle.broker_slug == "exness"
     assert bundle.server == "Exness-MT5Trial9"
     pub = bundle.public_dict()
-    assert pub.get("password_included") == "false"
+    assert pub.get("auth_material_present") == "false"
+    assert "password" not in str(pub).lower()
     assert "lab-only" not in str(pub)
 
 

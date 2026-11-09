@@ -307,7 +307,7 @@ def ops_snapshot(path: Path | None = None) -> dict[str, Any]:
         "updated_at": store.get("updated_at"),
         "brokers": brokers,
         "connectable_slugs": sorted(connectable_slugs_from_evidence(path)),
-        "password_included": False,
+        "credentials_exposed": False,
         "note": (
             "Evidence is written only after a real Windows MT5 authenticate+verify. "
             "Passwords are never stored."

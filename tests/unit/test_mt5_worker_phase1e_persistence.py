@@ -29,7 +29,7 @@ def test_seal_unwrap_roundtrip_no_password_field() -> None:
         password="demo-secret",
     )
     assert sealed["authorized"] is True
-    assert sealed["password_included"] is False
+    assert sealed["credentials_exposed"] is False
     assert "password" not in sealed
     assert "demo-secret" not in str(sealed)
     opened = unwrap_credential_material(
@@ -61,7 +61,7 @@ def test_claim_without_demo_env_does_not_invent_success(
     )
     assert claim["ok"] is True
     assert claim["sealed"] is False
-    assert claim["password_included"] is False
+    assert claim["credentials_exposed"] is False
     assert claim["error"] == "credential_material_unavailable"
 
 
@@ -76,7 +76,7 @@ def test_claim_with_lab_env_issues_sealed_envelope(
     wid = __import__("uuid").UUID(reg["worker_id"])
     claim = api.claim_sealed_credentials(worker_id=wid)
     assert claim["sealed"] is True
-    assert claim["password_included"] is False
+    assert claim["credentials_exposed"] is False
     assert "lab-only-secret" not in str(claim)
     opened = unwrap_credential_material(
         service_token=TOKEN,

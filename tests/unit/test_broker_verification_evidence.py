@@ -56,7 +56,7 @@ def test_failure_does_not_promote_connectable(tmp_path: Path) -> None:
     assert connectable_slugs_from_evidence(path) == set()
     entry = load_evidence(path)["brokers"]["hfm"]
     assert entry["connectable"] is False
-    assert "password" not in str(entry).lower() or "password_included" in str(entry)
+    assert "password" not in str(entry).lower()
 
 
 def test_ingest_strips_password_keys(tmp_path: Path) -> None:
