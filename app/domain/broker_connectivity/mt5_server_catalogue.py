@@ -95,27 +95,25 @@ def broker_registry_rows() -> list[dict[str, Any]]:
         if any(r["slug"] == slug for r in rows):
             continue
         verified = slug in evidence_connectable
-        ev = evidence_for_broker(slug) if verified else None
+        stub_ev = evidence_for_broker(slug) if verified else None
+        if verified and stub_ev is not None:
+            status = str(stub_ev.get("connection_status") or "demo_verified")
+            notes = "Windows MT5 worker verified session."
+        else:
+            status = "not_verified"
+            notes = (
+                "Documented MT5 brand only. Awaiting Windows gateway "
+                "verification before connect is enabled."
+            )
         rows.append(
             {
                 "slug": slug,
                 "name": name,
                 "website": website,
                 "platform": "mt5",
-                "connection_status": (
-                    str((ev or {}).get("connection_status") or "demo_verified")
-                    if verified
-                    else "not_verified"
-                ),
+                "connection_status": status,
                 "connectable": verified,
-                "notes": (
-                    "Windows MT5 worker verified session."
-                    if verified
-                    else (
-                        "Documented MT5 brand only. Awaiting Windows gateway "
-                        "verification before connect is enabled."
-                    )
-                ),
+                "notes": notes,
                 "regions": ["Global"],
                 "priority": 90,
             }

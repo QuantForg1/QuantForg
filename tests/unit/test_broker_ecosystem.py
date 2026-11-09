@@ -27,6 +27,7 @@ class TestMT5EcosystemProfiles:
             "exness",
             "ic-markets",
             "pepperstone",
+            "hfm",
         }
 
     def test_all_mt5_platform(self) -> None:
@@ -72,7 +73,7 @@ class TestCompatibilitySuite:
 
         suite = run_compatibility_suite(invoke=invoke, paper_available=False)
         assert suite["session"]["connected"] is False
-        assert len(suite["matrix"]) == 5
+        assert len(suite["matrix"]) == 6
         for row in suite["matrix"]:
             assert row["login"] == "pending_session"
             assert row["quotes"] == "pending_session"
@@ -120,7 +121,7 @@ class TestBrokerConnectivityServiceEcosystem:
         svc = BrokerConnectivityService.create(mt5=None, paper_available=False)
         eco = svc.ecosystem()
         assert eco["version"] == "1.1"
-        assert len(eco["items"]) == 5
+        assert len(eco["items"]) == 6
         guide = svc.onboarding("pepperstone")
         assert guide is not None
         assert guide["slug"] == "pepperstone"

@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 import time
+from typing import Any
 
 logging.basicConfig(
     level=logging.INFO,
@@ -165,7 +166,7 @@ def cmd_railway_heartbeat() -> int:
     return 0
 
 
-def _prepare_slot_terminal(slot_id: str):
+def _prepare_slot_terminal(slot_id: str) -> str:
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
     from services.mt5_worker_agent.slot_manager import (
         prepare_portable_slot,
@@ -178,14 +179,14 @@ def _prepare_slot_terminal(slot_id: str):
     return LocalWorkerSupervisor().terminal_exe_for(slot_id)
 
 
-def _persist_and_report_evidence(payload: dict) -> dict:
+def _persist_and_report_evidence(payload: dict[str, Any]) -> dict[str, Any]:
     """Write local evidence and best-effort report to Railway (no passwords)."""
     from app.domain.broker_connectivity.broker_verification_evidence import (
         ingest_worker_report,
     )
 
     local = ingest_worker_report(payload)
-    railway_result: dict = {"skipped": True}
+    railway_result: dict[str, Any] = {"skipped": True}
     try:
         from services.mt5_worker_agent.railway_client import (
             RailwayClientConfig,
@@ -329,7 +330,7 @@ def cmd_connect_demo(slot_id: str, broker: str | None = None) -> int:
         "error": result_error if not success else "",
     }
     # Only persist evidence when a broker was explicitly targeted.
-    evidence_meta: dict = {}
+    evidence_meta: dict[str, Any] = {}
     if slug:
         if not success:
             evidence_payload["broker_slug"] = slug

@@ -53,8 +53,12 @@ def normalize_broker_slug(raw: str | None) -> BrokerSlug | None:
     code = (raw or "").strip().lower().replace("_", "-")
     if code in {"hf-markets", "hfmarkets", "hotforex"}:
         code = "hfm"
-    if code in _SUPPORTED:
-        return code  # type: ignore[return-value]
+    if code == "exness":
+        return "exness"
+    if code == "hfm":
+        return "hfm"
+    if code == "weltrade":
+        return "weltrade"
     return None
 
 
