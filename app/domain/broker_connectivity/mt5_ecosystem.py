@@ -298,6 +298,35 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         notes="HFM (HF Markets) MT5 — connectable only after Windows demo verify.",
         priority=6,
     ),
+    MT5BrokerProfile(
+        slug="fp-markets",
+        name="FP Markets",
+        website="https://www.fpmarkets.com",
+        regions=("Global", "AU", "SC", "KE"),
+        account_types=("raw", "standard", "demo"),
+        order_types=("market", "limit", "stop", "stop_limit"),
+        server_match_patterns=("fpmarkets", "firstprudential"),
+        # Documented search hints only — copy exact portal/email server.
+        server_hints=(
+            "FPMarkets-Demo",
+            "FPMarkets-Live",
+            "FPMarketsSC-Demo",
+            "FPMarketsSC-Live",
+            "FPMarketsKE-Demo",
+            "FPMarketsKE-Live",
+        ),
+        onboarding=_mt5_onboarding(
+            brand="FP Markets",
+            website="https://www.fpmarkets.com",
+            search_terms="FPMarkets, FPMarketsSC, FPMarketsKE",
+            server_note=(
+                "Use the exact server from the FP Markets registration email / "
+                "Client Portal. Demo and Live names differ by entity."
+            ),
+        ),
+        notes="FP Markets MT5 — connectable only after Windows verify.",
+        priority=7,
+    ),
 )
 
 

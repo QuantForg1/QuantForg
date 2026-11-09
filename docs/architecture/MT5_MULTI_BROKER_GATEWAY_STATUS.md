@@ -1,84 +1,71 @@
 # MT5 Multi-Broker Gateway — implementation status
 
 **Date:** 2026-11-09  
-**Scope:** Windows MT5 multi-broker gateway — Exness + HFM demo first
+**Scope:** Six-broker MT5 connectivity on the **existing Windows host** (no new VPS)
 
-## What is production-verified today
-
-| Capability | Status |
-|---|---|
-| Weltrade connect via Windows MT5 Gateway | **Operational** (existing Railway → Windows path) |
-| Credential encryption at rest (AES-256-GCM) | **Implemented** (`core/security/credential_encryption.py`, `BrokerSecretStore`) |
-| Account ownership / claim / reconnect / disconnect | **Unchanged** existing Weltrade APIs |
-| Robot / OMS / risk / kill switches | **Unchanged** — no second trading engine |
-| Worker control plane (Railway) | **Present** (`/api/v1/mt5-workers/*`) |
-| Local Windows portable slots | **Prepared** on developer host (`demo-a`, `demo-b`) |
-| Verification evidence gate | **Implemented** — `connectable=true` only after real Windows verify |
-
-## Broker verification matrix
-
-| Broker | Registry status | Demo verified (real MT5) | Live verified | Connectable |
-|---|---|---|---|---|
-| Weltrade | `production_verified` | Yes (profile + gateway) | Yes (production gateway) | **Yes** |
-| Exness | `not_verified` | **No** — demo credentials not provided | No | **No** |
-| HFM | `not_verified` | **No** — demo credentials not provided | No | **No** |
-| IC Markets | `not_verified` | No | No | No |
-| Pepperstone | `not_verified` | No | No | No |
-| FP Markets | `not_verified` | No | No | No |
-| XM | `not_verified` | No | No | No |
-
-Connect is disabled in the Broker Accounts UI for any broker with `connectable=false`.
-
-## Windows VPS / host decision
+## Infrastructure decision
 
 | Option | Verdict |
 |---|---|
-| Railway Linux containers | **Cannot** run `terminal64.exe` |
-| Existing developer Windows host | **Reusable** for portable demo slots (tight RAM/disk) |
-| Dedicated Windows VPS | **Required** before multi-user production scale; not provisioned in this phase |
+| New Windows VPS | **Not provisioned** (explicit product decision) |
+| Existing Windows host | **Retained** — portable slots + capacity soft-cap |
+| Railway Linux | Cannot run `terminal64.exe` |
+| Weltrade LIVE Program Files terminal | **Protected** — workers refuse this path |
 
-LIVE Program Files Weltrade terminal must **not** be used by multi-broker workers.
+### Measured capacity (existing host)
 
-## Authenticated demo accounts (this host)
-
-| Metric | Value |
+| Metric | Observed |
 |---|---|
-| `QF_DEMO_EXNESS_*` configured | No |
-| `QF_DEMO_HFM_*` configured | No |
-| Authenticated Exness demo sessions | **0** |
-| Authenticated HFM demo sessions | **0** |
-| Orders submitted | **0** (LIVE submit remains off) |
+| CPU logical | 4 |
+| RAM | ~8 GB (free often ~2 GB with LIVE terminal) |
+| Disk free | ~3–4 GB (tight) |
+| Prepared portable slots | `demo-a`, `demo-b` (`demo-c` optional) |
+| Soft concurrent portable cap | **2** (`QF_MT5_MAX_CONCURRENT_PORTABLES`) |
+| Queue | FIFO when capacity exhausted |
 
-## Documented search hints (NOT verified servers)
+## Production-verified
 
-Copied from broker documentation for admin diagnostics only:
+| Capability | Status |
+|---|---|
+| Weltrade Demo + Live | **Operational** |
+| Credential encryption | AES-256-GCM / existing secret store |
+| Robot / OMS / kill switches | **Unchanged** — LIVE multi-account submit **off** |
+| Evidence gate | `connectable=true` only after real Windows verify |
 
-- **Exness:** `Exness-MT5Trial*`, `Exness-MT5Real*` (exact shard from Personal Area)
-- **HFM:** `HFMarketsGlobal-Demo`, `HFMarketsGlobal-Live1`, … (exact name from myHF / welcome email)
+## Six-broker verification matrix
 
-These hints never appear as verified production servers until a Windows login returns `account_info.server`.
+| Broker | Demo | Live | Market data | Recovery | Connectable |
+|---|---|---|---|---|---|
+| Exness | **BLOCKED** (no approved creds) | **BLOCKED** | BLOCKED | BLOCKED | No |
+| HFM | **BLOCKED** | **BLOCKED** | BLOCKED | BLOCKED | No |
+| IC Markets | **BLOCKED** | **BLOCKED** | BLOCKED | BLOCKED | No |
+| Pepperstone | **BLOCKED** | **BLOCKED** | BLOCKED | BLOCKED | No |
+| FP Markets | **BLOCKED** | **BLOCKED** | BLOCKED | BLOCKED | No |
+| XM | **BLOCKED** | **BLOCKED** | BLOCKED | BLOCKED | No |
 
-## How to verify a demo (operator)
+BLOCKED = approved credentials / verified session missing — **not** simulated success.
+
+Documented search hints exist for admin/discovery only. Verified selectable servers remain empty until Windows login returns `account_info.server`.
+
+## Operator verify (when credentials are approved)
 
 ```powershell
-# local.env: QF_DEMO_EXNESS_LOGIN / PASSWORD / SERVER  (exact PA server)
 .\deploy\mt5_worker_agent\verify_demo_broker.ps1 -Broker exness -Slot demo-a -AlsoRejectTest
-.\deploy\mt5_worker_agent\verify_demo_broker.ps1 -Broker hfm -Slot demo-b -AlsoRejectTest
+poetry run python -m services.mt5_worker_agent.main verify-broker --broker ic-markets --slot demo-b --env demo
+poetry run python -m services.mt5_worker_agent.main capacity
 ```
-
-On success, evidence is written and the broker may flip `connectable=true`. On missing credentials the command exits non-zero with `demo_credentials_not_provided`.
 
 ## API surfaces
 
-- `GET /api/v1/broker-connectivity/mt5-broker-registry`
-- `GET /api/v1/broker-connectivity/mt5-servers?broker=<slug>`
-- `GET /api/v1/broker-connectivity/mt5-worker-ops` (Admin)
-- `POST /api/v1/mt5-workers/verification/report` (worker token)
-- `GET /api/v1/mt5-workers/ops/summary` (worker token)
+- `GET /broker-connectivity/mt5-broker-registry`
+- `GET /broker-connectivity/mt5-servers?broker=` (verified + documented hints + demo/live split)
+- `GET /broker-connectivity/mt5-verification-matrix`
+- `GET /broker-connectivity/mt5-worker-ops`
+- Worker: `capacity`, `queue-status`, `verify-broker --env demo|live`
 
 ## Remaining dependencies
 
-1. Approved Exness + HFM **demo** credentials (login, master password, exact server).
-2. Successful `verify-broker` on an isolated portable terminal.
-3. Optional dedicated Windows VPS when scaling beyond this host.
-4. Additive migration `20261109193000_mt5_broker_verification_evidence.sql` applied when durable API evidence is required.
+1. Approved Demo (+ optional Live auth) credentials per broker with **exact** server names.
+2. Successful `verify-broker` on isolated portable terminals (respect capacity=2).
+3. Optional apply of `20261109193000_mt5_broker_verification_evidence.sql` for durable Postgres evidence.
+4. Larger concurrent multi-user scale still needs more host RAM/disk — **without** claiming unlimited capacity.
