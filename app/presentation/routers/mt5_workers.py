@@ -139,3 +139,13 @@ async def authorize_credentials(
 ) -> dict[str, Any]:
     """Assignment check only — never returns decrypted passwords."""
     return api.authorize_credentials(worker_id=body.worker_id)
+
+
+@router.post("/credentials/claim")
+async def claim_sealed_credentials(
+    body: WorkerIdRequest,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> dict[str, Any]:
+    """Issue opaque sealed envelope for assigned worker. No plaintext password field."""
+    return api.claim_sealed_credentials(worker_id=body.worker_id)

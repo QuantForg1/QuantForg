@@ -1,20 +1,22 @@
-"""HTTP-facing MT5 worker control-plane facade (Phase 1C).
+"""HTTP-facing MT5 worker control-plane facade (Phase 1C/1E).
 
-Process-durable singleton used by Railway routes. Does not enable LIVE
-multi-account submit. Passwords are never stored or returned.
+Process + optional PostgreSQL durable state. Does not enable LIVE
+multi-account submit. Passwords are never stored or returned in plaintext.
 """
 
 from __future__ import annotations
 
 import contextlib
 import logging
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
 from uuid import UUID, uuid5
 
 from app.application.services.mt5_worker_control_plane import Mt5WorkerControlPlane
+from app.application.services.mt5_worker_credential_seal import seal_credential_material
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import NotFoundError, ValidationError
 from app.domain.multi_account.feature_gates import multi_account_live_submit_allowed
@@ -42,7 +44,7 @@ def _slot_key(host_code: str, slot_id: str) -> str:
 
 @dataclass
 class Mt5WorkerApiFacade:
-    """Durable (process-lifetime) worker registration / heartbeat / revoke API."""
+    """Durable worker registration / heartbeat / revoke API."""
 
     plane: Mt5WorkerControlPlane
     stale_after: timedelta = field(default_factory=lambda: timedelta(seconds=45))
@@ -50,10 +52,12 @@ class Mt5WorkerApiFacade:
     _slot_to_worker: dict[str, UUID] = field(default_factory=dict)
     _worker_to_slot: dict[UUID, str] = field(default_factory=dict)
     _revoked_workers: set[UUID] = field(default_factory=set)
+    _hydrated: bool = False
 
     def __post_init__(self) -> None:
         assert self.plane.supervisor is not None
         self.plane.supervisor.stale_after = self.stale_after
+        self.hydrate_from_postgres()
 
     def _public(self, worker: WorkerRuntime) -> dict[str, Any]:
         status = worker.public_status()
@@ -134,6 +138,7 @@ class Mt5WorkerApiFacade:
                         worker.worker_id,
                         slot,
                     )
+                    self._persist(worker)
                     return {"ok": True, "idempotent": True, **self._public(worker)}
 
             lab_user, lab_acct = lab_ids_for_slot(host_code=host_code, slot_id=slot)
@@ -160,6 +165,7 @@ class Mt5WorkerApiFacade:
             self._slot_to_worker[key] = worker.worker_id
             self._worker_to_slot[worker.worker_id] = key
             self._revoked_workers.discard(worker.worker_id)
+        self._persist(worker)
         logger.info(
             "mt5_worker_registered worker_id=%s host=%s slot=%s",
             worker.worker_id,
@@ -245,6 +251,7 @@ class Mt5WorkerApiFacade:
             except ValueError:
                 pass
         _ = ready  # informational; READY still requires verify path
+        self._persist(updated)
         return {"ok": True, "idempotent": True, **self._public(updated)}
 
     def report_health(
@@ -274,6 +281,7 @@ class Mt5WorkerApiFacade:
             healthy=healthy,
         )
         hb = self.plane.heartbeat(worker_id=worker.worker_id, user_id=worker.user_id)
+        self._persist(hb)
         return {
             "ok": True,
             **self._public(hb),
@@ -286,6 +294,7 @@ class Mt5WorkerApiFacade:
         stopped = self.plane.provisioner.stop(  # type: ignore[union-attr]
             worker_id=worker.worker_id, user_id=worker.user_id
         )
+        self._persist(stopped)
         return {"ok": True, **self._public(stopped)}
 
     def revoke(self, *, worker_id: UUID) -> dict[str, Any]:
@@ -303,6 +312,17 @@ class Mt5WorkerApiFacade:
             key = self._worker_to_slot.pop(worker.worker_id, None)
             if key:
                 self._slot_to_worker.pop(key, None)
+        try:
+            from app.infrastructure.persistence import (
+                postgres_mt5_worker_control_plane as cp_store,
+            )
+
+            mark_revoked = cp_store.mark_revoked
+
+            mark_revoked(worker.worker_id)
+        except Exception:
+            logger.warning("mt5_worker_cp_mark_revoked_failed")
+        self._persist(revoked)
         logger.info("mt5_worker_revoked worker_id=%s", worker.worker_id)
         return {"ok": True, **self._public(revoked)}
 
@@ -312,6 +332,7 @@ class Mt5WorkerApiFacade:
         updated, delay = self.plane.supervisor.request_reconnect(
             worker_id=worker.worker_id, user_id=worker.user_id
         )
+        self._persist(updated)
         return {
             "ok": True,
             "reconnect_backoff_seconds": delay,
@@ -320,6 +341,8 @@ class Mt5WorkerApiFacade:
 
     def scan_stale(self, *, now: datetime | None = None) -> dict[str, Any]:
         stale = self.plane.scan_stale(now=now)
+        for worker in stale:
+            self._persist(worker)
         return {
             "ok": True,
             "stale_count": len(stale),
@@ -327,7 +350,7 @@ class Mt5WorkerApiFacade:
         }
 
     def authorize_credentials(self, *, worker_id: UUID) -> dict[str, Any]:
-        """Confirm assignment may access vault later — never returns password."""
+        """Confirm assignment may access vault — never returns plaintext password."""
         worker = self.require_worker(worker_id)
         return {
             "ok": True,
@@ -341,10 +364,186 @@ class Mt5WorkerApiFacade:
             "note": "No decrypted credential payload is included in this response.",
         }
 
+    def claim_sealed_credentials(self, *, worker_id: UUID) -> dict[str, Any]:
+        """Issue a sealed envelope for the assigned worker only.
+
+        Plaintext passwords are never present as a ``password`` JSON field.
+        Lab mode uses ``QF_DEMO_*`` on the API host only when explicitly set
+        for integration; production vault unwrap is preferred when wired.
+        """
+        worker = self.require_worker(worker_id)
+        token = (self.plane.service_token or "").strip()
+        if len(token) < 16:
+            raise AuthorizationError(
+                "Worker credential seal not configured",
+                code="worker_seal_not_configured",
+            )
+        # Prefer verified login/server; fall back to env demo material for lab.
+        login = (
+            worker.account_login_verified
+            or (os.environ.get("QF_DEMO_LOGIN") or "").strip()
+        )
+        server = (
+            worker.server_verified or (os.environ.get("QF_DEMO_SERVER") or "").strip()
+        )
+        secret = (os.environ.get("QF_DEMO_PASSWORD") or "").strip()
+        # Never log secret. If no material, authorize=false without inventing.
+        if not login or not server or not secret:
+            return {
+                "ok": True,
+                "authorized": True,
+                "password_included": False,
+                "sealed": False,
+                "worker_id": str(worker.worker_id),
+                "broker_account_id": str(worker.broker_account_id),
+                "error": "credential_material_unavailable",
+                "note": (
+                    "No sealed envelope issued. Provide authorized vault material "
+                    "or QF_DEMO_* on the API for lab-only tests. NOT a successful "
+                    "MT5 authentication proof."
+                ),
+            }
+        sealed = seal_credential_material(
+            service_token=token,
+            worker_id=worker.worker_id,
+            login=login,
+            server=server,
+            password=secret,
+        )
+        return {"ok": True, **sealed}
+
+    def hydrate_from_postgres(self) -> int:
+        """Restore in-memory indexes from durable table when available."""
+        if self._hydrated:
+            return 0
+        self._hydrated = True
+        try:
+            from app.infrastructure.persistence import (
+                postgres_mt5_worker_control_plane as cp_store,
+            )
+
+            load_all_workers = cp_store.load_all_workers
+        except Exception:
+            return 0
+        try:
+            rows = load_all_workers()
+        except Exception:
+            logger.warning("mt5_worker_cp_hydrate_failed")
+            return 0
+        restored = 0
+        assert self.plane.provisioner is not None
+        for row in rows:
+            try:
+                worker_id = UUID(str(row["worker_id"]))
+                host_code = str(row.get("host_code") or "")
+                slot_id = str(row.get("slot_id") or "")
+                key = _slot_key(host_code, slot_id)
+                user_id = (
+                    UUID(str(row["user_id"]))
+                    if row.get("user_id")
+                    else uuid5(_LAB_NS, f"orphan-user:{worker_id}")
+                )
+                account_id = (
+                    UUID(str(row["broker_account_id"]))
+                    if row.get("broker_account_id")
+                    else uuid5(_LAB_NS, f"orphan-acct:{worker_id}")
+                )
+                host_id = (
+                    UUID(str(row["host_id"]))
+                    if row.get("host_id")
+                    else self.plane.capacity.ensure_host(
+                        host_code=host_code or "unknown-host", max_terminals=8
+                    ).host_id
+                )
+                lifecycle = WorkerLifecycleState(
+                    str(row.get("lifecycle_status") or "pending")
+                )
+                worker = WorkerRuntime(
+                    worker_id=worker_id,
+                    worker_code=f"restored-{slot_id or worker_id.hex[:8]}",
+                    user_id=user_id,
+                    broker_account_id=account_id,
+                    host_id=host_id,
+                    lifecycle=lifecycle,
+                    runtime_session_id=str(row.get("runtime_session_id") or ""),
+                    last_heartbeat_at=row.get("last_heartbeat_at"),
+                    last_health_check_at=row.get("last_health_check_at"),
+                    last_error=str(row.get("last_error") or ""),
+                    attempt_count=int(row.get("attempt_count") or 0),
+                    trade_allowed=row.get("trade_allowed"),
+                    account_login_verified=str(row.get("account_login_verified") or ""),
+                    server_verified=str(row.get("server_verified") or ""),
+                    metadata={"restored": True, "slot_id": slot_id},
+                )
+                self.plane.provisioner._by_id[worker_id] = worker
+                if (
+                    bool(row.get("revoked"))
+                    or lifecycle is WorkerLifecycleState.REVOKED
+                ):
+                    self._revoked_workers.add(worker_id)
+                else:
+                    self._slot_to_worker[key] = worker_id
+                    self._worker_to_slot[worker_id] = key
+                    if lifecycle not in {
+                        WorkerLifecycleState.STOPPED,
+                        WorkerLifecycleState.REVOKED,
+                    }:
+                        self.plane.provisioner._active_by_user[user_id] = worker_id
+                        self.plane.provisioner._active_by_account[account_id] = (
+                            worker_id
+                        )
+                restored += 1
+            except Exception:
+                logger.exception("mt5_worker_cp_hydrate_row_failed")
+        if restored:
+            logger.info("mt5_worker_cp_hydrated count=%s", restored)
+        return restored
+
+    def _persist(self, worker: WorkerRuntime) -> None:
+        slot = self._worker_to_slot.get(worker.worker_id, "")
+        host_code = ""
+        slot_id = ""
+        if "::" in slot:
+            host_code, slot_id = slot.split("::", 1)
+        try:
+            from app.infrastructure.persistence import (
+                postgres_mt5_worker_control_plane as cp_store,
+            )
+
+            upsert_worker_row = cp_store.upsert_worker_row
+
+            upsert_worker_row(
+                {
+                    "worker_id": str(worker.worker_id),
+                    "host_code": host_code
+                    or str(worker.metadata.get("host_code") or "unknown"),
+                    "slot_id": slot_id
+                    or str(worker.metadata.get("slot_id") or "unknown"),
+                    "host_id": str(worker.host_id),
+                    "user_id": str(worker.user_id),
+                    "broker_account_id": str(worker.broker_account_id),
+                    "lifecycle_status": worker.lifecycle.value,
+                    "runtime_session_id": worker.runtime_session_id,
+                    "platform": str(worker.metadata.get("platform") or "windows-local"),
+                    "last_heartbeat_at": worker.last_heartbeat_at,
+                    "last_health_check_at": worker.last_health_check_at,
+                    "last_error": worker.last_error,
+                    "attempt_count": worker.attempt_count,
+                    "trade_allowed": worker.trade_allowed,
+                    "account_login_verified": worker.account_login_verified,
+                    "server_verified": worker.server_verified,
+                    "revoked": worker.worker_id in self._revoked_workers
+                    or worker.lifecycle is WorkerLifecycleState.REVOKED,
+                    "metadata": worker.metadata,
+                }
+            )
+        except Exception:
+            logger.warning(
+                "mt5_worker_cp_persist_failed worker_id=%s", worker.worker_id
+            )
+
 
 def _with_metadata(worker: WorkerRuntime, metadata: dict[str, Any]) -> WorkerRuntime:
-    from dataclasses import replace
-
     from app.domain.multi_account.execution_worker_registry import (
         assert_tenant_safe_worker_metadata,
     )
