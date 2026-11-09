@@ -130,6 +130,63 @@ async def mt5_servers(
     }
 
 
+@router.get("/mt5-worker-ops")
+async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
+    """Admin visibility for Windows workers + verification evidence (no passwords)."""
+    from app.domain.broker_connectivity.broker_verification_evidence import (
+        ops_snapshot,
+    )
+    from app.domain.broker_connectivity.mt5_server_catalogue import catalogue_snapshot
+    from app.domain.multi_account.feature_gates import multi_account_live_submit_allowed
+
+    verification = ops_snapshot()
+    registry = catalogue_snapshot()
+    workers: list[dict[str, Any]] = []
+    hosts: dict[str, Any] = {}
+    try:
+        from app.infrastructure.persistence import (
+            postgres_mt5_worker_control_plane as cp_store,
+        )
+
+        rows = cp_store.load_all_workers() if cp_store.table_ready() else []
+        for row in rows:
+            workers.append(
+                {
+                    "worker_id": row.get("worker_id"),
+                    "host_code": row.get("host_code"),
+                    "slot_id": row.get("slot_id"),
+                    "lifecycle": row.get("lifecycle_status"),
+                    "last_heartbeat_at": row.get("last_heartbeat_at"),
+                    "last_error": row.get("last_error") or "",
+                    "trade_allowed": row.get("trade_allowed"),
+                    "account_login_verified": row.get("account_login_verified") or "",
+                    "server_verified": row.get("server_verified") or "",
+                    "revoked": bool(row.get("revoked")),
+                    "password_included": False,
+                }
+            )
+    except Exception as exc:
+        logger.info(
+            "mt5_worker_ops_durable_unavailable",
+            error_type=type(exc).__name__,
+        )
+    return {
+        "ok": True,
+        "password_included": False,
+        "live_submit_enabled": multi_account_live_submit_allowed(),
+        "workers": workers,
+        "worker_count": len(workers),
+        "hosts": hosts,
+        "verification": verification,
+        "registry": registry,
+        "gateway": registry.get("gateway"),
+        "note": (
+            "Passwords are never returned. Brokers remain connectable=false until "
+            "a Windows MT5 demo verify writes evidence."
+        ),
+    }
+
+
 @router.get("/compatibility")
 async def broker_compatibility(
     _user: CurrentUser,

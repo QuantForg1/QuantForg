@@ -65,6 +65,13 @@ export default function AdminBrokersPage() {
     retry: false,
     staleTime: 60_000,
   });
+  const workerOpsQ = useQuery({
+    queryKey: ["admin-mt5-worker-ops"],
+    queryFn: brokerConnectivityApi.mt5WorkerOps,
+    enabled: allowed && opsReady && isAuthenticated,
+    retry: false,
+    staleTime: 30_000,
+  });
 
   const emailByUserId = useMemo(() => {
     const map = new Map<string, string>();
@@ -112,6 +119,10 @@ export default function AdminBrokersPage() {
   const registryBrokers = asList(registry.brokers);
   const registryServers = asRecord(registry.servers);
   const gatewayMeta = asRecord(registry.gateway);
+  const workerOps = asRecord(workerOpsQ.data);
+  const workerRows = asList(workerOps.workers);
+  const verification = asRecord(workerOps.verification);
+  const connectableSlugs = asList(verification.connectable_slugs);
 
   const selected =
     connections.find((row) => {
@@ -158,6 +169,68 @@ export default function AdminBrokersPage() {
           <Badge tone="warning">Synthetic payload</Badge>
         ) : null}
       </div>
+
+      <NocPanel title="Windows MT5 workers & verification">
+        <p className="mb-3 text-[12px] text-[var(--fg-muted)]">
+          {fmt(
+            workerOps.note,
+            "Outbound Windows workers report health to Railway. Passwords are never shown.",
+          )}{" "}
+          Live submit · {fmt(workerOps.live_submit_enabled, "false")}. Evidence
+          connectable ·{" "}
+          {connectableSlugs.length
+            ? connectableSlugs.map((s) => String(s)).join(", ")
+            : "none yet"}
+          .
+        </p>
+        {workerOpsQ.isError ? (
+          <p className="text-[12px] text-[var(--danger)]">
+            Worker ops unavailable. Registry below still loads independently.
+          </p>
+        ) : workerRows.length === 0 ? (
+          <p className="text-[12px] text-[var(--fg-muted)]">
+            No durable worker heartbeats yet. Local/VPS agents must register
+            with WORKER_SERVICE_TOKEN before slots appear here.
+          </p>
+        ) : (
+          <DeskTable
+            columns={[
+              "Host",
+              "Slot",
+              "Lifecycle",
+              "Server verified",
+              "Login",
+              "Heartbeat",
+              "Error",
+            ]}
+            rows={workerRows.map((row) => {
+              const r = asRecord(row);
+              return [
+                fmt(r.host_code),
+                fmt(r.slot_id),
+                <Badge
+                  key={`${fmt(r.worker_id)}-life`}
+                  tone={
+                    str(r.lifecycle, "") === "ready"
+                      ? "success"
+                      : str(r.lifecycle, "").includes("error")
+                        ? "danger"
+                        : "neutral"
+                  }
+                >
+                  {fmt(r.lifecycle, "pending")}
+                </Badge>,
+                fmt(r.server_verified),
+                <span key={`${fmt(r.worker_id)}-login`} className="font-mono text-[12px]">
+                  {fmt(r.account_login_verified)}
+                </span>,
+                fmt(r.last_heartbeat_at).slice(0, 19),
+                fmt(r.last_error, "—"),
+              ];
+            })}
+          />
+        )}
+      </NocPanel>
 
       <NocPanel title="MT5 broker registry & verified servers">
         <p className="mb-3 text-[12px] text-[var(--fg-muted)]">

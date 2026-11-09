@@ -1009,6 +1009,8 @@ export const brokerConnectivityApi = {
     apiFetch<Record<string, unknown>>(
       `/broker-connectivity/mt5-servers?broker=${encodeURIComponent(broker)}`,
     ),
+  mt5WorkerOps: () =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/mt5-worker-ops"),
   compatibility: (broker?: string, symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
       broker
