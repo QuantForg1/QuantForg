@@ -62,6 +62,18 @@ class BrokerAccountRepositoryPort(Protocol):
         external_account_id: str,
     ) -> BrokerAccount | None: ...
 
+    async def get_active_global_claim(
+        self,
+        broker_id: UUID,
+        *,
+        server: str,
+        external_account_id: str,
+    ) -> BrokerAccount | None: ...
+
+    async def get_non_revoked_for_user(
+        self, user_id: UUID
+    ) -> BrokerAccount | None: ...
+
     async def add(self, account: BrokerAccount) -> BrokerAccount: ...
 
     async def update(self, account: BrokerAccount) -> BrokerAccount: ...

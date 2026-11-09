@@ -351,6 +351,57 @@ class PostgresBrokerAccountRepository:
         row = result.mappings().first()
         return _account_from_row(row) if row else None
 
+    async def get_active_global_claim(
+        self,
+        broker_id: UUID,
+        *,
+        server: str,
+        external_account_id: str,
+    ) -> BrokerAccount | None:
+        """Return the non-revoked owner of broker+server+login, if any.
+
+        Uses the same normalization as the Phase 1a unique index
+        (lower/trim of login and server). Safe before and after migration.
+        """
+        session = self._uow._require_session()
+        result = await session.execute(
+            text(
+                """
+                SELECT * FROM broker_accounts
+                WHERE broker_id = :broker_id
+                  AND status <> 'revoked'
+                  AND lower(trim(external_account_id))
+                      = lower(trim(:external_account_id))
+                  AND lower(trim(server)) = lower(trim(:server))
+                LIMIT 1
+                """
+            ),
+            {
+                "broker_id": str(broker_id),
+                "external_account_id": external_account_id.strip(),
+                "server": (server or "").strip(),
+            },
+        )
+        row = result.mappings().first()
+        return _account_from_row(row) if row else None
+
+    async def get_non_revoked_for_user(self, user_id: UUID) -> BrokerAccount | None:
+        """Return the user's single non-revoked MT5 account, if any."""
+        session = self._uow._require_session()
+        result = await session.execute(
+            text(
+                """
+                SELECT * FROM broker_accounts
+                WHERE user_id = :user_id
+                  AND status <> 'revoked'
+                LIMIT 1
+                """
+            ),
+            {"user_id": str(user_id)},
+        )
+        row = result.mappings().first()
+        return _account_from_row(row) if row else None
+
     async def add(self, account: BrokerAccount) -> BrokerAccount:
         session = self._uow._require_session()
         await session.execute(
