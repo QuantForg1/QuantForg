@@ -17,8 +17,34 @@ from app.presentation.schemas.broker_connectivity import (
     InvokeConnectivityRequest,
     RunCertificationRequest,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/broker-connectivity", tags=["broker-connectivity"])
+
+
+def _weltrade_profile_server_names() -> list[str]:
+    """Best-effort Weltrade profile servers — empty when the service is unavailable."""
+    try:
+        from app.presentation.dependencies.weltrade import get_weltrade_service
+
+        profile = get_weltrade_service().profile()
+    except Exception as exc:
+        logger.info(
+            "mt5_registry_weltrade_profile_unavailable",
+            error_type=type(exc).__name__,
+        )
+        return []
+    servers = profile.get("servers") if isinstance(profile, dict) else None
+    if not isinstance(servers, dict):
+        return []
+    names: list[str] = []
+    for key in ("live", "demo"):
+        block = servers.get(key)
+        if isinstance(block, list):
+            names.extend(str(item) for item in block if item)
+    return names
 
 
 @router.get("/dashboard")
@@ -72,22 +98,9 @@ async def mt5_broker_registry(_user: CurrentUser) -> dict[str, Any]:
     from app.domain.broker_connectivity.mt5_server_catalogue import catalogue_snapshot
 
     discovered: dict[str, list[str]] = {}
-    try:
-        from app.presentation.dependencies.weltrade import get_weltrade_service
-
-        profile = get_weltrade_service().profile()
-        servers = profile.get("servers") if isinstance(profile, dict) else None
-        if isinstance(servers, dict):
-            names: list[str] = []
-            for key in ("live", "demo"):
-                block = servers.get(key)
-                if isinstance(block, list):
-                    names.extend(str(item) for item in block if item)
-            if names:
-                discovered["weltrade"] = names
-    except Exception:
-        # Profile unavailable — registry still returns verified Weltrade rows.
-        pass
+    names = _weltrade_profile_server_names()
+    if names:
+        discovered["weltrade"] = names
     return catalogue_snapshot(discovered_by_broker=discovered)
 
 
@@ -105,20 +118,7 @@ async def mt5_servers(
 
     slug = broker.strip().lower()
     meta = next((row for row in broker_registry_rows() if row["slug"] == slug), None)
-    discovered: list[str] = []
-    if slug == "weltrade":
-        try:
-            from app.presentation.dependencies.weltrade import get_weltrade_service
-
-            profile = get_weltrade_service().profile()
-            servers = profile.get("servers") if isinstance(profile, dict) else None
-            if isinstance(servers, dict):
-                for key in ("live", "demo"):
-                    block = servers.get(key)
-                    if isinstance(block, list):
-                        discovered.extend(str(item) for item in block if item)
-        except Exception:
-            pass
+    discovered = _weltrade_profile_server_names() if slug == "weltrade" else []
     rows = verified_servers_for_broker(slug, discovered=discovered)
     return {
         "broker": slug,
