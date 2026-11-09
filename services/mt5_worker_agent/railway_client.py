@@ -177,6 +177,13 @@ class RailwayWorkerClient:
             {"worker_id": worker_id},
         )
 
+    def claim_sealed_credentials(self, *, worker_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/credentials/claim",
+            {"worker_id": worker_id},
+        )
+
     def release(self, *, worker_id: str) -> dict[str, Any]:
         return self._request(
             "POST", "/api/v1/mt5-workers/release", {"worker_id": worker_id}
