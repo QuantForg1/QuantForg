@@ -3,8 +3,8 @@
  * Returns NaN when a metric cannot be computed — UI must show "—", never invent.
  */
 
-import { num, str } from "@/lib/desk";
-import { sumPnlInWindow } from "@/lib/dashboard/derive";
+import { num, str } from "../desk";
+import { sumPnlInWindow } from "./derive";
 
 const DAY_MS = 86_400_000;
 

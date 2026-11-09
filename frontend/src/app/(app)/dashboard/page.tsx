@@ -33,6 +33,10 @@ import {
 } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { deriveRiskIntelligence } from "@/lib/dashboard/risk-intelligence";
+import {
+  netDealPnl,
+  startOfUtcDayMs,
+} from "@/lib/dashboard/performance-window";
 import { OWNER_RISK_POLICY_DISPLAY } from "@/lib/trading/owner-risk-policy-display";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -324,12 +328,11 @@ export default function DashboardPage() {
     return Number.isFinite(p) ? sum + p : sum;
   }, 0);
   const sessionProfit = num(session.profit ?? session.daily_pnl ?? session.today_pnl);
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayStartMs = startOfUtcDayMs();
   const closedTodayPnl = deals.reduce((sum, deal) => {
     const stamp = Date.parse(str(deal.time ?? deal.close_time ?? deal.deal_time));
-    if (!Number.isFinite(stamp) || stamp < todayStart.getTime()) return sum;
-    const p = num(deal.profit);
+    if (!Number.isFinite(stamp) || stamp < todayStartMs) return sum;
+    const p = netDealPnl(deal);
     return Number.isFinite(p) ? sum + p : sum;
   }, 0);
   const todayPnlRaw = Number.isFinite(sessionProfit)

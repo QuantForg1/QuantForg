@@ -1,4 +1,4 @@
-import { asRecord, num, str } from "@/lib/desk";
+import { asRecord, num, str } from "../desk";
 
 export type AssetClass =
   | "forex"
