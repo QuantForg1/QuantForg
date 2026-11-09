@@ -122,9 +122,7 @@ async def mt5_servers(
     rows = verified_servers_for_broker(slug, discovered=discovered)
     return {
         "broker": slug,
-        "connection_status": (
-            meta["connection_status"] if meta else "not_verified"
-        ),
+        "connection_status": (meta["connection_status"] if meta else "not_verified"),
         "connectable": bool(meta["connectable"]) if meta else False,
         "servers": rows,
         # Documented search hints are admin diagnostics only — not connect options.

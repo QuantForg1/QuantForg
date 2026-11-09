@@ -129,9 +129,7 @@ def verified_servers_for_broker(
             # to the matcher — still require an explicit discovery feed.
             continue
         env = (
-            "demo"
-            if any(tok in name.lower() for tok in ("demo", "trial"))
-            else "live"
+            "demo" if any(tok in name.lower() for tok in ("demo", "trial")) else "live"
         )
         out.append(
             {
