@@ -38,6 +38,11 @@ assert.match(dash, /researchTick/);
 assert.match(dash, /market overview|platform feed/);
 assert.equal(dash.includes('href="/markets"'), false);
 assert.match(dash, /OverviewReferenceDesk/);
+assert.match(dash, /TradingPerformancePanel/);
+assert.match(dash, /RiskIntelligencePanel/);
+assert.match(dash, /RobotActivityPanel/);
+assert.match(dash, /RecentActivityPanel/);
+assert.match(dash, /NotificationsStrip/);
 assert.equal(dash.includes("ExecutionOrderTicket"), false);
 assert.ok(visiblePrimaryRail(true).every((item) => item.href !== "/markets"));
 

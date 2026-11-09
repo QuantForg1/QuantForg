@@ -11,15 +11,29 @@ import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { OverviewReferenceDesk } from "@/components/trading/overview-reference-desk";
+import { TradingPerformancePanel } from "@/components/trading/dashboard-intelligence/trading-performance-panel";
+import { RiskIntelligencePanel } from "@/components/trading/dashboard-intelligence/risk-intelligence-panel";
+import { RobotActivityPanel } from "@/components/trading/dashboard-intelligence/robot-activity-panel";
+import {
+  RecentActivityPanel,
+  buildActivityFromAccount,
+} from "@/components/trading/dashboard-intelligence/recent-activity-panel";
+import {
+  NotificationsStrip,
+  mapPlatformNotifications,
+} from "@/components/trading/dashboard-intelligence/notifications-strip";
 import { SignalCard } from "@/components/trading/signal-card";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
   mt5Api,
+  platformApi,
   portfolioApi,
   signalCenterApi,
   tradingSessionApi,
 } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
+import { deriveRiskIntelligence } from "@/lib/dashboard/risk-intelligence";
+import { OWNER_RISK_POLICY_DISPLAY } from "@/lib/trading/owner-risk-policy-display";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 // Auth still required for session; Admin link removed from trader Home.
@@ -123,6 +137,27 @@ export default function DashboardPage() {
     queryFn: portfolioApi.history,
     retry: false,
     refetchInterval: UNIVERSE_POLL_MS,
+  });
+  const robotStatusQ = useQuery({
+    queryKey: ["trading-robot-status"],
+    queryFn: tradingSessionApi.robotStatus,
+    retry: false,
+    refetchInterval: TRADER_POLL_MS,
+    staleTime: 10_000,
+  });
+  const notificationsQ = useQuery({
+    queryKey: ["dashboard-notifications"],
+    queryFn: () => platformApi.notifications(false),
+    retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
+    staleTime: 15_000,
+  });
+  const tradingComponentsQ = useQuery({
+    queryKey: ["trading-components-health"],
+    queryFn: platformApi.tradingComponents,
+    retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
+    staleTime: 20_000,
   });
 
   const session = asRecord(sessionQ.data);
@@ -312,10 +347,55 @@ export default function DashboardPage() {
     Number.isFinite(equityNum) &&
     equityNum > 0
       ? (dailyLossAmount / equityNum) * 100
-      : null;
+      : Number.isFinite(todayPnlRaw) && todayPnlRaw >= 0
+        ? 0
+        : null;
   const riskPctRaw = num(session.risk_pct ?? session.daily_risk_pct);
   const riskPct = Number.isFinite(riskPctRaw) ? riskPctRaw : null;
   const accountCurrency = str(session.currency, "USD");
+  const riskIntel = deriveRiskIntelligence({
+    equity: session.equity,
+    balance: session.balance,
+    floatingPnl: floatingFromPositions,
+    todayPnl: todayPnlRaw,
+    openPositionCount: positions.length,
+    riskLocked: session.risk_locked ?? session.daily_loss_exceeded,
+    emergencyStop: session.emergency_stop ?? session.global_emergency_stop,
+    liveAuthorization: session.live_authorization,
+    ordersMaySubmit: session.orders_may_submit,
+  });
+  const activityItems = buildActivityFromAccount({
+    positions,
+    deals,
+    riskState: riskIntel.state,
+    riskReason: riskIntel.reason,
+  });
+  const notificationItems = mapPlatformNotifications(
+    asList(notificationsQ.data).map(asRecord),
+  );
+  const robotStatus = asRecord(robotStatusQ.data);
+  const components = asRecord(tradingComponentsQ.data);
+  const componentsHealthy =
+    tradingComponentsQ.isError
+      ? null
+      : components.status
+        ? String(components.status).toLowerCase() === "ok" ||
+          String(components.status).toLowerCase() === "healthy"
+        : components.healthy == null
+          ? null
+          : Boolean(components.healthy);
+  const metricsUpdatedAt =
+    sessionQ.dataUpdatedAt
+      ? formatRelativeTime(new Date(sessionQ.dataUpdatedAt))
+      : undefined;
+  const todayPnlTone =
+    !showMetrics || !Number.isFinite(todayPnlRaw)
+      ? ("neutral" as const)
+      : todayPnlRaw > 0
+        ? ("success" as const)
+        : todayPnlRaw < 0
+          ? ("danger" as const)
+          : ("neutral" as const);
   const tick = asRecord(tickQ.data);
   const tickBid = num(tick.bid);
   const tickAsk = num(tick.ask);
@@ -379,6 +459,7 @@ export default function DashboardPage() {
               )
             : "—"
         }
+        todayPnlTone={todayPnlTone}
         openPositions={
           noBroker || sessionMismatch || positionsUnavailable
             ? "—"
@@ -406,24 +487,23 @@ export default function DashboardPage() {
         dailyRiskLabel={
           !showMetrics
             ? "—"
-            : dailyLossAmount != null
-              ? formatCurrency(
-                  dailyLossAmount,
-                  accountCurrency === "—" ? "USD" : accountCurrency,
-                )
-              : Number.isFinite(todayPnlRaw) && todayPnlRaw >= 0
-                ? "Clear"
-                : "—"
+            : dailyLossPctOfEquity != null
+              ? `${dailyLossPctOfEquity.toFixed(1)}% / ${OWNER_RISK_POLICY_DISPLAY.dailyLossHaltPercent}%`
+              : "—"
         }
         dailyRiskHint={
           !showMetrics
             ? "Requires broker session"
             : dailyLossPctOfEquity != null
-              ? `${dailyLossPctOfEquity.toFixed(1)}% of equity today`
-              : Number.isFinite(todayPnlRaw) && todayPnlRaw >= 0
+              ? dailyLossPctOfEquity <= 0
                 ? "No daily loss recorded"
-                : "Unavailable"
+                : `${formatCurrency(
+                    dailyLossAmount ?? 0,
+                    accountCurrency === "—" ? "USD" : accountCurrency,
+                  )} used of ${OWNER_RISK_POLICY_DISPLAY.dailyLossHaltPercent}% halt`
+              : "Unavailable"
         }
+        metricsUpdatedAt={metricsUpdatedAt}
         brokerConnected={showMetrics}
         marketLive={marketLive}
         marketBias={
@@ -460,6 +540,111 @@ export default function DashboardPage() {
         lastUpdate={lastUpdateLabel}
         topSignal={topSignal}
         lastPrice={Number.isFinite(tickMid) ? tickMid : undefined}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <TradingPerformancePanel
+          deals={deals}
+          floatingPnl={floatingFromPositions}
+          equity={Number.isFinite(equityNum) ? equityNum : NaN}
+          currency={accountCurrency === "—" ? "USD" : accountCurrency}
+          available={showMetrics && !activityUnavailable}
+        />
+        <RiskIntelligencePanel
+          equity={session.equity}
+          balance={session.balance}
+          floatingPnl={floatingFromPositions}
+          todayPnl={todayPnlRaw}
+          openPositionCount={
+            noBroker || sessionMismatch || positionsUnavailable
+              ? 0
+              : positions.length
+          }
+          riskLocked={session.risk_locked ?? session.daily_loss_exceeded}
+          emergencyStop={session.emergency_stop ?? session.global_emergency_stop}
+          liveAuthorization={session.live_authorization}
+          ordersMaySubmit={session.orders_may_submit}
+          currency={accountCurrency === "—" ? "USD" : accountCurrency}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <RobotActivityPanel
+          robotState={robot}
+          brokerLabel={
+            sessionQ.isError
+              ? "Unavailable"
+              : noBroker
+                ? "Disconnected"
+                : sessionMismatch
+                  ? "Reconnect required"
+                  : "Connected"
+          }
+          tradingAuthLabel={liveTradingHint.label}
+          tradingAuthDetail={liveTradingHint.detail}
+          lastHeartbeat={
+            str(
+              robotStatus.last_heartbeat_at ??
+                session.last_heartbeat_at ??
+                connection.lastVerified,
+              "",
+            ) || null
+          }
+          lastSignalLabel={
+            topSignal
+              ? `${str(topSignal.broker_symbol || topSignal.symbol, TRADING_SYMBOL)} · ${signalBoardDirection(topSignal)}`
+              : "No live signal"
+          }
+          lastExecutionLabel={
+            str(
+              session.last_execution_at ??
+                robotStatus.last_execution_at ??
+                deals[0]?.time,
+              "No execution recorded",
+            )
+          }
+          lastExecutionResult={
+            str(
+              session.last_execution_result ??
+                robotStatus.last_execution_result ??
+                deals[0]?.status ??
+                deals[0]?.comment,
+              "—",
+            )
+          }
+          omsLabel={
+            str(
+              session.oms_status ?? robotStatus.oms_status,
+              session.orders_may_submit === false
+                ? "Blocked"
+                : showMetrics
+                  ? "Ready"
+                  : "Unavailable",
+            )
+          }
+          lastSyncLabel={
+            connection.lastVerified
+              ? formatRelativeTime(connection.lastVerified)
+              : metricsUpdatedAt || "—"
+          }
+          recentError={
+            str(
+              session.last_error ?? robotStatus.last_error ?? session.error,
+              "",
+            ) || null
+          }
+          componentsHealthy={componentsHealthy}
+        />
+        <NotificationsStrip
+          items={notificationItems}
+          unavailable={Boolean(notificationsQ.isError)}
+        />
+      </div>
+
+      <RecentActivityPanel
+        items={activityItems}
+        unavailable={activityUnavailable || positionsUnavailable}
+        noBroker={noBroker || sessionMismatch}
       />
 
       <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
