@@ -1,53 +1,30 @@
-# Multi-User MT5 Registry — Phase 1a Status
+# Multi-User MT5 — Phase 1a + 1B Status
 
-**Branch:** `feat/multi-account-phase1a-registry`  
-**Baseline:** `main` @ `d92e17bc`  
-**LIVE multi-user fan-out:** **DISABLED** (both env flags default `false`)
+**Branches:** `feat/multi-account-phase1a-registry` (PR #207), `feat/multi-user-mt5-worker-infra`  
+**LIVE fan-out:** **DISABLED**
 
-## Product rule (this phase)
+## Product rule
 
-```text
-One QuantForg user  →  at most ONE non-revoked MT5 account
-One MT5 account     →  at most ONE active worker *assignment* row
-Many users          →  each may own one account (registry)
-```
+One user → one active MT5 account → one isolated worker runtime (when hosts exist).
 
-Do **not** build multiple MT5 accounts per user in this phase.
+## Phase 1a (registry)
 
-## What is implemented (registry only)
-
-| Component | Status |
+| Item | Status |
 | --- | --- |
-| Feature flags default OFF | Done |
-| Global login uniqueness `(broker, server, login)` | Domain + memory repo + migration SQL |
-| One active account per user | Domain + use case + memory repo + migration SQL |
-| Worker assignment registry (metadata only) | Domain + migration SQL |
-| Ownership verify-after-auth model | Domain (mocked auth in tests) |
-| Effective risk strictest-of-three | Domain + unit tests |
-| Signal / per-user execution intent models | Domain + unit tests |
-| Honest capability statement | `REGISTRY_CAPABILITY_STATEMENT` |
+| One account per user + global login uniqueness | Done |
+| Worker assignment metadata table | Done |
+| Effective risk + signal intent models | Done |
+| Flags default OFF | Done |
 
-## What is NOT implemented / NOT proven
+## Phase 1B (worker infrastructure)
 
-| Claim | Reality |
+| Item | Status |
 | --- | --- |
-| Provisioned isolated MT5 terminals | **0** |
-| Concurrent authenticated MT5 sessions | **0** (singleton LIVE gateway remains) |
-| Demo accounts executing simultaneously | **0** |
-| Independent LIVE order submission / reconciliation | **Not proven** |
-| Connect UX (broker/login/password/server → Verified) | **Not shipped** |
-| Production migration applied | **No** |
+| Lifecycle / provisioner / capacity / supervisor | Done (control plane) |
+| Windows agent interface + idle entrypoint | Done (deployable code) |
+| Mock agent unit isolation tests | Done |
+| Actual Windows hosts provisioned | **0** |
+| Actual MT5 terminal sessions running | **0** |
+| Concurrent demo authentications proven | **0** |
 
-Placeholder `execution_workers` rows are **assignment metadata**, not running workers.
-
-## Existing LIVE Weltrade path
-
-Unchanged. Owner singleton gateway remains the production execution path while flags stay off.
-
-## Next phases (separate)
-
-1. Isolated MT5 worker provisioning (one terminal session per user account).
-2. Credential-based connect + verify UX inside QuantForg.
-3. Central signal dispatcher → independent user workers.
-4. Per-user risk evaluation, OMS, reconciliation.
-5. Concurrent demo proof → controlled LIVE enablement (explicit owner approval).
+See `MULTI_USER_MT5_WORKER_INFRA.md` and `MT5_WORKER_INTEGRATION_TEST.md`.
