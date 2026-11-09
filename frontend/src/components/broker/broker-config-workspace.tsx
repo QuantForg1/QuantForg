@@ -1,68 +1,232 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Cable,
+  Building2,
+  Check,
   CheckCircle2,
-  Copy,
+  ChevronDown,
+  Coins,
+  Eye,
+  EyeOff,
+  Layers,
+  Link2,
+  Link2Off,
   Loader2,
-  Plus,
+  Lock,
+  Pencil,
   RefreshCw,
+  Search,
+  Server,
+  ShieldCheck,
   Unplug,
+  UserRound,
+  Wallet,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ConnectionStatus } from "@/components/trading/connection-status";
-import { WeltradeLogo } from "@/components/brand/weltrade-logo";
+import { BrokerLogo, Mt5BrandMark } from "@/components/broker/broker-logo";
 import { mt5Api, marketUniverseApi, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
 import {
   MARKET_UNIVERSE_QUERY_KEY,
   SIGNAL_CENTER_QUERY_KEY,
-  latencyLabel,
-  researchDeskLiveTradingStatus,
   ownershipBlockMessage,
   resolveConnectionPresentation,
+  researchDeskLiveTradingStatus,
   traderFacingErrorMessage,
 } from "@/lib/trading/trader-ux";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { cn } from "@/lib/utils";
+import {
+  MT5_BROKER_OPTIONS,
+  type Mt5BrokerOption,
+  type Mt5BrokerSlug,
+  brokerBySlug,
+  matchBrokerByServer,
+  serversForBroker,
+} from "@/lib/broker/mt5-broker-catalog";
 
 type AccountType = "demo" | "live";
 
-function Section({
-  title,
+function inferAccountType(serverName: string): AccountType {
+  const s = serverName.toLowerCase();
+  if (s.includes("demo") || s.includes("trial")) return "demo";
+  return "live";
+}
+
+function FieldShell({
   children,
-  aside,
+  className,
 }: {
-  title: string;
   children: React.ReactNode;
-  aside?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_90%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px]">
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          {title}
-        </h2>
-        {aside}
-      </header>
-      <div className="p-4 sm:p-5">{children}</div>
-    </section>
+    <div
+      className={cn(
+        "flex h-12 w-full items-center gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--accent)_22%,var(--border))] bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] px-3 text-sm text-[var(--fg)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SecurityFooter() {
+  return (
+    <div className="mt-6 flex items-start gap-3 rounded-xl border border-[color-mix(in_srgb,var(--success)_35%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-4 py-3">
+      <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--success)]" aria-hidden />
+      <p className="text-[12px] leading-relaxed text-[color-mix(in_srgb,var(--success)_75%,var(--fg))]">
+        <span className="font-semibold text-[var(--fg)]">Secure &amp; Private Connection</span>
+        {" — "}
+        Your credentials are encrypted (AES-256), stored securely, and never exposed in logs or
+        browser responses.
+      </p>
+    </div>
+  );
+}
+
+function BrokerSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Mt5BrokerSlug | null;
+  onChange: (broker: Mt5BrokerOption) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = value ? brokerBySlug(value) : undefined;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return MT5_BROKER_OPTIONS;
+    return MT5_BROKER_OPTIONS.filter((b) => b.name.toLowerCase().includes(q));
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left"
+      >
+        <FieldShell className={cn(open && "border-[var(--accent)] ring-1 ring-[var(--ring)]")}>
+          {selected ? (
+            <BrokerLogo src={selected.logoSrc} name={selected.name} size={22} rounded="md" />
+          ) : (
+            <Building2 className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+          )}
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate",
+              selected ? "text-[var(--fg)]" : "text-[var(--fg-subtle)]",
+            )}
+          >
+            {selected ? selected.name : "Select a broker"}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-[var(--fg-subtle)] transition",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </FieldShell>
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_92%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
+        >
+          <div className="border-b border-[var(--border)] p-2">
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/40 px-2.5">
+              <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search broker..."
+                className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
+              />
+            </label>
+          </div>
+          <ul className="max-h-64 overflow-y-auto py-1">
+            {filtered.map((broker) => {
+              const active = broker.slug === value;
+              return (
+                <li key={broker.slug}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={cn(
+                      "flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)]",
+                      active && "bg-[var(--accent-soft)]",
+                    )}
+                    onClick={() => {
+                      onChange(broker);
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                  >
+                    <BrokerLogo src={broker.logoSrc} name={broker.name} size={28} rounded="md" />
+                    <span className="min-w-0 flex-1 truncate font-medium">{broker.name}</span>
+                    <span className="rounded-md border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent)]">
+                      MT5
+                    </span>
+                    {active ? (
+                      <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                    ) : (
+                      <span className="w-4" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+            {!filtered.length ? (
+              <li className="px-3 py-4 text-center text-sm text-[var(--fg-muted)]">
+                No brokers match that search.
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
 /**
- * Broker Workspace — configuration only.
- * Connection · Diagnostics · Settings. No metrics, charts, or ops dashboards.
+ * Broker Workspace — Connect MT5 Account UI.
+ * Connection · ownership · reconnect. Balance/status from live session only.
  */
 export function BrokerConfigWorkspace() {
   const qc = useQueryClient();
@@ -110,8 +274,6 @@ export function BrokerConfigWorkspace() {
   const mt5 = asRecord(mt5Q.data);
   const profile = asRecord(profileQ.data);
 
-  // Owned trading session is the only "Connected" truth.
-  // Gateway / MT5 process health must never invent a user-owned connection.
   const tradingSnapEarly = asRecord(tradingSessionQ.data);
   const connectionEarly = resolveConnectionPresentation(tradingSnapEarly, {
     connecting: false,
@@ -125,28 +287,41 @@ export function BrokerConfigWorkspace() {
     health.mt5_connected || health.mt5_attached || mt5.connected,
   );
 
+  const [brokerSlug, setBrokerSlug] = useState<Mt5BrokerSlug | null>("weltrade");
   const [accountType, setAccountType] = useState<AccountType>("live");
   const [server, setServer] = useState("Weltrade-Real");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordFieldKey, setPasswordFieldKey] = useState(0);
   const [terminalPath, setTerminalPath] = useState("");
   const [progress, setProgress] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [changingAccount, setChangingAccount] = useState(false);
 
-  const serverOptions = useMemo(() => {
+  const selectedBroker = brokerSlug ? brokerBySlug(brokerSlug) : undefined;
+
+  const profileServerList = useMemo(() => {
     const servers = asRecord(asRecord(profile).servers);
     const list = Array.isArray(servers[accountType])
       ? (servers[accountType] as string[])
       : [];
-    if (list.length) return list;
-    return accountType === "demo" ? ["Weltrade-Demo"] : ["Weltrade-Real"];
+    return list.map(String).filter(Boolean);
   }, [profile, accountType]);
+
+  const serverOptions = useMemo(
+    () =>
+      serversForBroker(
+        selectedBroker,
+        accountType,
+        selectedBroker?.slug === "weltrade" ? profileServerList : undefined,
+      ),
+    [selectedBroker, accountType, profileServerList],
+  );
 
   useEffect(() => {
     if (!serverOptions.includes(server)) {
-      setServer(serverOptions[0] ?? "Weltrade-Real");
+      setServer(serverOptions[0] ?? "");
     }
   }, [serverOptions, server]);
 
@@ -154,7 +329,12 @@ export function BrokerConfigWorkspace() {
     const liveLogin = str(mt5.login || session.login);
     if (liveLogin && liveLogin !== "—" && !login) setLogin(liveLogin);
     const liveServer = str(mt5.server || session.server);
-    if (liveServer && liveServer !== "—") setServer(liveServer);
+    if (liveServer && liveServer !== "—") {
+      setServer(liveServer);
+      setAccountType(inferAccountType(liveServer));
+      const matched = matchBrokerByServer(liveServer);
+      if (matched) setBrokerSlug(matched.slug);
+    }
     if (session.connected) setPassword("");
   }, [mt5.login, mt5.server, session.login, session.server, session.connected, login]);
 
@@ -180,7 +360,9 @@ export function BrokerConfigWorkspace() {
   const clearPasswordField = () => {
     setPassword("");
     setPasswordFieldKey((key) => key + 1);
+    setShowPassword(false);
   };
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -189,13 +371,17 @@ export function BrokerConfigWorkspace() {
         const meta = await weltradeApi.runtimeProfile();
         const profileRow = asRecord(meta.profile);
         if (!profileRow.login) return;
-        // Prefill configured credentials only — never claim Connected from profile.
         if (!cancelled && !login) setLogin(String(profileRow.login));
-        if (!cancelled && profileRow.server) setServer(String(profileRow.server));
+        if (!cancelled && profileRow.server) {
+          const srv = String(profileRow.server);
+          setServer(srv);
+          setAccountType(inferAccountType(srv));
+          const matched = matchBrokerByServer(srv);
+          if (matched) setBrokerSlug(matched.slug);
+        }
         if (!cancelled && profileRow.terminal_path) {
           setTerminalPath(String(profileRow.terminal_path));
         }
-        // Secure restore may re-attach an owned session when the gateway supports it.
         await weltradeApi.restoreProfile();
         if (!cancelled) await refresh();
       } catch {
@@ -243,6 +429,7 @@ export function BrokerConfigWorkspace() {
     mutationFn: weltradeApi.disconnect,
     onSuccess: async () => {
       toast.success("Disconnected");
+      setChangingAccount(false);
       await refresh();
       await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
     },
@@ -301,9 +488,16 @@ export function BrokerConfigWorkspace() {
     saveMut.isPending;
 
   const onConnect = () => {
+    if (!selectedBroker) {
+      toast.error("Select a broker");
+      return;
+    }
+    if (!server) {
+      toast.error("Select server");
+      return;
+    }
     const loginNum = Number(login);
     if ((!Number.isFinite(loginNum) || loginNum <= 0) && !password) {
-      // Claim the verified terminal first. Reconnect only if that is refused.
       void (async () => {
         setProgress("Verifying ownership…");
         try {
@@ -401,11 +595,8 @@ export function BrokerConfigWorkspace() {
       liveAuthorization: tradingSnap.live_authorization,
     },
   );
-  const isLiveAccount = accountType === "live";
-  const latency =
-    session.latencyMs && session.latencyMs !== "—"
-      ? latencyLabel(Number(session.latencyMs))
-      : "Not available";
+  const isLiveAccount =
+    inferAccountType(str(connectionView.server || server, "Weltrade-Real")) === "live";
 
   const showPasswordField =
     showConnectForm && !connectMut.isPending && !saveMut.isPending;
@@ -427,515 +618,371 @@ export function BrokerConfigWorkspace() {
     })();
   };
 
-  const onVerify = () => {
-    if (showConnectForm) {
-      saveMut.mutate();
-      return;
-    }
-    onReconnect();
-  };
+  const connectedBroker =
+    matchBrokerByServer(str(connectionView.server || server)) ||
+    selectedBroker ||
+    brokerBySlug("weltrade");
 
-  const copyText = async (value: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`${label} copied`);
-    } catch {
-      toast.error("Clipboard unavailable");
-    }
-  };
+  const balanceDisplay =
+    session.balance && session.balance !== "—"
+      ? String(session.balance).replace(/^\$/, "")
+      : "—";
+  const currencyDisplay = str(tradingSnap.currency, "USD");
+  const loginDisplay = connectionView.maskedLogin || login || "—";
+  const tradingEnabled = liveTradingHint.label.toLowerCase().includes("enabled");
 
-  const statusChecks = [
-    {
-      label: "Account authorized",
-      ok: connected && connectionView.ownership === "owned",
-    },
-    {
-      label: "Server connected",
-      ok: connected && gatewayOnline,
-    },
-    {
-      label: "Account information loaded",
-      ok: connected && Boolean(session.balance && session.balance !== "—"),
-    },
-    {
-      label: "Trading ready",
-      ok: connected && liveTradingHint.label.toLowerCase().includes("enabled"),
-    },
-  ] as const;
+  const onBrokerPicked = (broker: Mt5BrokerOption) => {
+    setBrokerSlug(broker.slug);
+    const nextServers = serversForBroker(
+      broker,
+      accountType,
+      broker.slug === "weltrade" ? profileServerList : undefined,
+    );
+    const next = nextServers[0] ?? "";
+    setServer(next);
+    if (next) setAccountType(inferAccountType(next));
+  };
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-5xl space-y-4 px-1 sm:px-0">
-      <PageHeader
-        title="Broker Accounts"
-        description="Connect and manage your MT5 account. Balance and status come from the live session only — never fabricated. Live trading still requires existing authorization and risk controls."
-        actions={
-          <Button
-            size="sm"
-            disabled={busy}
-            onClick={() => setChangingAccount(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Connect New Account
-          </Button>
-        }
-      />
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col items-center px-1 py-2 sm:px-0 sm:py-4">
+      <article
+        className={cn(
+          "w-full overflow-visible rounded-[1.35rem] border border-[color-mix(in_srgb,var(--accent)_18%,rgba(255,255,255,0.12))]",
+          "bg-[color-mix(in_srgb,#071528_72%,transparent)] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_80px_rgba(0,0,0,0.45)]",
+          "backdrop-blur-[18px] px-5 py-7 sm:px-8 sm:py-9",
+        )}
+      >
+        <header className="mb-7 flex flex-col items-center text-center">
+          <Mt5BrandMark size={78} className="mb-4" />
+          <h1 className="text-[1.65rem] font-semibold tracking-tight text-[var(--fg)] sm:text-[1.85rem]">
+            Connect MT5 Account
+          </h1>
+          <p className="mt-2 max-w-md text-sm text-[var(--fg-muted)]">
+            Link your existing MetaTrader 5 trading account to QuantForg in seconds.
+          </p>
+        </header>
 
-      <ConnectionStatus
-        session={tradingSnap}
-        connecting={
-          (Boolean(progress) && !connected) || connectMut.isPending || saveMut.isPending
-        }
-      />
-
-      {connected && uxState !== "SESSION_MISMATCH" ? (
-        <>
-          <article className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-4 shadow-[var(--shadow-card)] backdrop-blur-[8px] sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <WeltradeLogo size={56} variant="wordmark" className="rounded-2xl" />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-semibold tracking-tight">Weltrade</h2>
-                    <Badge tone="success">Connected</Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                    MT5 · {isLiveAccount ? "Real Account" : "Demo Account"}
+        {connected && !showConnectForm ? (
+          <div className="space-y-5">
+            <div className="relative overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--success)_35%,transparent)] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] px-4 py-4 sm:px-5">
+              <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--success)_45%,transparent)] bg-[color-mix(in_srgb,var(--success)_18%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)] shadow-[0_0_16px_rgba(0,255,163,0.25)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" aria-hidden />
+                Connected
+              </span>
+              <div className="flex items-start gap-3 pr-24">
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--success)_22%,transparent)] text-[var(--success)] shadow-[0_0_20px_rgba(0,255,163,0.35)]">
+                  <CheckCircle2 className="h-6 w-6" aria-hidden />
+                </span>
+                <div>
+                  <p className="text-base font-semibold text-[var(--fg)]">MT5 Account Connected</p>
+                  <p className="mt-0.5 text-sm text-[var(--fg-muted)]">
+                    Your trading account is now linked to QuantForg.
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="flex items-center justify-end gap-2 text-sm font-medium text-[var(--success)]">
-                  <span className="h-2 w-2 rounded-full bg-[var(--success)]" aria-hidden />
-                  Connected
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                  Broker
                 </p>
-                <p className="mt-1 text-xs text-[var(--fg-subtle)]">
-                  Last synced {connectionView.lastVerified || "—"}
+                <div className="mt-2 flex items-center gap-2.5">
+                  {connectedBroker ? (
+                    <BrokerLogo
+                      src={connectedBroker.logoSrc}
+                      name={connectedBroker.name}
+                      size={28}
+                      rounded="full"
+                    />
+                  ) : null}
+                  <span className="truncate text-sm font-medium">
+                    {connectedBroker?.name || "MT5"}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                  Server
                 </p>
-                <div className="mt-3">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => setChangingAccount(true)}
-                  >
-                    … Actions
-                  </Button>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <span className="truncate text-sm font-medium">
+                    {connectionView.server || "—"}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                  MT5 Login
+                </p>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <UserRound className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <span className="truncate font-mono text-sm font-medium">{loginDisplay}</span>
                 </div>
               </div>
             </div>
-            <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  Account Login
-                </dt>
-                <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
-                  <span className="truncate">{connectionView.maskedLogin}</span>
-                  {connectionView.maskedLogin ? (
-                    <button
-                      type="button"
-                      className="text-[var(--fg-subtle)] hover:text-[var(--fg)]"
-                      aria-label="Copy account login"
-                      onClick={() =>
-                        void copyText(String(connectionView.maskedLogin), "Login")
-                      }
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  Server
-                </dt>
-                <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
-                  <span className="truncate">{connectionView.server || "N/A"}</span>
-                  {connectionView.server ? (
-                    <button
-                      type="button"
-                      className="text-[var(--fg-subtle)] hover:text-[var(--fg)]"
-                      aria-label="Copy server"
-                      onClick={() =>
-                        void copyText(String(connectionView.server), "Server")
-                      }
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                   Account Balance
-                </dt>
-                <dd className="mt-1 text-sm font-semibold tabular">
-                  {session.balance && session.balance !== "—" ? session.balance : "N/A"}
-                </dd>
+                </p>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <Wallet className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <span className="text-sm font-semibold tabular">{balanceDisplay}</span>
+                </div>
               </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                   Currency
-                </dt>
-                <dd className="mt-1 text-sm font-medium">
-                  {str(tradingSnap.currency, "USD")}
-                </dd>
+                </p>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <Coins className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <span className="text-sm font-medium">{currencyDisplay}</span>
+                </div>
               </div>
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                   Account Type
-                </dt>
-                <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
-                  {isLiveAccount ? "Real" : "Demo"}
-                  <Badge tone={isLiveAccount ? "warning" : "neutral"}>
-                    {isLiveAccount ? "Live" : "Demo"}
-                  </Badge>
-                </dd>
+                </p>
+                <div className="mt-2 flex items-center gap-2.5">
+                  <Layers className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <span
+                    className={cn(
+                      "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                      isLiveAccount
+                        ? "bg-[color-mix(in_srgb,var(--success)_18%,transparent)] text-[var(--success)]"
+                        : "bg-[var(--surface-2)] text-[var(--fg-muted)]",
+                    )}
+                  >
+                    {isLiveAccount ? "RealLive" : "Demo"}
+                  </span>
+                </div>
               </div>
-            </dl>
-            <div className="mt-4 flex flex-wrap gap-2">
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(
+                [
+                  {
+                    label: "Connection",
+                    value: gatewayOnline || connected ? "Active" : "Offline",
+                    ok: connected && gatewayOnline,
+                  },
+                  {
+                    label: "Trading Permission",
+                    value: tradingEnabled ? "Enabled" : liveTradingHint.label,
+                    ok: tradingEnabled,
+                  },
+                  {
+                    label: "Data Sync",
+                    value: connected ? "Real-time" : "Idle",
+                    ok: connected,
+                  },
+                ] as const
+              ).map((row) => (
+                <div
+                  key={row.label}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-3"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                    {row.label}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2 text-sm font-medium">
+                    <CheckCircle2
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        row.ok ? "text-[var(--success)]" : "text-[var(--fg-subtle)]",
+                      )}
+                      aria-hidden
+                    />
+                    <span className={row.ok ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"}>
+                      {row.value}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-[var(--fg-subtle)]">
+              Live trading: {liveTradingHint.label}
+              {ownershipBlockMessage(tradingSnap.ownership_block_reason)
+                ? ` · ${ownershipBlockMessage(tradingSnap.ownership_block_reason)}`
+                : ""}
+            </p>
+
+            <div className="grid gap-2.5 sm:grid-cols-3">
               <Button
-                variant="secondary"
+                variant="outline"
                 disabled={busy}
+                className="h-11 border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-transparent"
                 onClick={() => setChangingAccount(true)}
               >
+                <Pencil className="h-4 w-4" />
                 Change account
               </Button>
-              <Button variant="secondary" disabled={busy} onClick={onReconnect}>
+              <Button
+                variant="outline"
+                disabled={busy}
+                className="h-11 border-[color-mix(in_srgb,var(--accent)_40%,var(--border))] text-[var(--accent)] shadow-[0_0_18px_rgba(0,212,224,0.12)]"
+                onClick={onReconnect}
+              >
                 <RefreshCw className="h-4 w-4" />
                 Reconnect
               </Button>
-              <Button variant="secondary" disabled={busy} onClick={onVerify}>
-                Verify connection
-              </Button>
               <Button
-                variant="secondary"
+                variant="outline"
                 disabled={busy}
+                className="h-11 border-[color-mix(in_srgb,var(--danger)_45%,var(--border))] text-[var(--danger)] shadow-[0_0_18px_rgba(225,29,72,0.12)]"
                 onClick={() => disconnectMut.mutate()}
               >
                 <Unplug className="h-4 w-4" />
                 Disconnect
               </Button>
             </div>
-          </article>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Section title="Connection Settings">
-              <p className="mb-4 text-sm text-[var(--fg-muted)]">
-                Update credentials or server details. Saving reconnects through the existing
-                MT5 path — balances stay live session data only.
-              </p>
-              <div className="grid gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="bw-settings-login">Account Login</Label>
-                  <Input
-                    id="bw-settings-login"
-                    inputMode="numeric"
-                    autoComplete="username"
-                    value={login}
-                    onChange={(e) => setLogin(e.target.value)}
-                    placeholder="Account number"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="bw-settings-server">Server</Label>
-                  <select
-                    id="bw-settings-server"
-                    className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                    value={server}
-                    onChange={(e) => setServer(e.target.value)}
-                  >
-                    {serverOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="bw-settings-password">
-                    Investor Password (Optional)
-                  </Label>
-                  <Input
-                    key={`settings-${passwordFieldKey}`}
-                    id="bw-settings-password"
-                    type="password"
-                    autoComplete="off"
-                    name="broker-investor-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Required only when reconnecting"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="bw-settings-type">Account Type</Label>
-                  <select
-                    id="bw-settings-type"
-                    className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                    value={accountType}
-                    onChange={(e) => setAccountType(e.target.value as AccountType)}
-                  >
-                    <option value="live">Real Account</option>
-                    <option value="demo">Demo Account</option>
-                  </select>
-                </div>
-              </div>
-              <Button
-                className="qf-btn-hot mt-4 w-full border-0"
-                disabled={busy}
-                onClick={() => {
-                  setChangingAccount(true);
-                  onConnect();
-                }}
-              >
-                {connectMut.isPending || saveMut.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
-                Save Changes
-              </Button>
-              <dl className="mt-4 grid gap-2 border-t border-[var(--border)] pt-3 text-xs text-[var(--fg-muted)] sm:grid-cols-2">
-                <div>
-                  Equity:{" "}
-                  <span className="text-[var(--fg)]">
-                    {session.equity && session.equity !== "—" ? session.equity : "N/A"}
-                  </span>
-                </div>
-                <div>
-                  Free margin:{" "}
-                  <span className="text-[var(--fg)]">
-                    {session.freeMargin && session.freeMargin !== "—"
-                      ? session.freeMargin
-                      : "N/A"}
-                  </span>
-                </div>
-                <div>
-                  Latency:{" "}
-                  <span className="text-[var(--fg)]">
-                    {latency === "—" ? "N/A" : latency}
-                  </span>
-                </div>
-                <div>
-                  Live trading:{" "}
-                  <span className="text-[var(--fg)]">{liveTradingHint.label}</span>
-                </div>
-              </dl>
-            </Section>
-
-            <Section
-              title="Account Status"
-              aside={
-                <span className="inline-flex items-center gap-2 text-sm font-medium text-[var(--success)]">
-                  <span className="h-2 w-2 rounded-full bg-[var(--success)]" aria-hidden />
-                  Connected
-                </span>
-              }
-            >
-              <p className="mb-4 text-sm text-[var(--fg-muted)]">
-                Your account is connected and ready for trading.
-              </p>
-              <ul className="space-y-3">
-                {statusChecks.map((item) => (
-                  <li key={item.label} className="flex items-center gap-2.5 text-sm">
-                    <CheckCircle2
-                      className={cn(
-                        "h-4 w-4 shrink-0",
-                        item.ok ? "text-[var(--success)]" : "text-[var(--fg-subtle)]",
-                      )}
-                      aria-hidden
-                    />
-                    <span className={item.ok ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"}>
-                      {item.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                className="mt-4 w-full"
-                variant="secondary"
-                disabled={busy}
-                onClick={onVerify}
-              >
-                <Cable className="h-4 w-4" />
-                Test Connection
-              </Button>
-            </Section>
           </div>
-        </>
-      ) : (
-        <Section title="Connection">
-          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Broker
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">NOT CONNECTED</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Connection
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {gatewayOnline
-                  ? "Online"
-                  : healthQ.isError
-                    ? "Unavailable"
-                    : "Offline"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                MT5
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">
-                {gatewayMt5Attached ? "Attached (not owned by you)" : "Not attached"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Live trading
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
-            </div>
-          </dl>
-          {!connected && gatewayMt5Attached ? (
-            <p className="mt-3 text-xs text-[var(--warning)]">
-              A gateway session may exist, but it is not your owned broker connection.
-              Use Connect MT5 to claim ownership.
-              {ownershipBlockMessage(tradingSnap.ownership_block_reason)
-                ? ` ${ownershipBlockMessage(tradingSnap.ownership_block_reason)}`
-                : ""}
-            </p>
-          ) : null}
-        </Section>
-      )}
+        ) : (
+          <div className="space-y-4">
+            {uxState === "SESSION_MISMATCH" ? (
+              <p className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
+                ACCOUNT SESSION MISMATCH. Reconnect your own account.
+              </p>
+            ) : null}
 
-      <Section
-        title="Connect MT5"
-        aside={
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={session.refreshing}
-            onClick={() => void refresh()}
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5", session.refreshing && "animate-spin")}
-            />
-            Refresh
-          </Button>
-        }
-      >
-        {uxState === "SESSION_MISMATCH" ? (
-          <p className="mb-3 text-sm text-[var(--warning)]">
-            ACCOUNT SESSION MISMATCH. Reconnect your own account.
-          </p>
-        ) : null}
-        {showConnectForm ? (
-          <>
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              {(["demo", "live"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setAccountType(t)}
-                  className={cn(
-                    "border px-3 py-2 text-sm capitalize transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-                    accountType === t
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--fg)]"
-                      : "border-[var(--border)] text-[var(--fg-muted)] hover:border-[var(--border-strong)]",
-                  )}
-                >
-                  {t === "live" ? "Live" : "Demo"}
-                </button>
-              ))}
-            </div>
-            <div className="grid gap-3">
+            {!connected && gatewayMt5Attached ? (
+              <p className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[var(--warning-soft)] px-3 py-2 text-xs text-[var(--warning)]">
+                A gateway session may exist, but it is not your owned broker connection.
+                Use Connect MT5 to claim ownership.
+                {ownershipBlockMessage(tradingSnap.ownership_block_reason)
+                  ? ` ${ownershipBlockMessage(tradingSnap.ownership_block_reason)}`
+                  : ""}
+              </p>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="bw-server">Broker / Server</Label>
-                <select
-                  id="bw-server"
-                  className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-                  value={server}
-                  onChange={(e) => setServer(e.target.value)}
-                >
-                  {serverOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="bw-login">MT5 Login</Label>
-                <Input
-                  id="bw-login"
-                  inputMode="numeric"
-                  autoComplete="username"
-                  value={login}
-                  onChange={(e) => setLogin(e.target.value)}
-                  placeholder="Account number"
+                <label className="text-[11px] font-medium text-[var(--fg-subtle)]">Broker</label>
+                <BrokerSelect
+                  value={brokerSlug}
+                  disabled={busy}
+                  onChange={onBrokerPicked}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="bw-password">Password</Label>
-                {showPasswordField ? (
-                  <Input
-                    key={passwordFieldKey}
-                    id="bw-password"
-                    type="password"
-                    autoComplete="off"
-                    name="broker-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Required to verify the connection"
+                <label htmlFor="bw-server" className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                  Server
+                </label>
+                <div className="relative">
+                  <FieldShell>
+                    <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                    <select
+                      id="bw-server"
+                      disabled={busy || !serverOptions.length}
+                      className="h-full w-full min-w-0 appearance-none bg-transparent pr-6 text-sm outline-none disabled:opacity-60"
+                      value={server}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setServer(next);
+                        setAccountType(inferAccountType(next));
+                      }}
+                    >
+                      {!server ? (
+                        <option value="">Select server</option>
+                      ) : null}
+                      {serverOptions.map((s) => (
+                        <option key={s} value={s} className="bg-[var(--bg-elevated)] text-[var(--fg)]">
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      className="pointer-events-none absolute right-3 h-4 w-4 text-[var(--fg-subtle)]"
+                      aria-hidden
+                    />
+                  </FieldShell>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="bw-login" className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                  MT5 Login (Account Number)
+                </label>
+                <FieldShell>
+                  <UserRound className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <input
+                    id="bw-login"
+                    inputMode="numeric"
+                    autoComplete="username"
+                    disabled={busy}
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                    placeholder="e.g. 81234567"
+                    className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
                   />
+                </FieldShell>
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="bw-password"
+                  className="text-[11px] font-medium text-[var(--fg-subtle)]"
+                >
+                  MT5 Password (Trading Password)
+                </label>
+                {showPasswordField ? (
+                  <FieldShell>
+                    <Lock className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                    <input
+                      key={passwordFieldKey}
+                      id="bw-password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="off"
+                      name="broker-password"
+                      disabled={busy}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your MT5 password"
+                      className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
+                    />
+                    <button
+                      type="button"
+                      className="text-[var(--fg-subtle)] hover:text-[var(--fg)]"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <Eye className="h-4 w-4" aria-hidden />
+                      )}
+                    </button>
+                  </FieldShell>
                 ) : (
-                  <p className="text-sm text-[var(--fg-subtle)]">
-                    Password submitted. It is never displayed again.
+                  <p className="flex h-12 items-center text-sm text-[var(--fg-subtle)]">
+                    Password is never displayed after submission.
                   </p>
                 )}
               </div>
-              {isOperator ? (
-                <div className="space-y-1.5">
-                  <Label htmlFor="bw-path">Terminal Path</Label>
-                  <Input
+            </div>
+
+            {isOperator ? (
+              <div className="space-y-1.5">
+                <label htmlFor="bw-path" className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                  Terminal Path
+                </label>
+                <FieldShell>
+                  <input
                     id="bw-path"
                     value={terminalPath}
                     onChange={(e) => setTerminalPath(e.target.value)}
                     placeholder="Optional — leave blank to auto-attach"
+                    className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
                   />
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button disabled={busy} onClick={onConnect}>
-                {connectMut.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Cable className="h-4 w-4" />
-                )}
-                Connect MT5
-              </Button>
-              {gatewayMt5Attached && !connected ? (
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => claimMut.mutate()}
-                >
-                  Claim ownership
-                </Button>
-              ) : null}
-              <Button variant="secondary" disabled={busy} onClick={onVerify}>
-                Verify connection
-              </Button>
-            </div>
-            {progress ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-[var(--accent)]">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {progress}
-              </p>
+                </FieldShell>
+              </div>
             ) : null}
+
             {gatewayMt5Attached ? (
-              <p className="mt-4 text-sm text-[var(--fg-muted)]">
+              <p className="text-sm text-[var(--fg-muted)]">
                 {exposureQ.isError
                   ? "Open positions could not be read. The account will not be switched until exposure is verified."
                   : exposureQ.isLoading
@@ -945,8 +992,9 @@ export function BrokerConfigWorkspace() {
                       : "No open positions or pending orders on this terminal."}
               </p>
             ) : null}
+
             {gatewayMt5Attached && exposureNeedsConfirm ? (
-              <label className="mt-4 flex items-start gap-2 text-sm text-[var(--fg-muted)]">
+              <label className="flex items-start gap-2 text-sm text-[var(--fg-muted)]">
                 <input
                   type="checkbox"
                   className="mt-1"
@@ -954,33 +1002,76 @@ export function BrokerConfigWorkspace() {
                   onChange={(e) => setConfirmLeave(e.target.checked)}
                 />
                 <span>
-                  I understand open positions and pending orders stay on the current
-                  account. They are not closed or moved. This terminal will trade
-                  only the account it verifies next.
+                  I understand open positions and pending orders stay on the current account.
+                  They are not closed or moved. This terminal will trade only the account it
+                  verifies next.
                 </span>
               </label>
             ) : null}
-            <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
-              Password is used only to submit this form. It is never stored in the browser,
-              localStorage, or API responses.
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-[var(--fg-muted)]">
-            Connected. Use Reconnect, Verify, or Disconnect above.
-          </p>
-        )}
-      </Section>
 
-      <Section title="Security">
-        <ul className="space-y-2 text-sm text-[var(--fg-muted)]">
-          <li>Credentials are protected through the existing secure session mechanism.</li>
-          <li>Password is never displayed after submission.</li>
-          <li>Account number is masked.</li>
-          <li>The connection can be revoked at any time with Disconnect.</li>
-          <li>QuantForg does not bypass broker, ownership, or risk controls.</li>
-        </ul>
-      </Section>
+            <div className="flex flex-col gap-2 pt-1">
+              <Button
+                className="qf-btn-hot h-12 w-full border-0 text-[15px] font-semibold text-[var(--brand-navy)]"
+                disabled={busy}
+                onClick={onConnect}
+              >
+                {connectMut.isPending || saveMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Link2 className="h-4 w-4" />
+                )}
+                Connect MT5 Account
+              </Button>
+              {gatewayMt5Attached && !connected ? (
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  className="h-11 w-full"
+                  onClick={() => claimMut.mutate()}
+                >
+                  Claim ownership
+                </Button>
+              ) : null}
+              {changingAccount && connected ? (
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  className="h-10 w-full"
+                  onClick={() => setChangingAccount(false)}
+                >
+                  Cancel change account
+                </Button>
+              ) : null}
+            </div>
+
+            {progress ? (
+              <p className="flex items-center justify-center gap-2 text-sm text-[var(--accent)]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {progress}
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        <SecurityFooter />
+        <p className="mt-3 text-center text-[11px] text-[var(--fg-subtle)]">
+          Password is never displayed after submission. Connect MT5 uses your owned session only.
+          {connected && !showConnectForm ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="text-[var(--fg-muted)] underline-offset-2 hover:underline"
+                disabled={busy || session.refreshing}
+                onClick={() => void refresh()}
+              >
+                <Link2Off className="mr-1 inline h-3 w-3" aria-hidden />
+                Refresh status
+              </button>
+            </>
+          ) : null}
+        </p>
+      </article>
     </div>
   );
 }
