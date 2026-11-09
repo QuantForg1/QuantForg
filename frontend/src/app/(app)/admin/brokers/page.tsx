@@ -123,6 +123,8 @@ export default function AdminBrokersPage() {
   const workerRows = asList(workerOps.workers);
   const verification = asRecord(workerOps.verification);
   const connectableSlugs = asList(verification.connectable_slugs);
+  const matrix = asRecord(workerOps.verification_matrix);
+  const matrixRows = asList(matrix.brokers);
 
   const selected =
     connections.find((row) => {
@@ -226,6 +228,59 @@ export default function AdminBrokersPage() {
                 </span>,
                 fmt(r.last_heartbeat_at).slice(0, 19),
                 fmt(r.last_error, "—"),
+              ];
+            })}
+          />
+        )}
+      </NocPanel>
+
+      <NocPanel title="Six-broker Demo / Live verification matrix">
+        <p className="mb-3 text-[12px] text-[var(--fg-muted)]">
+          {fmt(
+            matrix.note,
+            "PASS only after a real Windows MT5 verify. Passwords are never shown.",
+          )}
+        </p>
+        {matrixRows.length === 0 ? (
+          <p className="text-[12px] text-[var(--fg-muted)]">
+            Matrix unavailable until worker-ops / registry loads.
+          </p>
+        ) : (
+          <DeskTable
+            columns={[
+              "Broker",
+              "Connectable",
+              "Demo",
+              "Live",
+              "Verified servers",
+              "Recovery",
+            ]}
+            rows={matrixRows.map((row) => {
+              const r = asRecord(row);
+              const demo = asRecord(r.demo);
+              const live = asRecord(r.live);
+              const recovery = asRecord(r.recovery);
+              const servers = asList(r.verified_servers)
+                .map((s) => str(asRecord(s).name, ""))
+                .filter(Boolean)
+                .join(", ");
+              return [
+                fmt(r.name, str(r.broker, "—")),
+                r.connectable === true ? "Yes" : "No",
+                <Badge
+                  key={`${str(r.broker)}-demo`}
+                  tone={str(demo.status) === "PASS" ? "success" : "neutral"}
+                >
+                  {fmt(demo.status, "BLOCKED")}
+                </Badge>,
+                <Badge
+                  key={`${str(r.broker)}-live`}
+                  tone={str(live.status) === "PASS" ? "success" : "neutral"}
+                >
+                  {fmt(live.status, "BLOCKED")}
+                </Badge>,
+                servers || "—",
+                fmt(recovery.status, "BLOCKED"),
               ];
             })}
           />

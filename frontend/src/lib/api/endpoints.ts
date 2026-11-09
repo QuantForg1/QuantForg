@@ -1011,6 +1011,10 @@ export const brokerConnectivityApi = {
     ),
   mt5WorkerOps: () =>
     apiFetch<Record<string, unknown>>("/broker-connectivity/mt5-worker-ops"),
+  mt5VerificationMatrix: () =>
+    apiFetch<Record<string, unknown>>(
+      "/broker-connectivity/mt5-verification-matrix",
+    ),
   compatibility: (broker?: string, symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
       broker

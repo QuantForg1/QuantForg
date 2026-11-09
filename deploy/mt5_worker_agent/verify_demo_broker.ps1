@@ -1,12 +1,14 @@
-﻿# Real demo verification for one broker (exness|hfm|weltrade).
-# Requires approved QF_DEMO_<BROKER>_* credentials in local.env — never invents success.
+﻿# Real demo/live verification for one broker on the existing Windows host.
+# Requires approved QF_DEMO_* / QF_LIVE_* credentials in local.env — never invents success.
 # Usage: .\deploy\mt5_worker_agent\verify_demo_broker.ps1 -Broker exness -Slot demo-a
 
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("exness", "hfm", "weltrade")]
+  [ValidateSet("exness", "hfm", "ic-markets", "pepperstone", "fp-markets", "xm", "weltrade")]
   [string]$Broker,
   [string]$Slot = "demo-a",
+  [ValidateSet("demo", "live")]
+  [string]$Env = "demo",
   [switch]$AlsoRejectTest
 )
 
@@ -27,11 +29,12 @@ if (Test-Path $EnvFile) {
   }
 }
 
-Write-Host "Verifying broker=$Broker slot=$Slot (passwords never printed)"
-poetry run python -m services.mt5_worker_agent.main verify-broker --broker $Broker --slot $Slot
+Write-Host "Verifying broker=$Broker env=$Env slot=$Slot (passwords never printed)"
+poetry run python -m services.mt5_worker_agent.main capacity
+poetry run python -m services.mt5_worker_agent.main verify-broker --broker $Broker --slot $Slot --env $Env
 $code = $LASTEXITCODE
 if ($AlsoRejectTest) {
   Write-Host "Running invalid-credential rejection test"
-  poetry run python -m services.mt5_worker_agent.main reject-demo --broker $Broker --slot $Slot
+  poetry run python -m services.mt5_worker_agent.main reject-demo --broker $Broker --slot $Slot --env $Env
 }
 exit $code

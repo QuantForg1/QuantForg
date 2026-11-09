@@ -120,13 +120,21 @@ async def mt5_servers(
     meta = next((row for row in broker_registry_rows() if row["slug"] == slug), None)
     discovered = _weltrade_profile_server_names() if slug == "weltrade" else []
     rows = verified_servers_for_broker(slug, discovered=discovered)
+    demo = [r for r in rows if r.get("environment") == "demo"]
+    live = [r for r in rows if r.get("environment") == "live"]
     return {
         "broker": slug,
         "connection_status": (meta["connection_status"] if meta else "not_verified"),
         "connectable": bool(meta["connectable"]) if meta else False,
         "servers": rows,
-        # Documented search hints are admin diagnostics only — not connect options.
+        "servers_by_environment": {"demo": demo, "live": live},
+        # Documented search hints are diagnostics only — not verified connect options.
         "documented_search_hints": documented_hints_for_admin(slug),
+        "password_included": False,
+        "note": (
+            "Selectable connect servers are verified rows only. "
+            "Documented hints are search aids and never invent connectivity."
+        ),
     }
 
 
@@ -137,6 +145,9 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
         ops_snapshot,
     )
     from app.domain.broker_connectivity.mt5_server_catalogue import catalogue_snapshot
+    from app.domain.broker_connectivity.verification_matrix import (
+        build_verification_matrix,
+    )
     from app.domain.multi_account.feature_gates import multi_account_live_submit_allowed
 
     verification = ops_snapshot()
@@ -178,6 +189,7 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
         "worker_count": len(workers),
         "hosts": hosts,
         "verification": verification,
+        "verification_matrix": build_verification_matrix(),
         "registry": registry,
         "gateway": registry.get("gateway"),
         "note": (
@@ -185,6 +197,16 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
             "a Windows MT5 demo verify writes evidence."
         ),
     }
+
+
+@router.get("/mt5-verification-matrix")
+async def mt5_verification_matrix(_user: CurrentUser) -> dict[str, Any]:
+    """Six-broker Demo/Live matrix — PASS only after real Windows MT5 verify."""
+    from app.domain.broker_connectivity.verification_matrix import (
+        build_verification_matrix,
+    )
+
+    return {"ok": True, **build_verification_matrix()}
 
 
 @router.get("/compatibility")

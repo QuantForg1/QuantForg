@@ -382,6 +382,9 @@ class Mt5WorkerApiFacade:
         from app.domain.broker_connectivity.mt5_server_catalogue import (
             catalogue_snapshot,
         )
+        from app.domain.broker_connectivity.verification_matrix import (
+            build_verification_matrix,
+        )
 
         assert self.plane.provisioner is not None
         by_id = getattr(self.plane.provisioner, "_by_id", {})
@@ -395,10 +398,12 @@ class Mt5WorkerApiFacade:
             "workers": workers,
             "worker_count": len(workers),
             "verification": ops_snapshot(),
+            "verification_matrix": build_verification_matrix(),
             "registry": catalogue_snapshot(),
             "note": (
                 "Windows MT5 workers report heartbeats outbound to Railway. "
-                "Brokers stay connectable=false until verification evidence exists."
+                "Brokers stay connectable=false until verification evidence exists. "
+                "Existing Windows host retained — no new VPS."
             ),
         }
 

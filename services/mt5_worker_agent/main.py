@@ -7,12 +7,15 @@ Modes:
   status          — print slot + resource status (no secrets)
   supervise       — local supervisor heartbeat loop
   connect-demo    — real MT5 login+verify for one slot (requires env creds)
-  verify-broker   — Exness/HFM/Weltrade demo verify + evidence write
+  verify-broker   — six-broker demo/live verify + evidence write
   reject-demo     — negative credential test (expects failure)
+  capacity        — measured host portable-terminal capacity
+  queue-status    — capacity wait queue (no secrets)
   railway-ping    — outbound HTTPS health check to Railway/API
 
 Never attaches to the LIVE Program Files terminal by default.
 Never enables MULTI_ACCOUNT_LIVE_SUBMIT.
+Never provisions a new Windows VPS.
 """
 
 from __future__ import annotations
@@ -80,11 +83,13 @@ def cmd_stop_slots() -> int:
 
 
 def cmd_status() -> int:
+    from services.mt5_worker_agent.host_capacity import measure_host_capacity
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
     from services.mt5_worker_agent.resources import (
         host_memory_summary,
         sample_terminal_processes,
     )
+    from services.mt5_worker_agent.slot_queue import snapshot as queue_snapshot
 
     sup = LocalWorkerSupervisor()
     report = {
@@ -99,9 +104,26 @@ def cmd_status() -> int:
             for s in sample_terminal_processes()
         ],
         "host_memory": host_memory_summary(),
+        "capacity": measure_host_capacity().to_dict(),
+        "queue": queue_snapshot(),
         "note": "Status only — ready=false until connect-demo succeeds for a slot",
     }
     print(json.dumps(report, indent=2))
+    return 0
+
+
+def cmd_capacity() -> int:
+    from services.mt5_worker_agent.host_capacity import measure_host_capacity
+
+    print(json.dumps(measure_host_capacity().to_dict(), indent=2))
+    return 0
+
+
+def cmd_queue_status() -> int:
+    from services.mt5_worker_agent.slot_queue import load_persisted, snapshot
+
+    load_persisted()
+    print(json.dumps(snapshot(), indent=2))
     return 0
 
 
@@ -203,22 +225,41 @@ def _persist_and_report_evidence(payload: dict[str, Any]) -> dict[str, Any]:
     return {"local_evidence": local, "railway": railway_result}
 
 
-def cmd_connect_demo(slot_id: str, broker: str | None = None) -> int:
+_BROKER_CHOICES = [
+    "exness",
+    "hfm",
+    "ic-markets",
+    "pepperstone",
+    "fp-markets",
+    "xm",
+    "weltrade",
+]
+
+
+def cmd_connect_demo(
+    slot_id: str,
+    broker: str | None = None,
+    *,
+    environment: str = "demo",
+) -> int:
     """Real MT5 authenticate+verify for one portable slot.
 
-    Requires broker-specific or generic QF_DEMO_* credentials.
+    Requires broker-specific or generic QF_DEMO_* / QF_LIVE_* credentials.
     Never invents success without MetaTrader5 login.
     """
     from services.mt5_worker_agent.broker_demo_adapters import (
         classify_environment,
         missing_credential_keys,
         normalize_broker_slug,
-        resolve_demo_credentials,
+        resolve_credentials,
         server_matches_broker,
         supported_brokers,
     )
+    from services.mt5_worker_agent.host_capacity import can_start_another_portable
     from services.mt5_worker_agent.mt5_session import authenticate_and_verify
+    from services.mt5_worker_agent.slot_queue import enqueue
 
+    env_req = "live" if str(environment).lower() == "live" else "demo"
     slug = normalize_broker_slug(broker) if broker else None
     if broker and slug is None:
         print(
@@ -233,7 +274,33 @@ def cmd_connect_demo(slot_id: str, broker: str | None = None) -> int:
         )
         return 2
 
-    creds = resolve_demo_credentials(slug or "exness") if slug else None
+    can_start, capacity_reason = can_start_another_portable()
+    if not can_start:
+        queued = enqueue(
+            broker_slug=slug or "unknown",
+            environment=env_req,
+            slot_preference=slot_id,
+        )
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": capacity_reason,
+                    "queue": queued,
+                    "note": (
+                        "Existing Windows host at portable capacity. "
+                        "Request queued — no new VPS provisioned."
+                    ),
+                },
+                indent=2,
+            )
+        )
+        return 3
+
+    from typing import Literal as _Lit
+
+    env_lit: _Lit["demo", "live"] = "live" if env_req == "live" else "demo"
+    creds = resolve_credentials(slug, environment=env_lit) if slug else None
     if creds is None and not slug:
         # Generic path for backward-compatible connect-demo.
         login_raw = (os.environ.get("QF_DEMO_LOGIN") or "").strip()
@@ -275,17 +342,18 @@ def cmd_connect_demo(slot_id: str, broker: str | None = None) -> int:
             server=server,
         )
     elif creds is None:
-        missing = missing_credential_keys(slug or "exness")
+        missing = missing_credential_keys(slug or "exness", environment=env_req)
         print(
             json.dumps(
                 {
                     "ok": False,
                     "authenticated_demo_accounts": 0,
                     "broker": slug,
+                    "environment": env_req,
                     "error": "demo_credentials_not_provided",
                     "missing_env": missing,
                     "note": (
-                        "Provide approved demo credentials on the Windows host. "
+                        "Provide approved credentials on the Windows host. "
                         "Do not invent server names. connectable stays false."
                     ),
                 },
@@ -363,16 +431,16 @@ def cmd_connect_demo(slot_id: str, broker: str | None = None) -> int:
     return 0 if success else 1
 
 
-def cmd_verify_broker(broker: str, slot_id: str) -> int:
-    return cmd_connect_demo(slot_id=slot_id, broker=broker)
+def cmd_verify_broker(broker: str, slot_id: str, *, environment: str = "demo") -> int:
+    return cmd_connect_demo(slot_id=slot_id, broker=broker, environment=environment)
 
 
-def cmd_reject_demo(broker: str, slot_id: str) -> int:
+def cmd_reject_demo(broker: str, slot_id: str, *, environment: str = "demo") -> int:
     """Negative test: deliberately wrong password must fail closed."""
     from services.mt5_worker_agent.broker_demo_adapters import (
         missing_credential_keys,
         normalize_broker_slug,
-        resolve_demo_credentials,
+        resolve_credentials,
         supported_brokers,
     )
     from services.mt5_worker_agent.mt5_session import authenticate_and_verify
@@ -390,14 +458,15 @@ def cmd_reject_demo(broker: str, slot_id: str) -> int:
             )
         )
         return 2
-    creds = resolve_demo_credentials(slug)
+    env_req = "live" if str(environment).lower() == "live" else "demo"
+    creds = resolve_credentials(slug, environment=env_req)
     if creds is None:
         print(
             json.dumps(
                 {
                     "ok": False,
                     "error": "demo_credentials_not_provided",
-                    "missing_env": missing_credential_keys(slug),
+                    "missing_env": missing_credential_keys(slug, environment=env_req),
                     "note": (
                         "Cannot run invalid-credential rejection "
                         "without a real login/server."
@@ -444,23 +513,24 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("railway-ping")
     sub.add_parser("railway-register")
     sub.add_parser("railway-heartbeat")
+    sub.add_parser("capacity")
+    sub.add_parser("queue-status")
     p_conn = sub.add_parser("connect-demo")
     p_conn.add_argument("--slot", default="demo-a")
     p_conn.add_argument(
         "--broker",
         default=None,
-        help="Optional broker slug (exness|hfm|weltrade). Writes evidence when set.",
+        help="Optional broker slug. Writes evidence when set.",
     )
+    p_conn.add_argument("--env", default="demo", choices=["demo", "live"])
     p_verify = sub.add_parser("verify-broker")
-    p_verify.add_argument(
-        "--broker", required=True, choices=["exness", "hfm", "weltrade"]
-    )
+    p_verify.add_argument("--broker", required=True, choices=_BROKER_CHOICES)
     p_verify.add_argument("--slot", default="demo-a")
+    p_verify.add_argument("--env", default="demo", choices=["demo", "live"])
     p_reject = sub.add_parser("reject-demo")
-    p_reject.add_argument(
-        "--broker", required=True, choices=["exness", "hfm", "weltrade"]
-    )
+    p_reject.add_argument("--broker", required=True, choices=_BROKER_CHOICES)
     p_reject.add_argument("--slot", default="demo-a")
+    p_reject.add_argument("--env", default="demo", choices=["demo", "live"])
     return parser
 
 
@@ -481,6 +551,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_stop_slots()
     if command == "status":
         return cmd_status()
+    if command == "capacity":
+        return cmd_capacity()
+    if command == "queue-status":
+        return cmd_queue_status()
     if command == "supervise":
         return cmd_supervise()
     if command == "railway-ping":
@@ -490,11 +564,23 @@ def main(argv: list[str] | None = None) -> int:
     if command == "railway-heartbeat":
         return cmd_railway_heartbeat()
     if command == "connect-demo":
-        return cmd_connect_demo(str(args.slot), broker=getattr(args, "broker", None))
+        return cmd_connect_demo(
+            str(args.slot),
+            broker=getattr(args, "broker", None),
+            environment=str(getattr(args, "env", "demo")),
+        )
     if command == "verify-broker":
-        return cmd_verify_broker(str(args.broker), str(args.slot))
+        return cmd_verify_broker(
+            str(args.broker),
+            str(args.slot),
+            environment=str(getattr(args, "env", "demo")),
+        )
     if command == "reject-demo":
-        return cmd_reject_demo(str(args.broker), str(args.slot))
+        return cmd_reject_demo(
+            str(args.broker),
+            str(args.slot),
+            environment=str(getattr(args, "env", "demo")),
+        )
     parser.error(f"unknown command: {command}")
     return 2
 

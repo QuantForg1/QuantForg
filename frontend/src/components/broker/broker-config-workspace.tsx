@@ -910,8 +910,19 @@ export function BrokerConfigWorkspace() {
 
             {selectedBroker && !selectedBroker.connectable ? (
               <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--fg-muted)]">
-                {selectedBroker.name} appears for discovery planning only. Connect is disabled until a
-                QuantForg Windows MT5 worker verifies this broker. Use Weltrade for production connect.
+                {selectedBroker.name} is listed for Demo/Live server discovery, but Connect stays
+                disabled until a QuantForg Windows MT5 worker records a real authenticate+verify.
+                Documented search hints are not selectable verified servers. Weltrade remains the
+                production-verified path.
+              </p>
+            ) : null}
+            {serversQ.isSuccess && !serverOptions.length && selectedBroker ? (
+              <p className="text-[11px] text-[var(--fg-subtle)]">
+                No verified {accountType} servers for {selectedBroker.name} yet
+                {asList(asRecord(serversQ.data).documented_search_hints).length
+                  ? ` · documented search hints available to operators (${asList(asRecord(serversQ.data).documented_search_hints).length})`
+                  : ""}
+                .
               </p>
             ) : null}
 

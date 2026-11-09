@@ -88,36 +88,6 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 "priority": profile.priority,
             }
         )
-    # Brands requested in product scope but not yet in ecosystem profiles.
-    for slug, name, website in (
-        ("fp-markets", "FP Markets", "https://www.fpmarkets.com"),
-    ):
-        if any(r["slug"] == slug for r in rows):
-            continue
-        verified = slug in evidence_connectable
-        stub_ev = evidence_for_broker(slug) if verified else None
-        if verified and stub_ev is not None:
-            status = str(stub_ev.get("connection_status") or "demo_verified")
-            notes = "Windows MT5 worker verified session."
-        else:
-            status = "not_verified"
-            notes = (
-                "Documented MT5 brand only. Awaiting Windows gateway "
-                "verification before connect is enabled."
-            )
-        rows.append(
-            {
-                "slug": slug,
-                "name": name,
-                "website": website,
-                "platform": "mt5",
-                "connection_status": status,
-                "connectable": verified,
-                "notes": notes,
-                "regions": ["Global"],
-                "priority": 90,
-            }
-        )
     return sorted(
         rows,
         key=lambda r: (0 if r["connectable"] else 1, r["priority"], r["slug"]),
