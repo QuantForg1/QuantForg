@@ -261,6 +261,27 @@ export function Sidebar() {
       className="fixed inset-y-0 left-0 z-30 hidden border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_62%,transparent)] shadow-[4px_0_24px_rgba(2,12,28,0.18)] backdrop-blur-xl transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
       aria-label="Workspace rail"
     >
+      <div
+        className={cn(
+          "shrink-0 border-b border-[var(--border)]",
+          chrome.collapsed ? "px-2 py-3" : "px-3 py-3.5",
+        )}
+      >
+        <Link
+          href="/dashboard"
+          className={cn(
+            "flex items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+            chrome.collapsed ? "justify-center" : "gap-2.5",
+          )}
+          aria-label="QuantForg overview"
+        >
+          {chrome.collapsed ? (
+            <BrandLogo size={28} wordmark={false} priority />
+          ) : (
+            <BrandLogo size={32} priority />
+          )}
+        </Link>
+      </div>
       <Suspense fallback={<div className="flex-1" aria-hidden />}>
         <NavBody collapsed={chrome.collapsed} />
       </Suspense>

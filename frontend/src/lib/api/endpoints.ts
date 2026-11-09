@@ -1003,6 +1003,12 @@ export const brokerConnectivityApi = {
     ),
   ecosystem: () =>
     apiFetch<Record<string, unknown>>("/broker-connectivity/ecosystem"),
+  mt5BrokerRegistry: () =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/mt5-broker-registry"),
+  mt5Servers: (broker: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/broker-connectivity/mt5-servers?broker=${encodeURIComponent(broker)}`,
+    ),
   compatibility: (broker?: string, symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
       broker

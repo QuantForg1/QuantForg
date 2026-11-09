@@ -1,7 +1,9 @@
 /**
- * Documented MT5 broker brands for Broker Accounts UI.
- * Connection still uses the existing MT5 / Weltrade session path —
- * this catalog only drives selection labels, logos, and server hints.
+ * MT5 broker registry for Broker Accounts.
+ *
+ * Only Weltrade is marked production-verified / connectable until another
+ * broker's MT5 connection is proven on a QuantForg Windows gateway/worker.
+ * Documented brands may appear in the dropdown, but must not imply a live path.
  */
 
 export type Mt5BrokerSlug =
@@ -13,16 +15,27 @@ export type Mt5BrokerSlug =
   | "hfm"
   | "xm";
 
+export type Mt5ConnectionStatus = "production_verified" | "not_verified";
+
 export type Mt5BrokerOption = {
   slug: Mt5BrokerSlug;
   name: string;
   logoSrc: string;
   website: string;
-  /** Documented server name hints — never invent beyond these UI options. */
+  connectionStatus: Mt5ConnectionStatus;
+  connectable: boolean;
+  /** Verified servers only — empty until discovery / production proof. */
   servers: {
     live: string[];
     demo: string[];
   };
+};
+
+export type Mt5ServerRow = {
+  name: string;
+  environment: "demo" | "live";
+  source: string;
+  verified_at: string | null;
 };
 
 export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
@@ -31,8 +44,10 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "Weltrade",
     logoSrc: "/brand/brokers/weltrade-mark.png",
     website: "https://www.weltrade.com",
+    connectionStatus: "production_verified",
+    connectable: true,
     servers: {
-      live: ["Weltrade-Real", "Weltrade-MT5"],
+      live: ["Weltrade-Real"],
       demo: ["Weltrade-Demo"],
     },
   },
@@ -41,60 +56,54 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "Exness",
     logoSrc: "/brand/brokers/exness-mark.png",
     website: "https://www.exness.com",
-    servers: {
-      live: ["Exness-MT5Real", "Exness-MT5"],
-      demo: ["Exness-Trial"],
-    },
+    connectionStatus: "not_verified",
+    connectable: false,
+    servers: { live: [], demo: [] },
   },
   {
     slug: "ic-markets",
     name: "IC Markets",
     logoSrc: "/brand/brokers/icmarkets-mark.svg",
     website: "https://www.icmarkets.com",
-    servers: {
-      live: ["ICMarketsSC-MT5", "ICMarketsSC-MT5-2", "ICMarketsEU-MT5"],
-      demo: ["ICMarkets-Demo"],
-    },
+    connectionStatus: "not_verified",
+    connectable: false,
+    servers: { live: [], demo: [] },
   },
   {
     slug: "pepperstone",
     name: "Pepperstone",
     logoSrc: "/brand/brokers/pepperstone-mark.png",
     website: "https://pepperstone.com",
-    servers: {
-      live: ["Pepperstone-MT5-Live", "PepperstoneLtd-Live"],
-      demo: ["Pepperstone-MT5-Demo"],
-    },
+    connectionStatus: "not_verified",
+    connectable: false,
+    servers: { live: [], demo: [] },
   },
   {
     slug: "fp-markets",
     name: "FP Markets",
     logoSrc: "/brand/brokers/fpmarkets-mark.png",
     website: "https://www.fpmarkets.com",
-    servers: {
-      live: ["FPMarkets-Live", "FPMarketsLLC-Live"],
-      demo: ["FPMarkets-Demo"],
-    },
+    connectionStatus: "not_verified",
+    connectable: false,
+    servers: { live: [], demo: [] },
   },
   {
     slug: "hfm",
     name: "HFM",
     logoSrc: "/brand/brokers/hfm-mark.svg",
     website: "https://www.hfm.com",
-    servers: {
-      live: ["HFM-Live", "HFMarketsGlobal-Live"],
-      demo: ["HFM-Demo"],
-    },
+    connectionStatus: "not_verified",
+    connectable: false,
+    servers: { live: [], demo: [] },
   },
   {
     slug: "xm",
     name: "XM",
     logoSrc: "/brand/brokers/xm-mark.png",
     website: "https://www.xm.com",
-    servers: {
-      live: ["XMGlobal-MT5", "XMGlobal-Real", "XM.COM-Real", "XMTrading-Real"],
-      demo: ["XMGlobal-Demo"],
-    },
+    connectionStatus: "not_verified",
+    connectable: false,
+    servers: { live: [], demo: [] },
   },
 ] as const;
 
@@ -130,7 +139,16 @@ export function serversForBroker(
   broker: Mt5BrokerOption | undefined,
   accountType: "demo" | "live",
   profileServers?: string[],
+  apiServers?: Mt5ServerRow[],
 ): string[] {
+  if (apiServers && apiServers.length) {
+    const filtered = apiServers
+      .filter((s) => (accountType === "demo" ? s.environment === "demo" : s.environment === "live"))
+      .map((s) => s.name);
+    if (filtered.length) return filtered;
+    // If API returned mixed envs only, still surface all verified names.
+    return apiServers.map((s) => s.name);
+  }
   const documented = broker
     ? accountType === "demo"
       ? [...broker.servers.demo]
@@ -140,5 +158,32 @@ export function serversForBroker(
   for (const s of profileServers || []) {
     if (s && !merged.includes(s)) merged.push(s);
   }
-  return merged.length ? merged : accountType === "demo" ? ["Demo"] : ["Live"];
+  return merged;
+}
+
+export function mapRegistryBrokers(apiBrokers: unknown): Mt5BrokerOption[] {
+  if (!Array.isArray(apiBrokers) || !apiBrokers.length) {
+    return [...MT5_BROKER_OPTIONS];
+  }
+  const bySlug = new Map(MT5_BROKER_OPTIONS.map((b) => [b.slug, b]));
+  const out: Mt5BrokerOption[] = [];
+  for (const raw of apiBrokers) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const slug = String(row.slug || "") as Mt5BrokerSlug;
+    const base = bySlug.get(slug);
+    if (!base) continue;
+    out.push({
+      ...base,
+      connectionStatus:
+        row.connection_status === "production_verified"
+          ? "production_verified"
+          : "not_verified",
+      connectable: Boolean(row.connectable),
+    });
+  }
+  for (const b of MT5_BROKER_OPTIONS) {
+    if (!out.some((x) => x.slug === b.slug)) out.push(b);
+  }
+  return out;
 }

@@ -37,27 +37,28 @@ export function BrokerLogo({
   );
 }
 
+/** Official MetaTrader 5 mark (sourced from metatrader5.com). */
 export function Mt5BrandMark({ size = 72, className }: { size?: number; className?: string }) {
   return (
     <span
       className={cn("relative inline-flex items-center justify-center", className)}
       style={{ width: size, height: size }}
-      aria-hidden
     >
       <span
-        className="absolute inset-[-18%] rounded-full opacity-70 blur-xl"
+        className="absolute inset-[-12%] rounded-full opacity-50 blur-2xl"
         style={{
           background:
-            "radial-gradient(circle, rgba(0,255,163,0.45) 0%, rgba(0,180,255,0.22) 45%, transparent 70%)",
+            "radial-gradient(circle, rgba(0,212,224,0.28) 0%, rgba(8,124,255,0.12) 48%, transparent 72%)",
         }}
+        aria-hidden
       />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/brand/brokers/mt5-mark.svg"
-        alt=""
+        src="/brand/brokers/metatrader5-logo.png"
+        alt="MetaTrader 5"
         width={size}
         height={size}
-        className="relative z-[1] h-full w-full object-contain drop-shadow-[0_0_18px_rgba(0,212,224,0.45)]"
+        className="relative z-[1] h-full w-full rounded-2xl object-contain"
       />
     </span>
   );
