@@ -95,7 +95,10 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 "priority": 90,
             }
         )
-    return sorted(rows, key=lambda r: (0 if r["connectable"] else 1, r["priority"], r["slug"]))
+    return sorted(
+        rows,
+        key=lambda r: (0 if r["connectable"] else 1, r["priority"], r["slug"]),
+    )
 
 
 def verified_servers_for_broker(
