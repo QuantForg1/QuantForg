@@ -130,7 +130,7 @@ async def mt5_servers(
         "servers_by_environment": {"demo": demo, "live": live},
         # Documented search hints are diagnostics only — not verified connect options.
         "documented_search_hints": documented_hints_for_admin(slug),
-        "password_included": False,
+        "credentials_exposed": False,
         "note": (
             "Selectable connect servers are verified rows only. "
             "Documented hints are search aids and never invent connectivity."
@@ -173,7 +173,7 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
                     "account_login_verified": row.get("account_login_verified") or "",
                     "server_verified": row.get("server_verified") or "",
                     "revoked": bool(row.get("revoked")),
-                    "password_included": False,
+                    "credentials_exposed": False,
                 }
             )
     except Exception as exc:
@@ -183,7 +183,7 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
         )
     return {
         "ok": True,
-        "password_included": False,
+        "credentials_exposed": False,
         "live_submit_enabled": multi_account_live_submit_allowed(),
         "workers": workers,
         "worker_count": len(workers),

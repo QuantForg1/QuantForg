@@ -73,7 +73,7 @@ def test_register_heartbeat_assignment_idempotent() -> None:
     assert r1.status_code == 200
     body1 = r1.json()
     assert body1["ok"] is True
-    assert body1["password_included"] is False
+    assert body1["credentials_exposed"] is False
     wid = body1["worker_id"]
 
     r2 = client.post(
@@ -101,9 +101,9 @@ def test_register_heartbeat_assignment_idempotent() -> None:
     assert assign.status_code == 200
     payload = assign.json()
     assert payload["ok"] is True
-    assert payload["credentials"]["password_included"] is False
+    assert payload["credentials"]["credentials_exposed"] is False
     blob = str(payload).lower()
-    assert "password" not in blob or "password_included" in blob
+    assert "password" not in blob
     assert "secret" not in blob
 
 
@@ -177,7 +177,7 @@ def test_credentials_authorize_never_returns_password() -> None:
     assert authz.status_code == 200
     body = authz.json()
     assert body["authorized"] is True
-    assert body["password_included"] is False
+    assert body["credentials_exposed"] is False
     assert "password" not in body or body.get("password") in (None, False)
 
 

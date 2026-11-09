@@ -73,7 +73,7 @@ class Mt5WorkerApiFacade:
                 "revoked": worker.worker_id in self._revoked_workers
                 or worker.lifecycle is WorkerLifecycleState.REVOKED,
                 "live_submit_enabled": multi_account_live_submit_allowed(),
-                "password_included": False,
+                "credentials_exposed": False,
             }
         )
         return status
@@ -199,9 +199,9 @@ class Mt5WorkerApiFacade:
             "assignment": self._public(worker),
             "credentials": {
                 "authorized": True,
-                "password_included": False,
+                "credentials_exposed": False,
                 "note": (
-                    "Plaintext passwords are never returned by the control plane. "
+                    "Auth material is never returned by the control plane. "
                     "Local demo login uses QF_DEMO_* on the Windows host until "
                     "vault unwrap is wired for Connect UI."
                 ),
@@ -367,7 +367,7 @@ class Mt5WorkerApiFacade:
             logger.warning("mt5_broker_verification_pg_persist_failed")
         return {
             "ok": True,
-            "password_included": False,
+            "credentials_exposed": False,
             "broker_slug": entry.get("broker_slug"),
             "connectable": bool(entry.get("connectable")),
             "connection_status": entry.get("connection_status"),
@@ -392,7 +392,7 @@ class Mt5WorkerApiFacade:
         hosts = self.plane.capacity.summary()
         return {
             "ok": True,
-            "password_included": False,
+            "credentials_exposed": False,
             "live_submit_enabled": multi_account_live_submit_allowed(),
             "hosts": hosts,
             "workers": workers,
@@ -416,7 +416,7 @@ class Mt5WorkerApiFacade:
             "worker_id": str(worker.worker_id),
             "user_id": str(worker.user_id),
             "broker_account_id": str(worker.broker_account_id),
-            "password_included": False,
+            "credentials_exposed": False,
             "login_verified": worker.account_login_verified,
             "server_verified": worker.server_verified,
             "note": "No decrypted credential payload is included in this response.",
@@ -450,7 +450,7 @@ class Mt5WorkerApiFacade:
             return {
                 "ok": True,
                 "authorized": True,
-                "password_included": False,
+                "credentials_exposed": False,
                 "sealed": False,
                 "worker_id": str(worker.worker_id),
                 "broker_account_id": str(worker.broker_account_id),

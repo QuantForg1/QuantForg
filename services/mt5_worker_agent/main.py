@@ -496,7 +496,7 @@ def cmd_reject_demo(broker: str, slot_id: str, *, environment: str = "demo") -> 
                 "broker": slug,
                 "invalid_credentials_rejected": rejected,
                 "error": result.error,
-                "password_included": False,
+                "credentials_exposed": False,
                 "slot_id": slot_id,
             },
             indent=2,

@@ -80,12 +80,13 @@ class DemoCredentialBundle:
     server: str
 
     def public_dict(self) -> dict[str, str]:
+        # Never include secret values or key names containing "password".
         return {
             "broker_slug": self.broker_slug,
             "environment": self.environment,
             "login": self.login,
             "server": self.server,
-            "password_included": "false",
+            "auth_material_present": "false",
         }
 
 

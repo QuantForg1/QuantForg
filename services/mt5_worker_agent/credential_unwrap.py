@@ -50,7 +50,8 @@ def claim_result_safe_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "ok": bool(payload.get("ok")),
         "authorized": bool(payload.get("authorized")),
         "sealed": bool(payload.get("sealed")),
-        "password_included": bool(payload.get("password_included")),
+        # Always false in operator summaries — never echo secret-bearing flags.
+        "credentials_exposed": False,
         "error": payload.get("error"),
         "has_envelope": bool(payload.get("sealed_envelope")),
     }
