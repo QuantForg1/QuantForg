@@ -365,8 +365,7 @@ class PostgresBrokerAccountRepository:
         """
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM broker_accounts
                 WHERE broker_id = :broker_id
                   AND status <> 'revoked'
@@ -374,8 +373,7 @@ class PostgresBrokerAccountRepository:
                       = lower(trim(:external_account_id))
                   AND lower(trim(server)) = lower(trim(:server))
                 LIMIT 1
-                """
-            ),
+                """),
             {
                 "broker_id": str(broker_id),
                 "external_account_id": external_account_id.strip(),
@@ -389,14 +387,12 @@ class PostgresBrokerAccountRepository:
         """Return the user's single non-revoked MT5 account, if any."""
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM broker_accounts
                 WHERE user_id = :user_id
                   AND status <> 'revoked'
                 LIMIT 1
-                """
-            ),
+                """),
             {"user_id": str(user_id)},
         )
         row = result.mappings().first()

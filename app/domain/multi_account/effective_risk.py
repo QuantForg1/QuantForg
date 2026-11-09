@@ -197,7 +197,7 @@ def resolve_effective_risk(
     admin_concurrent_i: int | None = None
     if admin_concurrent is not None:
         try:
-            admin_concurrent_i = int(admin_concurrent)
+            admin_concurrent_i = int(str(admin_concurrent))
         except (TypeError, ValueError):
             rejected.append("max_concurrent_positions:invalid_admin_max")
 
