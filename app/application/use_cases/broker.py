@@ -333,6 +333,19 @@ class CreateBrokerAccountUseCase:
                     "Broker is not available for new accounts",
                     details={"status": broker.status.value},
                 )
+            # Phase 1a product rule: one non-revoked MT5 account per user.
+            existing_for_user = await uow.accounts.get_non_revoked_for_user(
+                command.user_id
+            )
+            if existing_for_user is not None:
+                raise ConflictError(
+                    "User already has an active MT5 trading account",
+                    details={
+                        "user_id": str(command.user_id),
+                        "existing_account_id": str(existing_for_user.id),
+                    },
+                )
+
             duplicate = await uow.accounts.get_by_user_broker_external(
                 command.user_id,
                 command.broker_id,
@@ -345,6 +358,23 @@ class CreateBrokerAccountUseCase:
                 raise ConflictError(
                     "Broker account already linked",
                     details={"external_account_id": command.external_account_id},
+                )
+
+            # Global ownership claim (broker + server + login).
+            # DB unique index is authoritative once migration is applied;
+            # this check fails closed early for cross-user duplicates.
+            global_claim = await uow.accounts.get_active_global_claim(
+                command.broker_id,
+                server=command.server,
+                external_account_id=command.external_account_id.strip(),
+            )
+            if global_claim is not None and global_claim.user_id != command.user_id:
+                raise ConflictError(
+                    "Broker account login already claimed by another user",
+                    details={
+                        "external_account_id": command.external_account_id.strip(),
+                        "server": (command.server or "").strip(),
+                    },
                 )
 
             account = BrokerAccount.link(

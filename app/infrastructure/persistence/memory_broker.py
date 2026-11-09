@@ -107,7 +107,88 @@ class InMemoryBrokerAccountRepository:
                 return account
         return None
 
+    async def get_active_global_claim(
+        self,
+        broker_id: UUID,
+        *,
+        server: str,
+        external_account_id: str,
+    ) -> BrokerAccount | None:
+        from app.domain.enums.broker import BrokerAccountStatus
+        from app.domain.multi_account.ownership_claim import ownership_claim_key
+
+        key = ownership_claim_key(
+            broker_id=broker_id,
+            server=server,
+            login=external_account_id,
+        )
+        for account in self.items.values():
+            if account.status == BrokerAccountStatus.REVOKED:
+                continue
+            if (
+                account.broker_id,
+                account.server.strip().lower(),
+                account.external_account_id.strip().lower(),
+            ) == key:
+                return account
+        return None
+
+    async def get_non_revoked_for_user(self, user_id: UUID) -> BrokerAccount | None:
+        from app.domain.enums.broker import BrokerAccountStatus
+
+        for account in self.items.values():
+            if (
+                account.user_id == user_id
+                and account.status != BrokerAccountStatus.REVOKED
+            ):
+                return account
+        return None
+
     async def add(self, account: BrokerAccount) -> BrokerAccount:
+        from app.domain.enums.broker import BrokerAccountStatus
+        from app.domain.exceptions.base import ConflictError
+        from app.domain.multi_account.ownership_claim import ownership_claim_key
+
+        if account.status != BrokerAccountStatus.REVOKED:
+            for existing in self.items.values():
+                if existing.id == account.id:
+                    continue
+                if existing.status == BrokerAccountStatus.REVOKED:
+                    continue
+                if existing.user_id == account.user_id:
+                    raise ConflictError(
+                        "User already has an active MT5 trading account",
+                        details={
+                            "user_id": str(account.user_id),
+                            "existing_account_id": str(existing.id),
+                        },
+                    )
+            key = ownership_claim_key(
+                broker_id=account.broker_id,
+                server=account.server,
+                login=account.external_account_id,
+            )
+            for existing in self.items.values():
+                if existing.id == account.id:
+                    continue
+                if existing.status == BrokerAccountStatus.REVOKED:
+                    continue
+                existing_key = (
+                    existing.broker_id,
+                    existing.server.strip().lower(),
+                    existing.external_account_id.strip().lower(),
+                )
+                if existing_key == key:
+                    raise ConflictError(
+                        "Broker account login already claimed by another user",
+                        details={
+                            "broker_id": str(account.broker_id),
+                            "login": key[2],
+                            "server": key[1],
+                            "existing_account_id": str(existing.id),
+                            "existing_user_id": str(existing.user_id),
+                        },
+                    )
         self.items[account.id] = account
         return account
 

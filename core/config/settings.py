@@ -748,6 +748,36 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Multi-account dispatch (foundation only; LIVE fan-out stays off) ----
+    multi_account_dispatch_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "When true, allows durable multi-account signal dispatch records "
+                "and eligibility evaluation. Does NOT authorize broker order_send "
+                "fan-out. Default false — existing single-account LIVE path only."
+            ),
+            validation_alias=AliasChoices(
+                "MULTI_ACCOUNT_DISPATCH_ENABLED",
+                "multi_account_dispatch_enabled",
+            ),
+        ),
+    ] = False
+    multi_account_live_submit_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Owner-gated LIVE multi-account order submission. Requires "
+                "MULTI_ACCOUNT_DISPATCH_ENABLED and explicit founder approval. "
+                "Default false. Never enable from unit tests or CI."
+            ),
+            validation_alias=AliasChoices(
+                "MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED",
+                "multi_account_live_submit_enabled",
+            ),
+        ),
+    ] = False
+
     # -- Phase A institutional safety hardening (rollback = set False) -------
     phase_a_kill_persistence_enabled: Annotated[
         bool,

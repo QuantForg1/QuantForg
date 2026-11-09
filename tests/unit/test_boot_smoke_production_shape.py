@@ -29,6 +29,12 @@ assert settings.debug is False, "DEBUG not coerced"
 assert settings.reload is False, "RELOAD not coerced"
 assert settings.force_first_trade is False, "FORCE_FIRST_TRADE not coerced"
 assert settings.allow_risk_lock_override is False, "risk override not coerced"
+assert (
+    settings.multi_account_dispatch_enabled is False
+), "multi-account dispatch must default off"
+assert (
+    settings.multi_account_live_submit_enabled is False
+), "multi-account LIVE submit must default off"
 assert settings.execution_universe_mode == "GOLD_ONLY", settings.execution_universe_mode
 assert settings.execution_enabled is False, "execution must be off without a gateway"
 
