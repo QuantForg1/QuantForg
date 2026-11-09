@@ -64,7 +64,7 @@ class RailwayWorkerClient:
                 "Authorization": f"Bearer {self._config.service_token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": "quantforg-mt5-worker-agent/1b-local",
+                "User-Agent": "quantforg-mt5-worker-agent/1c",
             },
         )
         try:
@@ -85,7 +85,12 @@ class RailwayWorkerClient:
                 exc.code,
                 detail,
             )
-            return {"ok": False, "status": exc.code, "error": "http_error"}
+            return {
+                "ok": False,
+                "status": exc.code,
+                "error": "http_error",
+                "detail": detail,
+            }
         except urllib.error.URLError as exc:
             logger.warning(
                 "railway_url_error method=%s path=%s reason=%s",
@@ -96,12 +101,22 @@ class RailwayWorkerClient:
             return {"ok": False, "error": "url_error"}
 
     def health_ping(self) -> dict[str, Any]:
-        # Prefer public live health (no secrets) then optional worker route.
-        live = self._request("GET", "/api/v1/health/live")
-        return live
+        return self._request("GET", "/api/v1/health/live")
+
+    def register_host(
+        self, *, host_code: str, max_terminals: int = 4, region: str = ""
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/hosts/register",
+            {
+                "host_code": host_code,
+                "max_terminals": max_terminals,
+                "region": region,
+            },
+        )
 
     def register_worker(self, *, host_code: str, slot_id: str) -> dict[str, Any]:
-        """Best-effort registration. Endpoint may not exist yet — report honestly."""
         return self._request(
             "POST",
             "/api/v1/mt5-workers/register",
@@ -111,6 +126,9 @@ class RailwayWorkerClient:
                 "platform": "windows-local",
             },
         )
+
+    def get_assignment(self, *, worker_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/api/v1/mt5-workers/assignments/{worker_id}")
 
     def heartbeat(
         self,
@@ -130,3 +148,49 @@ class RailwayWorkerClient:
                 "ready": ready,
             },
         )
+
+    def report_health(
+        self,
+        *,
+        worker_id: str,
+        cpu_percent: float = 0.0,
+        ram_percent: float = 0.0,
+        disk_percent: float = 0.0,
+        healthy: bool = True,
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/health",
+            {
+                "worker_id": worker_id,
+                "cpu_percent": cpu_percent,
+                "ram_percent": ram_percent,
+                "disk_percent": disk_percent,
+                "healthy": healthy,
+            },
+        )
+
+    def authorize_credentials(self, *, worker_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/credentials/authorize",
+            {"worker_id": worker_id},
+        )
+
+    def release(self, *, worker_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST", "/api/v1/mt5-workers/release", {"worker_id": worker_id}
+        )
+
+    def revoke(self, *, worker_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST", "/api/v1/mt5-workers/revoke", {"worker_id": worker_id}
+        )
+
+    def reconnect(self, *, worker_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST", "/api/v1/mt5-workers/reconnect", {"worker_id": worker_id}
+        )
+
+    def scan_stale(self) -> dict[str, Any]:
+        return self._request("POST", "/api/v1/mt5-workers/stale/scan", {})

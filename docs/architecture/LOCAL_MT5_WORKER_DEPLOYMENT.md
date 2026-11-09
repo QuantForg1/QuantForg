@@ -64,7 +64,8 @@ If credentials are absent, the command exits non-zero and reports
 
 - Outbound only: `QUANTFORG_API_BASE_URL` + `WORKER_SERVICE_TOKEN`
 - `railway-ping` hits `/api/v1/health/live`
-- Worker register/heartbeat routes may return HTTP errors until API wiring ships — that is reported honestly
+- Phase 1C: `railway-register` / `railway-heartbeat` call durable `/api/v1/mt5-workers/*` routes (see `MT5_WORKER_RAILWAY_CONTROL_PLANE.md`)
+- Requires the same `WORKER_SERVICE_TOKEN` configured on Railway; plaintext passwords are never returned by the API
 
 ## Future VPS migration (no rewrite)
 

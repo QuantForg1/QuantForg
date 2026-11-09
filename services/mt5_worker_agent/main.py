@@ -130,6 +130,39 @@ def cmd_railway_ping() -> int:
     return 0 if result.get("ok") or result.get("status") == "ok" else 1
 
 
+def cmd_railway_register() -> int:
+    from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
+
+    if not _token_ok(os.environ.get("WORKER_SERVICE_TOKEN")):
+        logger.error("WORKER_SERVICE_TOKEN missing or too short")
+        return 2
+    result = LocalWorkerSupervisor().register_with_railway()
+    print(json.dumps(result, indent=2))
+    return 0 if result.get("ok") else 1
+
+
+def cmd_railway_heartbeat() -> int:
+    from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
+
+    if not _token_ok(os.environ.get("WORKER_SERVICE_TOKEN")):
+        logger.error("WORKER_SERVICE_TOKEN missing or too short")
+        return 2
+    sup = LocalWorkerSupervisor()
+    reg = sup.register_with_railway()
+    if not reg.get("ok"):
+        print(json.dumps({"ok": False, "register": reg}, indent=2))
+        return 1
+    hb = sup.heartbeat_once()
+    assign = sup.fetch_assignments()
+    print(
+        json.dumps(
+            {"ok": True, "register": reg, "heartbeat": hb, "assignments": assign},
+            indent=2,
+        )
+    )
+    return 0
+
+
 def cmd_connect_demo(slot_id: str) -> int:
     """Real MT5 authenticate+verify for one portable slot.
 
@@ -208,6 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status")
     sub.add_parser("supervise")
     sub.add_parser("railway-ping")
+    sub.add_parser("railway-register")
+    sub.add_parser("railway-heartbeat")
     p_conn = sub.add_parser("connect-demo")
     p_conn.add_argument("--slot", default="demo-a")
     return parser
@@ -234,6 +269,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_supervise()
     if command == "railway-ping":
         return cmd_railway_ping()
+    if command == "railway-register":
+        return cmd_railway_register()
+    if command == "railway-heartbeat":
+        return cmd_railway_heartbeat()
     if command == "connect-demo":
         return cmd_connect_demo(str(args.slot))
     parser.error(f"unknown command: {command}")

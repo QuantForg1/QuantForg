@@ -91,6 +91,37 @@ class InMemoryCapacityManager:
         with self._lock:
             return self._hosts.get(host_id)
 
+    def get_by_code(self, host_code: str) -> WorkerHostCapacity | None:
+        code = (host_code or "").strip().lower()
+        with self._lock:
+            host_id = self._codes.get(code)
+            return self._hosts.get(host_id) if host_id else None
+
+    def ensure_host(
+        self,
+        *,
+        host_code: str,
+        max_terminals: int = 4,
+        region: str = "",
+        notes: str = "",
+    ) -> WorkerHostCapacity:
+        """Idempotent host registration for worker reconnects."""
+        existing = self.get_by_code(host_code)
+        if existing is not None:
+            return existing
+        try:
+            return self.register_host(
+                host_code=host_code,
+                max_terminals=max_terminals,
+                region=region,
+                notes=notes,
+            )
+        except ConflictError:
+            again = self.get_by_code(host_code)
+            if again is None:
+                raise
+            return again
+
     def list_hosts(self) -> list[WorkerHostCapacity]:
         with self._lock:
             return list(self._hosts.values())
