@@ -6,6 +6,7 @@ import {
   BarChart3,
   Brain,
   Check,
+  ChevronRight,
   CircleCheck,
   Gauge,
   Lock,
@@ -346,7 +347,7 @@ export function HomeLanding() {
             <div className={`${styles.section} ${styles.heroGrid}`}>
               <div>
                 <p className={styles.badge}>
-                  <Sparkles className="h-3.5 w-3.5 text-[var(--cta)]" aria-hidden />
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
                   Institutional AI Trading · MT5 · 24/5 gold session
                 </p>
                 <h1 className={styles.headline}>
@@ -367,9 +368,9 @@ export function HomeLanding() {
                   </Link>
                   <Link
                     href="/#how-it-works"
-                    className={`${btn} qf-glass-card h-12 border-0 px-5 text-[var(--fg)] hover:bg-[color-mix(in_srgb,var(--surface-2)_72%,transparent)]`}
+                    className={`${btn} ${styles.secondaryBtn} h-12 px-5`}
                   >
-                    <Play className="h-4 w-4" aria-hidden />
+                    <Play className="h-4 w-4 text-[var(--accent)]" aria-hidden />
                     Explore How It Works
                   </Link>
                 </div>
@@ -496,7 +497,7 @@ export function HomeLanding() {
               {ROBOT.map((step, index) => {
                 const Icon = step.icon;
                 return (
-                  <li key={step.title}>
+                  <li key={step.title} className={styles.robotItem}>
                     <div className={`qf-glass-card ${styles.robotCard}`}>
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
@@ -509,6 +510,9 @@ export function HomeLanding() {
                         {step.body}
                       </p>
                     </div>
+                    {index < ROBOT.length - 1 ? (
+                      <ChevronRight className={styles.robotArrow} aria-hidden />
+                    ) : null}
                   </li>
                 );
               })}
@@ -618,40 +622,36 @@ export function HomeLanding() {
                   ))}
                 </ul>
               </article>
-              <article id="brokers" className="qf-glass-card p-5">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                  Broker integration
+            </div>
+          </section>
+
+          <section id="brokers" className={`${styles.section} py-12`}>
+            <SectionTitle
+              kicker="Broker integration"
+              title="Supported connection"
+              body="Weltrade through MetaTrader 5 is the production broker path."
+            />
+            <div className={styles.brokerGrid}>
+              <article className="qf-glass-card qf-glass-card--hover p-5">
+                <WeltradeLogo size={44} variant="wordmark" className="mb-3 rounded-xl" />
+                <h3 className="text-lg font-semibold">Weltrade</h3>
+                <p className="mt-2 text-sm text-[var(--fg-muted)]">
+                  Connect the real account you own. The Broker Accounts screen shows login, server,
+                  balance, and sync status from that session.
                 </p>
-                <div className="space-y-4">
-                  <div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <WeltradeLogo size={28} variant="wordmark" className="rounded-lg" />
-                      <h3 className="font-semibold">Weltrade</h3>
-                    </div>
-                    <p className="text-sm text-[var(--fg-muted)]">
-                      Connect the real account you own. The Broker Accounts screen shows login,
-                      server, balance, and sync status from that session.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <Gauge className="h-4 w-4 text-[var(--accent)]" aria-hidden />
-                      <h3 className="font-semibold">MetaTrader 5</h3>
-                    </div>
-                    <p className="text-sm text-[var(--fg-muted)]">
-                      Orders, positions, and history travel through the existing gateway. A
-                      disconnected gateway shows an unavailable state.
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2 text-xs text-[var(--fg-muted)]">
-                    Status: connect a broker to replace this disconnected preview.
-                  </div>
-                </div>
+              </article>
+              <article className="qf-glass-card qf-glass-card--hover p-5">
+                <Gauge className="mb-3 h-5 w-5 text-[var(--accent)]" aria-hidden />
+                <h3 className="text-lg font-semibold">MetaTrader 5</h3>
+                <p className="mt-2 text-sm text-[var(--fg-muted)]">
+                  Orders, positions, and history travel through the existing gateway. A disconnected
+                  gateway shows an unavailable state.
+                </p>
               </article>
             </div>
           </section>
 
-          <section id="security" className={`${styles.section} py-12`}>
+          <section id="security" className={`${styles.section} py-6`}>
             <SectionTitle
               kicker="Security and reliability"
               title="Your account and the checks around it"
@@ -662,7 +662,7 @@ export function HomeLanding() {
                 const Icon = item.icon;
                 return (
                   <article key={item.title} className="qf-glass-card qf-glass-card--hover p-4">
-                    <Icon className="mb-3 h-5 w-5 text-[var(--success)]" aria-hidden />
+                    <Icon className="mb-3 h-5 w-5 text-[var(--accent)]" aria-hidden />
                     <h3 className="font-semibold">{item.title}</h3>
                     <p className="mt-1 text-sm text-[var(--fg-muted)]">{item.body}</p>
                   </article>
@@ -697,7 +697,7 @@ export function HomeLanding() {
                       Connect Your Broker
                       <ArrowRight className="h-4 w-4" aria-hidden />
                     </Link>
-                    <Link href="/pricing" className={`${btn} qf-glass-card h-11 border-0 px-5`}>
+                    <Link href="/pricing" className={`${btn} ${styles.secondaryBtn} h-11 px-5`}>
                       View Pricing
                     </Link>
                   </div>

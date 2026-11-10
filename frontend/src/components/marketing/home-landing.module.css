@@ -7,6 +7,27 @@
   color: var(--fg);
 }
 
+/* Match approved reference: cyan primary actions on Home only (not orange CTA). */
+.page :global(.qf-btn-cta) {
+  background-image: linear-gradient(180deg, #5ef6ff 0%, #00d4e0 48%, #00cac0 100%);
+  color: #031018;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 8px 28px rgba(0, 212, 224, 0.28);
+}
+
+.page :global(.qf-btn-cta:hover) {
+  filter: brightness(1.06);
+}
+
+.page :global(.qf-glass-card) {
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
 .atmosphere {
   position: fixed;
   inset: 0;
@@ -147,15 +168,30 @@
 
 .featureIcon {
   display: inline-flex;
-  height: 2.5rem;
-  width: 2.5rem;
+  height: 2.75rem;
+  width: 2.75rem;
   align-items: center;
   justify-content: center;
-  margin-bottom: 0.75rem;
-  border-radius: 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
-  background: var(--accent-soft);
+  margin-bottom: 0.85rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: radial-gradient(
+    circle at 30% 25%,
+    color-mix(in srgb, var(--accent) 28%, transparent),
+    var(--accent-soft) 70%
+  );
   color: var(--accent);
+  box-shadow: 0 0 22px rgba(0, 212, 224, 0.22);
+}
+
+.secondaryBtn {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  color: var(--fg);
+}
+
+.secondaryBtn:hover {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
 .laptop {
@@ -323,20 +359,48 @@
 }
 
 .robotRow {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
 @media (min-width: 1024px) {
   .robotRow {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 0.4rem;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.25rem;
   }
+}
+
+.robotItem {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: stretch;
+  gap: 0.25rem;
 }
 
 .robotCard {
   height: 100%;
+  min-width: 0;
+  flex: 1;
   padding: 0.75rem;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.robotArrow {
+  display: none;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--accent);
+  opacity: 0.65;
+}
+
+@media (min-width: 1024px) {
+  .robotArrow {
+    display: block;
+  }
 }
 
 .strategyGrid {
@@ -387,8 +451,19 @@
 
 @media (min-width: 1024px) {
   .diffGrid {
-    grid-template-columns: 0.9fr 1.2fr 0.95fr;
+    grid-template-columns: 0.95fr 1.25fr;
     align-items: stretch;
+  }
+}
+
+.brokerGrid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .brokerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -474,10 +549,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.45rem;
-  background: color-mix(in srgb, var(--cta) 92%, transparent);
+  background-image: linear-gradient(180deg, #5ef6ff 0%, #00d4e0 48%, #00cac0 100%);
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--cta-fg);
+  color: #031018;
+  box-shadow: 0 0 16px rgba(0, 212, 224, 0.22);
 }
 
 .formCta:hover {
