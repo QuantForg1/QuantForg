@@ -41,12 +41,14 @@ assert.match(policy, /dailyLossHaltPercent: 48/);
 assert.match(policy, /maxLot: 0\.01/);
 assert.match(policy, /maxConcurrentPositions: 1/);
 assert.match(dash, /TradingPerformancePanel/);
-assert.match(dash, /RiskIntelligencePanel/);
-assert.match(dash, /RobotActivityPanel/);
-assert.match(dash, /RecentActivityPanel/);
-assert.match(dash, /NotificationsStrip/);
+assert.doesNotMatch(dash, /RiskIntelligencePanel/);
+assert.doesNotMatch(dash, /RobotActivityPanel/);
+assert.doesNotMatch(dash, /RecentActivityPanel/);
+assert.doesNotMatch(dash, /NotificationsStrip/);
 assert.match(dash, /netDealPnl/);
 assert.match(dash, /startOfUtcDayMs/);
+const riskCenter = readFileSync(join(root, "app/(app)/risk-center/page.tsx"), "utf8");
+assert.match(riskCenter, /RiskIntelligencePanel|Account Risk Overview|My Risk Preferences/);
 assert.match(desk, /todayPnlTone/);
 assert.match(desk, /metricsUpdatedAt/);
 

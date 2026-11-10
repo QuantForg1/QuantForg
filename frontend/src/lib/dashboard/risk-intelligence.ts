@@ -1,6 +1,6 @@
 /**
  * Derive account risk intelligence from live session + open exposure.
- * Uses OWNER_RISK_POLICY_DISPLAY ceilings for explanation only — does not
+ * Thresholds mirror production ceilings for display math only — does not
  * re-implement or bypass the production risk engine.
  */
 
@@ -33,6 +33,11 @@ export function deriveRiskIntelligence(input: {
   emergencyStop?: unknown;
   liveAuthorization?: unknown;
   ordersMaySubmit?: unknown;
+  /** Optional personal/effective ceilings; defaults stay internal. */
+  dailyLossHaltPercent?: number;
+  maxAggregateOpenRiskPercent?: number;
+  maxConcurrentPositions?: number;
+  riskPerTradePercent?: number;
 }): RiskIntelligenceSnapshot {
   const equity = num(input.equity);
   const balance = num(input.balance);
@@ -40,6 +45,22 @@ export function deriveRiskIntelligence(input: {
   const today = num(input.todayPnl);
   const openCount = Math.max(0, Math.floor(input.openPositionCount ?? 0));
   const policy = OWNER_RISK_POLICY_DISPLAY;
+  const dailyHalt =
+    Number.isFinite(input.dailyLossHaltPercent)
+      ? Number(input.dailyLossHaltPercent)
+      : policy.dailyLossHaltPercent;
+  const aggCeiling =
+    Number.isFinite(input.maxAggregateOpenRiskPercent)
+      ? Number(input.maxAggregateOpenRiskPercent)
+      : policy.maxAggregateOpenRiskPercent;
+  const maxConcurrent =
+    Number.isFinite(input.maxConcurrentPositions)
+      ? Math.max(1, Math.floor(Number(input.maxConcurrentPositions)))
+      : policy.maxConcurrentPositions;
+  const riskPerTrade =
+    Number.isFinite(input.riskPerTradePercent)
+      ? Number(input.riskPerTradePercent)
+      : policy.riskPerTradePercent;
 
   const available = Number.isFinite(equity) && equity > 0;
   if (!available) {
@@ -51,7 +72,7 @@ export function deriveRiskIntelligence(input: {
       dailyLossRemainingPct: NaN,
       aggregateOpenRiskPct: NaN,
       openPositionCount: openCount,
-      maxConcurrentPositions: policy.maxConcurrentPositions,
+      maxConcurrentPositions: maxConcurrent,
       floatingPnl: Number.isFinite(floating) ? floating : NaN,
       equity: Number.isFinite(equity) ? equity : NaN,
       available: false,
@@ -59,7 +80,9 @@ export function deriveRiskIntelligence(input: {
   }
 
   const peakRef =
-    Number.isFinite(balance) && balance > equity ? balance : equity - (Number.isFinite(floating) ? Math.min(0, floating) : 0);
+    Number.isFinite(balance) && balance > equity
+      ? balance
+      : equity - (Number.isFinite(floating) ? Math.min(0, floating) : 0);
   const drawdownPct =
     Number.isFinite(peakRef) && peakRef > 0 && Number.isFinite(floating) && floating < 0
       ? (Math.abs(floating) / equity) * 100
@@ -69,17 +92,13 @@ export function deriveRiskIntelligence(input: {
 
   const dailyLossUsedPct =
     Number.isFinite(today) && today < 0 ? (Math.abs(today) / equity) * 100 : 0;
-  const dailyLossRemainingPct = Math.max(
-    0,
-    policy.dailyLossHaltPercent - dailyLossUsedPct,
-  );
+  const dailyLossRemainingPct = Math.max(0, dailyHalt - dailyLossUsedPct);
 
-  // Open exposure proxy: floating loss relative to equity, capped by concurrent count.
   const aggregateOpenRiskPct =
     Number.isFinite(floating) && floating < 0
       ? (Math.abs(floating) / equity) * 100
       : openCount > 0
-        ? Math.min(policy.maxAggregateOpenRiskPercent, policy.riskPerTradePercent)
+        ? Math.min(aggCeiling, riskPerTrade)
         : 0;
 
   const auth = String(input.liveAuthorization || "").toUpperCase();
@@ -88,41 +107,41 @@ export function deriveRiskIntelligence(input: {
   const maySubmit = input.ordersMaySubmit;
 
   let state: RiskHealthState = "Healthy";
-  let reason = "Within owner risk ceilings.";
+  let reason = "Account risk is within your effective protection limits.";
 
-  if (emergency || riskLocked || dailyLossUsedPct >= policy.dailyLossHaltPercent) {
+  if (emergency || riskLocked || dailyLossUsedPct >= dailyHalt) {
     state = "Halted";
     reason =
-      dailyLossUsedPct >= policy.dailyLossHaltPercent
-        ? `Daily loss reached the ${policy.dailyLossHaltPercent}% halt ceiling.`
+      dailyLossUsedPct >= dailyHalt
+        ? "Daily loss protection has halted new entries for this account."
         : emergency
           ? "Emergency stop is active on the trading session."
           : "Risk lock is active on this account session.";
   } else if (
-    openCount > policy.maxConcurrentPositions ||
-    aggregateOpenRiskPct >= policy.maxAggregateOpenRiskPercent ||
+    openCount > maxConcurrent ||
+    aggregateOpenRiskPct >= aggCeiling ||
     (typeof maySubmit === "boolean" && maySubmit === false) ||
     auth.includes("DISABLED") ||
     auth.includes("BLOCK")
   ) {
     state = "Restricted";
-    if (openCount > policy.maxConcurrentPositions) {
-      reason = `Open positions exceed the max concurrent limit of ${policy.maxConcurrentPositions}.`;
-    } else if (aggregateOpenRiskPct >= policy.maxAggregateOpenRiskPercent) {
-      reason = `Aggregate open risk is at or above the ${policy.maxAggregateOpenRiskPercent}% ceiling.`;
+    if (openCount > maxConcurrent) {
+      reason = "Open positions exceed your allowed concurrent-position preference.";
+    } else if (aggregateOpenRiskPct >= aggCeiling) {
+      reason = "Aggregate open risk is at or above your effective ceiling.";
     } else if (typeof maySubmit === "boolean" && maySubmit === false) {
       reason = "Orders may not submit under the current session authorization.";
     } else {
       reason = "Live trading authorization is not enabled for this session.";
     }
   } else if (
-    dailyLossUsedPct >= policy.dailyLossHaltPercent * 0.5 ||
+    dailyLossUsedPct >= dailyHalt * 0.5 ||
     drawdownPct >= 5 ||
-    aggregateOpenRiskPct >= policy.maxAggregateOpenRiskPercent * 0.66
+    aggregateOpenRiskPct >= aggCeiling * 0.66
   ) {
     state = "Warning";
     reason =
-      dailyLossUsedPct >= policy.dailyLossHaltPercent * 0.5
+      dailyLossUsedPct >= dailyHalt * 0.5
         ? `Daily loss usage is elevated (${dailyLossUsedPct.toFixed(1)}% of equity).`
         : drawdownPct >= 5
           ? `Current drawdown is elevated (${drawdownPct.toFixed(1)}%).`
@@ -137,7 +156,7 @@ export function deriveRiskIntelligence(input: {
     dailyLossRemainingPct,
     aggregateOpenRiskPct,
     openPositionCount: openCount,
-    maxConcurrentPositions: policy.maxConcurrentPositions,
+    maxConcurrentPositions: maxConcurrent,
     floatingPnl: Number.isFinite(floating) ? floating : 0,
     equity,
     available: true,

@@ -28,8 +28,8 @@ const traderUx = readFileSync(join(root, "lib/trading/trader-ux.ts"), "utf8");
 const perfSrc = readFileSync(join(root, "lib/dashboard/performance-window.ts"), "utf8");
 const statsSrc = readFileSync(join(root, "lib/dashboard/deal-stats.ts"), "utf8");
 
-assert.match(pageSrc, /resolveLastExecutionView/);
-assert.match(pageSrc, /live_submit_enabled/);
+assert.match(pageSrc, /TradingPerformancePanel/);
+assert.doesNotMatch(pageSrc, /resolveLastExecutionView/);
 assert.match(robotSrc, /Weltrade LIVE/);
 assert.match(robotSrc, /Multi-account LIVE/);
 assert.match(robotSrc, /stale/);
@@ -37,6 +37,11 @@ assert.match(activitySrc, /activityKindFromDeal|classifyDealKind|deposit/);
 assert.match(traderUx, /Weltrade single-account/);
 assert.match(perfSrc, /isTradeDeal/);
 assert.match(statsSrc, /isTradeDeal/);
+const dealClass = readFileSync(
+  join(root, "lib/dashboard/deal-classification.ts"),
+  "utf8",
+);
+assert.match(dealClass, /resolveLastExecutionView/);
 
 const deposit = {
   comment: "Deposit from #12439799",

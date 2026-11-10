@@ -414,6 +414,21 @@ export const brokersApi = {
 export const riskApi = {
   check: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/risk/check", { method: "POST", body }),
+  preferences: () =>
+    apiFetch<Record<string, unknown>>("/risk/preferences"),
+  updatePreferences: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/risk/preferences", {
+      method: "PUT",
+      body,
+    }),
+  effectivePreferences: () =>
+    apiFetch<Record<string, unknown>>("/risk/preferences/effective"),
+  preferenceBounds: () =>
+    apiFetch<Record<string, unknown>>("/risk/preferences/bounds"),
+  preferenceHistory: (limit = 40) =>
+    apiFetch<Record<string, unknown>>(
+      `/risk/preferences/history?limit=${encodeURIComponent(String(limit))}`,
+    ),
 };
 
 export const portfolioIntelligenceApi = {
