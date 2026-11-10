@@ -241,6 +241,23 @@ export const mt5Api = {
     apiFetch<unknown[]>(
       `/mt5/research/candles/${encodeURIComponent(resolveTradingSymbol(symbol))}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
     ),
+  /**
+   * Public platform/reference candles — works without login.
+   * Prefer this for Live Market chart surfaces.
+   */
+  publicCandles: async (symbol: string, timeframe = "H1", count = 400) => {
+    const payload = await apiFetch<Record<string, unknown>>(
+      `/public/market/candles/${encodeURIComponent(resolveTradingSymbol(symbol))}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
+      { auth: false },
+    );
+    return payload;
+  },
+  /** Public platform/reference tick — works without login. */
+  publicTick: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/public/market/tick/${encodeURIComponent(resolveTradingSymbol(symbol))}`,
+      { auth: false },
+    ),
   validateOrder: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/mt5/order/validate", {
       method: "POST",

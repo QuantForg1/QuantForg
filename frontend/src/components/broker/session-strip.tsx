@@ -30,7 +30,7 @@ export const SessionStrip = memo(function SessionStrip({
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={session.connected ? "success" : "warning"} className="gap-1.5">
           <span className="qf-status-dot h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-          {session.connected ? "Session live" : "Session offline"}
+          {session.connected ? "Broker session live" : "Broker session offline"}
         </Badge>
         <Badge tone={session.gatewayOnline ? "accent" : "neutral"}>
           {session.gatewayLabel}
@@ -40,7 +40,7 @@ export const SessionStrip = memo(function SessionStrip({
             ? `${session.server} · login ${session.login}${
                 session.latencyMs !== "—" ? ` · ${session.latencyMs} ms` : ""
               }`
-            : "Open Broker Workspace to attach the live MT5 session"}
+            : "Personal MT5 attach is optional for market charts — required for account trades"}
         </span>
       </div>
       <div className="flex gap-2">

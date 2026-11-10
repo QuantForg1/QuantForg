@@ -18,10 +18,13 @@ const endpoints = readFileSync(join(root, "lib/api/endpoints.ts"), "utf8");
 
 assert.match(endpoints, /researchCandles/);
 assert.match(endpoints, /researchTick/);
+assert.match(endpoints, /publicCandles/);
+assert.match(endpoints, /publicTick/);
 assert.match(endpoints, /\/mt5\/research\/candles\//);
 assert.match(endpoints, /\/mt5\/research\/ticks\//);
+assert.match(endpoints, /\/public\/market\//);
 
-assert.match(chart, /researchCandles/);
+assert.match(chart, /publicCandles/);
 assert.match(chart, /marketFeedEnabled/);
 assert.equal(chart.includes("Broker not connected"), false);
 assert.equal(chart.includes("Connect MT5"), false);

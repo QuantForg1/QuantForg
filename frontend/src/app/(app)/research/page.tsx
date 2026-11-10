@@ -22,7 +22,7 @@ export default function ResearchPage() {
     <div className="flex h-full min-h-0 w-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-1.5">
         <p className="text-center text-[11px] font-medium text-[var(--fg-muted)]">
-          Research is not a trade authorization · live Gold candles still require a reachable broker Gateway
+          Research is not a trade authorization · market charts use the platform feed · personal MT5 is for account trades only
         </p>
         <Link
           href="/signals"

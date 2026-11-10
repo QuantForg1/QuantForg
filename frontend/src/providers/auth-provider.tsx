@@ -269,3 +269,8 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
+
+/** Safe for marketing chrome that may prerender outside AuthProvider. */
+export function useAuthOptional(): AuthContextValue | null {
+  return useContext(AuthContext);
+}
