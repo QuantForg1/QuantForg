@@ -16,8 +16,8 @@ from typing import Any, Literal
 from app.application.dto.mt5 import MT5CandleDTO, MT5TickDTO
 from app.application.services.mt5_session_guard import require_platform_market_feed
 from app.domain.exceptions.base import ServiceUnavailableError, ValidationError
-from app.domain.trading.gold_only import resolve_trading_symbol
 from app.domain.market_data.timeframe import Timeframe
+from app.domain.trading.gold_only import resolve_trading_symbol
 from core.config.settings import get_settings
 from core.logging import get_logger
 
@@ -94,7 +94,9 @@ class PublicMarketFeedService:
         if mt5 is not None:
             return mt5
 
-        twelve = self._try_twelve_candles(symbol=symbol, timeframe=tf.value, count=count)
+        twelve = self._try_twelve_candles(
+            symbol=symbol, timeframe=tf.value, count=count
+        )
         if twelve is not None:
             return twelve
 
