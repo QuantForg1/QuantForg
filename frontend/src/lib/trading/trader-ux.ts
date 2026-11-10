@@ -639,7 +639,8 @@ export function researchDeskLiveTradingStatus(
   if (auth === "LIVE_ENABLED") {
     return {
       label: "LIVE_ENABLED",
-      detail: "Existing live-trading controller currently permits order evaluation.",
+      detail:
+        "Existing Weltrade single-account LIVE controller permits order evaluation. This is not multi-account LIVE dispatch.",
       state: "LIVE_TRADING_ENABLED",
     };
   }
@@ -664,7 +665,8 @@ export function researchDeskLiveTradingStatus(
   if (legacyAuthorized && auth == null) {
     return {
       label: "LIVE_ENABLED",
-      detail: "Existing authorization and risk controls currently permit execution.",
+      detail:
+        "Existing Weltrade single-account authorization and risk controls currently permit execution. Multi-account LIVE dispatch remains separate and disabled unless explicitly gated on.",
       state: "LIVE_TRADING_ENABLED",
     };
   }

@@ -5,6 +5,9 @@
 
 import { num, str } from "../desk";
 import { sumPnlInWindow } from "./derive";
+import { isTradeDeal } from "./deal-classification";
+
+export { isTradeDeal } from "./deal-classification";
 
 const DAY_MS = 86_400_000;
 
@@ -19,29 +22,6 @@ export type DealStats = {
   dailyDrawdown: number;
   dailyDrawdownPct: number;
 };
-
-/** Exclude balance/credit/deposit rows from performance samples. */
-export function isTradeDeal(deal: Record<string, unknown>): boolean {
-  const typ = str(deal.deal_type || deal.type, "").toLowerCase();
-  if (
-    typ.includes("balance") ||
-    typ.includes("credit") ||
-    typ.includes("charge") ||
-    typ.includes("correction") ||
-    typ.includes("bonus") ||
-    typ.includes("commission")
-  ) {
-    return false;
-  }
-  const symbol = str(deal.symbol, "").trim();
-  if (!symbol && typ && !typ.includes("buy") && !typ.includes("sell") && !typ.includes("deal")) {
-    return false;
-  }
-  const profit = num(deal.profit);
-  // Keep zero-profit trade rows; drop rows with no parseable profit and no symbol.
-  if (!symbol && !Number.isFinite(profit)) return false;
-  return true;
-}
 
 function startOfLocalDay(now = Date.now()): number {
   const d = new Date(now);

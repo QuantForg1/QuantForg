@@ -10,11 +10,23 @@ function tone(
   value: string,
 ): "success" | "warning" | "danger" | "neutral" {
   const v = value.toLowerCase();
-  if (["running", "connected", "ready", "healthy", "authorized"].some((x) => v.includes(x)))
+  if (
+    ["running", "connected", "ready", "healthy", "authorized", "live_enabled"].some(
+      (x) => v.includes(x),
+    )
+  )
     return "success";
-  if (["paused", "reconnecting", "connecting", "degraded"].some((x) => v.includes(x)))
+  if (
+    ["paused", "reconnecting", "connecting", "degraded", "stale"].some((x) =>
+      v.includes(x),
+    )
+  )
     return "warning";
-  if (["error", "stopped", "blocked", "disconnected", "failed"].some((x) => v.includes(x)))
+  if (
+    ["error", "stopped", "blocked", "disconnected", "failed", "disabled"].some(
+      (x) => v.includes(x),
+    )
+  )
     return "danger";
   return "neutral";
 }
@@ -44,10 +56,13 @@ export function RobotActivityPanel({
   brokerLabel,
   tradingAuthLabel,
   tradingAuthDetail,
+  multiAccountDispatchLabel,
+  multiAccountDispatchDetail,
   lastHeartbeat,
   lastSignalLabel,
   lastExecutionLabel,
   lastExecutionResult,
+  executionStale,
   omsLabel,
   lastSyncLabel,
   recentError,
@@ -57,10 +72,13 @@ export function RobotActivityPanel({
   brokerLabel: string;
   tradingAuthLabel: string;
   tradingAuthDetail?: string;
+  multiAccountDispatchLabel?: string;
+  multiAccountDispatchDetail?: string;
   lastHeartbeat: string | null;
   lastSignalLabel: string;
   lastExecutionLabel: string;
   lastExecutionResult: string;
+  executionStale?: boolean;
   omsLabel: string;
   lastSyncLabel: string;
   recentError: string | null;
@@ -81,7 +99,7 @@ export function RobotActivityPanel({
           </div>
           <p className="mt-1 text-xs text-[var(--fg-muted)]">
             Process health, broker connection, and trading authorization are shown
-            separately. A healthy robot does not imply LIVE orders may submit.
+            separately. RUNNING does not mean orders are being submitted.
           </p>
         </div>
         <Button variant="ghost" size="sm" asChild>
@@ -101,13 +119,26 @@ export function RobotActivityPanel({
         />
         <Row label="Broker connection" value={brokerLabel} badge={brokerLabel} />
         <Row
-          label="Trading authorization"
+          label="Weltrade LIVE authorization"
           value={tradingAuthDetail || tradingAuthLabel}
           badge={tradingAuthLabel}
         />
+        <Row
+          label="Multi-account LIVE dispatch"
+          value={
+            multiAccountDispatchDetail ||
+            multiAccountDispatchLabel ||
+            "Disabled — singleton Weltrade path only"
+          }
+          badge={multiAccountDispatchLabel || "Disabled"}
+        />
         <Row label="Last generated signal" value={lastSignalLabel} />
-        <Row label="Last execution attempt" value={lastExecutionLabel} />
-        <Row label="Last execution result" value={lastExecutionResult} />
+        <Row
+          label="Last trade execution attempt"
+          value={lastExecutionLabel}
+          badge={executionStale ? "Stale" : undefined}
+        />
+        <Row label="Last trade execution result" value={lastExecutionResult} />
         <Row label="OMS / processing" value={omsLabel} badge={omsLabel} />
         <Row label="Account synchronization" value={lastSyncLabel} />
         <Row
@@ -128,6 +159,13 @@ export function RobotActivityPanel({
           }
         />
       </div>
+
+      {executionStale ? (
+        <p className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--warning-soft)_40%,var(--bg))] px-3 py-2 text-xs text-[var(--fg)]">
+          Last trade execution is stale. Robot RUNNING does not imply a recent
+          order submission.
+        </p>
+      ) : null}
 
       {recentError ? (
         <p className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--danger-soft)_35%,var(--bg))] px-3 py-2 text-xs text-[var(--fg)]">

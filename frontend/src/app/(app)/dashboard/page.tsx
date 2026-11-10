@@ -25,6 +25,7 @@ import {
 import { SignalCard } from "@/components/trading/signal-card";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
+  brokerConnectivityApi,
   mt5Api,
   platformApi,
   portfolioApi,
@@ -37,6 +38,7 @@ import {
   netDealPnl,
   startOfUtcDayMs,
 } from "@/lib/dashboard/performance-window";
+import { resolveLastExecutionView } from "@/lib/dashboard/deal-classification";
 import { OWNER_RISK_POLICY_DISPLAY } from "@/lib/trading/owner-risk-policy-display";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -162,6 +164,13 @@ export default function DashboardPage() {
     retry: false,
     refetchInterval: UNIVERSE_POLL_MS,
     staleTime: 20_000,
+  });
+  const workerOpsQ = useQuery({
+    queryKey: ["dashboard-mt5-worker-ops"],
+    queryFn: brokerConnectivityApi.mt5WorkerOps,
+    retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
+    staleTime: 30_000,
   });
 
   const session = asRecord(sessionQ.data);
@@ -393,6 +402,25 @@ export default function DashboardPage() {
         : components.healthy == null
           ? null
           : Boolean(components.healthy);
+  const workerOps = asRecord(workerOpsQ.data);
+  const multiAccountLiveSubmit =
+    workerOpsQ.isError
+      ? false
+      : workerOps.live_submit_enabled === true ||
+        workerOps.multi_account_live_submit_enabled === true;
+  const multiAccountDispatch =
+    workerOpsQ.isError
+      ? false
+      : workerOps.dispatch_enabled === true ||
+        workerOps.multi_account_dispatch_enabled === true ||
+        multiAccountLiveSubmit;
+  const lastExecution = resolveLastExecutionView({
+    sessionExecutionAt: session.last_execution_at,
+    sessionExecutionResult: session.last_execution_result,
+    robotExecutionAt: robotStatus.last_execution_at,
+    robotExecutionResult: robotStatus.last_execution_result,
+    deals,
+  });
   const metricsUpdatedAt =
     sessionQ.dataUpdatedAt
       ? formatRelativeTime(new Date(sessionQ.dataUpdatedAt))
@@ -597,6 +625,20 @@ export default function DashboardPage() {
           }
           tradingAuthLabel={liveTradingHint.label}
           tradingAuthDetail={liveTradingHint.detail}
+          multiAccountDispatchLabel={
+            multiAccountLiveSubmit
+              ? "LIVE submit enabled"
+              : multiAccountDispatch
+                ? "Dispatch only"
+                : "Disabled"
+          }
+          multiAccountDispatchDetail={
+            multiAccountLiveSubmit
+              ? "Multi-account LIVE submit gate reports enabled — verify owner gates."
+              : multiAccountDispatch
+                ? "Dispatch may be on, but multi-account LIVE submit remains off."
+                : "Multi-account LIVE dispatch/submit gates are off. Existing Weltrade singleton path only."
+          }
           lastHeartbeat={
             str(
               robotStatus.last_heartbeat_at ??
@@ -610,23 +652,9 @@ export default function DashboardPage() {
               ? `${str(topSignal.broker_symbol || topSignal.symbol, TRADING_SYMBOL)} · ${signalBoardDirection(topSignal)}`
               : "No live signal"
           }
-          lastExecutionLabel={
-            str(
-              session.last_execution_at ??
-                robotStatus.last_execution_at ??
-                deals[0]?.time,
-              "No execution recorded",
-            )
-          }
-          lastExecutionResult={
-            str(
-              session.last_execution_result ??
-                robotStatus.last_execution_result ??
-                deals[0]?.status ??
-                deals[0]?.comment,
-              "—",
-            )
-          }
+          lastExecutionLabel={lastExecution.attemptLabel}
+          lastExecutionResult={lastExecution.resultLabel}
+          executionStale={lastExecution.stale}
           omsLabel={
             str(
               session.oms_status ?? robotStatus.oms_status,
