@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { HomeLanding } from "@/components/marketing/home-landing";
 import { PublicStructuredData } from "@/components/marketing/structured-data";
+import { AuthFormProviders } from "@/providers/auth-form-providers";
 
 export const metadata: Metadata = {
   title: {
@@ -20,9 +21,9 @@ export const metadata: Metadata = {
 
 export default function LandingPage() {
   return (
-    <>
+    <AuthFormProviders>
       <PublicStructuredData />
       <HomeLanding />
-    </>
+    </AuthFormProviders>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { AuthFormProviders } from "@/providers/auth-form-providers";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -16,5 +17,5 @@ export const metadata: Metadata = {
 };
 
 export default function ContactLayout({ children }: { children: ReactNode }) {
-  return children;
+  return <AuthFormProviders>{children}</AuthFormProviders>;
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { useAuth } from "@/providers/auth-provider";
+import { useAuthOptional } from "@/providers/auth-provider";
 
 const LINKS = [
   { href: "/#features", label: "Features" },
@@ -22,7 +22,9 @@ export function SiteHeader({
   active?: "home" | "pricing" | "purchase" | "contact" | "live" | "billing";
 }) {
   const [open, setOpen] = useState(false);
-  const { isAuthenticated, loading } = useAuth();
+  const auth = useAuthOptional();
+  const isAuthenticated = auth?.isAuthenticated ?? false;
+  const loading = auth?.loading ?? false;
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_55%,transparent)] backdrop-blur-xl">
