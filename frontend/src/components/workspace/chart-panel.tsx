@@ -148,7 +148,9 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     () => parseCandles(feedMeta.candles ?? candlesQ.data),
     [candlesQ.data, feedMeta.candles],
   );
-  const feedStatus = str(feedMeta.status || (candles.length ? "live" : "unavailable"));
+  const feedStatus = candlesQ.isLoading
+    ? "loading"
+    : str(feedMeta.status || (candles.length ? "live" : "unavailable"));
   const feedBadge = publicFeedBadge(feedStatus);
   const feedLive = candlesQ.isSuccess && candles.length > 0 && feedStatus === "live";
   const asOf = str(feedMeta.as_of || "");

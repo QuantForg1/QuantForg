@@ -42,7 +42,9 @@ export default function PublicLiveMarketPage() {
       : Number.isFinite(bid)
         ? bid
         : Number.NaN;
-  const status = str(tickPayload.status || (tickQ.isSuccess ? "live" : "unavailable"));
+  const status = tickQ.isLoading
+    ? "loading"
+    : str(tickPayload.status || (tickQ.isSuccess ? "live" : "unavailable"));
   const badge = publicFeedBadge(status);
   const asOf = str(tickPayload.as_of || "");
   const source = str(tickPayload.source || "");

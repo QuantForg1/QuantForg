@@ -152,6 +152,8 @@ export function publicFeedBadge(status: string | null | undefined): {
       return { label: "MARKET CLOSED", tone: "warn" };
     case "delayed":
       return { label: "DELAYED", tone: "warn" };
+    case "loading":
+      return { label: "LOADING", tone: "muted" };
     case "unavailable":
       return { label: "UNAVAILABLE", tone: "danger" };
     default:
