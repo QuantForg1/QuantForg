@@ -69,9 +69,7 @@ def test_case_a_eligible_with_readiness() -> None:
         account=AccountReadiness(
             status="active", ownership_verified=True, user_id=user
         ),
-        worker=WorkerReadiness(
-            present=True, ready=True, heartbeat_stale=False
-        ),
+        worker=WorkerReadiness(present=True, ready=True, heartbeat_stale=False),
         require_readiness=True,
     )
     assert updated.state is AccountExecutionState.ELIGIBLE

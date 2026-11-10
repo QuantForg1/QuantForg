@@ -78,9 +78,7 @@ class DispatchPlan:
                 for i in self.items
                 if i.evaluation.state is AccountExecutionState.BLOCKED
             ),
-            "delivery_suppressed_all": all(
-                i.delivery_suppressed for i in self.items
-            ),
+            "delivery_suppressed_all": all(i.delivery_suppressed for i in self.items),
         }
 
 
