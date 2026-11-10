@@ -33,4 +33,3 @@ def test_market_chat_public_list_route_exists() -> None:
     paths = {getattr(r, "path", "") for r in market_chat.router.routes}
     assert "/public/market/chat" in paths
     assert "/market/chat" in paths
-
