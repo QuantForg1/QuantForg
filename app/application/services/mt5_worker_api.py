@@ -52,7 +52,6 @@ class Mt5WorkerApiFacade:
     _slot_to_worker: dict[str, UUID] = field(default_factory=dict)
     _worker_to_slot: dict[UUID, str] = field(default_factory=dict)
     _revoked_workers: set[UUID] = field(default_factory=set)
-    _active_credential_claims: dict[UUID, str] = field(default_factory=dict)
     _hydrated: bool = False
 
     def __post_init__(self) -> None:
@@ -366,7 +365,6 @@ class Mt5WorkerApiFacade:
         )
         with self._lock:
             self._revoked_workers.add(worker.worker_id)
-            self._active_credential_claims.pop(worker.worker_id, None)
             key = self._worker_to_slot.pop(worker.worker_id, None)
             if key:
                 self._slot_to_worker.pop(key, None)
@@ -502,17 +500,8 @@ class Mt5WorkerApiFacade:
         Plaintext passwords are never present as a ``password`` JSON field.
         Lab mode uses ``QF_DEMO_*`` on the API host only when explicitly set
         for integration; production vault unwrap is preferred when wired.
-
-        Requires a prior heartbeat. Each claim rotates ``claim_id`` so prior
-        envelopes are superseded for audit/rotation. Fernet TTL limits replay.
         """
         worker = self.require_worker(worker_id)
-        if worker.last_heartbeat_at is None:
-            raise AuthorizationError(
-                "Heartbeat required before sealed credential claim",
-                code="heartbeat_required",
-                details={"worker_id": str(worker_id)},
-            )
         token = (self.plane.service_token or "").strip()
         if len(token) < 16:
             raise AuthorizationError(
@@ -544,30 +533,14 @@ class Mt5WorkerApiFacade:
                     "MT5 authentication proof."
                 ),
             }
-        claim_id = str(uuid4())
         sealed = seal_credential_material(
             service_token=token,
             worker_id=worker.worker_id,
             login=login,
             server=server,
             password=secret,
-            claim_id=claim_id,
         )
-        with self._lock:
-            previous = self._active_credential_claims.get(worker.worker_id)
-            self._active_credential_claims[worker.worker_id] = claim_id
-        logger.info(
-            "mt5_worker_sealed_claim_issued worker_id=%s claim_id=%s rotated=%s",
-            worker.worker_id,
-            claim_id,
-            bool(previous),
-        )
-        return {
-            "ok": True,
-            **sealed,
-            "rotated_previous_claim": bool(previous),
-            "previous_claim_id": previous,
-        }
+        return {"ok": True, **sealed}
 
     def hydrate_from_postgres(self) -> int:
         """Restore in-memory indexes from durable table when available."""
