@@ -1,0 +1,51 @@
+{
+  "dispatch_allowed": false,
+  "live_submit_allowed": false,
+  "user_risk_settings": {
+    "n": 1,
+    "active": 1
+  },
+  "active_pref": {
+    "planned": "10.0000",
+    "source": "user_edit",
+    "user_prefix": "7d31c808"
+  },
+  "broker_account_status_counts": [
+    {
+      "status": "active",
+      "n": 1
+    },
+    {
+      "status": "revoked",
+      "n": 2
+    }
+  ],
+  "worker_tables_present": [
+    "execution_workers",
+    "mt5_worker_control_plane"
+  ],
+  "execution_workers_columns": [
+    "account_login_verified",
+    "attempt_count",
+    "broker_account_id",
+    "created_at",
+    "gateway_base_url",
+    "host_id",
+    "id",
+    "last_error",
+    "last_health_check_at",
+    "last_heartbeat_at",
+    "lifecycle_status",
+    "metadata",
+    "platform_code",
+    "runtime_session_id",
+    "server_verified",
+    "status",
+    "trade_allowed",
+    "updated_at",
+    "user_id",
+    "worker_code"
+  ],
+  "execution_workers": [],
+  "readiness_note": "Account rows \u2260 execution-ready. Worker assignment / heartbeat / MT5 auth must be proven separately. Eligibility dry-run requires injected readiness."
+}

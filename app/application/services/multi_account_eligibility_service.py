@@ -1,7 +1,8 @@
-"""Phase 5 — preference-aware multi-account eligibility (dry-run safe).
+"""Phase 5 / 5.1 — preference-aware multi-account eligibility (dry-run safe).
 
 Connects Phase 4 ``user_risk_settings`` / ``resolve_effective_risk`` to the
-Phase 1 account-execution intent vocabulary.
+Phase 1 account-execution intent vocabulary, with optional account/worker
+readiness gates for the Phase 5.1 acceptance matrix.
 
 LIVE fan-out stays off by default:
 - When ``multi_account_dispatch_allowed`` is False, evaluation may still
@@ -36,6 +37,28 @@ from app.domain.multi_account.signal_dispatch import (
 
 PrefLoader = Callable[[UUID], dict[str, Any]]
 
+_INACTIVE_ACCOUNT_STATUSES = frozenset({"revoked", "inactive", "disabled", "closed"})
+
+
+@dataclass(frozen=True, slots=True)
+class AccountReadiness:
+    """Caller-supplied broker account readiness (never invents DB truth)."""
+
+    status: str
+    ownership_verified: bool = False
+    user_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerReadiness:
+    """Caller-supplied worker readiness (heartbeat ≠ broker auth)."""
+
+    present: bool
+    ready: bool
+    heartbeat_stale: bool = False
+    trade_allowed: bool | None = None
+    detail: str = ""
+
 
 @dataclass(frozen=True, slots=True)
 class EligibilityEvaluation:
@@ -50,6 +73,7 @@ class EligibilityEvaluation:
     live_submit_allowed: bool
     dry_run: bool
     source: str
+    readiness_scope: str = "prefs_only"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,6 +86,7 @@ class EligibilityEvaluation:
             "live_submit_allowed": self.live_submit_allowed,
             "dry_run": self.dry_run,
             "source": self.source,
+            "readiness_scope": self.readiness_scope,
         }
 
 
@@ -93,6 +118,53 @@ def _dec(value: object) -> Decimal | None:
         return None
 
 
+def _blocked(
+    *,
+    intent: AccountExecutionIntent,
+    reason: str,
+    effective: dict[str, Any],
+    dispatch_ok: bool,
+    live_ok: bool,
+    dry_run: bool,
+    source: str,
+    readiness_scope: str,
+) -> tuple[AccountExecutionIntent, EligibilityEvaluation]:
+    evaluation = EligibilityEvaluation(
+        user_id=intent.user_id,
+        broker_account_id=intent.broker_account_id,
+        state=AccountExecutionState.BLOCKED,
+        block_reason=reason,
+        effective=effective,
+        dispatch_allowed=dispatch_ok,
+        live_submit_allowed=live_ok,
+        dry_run=dry_run,
+        source=source,
+        readiness_scope=readiness_scope,
+    )
+    updated = intent.transition(
+        AccountExecutionState.BLOCKED,
+        block_reason=reason,
+    )
+    meta = dict(updated.metadata)
+    meta["eligibility"] = evaluation.to_dict()
+    updated = AccountExecutionIntent(
+        execution_id=updated.execution_id,
+        signal_id=updated.signal_id,
+        user_id=updated.user_id,
+        broker_account_id=updated.broker_account_id,
+        state=updated.state,
+        idempotency_key=updated.idempotency_key,
+        block_reason=updated.block_reason,
+        planned_volume=updated.planned_volume,
+        broker_ticket=updated.broker_ticket,
+        attempt_count=updated.attempt_count,
+        created_at=updated.created_at,
+        updated_at=updated.updated_at,
+        metadata=meta,
+    )
+    return updated, evaluation
+
+
 def evaluate_account_eligibility(
     *,
     actor_user_id: UUID,
@@ -100,8 +172,11 @@ def evaluate_account_eligibility(
     proposal: RiskSettingProposal | None = None,
     load_preferences: PrefLoader | None = None,
     settings: Any | None = None,
+    account: AccountReadiness | None = None,
+    worker: WorkerReadiness | None = None,
+    require_readiness: bool = False,
 ) -> tuple[AccountExecutionIntent, EligibilityEvaluation]:
-    """Resolve prefs → effective risk → ELIGIBLE/BLOCKED transition.
+    """Resolve prefs (+ optional readiness) → ELIGIBLE/BLOCKED.
 
     Raises ``AuthorizationError`` when ``actor_user_id`` does not own the intent.
     Never submits orders. Never enables LIVE gates.
@@ -111,6 +186,108 @@ def evaluate_account_eligibility(
     dispatch_ok = multi_account_dispatch_allowed(settings)
     live_ok = multi_account_live_submit_allowed(settings)
     dry_run = not dispatch_ok
+    readiness_scope = (
+        "prefs_account_worker"
+        if (account is not None or worker is not None or require_readiness)
+        else "prefs_only"
+    )
+
+    if require_readiness and (account is None or worker is None):
+        return _blocked(
+            intent=intent,
+            reason="readiness_context_required",
+            effective={},
+            dispatch_ok=dispatch_ok,
+            live_ok=live_ok,
+            dry_run=dry_run,
+            source="none",
+            readiness_scope=readiness_scope,
+        )
+
+    if account is not None:
+        if account.user_id is not None and account.user_id != intent.user_id:
+            return _blocked(
+                intent=intent,
+                reason="account_user_mismatch",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="account",
+                readiness_scope=readiness_scope,
+            )
+        status = (account.status or "").strip().lower()
+        if status in _INACTIVE_ACCOUNT_STATUSES or status == "":
+            return _blocked(
+                intent=intent,
+                reason=f"account_status_{status or 'unknown'}",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="account",
+                readiness_scope=readiness_scope,
+            )
+        # pending is allowed only for prefs-only probes; full readiness
+        # requires active.
+        allow_pending = status == "pending" and not require_readiness
+        if status != "active" and not allow_pending:
+            return _blocked(
+                intent=intent,
+                reason=f"account_not_active:{status}",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="account",
+                readiness_scope=readiness_scope,
+            )
+
+    if worker is not None:
+        if not worker.present:
+            return _blocked(
+                intent=intent,
+                reason="worker_missing",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="worker",
+                readiness_scope=readiness_scope,
+            )
+        if worker.heartbeat_stale:
+            return _blocked(
+                intent=intent,
+                reason="worker_heartbeat_stale",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="worker",
+                readiness_scope=readiness_scope,
+            )
+        if not worker.ready:
+            return _blocked(
+                intent=intent,
+                reason=worker.detail or "worker_not_ready",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="worker",
+                readiness_scope=readiness_scope,
+            )
+        if worker.trade_allowed is False:
+            return _blocked(
+                intent=intent,
+                reason="worker_trade_not_allowed",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="worker",
+                readiness_scope=readiness_scope,
+            )
 
     source = "proposal"
     resolved_proposal = proposal
@@ -121,28 +298,45 @@ def evaluate_account_eligibility(
             )
 
             load_preferences = get_user_risk_preferences
-        payload = load_preferences(intent.user_id)
+        try:
+            payload = load_preferences(intent.user_id)
+        except Exception as exc:
+            return _blocked(
+                intent=intent,
+                reason=f"preference_storage_unavailable:{type(exc).__name__}",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="storage_error",
+                readiness_scope=readiness_scope,
+            )
+        if not isinstance(payload, dict) or not payload:
+            return _blocked(
+                intent=intent,
+                reason="preference_payload_untrusted",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="untrusted",
+                readiness_scope=readiness_scope,
+            )
         source = str(payload.get("source") or "default_copy")
         resolved_proposal = _proposal_from_preferences_payload(payload)
 
     effective: EffectiveRiskProfile = resolve_effective_risk(resolved_proposal)
     if not effective.ok:
-        evaluation = EligibilityEvaluation(
-            user_id=intent.user_id,
-            broker_account_id=intent.broker_account_id,
-            state=AccountExecutionState.BLOCKED,
-            block_reason=effective.block_reason or "effective_risk_rejected",
+        return _blocked(
+            intent=intent,
+            reason=effective.block_reason or "effective_risk_rejected",
             effective=effective.to_dict(),
-            dispatch_allowed=dispatch_ok,
-            live_submit_allowed=live_ok,
+            dispatch_ok=dispatch_ok,
+            live_ok=live_ok,
             dry_run=dry_run,
             source=source,
+            readiness_scope=readiness_scope,
         )
-        updated = intent.transition(
-            AccountExecutionState.BLOCKED,
-            block_reason=evaluation.block_reason,
-        )
-        return updated, evaluation
 
     evaluation = EligibilityEvaluation(
         user_id=intent.user_id,
@@ -154,16 +348,14 @@ def evaluate_account_eligibility(
         live_submit_allowed=live_ok,
         dry_run=dry_run,
         source=source,
+        readiness_scope=readiness_scope,
     )
-    # Preference-derived planned volume is advisory only; OMS remains final.
     planned = effective.max_lot
     updated = intent.transition(
         AccountExecutionState.ELIGIBLE,
         planned_volume=planned,
         block_reason=None,
     )
-    # Annotate dry-run / gate status without mutating frozen dataclasses' shape
-    # beyond metadata copy on a new intent.
     meta = dict(updated.metadata)
     meta["eligibility"] = evaluation.to_dict()
     updated = AccountExecutionIntent(
