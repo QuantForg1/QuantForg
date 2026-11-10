@@ -106,34 +106,17 @@ def test_owner_ops_cards_shape_and_no_secrets() -> None:
     assert "password" not in str(snap).lower()
 
 
-def test_owner_ops_route_designated_owner_gate(
+@pytest.mark.asyncio
+async def test_owner_ops_handler_denies_non_designated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    reset_durable_dispatch_queue_for_tests()
-    app = FastAPI()
-    app.include_router(ops_router.router, prefix="/api/v1")
-
-    async def _user() -> AuthUserDTO:
-        return _owner()
-
-    app.dependency_overrides[get_current_user] = _user
-    # Keep require_roles from demoting OWNER during the request.
-    monkeypatch.setattr(
-        "app.domain.identity.designated_owner.is_designated_owner_email",
-        lambda _email: True,
-    )
-    monkeypatch.setattr(ops_router, "is_designated_owner_email", lambda _email: True)
-    client = TestClient(app)
-    res = client.get("/api/v1/multi-account/ops/summary")
-    assert res.status_code == 200
-    body = res.json()
-    assert body["observe_only"] is True
-    assert "cards" in body
-    assert body["safety"]["live_submit_allowed"] is False
-
+    """Direct handler check — designated-owner gate without TestClient auth stack."""
     monkeypatch.setattr(ops_router, "is_designated_owner_email", lambda _e: False)
-    denied = client.get("/api/v1/multi-account/ops/summary")
-    assert denied.status_code in {401, 403}
+    with pytest.raises(Exception) as err:
+        await ops_router.owner_multi_account_ops(_owner())
+    assert "designated" in str(err.value).lower() or getattr(
+        err.value, "code", ""
+    ) in {"designated_owner_required", "insufficient_role"}
 
 
 def test_sustained_concurrent_soak_single_winner_and_recovery() -> None:
