@@ -1168,6 +1168,13 @@ export const weltradeApi = {
     }),
 };
 
+export const multiAccountOpsApi = {
+  ownerSummary: () =>
+    apiFetch<Record<string, unknown>>("/multi-account/ops/summary"),
+  myDispatchStatus: () =>
+    apiFetch<Record<string, unknown>>("/multi-account/dispatch/status"),
+};
+
 export const opsApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/ops/dashboard"),
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),

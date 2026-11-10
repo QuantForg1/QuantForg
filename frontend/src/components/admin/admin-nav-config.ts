@@ -118,6 +118,12 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         icon: Activity,
       },
       {
+        label: "Multi-account ops",
+        href: "/admin/multi-account",
+        hint: "Dispatch queue · workers · observe only",
+        icon: Activity,
+      },
+      {
         label: "Live trading evidence",
         href: "/admin/live-trading-evidence",
         hint: "Evidence program — observe only",
