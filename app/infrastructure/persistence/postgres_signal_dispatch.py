@@ -42,16 +42,14 @@ def table_ready() -> bool:
     try:
         from app.infrastructure.persistence.direct_postgres import fetch
 
-        rows = fetch(
-            """
+        rows = fetch("""
             SELECT 1 AS ok
               FROM information_schema.columns
              WHERE table_schema = 'public'
                AND table_name = 'account_execution_intents'
                AND column_name = 'delivery_status'
              LIMIT 1
-            """
-        )
+            """)
         _READY = bool(rows)
     except Exception:
         logger.warning("dispatch_queue_table_probe_failed")
@@ -212,14 +210,12 @@ def queue_depth_counts() -> dict[str, Any] | None:
         return None
     from app.infrastructure.persistence.direct_postgres import fetch
 
-    rows = fetch(
-        """
+    rows = fetch("""
         SELECT delivery_status, count(*)::int AS n
           FROM public.account_execution_intents
          GROUP BY delivery_status
          ORDER BY 1
-        """
-    )
+        """)
     return {
         "by_delivery_status": {r["delivery_status"]: r["n"] for r in rows},
         "live_submit_enabled": False,

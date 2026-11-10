@@ -104,7 +104,8 @@ def assert_delivery_transition(current: DeliveryStatus, new: DeliveryStatus) -> 
 def retry_delay_seconds(attempt: int, *, base: int = DEFAULT_RETRY_BASE_SECONDS) -> int:
     """Exponential backoff capped at 5 minutes."""
     exp = max(0, int(attempt) - 1)
-    return min(300, int(base) * (2**exp))
+    delay: int = int(base) * (2**exp)
+    return min(300, delay)
 
 
 @dataclass(slots=True)
