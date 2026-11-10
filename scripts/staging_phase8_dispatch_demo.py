@@ -95,10 +95,12 @@ def main() -> int:
     rec("weltrade_path_exists", "PASS" if live.is_file() else "FAIL")
     rec(
         "allow_worker_on_live_false",
-        "PASS"
-        if os.environ.get("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "").lower()
-        in {"0", "false", "no", ""}
-        else "FAIL",
+        (
+            "PASS"
+            if os.environ.get("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "").lower()
+            in {"0", "false", "no", ""}
+            else "FAIL"
+        ),
     )
 
     sup = LocalWorkerSupervisor()
@@ -220,11 +222,7 @@ def main() -> int:
         worker_id=worker_id, user_id=user_id, broker_account_id=account_id
     )
     job = claim.get("job") if isinstance(claim, dict) else None
-    claim_ok = (
-        claim.get("ok")
-        and isinstance(job, dict)
-        and bool(job.get("intent_id"))
-    )
+    claim_ok = claim.get("ok") and isinstance(job, dict) and bool(job.get("intent_id"))
     rec("assigned_claim", "PASS" if claim_ok else "FAIL", f"has_job={bool(job)}")
     if not (isinstance(job, dict) and job.get("intent_id")):
         for name in ("lease_recover", "ack_terminal_state", "fail_retry_or_pending"):
@@ -256,10 +254,12 @@ def main() -> int:
         )
         rec(
             "ack_terminal_state",
-            "PASS"
-            if ack.get("ok")
-            and (ack.get("job") or {}).get("delivery_status") == "acked"
-            else "FAIL",
+            (
+                "PASS"
+                if ack.get("ok")
+                and (ack.get("job") or {}).get("delivery_status") == "acked"
+                else "FAIL"
+            ),
             str((ack.get("job") or {}).get("delivery_status")),
         )
     else:
@@ -281,9 +281,11 @@ def main() -> int:
             status = (fail.get("job") or {}).get("delivery_status")
             rec(
                 "fail_retry_or_pending",
-                "PASS"
-                if fail.get("ok") and status in {"pending", "dead_letter"}
-                else "FAIL",
+                (
+                    "PASS"
+                    if fail.get("ok") and status in {"pending", "dead_letter"}
+                    else "FAIL"
+                ),
                 str(status),
             )
         else:
@@ -313,9 +315,11 @@ def _security_only(client: object, worker_id: str) -> None:
     )
     rec(
         "spoof_claim_rejected",
-        "PASS"
-        if spoof.get("ok") is False and spoof.get("error") == "assignment_mismatch"
-        else "FAIL",
+        (
+            "PASS"
+            if spoof.get("ok") is False and spoof.get("error") == "assignment_mismatch"
+            else "FAIL"
+        ),
         str(spoof.get("error")),
     )
 
@@ -338,15 +342,19 @@ def _tail(client: object) -> None:
     ops = client.ops_summary()  # type: ignore[attr-defined]
     rec(
         "owner_ops_snapshot",
-        "PASS"
-        if ops.get("ok") is not False and ops.get("live_submit_allowed") is False
-        else "FAIL",
+        (
+            "PASS"
+            if ops.get("ok") is not False and ops.get("live_submit_allowed") is False
+            else "FAIL"
+        ),
     )
     rec(
         "ops_explains_execution_workers",
-        "PASS"
-        if "execution_workers_note" in ops or "control_plane_worker_count" in ops
-        else "FAIL",
+        (
+            "PASS"
+            if "execution_workers_note" in ops or "control_plane_worker_count" in ops
+            else "FAIL"
+        ),
     )
     rec(
         "customer_dispatch_status",
