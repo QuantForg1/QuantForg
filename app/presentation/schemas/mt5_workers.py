@@ -62,3 +62,23 @@ class WorkerVerificationReport(BaseModel):
     worker_id: str = Field(default="", max_length=64)
     source: str = Field(default="windows_mt5_demo_verify", max_length=64)
     error: str = Field(default="", max_length=200)
+
+
+class DispatchClaimRequest(BaseModel):
+    """Worker claim for next durable dispatch job (delivery only, no LIVE submit)."""
+
+    worker_id: UUID
+    user_id: UUID
+    broker_account_id: UUID
+
+
+class DispatchAckRequest(BaseModel):
+    worker_id: UUID
+    intent_id: UUID
+    detail: str = Field(default="", max_length=500)
+
+
+class DispatchFailRequest(BaseModel):
+    worker_id: UUID
+    intent_id: UUID
+    reason: str = Field(default="failed", max_length=500)

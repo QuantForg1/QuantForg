@@ -100,6 +100,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "app.presentation.routers.user_risk_preferences",
     ),
     (
+        "multi_account_ops",
+        "app.presentation.routers.multi_account_ops",
+    ),
+    (
         "institutional_data_warehouse",
         "app.presentation.routers.institutional_data_warehouse",
     ),

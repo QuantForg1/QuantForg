@@ -13,8 +13,14 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
+from app.application.services.multi_account_dispatch_queue import (
+    get_durable_dispatch_queue,
+)
 from app.presentation.dependencies.mt5_workers import WorkerApi, WorkerAuth
 from app.presentation.schemas.mt5_workers import (
+    DispatchAckRequest,
+    DispatchClaimRequest,
+    DispatchFailRequest,
     WorkerHealthRequest,
     WorkerHeartbeatRequest,
     WorkerHostRegisterRequest,
@@ -168,4 +174,94 @@ async def worker_ops_summary(
     api: WorkerApi,
 ) -> dict[str, Any]:
     """Worker + verification ops snapshot for operators (no passwords)."""
-    return api.ops_summary()
+    summary = api.ops_summary()
+    queue = get_durable_dispatch_queue()
+    summary["dispatch_queue"] = queue.metrics().to_dict()
+    summary["live_submit_allowed"] = False
+    return summary
+
+
+@router.post("/dispatch/claim")
+async def dispatch_claim(
+    body: DispatchClaimRequest,
+    _: WorkerAuth,
+) -> dict[str, Any]:
+    """Claim next queued delivery job for this worker's assigned account.
+
+    Delivery only — never invokes OMS / order_send. LIVE submit stays off.
+    """
+    queue = get_durable_dispatch_queue()
+    job = queue.claim_next(
+        worker_id=body.worker_id,
+        user_id=body.user_id,
+        broker_account_id=body.broker_account_id,
+    )
+    if job is None:
+        return {"ok": True, "job": None, "live_submit_allowed": False}
+    return {
+        "ok": True,
+        "job": job.to_public_dict(),
+        "live_submit_allowed": False,
+        "delivery_suppressed": True,
+    }
+
+
+@router.post("/dispatch/ack")
+async def dispatch_ack(
+    body: DispatchAckRequest,
+    _: WorkerAuth,
+) -> dict[str, Any]:
+    """Acknowledge delivery (not broker fill). No order_send."""
+    queue = get_durable_dispatch_queue()
+    try:
+        job = queue.acknowledge(
+            intent_id=body.intent_id,
+            worker_id=body.worker_id,
+            detail=body.detail,
+        )
+    except KeyError:
+        return {"ok": False, "error": "intent_not_found"}
+    except PermissionError:
+        return {"ok": False, "error": "lease_owner_mismatch"}
+    except TimeoutError:
+        return {"ok": False, "error": "lease_expired"}
+    return {"ok": True, "job": job.to_public_dict(), "live_submit_allowed": False}
+
+
+@router.post("/dispatch/fail")
+async def dispatch_fail(
+    body: DispatchFailRequest,
+    _: WorkerAuth,
+) -> dict[str, Any]:
+    """Report delivery failure with idempotent retry / dead-letter."""
+    queue = get_durable_dispatch_queue()
+    try:
+        job = queue.fail(
+            intent_id=body.intent_id,
+            worker_id=body.worker_id,
+            reason=body.reason,
+        )
+    except KeyError:
+        return {"ok": False, "error": "intent_not_found"}
+    except PermissionError:
+        return {"ok": False, "error": "lease_owner_mismatch"}
+    except TimeoutError:
+        return {"ok": False, "error": "lease_expired"}
+    return {"ok": True, "job": job.to_public_dict(), "live_submit_allowed": False}
+
+
+@router.post("/dispatch/recover")
+async def dispatch_recover(
+    _: WorkerAuth,
+) -> dict[str, Any]:
+    """Release claimed leases after process restart (ops / worker token)."""
+    queue = get_durable_dispatch_queue()
+    recovered = queue.recover_after_restart()
+    expired = queue.expire_leases()
+    return {
+        "ok": True,
+        "recovered": recovered,
+        "expired_leases": expired,
+        "metrics": queue.metrics().to_dict(),
+        "live_submit_allowed": False,
+    }
