@@ -380,9 +380,7 @@ def test_pg_mirror_hooks_are_best_effort_noops(monkeypatch: pytest.MonkeyPatch) 
         settings=_SETTINGS_ON,
     )
     worker = uuid4()
-    claimed = q.claim_next(
-        worker_id=worker, user_id=user, broker_account_id=account
-    )
+    claimed = q.claim_next(worker_id=worker, user_id=user, broker_account_id=account)
     assert claimed is not None
     q.acknowledge(intent_id=claimed.intent_id, worker_id=worker)
     assert jobs
