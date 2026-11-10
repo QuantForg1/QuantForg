@@ -934,12 +934,16 @@ assert.equal(
     "Enabled",
   );
   assert.equal(authorizedHint.label, "LIVE_ENABLED");
+  assert.match(authorizedHint.detail, /Weltrade single-account/i);
+  assert.match(authorizedHint.detail, /Multi-account LIVE dispatch remains separate/i);
   const controllerHint = researchDeskLiveTradingStatus(
     { connected: false, state: "BROKER_NOT_CONNECTED" },
     "Disabled",
     { ordersMaySubmit: true, liveTradingState: "ENABLED" },
   );
   assert.equal(controllerHint.label, "LIVE_ENABLED");
+  assert.match(controllerHint.detail, /Weltrade single-account/i);
+  assert.match(controllerHint.detail, /not multi-account LIVE dispatch/i);
   const pausedHint = researchDeskLiveTradingStatus(
     { connected: true, state: "CONNECTED" },
     "Enabled",

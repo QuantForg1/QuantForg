@@ -5,13 +5,26 @@ import { Activity, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty } from "@/components/desk/primitives";
+import {
+  activityKindFromDeal,
+  classifyDealKind,
+  sortDealsNewestFirst,
+} from "@/lib/dashboard/deal-classification";
 import { num, str } from "@/lib/desk";
 import { positionExposureLabel } from "@/lib/trading/trader-ux";
 import { cn, formatCurrency, formatRelativeTime } from "@/lib/utils";
 
 export type ActivityItem = {
   id: string;
-  kind: "opened" | "closed" | "rejected" | "risk" | "execution";
+  kind:
+    | "opened"
+    | "closed"
+    | "rejected"
+    | "risk"
+    | "execution"
+    | "deposit"
+    | "withdrawal"
+    | "balance";
   title: string;
   detail?: string;
   pnl?: number;
@@ -21,10 +34,18 @@ export type ActivityItem = {
 function kindTone(
   kind: ActivityItem["kind"],
 ): "success" | "warning" | "danger" | "neutral" {
-  if (kind === "opened") return "success";
-  if (kind === "closed") return "neutral";
-  if (kind === "rejected" || kind === "risk") return "danger";
+  if (kind === "opened" || kind === "deposit") return "success";
+  if (kind === "closed" || kind === "balance") return "neutral";
+  if (kind === "rejected" || kind === "risk" || kind === "withdrawal") return "danger";
   return "warning";
+}
+
+function balanceTitle(deal: Record<string, unknown>): string {
+  const kind = classifyDealKind(deal);
+  const comment = str(deal.comment ?? deal.reason ?? deal.status, "").trim();
+  if (kind === "deposit") return comment || "Account deposit";
+  if (kind === "withdrawal") return comment || "Account withdrawal";
+  return comment || "Balance adjustment";
 }
 
 export function buildActivityFromAccount(opts: {
@@ -46,20 +67,31 @@ export function buildActivityFromAccount(opts: {
     });
   }
 
-  for (const d of opts.deals.slice(0, 6)) {
+  for (const d of sortDealsNewestFirst(opts.deals).slice(0, 8)) {
+    const kind = activityKindFromDeal(d);
     const pnl = num(d.profit);
-    const rejected = /reject|denied|blocked/i.test(
-      str(d.status ?? d.comment ?? d.reason, ""),
-    );
+    if (kind === "deposit" || kind === "withdrawal" || kind === "balance") {
+      items.push({
+        id: `deal-${str(d.ticket, str(d.id, Math.random().toString(36).slice(2)))}`,
+        kind,
+        title: balanceTitle(d),
+        detail: "Non-trading account event — excluded from trade performance",
+        pnl: Number.isFinite(pnl) ? pnl : undefined,
+        at: str(d.time ?? d.close_time, ""),
+      });
+      continue;
+    }
     items.push({
       id: `deal-${str(d.ticket, str(d.id, Math.random().toString(36).slice(2)))}`,
-      kind: rejected ? "rejected" : "closed",
-      title: rejected
-        ? `${str(d.symbol)} execution rejected`
-        : `${str(d.symbol)} ${positionExposureLabel(d.side)} closed`,
-      detail: rejected
-        ? str(d.comment ?? d.reason ?? d.status, "Rejected by broker/OMS")
-        : undefined,
+      kind: kind === "rejected" ? "rejected" : "closed",
+      title:
+        kind === "rejected"
+          ? `${str(d.symbol)} execution rejected`
+          : `${str(d.symbol)} ${positionExposureLabel(d.side)} closed`,
+      detail:
+        kind === "rejected"
+          ? str(d.comment ?? d.reason ?? d.status, "Rejected by broker/OMS")
+          : undefined,
       pnl: Number.isFinite(pnl) ? pnl : undefined,
       at: str(d.time ?? d.close_time, ""),
     });
@@ -103,7 +135,8 @@ export function RecentActivityPanel({
             Recent Trading Activity
           </h2>
           <p className="mt-1 text-xs text-[var(--fg-muted)]">
-            Positions, fills, and risk events for your authorized account only.
+            Positions, fills, and account events for your authorized account.
+            Deposits and balance adjustments are labeled separately from trades.
           </p>
         </div>
         <div className="flex gap-1">
