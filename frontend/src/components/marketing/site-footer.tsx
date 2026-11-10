@@ -77,8 +77,7 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="border-t border-[var(--border)] px-6 py-4 text-center text-xs text-[var(--fg-subtle)]">
-        © {new Date().getFullYear()} QuantForg. Trading can lose capital. This site does not
-        promise profits.
+        © 2026 QuantForg. Trading can lose capital. This site does not promise profits.
       </div>
     </footer>
   );
