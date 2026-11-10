@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from uuid import UUID, uuid4
 from unittest.mock import MagicMock
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI

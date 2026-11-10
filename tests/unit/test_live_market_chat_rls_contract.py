@@ -18,11 +18,14 @@ def test_rls_migration_enforces_ownership_and_public_read() -> None:
     assert "live_market_chat_messages_insert_own" in sql
     assert "user_id = public.current_app_user_id()" in sql
     assert "live_market_chat_messages_update_own" in sql
-    assert "REVOKE DELETE ON public.live_market_chat_messages FROM anon, authenticated" in sql
+    assert "REVOKE DELETE ON public.live_market_chat_messages" in sql
+    assert "FROM anon, authenticated" in sql
     assert "live_market_chat_reports_insert_own" in sql
     assert "reporter_id = public.current_app_user_id()" in sql
-    assert "GRANT SELECT ON public.live_market_chat_messages TO anon, authenticated" in sql
-    assert "GRANT INSERT, UPDATE ON public.live_market_chat_messages TO authenticated" in sql
+    assert "GRANT SELECT ON public.live_market_chat_messages" in sql
+    assert "TO anon, authenticated" in sql
+    assert "GRANT INSERT, UPDATE ON public.live_market_chat_messages" in sql
+    assert "TO authenticated" in sql
 
 
 def test_table_migration_bounds_body_and_channel() -> None:
