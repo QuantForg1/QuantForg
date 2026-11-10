@@ -1,5 +1,5 @@
 /**
- * Broker Accounts shell refinements — logo placement + guide popup removed.
+ * Broker Accounts shell refinements — equal Broker/Server selectors, no standalone search field.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,7 +24,14 @@ assert.match(providers, /ProductTour/);
 assert.match(brokerLogo, /metatrader5-logo\.png/);
 assert.match(broker, /AES-256-GCM/);
 assert.match(broker, /connectable/);
-assert.match(broker, /Search verified servers/);
+assert.match(broker, /function ServerSelect/);
+assert.match(broker, /function BrokerSelect/);
+assert.match(broker, /serverRowsForBroker/);
+assert.match(broker, /Account type/);
+assert.equal(broker.includes("Search verified servers"), false);
 assert.equal(broker.includes("RealLive"), false);
+assert.match(broker, /weltradeApi\.connect/);
+assert.match(broker, /clearPasswordField/);
+assert.match(broker, /account_type: accountTypeResolved/);
 
 console.log("broker-shell-refine: ok");

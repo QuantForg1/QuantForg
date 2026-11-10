@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -54,18 +54,13 @@ import {
   type Mt5BrokerSlug,
   type Mt5ServerRow,
   brokerBySlug,
+  classifyServerEnvironment,
   mapRegistryBrokers,
   matchBrokerByServer,
-  serversForBroker,
+  serverRowsForBroker,
 } from "@/lib/broker/mt5-broker-catalog";
 
 type AccountType = "demo" | "live";
-
-function inferAccountType(serverName: string): AccountType {
-  const s = serverName.toLowerCase();
-  if (s.includes("demo") || s.includes("trial")) return "demo";
-  return "live";
-}
 
 function FieldShell({
   children,
@@ -83,6 +78,37 @@ function FieldShell({
     >
       {children}
     </div>
+  );
+}
+
+function EnvBadge({ environment }: { environment: "demo" | "live" }) {
+  const live = environment === "live";
+  return (
+    <span
+      className={cn(
+        "rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
+        live
+          ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]"
+          : "bg-[var(--surface-2)] text-[var(--fg-muted)]",
+      )}
+    >
+      {live ? "LIVE" : "DEMO"}
+    </span>
+  );
+}
+
+function VerifiedBadge({ verified }: { verified: boolean }) {
+  if (!verified) {
+    return (
+      <span className="rounded-md bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--fg-subtle)]">
+        Unverified
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-md bg-[color-mix(in_srgb,var(--success)_16%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--success)]">
+      VERIFIED
+    </span>
   );
 }
 
@@ -111,8 +137,10 @@ function BrokerSelect({
   onChange: (broker: Mt5BrokerOption) => void;
   disabled?: boolean;
 }) {
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = options.find((b) => b.slug === value) ?? (value ? brokerBySlug(value) : undefined);
 
@@ -124,6 +152,7 @@ function BrokerSelect({
 
   useEffect(() => {
     if (!open) return;
+    setActiveIndex(0);
     const onDoc = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -138,6 +167,33 @@ function BrokerSelect({
     };
   }, [open]);
 
+  const pick = (broker: Mt5BrokerOption) => {
+    onChange(broker);
+    setOpen(false);
+    setQuery("");
+  };
+
+  const onTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
+    if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setOpen(true);
+    }
+  };
+
+  const onListKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && filtered[activeIndex]) {
+      e.preventDefault();
+      pick(filtered[activeIndex]);
+    }
+  };
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -145,7 +201,9 @@ function BrokerSelect({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={listId}
         onClick={() => setOpen((v) => !v)}
+        onKeyDown={onTriggerKeyDown}
         className="w-full text-left"
       >
         <FieldShell className={cn(open && "border-[var(--accent)] ring-1 ring-[var(--ring)]")}>
@@ -174,7 +232,10 @@ function BrokerSelect({
 
       {open ? (
         <div
+          id={listId}
           role="listbox"
+          tabIndex={-1}
+          onKeyDown={onListKeyDown}
           className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_92%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
         >
           <div className="border-b border-[var(--border)] p-2">
@@ -183,15 +244,20 @@ function BrokerSelect({
               <input
                 autoFocus
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search broker..."
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActiveIndex(0);
+                }}
+                onKeyDown={onListKeyDown}
+                placeholder="Search brokers..."
                 className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
               />
             </label>
           </div>
           <ul className="max-h-64 overflow-y-auto py-1">
-            {filtered.map((broker) => {
+            {filtered.map((broker, index) => {
               const active = broker.slug === value;
+              const focused = index === activeIndex;
               return (
                 <li key={broker.slug}>
                   <button
@@ -200,16 +266,18 @@ function BrokerSelect({
                     aria-selected={active}
                     className={cn(
                       "flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)]",
-                      active && "bg-[var(--accent-soft)]",
+                      (active || focused) && "bg-[var(--accent-soft)]",
                     )}
-                    onClick={() => {
-                      onChange(broker);
-                      setOpen(false);
-                      setQuery("");
-                    }}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => pick(broker)}
                   >
                     <BrokerLogo src={broker.logoSrc} name={broker.name} size={28} rounded="md" />
-                    <span className="min-w-0 flex-1 truncate font-medium">{broker.name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{broker.name}</span>
+                      <span className="block text-[11px] text-[var(--fg-subtle)]">
+                        MetaTrader 5
+                      </span>
+                    </span>
                     <span className="rounded-md border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent)]">
                       MT5
                     </span>
@@ -235,6 +303,198 @@ function BrokerSelect({
             {!filtered.length ? (
               <li className="px-3 py-4 text-center text-sm text-[var(--fg-muted)]">
                 No brokers match that search.
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ServerSelect({
+  value,
+  options,
+  brokerName,
+  loading,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  options: readonly Mt5ServerRow[];
+  brokerName?: string;
+  loading?: boolean;
+  onChange: (server: Mt5ServerRow) => void;
+  disabled?: boolean;
+}) {
+  const listId = useId();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((s) => s.name === value);
+  const showSearch = options.length > 6;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((s) => s.name.toLowerCase().includes(q));
+  }, [query, options]);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIndex(0);
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const pick = (row: Mt5ServerRow) => {
+    onChange(row);
+    setOpen(false);
+    setQuery("");
+  };
+
+  const onTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
+    if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setOpen(true);
+    }
+  };
+
+  const onListKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && filtered[activeIndex]) {
+      e.preventDefault();
+      pick(filtered[activeIndex]);
+    }
+  };
+
+  const placeholder = loading
+    ? "Loading servers…"
+    : options.length
+      ? "Select MT5 server"
+      : "No verified servers";
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled || loading || !options.length}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={onTriggerKeyDown}
+        className="w-full text-left disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <FieldShell className={cn(open && "border-[var(--accent)] ring-1 ring-[var(--ring)]")}>
+          {loading ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--accent)]" aria-hidden />
+          ) : (
+            <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+          )}
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate",
+              selected ? "text-[var(--fg)]" : "text-[var(--fg-subtle)]",
+            )}
+          >
+            {selected ? selected.name : placeholder}
+          </span>
+          {selected ? <EnvBadge environment={selected.environment} /> : null}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-[var(--fg-subtle)] transition",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </FieldShell>
+      </button>
+
+      {open && options.length ? (
+        <div
+          id={listId}
+          role="listbox"
+          tabIndex={-1}
+          onKeyDown={onListKeyDown}
+          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_92%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
+        >
+          {showSearch ? (
+            <div className="border-b border-[var(--border)] p-2">
+              <label className="flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/40 px-2.5">
+                <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setActiveIndex(0);
+                  }}
+                  onKeyDown={onListKeyDown}
+                  placeholder="Filter servers…"
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
+                />
+              </label>
+            </div>
+          ) : null}
+          <ul className="max-h-64 overflow-y-auto py-1">
+            {filtered.map((row, index) => {
+              const active = row.name === value;
+              const focused = index === activeIndex;
+              const verified = Boolean(row.verified_at);
+              return (
+                <li key={row.name}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)]",
+                      (active || focused) && "bg-[var(--accent-soft)]",
+                    )}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => pick(row)}
+                  >
+                    <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-[var(--fg)]">
+                        {row.name}
+                      </span>
+                      <span className="block truncate text-[11px] text-[var(--fg-subtle)]">
+                        {brokerName || "MT5"} · {row.environment === "demo" ? "Demo" : "Live"}
+                      </span>
+                    </span>
+                    <EnvBadge environment={row.environment} />
+                    <VerifiedBadge verified={verified} />
+                    {active ? (
+                      <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                    ) : (
+                      <span className="w-4" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+            {!filtered.length ? (
+              <li className="px-3 py-4 text-center text-sm text-[var(--fg-muted)]">
+                No servers match that filter.
               </li>
             ) : null}
           </ul>
@@ -320,7 +580,6 @@ export function BrokerConfigWorkspace() {
   const [brokerSlug, setBrokerSlug] = useState<Mt5BrokerSlug | null>("weltrade");
   const [accountType, setAccountType] = useState<AccountType>("live");
   const [server, setServer] = useState("Weltrade-Real");
-  const [serverQuery, setServerQuery] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -329,13 +588,14 @@ export function BrokerConfigWorkspace() {
   const [progress, setProgress] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [changingAccount, setChangingAccount] = useState(false);
+  const [brokerSwitchEpoch, setBrokerSwitchEpoch] = useState(0);
 
   const selectedBroker =
     brokerOptions.find((b) => b.slug === brokerSlug) ??
     (brokerSlug ? brokerBySlug(brokerSlug) : undefined);
 
   const serversQ = useQuery({
-    queryKey: ["mt5-servers", brokerSlug],
+    queryKey: ["mt5-servers", brokerSlug, brokerSwitchEpoch],
     queryFn: () => brokerConnectivityApi.mt5Servers(String(brokerSlug)),
     enabled: Boolean(brokerSlug),
     staleTime: 60_000,
@@ -349,10 +609,10 @@ export function BrokerConfigWorkspace() {
         const row = asRecord(item);
         const name = str(row.name, "");
         if (!name) return null;
-        const env = str(row.environment, "live").toLowerCase() === "demo" ? "demo" : "live";
+        const env = str(row.environment, "").toLowerCase() === "demo" ? "demo" : "live";
         return {
           name,
-          environment: env,
+          environment: env as AccountType,
           source: str(row.source, "unknown"),
           verified_at: row.verified_at ? String(row.verified_at) : null,
         } satisfies Mt5ServerRow;
@@ -362,29 +622,44 @@ export function BrokerConfigWorkspace() {
 
   const profileServerList = useMemo(() => {
     const servers = asRecord(asRecord(profile).servers);
-    const list = Array.isArray(servers[accountType])
-      ? (servers[accountType] as string[])
-      : [];
-    return list.map(String).filter(Boolean);
-  }, [profile, accountType]);
+    const live = Array.isArray(servers.live) ? (servers.live as string[]) : [];
+    const demo = Array.isArray(servers.demo) ? (servers.demo as string[]) : [];
+    return [...live, ...demo].map(String).filter(Boolean);
+  }, [profile]);
 
-  const serverOptions = useMemo(() => {
-    const base = serversForBroker(
-      selectedBroker,
-      accountType,
-      selectedBroker?.slug === "weltrade" ? profileServerList : undefined,
-      apiServerRows,
-    );
-    const q = serverQuery.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter((s) => s.toLowerCase().includes(q));
-  }, [selectedBroker, accountType, profileServerList, apiServerRows, serverQuery]);
+  const serverRows = useMemo(
+    () =>
+      serverRowsForBroker(
+        selectedBroker,
+        selectedBroker?.slug === "weltrade" ? profileServerList : undefined,
+        serversQ.isSuccess || apiServerRows.length ? apiServerRows : undefined,
+      ),
+    [selectedBroker, profileServerList, apiServerRows, serversQ.isSuccess],
+  );
+
+  const selectedServerRow = serverRows.find((row) => row.name === server) ?? null;
+  const serverEnvironment = selectedServerRow
+    ? selectedServerRow.environment
+    : classifyServerEnvironment(server);
+  const accountTypeResolved: AccountType | null =
+    serverEnvironment === "demo" || serverEnvironment === "live"
+      ? serverEnvironment
+      : null;
 
   useEffect(() => {
-    if (!serverOptions.includes(server)) {
-      setServer(serverOptions[0] ?? "");
+    if (serversQ.isFetching) return;
+    if (!serverRows.length) {
+      if (server) setServer("");
+      return;
     }
-  }, [serverOptions, server]);
+    if (server && serverRows.some((row) => row.name === server)) {
+      const row = serverRows.find((r) => r.name === server);
+      if (row) setAccountType(row.environment);
+      return;
+    }
+    // Stale or cleared after broker switch — do not keep another broker's server.
+    if (server) setServer("");
+  }, [serverRows, serversQ.isFetching, server]);
 
   useEffect(() => {
     const liveLogin = str(mt5.login || session.login);
@@ -392,9 +667,10 @@ export function BrokerConfigWorkspace() {
     const liveServer = str(mt5.server || session.server);
     if (liveServer && liveServer !== "—") {
       setServer(liveServer);
-      setAccountType(inferAccountType(liveServer));
       const matched = matchBrokerByServer(liveServer);
       if (matched) setBrokerSlug(matched.slug);
+      const env = classifyServerEnvironment(liveServer);
+      if (env === "demo" || env === "live") setAccountType(env);
     }
     if (session.connected) setPassword("");
   }, [mt5.login, mt5.server, session.login, session.server, session.connected, login]);
@@ -436,7 +712,8 @@ export function BrokerConfigWorkspace() {
         if (!cancelled && profileRow.server) {
           const srv = String(profileRow.server);
           setServer(srv);
-          setAccountType(inferAccountType(srv));
+          const env = classifyServerEnvironment(srv);
+          if (env === "demo" || env === "live") setAccountType(env);
           const matched = matchBrokerByServer(srv);
           if (matched) setBrokerSlug(matched.slug);
         }
@@ -460,7 +737,7 @@ export function BrokerConfigWorkspace() {
     mutationFn: weltradeApi.connect,
     onMutate: () => {
       clearPasswordField();
-      setProgress("CONNECTING");
+      setProgress("Connecting…");
     },
     onSuccess: async (data) => {
       clearPasswordField();
@@ -468,7 +745,7 @@ export function BrokerConfigWorkspace() {
       if (Object.keys(body).length > 0) {
         qc.setQueryData(["weltrade-dashboard"], body);
       }
-      toast.success("CONNECTED");
+      toast.success("Connected");
       setChangingAccount(false);
       await qc.invalidateQueries({ queryKey: ["trading-session"] });
       await refresh();
@@ -481,7 +758,7 @@ export function BrokerConfigWorkspace() {
       toast.error(
         e instanceof ApiError
           ? traderFacingErrorMessage(e)
-          : "CONNECTION_FAILED",
+          : "Connection failed",
       );
     },
   });
@@ -506,13 +783,16 @@ export function BrokerConfigWorkspace() {
       if (!Number.isFinite(loginNum) || loginNum <= 0) {
         throw new Error("Enter a valid login");
       }
+      if (!accountTypeResolved) {
+        throw new Error("Select a verified Demo or Live server before connecting.");
+      }
       const submittedPassword = password;
       clearPasswordField();
       return weltradeApi.connect({
         login: loginNum,
         password: submittedPassword || undefined,
         server,
-        account_type: accountType,
+        account_type: accountTypeResolved,
         prefer_attach: true,
         path: terminalPath || undefined,
         remember_on_gateway: true,
@@ -520,11 +800,11 @@ export function BrokerConfigWorkspace() {
       });
     },
     onMutate: () => {
-      setProgress("CONNECTING");
+      setProgress("Connecting…");
     },
     onSuccess: async () => {
       clearPasswordField();
-      toast.success("CONNECTED");
+      toast.success("Connected");
       setChangingAccount(false);
       await refresh();
       await refreshOwnedCatalogue();
@@ -538,7 +818,7 @@ export function BrokerConfigWorkspace() {
           ? traderFacingErrorMessage(e)
           : e instanceof Error
             ? traderFacingErrorMessage({ message: e.message })
-            : "CONNECTION_FAILED",
+            : "Connection failed",
       );
     },
   });
@@ -559,8 +839,22 @@ export function BrokerConfigWorkspace() {
       );
       return;
     }
-    if (!server) {
-      toast.error("Select server");
+    if (!server || !selectedServerRow) {
+      toast.error(
+        serversQ.isError
+          ? "Server catalogue unavailable. Try again or contact support."
+          : "Select the exact MT5 server for your account",
+      );
+      return;
+    }
+    if (!accountTypeResolved) {
+      toast.error(
+        "This server’s Demo/Live classification is unknown. Connection is blocked until it is verified.",
+      );
+      return;
+    }
+    if (accountType !== accountTypeResolved) {
+      toast.error("Account type must match the selected server (Demo or Live).");
       return;
     }
     const loginNum = Number(login);
@@ -589,7 +883,7 @@ export function BrokerConfigWorkspace() {
             toast.error(
               e instanceof ApiError
                 ? traderFacingErrorMessage(e)
-                : "CONNECTION_FAILED",
+                : "Connection failed",
             );
           }
         } finally {
@@ -606,7 +900,7 @@ export function BrokerConfigWorkspace() {
       login: loginNum,
       password: password || undefined,
       server,
-      account_type: accountType,
+      account_type: accountTypeResolved,
       prefer_attach: true,
       path: terminalPath || undefined,
       remember_on_gateway: true,
@@ -629,7 +923,7 @@ export function BrokerConfigWorkspace() {
       toast.error(
         e instanceof ApiError
           ? traderFacingErrorMessage(e)
-          : "CONNECTION_FAILED",
+          : "Connection failed",
       );
     },
   });
@@ -663,7 +957,10 @@ export function BrokerConfigWorkspace() {
     },
   );
   const isLiveAccount =
-    inferAccountType(str(connectionView.server || server, "Weltrade-Real")) === "live";
+    classifyServerEnvironment(
+      str(connectionView.server || server, "Weltrade-Real"),
+      selectedServerRow,
+    ) === "live";
 
   const showPasswordField =
     showConnectForm && !connectMut.isPending && !saveMut.isPending;
@@ -677,7 +974,7 @@ export function BrokerConfigWorkspace() {
         await refresh();
       } catch (e) {
         toast.error(
-          e instanceof ApiError ? traderFacingErrorMessage(e) : "CONNECTION_FAILED",
+          e instanceof ApiError ? traderFacingErrorMessage(e) : "Connection failed",
         );
       } finally {
         setProgress(null);
@@ -694,22 +991,37 @@ export function BrokerConfigWorkspace() {
     session.balance && session.balance !== "—"
       ? String(session.balance).replace(/^\$/, "")
       : "—";
+  const equityDisplay =
+    session.equity && session.equity !== "—"
+      ? String(session.equity).replace(/^\$/, "")
+      : "—";
   const currencyDisplay = str(tradingSnap.currency, "USD");
   const loginDisplay = connectionView.maskedLogin || login || "—";
   const tradingEnabled = liveTradingHint.label.toLowerCase().includes("enabled");
+  const lastSyncDisplay = connectionView.lastVerified
+    ? new Date(connectionView.lastVerified).toLocaleString()
+    : connected
+      ? "Just now"
+      : "—";
 
   const onBrokerPicked = (broker: Mt5BrokerOption) => {
     setBrokerSlug(broker.slug);
-    setServerQuery("");
-    const nextServers = serversForBroker(
-      broker,
-      accountType,
-      broker.slug === "weltrade" ? profileServerList : undefined,
-    );
-    const next = nextServers[0] ?? "";
-    setServer(next);
-    if (next) setAccountType(inferAccountType(next));
+    setServer("");
+    setBrokerSwitchEpoch((n) => n + 1);
   };
+
+  const onServerPicked = (row: Mt5ServerRow) => {
+    setServer(row.name);
+    setAccountType(row.environment);
+  };
+
+  const serversLoading = Boolean(brokerSlug) && (serversQ.isLoading || serversQ.isFetching);
+  const connectBlocked =
+    busy ||
+    Boolean(selectedBroker && !selectedBroker.connectable) ||
+    !server ||
+    !accountTypeResolved ||
+    serversLoading;
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col items-center px-1 py-2 sm:px-0 sm:py-4">
@@ -783,14 +1095,29 @@ export function BrokerConfigWorkspace() {
                     icon: <Wallet className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
                   },
                   {
-                    label: "Currency",
-                    value: currencyDisplay,
+                    label: "Equity",
+                    value: equityDisplay,
                     icon: <Coins className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
                   },
                   {
                     label: "Account Type",
                     value: isLiveAccount ? "Real / Live" : "Demo",
                     icon: <Layers className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "Currency",
+                    value: currencyDisplay,
+                    icon: <Coins className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "Last sync",
+                    value: lastSyncDisplay,
+                    icon: <RefreshCw className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                  },
+                  {
+                    label: "Verification",
+                    value: connected ? "Owned session" : "Pending",
+                    icon: <ShieldCheck className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
                   },
                 ] as const
               ).map((cell) => (
@@ -910,19 +1237,27 @@ export function BrokerConfigWorkspace() {
 
             {selectedBroker && !selectedBroker.connectable ? (
               <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--fg-muted)]">
-                {selectedBroker.name} is listed for Demo/Live server discovery, but Connect stays
-                disabled until a QuantForg Windows MT5 worker records a real authenticate+verify.
-                Documented search hints are not selectable verified servers. Weltrade remains the
-                production-verified path.
+                {selectedBroker.name} is listed for honest Demo/Live server discovery once verified,
+                but Connect stays disabled until a QuantForg Windows MT5 worker records a real
+                authenticate+verify. Weltrade remains the production-verified path.
               </p>
             ) : null}
-            {serversQ.isSuccess && !serverOptions.length && selectedBroker ? (
-              <p className="text-[11px] text-[var(--fg-subtle)]">
-                No verified {accountType} servers for {selectedBroker.name} yet
+
+            {serversQ.isError ? (
+              <p className="rounded-xl border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 py-2 text-xs text-[var(--danger)]">
+                Could not load the MT5 server catalogue for {selectedBroker?.name || "this broker"}.
+                Retry shortly — another broker&apos;s servers will not be substituted.
+              </p>
+            ) : null}
+
+            {serversQ.isSuccess && !serverRows.length && selectedBroker ? (
+              <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--fg-muted)]">
+                No verified MT5 servers for {selectedBroker.name} yet. Server names are not invented
+                or borrowed from other brokers. Request onboarding once a Windows gateway worker can
+                verify this brand.
                 {asList(asRecord(serversQ.data).documented_search_hints).length
-                  ? ` · documented search hints available to operators (${asList(asRecord(serversQ.data).documented_search_hints).length})`
+                  ? ` Operators may see ${asList(asRecord(serversQ.data).documented_search_hints).length} documented search hint(s) — those are not selectable verified servers.`
                   : ""}
-                .
               </p>
             ) : null}
 
@@ -937,63 +1272,17 @@ export function BrokerConfigWorkspace() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="bw-server" className="text-[11px] font-medium text-[var(--fg-subtle)]">
-                  Server
+                <label className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                  MT5 Server
                 </label>
-                <div className="space-y-2">
-                  <FieldShell>
-                    <Search className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                    <input
-                      value={serverQuery}
-                      disabled={busy}
-                      onChange={(e) => setServerQuery(e.target.value)}
-                      placeholder="Search verified servers..."
-                      className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
-                    />
-                  </FieldShell>
-                  <div className="relative">
-                    <FieldShell>
-                      <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                      <select
-                        id="bw-server"
-                        disabled={busy || !serverOptions.length}
-                        className="h-full w-full min-w-0 appearance-none bg-transparent pr-6 text-sm outline-none disabled:opacity-60"
-                        value={server}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setServer(next);
-                          setAccountType(inferAccountType(next));
-                        }}
-                      >
-                        {!serverOptions.length ? (
-                          <option value="">No verified servers yet</option>
-                        ) : !server ? (
-                          <option value="">Select server</option>
-                        ) : null}
-                        {serverOptions.map((s) => {
-                          const meta = apiServerRows.find((row) => row.name === s);
-                          const tag =
-                            meta?.environment === "demo" || inferAccountType(s) === "demo"
-                              ? "Demo"
-                              : "Live";
-                          return (
-                            <option
-                              key={s}
-                              value={s}
-                              className="bg-[var(--bg-elevated)] text-[var(--fg)]"
-                            >
-                              {s} · {tag}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <ChevronDown
-                        className="pointer-events-none absolute right-3 h-4 w-4 text-[var(--fg-subtle)]"
-                        aria-hidden
-                      />
-                    </FieldShell>
-                  </div>
-                </div>
+                <ServerSelect
+                  value={server}
+                  options={serverRows}
+                  brokerName={selectedBroker?.name}
+                  loading={serversLoading}
+                  disabled={busy}
+                  onChange={onServerPicked}
+                />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="bw-login" className="text-[11px] font-medium text-[var(--fg-subtle)]">
@@ -1056,6 +1345,46 @@ export function BrokerConfigWorkspace() {
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_35%,transparent)] px-3 py-2.5">
+              <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+                Account type
+              </span>
+              <span
+                className={cn(
+                  "rounded-md px-2 py-1 text-[11px] font-semibold",
+                  accountTypeResolved === "live"
+                    ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]"
+                    : accountTypeResolved === "demo"
+                      ? "bg-[var(--surface-2)] text-[var(--fg-muted)]"
+                      : "bg-[var(--surface-2)] text-[var(--fg-subtle)]",
+                )}
+              >
+                {accountTypeResolved === "live"
+                  ? "Live"
+                  : accountTypeResolved === "demo"
+                    ? "Demo"
+                    : "Select a server"}
+              </span>
+              <span className="text-[11px] text-[var(--fg-subtle)]">
+                Matches the selected MT5 server — Demo and Live are not interchangeable.
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--fg-muted)]">
+              <span className="font-medium text-[var(--fg-subtle)]">Connection status</span>
+              <span>
+                {progress
+                  ? progress
+                  : connected
+                    ? "Connected"
+                    : gatewayOnline
+                      ? gatewayMt5Attached
+                        ? "Gateway online · ownership required"
+                        : "Gateway online · not connected"
+                      : "Gateway offline or unreachable"}
+              </span>
+            </div>
+
             {isOperator ? (
               <div className="space-y-1.5">
                 <label htmlFor="bw-path" className="text-[11px] font-medium text-[var(--fg-subtle)]">
@@ -1104,7 +1433,7 @@ export function BrokerConfigWorkspace() {
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 className="qf-btn-hot h-12 w-full border-0 text-[15px] font-semibold text-[var(--brand-navy)]"
-                disabled={busy || Boolean(selectedBroker && !selectedBroker.connectable)}
+                disabled={connectBlocked}
                 onClick={onConnect}
               >
                 {connectMut.isPending || saveMut.isPending ? (

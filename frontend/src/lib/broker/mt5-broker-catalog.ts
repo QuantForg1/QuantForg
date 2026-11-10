@@ -112,6 +112,24 @@ export function brokerBySlug(slug: string | null | undefined): Mt5BrokerOption |
   return MT5_BROKER_OPTIONS.find((b) => b.slug === slug);
 }
 
+export function classifyServerEnvironment(
+  serverName: string,
+  known?: Mt5ServerRow | null,
+): "demo" | "live" | "unknown" {
+  if (known?.environment === "demo" || known?.environment === "live") {
+    return known.environment;
+  }
+  const s = String(serverName || "")
+    .trim()
+    .toLowerCase();
+  if (!s) return "unknown";
+  if (s.includes("demo") || s.includes("trial")) return "demo";
+  if (s.includes("real") || s.includes("live") || s.includes("-mt5")) return "live";
+  // Documented production names without demo token are treated as live only when
+  // the catalogue row already classified them; bare guesses stay unknown.
+  return "unknown";
+}
+
 export function matchBrokerByServer(server: string | null | undefined): Mt5BrokerOption | undefined {
   const hay = String(server || "")
     .trim()
@@ -135,30 +153,93 @@ export function matchBrokerByServer(server: string | null | undefined): Mt5Broke
   return undefined;
 }
 
+function documentedRows(broker: Mt5BrokerOption | undefined): Mt5ServerRow[] {
+  if (!broker) return [];
+  const out: Mt5ServerRow[] = [];
+  for (const name of broker.servers.live) {
+    out.push({
+      name,
+      environment: "live",
+      source: "documented_verified",
+      verified_at: broker.connectable ? "documented" : null,
+    });
+  }
+  for (const name of broker.servers.demo) {
+    out.push({
+      name,
+      environment: "demo",
+      source: "documented_verified",
+      verified_at: broker.connectable ? "documented" : null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Full verified server catalogue for a broker (Demo + Live).
+ * Prefer API rows; fall back to documented verified names + profile servers.
+ * Never invent cross-broker names.
+ */
+export function serverRowsForBroker(
+  broker: Mt5BrokerOption | undefined,
+  profileServers?: string[],
+  apiServers?: Mt5ServerRow[],
+): Mt5ServerRow[] {
+  const byName = new Map<string, Mt5ServerRow>();
+
+  const push = (row: Mt5ServerRow) => {
+    const key = row.name.trim();
+    if (!key) return;
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, row);
+      return;
+    }
+    // Prefer API / verified_at evidence over documented placeholders.
+    if (!existing.verified_at && row.verified_at) {
+      byName.set(key, row);
+    }
+  };
+
+  if (apiServers?.length) {
+    for (const row of apiServers) push(row);
+  } else {
+    for (const row of documentedRows(broker)) push(row);
+  }
+
+  for (const raw of profileServers || []) {
+    const name = String(raw || "").trim();
+    if (!name || byName.has(name)) continue;
+    const env = classifyServerEnvironment(name);
+    if (env === "unknown") continue;
+    push({
+      name,
+      environment: env,
+      source: "weltrade_profile",
+      verified_at: null,
+    });
+  }
+
+  return [...byName.values()].sort((a, b) => {
+    if (a.environment !== b.environment) {
+      return a.environment === "live" ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export function serversForBroker(
   broker: Mt5BrokerOption | undefined,
   accountType: "demo" | "live",
   profileServers?: string[],
   apiServers?: Mt5ServerRow[],
 ): string[] {
-  if (apiServers && apiServers.length) {
-    const filtered = apiServers
-      .filter((s) => (accountType === "demo" ? s.environment === "demo" : s.environment === "live"))
-      .map((s) => s.name);
-    if (filtered.length) return filtered;
-    // If API returned mixed envs only, still surface all verified names.
-    return apiServers.map((s) => s.name);
-  }
-  const documented = broker
-    ? accountType === "demo"
-      ? [...broker.servers.demo]
-      : [...broker.servers.live]
-    : [];
-  const merged = [...documented];
-  for (const s of profileServers || []) {
-    if (s && !merged.includes(s)) merged.push(s);
-  }
-  return merged;
+  const rows = serverRowsForBroker(broker, profileServers, apiServers);
+  const filtered = rows
+    .filter((s) => s.environment === accountType)
+    .map((s) => s.name);
+  if (filtered.length) return filtered;
+  return rows.map((s) => s.name);
 }
 
 export function mapRegistryBrokers(apiBrokers: unknown): Mt5BrokerOption[] {
