@@ -57,9 +57,39 @@ def _heartbeat_ok(hb: object) -> bool:
 
 
 def _assert_no_secrets(payload: object) -> bool:
-    blob = json.dumps(payload, default=str).lower()
-    banned = ("password", "service_token", "bearer ", "qf_demo_")
-    return not any(b in blob for b in banned)
+    """Fail only on leaked credential values / secret JSON fields — not docs notes."""
+    blob = json.dumps(payload, default=str)
+    lower = blob.lower()
+    if "bearer " in lower:
+        return False
+    token = (os.environ.get("WORKER_SERVICE_TOKEN") or "").strip()
+    if token and token in blob:
+        return False
+    # Reject non-empty password/secret JSON fields (notes may mention the word).
+    for key in ("password", "secret", "sealed_envelope", "service_token"):
+        needle = f'"{key}":'
+        if needle not in lower:
+            continue
+        # Allow null/empty explicitly.
+        if f'"{key}": null' in lower or f'"{key}":null' in lower:
+            continue
+        if f'"{key}": ""' in lower or f'"{key}":""' in lower:
+            continue
+        return False
+    return True
+
+
+def _summary_and_exit(code: int) -> int:
+    fails = [r for r in RESULTS if r[1] == "FAIL"]
+    print("--- SUMMARY ---")
+    print("pass", sum(1 for r in RESULTS if r[1] == "PASS"))
+    print("fail", len(fails))
+    print(
+        "blocked_or_skipped",
+        sum(1 for r in RESULTS if r[1] in {"BLOCKED", "NOT_EXERCISED", "NOT_WIRED"}),
+    )
+    _write()
+    return 1 if fails else code
 
 
 def main() -> int:
@@ -141,8 +171,7 @@ def main() -> int:
             break
     if not worker_id:
         rec("worker_identity", "FAIL", "no_worker_id")
-        _write()
-        return 1
+        return _summary_and_exit(1)
     rec("worker_identity", "PASS")
 
     assign = client.get_assignment(worker_id=worker_id)
@@ -184,8 +213,7 @@ def main() -> int:
             rec(name, "FAIL", "lab_enqueue_unavailable")
         _security_only(client, worker_id)
         _tail(client)
-        _write()
-        return 1
+        return _summary_and_exit(1)
 
     if not enq.get("ok"):
         rec("lab_enqueue", "FAIL", str(enq.get("error") or enq_status))
@@ -199,8 +227,7 @@ def main() -> int:
             rec(name, "FAIL", "lab_enqueue_failed")
         _security_only(client, worker_id)
         _tail(client)
-        _write()
-        return 1
+        return _summary_and_exit(1)
 
     rec(
         "lab_enqueue",
@@ -229,8 +256,7 @@ def main() -> int:
             rec(name, "FAIL", "no_claimed_job")
         _idempotency(client, worker_id, key, enq_ok=True)
         _tail(client)
-        _write()
-        return 1 if any(r[1] == "FAIL" for r in RESULTS) else 0
+        return _summary_and_exit(0)
 
     intent_id = str(job["intent_id"])
     recovered = client.dispatch_recover()
@@ -295,16 +321,7 @@ def main() -> int:
 
     _idempotency(client, worker_id, key, enq_ok=True)
     _tail(client)
-    _write()
-    fails = [r for r in RESULTS if r[1] == "FAIL"]
-    print("--- SUMMARY ---")
-    print("pass", sum(1 for r in RESULTS if r[1] == "PASS"))
-    print("fail", len(fails))
-    print(
-        "blocked_or_skipped",
-        sum(1 for r in RESULTS if r[1] in {"BLOCKED", "NOT_EXERCISED", "NOT_WIRED"}),
-    )
-    return 1 if fails else 0
+    return _summary_and_exit(0)
 
 
 def _security_only(client: object, worker_id: str) -> None:

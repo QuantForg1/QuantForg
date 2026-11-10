@@ -313,9 +313,46 @@ def test_ops_summary_explains_execution_workers_zero(
 
 
 def test_harness_heartbeat_helper_rejects_register_fallback() -> None:
-    from scripts.staging_phase8_dispatch_demo import _heartbeat_ok
+    from scripts.staging_phase8_dispatch_demo import _assert_no_secrets, _heartbeat_ok
 
     assert _heartbeat_ok({"railway": {}}) is False
     assert _heartbeat_ok({"railway": {"demo-a": {"ok": False}}}) is False
     assert _heartbeat_ok({"ok": True}) is False  # registration-shaped payload
     assert _heartbeat_ok({"railway": {"demo-a": {"ok": True}}}) is True
+    # Docs notes may mention passwords; only structured secret fields fail.
+    assert _assert_no_secrets({"note": "passwords are never stored"}) is True
+    assert _assert_no_secrets({"password": "secret-value"}) is False
+
+
+def test_lab_bound_detection_from_deterministic_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        mt5_workers_router,
+        "get_settings",
+        lambda: _fake_settings(env=AppEnvironment.STAGING),
+    )
+    client, api = _client()
+    wid = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "h1", "slot_id": "demo-a"},
+    ).json()["worker_id"]
+    worker = api.require_worker(UUID(wid))
+    # Strip lab_binding flag but keep deterministic lab ids / slot map.
+    from app.application.services.mt5_worker_api import _with_metadata
+
+    stripped = api.plane.provisioner.save(  # type: ignore[union-attr]
+        _with_metadata(worker, {"slot_id": "demo-a", "host_code": "h1"})
+    )
+    assert stripped.metadata.get("lab_binding") is not True
+    assert api._is_lab_bound_assignment(stripped) is True
+    client.post(
+        "/api/v1/mt5-workers/heartbeat",
+        json={"worker_id": wid, "slot_id": "demo-a"},
+    )
+    attest = client.post(
+        "/api/v1/mt5-workers/lab/attest-assignment",
+        json={"worker_id": wid},
+    )
+    assert attest.status_code == 200
+    assert attest.json()["ok"] is True
