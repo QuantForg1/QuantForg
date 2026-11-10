@@ -236,3 +236,101 @@ def test_health_and_release() -> None:
     released = client.post("/api/v1/mt5-workers/release", json={"worker_id": wid})
     assert released.status_code == 200
     assert released.json()["lifecycle"] == "stopped"
+
+
+def test_dispatch_claim_requires_worker_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.services.multi_account_dispatch_queue import (
+        reset_durable_dispatch_queue_for_tests,
+    )
+
+    reset_durable_dispatch_queue_for_tests()
+    monkeypatch.setenv("WORKER_SERVICE_TOKEN", TOKEN)
+    from core.config.settings import get_settings
+
+    get_settings.cache_clear()
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(mt5_workers_router.router, prefix="/api/v1")
+    app.state.mt5_worker_api = _facade()
+    client = TestClient(app, raise_server_exceptions=False)
+    missing = client.post(
+        "/api/v1/mt5-workers/dispatch/claim",
+        json={
+            "worker_id": "00000000-0000-0000-0000-000000000001",
+            "user_id": "00000000-0000-0000-0000-000000000002",
+            "broker_account_id": "00000000-0000-0000-0000-000000000003",
+        },
+    )
+    assert missing.status_code in {401, 403}
+    bad = client.post(
+        "/api/v1/mt5-workers/dispatch/claim",
+        headers={"Authorization": "Bearer wrong-token-xxxxxxxxxx"},
+        json={
+            "worker_id": "00000000-0000-0000-0000-000000000001",
+            "user_id": "00000000-0000-0000-0000-000000000002",
+            "broker_account_id": "00000000-0000-0000-0000-000000000003",
+        },
+    )
+    assert bad.status_code in {401, 403}
+    get_settings.cache_clear()
+
+
+def test_dispatch_claim_rejects_assignment_spoof() -> None:
+    from app.application.services.multi_account_dispatch_queue import (
+        reset_durable_dispatch_queue_for_tests,
+    )
+
+    reset_durable_dispatch_queue_for_tests()
+    client, api = _client()
+    reg = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "h1", "slot_id": "demo-a"},
+    ).json()
+    wid = UUID(reg["worker_id"])
+    worker = api.require_worker(wid)
+    spoof = client.post(
+        "/api/v1/mt5-workers/dispatch/claim",
+        json={
+            "worker_id": str(wid),
+            "user_id": str(UUID(int=1)),
+            "broker_account_id": str(UUID(int=2)),
+        },
+    )
+    assert spoof.status_code == 200
+    body = spoof.json()
+    assert body["ok"] is False
+    assert body["error"] == "assignment_mismatch"
+    assert body["live_submit_allowed"] is False
+
+    empty = client.post(
+        "/api/v1/mt5-workers/dispatch/claim",
+        json={
+            "worker_id": str(wid),
+            "user_id": str(worker.user_id),
+            "broker_account_id": str(worker.broker_account_id),
+        },
+    )
+    assert empty.status_code == 200
+    assert empty.json()["ok"] is True
+    assert empty.json()["job"] is None
+    assert empty.json()["live_submit_allowed"] is False
+
+
+def test_ops_summary_includes_phase7_owner_snapshot() -> None:
+    from app.application.services.multi_account_dispatch_queue import (
+        reset_durable_dispatch_queue_for_tests,
+    )
+
+    reset_durable_dispatch_queue_for_tests()
+    client, _ = _client()
+    client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "h1", "slot_id": "demo-a"},
+    )
+    summary = client.get("/api/v1/mt5-workers/ops/summary")
+    assert summary.status_code == 200
+    body = summary.json()
+    assert body["live_submit_allowed"] is False
+    assert "dispatch_queue" in body
+    assert body["safety"]["live_submit_allowed"] is False
+    assert body["feature_flags"]["MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED"] is False

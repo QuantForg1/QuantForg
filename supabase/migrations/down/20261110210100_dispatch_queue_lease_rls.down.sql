@@ -1,0 +1,4 @@
+DROP POLICY IF EXISTS dispatch_delivery_events_deny_delete ON public.dispatch_delivery_events;
+DROP POLICY IF EXISTS dispatch_delivery_events_deny_update ON public.dispatch_delivery_events;
+DROP POLICY IF EXISTS dispatch_delivery_events_deny_write ON public.dispatch_delivery_events;
+DROP POLICY IF EXISTS dispatch_delivery_events_select_own ON public.dispatch_delivery_events;
