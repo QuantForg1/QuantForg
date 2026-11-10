@@ -35,37 +35,58 @@ _PROTECTION_COPY = (
     {
         "id": "stop_loss",
         "title": "Mandatory stop-loss",
-        "detail": "Every new order must include a valid stop-loss. This protection cannot be disabled.",
+        "detail": (
+            "Every new order must include a valid stop-loss. "
+            "This protection cannot be disabled."
+        ),
     },
     {
         "id": "risk_validation",
         "title": "Pre-trade risk validation",
-        "detail": "Orders are checked against your effective risk limits before submission.",
+        "detail": (
+            "Orders are checked against your effective risk limits "
+            "before submission."
+        ),
     },
     {
         "id": "exposure",
         "title": "Exposure restrictions",
-        "detail": "Open risk and concurrent positions are capped so a single account cannot over-extend.",
+        "detail": (
+            "Open risk and concurrent positions are capped so a single "
+            "account cannot over-extend."
+        ),
     },
     {
         "id": "trade_quality",
         "title": "Trade-quality checks",
-        "detail": "Low-quality setups are blocked by platform quality gates before they reach the OMS.",
+        "detail": (
+            "Low-quality setups are blocked by platform quality gates "
+            "before they reach the OMS."
+        ),
     },
     {
         "id": "position_limits",
         "title": "Position limits",
-        "detail": "Your personal concurrent-position preference cannot exceed the platform hard ceiling.",
+        "detail": (
+            "Your personal concurrent-position preference cannot exceed "
+            "the platform hard ceiling."
+        ),
     },
     {
         "id": "daily_loss",
         "title": "Daily loss protection",
-        "detail": "When daily loss usage reaches your effective halt threshold, new entries are blocked.",
+        "detail": (
+            "When daily loss usage reaches your effective halt threshold, "
+            "new entries are blocked."
+        ),
     },
     {
         "id": "restricted_strategies",
         "title": "Restricted strategy types",
-        "detail": "Grid, martingale, and averaging-down strategies remain disabled for all accounts.",
+        "detail": (
+            "Grid, martingale, and averaging-down strategies remain "
+            "disabled for all accounts."
+        ),
     },
 )
 
@@ -85,7 +106,10 @@ def preference_bounds() -> dict[str, Any]:
             "max": str(OWNER_MAX_AGGREGATE_OPEN_RISK_PCT),
             "unit": "percent",
             "label": "Aggregate open risk",
-            "help": "Total open risk across positions. Must stay at or above risk per trade.",
+            "help": (
+                "Total open risk across positions. "
+                "Must stay at or above risk per trade."
+            ),
         },
         "max_lot": {
             "min": "0.01",

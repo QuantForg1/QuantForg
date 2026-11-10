@@ -15,11 +15,11 @@ from app.application.services.user_risk_preferences_service import (
 )
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import ValidationError
+from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
 from app.domain.multi_account.effective_risk import (
     RiskSettingProposal,
     resolve_effective_risk,
 )
-from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
@@ -63,7 +63,9 @@ def test_assert_own_user_blocks_foreign_ids() -> None:
         assert_own_user(me, other)
 
 
-def test_update_rejects_when_storage_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_rejects_when_storage_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "app.application.services.user_risk_preferences_service.direct_postgres_available",
         lambda: False,
@@ -80,7 +82,9 @@ def test_update_rejects_when_storage_unavailable(monkeypatch: pytest.MonkeyPatch
     assert exc.value.code == "risk_preference_storage_unavailable"
 
 
-def test_update_rejects_over_ceiling_before_write(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_rejects_over_ceiling_before_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     called = {"execute": 0}
 
     def _boom(*_a, **_k):  # pragma: no cover - must not run

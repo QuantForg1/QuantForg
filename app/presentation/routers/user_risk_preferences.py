@@ -13,7 +13,6 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
-from app.domain.exceptions.base import ValidationError
 from app.application.services.user_risk_preferences_service import (
     get_user_risk_preferences,
     list_risk_history,
@@ -21,6 +20,7 @@ from app.application.services.user_risk_preferences_service import (
     protection_status,
     update_user_risk_preferences,
 )
+from app.domain.exceptions.base import ValidationError
 from app.presentation.dependencies.auth import CurrentUser
 
 router = APIRouter(prefix="/risk/preferences", tags=["risk-preferences"])
