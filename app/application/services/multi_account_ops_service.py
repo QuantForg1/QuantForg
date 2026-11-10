@@ -136,8 +136,13 @@ def customer_dispatch_status(
     *,
     user_id: UUID,
     queue: DurableDispatchQueue | None = None,
+    settings: Any | None = None,
 ) -> dict[str, Any]:
-    """Customer-scoped dispatch status — own jobs only."""
+    """Customer-scoped dispatch status — own jobs only.
+
+    Never fabricates connected/verified states. Never exposes credentials,
+    worker tokens, or other customers' jobs.
+    """
     q = queue or get_durable_dispatch_queue()
     jobs = [j.to_public_dict() for j in q.list_for_user(user_id)]
     events = [
@@ -150,10 +155,43 @@ def customer_dispatch_status(
         }
         for e in q.events_for_user(user_id)
     ]
+    dispatch_on = multi_account_dispatch_allowed(settings)
+    live_on = multi_account_live_submit_allowed(settings)
+    blocked_reasons: list[str] = []
+    if not dispatch_on:
+        blocked_reasons.append("multi_account_dispatch_disabled")
+    if not live_on:
+        blocked_reasons.append("live_submit_disabled")
+    if not jobs and not dispatch_on:
+        blocked_reasons.append("awaiting_owner_enablement")
     return {
         "user_id": str(user_id),
         "job_count": len(jobs),
         "jobs": jobs,
         "events": events[-50:],
         "live_submit_allowed": False,
+        "dispatch_enabled": bool(dispatch_on),
+        "eligibility": {
+            "dispatch_ready": bool(dispatch_on),
+            "live_submit_ready": False,
+            "blocked": bool(blocked_reasons),
+            "blocked_reasons": blocked_reasons,
+        },
+        "worker_availability": {
+            # Customer surface never invents online workers.
+            "reported": False,
+            "note": (
+                "Worker online status is owner/ops-only until a verified "
+                "assignment exists for this account."
+            ),
+        },
+        "connection_verification": {
+            "verified": False,
+            "note": (
+                "Connection stays unverified until broker ownership evidence "
+                "is recorded for this account. Demo vs Live is shown from "
+                "broker server metadata only — never fabricated."
+            ),
+        },
+        "credentials_exposed": False,
     }

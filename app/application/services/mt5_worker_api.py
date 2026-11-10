@@ -192,6 +192,80 @@ class Mt5WorkerApiFacade:
             )
         return worker
 
+    def _is_lab_bound_assignment(self, worker: WorkerRuntime) -> bool:
+        """True when the worker is a disposable lab binding (not SaaS ownership)."""
+        meta = dict(worker.metadata or {})
+        if meta.get("lab_binding") is True:
+            return True
+        host = str(meta.get("host_code") or "").strip()
+        slot = str(meta.get("slot_id") or "").strip()
+        if not host or not slot:
+            # Fall back to slot map when metadata was stripped on hydrate.
+            mapped = self._worker_to_slot.get(worker.worker_id, "")
+            if "::" in mapped:
+                host, slot = mapped.split("::", 1)
+        if not host or not slot:
+            return False
+        lab_user, lab_acct = lab_ids_for_slot(host_code=host, slot_id=slot)
+        return worker.user_id == lab_user and worker.broker_account_id == lab_acct
+
+    def lab_assignment_gate(self, worker: WorkerRuntime) -> str | None:
+        """Fail-closed gate for staging lab enqueue.
+
+        Registration alone is never enough. Returns an error code or None.
+        """
+        if worker.user_id is None or worker.broker_account_id is None:
+            return "assignment_incomplete"
+        if worker.last_heartbeat_at is None:
+            return "heartbeat_required"
+        login_ok = bool((worker.account_login_verified or "").strip())
+        server_ok = bool((worker.server_verified or "").strip())
+        if login_ok and server_ok:
+            return None
+        meta = dict(worker.metadata or {})
+        # Staging lab attestation must be explicit after heartbeat — never
+        # inferred solely from register-time lab_binding.
+        if (
+            self._is_lab_bound_assignment(worker)
+            and meta.get("staging_lab_assignment_verified") is True
+        ):
+            return None
+        return "assignment_unverified"
+
+    def attest_staging_lab_assignment(self, *, worker_id: UUID) -> dict[str, Any]:
+        """Mark a lab-bound worker assignment verified for staging enqueue only.
+
+        Requires a prior heartbeat. Never sets production eligibility. Never
+        exposes credentials.
+        """
+        worker = self.require_worker(worker_id)
+        if worker.last_heartbeat_at is None:
+            raise AuthorizationError(
+                "Heartbeat required before lab assignment attestation",
+                code="heartbeat_required",
+                details={"worker_id": str(worker_id)},
+            )
+        if not self._is_lab_bound_assignment(worker):
+            raise AuthorizationError(
+                "Only lab-bound staging workers may be attested",
+                code="lab_binding_required",
+                details={"worker_id": str(worker_id)},
+            )
+        meta = dict(worker.metadata or {})
+        meta["lab_binding"] = True
+        meta["staging_lab_assignment_verified"] = True
+        meta["staging_lab_assignment_verified_at"] = datetime.now(UTC).isoformat()
+        assert self.plane.provisioner is not None
+        updated = self.plane.provisioner.save(_with_metadata(worker, meta))
+        self._persist(updated)
+        return {
+            "ok": True,
+            "worker_id": str(updated.worker_id),
+            "staging_lab_assignment_verified": True,
+            "live_submit_allowed": False,
+            "credentials_exposed": False,
+        }
+
     def get_assignment(self, worker_id: UUID) -> dict[str, Any]:
         worker = self.require_worker(worker_id)
         return {
@@ -390,6 +464,16 @@ class Mt5WorkerApiFacade:
         by_id = getattr(self.plane.provisioner, "_by_id", {})
         workers = [self._public(w) for w in by_id.values()]
         hosts = self.plane.capacity.summary()
+        control_plane_rows = 0
+        try:
+            from app.infrastructure.persistence import (
+                postgres_mt5_worker_control_plane as cp_store,
+            )
+
+            if cp_store.table_ready():
+                control_plane_rows = len(cp_store.load_all_workers() or [])
+        except Exception:
+            control_plane_rows = 0
         return {
             "ok": True,
             "credentials_exposed": False,
@@ -397,6 +481,12 @@ class Mt5WorkerApiFacade:
             "hosts": hosts,
             "workers": workers,
             "worker_count": len(workers),
+            "control_plane_worker_count": control_plane_rows,
+            "execution_workers_note": (
+                "Runtime registration persists to mt5_worker_control_plane; "
+                "public.execution_workers remains the Phase-1a assignment table "
+                "and may stay at 0 until ownership-bound provisioning writes it."
+            ),
             "verification": ops_snapshot(),
             "verification_matrix": build_verification_matrix(),
             "registry": catalogue_snapshot(),
@@ -516,6 +606,22 @@ class Mt5WorkerApiFacade:
                 lifecycle = WorkerLifecycleState(
                     str(row.get("lifecycle_status") or "pending")
                 )
+                lab_user, lab_acct = (
+                    lab_ids_for_slot(host_code=host_code, slot_id=slot_id)
+                    if host_code and slot_id
+                    else (None, None)
+                )
+                restored_meta: dict[str, Any] = {
+                    "restored": True,
+                    "slot_id": slot_id,
+                    "host_code": host_code,
+                }
+                if (
+                    lab_user is not None
+                    and user_id == lab_user
+                    and account_id == lab_acct
+                ):
+                    restored_meta["lab_binding"] = True
                 worker = WorkerRuntime(
                     worker_id=worker_id,
                     worker_code=f"restored-{slot_id or worker_id.hex[:8]}",
@@ -531,7 +637,7 @@ class Mt5WorkerApiFacade:
                     trade_allowed=row.get("trade_allowed"),
                     account_login_verified=str(row.get("account_login_verified") or ""),
                     server_verified=str(row.get("server_verified") or ""),
-                    metadata={"restored": True, "slot_id": slot_id},
+                    metadata=restored_meta,
                 )
                 self.plane.provisioner._by_id[worker_id] = worker
                 if (

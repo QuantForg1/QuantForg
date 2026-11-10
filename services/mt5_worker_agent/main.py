@@ -193,6 +193,91 @@ def cmd_railway_heartbeat() -> int:
     return 0
 
 
+def cmd_railway_dispatch_poll(*, once: bool = True, ack: bool = True) -> int:
+    """Claim next assigned delivery job (delivery only; no order_send)."""
+    from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
+    from services.mt5_worker_agent.railway_client import (
+        RailwayClientConfig,
+        RailwayWorkerClient,
+    )
+
+    if not _token_ok(os.environ.get("WORKER_SERVICE_TOKEN")):
+        logger.error("WORKER_SERVICE_TOKEN missing or too short")
+        return 2
+    client = RailwayWorkerClient(RailwayClientConfig.from_env())
+    sup = LocalWorkerSupervisor()
+    reg = sup.register_with_railway()
+    if not reg.get("ok"):
+        print(json.dumps({"ok": False, "register": reg}, indent=2))
+        return 1
+    results: list[dict[str, Any]] = []
+    for slot_id, info in (reg.get("slots") or {}).items():
+        if not isinstance(info, dict) or not info.get("ok"):
+            continue
+        worker_id = str(info.get("worker_id") or "")
+        if not worker_id:
+            continue
+        assign = client.get_assignment(worker_id=worker_id)
+        assignment = (
+            (assign.get("assignment") or {}) if isinstance(assign, dict) else {}
+        )
+        user_id = str(assignment.get("user_id") or "")
+        account_id = str(assignment.get("broker_account_id") or "")
+        if not user_id or not account_id:
+            results.append(
+                {
+                    "slot_id": slot_id,
+                    "worker_id": worker_id,
+                    "ok": False,
+                    "error": "assignment_incomplete",
+                }
+            )
+            continue
+        claim = client.dispatch_claim(
+            worker_id=worker_id,
+            user_id=user_id,
+            broker_account_id=account_id,
+        )
+        entry: dict[str, Any] = {
+            "slot_id": slot_id,
+            "worker_id": worker_id,
+            "claim": claim,
+            "live_submit_allowed": False,
+        }
+        job = claim.get("job") if isinstance(claim, dict) else None
+        if ack and isinstance(job, dict) and job.get("intent_id"):
+            entry["ack"] = client.dispatch_ack(
+                worker_id=worker_id,
+                intent_id=str(job["intent_id"]),
+                detail="portable_delivery_ack",
+            )
+        results.append(entry)
+        if once and job:
+            break
+    print(
+        json.dumps(
+            {"ok": True, "results": results, "live_submit_allowed": False},
+            indent=2,
+        )
+    )
+    return 0
+
+
+def cmd_railway_dispatch_recover() -> int:
+    from services.mt5_worker_agent.railway_client import (
+        RailwayClientConfig,
+        RailwayWorkerClient,
+    )
+
+    if not _token_ok(os.environ.get("WORKER_SERVICE_TOKEN")):
+        logger.error("WORKER_SERVICE_TOKEN missing or too short")
+        return 2
+    client = RailwayWorkerClient(RailwayClientConfig.from_env())
+    result = client.dispatch_recover()
+    print(json.dumps(result, indent=2))
+    return 0 if result.get("ok") else 1
+
+
 def _prepare_slot_terminal(slot_id: str) -> str:
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
     from services.mt5_worker_agent.slot_manager import (
@@ -518,6 +603,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("railway-ping")
     sub.add_parser("railway-register")
     sub.add_parser("railway-heartbeat")
+    p_poll = sub.add_parser("railway-dispatch-poll")
+    p_poll.add_argument(
+        "--no-ack",
+        action="store_true",
+        help="Claim only; do not ACK (for lease/recovery tests)",
+    )
+    sub.add_parser("railway-dispatch-recover")
     sub.add_parser("capacity")
     sub.add_parser("queue-status")
     p_conn = sub.add_parser("connect-demo")
@@ -568,6 +660,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_railway_register()
     if command == "railway-heartbeat":
         return cmd_railway_heartbeat()
+    if command == "railway-dispatch-poll":
+        return cmd_railway_dispatch_poll(ack=not bool(getattr(args, "no_ack", False)))
+    if command == "railway-dispatch-recover":
+        return cmd_railway_dispatch_recover()
     if command == "connect-demo":
         return cmd_connect_demo(
             str(args.slot),

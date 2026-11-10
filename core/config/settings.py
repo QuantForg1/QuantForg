@@ -777,6 +777,20 @@ class Settings(BaseSettings):
             ),
         ),
     ] = False
+    qf_dispatch_lab_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Staging-only lab enqueue for durable dispatch demo proofs. "
+                "Never authorizes LIVE submit. Default false. Forbidden in "
+                "production app_env."
+            ),
+            validation_alias=AliasChoices(
+                "QF_DISPATCH_LAB_ENABLED",
+                "qf_dispatch_lab_enabled",
+            ),
+        ),
+    ] = False
     worker_service_token: Annotated[
         SecretStr | None,
         Field(
