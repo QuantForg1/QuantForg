@@ -7,6 +7,7 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { useAuthOptional } from "@/providers/auth-provider";
 
 const LINKS = [
+  { href: "/", label: "Home" },
   { href: "/#features", label: "Features" },
   { href: "/#platform", label: "Platform" },
   { href: "/live", label: "Live Market" },
@@ -35,13 +36,18 @@ export function SiteHeader({
         <nav className="hidden items-center gap-5 text-sm text-[var(--fg-muted)] lg:flex" aria-label="Marketing">
           {LINKS.map((item) => {
             const current =
+              (item.href === "/" && active === "home") ||
               (item.href === "/pricing" && active === "pricing") ||
               (item.href === "/live" && active === "live");
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={current ? "text-[var(--fg)]" : "hover:text-[var(--fg)]"}
+                className={
+                  current
+                    ? "text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                    : "hover:text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                }
                 aria-current={current ? "page" : undefined}
               >
                 {item.label}
