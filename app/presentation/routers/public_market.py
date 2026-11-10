@@ -73,12 +73,16 @@ async def public_market_tick(
 
 
 @router.get("/status")
-async def public_market_status() -> dict[str, Any]:
+async def public_market_status(
+    feed: Annotated[PublicMarketFeedService, Depends(_feed_service)],
+) -> dict[str, Any]:
     """Lightweight status probe for public market surfaces."""
+    readiness = feed.provider_readiness()
     return {
         "ok": True,
         "service": "public-market",
         "as_of": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "auth_required": False,
         "personal_broker_required": False,
+        **readiness,
     }

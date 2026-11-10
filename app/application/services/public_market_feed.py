@@ -109,10 +109,7 @@ class PublicMarketFeedService:
             market_open=None,
             candles=[],
             last_price=None,
-            note=(
-                "Platform market feed is offline and no licensed reference "
-                "provider returned candles."
-            ),
+            note=self._unavailable_note(kind="candles"),
         )
 
     async def tick(self, *, symbol: str) -> PublicTickBundle:
@@ -132,11 +129,33 @@ class PublicMarketFeedService:
             as_of=datetime.now(UTC).replace(microsecond=0).isoformat(),
             market_open=None,
             tick=None,
-            note=(
-                "Platform market feed is offline and no licensed reference "
-                "quote is available."
-            ),
+            note=self._unavailable_note(kind="tick"),
         )
+
+    @staticmethod
+    def _unavailable_note(*, kind: str) -> str:
+        settings = get_settings()
+        has_twelve = bool((getattr(settings, "twelvedata_api_key", "") or "").strip())
+        if has_twelve:
+            return (
+                f"Platform MT5 gateway did not return {kind} and the licensed "
+                "Twelve Data fallback also failed (timeout, rate limit, or empty)."
+            )
+        return (
+            f"Platform MT5 gateway did not return {kind}. Licensed Twelve Data "
+            "fallback is not configured (set Railway TWELVEDATA_API_KEY)."
+        )
+
+    def provider_readiness(self) -> dict[str, Any]:
+        """Ops-safe readiness — never exposes secrets."""
+        settings = get_settings()
+        has_twelve = bool((getattr(settings, "twelvedata_api_key", "") or "").strip())
+        return {
+            "mt5_gateway_preferred": True,
+            "twelvedata_configured": has_twelve,
+            "provider_symbol_gold": "XAU/USD",
+            "timeframes": sorted(_TF_TO_TWELVE.keys()),
+        }
 
     async def _try_mt5_candles(
         self, *, symbol: str, tf: Timeframe, count: int

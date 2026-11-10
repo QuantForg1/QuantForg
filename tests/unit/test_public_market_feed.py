@@ -25,3 +25,11 @@ def test_public_market_router_is_anonymous() -> None:
             continue
         names = [d.call.__name__ for d in deps.dependencies if getattr(d, "call", None)]
         assert "get_current_user" not in names
+
+
+def test_market_chat_public_list_route_exists() -> None:
+    from app.presentation.routers import market_chat
+
+    paths = {getattr(r, "path", "") for r in market_chat.router.routes}
+    assert "/public/market/chat" in paths
+    assert "/market/chat" in paths

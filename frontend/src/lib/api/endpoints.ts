@@ -276,6 +276,25 @@ export const mt5Api = {
     }),
 };
 
+/** Public Live Market Chat — read without login; post requires auth. */
+export const marketChatApi = {
+  list: (channel = "xauusd", limit = 80) =>
+    apiFetch<Record<string, unknown>>(
+      `/public/market/chat?channel=${encodeURIComponent(channel)}&limit=${limit}`,
+      { auth: false },
+    ),
+  post: (body: { body: string; channel?: string; parent_id?: string; display_name?: string }) =>
+    apiFetch<Record<string, unknown>>("/market/chat", {
+      method: "POST",
+      body,
+    }),
+  report: (messageId: string, body: { reason?: string; note?: string }) =>
+    apiFetch<Record<string, unknown>>(
+      `/market/chat/${encodeURIComponent(messageId)}/report`,
+      { method: "POST", body },
+    ),
+};
+
 /** Operator Symbol Management — enable/disable/priority for trading universe. */
 export const symbolManagementApi = {
   list: (params?: {
