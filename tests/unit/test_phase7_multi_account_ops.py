@@ -105,3 +105,13 @@ def test_customer_status_is_user_scoped() -> None:
     assert mine["jobs"][0]["user_id"] == str(u1)
     assert all(j["user_id"] == str(u1) for j in mine["jobs"])
     assert mine["live_submit_allowed"] is False
+    assert mine["credentials_exposed"] is False
+    assert mine["eligibility"]["live_submit_ready"] is False
+    assert mine["eligibility"]["source"] == "feature_gates_and_eligibility_engine"
+    assert isinstance(mine["eligibility"]["engine_evaluations"], list)
+    assert mine["connection_verification"]["verified"] is False
+    assert mine["worker_availability"]["reported"] is False
+    other = customer_dispatch_status(user_id=u2, queue=q)
+    assert other["job_count"] == 1
+    assert other["jobs"][0]["user_id"] == str(u2)
+    assert all(j["user_id"] != str(u1) for j in other["jobs"])
