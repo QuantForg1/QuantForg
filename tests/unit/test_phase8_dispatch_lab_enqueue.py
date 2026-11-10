@@ -301,10 +301,15 @@ def test_ops_summary_explains_execution_workers_zero(
     )
     ops = client.get("/api/v1/mt5-workers/ops/summary").json()
     assert ops.get("ok") is True
-    assert ops.get("live_submit_allowed") is False
+    assert ops.get("live_submit_enabled") is False
     assert "execution_workers_note" in ops
     assert "control_plane_worker_count" in ops
     assert ops.get("credentials_exposed") is False
+    # Notes may mention passwords are never stored; ensure no secret fields leak.
+    blob = str(ops).lower()
+    assert '"password":' not in blob
+    assert "'password':" not in blob
+    assert "sealed_envelope" not in blob
 
 
 def test_harness_heartbeat_helper_rejects_register_fallback() -> None:
