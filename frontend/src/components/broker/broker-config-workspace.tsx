@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrokerLogo, Mt5BrandMark } from "@/components/broker/broker-logo";
+import { CustomerMultiAccountPanel } from "@/components/broker/customer-multi-account-panel";
 import {
   brokerConnectivityApi,
   mt5Api,
@@ -1474,6 +1475,7 @@ export function BrokerConfigWorkspace() {
           </div>
         )}
 
+        <CustomerMultiAccountPanel />
         <SecurityFooter />
         <p className="mt-3 text-center text-[11px] text-[var(--fg-subtle)]">
           Password is never displayed after submission. Connect MT5 uses your owned session only.

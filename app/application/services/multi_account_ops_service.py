@@ -132,6 +132,66 @@ def owner_ops_snapshot(
     }
 
 
+def _engine_eligibility_for_user(
+    *,
+    user_id: UUID,
+    jobs: list[dict[str, Any]],
+    settings: Any | None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Run the real eligibility engine for own job accounts (prefs scope).
+
+    Does not invent ownership/worker readiness. Never enables LIVE submit.
+    """
+    from app.application.services.multi_account_eligibility_service import (
+        evaluate_account_eligibility,
+    )
+    from app.domain.multi_account.signal_dispatch import (
+        AccountExecutionIntent,
+        CentralSignalIntent,
+    )
+
+    account_ids: list[UUID] = []
+    seen: set[str] = set()
+    for job in jobs:
+        raw = str(job.get("broker_account_id") or "").strip()
+        if not raw or raw in seen:
+            continue
+        seen.add(raw)
+        try:
+            account_ids.append(UUID(raw))
+        except ValueError:
+            continue
+
+    rows: list[dict[str, Any]] = []
+    extra_reasons: list[str] = []
+    for aid in account_ids:
+        probe = CentralSignalIntent.create(
+            symbol="STATUS",
+            side="BUY",
+            quality=0,
+            idempotency_key=f"customer-status:{user_id}:{aid}",
+        )
+        intent = AccountExecutionIntent.for_account(
+            signal=probe,
+            user_id=user_id,
+            broker_account_id=aid,
+        )
+        _, evaluation = evaluate_account_eligibility(
+            actor_user_id=user_id,
+            intent=intent,
+            settings=settings,
+            require_readiness=False,
+        )
+        payload = evaluation.to_dict()
+        # Never claim LIVE readiness from a status probe.
+        payload["live_submit_allowed"] = False
+        rows.append(payload)
+        reason = evaluation.block_reason
+        if reason and reason not in extra_reasons:
+            extra_reasons.append(reason)
+    return rows, extra_reasons
+
+
 def customer_dispatch_status(
     *,
     user_id: UUID,
@@ -164,6 +224,16 @@ def customer_dispatch_status(
         blocked_reasons.append("live_submit_disabled")
     if not jobs and not dispatch_on:
         blocked_reasons.append("awaiting_owner_enablement")
+
+    engine_rows, engine_reasons = _engine_eligibility_for_user(
+        user_id=user_id,
+        jobs=jobs,
+        settings=settings,
+    )
+    for reason in engine_reasons:
+        if reason not in blocked_reasons:
+            blocked_reasons.append(reason)
+
     # Truthful readiness ladder — never invent Connected/Verified/Online.
     has_jobs = bool(jobs)
     readiness = {
@@ -191,6 +261,12 @@ def customer_dispatch_status(
             "live_submit_ready": False,
             "blocked": bool(blocked_reasons),
             "blocked_reasons": blocked_reasons,
+            "source": "feature_gates_and_eligibility_engine",
+            "engine_evaluations": engine_rows,
+            "note": (
+                "Broker connection is not the same as multi-account trading "
+                "eligibility. LIVE fan-out stays off."
+            ),
         },
         "readiness": readiness,
         "worker_availability": {
