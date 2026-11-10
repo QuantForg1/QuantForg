@@ -9,14 +9,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from app.application.dto.auth import AuthUserDTO
 from app.application.services.multi_account_dispatch_dry_run import DispatchTarget
 from app.application.services.multi_account_dispatch_queue import (
     DurableDispatchQueue,
-    reset_durable_dispatch_queue_for_tests,
 )
 from app.application.services.multi_account_eligibility_service import (
     AccountReadiness,
@@ -26,7 +23,6 @@ from app.application.services.multi_account_ops_service import owner_ops_snapsho
 from app.domain.enums.user import UserRole
 from app.domain.multi_account.effective_risk import RiskSettingProposal
 from app.domain.multi_account.signal_dispatch import CentralSignalIntent
-from app.presentation.dependencies.auth import get_current_user
 from app.presentation.routers import multi_account_ops as ops_router
 
 pytestmark = [pytest.mark.unit]
@@ -114,9 +110,10 @@ async def test_owner_ops_handler_denies_non_designated(
     monkeypatch.setattr(ops_router, "is_designated_owner_email", lambda _e: False)
     with pytest.raises(Exception) as err:
         await ops_router.owner_multi_account_ops(_owner())
-    assert "designated" in str(err.value).lower() or getattr(
-        err.value, "code", ""
-    ) in {"designated_owner_required", "insufficient_role"}
+    assert "designated" in str(err.value).lower() or getattr(err.value, "code", "") in {
+        "designated_owner_required",
+        "insufficient_role",
+    }
 
 
 def test_sustained_concurrent_soak_single_winner_and_recovery() -> None:

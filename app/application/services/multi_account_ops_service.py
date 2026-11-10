@@ -22,7 +22,7 @@ from app.infrastructure.persistence import postgres_signal_dispatch as pg_dispat
 
 
 def _delivery_latency_ms(queue: DurableDispatchQueue) -> dict[str, Any]:
-    events = list(queue._events)  # noqa: SLF001
+    events = list(queue._events)
     claimed_at: dict[str, datetime] = {}
     samples: list[float] = []
     for e in events:
@@ -39,7 +39,7 @@ def _delivery_latency_ms(queue: DurableDispatchQueue) -> dict[str, Any]:
     n = len(samples)
 
     def _pct(p: float) -> float:
-        idx = min(n - 1, max(0, int(round((p / 100.0) * (n - 1)))))
+        idx = min(n - 1, max(0, round((p / 100.0) * (n - 1))))
         return round(samples[idx], 2)
 
     return {
@@ -53,8 +53,8 @@ def _delivery_latency_ms(queue: DurableDispatchQueue) -> dict[str, Any]:
 def _retry_counts(queue: DurableDispatchQueue) -> dict[str, int]:
     retries = 0
     max_attempt = 0
-    with queue._lock:  # noqa: SLF001
-        for job in queue._jobs.values():  # noqa: SLF001
+    with queue._lock:
+        for job in queue._jobs.values():
             if job.attempt_count > 1:
                 retries += job.attempt_count - 1
             max_attempt = max(max_attempt, job.attempt_count)
@@ -83,9 +83,7 @@ def owner_ops_snapshot(
         "generated_at": datetime.now(UTC).isoformat(),
         "observe_only": True,
         "feature_flags": {
-            "MULTI_ACCOUNT_DISPATCH_ENABLED": multi_account_dispatch_allowed(
-                settings
-            ),
+            "MULTI_ACCOUNT_DISPATCH_ENABLED": multi_account_dispatch_allowed(settings),
             "MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED": multi_account_live_submit_allowed(
                 settings
             ),

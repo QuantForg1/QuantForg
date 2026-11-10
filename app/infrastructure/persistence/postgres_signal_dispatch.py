@@ -221,6 +221,7 @@ def queue_depth_counts() -> dict[str, Any] | None:
         "live_submit_enabled": False,
     }
 
+
 def worker_ops_counts() -> dict[str, Any] | None:
     """Aggregate worker health from execution_workers (no credentials)."""
     if not _available():
@@ -228,8 +229,7 @@ def worker_ops_counts() -> dict[str, Any] | None:
     from app.infrastructure.persistence.direct_postgres import fetch
 
     try:
-        rows = fetch(
-            """
+        rows = fetch("""
             SELECT
               count(*)::int AS total,
               count(*) FILTER (
@@ -248,8 +248,7 @@ def worker_ops_counts() -> dict[str, Any] | None:
                 -1
               ) AS oldest_heartbeat_age_sec
               FROM public.execution_workers
-            """
-        )
+            """)
         if not rows:
             return {
                 "total": 0,
@@ -281,8 +280,7 @@ def broker_ops_status() -> list[dict[str, Any]]:
     from app.infrastructure.persistence.direct_postgres import fetch
 
     try:
-        rows = fetch(
-            """
+        rows = fetch("""
             SELECT coalesce(b.platform_code, 'unknown') AS platform,
                    coalesce(b.slug, b.name, 'unknown') AS broker,
                    a.status,
@@ -293,8 +291,7 @@ def broker_ops_status() -> list[dict[str, Any]]:
              GROUP BY 1, 2, 3, 4
              ORDER BY 1, 2, 3
              LIMIT 50
-            """
-        )
+            """)
         return [dict(r) for r in rows]
     except Exception:
         logger.warning("broker_ops_status_failed", exc_info=True)
