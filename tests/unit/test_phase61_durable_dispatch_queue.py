@@ -332,3 +332,59 @@ def test_module_never_imports_order_send() -> None:
     src = inspect.getsource(mod)
     assert "order_send(" not in src
     assert "OMS" not in src or "never" in src.lower()
+
+
+def test_live_submit_env_true_still_forced_off() -> None:
+    """Even if LIVE submit flag is mistakenly True, queue refuses it."""
+    q = DurableDispatchQueue()
+    user, account = uuid4(), uuid4()
+    settings = SimpleNamespace(
+        multi_account_dispatch_enabled=True,
+        multi_account_live_submit_enabled=True,
+    )
+    plan, jobs = q.plan_and_enqueue(
+        signal=_signal("signal:live-force-off"),
+        targets=[_ready_target(user, account)],
+        settings=settings,
+    )
+    assert plan.live_submit_allowed is False
+    assert jobs[0].payload.get("live_submit_allowed") is False
+    assert q.live_submit_armed() is False
+
+
+def test_pg_mirror_hooks_are_best_effort_noops(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mirror helpers must not raise when Postgres is unavailable."""
+    q = DurableDispatchQueue()
+    calls: list[str] = []
+
+    def _boom(*_a, **_k):
+        calls.append("called")
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.postgres_signal_dispatch.upsert_central_signal",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.postgres_signal_dispatch.upsert_intent_job",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "app.infrastructure.persistence.postgres_signal_dispatch.record_delivery_event",
+        _boom,
+    )
+    user, account = uuid4(), uuid4()
+    _, jobs = q.plan_and_enqueue(
+        signal=_signal("signal:mirror"),
+        targets=[_ready_target(user, account)],
+        settings=_SETTINGS_ON,
+    )
+    worker = uuid4()
+    claimed = q.claim_next(
+        worker_id=worker, user_id=user, broker_account_id=account
+    )
+    assert claimed is not None
+    q.acknowledge(intent_id=claimed.intent_id, worker_id=worker)
+    assert jobs
+    assert calls  # hooks attempted
+    assert q.get(claimed.intent_id) is not None

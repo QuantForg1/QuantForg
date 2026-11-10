@@ -16,6 +16,8 @@ from fastapi import APIRouter
 from app.application.services.multi_account_dispatch_queue import (
     get_durable_dispatch_queue,
 )
+from app.application.services.multi_account_ops_service import owner_ops_snapshot
+from app.domain.exceptions.auth import AuthorizationError
 from app.presentation.dependencies.mt5_workers import WorkerApi, WorkerAuth
 from app.presentation.schemas.mt5_workers import (
     DispatchAckRequest,
@@ -173,28 +175,48 @@ async def worker_ops_summary(
     _: WorkerAuth,
     api: WorkerApi,
 ) -> dict[str, Any]:
-    """Worker + verification ops snapshot for operators (no passwords)."""
-    summary = api.ops_summary()
-    queue = get_durable_dispatch_queue()
-    summary["dispatch_queue"] = queue.metrics().to_dict()
-    summary["live_submit_allowed"] = False
-    return summary
+    """Worker + verification + Phase 7 owner ops snapshot (no passwords)."""
+    worker_summary = api.ops_summary()
+    snap = owner_ops_snapshot(worker_summary=worker_summary)
+    # Preserve legacy worker summary keys while adding Phase 7 aggregates.
+    return {
+        **worker_summary,
+        **snap,
+        "live_submit_allowed": False,
+    }
 
 
 @router.post("/dispatch/claim")
 async def dispatch_claim(
     body: DispatchClaimRequest,
     _: WorkerAuth,
+    api: WorkerApi,
 ) -> dict[str, Any]:
     """Claim next queued delivery job for this worker's assigned account.
 
     Delivery only — never invokes OMS / order_send. LIVE submit stays off.
+    Claim is bound to the registered worker assignment (no body spoofing).
     """
+    try:
+        worker = api.require_worker(body.worker_id)
+    except AuthorizationError as exc:
+        code = getattr(exc, "code", None) or "worker_unauthorized"
+        return {"ok": False, "error": code}
+    assigned_ok = (
+        worker.user_id == body.user_id
+        and worker.broker_account_id == body.broker_account_id
+    )
+    if not assigned_ok:
+        return {
+            "ok": False,
+            "error": "assignment_mismatch",
+            "live_submit_allowed": False,
+        }
     queue = get_durable_dispatch_queue()
     job = queue.claim_next(
         worker_id=body.worker_id,
-        user_id=body.user_id,
-        broker_account_id=body.broker_account_id,
+        user_id=worker.user_id,
+        broker_account_id=worker.broker_account_id,
     )
     if job is None:
         return {"ok": True, "job": None, "live_submit_allowed": False}

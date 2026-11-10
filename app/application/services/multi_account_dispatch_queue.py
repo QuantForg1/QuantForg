@@ -7,6 +7,7 @@ MT5 gateway. LIVE submit stays forced off.
 
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -38,6 +39,8 @@ from app.domain.multi_account.signal_dispatch import (
     AccountExecutionState,
     CentralSignalIntent,
 )
+
+logger = logging.getLogger(__name__)
 
 _SECRET_KEYS = frozenset(
     {
@@ -85,6 +88,7 @@ class DurableDispatchQueue:
         """Idempotently persist plan items. Blocked items are stored as blocked."""
         ts = now or datetime.now(UTC)
         out: list[DispatchJob] = []
+        pending_events: list[DispatchEvent] = []
         with self._lock:
             self._signals[signal.idempotency_key] = signal
             for item in plan.items:
@@ -130,16 +134,22 @@ class DurableDispatchQueue:
                 )
                 self._jobs[key] = job
                 self._by_id[job.intent_id] = key
-                self._events.append(
-                    DispatchEvent.create(
-                        intent_id=job.intent_id,
-                        user_id=job.user_id,
-                        broker_account_id=job.broker_account_id,
-                        event_type="enqueued",
-                        detail=job.state.value,
-                    )
+                event = DispatchEvent.create(
+                    intent_id=job.intent_id,
+                    user_id=job.user_id,
+                    broker_account_id=job.broker_account_id,
+                    event_type="enqueued",
+                    detail=job.state.value,
                 )
-                out.append(deepcopy(job))
+                self._events.append(event)
+                mirrored = deepcopy(job)
+                out.append(mirrored)
+                pending_events.append(event)
+        self._mirror_signal(signal)
+        for job in out:
+            self._mirror_job(job)
+        for event in pending_events:
+            self._mirror_event(event)
         return out
 
     def plan_and_enqueue(
@@ -180,6 +190,8 @@ class DurableDispatchQueue:
     ) -> DispatchJob | None:
         """Exclusive claim for the worker's assigned account only."""
         ts = now or datetime.now(UTC)
+        event: DispatchEvent | None = None
+        claimed: DispatchJob | None = None
         with self._lock:
             self._expire_leases_unlocked(ts)
             candidates = [
@@ -211,17 +223,21 @@ class DurableDispatchQueue:
             job.lease_expires_at = lease_deadline(now=ts, seconds=self.lease_seconds)
             job.attempt_count += 1
             job.updated_at = ts
-            self._events.append(
-                DispatchEvent.create(
-                    intent_id=job.intent_id,
-                    user_id=job.user_id,
-                    broker_account_id=job.broker_account_id,
-                    worker_id=worker_id,
-                    event_type="claimed",
-                    detail=f"attempt={job.attempt_count}",
-                )
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                worker_id=worker_id,
+                event_type="claimed",
+                detail=f"attempt={job.attempt_count}",
             )
-            return deepcopy(job)
+            self._events.append(event)
+            claimed = deepcopy(job)
+        if claimed is not None:
+            self._mirror_job(claimed)
+        if event is not None:
+            self._mirror_event(event)
+        return claimed
 
     def mark_delivered(
         self,
@@ -266,17 +282,19 @@ class DurableDispatchQueue:
             job.updated_at = ts
             if detail:
                 job.last_error = ""
-            self._events.append(
-                DispatchEvent.create(
-                    intent_id=job.intent_id,
-                    user_id=job.user_id,
-                    broker_account_id=job.broker_account_id,
-                    worker_id=worker_id,
-                    event_type="acked",
-                    detail=detail or "delivery_ack",
-                )
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                worker_id=worker_id,
+                event_type="acked",
+                detail=detail or "delivery_ack",
             )
-            return deepcopy(job)
+            self._events.append(event)
+            result = deepcopy(job)
+        self._mirror_job(result)
+        self._mirror_event(event)
+        return result
 
     def fail(
         self,
@@ -301,7 +319,7 @@ class DurableDispatchQueue:
                 )
                 job.delivery_status = DeliveryStatus.DEAD_LETTER
                 job.state = AccountExecutionState.DEAD_LETTER
-                event = "dead_letter"
+                event_type = "dead_letter"
             else:
                 delay = retry_delay_seconds(job.attempt_count)
                 job.next_retry_at = ts + timedelta(seconds=delay)
@@ -310,18 +328,20 @@ class DurableDispatchQueue:
                     DeliveryStatus.FAILED, DeliveryStatus.PENDING
                 )
                 job.delivery_status = DeliveryStatus.PENDING
-                event = "failed"
-            self._events.append(
-                DispatchEvent.create(
-                    intent_id=job.intent_id,
-                    user_id=job.user_id,
-                    broker_account_id=job.broker_account_id,
-                    worker_id=worker_id,
-                    event_type=event,
-                    detail=job.last_error,
-                )
+                event_type = "failed"
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                worker_id=worker_id,
+                event_type=event_type,
+                detail=job.last_error,
             )
-            return deepcopy(job)
+            self._events.append(event)
+            result = deepcopy(job)
+        self._mirror_job(result)
+        self._mirror_event(event)
+        return result
 
     def cancel(
         self,
@@ -350,16 +370,18 @@ class DurableDispatchQueue:
             job.lease_owner_worker_id = None
             job.lease_expires_at = None
             job.updated_at = ts
-            self._events.append(
-                DispatchEvent.create(
-                    intent_id=job.intent_id,
-                    user_id=job.user_id,
-                    broker_account_id=job.broker_account_id,
-                    event_type="cancelled",
-                    detail=reason,
-                )
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                event_type="cancelled",
+                detail=reason,
             )
-            return deepcopy(job)
+            self._events.append(event)
+            result = deepcopy(job)
+        self._mirror_job(result)
+        self._mirror_event(event)
+        return result
 
     def set_kill_switch(self, *, user_id: UUID, enabled: bool) -> int:
         """Block new claims for a user; does not affect other users."""
@@ -412,6 +434,8 @@ class DurableDispatchQueue:
         """Release claimed leases so pending work can be reclaimed."""
         ts = now or datetime.now(UTC)
         recovered = 0
+        mirrored_jobs: list[DispatchJob] = []
+        mirrored_events: list[DispatchEvent] = []
         with self._lock:
             for job in self._jobs.values():
                 if job.delivery_status is DeliveryStatus.CLAIMED:
@@ -421,15 +445,20 @@ class DurableDispatchQueue:
                     job.available_at = ts
                     job.updated_at = ts
                     recovered += 1
-                    self._events.append(
-                        DispatchEvent.create(
-                            intent_id=job.intent_id,
-                            user_id=job.user_id,
-                            broker_account_id=job.broker_account_id,
-                            event_type="restart_recovered",
-                            detail="lease_released",
-                        )
+                    event = DispatchEvent.create(
+                        intent_id=job.intent_id,
+                        user_id=job.user_id,
+                        broker_account_id=job.broker_account_id,
+                        event_type="restart_recovered",
+                        detail="lease_released",
                     )
+                    self._events.append(event)
+                    mirrored_jobs.append(deepcopy(job))
+                    mirrored_events.append(event)
+        for job in mirrored_jobs:
+            self._mirror_job(job)
+        for event in mirrored_events:
+            self._mirror_event(event)
         return recovered
 
     def snapshot(self) -> dict[str, Any]:
@@ -553,6 +582,43 @@ class DurableDispatchQueue:
         return multi_account_dispatch_allowed(settings)
 
     # ------------------------------------------------------------------ private
+    def _mirror_signal(self, signal: CentralSignalIntent) -> None:
+        try:
+            from app.infrastructure.persistence import (
+                postgres_signal_dispatch as pg_dispatch,
+            )
+
+            pg_dispatch.upsert_central_signal(signal)
+        except Exception:
+            logger.debug("dispatch_queue_pg_mirror_signal_skipped", exc_info=True)
+
+    def _mirror_job(self, job: DispatchJob) -> None:
+        try:
+            from app.infrastructure.persistence import (
+                postgres_signal_dispatch as pg_dispatch,
+            )
+
+            pg_dispatch.upsert_intent_job(job)
+        except Exception:
+            logger.debug("dispatch_queue_pg_mirror_job_skipped", exc_info=True)
+
+    def _mirror_event(self, event: DispatchEvent) -> None:
+        try:
+            from app.infrastructure.persistence import (
+                postgres_signal_dispatch as pg_dispatch,
+            )
+
+            pg_dispatch.record_delivery_event(
+                intent_id=event.intent_id,
+                user_id=event.user_id,
+                broker_account_id=event.broker_account_id,
+                event_type=event.event_type,
+                worker_id=event.worker_id,
+                detail=event.detail,
+            )
+        except Exception:
+            logger.debug("dispatch_queue_pg_mirror_event_skipped", exc_info=True)
+
     def _require_leased(
         self, intent_id: UUID, worker_id: UUID, ts: datetime
     ) -> DispatchJob:
@@ -584,16 +650,18 @@ class DurableDispatchQueue:
             if set_delivered:
                 job.delivered_at = ts
             job.updated_at = ts
-            self._events.append(
-                DispatchEvent.create(
-                    intent_id=job.intent_id,
-                    user_id=job.user_id,
-                    broker_account_id=job.broker_account_id,
-                    worker_id=worker_id,
-                    event_type=event_type,
-                )
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                worker_id=worker_id,
+                event_type=event_type,
             )
-            return deepcopy(job)
+            self._events.append(event)
+            result = deepcopy(job)
+        self._mirror_job(result)
+        self._mirror_event(event)
+        return result
 
     def _expire_leases_unlocked(self, ts: datetime) -> int:
         n = 0
