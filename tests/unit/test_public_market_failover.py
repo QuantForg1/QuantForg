@@ -8,10 +8,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.application.dto.mt5 import MT5CandleDTO, MT5TickDTO
-from app.application.services.public_market_feed import PublicMarketFeedService
+from app.application.dto.mt5 import MT5CandleDTO
+from app.application.services.public_market_feed import (
+    PublicCandleBundle,
+    PublicMarketFeedService,
+)
 from app.domain.exceptions.base import ServiceUnavailableError
-from app.domain.market_data.timeframe import Timeframe
 
 
 class _FakeSettings:
@@ -19,7 +21,9 @@ class _FakeSettings:
 
 
 @pytest.mark.asyncio
-async def test_failover_to_twelve_when_mt5_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_failover_to_twelve_when_mt5_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     market_data = MagicMock()
     market_data.adapter = object()
     market_data.historical_candles.side_effect = ServiceUnavailableError(
@@ -53,26 +57,10 @@ async def test_failover_to_twelve_when_mt5_unavailable(monkeypatch: pytest.Monke
         lambda: _FakeSettings(),
     )
 
-    def _fake_twelve(**_kwargs):
-        return SimpleNamespace(
-            symbol="XAUUSD",
-            timeframe="H1",
-            status="delayed",
-            source="twelvedata",
-            as_of="2026-11-10T17:00:00+00:00",
-            market_open=None,
-            candles=[candle],
-            last_price="4005",
-            note="Reference OHLCV",
-        )
-
-    # PublicCandleBundle is a dataclass — return a real bundle via private method stub.
-    from app.application.services.public_market_feed import PublicCandleBundle
-
     monkeypatch.setattr(
         svc,
         "_try_twelve_candles",
-        lambda **kwargs: PublicCandleBundle(
+        lambda **_k: PublicCandleBundle(
             symbol="XAUUSD",
             timeframe="H1",
             status="delayed",
@@ -93,17 +81,13 @@ async def test_failover_to_twelve_when_mt5_unavailable(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_mt5_preferred_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_mt5_preferred_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     market_data = MagicMock()
     market_data.adapter = object()
-    market_data.historical_candles.return_value = [
-        SimpleNamespace(
-            # unused — we stub DTO conversion path by stubbing _try_mt5_candles
-        )
-    ]
+    market_data.historical_candles.return_value = [SimpleNamespace()]
     svc = PublicMarketFeedService(market_data=market_data)
-
-    from app.application.services.public_market_feed import PublicCandleBundle
 
     mt5_bundle = PublicCandleBundle(
         symbol="XAUUSD",
