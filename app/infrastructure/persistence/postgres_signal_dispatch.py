@@ -220,3 +220,158 @@ def queue_depth_counts() -> dict[str, Any] | None:
         "by_delivery_status": {r["delivery_status"]: r["n"] for r in rows},
         "live_submit_enabled": False,
     }
+
+def worker_ops_counts() -> dict[str, Any] | None:
+    """Aggregate worker health from execution_workers (no credentials)."""
+    if not _available():
+        return None
+    from app.infrastructure.persistence.direct_postgres import fetch
+
+    try:
+        rows = fetch(
+            """
+            SELECT
+              count(*)::int AS total,
+              count(*) FILTER (
+                WHERE status IN ('registered', 'healthy', 'degraded', 'offline')
+              )::int AS active,
+              count(*) FILTER (WHERE status = 'healthy')::int AS healthy,
+              count(*) FILTER (
+                WHERE last_heartbeat_at IS NULL
+                   OR last_heartbeat_at < timezone('utc', now())
+                       - interval '90 seconds'
+              )::int AS stale,
+              coalesce(
+                extract(
+                  epoch FROM (timezone('utc', now()) - max(last_heartbeat_at))
+                )::int,
+                -1
+              ) AS oldest_heartbeat_age_sec
+              FROM public.execution_workers
+            """
+        )
+        if not rows:
+            return {
+                "total": 0,
+                "active": 0,
+                "healthy": 0,
+                "stale": 0,
+                "oldest_heartbeat_age_sec": None,
+            }
+        row = dict(rows[0])
+        age = row.get("oldest_heartbeat_age_sec")
+        return {
+            "total": int(row.get("total") or 0),
+            "active": int(row.get("active") or 0),
+            "healthy": int(row.get("healthy") or 0),
+            "stale": int(row.get("stale") or 0),
+            "oldest_heartbeat_age_sec": (
+                None if age is None or int(age) < 0 else int(age)
+            ),
+        }
+    except Exception:
+        logger.warning("worker_ops_counts_failed", exc_info=True)
+        return None
+
+
+def broker_ops_status() -> list[dict[str, Any]]:
+    """Per-broker operational counts — redacted (no logins/passwords)."""
+    if not _available():
+        return []
+    from app.infrastructure.persistence.direct_postgres import fetch
+
+    try:
+        rows = fetch(
+            """
+            SELECT coalesce(b.platform_code, 'unknown') AS platform,
+                   coalesce(b.slug, b.name, 'unknown') AS broker,
+                   a.status,
+                   a.environment,
+                   count(*)::int AS n
+              FROM public.broker_accounts a
+              LEFT JOIN public.brokers b ON b.id = a.broker_id
+             GROUP BY 1, 2, 3, 4
+             ORDER BY 1, 2, 3
+             LIMIT 50
+            """
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        logger.warning("broker_ops_status_failed", exc_info=True)
+        return []
+
+
+def claim_next_skip_locked(
+    *,
+    worker_id: UUID,
+    user_id: UUID,
+    broker_account_id: UUID,
+    lease_seconds: int = 60,
+) -> dict[str, Any] | None:
+    """Atomically claim one queued intent with FOR UPDATE SKIP LOCKED."""
+    if not table_ready():
+        return None
+    from app.infrastructure.persistence.direct_postgres import fetch
+
+    try:
+        rows = fetch(
+            """
+            WITH candidate AS (
+              SELECT id
+                FROM public.account_execution_intents
+               WHERE state = 'queued'
+                 AND delivery_status IN ('pending', 'failed', 'expired')
+                 AND kill_switch = false
+                 AND user_id = $1::uuid
+                 AND broker_account_id = $2::uuid
+                 AND available_at <= timezone('utc', now())
+                 AND (
+                   lease_owner_worker_id IS NULL
+                   OR lease_expires_at IS NULL
+                   OR lease_expires_at <= timezone('utc', now())
+                 )
+               ORDER BY available_at ASC, created_at ASC
+               FOR UPDATE SKIP LOCKED
+               LIMIT 1
+            )
+            UPDATE public.account_execution_intents AS a
+               SET delivery_status = 'claimed',
+                   lease_owner_worker_id = $3::uuid,
+                   lease_expires_at =
+                     timezone('utc', now()) + make_interval(secs => $4::int),
+                   attempt_count = a.attempt_count + 1,
+                   updated_at = timezone('utc', now())
+              FROM candidate
+             WHERE a.id = candidate.id
+         RETURNING a.id, a.signal_id, a.user_id, a.broker_account_id,
+                   a.idempotency_key, a.state, a.delivery_status,
+                   a.attempt_count, a.lease_expires_at
+            """,
+            user_id,
+            broker_account_id,
+            worker_id,
+            int(lease_seconds),
+        )
+    except Exception:
+        logger.warning("claim_next_skip_locked_failed", exc_info=True)
+        return None
+    if not rows:
+        return None
+    row = dict(rows[0])
+    return {
+        "intent_id": str(row["id"]),
+        "signal_id": str(row["signal_id"]),
+        "user_id": str(row["user_id"]),
+        "broker_account_id": str(row["broker_account_id"]),
+        "idempotency_key": row["idempotency_key"],
+        "state": row["state"],
+        "delivery_status": row["delivery_status"],
+        "attempt_count": int(row["attempt_count"] or 0),
+        "lease_expires_at": (
+            row["lease_expires_at"].isoformat()
+            if row.get("lease_expires_at") is not None
+            else None
+        ),
+        "live_submit_allowed": False,
+        "delivery_suppressed": True,
+    }
