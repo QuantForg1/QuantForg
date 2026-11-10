@@ -6,6 +6,8 @@ import {
   MT5_BROKER_OPTIONS,
   matchBrokerByServer,
   serversForBroker,
+  serverRowsForBroker,
+  classifyServerEnvironment,
   brokerBySlug,
   mapRegistryBrokers,
 } from "./mt5-broker-catalog.ts";
@@ -19,6 +21,44 @@ assert.equal(matchBrokerByServer("Weltrade-Real")?.slug, "weltrade");
 
 const weltradeLive = serversForBroker(brokerBySlug("weltrade"), "live");
 assert.ok(weltradeLive.includes("Weltrade-Real"));
+assert.ok(!weltradeLive.includes("Weltrade-Demo"));
+
+const weltradeDemo = serversForBroker(brokerBySlug("weltrade"), "demo");
+assert.ok(weltradeDemo.includes("Weltrade-Demo"));
+
+const weltradeRows = serverRowsForBroker(brokerBySlug("weltrade"));
+assert.ok(weltradeRows.some((r) => r.name === "Weltrade-Real" && r.environment === "live"));
+assert.ok(weltradeRows.some((r) => r.name === "Weltrade-Demo" && r.environment === "demo"));
+
+assert.equal(classifyServerEnvironment("Weltrade-Real"), "live");
+assert.equal(classifyServerEnvironment("Weltrade-Demo"), "demo");
+assert.equal(classifyServerEnvironment(""), "unknown");
+
+const exnessRows = serverRowsForBroker(brokerBySlug("exness"), undefined, []);
+assert.equal(exnessRows.length, 0);
+
+const apiOnly = serverRowsForBroker(brokerBySlug("exness"), undefined, [
+  {
+    name: "Exness-MT5Trial",
+    environment: "demo",
+    source: "windows_mt5_demo_verify",
+    verified_at: "2026-11-09T00:00:00+00:00",
+  },
+]);
+assert.equal(apiOnly.length, 1);
+assert.equal(apiOnly[0]?.name, "Exness-MT5Trial");
+
+// Switching brokers must not keep foreign servers in the catalogue helper.
+const pepperstone = serverRowsForBroker(brokerBySlug("pepperstone"), undefined, [
+  {
+    name: "Pepperstone-Demo",
+    environment: "demo",
+    source: "evidence",
+    verified_at: "2026-11-09T00:00:00+00:00",
+  },
+]);
+assert.ok(!pepperstone.some((r) => r.name.includes("Weltrade")));
+assert.ok(!pepperstone.some((r) => r.name.includes("Exness")));
 
 const mapped = mapRegistryBrokers([
   {
