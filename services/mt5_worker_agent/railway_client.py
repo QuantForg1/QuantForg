@@ -6,6 +6,7 @@ payloads. Service identity uses WORKER_SERVICE_TOKEN bearer auth.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -77,7 +78,8 @@ class RailwayWorkerClient:
                 data = json.loads(raw)
                 return data if isinstance(data, dict) else {"ok": True, "data": data}
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:300]
+            raw = exc.read().decode("utf-8", errors="replace")
+            detail = raw[:300]
             logger.warning(
                 "railway_http_error method=%s path=%s status=%s detail=%s",
                 method,
@@ -85,6 +87,21 @@ class RailwayWorkerClient:
                 exc.code,
                 detail,
             )
+            parsed: dict[str, Any] = {}
+            with contextlib.suppress(Exception):
+                loaded = json.loads(raw)
+                if isinstance(loaded, dict):
+                    parsed = loaded
+            if parsed.get("error"):
+                return {
+                    "ok": False,
+                    "status": exc.code,
+                    "error": str(parsed.get("error")),
+                    "live_submit_allowed": bool(
+                        parsed.get("live_submit_allowed", False)
+                    ),
+                    "detail": detail,
+                }
             return {
                 "ok": False,
                 "status": exc.code,
@@ -219,6 +236,14 @@ class RailwayWorkerClient:
 
     def ops_summary(self) -> dict[str, Any]:
         return self._request("GET", "/api/v1/mt5-workers/ops/summary")
+
+    def lab_attest_assignment(self, *, worker_id: str) -> dict[str, Any]:
+        """Staging-only: attest lab assignment after heartbeat (no secrets)."""
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/lab/attest-assignment",
+            {"worker_id": worker_id},
+        )
 
     def dispatch_lab_enqueue(
         self,

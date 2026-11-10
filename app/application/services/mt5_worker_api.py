@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
 from app.application.services.mt5_worker_control_plane import Mt5WorkerControlPlane
 from app.application.services.mt5_worker_credential_seal import seal_credential_material
@@ -52,6 +52,7 @@ class Mt5WorkerApiFacade:
     _slot_to_worker: dict[str, UUID] = field(default_factory=dict)
     _worker_to_slot: dict[UUID, str] = field(default_factory=dict)
     _revoked_workers: set[UUID] = field(default_factory=set)
+    _active_credential_claims: dict[UUID, str] = field(default_factory=dict)
     _hydrated: bool = False
 
     def __post_init__(self) -> None:
@@ -192,6 +193,62 @@ class Mt5WorkerApiFacade:
             )
         return worker
 
+    def lab_assignment_gate(self, worker: WorkerRuntime) -> str | None:
+        """Fail-closed gate for staging lab enqueue.
+
+        Registration alone is never enough. Returns an error code or None.
+        """
+        if worker.user_id is None or worker.broker_account_id is None:
+            return "assignment_incomplete"
+        if worker.last_heartbeat_at is None:
+            return "heartbeat_required"
+        login_ok = bool((worker.account_login_verified or "").strip())
+        server_ok = bool((worker.server_verified or "").strip())
+        if login_ok and server_ok:
+            return None
+        meta = dict(worker.metadata or {})
+        # Staging lab attestation must be explicit after heartbeat — never
+        # inferred solely from register-time lab_binding.
+        if (
+            meta.get("lab_binding") is True
+            and meta.get("staging_lab_assignment_verified") is True
+        ):
+            return None
+        return "assignment_unverified"
+
+    def attest_staging_lab_assignment(self, *, worker_id: UUID) -> dict[str, Any]:
+        """Mark a lab-bound worker assignment verified for staging enqueue only.
+
+        Requires a prior heartbeat. Never sets production eligibility. Never
+        exposes credentials.
+        """
+        worker = self.require_worker(worker_id)
+        if worker.last_heartbeat_at is None:
+            raise AuthorizationError(
+                "Heartbeat required before lab assignment attestation",
+                code="heartbeat_required",
+                details={"worker_id": str(worker_id)},
+            )
+        meta = dict(worker.metadata or {})
+        if meta.get("lab_binding") is not True:
+            raise AuthorizationError(
+                "Only lab-bound staging workers may be attested",
+                code="lab_binding_required",
+                details={"worker_id": str(worker_id)},
+            )
+        meta["staging_lab_assignment_verified"] = True
+        meta["staging_lab_assignment_verified_at"] = datetime.now(UTC).isoformat()
+        assert self.plane.provisioner is not None
+        updated = self.plane.provisioner.save(_with_metadata(worker, meta))
+        self._persist(updated)
+        return {
+            "ok": True,
+            "worker_id": str(updated.worker_id),
+            "staging_lab_assignment_verified": True,
+            "live_submit_allowed": False,
+            "credentials_exposed": False,
+        }
+
     def get_assignment(self, worker_id: UUID) -> dict[str, Any]:
         worker = self.require_worker(worker_id)
         return {
@@ -309,6 +366,7 @@ class Mt5WorkerApiFacade:
         )
         with self._lock:
             self._revoked_workers.add(worker.worker_id)
+            self._active_credential_claims.pop(worker.worker_id, None)
             key = self._worker_to_slot.pop(worker.worker_id, None)
             if key:
                 self._slot_to_worker.pop(key, None)
@@ -444,8 +502,17 @@ class Mt5WorkerApiFacade:
         Plaintext passwords are never present as a ``password`` JSON field.
         Lab mode uses ``QF_DEMO_*`` on the API host only when explicitly set
         for integration; production vault unwrap is preferred when wired.
+
+        Requires a prior heartbeat. Each claim rotates ``claim_id`` so prior
+        envelopes are superseded for audit/rotation. Fernet TTL limits replay.
         """
         worker = self.require_worker(worker_id)
+        if worker.last_heartbeat_at is None:
+            raise AuthorizationError(
+                "Heartbeat required before sealed credential claim",
+                code="heartbeat_required",
+                details={"worker_id": str(worker_id)},
+            )
         token = (self.plane.service_token or "").strip()
         if len(token) < 16:
             raise AuthorizationError(
@@ -477,14 +544,30 @@ class Mt5WorkerApiFacade:
                     "MT5 authentication proof."
                 ),
             }
+        claim_id = str(uuid4())
         sealed = seal_credential_material(
             service_token=token,
             worker_id=worker.worker_id,
             login=login,
             server=server,
             password=secret,
+            claim_id=claim_id,
         )
-        return {"ok": True, **sealed}
+        with self._lock:
+            previous = self._active_credential_claims.get(worker.worker_id)
+            self._active_credential_claims[worker.worker_id] = claim_id
+        logger.info(
+            "mt5_worker_sealed_claim_issued worker_id=%s claim_id=%s rotated=%s",
+            worker.worker_id,
+            claim_id,
+            bool(previous),
+        )
+        return {
+            "ok": True,
+            **sealed,
+            "rotated_previous_claim": bool(previous),
+            "previous_claim_id": previous,
+        }
 
     def hydrate_from_postgres(self) -> int:
         """Restore in-memory indexes from durable table when available."""

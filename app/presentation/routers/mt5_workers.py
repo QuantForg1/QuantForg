@@ -14,6 +14,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.application.services.multi_account_dispatch_dry_run import DispatchTarget
 from app.application.services.multi_account_dispatch_queue import (
@@ -25,6 +26,7 @@ from app.application.services.multi_account_eligibility_service import (
 )
 from app.application.services.multi_account_ops_service import owner_ops_snapshot
 from app.domain.exceptions.auth import AuthorizationError
+from app.domain.exceptions.base import NotFoundError
 from app.domain.multi_account.effective_risk import RiskSettingProposal
 from app.domain.multi_account.feature_gates import multi_account_live_submit_allowed
 from app.domain.multi_account.signal_dispatch import CentralSignalIntent
@@ -34,6 +36,7 @@ from app.presentation.schemas.mt5_workers import (
     DispatchClaimRequest,
     DispatchFailRequest,
     DispatchLabEnqueueRequest,
+    LabAttestAssignmentRequest,
     WorkerHealthRequest,
     WorkerHeartbeatRequest,
     WorkerHostRegisterRequest,
@@ -312,35 +315,82 @@ def _lab_enqueue_allowed() -> bool:
     return bool(getattr(settings, "qf_dispatch_lab_enabled", False))
 
 
-@router.post("/dispatch/lab-enqueue")
+def _lab_forbidden(error: str) -> JSONResponse:
+    """Preserve lab error body shape while returning HTTP 403."""
+    return JSONResponse(
+        status_code=403,
+        content={
+            "ok": False,
+            "error": error,
+            "live_submit_allowed": False,
+        },
+    )
+
+
+@router.post("/lab/attest-assignment", response_model=None)
+async def lab_attest_assignment(
+    body: LabAttestAssignmentRequest,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> Any:
+    """Staging-only: attest a lab worker assignment after heartbeat.
+
+    Never enables LIVE submit. Forbidden in production.
+    """
+    if not _lab_enqueue_allowed():
+        return _lab_forbidden("lab_enqueue_disabled")
+    settings = get_settings()
+    if settings.app_env != AppEnvironment.STAGING:
+        # Local/dev lab flag alone is not enough for synthetic attestation.
+        return _lab_forbidden("staging_attestation_required")
+    try:
+        return api.attest_staging_lab_assignment(worker_id=body.worker_id)
+    except NotFoundError:
+        return _lab_forbidden("worker_unauthorized")
+    except AuthorizationError as exc:
+        return _lab_forbidden(getattr(exc, "code", None) or "worker_unauthorized")
+
+
+@router.post("/dispatch/lab-enqueue", response_model=None)
 async def dispatch_lab_enqueue(
     body: DispatchLabEnqueueRequest,
     _: WorkerAuth,
     api: WorkerApi,
-) -> dict[str, Any]:
+) -> Any:
     """Staging/lab enqueue for the assigned worker only.
 
     Forces delivery-suppressed queue planning with LIVE submit off.
     Forbidden in production app_env. Never calls OMS / order_send.
+    Synthetic readiness is staging-only and requires a verified assignment
+    (broker verify or explicit staging lab attestation after heartbeat).
     """
     if not _lab_enqueue_allowed():
-        return {
-            "ok": False,
-            "error": "lab_enqueue_disabled",
-            "live_submit_allowed": False,
-        }
+        return _lab_forbidden("lab_enqueue_disabled")
+    settings = get_settings()
     try:
         worker = api.require_worker(body.worker_id)
+    except NotFoundError:
+        return _lab_forbidden("worker_unauthorized")
     except AuthorizationError as exc:
-        return {
-            "ok": False,
-            "error": getattr(exc, "code", None) or "worker_unauthorized",
-            "live_submit_allowed": False,
-        }
+        return _lab_forbidden(getattr(exc, "code", None) or "worker_unauthorized")
+
+    gate = api.lab_assignment_gate(worker)
+    if gate is not None:
+        return _lab_forbidden(gate)
 
     side = (body.side or "BUY").strip().upper()
     if side not in {"BUY", "SELL"}:
         return {"ok": False, "error": "invalid_side", "live_submit_allowed": False}
+
+    # Synthetic readiness is allowed only on staging after a verified assignment.
+    # Never invent production eligibility from registration alone.
+    use_synthetic = settings.app_env == AppEnvironment.STAGING
+    broker_verified = bool(
+        (worker.account_login_verified or "").strip()
+        and (worker.server_verified or "").strip()
+    )
+    if not use_synthetic and not broker_verified:
+        return _lab_forbidden("assignment_unverified")
 
     key = (body.idempotency_key or "").strip() or f"lab:{body.worker_id}:{uuid4()}"
     signal = CentralSignalIntent.create(
@@ -351,23 +401,52 @@ async def dispatch_lab_enqueue(
         stop_loss=Decimal("3990"),
         take_profit=Decimal("4010"),
         idempotency_key=key,
+        metadata={
+            "staging_lab_enqueue": True,
+            "staging_lab_synthetic_readiness": use_synthetic and not broker_verified,
+            "delivery_suppressed": True,
+            "live_submit_allowed": False,
+        },
     )
-    target = DispatchTarget(
-        user_id=worker.user_id,
-        broker_account_id=worker.broker_account_id,
-        proposal=RiskSettingProposal(
+    if use_synthetic:
+        proposal = RiskSettingProposal(
             planned_risk_pct=Decimal("10"),
             aggregate_open_risk_pct=Decimal("30"),
             max_lot=Decimal("0.01"),
             daily_loss_pct=Decimal("48"),
             max_concurrent_positions=1,
-        ),
-        account=AccountReadiness(
+        )
+        account = AccountReadiness(
             status="active",
             ownership_verified=True,
             user_id=worker.user_id,
-        ),
-        worker=WorkerReadiness(present=True, ready=True),
+        )
+        worker_ready = WorkerReadiness(present=True, ready=True)
+    else:
+        # Non-staging lab path: broker-verified only; no synthetic ownership.
+        proposal = RiskSettingProposal(
+            planned_risk_pct=Decimal("10"),
+            aggregate_open_risk_pct=Decimal("30"),
+            max_lot=Decimal("0.01"),
+            daily_loss_pct=Decimal("48"),
+            max_concurrent_positions=1,
+        )
+        account = AccountReadiness(
+            status="active",
+            ownership_verified=True,
+            user_id=worker.user_id,
+        )
+        worker_ready = WorkerReadiness(
+            present=True,
+            ready=True,
+            trade_allowed=worker.trade_allowed,
+        )
+    target = DispatchTarget(
+        user_id=worker.user_id,
+        broker_account_id=worker.broker_account_id,
+        proposal=proposal,
+        account=account,
+        worker=worker_ready,
     )
     # Lab overrides dispatch flag for enqueue only; LIVE submit stays false.
     lab_settings = SimpleNamespace(
@@ -385,6 +464,7 @@ async def dispatch_lab_enqueue(
         "live_submit_allowed": False,
         "delivery_suppressed": True,
         "dispatch_allowed": plan.dispatch_allowed,
+        "staging_lab_synthetic_readiness": use_synthetic and not broker_verified,
         "job_count": len(jobs),
         "jobs": [j.to_public_dict() for j in jobs],
         "assignment": {

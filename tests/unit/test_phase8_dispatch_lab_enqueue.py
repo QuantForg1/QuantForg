@@ -1,4 +1,4 @@
-"""Phase 8 — staging lab enqueue + assignment-bound claim regressions."""
+"""Phase 8 — staging lab enqueue security + assignment-bound claim regressions."""
 
 from __future__ import annotations
 
@@ -46,8 +46,31 @@ def _client() -> tuple[TestClient, Mt5WorkerApiFacade]:
     return TestClient(app), api
 
 
-def test_lab_enqueue_forbidden_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Avoid full production Settings (POSTGRES_PASSWORD validator).
+def _register_heartbeat_attest(
+    client: TestClient, *, host: str = "h1", slot: str = "demo-a"
+) -> str:
+    wid = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": host, "slot_id": slot},
+    ).json()["worker_id"]
+    hb = client.post(
+        "/api/v1/mt5-workers/heartbeat",
+        json={"worker_id": wid, "slot_id": slot, "lifecycle": "provisioning"},
+    )
+    assert hb.status_code == 200
+    assert hb.json()["ok"] is True
+    attest = client.post(
+        "/api/v1/mt5-workers/lab/attest-assignment",
+        json={"worker_id": wid},
+    )
+    assert attest.status_code == 200
+    assert attest.json()["ok"] is True
+    return wid
+
+
+def test_lab_enqueue_forbidden_in_production_returns_403(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         mt5_workers_router,
         "get_settings",
@@ -62,9 +85,83 @@ def test_lab_enqueue_forbidden_in_production(monkeypatch: pytest.MonkeyPatch) ->
         "/api/v1/mt5-workers/dispatch/lab-enqueue",
         json={"worker_id": wid},
     )
-    assert resp.status_code == 200
-    assert resp.json()["ok"] is False
-    assert resp.json()["error"] == "lab_enqueue_disabled"
+    assert resp.status_code == 403
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error"] == "lab_enqueue_disabled"
+    assert body["live_submit_allowed"] is False
+
+
+def test_lab_enqueue_rejects_registration_without_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        mt5_workers_router,
+        "get_settings",
+        lambda: _fake_settings(env=AppEnvironment.STAGING),
+    )
+    client, _ = _client()
+    wid = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "h1", "slot_id": "demo-a"},
+    ).json()["worker_id"]
+    # Register only — no heartbeat / attestation.
+    resp = client.post(
+        "/api/v1/mt5-workers/dispatch/lab-enqueue",
+        json={"worker_id": wid},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "heartbeat_required"
+
+
+def test_lab_enqueue_rejects_heartbeat_without_attestation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        mt5_workers_router,
+        "get_settings",
+        lambda: _fake_settings(env=AppEnvironment.STAGING),
+    )
+    client, _ = _client()
+    wid = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "h1", "slot_id": "demo-a"},
+    ).json()["worker_id"]
+    client.post(
+        "/api/v1/mt5-workers/heartbeat",
+        json={"worker_id": wid, "slot_id": "demo-a"},
+    )
+    resp = client.post(
+        "/api/v1/mt5-workers/dispatch/lab-enqueue",
+        json={"worker_id": wid},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "assignment_unverified"
+
+
+def test_lab_attest_forbidden_outside_staging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        mt5_workers_router,
+        "get_settings",
+        lambda: _fake_settings(env=AppEnvironment.DEVELOPMENT, lab=True),
+    )
+    client, _ = _client()
+    wid = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "h1", "slot_id": "demo-a"},
+    ).json()["worker_id"]
+    client.post(
+        "/api/v1/mt5-workers/heartbeat",
+        json={"worker_id": wid, "slot_id": "demo-a"},
+    )
+    resp = client.post(
+        "/api/v1/mt5-workers/lab/attest-assignment",
+        json={"worker_id": wid},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "staging_attestation_required"
 
 
 def test_lab_enqueue_claim_ack_on_staging(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,10 +171,7 @@ def test_lab_enqueue_claim_ack_on_staging(monkeypatch: pytest.MonkeyPatch) -> No
         lambda: _fake_settings(env=AppEnvironment.STAGING),
     )
     client, api = _client()
-    wid = client.post(
-        "/api/v1/mt5-workers/register",
-        json={"host_code": "h1", "slot_id": "demo-a"},
-    ).json()["worker_id"]
+    wid = _register_heartbeat_attest(client)
     worker = api.require_worker(UUID(wid))
     enq = client.post(
         "/api/v1/mt5-workers/dispatch/lab-enqueue",
@@ -87,7 +181,9 @@ def test_lab_enqueue_claim_ack_on_staging(monkeypatch: pytest.MonkeyPatch) -> No
     body = enq.json()
     assert body["ok"] is True
     assert body["live_submit_allowed"] is False
+    assert body["staging_lab_synthetic_readiness"] is True
     assert body["job_count"] == 1
+    assert "password" not in str(body).lower()
 
     spoof = client.post(
         "/api/v1/mt5-workers/dispatch/claim",
@@ -137,10 +233,7 @@ def test_lab_enqueue_idempotent_recover_and_fail(
         lambda: _fake_settings(env=AppEnvironment.STAGING),
     )
     client, api = _client()
-    wid = client.post(
-        "/api/v1/mt5-workers/register",
-        json={"host_code": "h1", "slot_id": "demo-a"},
-    ).json()["worker_id"]
+    wid = _register_heartbeat_attest(client)
     worker = api.require_worker(UUID(wid))
     key = "phase8-lab-idem"
     first = client.post(
@@ -211,3 +304,13 @@ def test_ops_summary_explains_execution_workers_zero(
     assert ops.get("live_submit_allowed") is False
     assert "execution_workers_note" in ops
     assert "control_plane_worker_count" in ops
+    assert ops.get("credentials_exposed") is False
+
+
+def test_harness_heartbeat_helper_rejects_register_fallback() -> None:
+    from scripts.staging_phase8_dispatch_demo import _heartbeat_ok
+
+    assert _heartbeat_ok({"railway": {}}) is False
+    assert _heartbeat_ok({"railway": {"demo-a": {"ok": False}}}) is False
+    assert _heartbeat_ok({"ok": True}) is False  # registration-shaped payload
+    assert _heartbeat_ok({"railway": {"demo-a": {"ok": True}}}) is True

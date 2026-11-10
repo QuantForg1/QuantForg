@@ -92,3 +92,13 @@ class DispatchLabEnqueueRequest(BaseModel):
     side: str = Field(default="BUY", max_length=8)
     quality: int = Field(default=80, ge=1, le=100)
     idempotency_key: str = Field(default="", max_length=128)
+
+
+class LabAttestAssignmentRequest(BaseModel):
+    """Staging-only attestation that a lab worker assignment is verified.
+
+    Registration alone is insufficient. Requires a prior authenticated heartbeat.
+    Forbidden in production.
+    """
+
+    worker_id: UUID

@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
 
@@ -41,18 +40,36 @@ def load_env() -> None:
     os.environ["QF_ALLOW_WORKER_ON_LIVE_TERMINAL"] = "false"
     # Avoid missing demo-c during register in this proof.
     slots = os.environ.get("QF_MT5_LOCAL_SLOTS") or "demo-a,demo-b"
-    cleaned = [s.strip() for s in slots.split(",") if s.strip() and s.strip() != "demo-c"]
+    cleaned = [
+        s.strip() for s in slots.split(",") if s.strip() and s.strip() != "demo-c"
+    ]
     os.environ["QF_MT5_LOCAL_SLOTS"] = ",".join(cleaned or ["demo-a", "demo-b"])
+
+
+def _heartbeat_ok(hb: object) -> bool:
+    """Require an explicit successful Railway heartbeat — never registration."""
+    if not isinstance(hb, dict):
+        return False
+    railway_hb = hb.get("railway")
+    if not isinstance(railway_hb, dict) or not railway_hb:
+        return False
+    return any(isinstance(v, dict) and v.get("ok") is True for v in railway_hb.values())
+
+
+def _assert_no_secrets(payload: object) -> bool:
+    blob = json.dumps(payload, default=str).lower()
+    banned = ("password", "service_token", "bearer ", "qf_demo_")
+    return not any(b in blob for b in banned)
 
 
 def main() -> int:
     sys.path.insert(0, str(ROOT))
     load_env()
+    from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
     from services.mt5_worker_agent.railway_client import (
         RailwayClientConfig,
         RailwayWorkerClient,
     )
-    from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
 
     try:
         client = RailwayWorkerClient(RailwayClientConfig.from_env())
@@ -67,7 +84,6 @@ def main() -> int:
         f"keys={sorted(ping.keys())[:6]}",
     )
 
-    # Refuse production accidental target.
     api = os.environ.get("QUANTFORG_API_BASE_URL", "")
     rec(
         "api_is_staging",
@@ -75,7 +91,6 @@ def main() -> int:
         "redacted",
     )
 
-    # Live Program Files must remain untouched by this script.
     live = Path(r"C:\Program Files\MetaTrader 5\terminal64.exe")
     rec("weltrade_path_exists", "PASS" if live.is_file() else "FAIL")
     rec(
@@ -87,12 +102,17 @@ def main() -> int:
     )
 
     sup = LocalWorkerSupervisor()
-    # Restrict to slots that exist on disk.
     existing = [
         s
         for s in (os.environ.get("QF_MT5_LOCAL_SLOTS") or "").split(",")
         if s.strip()
-        and (Path(os.environ.get("QF_MT5_SLOT_ROOT") or r"C:\QuantForg-Workspace\mt5_worker_slots") / s.strip()).is_dir()
+        and (
+            Path(
+                os.environ.get("QF_MT5_SLOT_ROOT")
+                or r"C:\QuantForg-Workspace\mt5_worker_slots"
+            )
+            / s.strip()
+        ).is_dir()
     ]
     if existing:
         sup.slot_ids = existing
@@ -104,14 +124,14 @@ def main() -> int:
 
     reg = sup.register_with_railway()
     rec("worker_register", "PASS" if reg.get("ok") else "FAIL")
-    hb = sup.heartbeat_once()
-    railway_hb = (hb.get("railway") or {}) if isinstance(hb, dict) else {}
-    hb_ok = any(
-        isinstance(v, dict) and v.get("ok") for v in railway_hb.values()
-    ) or bool(railway_hb)
-    rec("worker_heartbeat", "PASS" if hb_ok or reg.get("ok") else "FAIL")
 
-    # Pick first registered worker.
+    hb = sup.heartbeat_once()
+    rec(
+        "worker_heartbeat",
+        "PASS" if _heartbeat_ok(hb) else "FAIL",
+        "independent_of_register",
+    )
+
     worker_id = ""
     for _slot, info in (reg.get("slots") or {}).items():
         if isinstance(info, dict) and info.get("worker_id"):
@@ -127,33 +147,166 @@ def main() -> int:
     assignment = assign.get("assignment") if isinstance(assign, dict) else {}
     user_id = str((assignment or {}).get("user_id") or "")
     account_id = str((assignment or {}).get("broker_account_id") or "")
+    rec("dispatch_assignment", "PASS" if user_id and account_id else "FAIL")
     rec(
-        "dispatch_assignment",
-        "PASS" if user_id and account_id else "FAIL",
+        "tokens_redacted",
+        "PASS" if _assert_no_secrets(assign) else "FAIL",
     )
 
-    # Lab enqueue (requires staging APP_ENV or QF_DISPATCH_LAB_ENABLED).
+    # Registration alone must not unlock enqueue — attest after heartbeat.
+    attest = client.lab_attest_assignment(worker_id=worker_id)
+    rec(
+        "lab_assignment_attested",
+        "PASS" if attest.get("ok") else "FAIL",
+        str(attest.get("error") or attest.get("status") or ""),
+    )
+
     key = f"phase8:{uuid.uuid4()}"
-    enq = client.dispatch_lab_enqueue(
-        worker_id=worker_id,
-        idempotency_key=key,
+    enq = client.dispatch_lab_enqueue(worker_id=worker_id, idempotency_key=key)
+    enq_status = enq.get("status")
+    missing_lab = enq_status == 404 or (
+        enq.get("ok") is False
+        and enq.get("error") == "http_error"
+        and enq_status == 404
     )
-    if not enq.get("ok"):
-        rec("lab_enqueue", "FAIL", str(enq.get("error") or enq.get("status")))
-        # Still exercise spoof/recover paths that don't need a job.
-    else:
-        rec(
-            "lab_enqueue",
-            "PASS",
-            f"jobs={enq.get('job_count')} live={enq.get('live_submit_allowed')}",
-        )
-        rec(
-            "lab_live_submit_off",
-            "PASS" if enq.get("live_submit_allowed") is False else "FAIL",
-        )
+    if missing_lab:
+        rec("lab_enqueue", "FAIL", "lab_endpoint_missing_404")
+        # Fail-closed: do not mark lifecycle steps as passed without a job.
+        for name in (
+            "assigned_claim",
+            "lease_recover",
+            "ack_terminal_state",
+            "fail_retry_or_pending",
+            "enqueue_idempotent",
+        ):
+            rec(name, "FAIL", "lab_enqueue_unavailable")
+        _security_only(client, worker_id)
+        _tail(client)
+        _write()
+        return 1
 
-    # Spoof claim
-    spoof = client.dispatch_claim(
+    if not enq.get("ok"):
+        rec("lab_enqueue", "FAIL", str(enq.get("error") or enq_status))
+        for name in (
+            "assigned_claim",
+            "lease_recover",
+            "ack_terminal_state",
+            "fail_retry_or_pending",
+            "enqueue_idempotent",
+        ):
+            rec(name, "FAIL", "lab_enqueue_failed")
+        _security_only(client, worker_id)
+        _tail(client)
+        _write()
+        return 1
+
+    rec(
+        "lab_enqueue",
+        "PASS",
+        f"jobs={enq.get('job_count')} live={enq.get('live_submit_allowed')}",
+    )
+    rec(
+        "lab_live_submit_off",
+        "PASS" if enq.get("live_submit_allowed") is False else "FAIL",
+    )
+    rec(
+        "tokens_redacted_enqueue",
+        "PASS" if _assert_no_secrets(enq) else "FAIL",
+    )
+
+    _security_only(client, worker_id)
+
+    claim = client.dispatch_claim(
+        worker_id=worker_id, user_id=user_id, broker_account_id=account_id
+    )
+    job = claim.get("job") if isinstance(claim, dict) else None
+    claim_ok = (
+        claim.get("ok")
+        and isinstance(job, dict)
+        and bool(job.get("intent_id"))
+    )
+    rec("assigned_claim", "PASS" if claim_ok else "FAIL", f"has_job={bool(job)}")
+    if not (isinstance(job, dict) and job.get("intent_id")):
+        for name in ("lease_recover", "ack_terminal_state", "fail_retry_or_pending"):
+            rec(name, "FAIL", "no_claimed_job")
+        _idempotency(client, worker_id, key, enq_ok=True)
+        _tail(client)
+        _write()
+        return 1 if any(r[1] == "FAIL" for r in RESULTS) else 0
+
+    intent_id = str(job["intent_id"])
+    recovered = client.dispatch_recover()
+    recover_ok = recovered.get("ok") and int(recovered.get("recovered") or 0) >= 1
+    rec(
+        "lease_recover",
+        "PASS" if recover_ok else "FAIL",
+        f"recovered={recovered.get('recovered')}",
+    )
+
+    claim2 = client.dispatch_claim(
+        worker_id=worker_id, user_id=user_id, broker_account_id=account_id
+    )
+    job2 = claim2.get("job") if isinstance(claim2, dict) else None
+    if isinstance(job2, dict) and job2.get("intent_id"):
+        intent_id = str(job2["intent_id"])
+        ack = client.dispatch_ack(
+            worker_id=worker_id,
+            intent_id=intent_id,
+            detail="phase8_staging_ack",
+        )
+        rec(
+            "ack_terminal_state",
+            "PASS"
+            if ack.get("ok")
+            and (ack.get("job") or {}).get("delivery_status") == "acked"
+            else "FAIL",
+            str((ack.get("job") or {}).get("delivery_status")),
+        )
+    else:
+        rec("ack_terminal_state", "FAIL", "reclaim_empty")
+
+    key2 = f"phase8-fail:{uuid.uuid4()}"
+    enq2 = client.dispatch_lab_enqueue(worker_id=worker_id, idempotency_key=key2)
+    if enq2.get("ok"):
+        c3 = client.dispatch_claim(
+            worker_id=worker_id, user_id=user_id, broker_account_id=account_id
+        )
+        j3 = c3.get("job") if isinstance(c3, dict) else None
+        if isinstance(j3, dict) and j3.get("intent_id"):
+            fail = client.dispatch_fail(
+                worker_id=worker_id,
+                intent_id=str(j3["intent_id"]),
+                reason="phase8_forced_fail",
+            )
+            status = (fail.get("job") or {}).get("delivery_status")
+            rec(
+                "fail_retry_or_pending",
+                "PASS"
+                if fail.get("ok") and status in {"pending", "dead_letter"}
+                else "FAIL",
+                str(status),
+            )
+        else:
+            rec("fail_retry_or_pending", "FAIL", "no_job")
+    else:
+        rec("fail_retry_or_pending", "FAIL", str(enq2.get("error")))
+
+    _idempotency(client, worker_id, key, enq_ok=True)
+    _tail(client)
+    _write()
+    fails = [r for r in RESULTS if r[1] == "FAIL"]
+    print("--- SUMMARY ---")
+    print("pass", sum(1 for r in RESULTS if r[1] == "PASS"))
+    print("fail", len(fails))
+    print(
+        "blocked_or_skipped",
+        sum(1 for r in RESULTS if r[1] in {"BLOCKED", "NOT_EXERCISED", "NOT_WIRED"}),
+    )
+    return 1 if fails else 0
+
+
+def _security_only(client: object, worker_id: str) -> None:
+    spoof = client.dispatch_claim(  # type: ignore[attr-defined]
         worker_id=worker_id,
         user_id="00000000-0000-0000-0000-000000000001",
         broker_account_id="00000000-0000-0000-0000-000000000002",
@@ -166,86 +319,23 @@ def main() -> int:
         str(spoof.get("error")),
     )
 
-    claim = client.dispatch_claim(
-        worker_id=worker_id, user_id=user_id, broker_account_id=account_id
+
+def _idempotency(client: object, worker_id: str, key: str, *, enq_ok: bool) -> None:
+    if not enq_ok:
+        rec("enqueue_idempotent", "FAIL", "lab_enqueue_unavailable")
+        return
+    enq_dup = client.dispatch_lab_enqueue(  # type: ignore[attr-defined]
+        worker_id=worker_id, idempotency_key=key
     )
-    job = claim.get("job") if isinstance(claim, dict) else None
+    jobs = enq_dup.get("jobs") or []
     rec(
-        "assigned_claim",
-        "PASS" if claim.get("ok") and (job or enq.get("ok") is False) else "FAIL",
-        f"has_job={bool(job)}",
+        "enqueue_idempotent",
+        "PASS" if enq_dup.get("ok") and len(jobs) == 1 else "FAIL",
     )
-    if isinstance(job, dict) and job.get("intent_id"):
-        intent_id = str(job["intent_id"])
-        # Leave claimed without ACK to test recover (lease release).
-        recovered = client.dispatch_recover()
-        rec(
-            "lease_recover",
-            "PASS" if recovered.get("ok") else "FAIL",
-            f"recovered={recovered.get('recovered')}",
-        )
-        # Reclaim + ACK
-        claim2 = client.dispatch_claim(
-            worker_id=worker_id, user_id=user_id, broker_account_id=account_id
-        )
-        job2 = claim2.get("job") if isinstance(claim2, dict) else None
-        if isinstance(job2, dict) and job2.get("intent_id"):
-            intent_id = str(job2["intent_id"])
-            ack = client.dispatch_ack(
-                worker_id=worker_id,
-                intent_id=intent_id,
-                detail="phase8_staging_ack",
-            )
-            rec(
-                "ack_terminal_state",
-                "PASS"
-                if ack.get("ok")
-                and (ack.get("job") or {}).get("delivery_status") == "acked"
-                else "FAIL",
-                str((ack.get("job") or {}).get("delivery_status")),
-            )
-        else:
-            rec("ack_terminal_state", "FAIL", "reclaim_empty")
 
-        # Failure/retry path with a fresh enqueue
-        key2 = f"phase8-fail:{uuid.uuid4()}"
-        enq2 = client.dispatch_lab_enqueue(worker_id=worker_id, idempotency_key=key2)
-        if enq2.get("ok"):
-            c3 = client.dispatch_claim(
-                worker_id=worker_id, user_id=user_id, broker_account_id=account_id
-            )
-            j3 = c3.get("job") if isinstance(c3, dict) else None
-            if isinstance(j3, dict) and j3.get("intent_id"):
-                fail = client.dispatch_fail(
-                    worker_id=worker_id,
-                    intent_id=str(j3["intent_id"]),
-                    reason="phase8_forced_fail",
-                )
-                status = (fail.get("job") or {}).get("delivery_status")
-                rec(
-                    "fail_retry_or_pending",
-                    "PASS" if fail.get("ok") and status in {"pending", "dead_letter"} else "FAIL",
-                    str(status),
-                )
-            else:
-                rec("fail_retry_or_pending", "FAIL", "no_job")
-        else:
-            rec("fail_retry_or_pending", "FAIL", str(enq2.get("error")))
-    else:
-        rec("lease_recover", "BLOCKED", "no_claimed_job")
-        rec("ack_terminal_state", "BLOCKED", "no_claimed_job")
-        rec("fail_retry_or_pending", "BLOCKED", "no_claimed_job")
 
-    # Idempotent re-enqueue
-    if enq.get("ok"):
-        enq_dup = client.dispatch_lab_enqueue(worker_id=worker_id, idempotency_key=key)
-        jobs = enq_dup.get("jobs") or []
-        rec(
-            "enqueue_idempotent",
-            "PASS" if enq_dup.get("ok") and len(jobs) == 1 else "FAIL",
-        )
-
-    ops = client.ops_summary()
+def _tail(client: object) -> None:
+    ops = client.ops_summary()  # type: ignore[attr-defined]
     rec(
         "owner_ops_snapshot",
         "PASS"
@@ -254,10 +344,10 @@ def main() -> int:
     )
     rec(
         "ops_explains_execution_workers",
-        "PASS" if "execution_workers_note" in ops or "control_plane_worker_count" in ops else "FAIL",
+        "PASS"
+        if "execution_workers_note" in ops or "control_plane_worker_count" in ops
+        else "FAIL",
     )
-
-    # Customer status requires user JWT — not exercised without disposable identity.
     rec(
         "customer_dispatch_status",
         "NOT_EXERCISED",
@@ -273,14 +363,6 @@ def main() -> int:
         "NOT_WIRED",
         "await_demo_auth_and_owner_flag",
     )
-
-    _write()
-    fails = [r for r in RESULTS if r[1] == "FAIL"]
-    print("--- SUMMARY ---")
-    print("pass", sum(1 for r in RESULTS if r[1] == "PASS"))
-    print("fail", len(fails))
-    print("blocked_or_skipped", sum(1 for r in RESULTS if r[1] in {"BLOCKED", "NOT_EXERCISED", "NOT_WIRED"}))
-    return 1 if fails else 0
 
 
 def _write() -> None:
