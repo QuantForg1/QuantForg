@@ -60,7 +60,9 @@ def test_plan_suppresses_delivery_and_stays_dry_run() -> None:
                 user_id=user,
                 broker_account_id=account,
                 proposal=_proposal(),
-                account=AccountReadiness(status="active", user_id=user),
+                account=AccountReadiness(
+                    status="active", ownership_verified=True, user_id=user
+                ),
                 worker=WorkerReadiness(present=True, ready=True),
             )
         ],
@@ -94,7 +96,9 @@ def test_idempotent_ledger_dedupes_same_key() -> None:
         user_id=user,
         broker_account_id=account,
         proposal=_proposal(),
-        account=AccountReadiness(status="active", user_id=user),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
         worker=WorkerReadiness(present=True, ready=True),
     )
     first = plan_signal_dispatch(
@@ -135,7 +139,9 @@ def test_foreign_actor_becomes_blocked_item_not_leak() -> None:
                 broker_account_id=uuid4(),
                 actor_user_id=stranger,
                 proposal=_proposal(),
-                account=AccountReadiness(status="active", user_id=owner),
+                account=AccountReadiness(
+                    status="active", ownership_verified=True, user_id=owner
+                ),
                 worker=WorkerReadiness(present=True, ready=True),
             )
         ],
