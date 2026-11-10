@@ -7,7 +7,6 @@ import {
   deriveRiskIntelligence,
   type RiskHealthState,
 } from "@/lib/dashboard/risk-intelligence";
-import { OWNER_RISK_POLICY_DISPLAY } from "@/lib/trading/owner-risk-policy-display";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
 function toneFor(state: RiskHealthState): "success" | "warning" | "danger" | "neutral" {
@@ -39,6 +38,7 @@ function Row({
   );
 }
 
+/** Customer-facing risk meters. Never renders Owner Policy numerical configuration. */
 export function RiskIntelligencePanel({
   equity,
   balance,
@@ -50,6 +50,11 @@ export function RiskIntelligencePanel({
   liveAuthorization,
   ordersMaySubmit,
   currency = "USD",
+  showRiskCenterLink = true,
+  dailyLossHaltPercent,
+  maxAggregateOpenRiskPercent,
+  maxConcurrentPositions,
+  riskPerTradePercent,
 }: {
   equity: unknown;
   balance: unknown;
@@ -61,6 +66,11 @@ export function RiskIntelligencePanel({
   liveAuthorization?: unknown;
   ordersMaySubmit?: unknown;
   currency?: string;
+  showRiskCenterLink?: boolean;
+  dailyLossHaltPercent?: number;
+  maxAggregateOpenRiskPercent?: number;
+  maxConcurrentPositions?: number;
+  riskPerTradePercent?: number;
 }) {
   const snap = deriveRiskIntelligence({
     equity,
@@ -72,9 +82,12 @@ export function RiskIntelligencePanel({
     emergencyStop,
     liveAuthorization,
     ordersMaySubmit,
+    dailyLossHaltPercent,
+    maxAggregateOpenRiskPercent,
+    maxConcurrentPositions,
+    riskPerTradePercent,
   });
   const code = currency && currency !== "—" ? currency : "USD";
-  const policy = OWNER_RISK_POLICY_DISPLAY;
 
   return (
     <section
@@ -88,7 +101,7 @@ export function RiskIntelligencePanel({
               id="risk-intelligence"
               className="text-sm font-medium text-[var(--fg)]"
             >
-              Risk Intelligence
+              Account Risk Overview
             </h2>
             <Badge tone={toneFor(snap.state)}>{snap.state}</Badge>
           </div>
@@ -96,90 +109,77 @@ export function RiskIntelligencePanel({
             {snap.reason}
           </p>
         </div>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/risk-center">Risk Center</Link>
-        </Button>
+        {showRiskCenterLink ? (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/risk-center">Risk Center</Link>
+          </Button>
+        ) : null}
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/30 px-3">
-          <Row
-            label="Current drawdown"
-            value={
-              Number.isFinite(snap.currentDrawdownPct)
-                ? `${formatNumber(snap.currentDrawdownPct, 2)}%`
-                : "—"
-            }
-          />
-          <Row
-            label="Daily loss usage"
-            value={
-              Number.isFinite(snap.dailyLossUsedPct)
-                ? `${formatNumber(snap.dailyLossUsedPct, 2)}%`
-                : "—"
-            }
-            hint={`Halt ceiling ${policy.dailyLossHaltPercent}%`}
-          />
-          <Row
-            label="Remaining daily loss allowance"
-            value={
-              Number.isFinite(snap.dailyLossRemainingPct)
-                ? `${formatNumber(snap.dailyLossRemainingPct, 2)}%`
-                : "—"
-            }
-          />
-          <Row
-            label="Aggregate open risk"
-            value={
-              Number.isFinite(snap.aggregateOpenRiskPct)
-                ? `${formatNumber(snap.aggregateOpenRiskPct, 2)}%`
-                : "—"
-            }
-            hint={`Ceiling ${policy.maxAggregateOpenRiskPercent}%`}
-          />
-          <Row
-            label="Open-position exposure"
-            value={`${snap.openPositionCount} / ${snap.maxConcurrentPositions}`}
-            hint={`Max concurrent ${policy.maxConcurrentPositions}`}
-          />
-          <Row
-            label="Floating P&L"
-            value={
-              Number.isFinite(snap.floatingPnl)
-                ? formatCurrency(snap.floatingPnl, code)
-                : "—"
-            }
-          />
-        </div>
-
-        <div
-          className={cn(
-            "rounded-[var(--radius-os)] border px-3 py-3 text-xs leading-relaxed text-[var(--fg-muted)]",
-            snap.state === "Healthy" &&
-              "border-[var(--border)] bg-[color-mix(in_srgb,var(--success-soft)_40%,var(--bg))]",
-            snap.state === "Warning" &&
-              "border-[var(--border)] bg-[color-mix(in_srgb,var(--warning-soft)_45%,var(--bg))]",
-            (snap.state === "Restricted" || snap.state === "Halted") &&
-              "border-[var(--border)] bg-[color-mix(in_srgb,var(--danger-soft)_40%,var(--bg))]",
-          )}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-            Owner policy (read-only)
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            <li>Max lot {policy.maxLot}</li>
-            <li>Risk / trade {policy.riskPerTradePercent}%</li>
-            <li>Daily loss halt {policy.dailyLossHaltPercent}%</li>
-            <li>Aggregate open risk {policy.maxAggregateOpenRiskPercent}%</li>
-            <li>Min trade quality {policy.minimumTradeQuality}</li>
-            <li>Mandatory stop-loss · no grid / martingale / averaging</li>
-          </ul>
-          <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
-            This panel does not submit trades or change LIVE ceilings. Enforcement
-            remains in the existing risk engine.
-          </p>
-        </div>
+      <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/30 px-3">
+        <Row
+          label="Current drawdown"
+          value={
+            Number.isFinite(snap.currentDrawdownPct)
+              ? `${formatNumber(snap.currentDrawdownPct, 2)}%`
+              : "—"
+          }
+        />
+        <Row
+          label="Daily loss usage"
+          value={
+            Number.isFinite(snap.dailyLossUsedPct)
+              ? `${formatNumber(snap.dailyLossUsedPct, 2)}%`
+              : "—"
+          }
+          hint="Measured against your effective daily-loss preference"
+        />
+        <Row
+          label="Remaining daily loss allowance"
+          value={
+            Number.isFinite(snap.dailyLossRemainingPct)
+              ? `${formatNumber(snap.dailyLossRemainingPct, 2)}%`
+              : "—"
+          }
+        />
+        <Row
+          label="Aggregate open risk"
+          value={
+            Number.isFinite(snap.aggregateOpenRiskPct)
+              ? `${formatNumber(snap.aggregateOpenRiskPct, 2)}%`
+              : "—"
+          }
+          hint="Against your effective open-risk preference"
+        />
+        <Row
+          label="Open positions"
+          value={`${snap.openPositionCount} / ${snap.maxConcurrentPositions}`}
+          hint="Versus your personal concurrent-position preference"
+        />
+        <Row
+          label="Floating P&L"
+          value={
+            Number.isFinite(snap.floatingPnl)
+              ? formatCurrency(snap.floatingPnl, code)
+              : "—"
+          }
+        />
       </div>
+
+      <p
+        className={cn(
+          "rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-xs text-[var(--fg-muted)]",
+          snap.state === "Healthy" &&
+            "bg-[color-mix(in_srgb,var(--success-soft)_35%,var(--bg))]",
+          snap.state === "Warning" &&
+            "bg-[color-mix(in_srgb,var(--warning-soft)_40%,var(--bg))]",
+          (snap.state === "Restricted" || snap.state === "Halted") &&
+            "bg-[color-mix(in_srgb,var(--danger-soft)_35%,var(--bg))]",
+        )}
+      >
+        Meters reflect your account session and effective preferences. Live
+        enforcement remains in the existing risk engine and OMS path.
+      </p>
     </section>
   );
 }

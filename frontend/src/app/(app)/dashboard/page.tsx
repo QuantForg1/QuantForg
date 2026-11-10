@@ -12,34 +12,19 @@ import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitive
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { OverviewReferenceDesk } from "@/components/trading/overview-reference-desk";
 import { TradingPerformancePanel } from "@/components/trading/dashboard-intelligence/trading-performance-panel";
-import { RiskIntelligencePanel } from "@/components/trading/dashboard-intelligence/risk-intelligence-panel";
-import { RobotActivityPanel } from "@/components/trading/dashboard-intelligence/robot-activity-panel";
-import {
-  RecentActivityPanel,
-  buildActivityFromAccount,
-} from "@/components/trading/dashboard-intelligence/recent-activity-panel";
-import {
-  NotificationsStrip,
-  mapPlatformNotifications,
-} from "@/components/trading/dashboard-intelligence/notifications-strip";
 import { SignalCard } from "@/components/trading/signal-card";
 import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
-  brokerConnectivityApi,
   mt5Api,
-  platformApi,
   portfolioApi,
   signalCenterApi,
   tradingSessionApi,
 } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
-import { deriveRiskIntelligence } from "@/lib/dashboard/risk-intelligence";
 import {
   netDealPnl,
   startOfUtcDayMs,
 } from "@/lib/dashboard/performance-window";
-import { resolveLastExecutionView } from "@/lib/dashboard/deal-classification";
-import { OWNER_RISK_POLICY_DISPLAY } from "@/lib/trading/owner-risk-policy-display";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 // Auth still required for session; Admin link removed from trader Home.
@@ -143,34 +128,6 @@ export default function DashboardPage() {
     queryFn: portfolioApi.history,
     retry: false,
     refetchInterval: UNIVERSE_POLL_MS,
-  });
-  const robotStatusQ = useQuery({
-    queryKey: ["trading-robot-status"],
-    queryFn: tradingSessionApi.robotStatus,
-    retry: false,
-    refetchInterval: TRADER_POLL_MS,
-    staleTime: 10_000,
-  });
-  const notificationsQ = useQuery({
-    queryKey: ["dashboard-notifications"],
-    queryFn: () => platformApi.notifications(false),
-    retry: false,
-    refetchInterval: UNIVERSE_POLL_MS,
-    staleTime: 15_000,
-  });
-  const tradingComponentsQ = useQuery({
-    queryKey: ["trading-components-health"],
-    queryFn: platformApi.tradingComponents,
-    retry: false,
-    refetchInterval: UNIVERSE_POLL_MS,
-    staleTime: 20_000,
-  });
-  const workerOpsQ = useQuery({
-    queryKey: ["dashboard-mt5-worker-ops"],
-    queryFn: brokerConnectivityApi.mt5WorkerOps,
-    retry: false,
-    refetchInterval: UNIVERSE_POLL_MS,
-    staleTime: 30_000,
   });
 
   const session = asRecord(sessionQ.data);
@@ -371,56 +328,6 @@ export default function DashboardPage() {
   const riskPctRaw = num(session.risk_pct ?? session.daily_risk_pct);
   const riskPct = Number.isFinite(riskPctRaw) ? riskPctRaw : null;
   const accountCurrency = str(session.currency, "USD");
-  const riskIntel = deriveRiskIntelligence({
-    equity: session.equity,
-    balance: session.balance,
-    floatingPnl: floatingFromPositions,
-    todayPnl: todayPnlRaw,
-    openPositionCount: positions.length,
-    riskLocked: session.risk_locked ?? session.daily_loss_exceeded,
-    emergencyStop: session.emergency_stop ?? session.global_emergency_stop,
-    liveAuthorization: session.live_authorization,
-    ordersMaySubmit: session.orders_may_submit,
-  });
-  const activityItems = buildActivityFromAccount({
-    positions,
-    deals,
-    riskState: riskIntel.state,
-    riskReason: riskIntel.reason,
-  });
-  const notificationItems = mapPlatformNotifications(
-    asList(notificationsQ.data).map(asRecord),
-  );
-  const robotStatus = asRecord(robotStatusQ.data);
-  const components = asRecord(tradingComponentsQ.data);
-  const componentsHealthy =
-    tradingComponentsQ.isError
-      ? null
-      : components.status
-        ? String(components.status).toLowerCase() === "ok" ||
-          String(components.status).toLowerCase() === "healthy"
-        : components.healthy == null
-          ? null
-          : Boolean(components.healthy);
-  const workerOps = asRecord(workerOpsQ.data);
-  const multiAccountLiveSubmit =
-    workerOpsQ.isError
-      ? false
-      : workerOps.live_submit_enabled === true ||
-        workerOps.multi_account_live_submit_enabled === true;
-  const multiAccountDispatch =
-    workerOpsQ.isError
-      ? false
-      : workerOps.dispatch_enabled === true ||
-        workerOps.multi_account_dispatch_enabled === true ||
-        multiAccountLiveSubmit;
-  const lastExecution = resolveLastExecutionView({
-    sessionExecutionAt: session.last_execution_at,
-    sessionExecutionResult: session.last_execution_result,
-    robotExecutionAt: robotStatus.last_execution_at,
-    robotExecutionResult: robotStatus.last_execution_result,
-    deals,
-  });
   const metricsUpdatedAt =
     sessionQ.dataUpdatedAt
       ? formatRelativeTime(new Date(sessionQ.dataUpdatedAt))
@@ -530,7 +437,7 @@ export default function DashboardPage() {
           !showMetrics
             ? "—"
             : dailyLossPctOfEquity != null
-              ? `${dailyLossPctOfEquity.toFixed(1)}% / ${OWNER_RISK_POLICY_DISPLAY.dailyLossHaltPercent}%`
+              ? `${dailyLossPctOfEquity.toFixed(1)}% used`
               : "—"
         }
         dailyRiskHint={
@@ -542,7 +449,7 @@ export default function DashboardPage() {
                 : `${formatCurrency(
                     dailyLossAmount ?? 0,
                     accountCurrency === "—" ? "USD" : accountCurrency,
-                  )} used of ${OWNER_RISK_POLICY_DISPLAY.dailyLossHaltPercent}% halt`
+                  )} daily loss vs equity — manage limits in Risk Center`
               : "Unavailable"
         }
         metricsUpdatedAt={metricsUpdatedAt}
@@ -585,109 +492,12 @@ export default function DashboardPage() {
         lastPrice={Number.isFinite(tickMid) ? tickMid : undefined}
       />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <TradingPerformancePanel
+      <TradingPerformancePanel
           deals={deals}
           floatingPnl={floatingFromPositions}
           equity={Number.isFinite(equityNum) ? equityNum : NaN}
           currency={accountCurrency === "—" ? "USD" : accountCurrency}
           available={showMetrics && !activityUnavailable}
-        />
-        <RiskIntelligencePanel
-          equity={session.equity}
-          balance={session.balance}
-          floatingPnl={floatingFromPositions}
-          todayPnl={todayPnlRaw}
-          openPositionCount={
-            noBroker || sessionMismatch || positionsUnavailable
-              ? 0
-              : positions.length
-          }
-          riskLocked={session.risk_locked ?? session.daily_loss_exceeded}
-          emergencyStop={session.emergency_stop ?? session.global_emergency_stop}
-          liveAuthorization={session.live_authorization}
-          ordersMaySubmit={session.orders_may_submit}
-          currency={accountCurrency === "—" ? "USD" : accountCurrency}
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <RobotActivityPanel
-          robotState={robot}
-          brokerLabel={
-            sessionQ.isError
-              ? "Unavailable"
-              : noBroker
-                ? "Disconnected"
-                : sessionMismatch
-                  ? "Reconnect required"
-                  : "Connected"
-          }
-          tradingAuthLabel={liveTradingHint.label}
-          tradingAuthDetail={liveTradingHint.detail}
-          multiAccountDispatchLabel={
-            multiAccountLiveSubmit
-              ? "LIVE submit enabled"
-              : multiAccountDispatch
-                ? "Dispatch only"
-                : "Disabled"
-          }
-          multiAccountDispatchDetail={
-            multiAccountLiveSubmit
-              ? "Multi-account LIVE submit gate reports enabled — verify owner gates."
-              : multiAccountDispatch
-                ? "Dispatch may be on, but multi-account LIVE submit remains off."
-                : "Multi-account LIVE dispatch/submit gates are off. Existing Weltrade singleton path only."
-          }
-          lastHeartbeat={
-            str(
-              robotStatus.last_heartbeat_at ??
-                session.last_heartbeat_at ??
-                connection.lastVerified,
-              "",
-            ) || null
-          }
-          lastSignalLabel={
-            topSignal
-              ? `${str(topSignal.broker_symbol || topSignal.symbol, TRADING_SYMBOL)} · ${signalBoardDirection(topSignal)}`
-              : "No live signal"
-          }
-          lastExecutionLabel={lastExecution.attemptLabel}
-          lastExecutionResult={lastExecution.resultLabel}
-          executionStale={lastExecution.stale}
-          omsLabel={
-            str(
-              session.oms_status ?? robotStatus.oms_status,
-              session.orders_may_submit === false
-                ? "Blocked"
-                : showMetrics
-                  ? "Ready"
-                  : "Unavailable",
-            )
-          }
-          lastSyncLabel={
-            connection.lastVerified
-              ? formatRelativeTime(connection.lastVerified)
-              : metricsUpdatedAt || "—"
-          }
-          recentError={
-            str(
-              session.last_error ?? robotStatus.last_error ?? session.error,
-              "",
-            ) || null
-          }
-          componentsHealthy={componentsHealthy}
-        />
-        <NotificationsStrip
-          items={notificationItems}
-          unavailable={Boolean(notificationsQ.isError)}
-        />
-      </div>
-
-      <RecentActivityPanel
-        items={activityItems}
-        unavailable={activityUnavailable || positionsUnavailable}
-        noBroker={noBroker || sessionMismatch}
       />
 
       <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
