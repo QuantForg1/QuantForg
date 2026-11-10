@@ -390,6 +390,16 @@ class Mt5WorkerApiFacade:
         by_id = getattr(self.plane.provisioner, "_by_id", {})
         workers = [self._public(w) for w in by_id.values()]
         hosts = self.plane.capacity.summary()
+        control_plane_rows = 0
+        try:
+            from app.infrastructure.persistence import (
+                postgres_mt5_worker_control_plane as cp_store,
+            )
+
+            if cp_store.table_ready():
+                control_plane_rows = len(cp_store.load_all_workers() or [])
+        except Exception:
+            control_plane_rows = 0
         return {
             "ok": True,
             "credentials_exposed": False,
@@ -397,6 +407,12 @@ class Mt5WorkerApiFacade:
             "hosts": hosts,
             "workers": workers,
             "worker_count": len(workers),
+            "control_plane_worker_count": control_plane_rows,
+            "execution_workers_note": (
+                "Runtime registration persists to mt5_worker_control_plane; "
+                "public.execution_workers remains the Phase-1a assignment table "
+                "and may stay at 0 until ownership-bound provisioning writes it."
+            ),
             "verification": ops_snapshot(),
             "verification_matrix": build_verification_matrix(),
             "registry": catalogue_snapshot(),

@@ -219,3 +219,71 @@ class RailwayWorkerClient:
 
     def ops_summary(self) -> dict[str, Any]:
         return self._request("GET", "/api/v1/mt5-workers/ops/summary")
+
+    def dispatch_lab_enqueue(
+        self,
+        *,
+        worker_id: str,
+        symbol: str = "XAUUSD",
+        side: str = "BUY",
+        quality: int = 80,
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        """Staging-only lab enqueue (delivery suppressed / LIVE submit off)."""
+        payload: dict[str, Any] = {
+            "worker_id": worker_id,
+            "symbol": symbol,
+            "side": side,
+            "quality": quality,
+        }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+        return self._request(
+            "POST", "/api/v1/mt5-workers/dispatch/lab-enqueue", payload
+        )
+
+    def dispatch_claim(
+        self,
+        *,
+        worker_id: str,
+        user_id: str,
+        broker_account_id: str,
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/dispatch/claim",
+            {
+                "worker_id": worker_id,
+                "user_id": user_id,
+                "broker_account_id": broker_account_id,
+            },
+        )
+
+    def dispatch_ack(
+        self, *, worker_id: str, intent_id: str, detail: str = ""
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/dispatch/ack",
+            {
+                "worker_id": worker_id,
+                "intent_id": intent_id,
+                "detail": detail,
+            },
+        )
+
+    def dispatch_fail(
+        self, *, worker_id: str, intent_id: str, reason: str = "failed"
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/dispatch/fail",
+            {
+                "worker_id": worker_id,
+                "intent_id": intent_id,
+                "reason": reason,
+            },
+        )
+
+    def dispatch_recover(self) -> dict[str, Any]:
+        return self._request("POST", "/api/v1/mt5-workers/dispatch/recover", {})

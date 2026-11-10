@@ -8,21 +8,32 @@ LIVE multi-account submit remains off.
 
 from __future__ import annotations
 
+from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter
 
+from app.application.services.multi_account_dispatch_dry_run import DispatchTarget
 from app.application.services.multi_account_dispatch_queue import (
     get_durable_dispatch_queue,
 )
+from app.application.services.multi_account_eligibility_service import (
+    AccountReadiness,
+    WorkerReadiness,
+)
 from app.application.services.multi_account_ops_service import owner_ops_snapshot
 from app.domain.exceptions.auth import AuthorizationError
+from app.domain.multi_account.effective_risk import RiskSettingProposal
+from app.domain.multi_account.feature_gates import multi_account_live_submit_allowed
+from app.domain.multi_account.signal_dispatch import CentralSignalIntent
 from app.presentation.dependencies.mt5_workers import WorkerApi, WorkerAuth
 from app.presentation.schemas.mt5_workers import (
     DispatchAckRequest,
     DispatchClaimRequest,
     DispatchFailRequest,
+    DispatchLabEnqueueRequest,
     WorkerHealthRequest,
     WorkerHeartbeatRequest,
     WorkerHostRegisterRequest,
@@ -30,6 +41,7 @@ from app.presentation.schemas.mt5_workers import (
     WorkerRegisterRequest,
     WorkerVerificationReport,
 )
+from core.config.settings import AppEnvironment, get_settings
 
 router = APIRouter(prefix="/mt5-workers", tags=["mt5-workers"])
 
@@ -286,4 +298,98 @@ async def dispatch_recover(
         "expired_leases": expired,
         "metrics": queue.metrics().to_dict(),
         "live_submit_allowed": False,
+    }
+
+
+def _lab_enqueue_allowed() -> bool:
+    settings = get_settings()
+    if multi_account_live_submit_allowed(settings):
+        return False
+    if settings.app_env == AppEnvironment.PRODUCTION:
+        return False
+    if settings.app_env == AppEnvironment.STAGING:
+        return True
+    return bool(getattr(settings, "qf_dispatch_lab_enabled", False))
+
+
+@router.post("/dispatch/lab-enqueue")
+async def dispatch_lab_enqueue(
+    body: DispatchLabEnqueueRequest,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> dict[str, Any]:
+    """Staging/lab enqueue for the assigned worker only.
+
+    Forces delivery-suppressed queue planning with LIVE submit off.
+    Forbidden in production app_env. Never calls OMS / order_send.
+    """
+    if not _lab_enqueue_allowed():
+        return {
+            "ok": False,
+            "error": "lab_enqueue_disabled",
+            "live_submit_allowed": False,
+        }
+    try:
+        worker = api.require_worker(body.worker_id)
+    except AuthorizationError as exc:
+        return {
+            "ok": False,
+            "error": getattr(exc, "code", None) or "worker_unauthorized",
+            "live_submit_allowed": False,
+        }
+
+    side = (body.side or "BUY").strip().upper()
+    if side not in {"BUY", "SELL"}:
+        return {"ok": False, "error": "invalid_side", "live_submit_allowed": False}
+
+    key = (body.idempotency_key or "").strip() or f"lab:{body.worker_id}:{uuid4()}"
+    signal = CentralSignalIntent.create(
+        symbol=(body.symbol or "XAUUSD").strip().upper(),
+        side=side,
+        quality=int(body.quality),
+        entry=Decimal("4000"),
+        stop_loss=Decimal("3990"),
+        take_profit=Decimal("4010"),
+        idempotency_key=key,
+    )
+    target = DispatchTarget(
+        user_id=worker.user_id,
+        broker_account_id=worker.broker_account_id,
+        proposal=RiskSettingProposal(
+            planned_risk_pct=Decimal("10"),
+            aggregate_open_risk_pct=Decimal("30"),
+            max_lot=Decimal("0.01"),
+            daily_loss_pct=Decimal("48"),
+            max_concurrent_positions=1,
+        ),
+        account=AccountReadiness(
+            status="active",
+            ownership_verified=True,
+            user_id=worker.user_id,
+        ),
+        worker=WorkerReadiness(present=True, ready=True),
+    )
+    # Lab overrides dispatch flag for enqueue only; LIVE submit stays false.
+    lab_settings = SimpleNamespace(
+        multi_account_dispatch_enabled=True,
+        multi_account_live_submit_enabled=False,
+    )
+    queue = get_durable_dispatch_queue()
+    plan, jobs = queue.plan_and_enqueue(
+        signal=signal,
+        targets=[target],
+        settings=lab_settings,
+    )
+    return {
+        "ok": True,
+        "live_submit_allowed": False,
+        "delivery_suppressed": True,
+        "dispatch_allowed": plan.dispatch_allowed,
+        "job_count": len(jobs),
+        "jobs": [j.to_public_dict() for j in jobs],
+        "assignment": {
+            "worker_id": str(worker.worker_id),
+            "user_id": str(worker.user_id),
+            "broker_account_id": str(worker.broker_account_id),
+        },
     }
