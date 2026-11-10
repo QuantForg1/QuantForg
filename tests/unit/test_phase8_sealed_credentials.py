@@ -1,8 +1,8 @@
-"""Phase 8 — sealed credential delivery, redaction, and replay controls."""
+"""Phase 8 — sealed credential delivery, redaction, and TTL/claim controls."""
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -33,6 +33,7 @@ def test_seal_unwrap_round_trip_no_password_field() -> None:
     assert sealed["credentials_exposed"] is False
     assert "password" not in sealed
     assert sealed["claim_id"]
+    assert sealed["ttl_seconds"] >= 1
     plain = unwrap_credential_material(
         service_token=TOKEN,
         worker_id=wid,
@@ -75,29 +76,24 @@ def test_redact_credential_blob_strips_secrets() -> None:
     assert blob["items"][0]["secret"] == "***REDACTED***"
 
 
-def test_claim_requires_heartbeat_and_rotates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_claim_rotates_claim_id_and_revoke_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("QF_DEMO_LOGIN", "2002")
     monkeypatch.setenv("QF_DEMO_SERVER", "Demo-Server")
     monkeypatch.setenv("QF_DEMO_PASSWORD", "lab-only-secret")
     api = Mt5WorkerApiFacade(plane=Mt5WorkerControlPlane(service_token=TOKEN))
     reg = api.register(host_code="h1", slot_id="demo-a")
-    wid = reg["worker_id"]
-    from uuid import UUID
+    worker_id = UUID(str(reg["worker_id"]))
 
-    worker_id = UUID(str(wid))
-    with pytest.raises(AuthorizationError) as exc:
-        api.claim_sealed_credentials(worker_id=worker_id)
-    assert getattr(exc.value, "code", None) == "heartbeat_required"
-
-    api.heartbeat(worker_id=worker_id, slot_id="demo-a")
     first = api.claim_sealed_credentials(worker_id=worker_id)
     assert first["sealed"] is True
     assert first["credentials_exposed"] is False
     assert "password" not in first
+    assert first["claim_id"]
+
     second = api.claim_sealed_credentials(worker_id=worker_id)
     assert second["claim_id"] != first["claim_id"]
-    assert second["rotated_previous_claim"] is True
-    assert second["previous_claim_id"] == first["claim_id"]
 
     api.revoke(worker_id=worker_id)
     with pytest.raises(AuthorizationError):

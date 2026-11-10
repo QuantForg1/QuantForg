@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
-from uuid import UUID, uuid4, uuid5
+from uuid import UUID, uuid5
 
 from app.application.services.mt5_worker_control_plane import Mt5WorkerControlPlane
 from app.application.services.mt5_worker_credential_seal import seal_credential_material
