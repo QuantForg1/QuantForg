@@ -335,20 +335,19 @@ def test_module_never_imports_order_send() -> None:
 
 
 def test_live_submit_env_true_still_forced_off() -> None:
-    """Even if LIVE submit flag is mistakenly True, queue refuses it."""
+    """Phase 9: LIVE submit armed → plan_and_enqueue refuses fail-closed."""
     q = DurableDispatchQueue()
     user, account = uuid4(), uuid4()
     settings = SimpleNamespace(
         multi_account_dispatch_enabled=True,
         multi_account_live_submit_enabled=True,
     )
-    plan, jobs = q.plan_and_enqueue(
-        signal=_signal("signal:live-force-off"),
-        targets=[_ready_target(user, account)],
-        settings=settings,
-    )
-    assert plan.live_submit_allowed is False
-    assert jobs[0].payload.get("live_submit_allowed") is False
+    with pytest.raises(RuntimeError, match="live_submit_armed_refused"):
+        q.plan_and_enqueue(
+            signal=_signal("signal:live-force-off"),
+            targets=[_ready_target(user, account)],
+            settings=settings,
+        )
     assert q.live_submit_armed() is False
 
 

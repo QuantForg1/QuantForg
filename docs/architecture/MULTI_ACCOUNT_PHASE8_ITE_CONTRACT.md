@@ -1,7 +1,8 @@
 # Phase 8 — ITE → durable dispatch integration contract
 
-**Status:** Contract only. **Not implemented** in `institutional_ite_runtime`.  
-**Gate:** Staging demo worker registration + claim/ACK proven; Owner keeps LIVE submit flags false.
+**Status:** Superseded for dry-run by Phase 9 (`MULTI_ACCOUNT_PHASE9_ITE_DRY_RUN.md`).  
+Thin dry-run hook is implemented in `institutional_ite_runtime` (non-executing).  
+**Gate for LIVE fan-out:** still Owner approval + flags; demo credentials still required for real MT5 verify.
 
 ## Prerequisites (all required)
 

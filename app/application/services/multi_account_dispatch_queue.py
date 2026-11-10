@@ -160,14 +160,17 @@ class DurableDispatchQueue:
         settings: Any | None = None,
         require_readiness: bool = True,
     ) -> tuple[DispatchPlan, list[DispatchJob]]:
+        # Phase 9: fail closed when LIVE fan-out is armed — do not enqueue.
+        if multi_account_live_submit_allowed(settings):
+            raise RuntimeError("live_submit_armed_refused")
         plan = plan_signal_dispatch(
             signal=signal,
             targets=targets,
             settings=settings,
             require_readiness=require_readiness,
         )
-        # Even if env mistakenly enables live submit, queue refuses it.
-        if multi_account_live_submit_allowed(settings):
+        # Strip live flag even if a caller constructed a plan elsewhere.
+        if plan.live_submit_allowed:
             plan = DispatchPlan(
                 signal_id=plan.signal_id,
                 signal_idempotency_key=plan.signal_idempotency_key,
