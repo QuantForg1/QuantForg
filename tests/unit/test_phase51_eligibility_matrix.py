@@ -58,6 +58,23 @@ def _ok_proposal() -> RiskSettingProposal:
     )
 
 
+def test_case_ownership_unverified_blocked() -> None:
+    user = uuid4()
+    _u, evaluation = evaluate_account_eligibility(
+        actor_user_id=user,
+        intent=_intent(user, uuid4()),
+        proposal=_ok_proposal(),
+        settings=_SETTINGS_OFF,
+        account=AccountReadiness(
+            status="active", ownership_verified=False, user_id=user
+        ),
+        worker=WorkerReadiness(present=True, ready=True),
+        require_readiness=True,
+    )
+    assert evaluation.state is AccountExecutionState.BLOCKED
+    assert evaluation.block_reason == "ownership_unverified"
+
+
 def test_case_a_eligible_with_readiness() -> None:
     user = uuid4()
     account = uuid4()
@@ -90,7 +107,9 @@ def test_case_b_risk_preference_blocked() -> None:
             max_concurrent_positions=1,
         ),
         settings=_SETTINGS_OFF,
-        account=AccountReadiness(status="active", user_id=user),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
         worker=WorkerReadiness(present=True, ready=True),
         require_readiness=True,
     )
@@ -120,7 +139,9 @@ def test_case_d_worker_unavailable_blocked() -> None:
         intent=_intent(user, uuid4()),
         proposal=_ok_proposal(),
         settings=_SETTINGS_OFF,
-        account=AccountReadiness(status="active", user_id=user),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
         worker=WorkerReadiness(present=False, ready=False),
         require_readiness=True,
     )
@@ -131,7 +152,9 @@ def test_case_d_worker_unavailable_blocked() -> None:
         intent=_intent(user, uuid4()),
         proposal=_ok_proposal(),
         settings=_SETTINGS_OFF,
-        account=AccountReadiness(status="active", user_id=user),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
         worker=WorkerReadiness(present=True, ready=True, heartbeat_stale=True),
         require_readiness=True,
     )
@@ -164,7 +187,9 @@ def test_case_f_missing_preferences_fail_closed() -> None:
         intent=_intent(user, uuid4()),
         load_preferences=boom,
         settings=_SETTINGS_OFF,
-        account=AccountReadiness(status="active", user_id=user),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
         worker=WorkerReadiness(present=True, ready=True),
         require_readiness=True,
     )
@@ -176,7 +201,9 @@ def test_case_f_missing_preferences_fail_closed() -> None:
         intent=_intent(user, uuid4()),
         load_preferences=lambda _u: {},
         settings=_SETTINGS_OFF,
-        account=AccountReadiness(status="active", user_id=user),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
         worker=WorkerReadiness(present=True, ready=True),
         require_readiness=True,
     )
@@ -204,7 +231,9 @@ def test_case_h_concurrent_users_no_cross_leak() -> None:
             intent=_intent(user, account),
             proposal=_ok_proposal(),
             settings=_SETTINGS_OFF,
-            account=AccountReadiness(status="active", user_id=user),
+            account=AccountReadiness(
+                status="active", ownership_verified=True, user_id=user
+            ),
             worker=WorkerReadiness(present=True, ready=True),
             require_readiness=True,
         )

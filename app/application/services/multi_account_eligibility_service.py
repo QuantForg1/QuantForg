@@ -242,6 +242,18 @@ def evaluate_account_eligibility(
                 source="account",
                 readiness_scope=readiness_scope,
             )
+        # Full readiness path requires verified ownership evidence.
+        if require_readiness and not account.ownership_verified:
+            return _blocked(
+                intent=intent,
+                reason="ownership_unverified",
+                effective={},
+                dispatch_ok=dispatch_ok,
+                live_ok=live_ok,
+                dry_run=dry_run,
+                source="account",
+                readiness_scope=readiness_scope,
+            )
 
     if worker is not None:
         if not worker.present:

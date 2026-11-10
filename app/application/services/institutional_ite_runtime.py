@@ -4698,6 +4698,25 @@ class InstitutionalIteRuntime:
             refresh_execution_gateway_reads,
         )
 
+        # Phase 9 (product-owner authorized): multi-account dry-run plan only.
+        # Never OMS / order_send / LIVE fan-out. Singleton Weltrade path continues.
+        try:
+            from app.application.services.ite_multi_account_dry_run import (
+                attach_ite_multi_account_dry_run,
+            )
+
+            market_context_diagnostics = attach_ite_multi_account_dry_run(
+                decision=decision,
+                trace_id=str(tid),
+                diagnostics=(
+                    dict(market_context_diagnostics)
+                    if isinstance(market_context_diagnostics, dict)
+                    else {}
+                ),
+            )
+        except Exception:
+            logger.exception("ite_multi_account_dry_run_hook_failed")
+
         refresh_execution_gateway_reads(self.mt5_adapter)
         bridge_result, market_context_diagnostics = self._submit_same_cycle_batch(
             decision=decision,

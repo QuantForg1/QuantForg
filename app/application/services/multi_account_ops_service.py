@@ -164,6 +164,21 @@ def customer_dispatch_status(
         blocked_reasons.append("live_submit_disabled")
     if not jobs and not dispatch_on:
         blocked_reasons.append("awaiting_owner_enablement")
+    # Truthful readiness ladder — never invent Connected/Verified/Online.
+    has_jobs = bool(jobs)
+    readiness = {
+        "account_registered": has_jobs,
+        "worker_assigned": False,
+        "worker_online": False,
+        "terminal_running": False,
+        "broker_authenticated": False,
+        "demo_verified": False,
+        "execution_ready": False,
+        "evidence_note": (
+            "Flags stay false until ownership/worker/demo evidence exists "
+            "for this user. Job presence alone is not verification."
+        ),
+    }
     return {
         "user_id": str(user_id),
         "job_count": len(jobs),
@@ -177,9 +192,11 @@ def customer_dispatch_status(
             "blocked": bool(blocked_reasons),
             "blocked_reasons": blocked_reasons,
         },
+        "readiness": readiness,
         "worker_availability": {
             # Customer surface never invents online workers.
             "reported": False,
+            "online": False,
             "note": (
                 "Worker online status is owner/ops-only until a verified "
                 "assignment exists for this account."
