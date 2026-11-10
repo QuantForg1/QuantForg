@@ -173,9 +173,11 @@ class PublicMarketFeedService:
             timeframe=tf.value,
             status="live",
             source="mt5_gateway",
-            as_of=last.open_time.astimezone(UTC).replace(microsecond=0).isoformat()
-            if last.open_time.tzinfo
-            else last.open_time.replace(tzinfo=UTC).isoformat(),
+            as_of=(
+                last.open_time.astimezone(UTC).replace(microsecond=0).isoformat()
+                if last.open_time.tzinfo
+                else last.open_time.replace(tzinfo=UTC).isoformat()
+            ),
             market_open=True,
             candles=candles,
             last_price=last.close,
@@ -198,9 +200,11 @@ class PublicMarketFeedService:
             symbol=symbol,
             status="live",
             source="mt5_gateway",
-            as_of=dto.timestamp.astimezone(UTC).replace(microsecond=0).isoformat()
-            if dto.timestamp.tzinfo
-            else dto.timestamp.replace(tzinfo=UTC).isoformat(),
+            as_of=(
+                dto.timestamp.astimezone(UTC).replace(microsecond=0).isoformat()
+                if dto.timestamp.tzinfo
+                else dto.timestamp.replace(tzinfo=UTC).isoformat()
+            ),
             market_open=True,
             tick=dto,
             note="Platform MT5 gateway feed.",
