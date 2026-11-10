@@ -1,0 +1,490 @@
+/* Home-scoped only — does not alter global marketing chrome. */
+
+.page {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: clip;
+  color: var(--fg);
+}
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+}
+
+.section {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 72rem;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .section {
+    padding-inline: 1.5rem;
+  }
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding-block: 3.5rem 2.5rem;
+}
+
+@media (min-width: 1024px) {
+  .hero {
+    padding-block: 5rem 3rem;
+  }
+}
+
+.heroGrid {
+  display: grid;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+@media (min-width: 1024px) {
+  .heroGrid {
+    grid-template-columns: 1.05fr 0.95fr;
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  backdrop-filter: blur(10px);
+}
+
+.headline {
+  margin-top: 1.25rem;
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  font-size: clamp(2.25rem, 5vw, 3.75rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.headlineAccent {
+  color: var(--accent);
+}
+
+.lead {
+  margin-top: 1.25rem;
+  max-width: 36rem;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--fg-muted);
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.trustRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--fg-muted);
+}
+
+@media (min-width: 640px) {
+  .trustRow {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+  }
+}
+
+.trustItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.featureGrid {
+  display: grid;
+  gap: 0.75rem;
+  padding-block: 1.5rem 2rem;
+}
+
+@media (min-width: 640px) {
+  .featureGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .featureGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.featureCard {
+  padding: 1.1rem;
+}
+
+.featureIcon {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.laptop {
+  position: relative;
+  margin-inline: auto;
+  width: 100%;
+  max-width: 34rem;
+  perspective: 1400px;
+}
+
+.laptopGlow {
+  position: absolute;
+  inset: 2.5rem -1.5rem -2rem;
+  border-radius: 2rem;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 224, 0.18),
+    transparent 65%
+  );
+  pointer-events: none;
+}
+
+.laptopBody {
+  position: relative;
+  transform: rotateY(-8deg) rotateX(4deg);
+  transform-style: preserve-3d;
+}
+
+@media (max-width: 1023px) {
+  .laptopBody {
+    transform: none;
+  }
+}
+
+.laptopBezel {
+  border-radius: 1.35rem 1.35rem 0.85rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--brand-electric) 35%, var(--border));
+  background: linear-gradient(180deg, var(--surface), var(--brand-navy));
+  padding: 0.7rem;
+  box-shadow: 0 30px 80px rgba(2, 12, 28, 0.55);
+}
+
+.laptopScreen {
+  overflow: hidden;
+  border-radius: 0.95rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+}
+
+.laptopChrome {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem 0.35rem;
+}
+
+.dot {
+  height: 0.55rem;
+  width: 0.55rem;
+  border-radius: 999px;
+}
+
+.dotRed {
+  background: #ff5f57;
+}
+
+.dotAmber {
+  background: #febc2e;
+}
+
+.dotGreen {
+  background: #28c840;
+}
+
+.laptopBase {
+  margin: 0 auto;
+  height: 0.55rem;
+  width: 72%;
+  border-radius: 0 0 0.75rem 0.75rem;
+  background: linear-gradient(180deg, var(--surface-3), var(--brand-navy));
+  box-shadow: 0 8px 18px rgba(2, 12, 28, 0.35);
+}
+
+.terminalGrid {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  min-height: 16rem;
+}
+
+.terminalNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  padding: 0.5rem;
+  font-size: 0.5625rem;
+  color: var(--fg-subtle);
+}
+
+.terminalNavActive {
+  border-radius: 0.4rem;
+  background: var(--accent-soft);
+  padding: 0.3rem 0.4rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.terminalNavItem {
+  padding: 0.3rem 0.4rem;
+}
+
+.terminalMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.chartFrame {
+  display: flex;
+  height: 7rem;
+  align-items: flex-end;
+  gap: 0.2rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+  padding: 0.5rem;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+@media (min-width: 640px) {
+  .metricGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.steps {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.stepNumber {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent-fg);
+}
+
+.robotRow {
+  display: grid;
+  gap: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+  .robotRow {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+}
+
+.robotCard {
+  height: 100%;
+  padding: 0.75rem;
+}
+
+.strategyGrid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 768px) {
+  .strategyGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .strategyGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.strategyPill {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+.spark {
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.25rem;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.riskValue {
+  margin-top: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #f0c35a;
+}
+
+.diffGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .diffGrid {
+    grid-template-columns: 0.9fr 1.2fr 0.95fr;
+    align-items: stretch;
+  }
+}
+
+.brokerChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.brokerChip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.ctaBand {
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .ctaBand {
+    padding: 2.75rem 2.5rem;
+  }
+}
+
+.ctaGrid {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .ctaGrid {
+    grid-template-columns: 1.2fr 0.8fr;
+  }
+}
+
+.ctaLaptop {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .ctaLaptop {
+    display: block;
+    transform: rotate(4deg) translateY(0.5rem);
+  }
+}
+
+.formPreview {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+  padding: 0.75rem;
+}
+
+.formField {
+  height: 2.25rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 2.25rem;
+  color: var(--fg-subtle);
+}
+
+.formCta {
+  display: inline-flex;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--cta) 92%, transparent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cta-fg);
+}
+
+.formCta:hover {
+  filter: brightness(1.05);
+}
+
+.formCta:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
