@@ -22,5 +22,6 @@ assert.match(src, /personal broker login is not required/);
 assert.match(src, /case "live":\s*return \{ label: "LIVE"/);
 assert.match(src, /case "closed":\s*return \{ label: "MARKET CLOSED"/);
 assert.match(src, /case "delayed":\s*return \{ label: "DELAYED"/);
+assert.match(src, /case "loading":\s*return \{ label: "LOADING"/);
 
 console.log("market-status: ok");
