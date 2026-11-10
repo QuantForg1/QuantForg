@@ -92,6 +92,7 @@ export function OverviewReferenceDesk({
   metricsUpdatedAt,
   brokerConnected,
   marketLive,
+  marketFeedStatus,
   marketBias,
   marketBiasDetail,
   currentPrice,
@@ -118,6 +119,8 @@ export function OverviewReferenceDesk({
   metricsUpdatedAt?: string;
   brokerConnected: boolean;
   marketLive: boolean;
+  /** Platform feed status — live | delayed | closed | unavailable */
+  marketFeedStatus?: string;
   marketBias: string;
   marketBiasDetail: string;
   currentPrice: string;
@@ -204,9 +207,13 @@ export function OverviewReferenceDesk({
                 <h2 className="text-base font-semibold tracking-tight sm:text-lg">
                   {displayTradingSymbolCode(TRADING_SYMBOL)}
                 </h2>
-                <Badge tone={marketLive ? "success" : "neutral"}>
-                  {marketLive ? "LIVE" : "OFFLINE"}
-                </Badge>
+                {(() => {
+                  const status = (marketFeedStatus || (marketLive ? "live" : "unavailable")).toLowerCase();
+                  if (status === "live") return <Badge tone="success">LIVE</Badge>;
+                  if (status === "delayed") return <Badge tone="warning">DELAYED</Badge>;
+                  if (status === "closed") return <Badge tone="warning">MARKET CLOSED</Badge>;
+                  return <Badge tone="neutral">OFFLINE</Badge>;
+                })()}
               </div>
               <p className="mt-0.5 text-xs text-[var(--fg-muted)] sm:text-sm">
                 {tradingInstrumentDescription(TRADING_SYMBOL)}

@@ -24,8 +24,11 @@ import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
-import { candleLoadErrorMessage } from "@/lib/trading/market-status";
-import { useTradingSession } from "@/providers/trading-session-provider";
+import {
+  candleLoadErrorMessage,
+  publicFeedBadge,
+} from "@/lib/trading/market-status";
+import { useTradingSessionOptional } from "@/providers/trading-session-provider";
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const;
 
@@ -104,7 +107,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   /** Parent owns the symbol title (Overview / Signals headers). */
   hideSymbolLabel?: boolean;
 }) {
-  const session = useTradingSession();
+  const session = useTradingSessionOptional();
   // Broker ownership remains available to callers; candles use the platform feed.
   void connected;
   const hostRef = useRef<HTMLDivElement>(null);
@@ -117,16 +120,38 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   const candlesCache = useRef<CandlePoint[]>([]);
 
   const candlesQ = useQuery({
-    queryKey: ["research-candles", symbol, timeframe],
-    queryFn: () => mt5Api.researchCandles(symbol, timeframe, 400),
+    queryKey: ["public-market-candles", symbol, timeframe],
+    queryFn: async () => {
+      try {
+        return await mt5Api.publicCandles(symbol, timeframe, 400);
+      } catch {
+        // Authenticated fallback to research path when public route is unavailable.
+        const rows = await mt5Api.researchCandles(symbol, timeframe, 400);
+        return {
+          ok: true,
+          status: "live",
+          source: "mt5_research",
+          as_of: null,
+          candles: rows,
+          note: "Authenticated research feed.",
+        };
+      }
+    },
     retry: 1,
     enabled: marketFeedEnabled && Boolean(symbol),
     staleTime: 60_000,
     refetchInterval: marketFeedEnabled ? 60_000 : false,
   });
 
-  const candles = useMemo(() => parseCandles(candlesQ.data), [candlesQ.data]);
-  const feedLive = candlesQ.isSuccess && candles.length > 0;
+  const feedMeta = asRecord(candlesQ.data);
+  const candles = useMemo(
+    () => parseCandles(feedMeta.candles ?? candlesQ.data),
+    [candlesQ.data, feedMeta.candles],
+  );
+  const feedStatus = str(feedMeta.status || (candles.length ? "live" : "unavailable"));
+  const feedBadge = publicFeedBadge(feedStatus);
+  const feedLive = candlesQ.isSuccess && candles.length > 0 && feedStatus === "live";
+  const asOf = str(feedMeta.as_of || "");
 
   useEffect(() => {
     candlesCache.current = candles;
@@ -273,11 +298,18 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             </p>
             <span
               className="qf-status-dot"
-              data-state={feedLive ? "ok" : "warn"}
-              aria-label={feedLive ? "Live" : "Offline"}
+              data-state={feedBadge.tone === "ok" ? "ok" : feedBadge.tone === "danger" ? "danger" : "warn"}
+              aria-label={feedBadge.label}
             />
+            <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--fg-muted)]">
+              {feedBadge.label}
+            </span>
           </>
-        ) : null}
+        ) : (
+          <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--fg-muted)]">
+            {feedBadge.label}
+          </span>
+        )}
         {ohlc ? (
           <p
             className="hidden min-w-0 truncate tabular text-[10px] text-[var(--fg-muted)] lg:inline"
@@ -285,6 +317,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           >
             O {formatNumber(ohlc.open, 2)} · H {formatNumber(ohlc.high, 2)} · L{" "}
             {formatNumber(ohlc.low, 2)} · C {formatNumber(ohlc.close, 2)}
+            {asOf ? ` · ${asOf}` : ""}
           </p>
         ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
@@ -353,32 +386,48 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           <div className="p-4">
             <DeskSkeleton rows={6} />
           </div>
+        ) : candles.length > 0 ? (
+          <>
+            {(feedStatus === "closed" || feedStatus === "delayed") && (
+              <div className="pointer-events-none absolute left-3 top-3 z-10 rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-2 py-1 text-[10px] font-medium text-[var(--fg-muted)] backdrop-blur">
+                {feedStatus === "closed"
+                  ? "MARKET CLOSED — showing last available candles"
+                  : "DELAYED — licensed reference data (not broker execution)"}
+                {asOf ? ` · ${asOf}` : ""}
+              </div>
+            )}
+            <div
+              ref={hostRef}
+              className="absolute inset-0 min-h-[280px]"
+              role="img"
+              aria-label={`${displayTradingSymbol(symbol)} price chart`}
+            />
+          </>
         ) : candlesQ.isError ? (
           <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
             <DeskError
               message={candleLoadErrorMessage(
                 candlesQ.error,
                 symbol,
-                session.gatewayOnline,
+                session?.gatewayOnline ?? null,
               )}
               onRetry={() => candlesQ.refetch()}
             />
             <p className="max-w-sm text-xs text-[var(--fg-muted)]">
-              Market chart uses the platform feed and does not require your personal MT5
+              Live Market uses the platform feed and does not require your personal MT5
               account.
             </p>
           </div>
-        ) : candles.length === 0 ? (
-          <div className="flex h-full min-h-[280px] items-center justify-center p-6 text-sm text-[var(--fg-muted)]">
-            No candle history returned for {displayTradingSymbol(symbol)} ({timeframe}).
-          </div>
         ) : (
-          <div
-            ref={hostRef}
-            className="absolute inset-0 min-h-[280px]"
-            role="img"
-            aria-label={`${displayTradingSymbol(symbol)} price chart`}
-          />
+          <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-sm text-[var(--fg-muted)]">
+              No genuine candle history available for {displayTradingSymbol(symbol)} (
+              {timeframe}).
+            </p>
+            <Button size="sm" variant="secondary" onClick={() => candlesQ.refetch()}>
+              Retry
+            </Button>
+          </div>
         )}
       </div>
     </section>

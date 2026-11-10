@@ -53,7 +53,7 @@ export default function BillingInvoiceDetailPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip">
-      <PricingHeader />
+      <PricingHeader active="billing" />
       <main
         id="main-content"
         className="mx-auto w-full max-w-2xl px-4 pb-20 pt-8 sm:px-6"
@@ -127,7 +127,9 @@ export default function BillingInvoiceDetailPage() {
                 </dd>
               </div>
             </dl>
-            {str(invoice.status) === "pending_payment" && str(invoice.invoice_url, "") ? (
+            {["pending_payment", "confirming", "partially_paid", "renewal_due", "past_due"].includes(
+              str(invoice.status),
+            ) && str(invoice.invoice_url, "") ? (
               <a href={str(invoice.invoice_url)} className={`${pricingBtnPrimary} w-full`}>
                 Continue with {PAYMENT_METHOD_LABEL}
               </a>

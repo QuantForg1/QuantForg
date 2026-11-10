@@ -179,7 +179,13 @@ export default function DashboardPage() {
 
   const tickQ = useQuery({
     queryKey: ["research-tick", TRADING_SYMBOL],
-    queryFn: () => mt5Api.researchTick(TRADING_SYMBOL),
+    queryFn: async () => {
+      try {
+        return await mt5Api.publicTick(TRADING_SYMBOL);
+      } catch {
+        return mt5Api.researchTick(TRADING_SYMBOL);
+      }
+    },
     retry: 1,
     staleTime: 5_000,
     refetchInterval: 10_000,
@@ -399,7 +405,8 @@ export default function DashboardPage() {
         : todayPnlRaw < 0
           ? ("danger" as const)
           : ("neutral" as const);
-  const tick = asRecord(tickQ.data);
+  const tickEnvelope = asRecord(tickQ.data);
+  const tick = asRecord(tickEnvelope.tick ?? tickQ.data);
   const tickBid = num(tick.bid);
   const tickAsk = num(tick.ask);
   const tickMid =
@@ -410,7 +417,11 @@ export default function DashboardPage() {
         : Number.isFinite(tickAsk)
           ? tickAsk
           : NaN;
-  const marketLive = tickQ.isSuccess && Number.isFinite(tickMid);
+  const publicTickStatus = str(tickEnvelope.status || "").toLowerCase();
+  const marketLive =
+    tickQ.isSuccess &&
+    Number.isFinite(tickMid) &&
+    (publicTickStatus === "" || publicTickStatus === "live");
   const liveMarketPrice = Number.isFinite(tickMid)
     ? priceDisplay(tickMid, XAUUSD_SPECS.digits)
     : topSignal
@@ -509,6 +520,7 @@ export default function DashboardPage() {
         metricsUpdatedAt={metricsUpdatedAt}
         brokerConnected={showMetrics}
         marketLive={marketLive}
+        marketFeedStatus={publicTickStatus || (marketLive ? "live" : "unavailable")}
         marketBias={
           biasDir === "BUY"
             ? "Bullish"

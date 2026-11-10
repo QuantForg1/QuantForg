@@ -57,6 +57,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("broker_accounts", "app.presentation.routers.broker_accounts"),
     ("broker_connections", "app.presentation.routers.broker_connections"),
     ("mt5", "app.presentation.routers.mt5"),
+    ("public_market", "app.presentation.routers.public_market"),
     ("mt5_workers", "app.presentation.routers.mt5_workers"),
     ("trading_session", "app.presentation.routers.trading_session"),
     ("execution", "app.presentation.routers.execution"),

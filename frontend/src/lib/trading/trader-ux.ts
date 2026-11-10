@@ -34,13 +34,13 @@ const TRADER_ERROR_COPY: Record<string, string> = {
   INVALID_CREDENTIALS: "Broker login or password was not accepted.",
   CONNECTION_FAILED: "Could not verify the broker connection.",
   GATEWAY_UNAVAILABLE:
-    "Broker connection offline. Open Broker Accounts to reconnect. Live gold market data requires a reachable connection.",
+    "Broker connection offline. Open Broker Accounts to reconnect. Public market charts still use the platform feed when available.",
   gateway_unavailable:
-    "Broker connection offline. Open Broker Accounts to reconnect. Live gold market data requires a reachable connection.",
+    "Broker connection offline. Open Broker Accounts to reconnect. Public market charts still use the platform feed when available.",
   CLOUDFLARE_ORIGIN_UNREACHABLE:
-    "Broker connection path is unreachable. Open Broker Accounts to reconnect. This is not a sign-in failure.",
+    "Broker gateway path is unreachable. Open Broker Accounts to reconnect for account trades. Public market charts are separate from this path.",
   cloudflare_origin_unreachable:
-    "Broker connection path is unreachable. Open Broker Accounts to reconnect. This is not a sign-in failure.",
+    "Broker gateway path is unreachable. Open Broker Accounts to reconnect for account trades. Public market charts are separate from this path.",
   ACCOUNT_SESSION_MISMATCH: "Your trading session needs to be reconnected.",
   account_session_mismatch: "Your trading session needs to be reconnected.",
   CATALOGUE_UNAVAILABLE: "Connect or verify your broker and refresh market data.",
@@ -1293,7 +1293,7 @@ export function researchSignalsEmptyCopy(input: {
   ) {
     const detail =
       reasons[0] ||
-      "Broker gold catalogue unavailable. Live XAUUSD analysis needs a connected broker session.";
+      "Broker gold catalogue unavailable. Account-linked analysis needs a connected broker session; public charts use the platform feed.";
     return {
       title: "GOLD ANALYSIS DEGRADED",
       description: detail,
