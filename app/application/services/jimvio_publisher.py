@@ -337,6 +337,11 @@ class JimvioPublisher:
         return self._last_success
 
     @property
+    def worker_running(self) -> bool:
+        task = self._task
+        return self._running and task is not None and not task.done()
+
+    @property
     def pending(self) -> int:
         with self._lock:
             return len(self._queue)
@@ -610,6 +615,48 @@ _publisher_lock = Lock()
 
 def get_jimvio_publisher() -> JimvioPublisher | None:
     return _publisher
+
+
+def jimvio_operator_status(
+    settings: Any | None = None,
+    publisher: JimvioPublisher | None = None,
+) -> dict[str, Any]:
+    """Redacted operator view. Never includes the secret or a credential.
+
+    Jimvio receives signed Gold-signal notices. It cannot submit orders,
+    change risk limits, or receive the broker token.
+    """
+    from urllib.parse import urlparse
+
+    enabled_flag = bool(getattr(settings, "jimvio_enabled", False))
+    secret = _settings_webhook_secret(settings) if settings is not None else None
+    raw_url = str(
+        getattr(settings, "jimvio_webhook_url", None) or DEFAULT_JIMVIO_WEBHOOK_URL
+    ).strip()
+    parsed = urlparse(raw_url)
+    active = bool(publisher.enabled) if publisher is not None else False
+    return {
+        "name": "jimvio",
+        "role": "outbound_signal_webhook",
+        "enabled_flag": enabled_flag,
+        "publisher_active": active,
+        "secret_configured": bool(_secret_text(secret)),
+        "webhook_scheme": parsed.scheme,
+        "webhook_host": parsed.hostname or "",
+        "signature": "HMAC-SHA256",
+        "signature_header": SIGNATURE_HEADER,
+        "can_execute_orders": False,
+        "can_change_risk_or_strategy": False,
+        "receives_broker_credentials": False,
+        "user_channel": "gold_signals_only",
+        "pending": publisher.pending if publisher is not None else 0,
+        "last_delivery_ok": (
+            publisher.last_success if publisher is not None else False
+        ),
+        "worker_running": (
+            publisher.worker_running if publisher is not None else False
+        ),
+    }
 
 
 def reset_jimvio_publisher_for_tests(

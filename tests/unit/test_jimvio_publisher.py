@@ -777,6 +777,45 @@ class TestJimvioMatchesTelegramPublicFilter:
         opened = [row for row in bodies if row["event_id"] == "open:575929789"]
         assert len(opened) == 1
 
+
+def test_operator_status_hides_secret_and_cannot_trade() -> None:
+    from types import SimpleNamespace
+
+    from app.application.services.jimvio_publisher import jimvio_operator_status
+
+    settings = SimpleNamespace(
+        jimvio_enabled=True,
+        jimvio_webhook_url="https://www.jimvio.com/api/webhooks/quantforg?token=hidden",
+        quantforg_webhook_secret=SecretStr(SECRET),
+    )
+    publisher = JimvioPublisher(enabled=True, secret=SECRET)
+    status = jimvio_operator_status(settings, publisher)
+    blob = json.dumps(status)
+    assert SECRET not in blob
+    assert "hidden" not in blob
+    assert status["webhook_host"] == "www.jimvio.com"
+    assert status["webhook_scheme"] == "https"
+    assert status["secret_configured"] is True
+    assert status["publisher_active"] is True
+    assert status["can_execute_orders"] is False
+    assert status["can_change_risk_or_strategy"] is False
+    assert status["receives_broker_credentials"] is False
+    assert status["user_channel"] == "gold_signals_only"
+    assert status["pending"] == 0
+    assert status["last_delivery_ok"] is False
+    assert status["worker_running"] is False
+
+
+def test_operator_status_disabled_without_publisher() -> None:
+    from app.application.services.jimvio_publisher import jimvio_operator_status
+
+    status = jimvio_operator_status(None, None)
+    assert status["enabled_flag"] is False
+    assert status["publisher_active"] is False
+    assert status["secret_configured"] is False
+    assert status["can_execute_orders"] is False
+    assert status["pending"] == 0
+
     @pytest.mark.asyncio
     async def test_jimvio_outage_does_not_block_telegram_or_trading(self) -> None:
         from tests.unit.test_telegram_dispatcher import (
