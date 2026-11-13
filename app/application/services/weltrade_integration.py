@@ -351,7 +351,9 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_reachable and mt5_attached
-                else "degraded" if gateway_reachable else "offline"
+                else "degraded"
+                if gateway_reachable
+                else "offline"
             ),
         }
 
@@ -482,7 +484,9 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_online and mt5_connected
-                else "degraded" if gateway_online else "offline"
+                else "degraded"
+                if gateway_online
+                else "offline"
             ),
         }
 
@@ -1075,27 +1079,32 @@ class WeltradeIntegrationService:
 
     @staticmethod
     def _environment_name(mode: str, server: str, requested: str) -> str:
+        """Prefer MT5 account metadata; never invent LIVE from a missing DEMO token."""
         label = str(mode or "").strip().lower()
-        if label == "real":
+        if label in {"real", "live"}:
             return "live"
-        if label == "demo":
+        if label in {"demo", "contest"}:
             return "demo"
         asked = str(requested or "").strip().lower()
         if asked in {"live", "demo"}:
             return asked
-        if "real" in str(server or "").lower():
+        low = str(server or "").lower()
+        if any(tok in low for tok in ("demo", "trial")):
+            return "demo"
+        if any(tok in low for tok in ("real", "live")):
             return "live"
-        return "demo"
+        # Ambiguous server without trade_mode — stay with explicit request only.
+        return asked if asked in {"live", "demo"} else "demo"
 
     @staticmethod
     def _reject_account_mode(mode: str, account_type: str) -> None:
         label = str(mode or "").strip().lower()
-        if label == "real" and account_type == "demo":
+        if label in {"real", "live"} and account_type == "demo":
             raise RuntimeError(
                 "ACCOUNT_MODE_MISMATCH: The terminal account is live. "
                 "Choose Live, not Demo."
             )
-        if label == "demo" and account_type == "live":
+        if label in {"demo", "contest"} and account_type == "live":
             raise RuntimeError(
                 "ACCOUNT_MODE_MISMATCH: The terminal account is demo. "
                 "Choose Demo, not Live."
@@ -1193,22 +1202,43 @@ class WeltradeIntegrationService:
         login: int,
         password: str,
         server: str,
-        account_type: str = "demo",
+        account_type: str = "live",
+        broker_slug: str = "",
         prefer_attach: bool = True,
         path: str = "",
         confirm_leave_exposure: bool = False,
     ) -> dict[str, Any]:
-        account_type = (account_type or "demo").strip().lower()
+        account_type = (account_type or "live").strip().lower()
         if account_type not in {"demo", "live"}:
             raise ValueError("account_type must be demo or live")
         if login <= 0:
             raise ValueError("login must be a positive integer")
+        requested_broker = (broker_slug or "").strip().lower().replace("_", "-")
         server_name = (server or "").strip()
         if not server_name or server_name.lower() in {"auto", "auto detect"}:
+            # Auto server is Weltrade-only legacy behavior — never invent for others.
+            if requested_broker and requested_broker != "weltrade":
+                raise ValueError(
+                    "Exact MT5 server is required for this broker. "
+                    "Copy it from your broker portal or terminal — do not guess."
+                )
             server_name = WELTRADE_SERVERS[account_type][0]
+            requested_broker = requested_broker or "weltrade"
+
+        from app.domain.broker_connectivity.mt5_ecosystem import match_broker_for_server
+
+        matched = match_broker_for_server(server_name)
+        if requested_broker:
+            if matched is None or matched.slug != requested_broker:
+                raise ValueError(
+                    f"Server '{server_name}' does not belong to broker "
+                    f"'{requested_broker}'. Never borrow another broker's server."
+                )
+        elif matched is not None:
+            requested_broker = matched.slug
 
         # Idempotent: concurrent Connect clicks share one in-flight attempt.
-        key = f"{int(login)}:{server_name}:{account_type}"
+        key = f"{int(login)}:{server_name}:{account_type}:{requested_broker}"
         task: asyncio.Task[Any]
         async with self._gate():
             if (
@@ -1231,12 +1261,13 @@ class WeltradeIntegrationService:
                         password=password,
                         server_name=server_name,
                         account_type=account_type,
+                        broker_slug=requested_broker or "weltrade",
                         prefer_attach=prefer_attach,
                         path=path,
                         correlation_id=key,
                         confirm_leave_exposure=confirm_leave_exposure,
                     ),
-                    name=f"weltrade-connect-{login}",
+                    name=f"mt5-connect-{login}",
                 )
                 self._connect_inflight = task
                 self._connect_inflight_key = key
@@ -1257,6 +1288,7 @@ class WeltradeIntegrationService:
         password: str,
         server_name: str,
         account_type: str,
+        broker_slug: str,
         prefer_attach: bool,
         path: str,
         correlation_id: str,
@@ -1269,6 +1301,7 @@ class WeltradeIntegrationService:
                 password=password,
                 server_name=server_name,
                 account_type=account_type,
+                broker_slug=broker_slug,
                 prefer_attach=prefer_attach,
                 path=path,
                 correlation_id=correlation_id,
@@ -1283,6 +1316,7 @@ class WeltradeIntegrationService:
         password: str,
         server_name: str,
         account_type: str,
+        broker_slug: str = "weltrade",
         prefer_attach: bool,
         path: str,
         correlation_id: str,
@@ -1372,8 +1406,7 @@ class WeltradeIntegrationService:
                         "step": "reuse_session",
                         "ok": True,
                         "detail": (
-                            "Reused attached MT5 gateway session "
-                            "(skipped broker login)"
+                            "Reused attached MT5 gateway session (skipped broker login)"
                         ),
                         "session_ref": session_ref,
                     }
@@ -1598,6 +1631,19 @@ class WeltradeIntegrationService:
             del request
 
         self._reject_account_mode(verified_mode, account_type)
+        resolved_env = self._environment_name(verified_mode, server_name, account_type)
+        from app.domain.broker_connectivity.mt5_ecosystem import match_broker_for_server
+
+        matched_after = match_broker_for_server(server_name)
+        if (
+            broker_slug
+            and matched_after is not None
+            and matched_after.slug != broker_slug
+        ):
+            raise RuntimeError(
+                "SERVER_BROKER_MISMATCH: Authenticated server does not belong "
+                f"to broker '{broker_slug}'."
+            )
         bound = await self.bind_user_session(
             user_id=user_id,
             login=login,
@@ -1622,12 +1668,42 @@ class WeltradeIntegrationService:
             user_id=user_id,
             login=int(login),
             server=server_name,
-            account_type=account_type,
+            account_type=resolved_env,
             currency=verified_currency,
             account_mode=verified_mode,
             trade_allowed=verified_trade_allowed,
             password=password if authenticated_with_password else "",
         )
+        # Persist honest catalogue evidence — never fabricates success without auth.
+        try:
+            from app.domain.broker_connectivity.broker_verification_evidence import (
+                record_verification_success,
+            )
+
+            balance_f = None
+            equity_f = None
+            with contextlib.suppress(Exception):
+                balance_f = float(verified_equity) if verified_equity else None
+                equity_f = balance_f
+            record_verification_success(
+                broker_slug=broker_slug or "weltrade",
+                server=server_name,
+                environment=resolved_env,  # type: ignore[arg-type]
+                login=int(login),
+                trade_allowed=bool(verified_trade_allowed)
+                if verified_trade_allowed is not None
+                else True,
+                market_data_ok=True,
+                balance=balance_f,
+                equity=equity_f,
+                currency=verified_currency,
+                source="customer_mt5_gateway_connect",
+            )
+        except Exception as exc:
+            logger.info(
+                "broker_verification_evidence_skip",
+                error_type=type(exc).__name__,
+            )
         from app.application.services.account_execution_gate import (
             finish_account_switch,
         )
@@ -1640,6 +1716,8 @@ class WeltradeIntegrationService:
             "broker_connected",
             login=login,
             server=server_name,
+            broker_slug=broker_slug or "weltrade",
+            account_environment=resolved_env,
             mt5_connected=sync["connection"]["mt5_connected"],
             correlation_id=correlation_id,
             state="CONNECTED",
@@ -1647,9 +1725,10 @@ class WeltradeIntegrationService:
         )
         return {
             "ok": True,
-            "broker": WELTRADE_BROKER,
+            "broker": broker_slug or WELTRADE_BROKER,
+            "broker_slug": broker_slug or "weltrade",
             "server": server_name,
-            "account_type": account_type,
+            "account_type": resolved_env,
             "steps": steps,
             "dashboard": sync,
             "account": sync.get("account"),
@@ -1659,9 +1738,13 @@ class WeltradeIntegrationService:
             },
             "status": sync.get("status"),
             "state": "CONNECTED",
+            "trading_eligibility": "unchanged",
+            "live_submit_enabled": False,
+            "orders_submitted": False,
             "verified": {
                 "currency": verified_currency,
                 "account_mode": verified_mode,
+                "environment": resolved_env,
                 "equity": verified_equity,
                 "trade_allowed": verified_trade_allowed,
             },

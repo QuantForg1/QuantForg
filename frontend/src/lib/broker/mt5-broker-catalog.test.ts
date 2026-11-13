@@ -16,7 +16,9 @@ assert.ok(MT5_BROKER_OPTIONS.length >= 7);
 assert.equal(brokerBySlug("weltrade")?.connectable, true);
 assert.equal(brokerBySlug("weltrade")?.connectionStatus, "production_verified");
 assert.equal(brokerBySlug("exness")?.connectable, false);
+assert.equal(brokerBySlug("exness")?.customerSelectable, true);
 assert.equal(brokerBySlug("hfm")?.servers.live.length, 0);
+assert.ok(MT5_BROKER_OPTIONS.every((b) => b.customerSelectable));
 assert.equal(matchBrokerByServer("Weltrade-Real")?.slug, "weltrade");
 
 const weltradeLive = serversForBroker(brokerBySlug("weltrade"), "live");

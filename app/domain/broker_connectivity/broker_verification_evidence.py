@@ -131,11 +131,15 @@ def record_verification_success(
 
     env = environment.strip().lower()
     if env not in {"demo", "live"}:
-        env = (
-            "demo"
-            if any(tok in server_name.lower() for tok in ("demo", "trial"))
-            else "live"
-        )
+        low = server_name.lower()
+        if any(tok in low for tok in ("demo", "trial")):
+            env = "demo"
+        elif any(tok in low for tok in ("real", "live")):
+            env = "live"
+        else:
+            raise ValueError(
+                "environment must be demo or live — will not invent from server name"
+            )
 
     store = load_evidence(path)
     brokers = dict(store.get("brokers") or {})

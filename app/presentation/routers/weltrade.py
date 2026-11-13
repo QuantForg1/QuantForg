@@ -54,6 +54,7 @@ async def weltrade_connect(
             password=body.password,
             server=body.server,
             account_type=body.account_type,
+            broker_slug=body.broker_slug,
             prefer_attach=body.prefer_attach,
             path=body.path,
             confirm_leave_exposure=body.confirm_leave_exposure,

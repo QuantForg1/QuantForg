@@ -1,5 +1,5 @@
 /**
- * Broker Accounts redesign contracts — selector parity, honest catalogue, Weltrade path.
+ * Broker Accounts LIVE-first redesign contracts.
  */
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import {
   MT5_BROKER_OPTIONS,
   brokerBySlug,
+  connectionLifecycleLabel,
+  mapRegistryBrokers,
   serverRowsForBroker,
 } from "./mt5-broker-catalog.ts";
 
@@ -16,32 +18,42 @@ const workspace = readFileSync(
   join(root, "components/broker/broker-config-workspace.tsx"),
   "utf8",
 );
+
 assert.equal(workspace.includes("Search verified servers"), false);
 assert.match(workspace, /function ServerSelect/);
 assert.match(workspace, /function BrokerSelect/);
 assert.match(workspace, /FieldShell/);
 assert.match(workspace, /h-12 w-full/);
 assert.match(workspace, /onBrokerPicked/);
+assert.match(workspace, /setAccountType\("live"\)/);
+assert.match(workspace, /broker_slug: selectedBroker\.slug/);
+assert.match(workspace, /Or paste exact portal server name/);
+assert.match(workspace, /connectionLifecycleLabel/);
+assert.match(workspace, /connection_failed/);
+assert.equal(workspace.includes("Verified\n"), false);
+assert.equal(workspace.includes('? "Verified"'), false);
+assert.equal(workspace.includes('? "Pending"'), false);
+assert.match(workspace, /weltradeApi\.connect/);
+assert.match(workspace, /Password is never displayed after submission/);
+assert.match(workspace, /LIVE is primary/);
+
 {
   const idx = workspace.indexOf("const onBrokerPicked");
   assert.ok(idx > 0);
-  const block = workspace.slice(idx, idx + 220);
+  const block = workspace.slice(idx, idx + 320);
   assert.match(block, /setServer\(""\)/);
   assert.match(block, /setBrokerSwitchEpoch/);
 }
-assert.match(workspace, /setServer\(""\)/);
-assert.match(workspace, /serversLoading/);
-assert.match(workspace, /No verified MT5 servers/);
-assert.match(workspace, /will not be substituted/);
-assert.match(workspace, /Demo and Live are not interchangeable/);
-assert.match(workspace, /weltradeApi\.connect/);
-assert.match(workspace, /weltradeApi\.claim/);
-assert.match(workspace, /Password is never displayed after submission/);
 
 for (const broker of MT5_BROKER_OPTIONS) {
   const asset = join(root, "..", "public", broker.logoSrc.replace(/^\//, ""));
   assert.ok(existsSync(asset), `missing logo asset for ${broker.slug}: ${broker.logoSrc}`);
+  assert.equal(broker.customerSelectable, true);
 }
+
+assert.equal(MT5_BROKER_OPTIONS.length, 7);
+assert.equal(connectionLifecycleLabel("not_connected"), "Not Connected");
+assert.equal(connectionLifecycleLabel("connected"), "Connected");
 
 const weltrade = brokerBySlug("weltrade");
 assert.ok(weltrade?.connectable);
@@ -51,9 +63,11 @@ assert.deepEqual(
   ["Weltrade-Demo", "Weltrade-Real"].sort(),
 );
 
-for (const pending of MT5_BROKER_OPTIONS.filter((b) => !b.connectable)) {
-  assert.equal(serverRowsForBroker(pending).length, 0);
-  assert.equal(pending.connectable, false);
-}
+const mapped = mapRegistryBrokers([
+  { slug: "xm", connection_status: "demo_verified", connectable: true, customer_selectable: true },
+  { slug: "exness", connection_status: "not_verified", connectable: false, customer_selectable: true },
+]);
+assert.equal(mapped.find((b) => b.slug === "xm")?.customerSelectable, true);
+assert.equal(mapped.find((b) => b.slug === "exness")?.customerSelectable, true);
 
 console.log("broker-accounts-redesign: ok");
