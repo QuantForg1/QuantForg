@@ -86,9 +86,7 @@ def test_resolve_account_environment_demo_request_not_flipped_to_live() -> None:
     assert live_env == "live"
     assert live_src == "mt5_account_trade_mode"
     assert (
-        account_type_mismatch(
-            requested="demo", resolved=live_env, trade_mode=2
-        )
+        account_type_mismatch(requested="demo", resolved=live_env, trade_mode=2)
         == "demo_request_authenticated_live_account"
     )
 

@@ -27,7 +27,7 @@ class TerminalResourceSample:
 
 
 def process_image_path(pid: int) -> str:
-    """Resolve executable path when CIM ExecutablePath is empty (common on locked-down hosts)."""
+    """Resolve exe path when CIM ExecutablePath is empty (locked-down hosts)."""
     try:
         import ctypes
         from ctypes import wintypes

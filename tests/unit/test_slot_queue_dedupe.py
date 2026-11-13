@@ -9,7 +9,7 @@ from services.mt5_worker_agent import slot_queue
 
 def test_enqueue_dedupes_same_broker_slot(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(tmp_path))
-    slot_queue._QUEUE.clear()  # noqa: SLF001
+    slot_queue._QUEUE.clear()
     first = slot_queue.enqueue(
         broker_slug="xm", environment="demo", slot_preference="demo-a"
     )

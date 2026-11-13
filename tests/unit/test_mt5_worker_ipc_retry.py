@@ -32,9 +32,7 @@ def test_ipc_timeout_retries_once_then_succeeds(monkeypatch, tmp_path: Path) -> 
             return None
 
     monkeypatch.setattr(mt5_session, "_import_mt5", lambda: FakeMt5())
-    monkeypatch.setattr(
-        mt5_session, "assert_worker_terminal_path", lambda p: Path(p)
-    )
+    monkeypatch.setattr(mt5_session, "assert_worker_terminal_path", lambda p: Path(p))
     monkeypatch.setattr(mt5_session.time, "sleep", lambda _s: None)
     assert mt5_session.initialize_portable(exe) is True
     assert calls["n"] == 2
@@ -56,9 +54,7 @@ def test_ipc_timeout_persists_fail_closed(monkeypatch, tmp_path: Path) -> None:
             return None
 
     monkeypatch.setattr(mt5_session, "_import_mt5", lambda: FakeMt5())
-    monkeypatch.setattr(
-        mt5_session, "assert_worker_terminal_path", lambda p: Path(p)
-    )
+    monkeypatch.setattr(mt5_session, "assert_worker_terminal_path", lambda p: Path(p))
     monkeypatch.setattr(mt5_session.time, "sleep", lambda _s: None)
     assert mt5_session.initialize_portable(exe) is False
 
@@ -88,9 +84,7 @@ def test_authenticate_records_trade_mode(monkeypatch, tmp_path: Path) -> None:
     mt5.symbol_info_tick.return_value = SimpleNamespace(bid=1.1)
 
     monkeypatch.setattr(mt5_session, "_import_mt5", lambda: mt5)
-    monkeypatch.setattr(
-        mt5_session, "assert_worker_terminal_path", lambda p: Path(p)
-    )
+    monkeypatch.setattr(mt5_session, "assert_worker_terminal_path", lambda p: Path(p))
     result = mt5_session.authenticate_and_verify(
         terminal_exe=exe,
         login=12345,

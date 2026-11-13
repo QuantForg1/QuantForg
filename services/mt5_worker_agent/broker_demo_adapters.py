@@ -151,9 +151,7 @@ def resolve_credentials(
     password = _env(*(f"{p}_PASSWORD" for p in prefixes))
     server = _env(*(f"{p}_SERVER" for p in prefixes))
     # Credential namespace is authoritative for the bundle environment label.
-    resolved_env: Literal["demo", "live"] = (
-        "live" if environment == "live" else "demo"
-    )
+    resolved_env: Literal["demo", "live"] = "live" if environment == "live" else "demo"
     if environment == "live":
         live_only = _prefix_keys(slug, "live")
         login = _env(*(f"{p}_LOGIN" for p in live_only))
