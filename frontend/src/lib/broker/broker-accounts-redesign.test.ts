@@ -59,7 +59,7 @@ for (const broker of MT5_BROKER_OPTIONS) {
   assert.equal(broker.customerSelectable, true);
 }
 
-assert.equal(MT5_BROKER_OPTIONS.length, 7);
+assert.equal(MT5_BROKER_OPTIONS.length, 8);
 assert.equal(connectionLifecycleLabel("not_connected"), "Not Connected");
 assert.equal(connectionLifecycleLabel("connected"), "Connected");
 
