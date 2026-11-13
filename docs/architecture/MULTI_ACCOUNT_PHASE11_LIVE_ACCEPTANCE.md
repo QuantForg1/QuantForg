@@ -4,7 +4,7 @@
 **Date (UTC):** 2026-11-13  
 **Owner directive:** Real LIVE MT5 auth acceptance for all seven brands; no fake verification; no real orders.  
 **Baseline (PR #243 / `main`):** `c95db3b42ecde99592d29e337061c25119904cc7`  
-**This branch:** `feat/phase11-live-broker-acceptance` (docs + LIVE credential fail-closed messaging)
+**Acceptance PR:** [#244](https://github.com/QuantForg1/QuantForg/pull/244) merged `2026-11-13T04:51:38Z` → `fbe2d0dc51de3a933da1627def7c13ec8cf77a5e`
 
 > Selectability ≠ LIVE-connected. Candidate servers ≠ confirmed LIVE. DEMO evidence ≠ LIVE evidence.
 
@@ -15,13 +15,14 @@
 | Item | Value |
 |---|---|
 | Base commit | `c95db3b42ecde99592d29e337061c25119904cc7` (PR #243 — Universal LIVE Broker Access) |
-| Final commit (this acceptance) | `69536c6a94da947426da6c444f5a795c8b15b0a3` on `feat/phase11-live-broker-acceptance` (merge SHA on `main` after PR) |
+| Acceptance branch tip | `b77d1df1` (pin) / `69536c6a` (report + fail-closed messaging) |
+| Merge commit on `main` | `fbe2d0dc51de3a933da1627def7c13ec8cf77a5e` (PR **#244**) |
 | Prior release | PR #243 merged to `main` |
-| CI | Required checks on acceptance PR (Black / mypy / unit / frontend as applicable) |
+| CI (PR #244) | All required green: Design Governance Docs · Lint & Format · Type Check · Unit Tests · Trading Core Regression · Frontend Lint Typecheck Build · Integration Tests · Vercel Preview |
+| Vercel preview (PR) | `frontend` `AMsmH8ittRpydwUKgXU9XEQWSjAF` · `quant-forg` `6XKpSDAxZwL4EUiHeaXaDFYQaKGd` |
 | Railway Production | Service **QuantForg** · Online · `https://quantforg-production.up.railway.app` · Environment ID `cb96aa83-7ace-470a-9e98-d52a1634a446` |
-| Railway Production SHA | `/api/v1/health` → `c95db3b42ecde99592d29e337061c25119904cc7` · `/health/live` → 200 `{"status":"ok"}` |
+| Railway Production SHA | `/api/v1/health` → `fbe2d0dc51de3a933da1627def7c13ec8cf77a5e` · `/health/live` → 200 (post-merge deploy verified 2026-11-13) |
 | Railway Staging | Same project; safety flags remain OFF (dispatch / LIVE submit) |
-| Vercel `frontend` / `quant-forg` | Public `/broker` served from production domain |
 | Production domain | `https://www.quantforg.com/broker` → **HTTP 200** (2026-11-13) |
 | Apex | `https://quantforg.com/broker` → **308** redirect (expected) |
 
