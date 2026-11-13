@@ -16,11 +16,14 @@ from app.domain.broker_connectivity.verification_matrix import (
 )
 
 
-def test_matrix_targets_six_brokers(monkeypatch, tmp_path: Path) -> None:
+def test_matrix_targets_seven_non_weltrade_brokers(monkeypatch, tmp_path: Path) -> None:
     path = tmp_path / "empty.json"
     monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(path))
     matrix = build_verification_matrix()
-    assert {r["broker"] for r in matrix["brokers"]} == set(TARGET_BROKERS)
+    ordered = [r["broker"] for r in matrix["brokers"]]
+    assert ordered == list(TARGET_BROKERS)
+    assert "justmarkets" in ordered
+    assert "weltrade" not in ordered
     for row in matrix["brokers"]:
         assert row["connectable"] is False
         assert row["demo"]["status"] == "BLOCKED"

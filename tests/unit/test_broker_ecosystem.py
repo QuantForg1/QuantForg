@@ -20,16 +20,22 @@ from app.domain.broker_connectivity.types import ConnectivityStatus
 @pytest.mark.unit
 class TestMT5EcosystemProfiles:
     def test_priority_brokers_present(self) -> None:
-        slugs = {p.slug for p in MT5_ECOSYSTEM}
-        assert slugs == {
+        ordered = [p.slug for p in sorted(MT5_ECOSYSTEM, key=lambda p: p.priority)]
+        assert ordered == [
             "weltrade",
             "xm",
             "exness",
+            "hfm",
+            "justmarkets",
             "ic-markets",
             "pepperstone",
-            "hfm",
             "fp-markets",
-        }
+        ]
+
+    def test_justmarkets_server_match(self) -> None:
+        hit = match_broker_for_server("JustMarkets-Live2")
+        assert hit is not None
+        assert hit.slug == "justmarkets"
 
     def test_all_mt5_platform(self) -> None:
         assert all(p.platform == "mt5" for p in MT5_ECOSYSTEM)
@@ -74,7 +80,7 @@ class TestCompatibilitySuite:
 
         suite = run_compatibility_suite(invoke=invoke, paper_available=False)
         assert suite["session"]["connected"] is False
-        assert len(suite["matrix"]) == 7
+        assert len(suite["matrix"]) == 8
         for row in suite["matrix"]:
             assert row["login"] == "pending_session"
             assert row["quotes"] == "pending_session"
@@ -122,7 +128,7 @@ class TestBrokerConnectivityServiceEcosystem:
         svc = BrokerConnectivityService.create(mt5=None, paper_available=False)
         eco = svc.ecosystem()
         assert eco["version"] == "1.1"
-        assert len(eco["items"]) == 7
+        assert len(eco["items"]) == 8
         guide = svc.onboarding("pepperstone")
         assert guide is not None
         assert guide["slug"] == "pepperstone"

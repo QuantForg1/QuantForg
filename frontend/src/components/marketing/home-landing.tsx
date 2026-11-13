@@ -162,10 +162,14 @@ const SECURITY: ReadonlyArray<{
 
 const MT5_CONTEXT = [
   "MetaTrader 5",
-  "IC Markets",
-  "Exness",
-  "Pepperstone",
+  "Weltrade",
   "XM",
+  "Exness",
+  "HFM",
+  "JustMarkets",
+  "IC Markets",
+  "Pepperstone",
+  "FP Markets",
 ] as const;
 
 const PERFORMANCE_METRICS = [

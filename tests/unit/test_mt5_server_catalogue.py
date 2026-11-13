@@ -18,7 +18,15 @@ def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
     assert by_slug["weltrade"]["connectable"] is True
     assert by_slug["weltrade"]["connection_status"] == "production_verified"
     assert all(r["customer_selectable"] is True for r in rows)
-    for slug in ("exness", "ic-markets", "pepperstone", "xm", "fp-markets", "hfm"):
+    for slug in (
+        "xm",
+        "exness",
+        "hfm",
+        "justmarkets",
+        "ic-markets",
+        "pepperstone",
+        "fp-markets",
+    ):
         assert slug in by_slug
         # Operational connectable remains evidence-gated; customers may still select.
         assert by_slug[slug]["connectable"] is False
@@ -29,6 +37,7 @@ def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
 def test_unverified_brokers_have_no_invented_servers() -> None:
     assert verified_servers_for_broker("exness") == []
     assert verified_servers_for_broker("hfm") == []
+    assert verified_servers_for_broker("justmarkets") == []
     assert verified_servers_for_broker("fp-markets") == []
 
 

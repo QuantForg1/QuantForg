@@ -88,7 +88,7 @@ async def mt5_ecosystem(
     _user: CurrentUser,
     svc: BrokerConnectivityDep,
 ) -> dict[str, Any]:
-    """MT5 Broker Ecosystem v1.1 — Weltrade, XM, Exness, IC Markets, Pepperstone."""
+    """MT5 Broker Ecosystem — Weltrade, XM, Exness, HFM, JustMarkets, IC Markets, Pepperstone, FP Markets."""
     return svc.ecosystem()
 
 
@@ -219,7 +219,7 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/mt5-verification-matrix")
 async def mt5_verification_matrix(_user: CurrentUser) -> dict[str, Any]:
-    """Six-broker Demo/Live matrix — PASS only after real Windows MT5 verify."""
+    """Non-Weltrade Demo/Live matrix — PASS only after real Windows MT5 verify."""
     from app.domain.broker_connectivity.verification_matrix import (
         build_verification_matrix,
     )

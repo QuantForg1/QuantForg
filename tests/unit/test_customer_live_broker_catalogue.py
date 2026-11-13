@@ -10,19 +10,27 @@ from app.domain.broker_connectivity.mt5_server_catalogue import (
 )
 
 
-def test_all_seven_brokers_customer_selectable() -> None:
+def test_all_eight_brokers_customer_selectable_in_canonical_order() -> None:
     rows = broker_registry_rows()
-    slugs = {r["slug"] for r in rows}
-    assert slugs == {
+    ordered = [r["slug"] for r in rows]
+    assert ordered == [
         "weltrade",
         "xm",
         "exness",
         "hfm",
+        "justmarkets",
         "ic-markets",
         "pepperstone",
         "fp-markets",
-    }
+    ]
     assert all(r["customer_selectable"] is True for r in rows)
+
+
+def test_justmarkets_candidates_are_unconfirmed() -> None:
+    candidates = candidate_servers_for_broker("justmarkets")
+    assert candidates
+    assert all(c.get("confirmed") is False for c in candidates)
+    assert all("justmarkets" in str(c["name"]).lower() for c in candidates)
 
 
 def test_candidates_are_unconfirmed_and_broker_scoped() -> None:

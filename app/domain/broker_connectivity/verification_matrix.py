@@ -1,4 +1,8 @@
-"""Six-broker Demo/Live verification matrix — honest BLOCKED without credentials."""
+"""Non-Weltrade Demo/Live verification matrix — honest BLOCKED without credentials.
+
+Canonical order (excluding Weltrade production singleton):
+XM → Exness → HFM → JustMarkets → IC Markets → Pepperstone → FP Markets
+"""
 
 from __future__ import annotations
 
@@ -14,12 +18,13 @@ from app.domain.broker_connectivity.mt5_server_catalogue import (
 )
 
 TARGET_BROKERS: tuple[str, ...] = (
+    "xm",
     "exness",
     "hfm",
+    "justmarkets",
     "ic-markets",
     "pepperstone",
     "fp-markets",
-    "xm",
 )
 
 

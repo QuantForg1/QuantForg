@@ -22,7 +22,7 @@ const ITEMS = [
   },
   {
     q: "Which brokers are supported?",
-    a: "The production connection is Weltrade through MetaTrader 5. You connect the account you own and grant the permissions that account allows. Other broker brands are not listed here as live integrations.",
+    a: "Supported MT5 brands (in order): Weltrade, XM, Exness, HFM, JustMarkets, IC Markets, Pepperstone, and FP Markets. You connect the account you own. Selectability is not the same as a verified LIVE connection — authentication evidence is recorded separately.",
   },
   {
     q: "What happens after I connect a broker?",

@@ -1,6 +1,7 @@
-"""MT5 broker credential adapters for Windows workers (six-broker + Weltrade).
+"""MT5 broker credential adapters for Windows workers (eight-broker).
 
-Supports Exness, HFM, IC Markets, Pepperstone, FP Markets, XM, Weltrade.
+Canonical order: Weltrade, XM, Exness, HFM, JustMarkets, IC Markets,
+Pepperstone, FP Markets.
 Demo and Live env vars are separated. Passwords are never logged.
 Server names are never invented — login must return a matching broker pattern.
 """
@@ -13,42 +14,58 @@ from dataclasses import dataclass
 from typing import Literal
 
 BrokerSlug = Literal[
+    "weltrade",
+    "xm",
     "exness",
     "hfm",
+    "justmarkets",
     "ic-markets",
     "pepperstone",
     "fp-markets",
-    "xm",
-    "weltrade",
 ]
 
+# Stable product order — not alphabetical.
 _SUPPORTED: tuple[BrokerSlug, ...] = (
+    "weltrade",
+    "xm",
     "exness",
     "hfm",
+    "justmarkets",
     "ic-markets",
     "pepperstone",
     "fp-markets",
-    "xm",
-    "weltrade",
 )
 
 _ENV_PREFIX: dict[str, str] = {
+    "weltrade": "WELTRADE",
+    "xm": "XM",
     "exness": "EXNESS",
     "hfm": "HFM",
+    "justmarkets": "JUSTMARKETS",
     "ic-markets": "IC_MARKETS",
     "pepperstone": "PEPPERSTONE",
     "fp-markets": "FP_MARKETS",
-    "xm": "XM",
-    "weltrade": "WELTRADE",
 }
 
 # Pattern checks after MT5 returns account_info.server — not UI server lists.
 _SERVER_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "weltrade": (re.compile(r"weltrade", re.I),),
+    "xm": (
+        re.compile(r"xmglobal", re.I),
+        re.compile(r"xm\.com", re.I),
+        re.compile(r"xmtrading", re.I),
+        re.compile(r"xmau", re.I),
+        re.compile(r"xm-", re.I),
+    ),
     "exness": (re.compile(r"exness", re.I),),
     "hfm": (
         re.compile(r"hfmarkets", re.I),
         re.compile(r"\bhfm\b", re.I),
         re.compile(r"hotforex", re.I),
+    ),
+    "justmarkets": (
+        re.compile(r"justmarkets", re.I),
+        re.compile(r"justmarketscy", re.I),
     ),
     "ic-markets": (
         re.compile(r"icmarkets", re.I),
@@ -60,14 +77,6 @@ _SERVER_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
         re.compile(r"fpmarkets", re.I),
         re.compile(r"firstprudential", re.I),
     ),
-    "xm": (
-        re.compile(r"xmglobal", re.I),
-        re.compile(r"xm\.com", re.I),
-        re.compile(r"xmtrading", re.I),
-        re.compile(r"xmau", re.I),
-        re.compile(r"xm-", re.I),
-    ),
-    "weltrade": (re.compile(r"weltrade", re.I),),
 }
 
 
@@ -104,6 +113,10 @@ def normalize_broker_slug(raw: str | None) -> BrokerSlug | None:
         "ic": "ic-markets",
         "fpmarkets": "fp-markets",
         "fp": "fp-markets",
+        "justmarket": "justmarkets",
+        "just-markets": "justmarkets",
+        "justmarkets-cy": "justmarkets",
+        "justmarketscy": "justmarkets",
     }
     code = aliases.get(code, code)
     for slug in _SUPPORTED:
@@ -125,7 +138,7 @@ def _prefix_keys(
 ) -> tuple[str, ...]:
     mid = _ENV_PREFIX[slug]
     env_tag = "DEMO" if environment == "demo" else "LIVE"
-    # Prefer env-specific, then DEMO_* legacy for demo, then generic QF_DEMO_*.
+    # Prefer env-specific, then DEMO_* legacy for demo only.
     specific = f"QF_{env_tag}_{mid}"
     keys = [specific]
     if environment == "demo":
@@ -142,6 +155,7 @@ def resolve_credentials(
 
     Broker-specific requests never fall back to generic ``QF_DEMO_*`` so one
     broker's credentials cannot silently authenticate another broker.
+    LIVE never falls back to DEMO material.
     """
     slug = normalize_broker_slug(broker_slug)
     if slug is None:
@@ -150,7 +164,6 @@ def resolve_credentials(
     login = _env(*(f"{p}_LOGIN" for p in prefixes))
     password = _env(*(f"{p}_PASSWORD" for p in prefixes))
     server = _env(*(f"{p}_SERVER" for p in prefixes))
-    # Credential namespace is authoritative for the bundle environment label.
     resolved_env: Literal["demo", "live"] = "live" if environment == "live" else "demo"
     if environment == "live":
         live_only = _prefix_keys(slug, "live")

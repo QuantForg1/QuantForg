@@ -4,7 +4,7 @@
 
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("exness", "hfm", "ic-markets", "pepperstone", "fp-markets", "xm", "weltrade")]
+  [ValidateSet("weltrade", "xm", "exness", "hfm", "justmarkets", "ic-markets", "pepperstone", "fp-markets")]
   [string]$Broker,
   [string]$Slot = "demo-a",
   [ValidateSet("demo", "live")]

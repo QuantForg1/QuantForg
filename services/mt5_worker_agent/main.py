@@ -7,7 +7,7 @@ Modes:
   status          — print slot + resource status (no secrets)
   supervise       — local supervisor heartbeat loop
   connect-demo    — real MT5 login+verify for one slot (requires env creds)
-  verify-broker   — six-broker demo/live verify + evidence write
+  verify-broker   — eight-broker demo/live verify + evidence write
   reject-demo     — negative credential test (expects failure)
   capacity        — measured host portable-terminal capacity
   queue-status    — capacity wait queue (no secrets)
@@ -320,13 +320,14 @@ def _persist_and_report_evidence(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 _BROKER_CHOICES = [
+    "weltrade",
+    "xm",
     "exness",
     "hfm",
+    "justmarkets",
     "ic-markets",
     "pepperstone",
     "fp-markets",
-    "xm",
-    "weltrade",
 ]
 
 
