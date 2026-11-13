@@ -15,7 +15,23 @@ export type Mt5BrokerSlug =
   | "hfm"
   | "xm";
 
-export type Mt5ConnectionStatus = "production_verified" | "not_verified";
+export type Mt5ConnectionStatus =
+  | "production_verified"
+  | "demo_verified"
+  | "live_verified"
+  | "not_verified";
+
+const VERIFIED_STATUSES: ReadonlySet<Mt5ConnectionStatus> = new Set([
+  "production_verified",
+  "demo_verified",
+  "live_verified",
+]);
+
+export function isBrokerVerifiedStatus(
+  status: string | null | undefined,
+): boolean {
+  return VERIFIED_STATUSES.has(status as Mt5ConnectionStatus);
+}
 
 export type Mt5BrokerOption = {
   slug: Mt5BrokerSlug;
@@ -124,9 +140,9 @@ export function classifyServerEnvironment(
     .toLowerCase();
   if (!s) return "unknown";
   if (s.includes("demo") || s.includes("trial")) return "demo";
-  if (s.includes("real") || s.includes("live") || s.includes("-mt5")) return "live";
-  // Documented production names without demo token are treated as live only when
-  // the catalogue row already classified them; bare guesses stay unknown.
+  if (s.includes("real") || s.includes("live")) return "live";
+  // Ambiguous names (e.g. XMGlobal-MT5) stay unknown — never invent live from "-mt5".
+  // Catalogue / evidence rows must supply environment explicitly.
   return "unknown";
 }
 
@@ -254,13 +270,16 @@ export function mapRegistryBrokers(apiBrokers: unknown): Mt5BrokerOption[] {
     const slug = String(row.slug || "") as Mt5BrokerSlug;
     const base = bySlug.get(slug);
     if (!base) continue;
+    const rawStatus = String(row.connection_status || "not_verified");
+    const connectionStatus: Mt5ConnectionStatus = isBrokerVerifiedStatus(
+      rawStatus,
+    )
+      ? (rawStatus as Mt5ConnectionStatus)
+      : "not_verified";
     out.push({
       ...base,
-      connectionStatus:
-        row.connection_status === "production_verified"
-          ? "production_verified"
-          : "not_verified",
-      connectable: Boolean(row.connectable),
+      connectionStatus,
+      connectable: Boolean(row.connectable) || isBrokerVerifiedStatus(connectionStatus),
     });
   }
   for (const b of MT5_BROKER_OPTIONS) {

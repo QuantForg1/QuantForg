@@ -7,6 +7,7 @@ This module must only initialize against an isolated portable terminal path.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,10 @@ from typing import Any
 from services.mt5_worker_agent.paths import assert_worker_terminal_path
 
 logger = logging.getLogger("quantforg.mt5_worker_agent.session")
+
+# MetaTrader5 IPC timeout — documented retry-once, then fail closed.
+_IPC_TIMEOUT_CODE = -10005
+_IPC_RETRY_SLEEP_SEC = 1.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +35,7 @@ class Mt5VerifyResult:
     symbols_total: int = 0
     quote_symbol: str = ""
     quote_bid: float | None = None
+    trade_mode: int | None = None
     error: str = ""
 
 
@@ -43,11 +49,19 @@ def _import_mt5() -> Any:
     return mt5
 
 
+def _error_code(err: Any) -> int | None:
+    if isinstance(err, tuple) and err:
+        try:
+            return int(err[0])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
 def initialize_portable(terminal_exe: Path | str) -> bool:
     path = assert_worker_terminal_path(terminal_exe)
     mt5 = _import_mt5()
-    ok = bool(mt5.initialize(path=str(path)))
-    err = mt5.last_error()
+    ok, err = _initialize_with_ipc_retry(mt5, path)
     logger.info(
         "mt5_portable_initialize ok=%s path=%s last_error=%s",
         ok,
@@ -55,6 +69,33 @@ def initialize_portable(terminal_exe: Path | str) -> bool:
         err,
     )
     return ok
+
+
+def _initialize_with_ipc_retry(mt5: Any, path: Path) -> tuple[bool, Any]:
+    """Initialize once; on IPC timeout (-10005) shutdown and retry exactly once."""
+    ok = bool(mt5.initialize(path=str(path)))
+    err = mt5.last_error()
+    if ok or _error_code(err) != _IPC_TIMEOUT_CODE:
+        return ok, err
+    logger.warning(
+        "mt5_ipc_timeout path=%s last_error=%s — single retry after shutdown",
+        path,
+        err,
+    )
+    try:
+        mt5.shutdown()
+    except Exception:
+        logger.exception("mt5_ipc_retry_shutdown_failed")
+    time.sleep(_IPC_RETRY_SLEEP_SEC)
+    ok = bool(mt5.initialize(path=str(path)))
+    err = mt5.last_error()
+    if not ok and _error_code(err) == _IPC_TIMEOUT_CODE:
+        logger.error(
+            "mt5_ipc_timeout_persisted path=%s last_error=%s — fail closed",
+            path,
+            err,
+        )
+    return ok, err
 
 
 def shutdown() -> None:
@@ -106,11 +147,12 @@ def authenticate_and_verify(
         return Mt5VerifyResult(ok=False, trade_allowed=False, error="password_required")
     path = assert_worker_terminal_path(terminal_exe)
     mt5 = _import_mt5()
-    if not bool(mt5.initialize(path=str(path))):
+    init_ok, init_err = _initialize_with_ipc_retry(mt5, path)
+    if not init_ok:
         return Mt5VerifyResult(
             ok=False,
             trade_allowed=False,
-            error=f"initialize_failed:{mt5.last_error()}",
+            error=f"initialize_failed:{init_err}",
         )
     try:
         logged_in = bool(
@@ -128,6 +170,12 @@ def authenticate_and_verify(
             return Mt5VerifyResult(
                 ok=False, trade_allowed=False, error="account_info_unavailable"
             )
+        trade_mode_raw = getattr(info, "trade_mode", None)
+        trade_mode: int | None
+        try:
+            trade_mode = int(trade_mode_raw) if trade_mode_raw is not None else None
+        except (TypeError, ValueError):
+            trade_mode = None
         trade_allowed = bool(getattr(info, "trade_allowed", False))
         trade_expert = bool(getattr(info, "trade_expert", True))
         # Investor / read-only style accounts typically have trade_allowed False.
@@ -138,6 +186,7 @@ def authenticate_and_verify(
                 login=int(getattr(info, "login", login) or login),
                 server=str(getattr(info, "server", server) or server),
                 name=str(getattr(info, "name", "") or ""),
+                trade_mode=trade_mode,
                 error="investor_or_readonly_credentials_rejected",
             )
         if (
@@ -150,16 +199,18 @@ def authenticate_and_verify(
                 trade_allowed=False,
                 login=int(info.login),
                 server=str(info.server or server),
+                trade_mode=trade_mode,
                 error="tradeapi_disabled",
             )
         market_ok, sym_total, quote_sym, quote_bid = probe_market_data(mt5)
         logger.info(
             "mt5_verify_ok login=%s server=%s trade_allowed=%s trade_expert=%s "
-            "market_data_ok=%s symbols=%s",
+            "trade_mode=%s market_data_ok=%s symbols=%s",
             int(info.login),
             str(info.server or ""),
             trade_allowed,
             trade_expert,
+            trade_mode,
             market_ok,
             sym_total,
         )
@@ -176,6 +227,7 @@ def authenticate_and_verify(
             symbols_total=sym_total,
             quote_symbol=quote_sym,
             quote_bid=quote_bid,
+            trade_mode=trade_mode,
         )
     finally:
         # Leave terminal process running; detach Python IPC.

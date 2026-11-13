@@ -40,9 +40,8 @@ def _env_status(entry: dict[str, Any] | None, environment: str) -> dict[str, Any
         if isinstance(s, dict)
         and str(s.get("environment") or "").lower() == environment
     ]
-    if not servers and entry.get("connectable") and environment == "demo":
-        # Some evidence rows may omit environment; treat as demo if connectable.
-        servers = [s for s in (entry.get("servers") or []) if isinstance(s, dict)]
+    # Do not promote connectable / omitted-environment rows into PASS.
+    # Environment must match verified evidence explicitly.
     if not servers:
         return {
             "status": "BLOCKED",
