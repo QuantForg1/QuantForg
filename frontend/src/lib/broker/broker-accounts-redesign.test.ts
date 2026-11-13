@@ -30,9 +30,17 @@ assert.match(workspace, /broker_slug: selectedBroker\.slug/);
 assert.match(workspace, /Or paste exact portal server name/);
 assert.match(workspace, /connectionLifecycleLabel/);
 assert.match(workspace, /connection_failed/);
-assert.equal(workspace.includes("Verified\n"), false);
-assert.equal(workspace.includes('? "Verified"'), false);
-assert.equal(workspace.includes('? "Pending"'), false);
+// Selector must not show Pending/Verified badges (connection lifecycle replaces them).
+assert.equal(/["']Verified["']/.test(workspace), false);
+assert.equal(/["']Pending["']/.test(workspace), false);
+assert.match(workspace, /BrokerSelect/);
+assert.doesNotMatch(
+  workspace.slice(
+    workspace.indexOf("function BrokerSelect"),
+    workspace.indexOf("function ServerSelect"),
+  ),
+  /Pending|Verified/,
+);
 assert.match(workspace, /weltradeApi\.connect/);
 assert.match(workspace, /Password is never displayed after submission/);
 assert.match(workspace, /LIVE is primary/);

@@ -14,10 +14,13 @@ def test_only_weltrade_is_connectable() -> None:
     by_slug = {r["slug"]: r for r in rows}
     assert by_slug["weltrade"]["connectable"] is True
     assert by_slug["weltrade"]["connection_status"] == "production_verified"
+    assert all(r["customer_selectable"] is True for r in rows)
     for slug in ("exness", "ic-markets", "pepperstone", "xm", "fp-markets", "hfm"):
         assert slug in by_slug
+        # Operational connectable remains evidence-gated; customers may still select.
         assert by_slug[slug]["connectable"] is False
         assert by_slug[slug]["connection_status"] == "not_verified"
+        assert by_slug[slug]["customer_selectable"] is True
 
 
 def test_unverified_brokers_have_no_invented_servers() -> None:
@@ -39,13 +42,16 @@ def test_weltrade_verified_servers_include_source_and_timestamp() -> None:
 def test_discovered_servers_are_tagged() -> None:
     rows = verified_servers_for_broker(
         "weltrade",
-        discovered=["Weltrade-MT5", "Weltrade-Real"],
+        discovered=["Weltrade-Live-Extra", "Weltrade-Real", "Weltrade-MT5"],
     )
     names = {r["name"] for r in rows}
     assert "Weltrade-Real" in names
-    assert "Weltrade-MT5" in names
-    discovered = [r for r in rows if r["name"] == "Weltrade-MT5"]
+    # Explicit live token is accepted from discovery.
+    assert "Weltrade-Live-Extra" in names
+    discovered = [r for r in rows if r["name"] == "Weltrade-Live-Extra"]
     assert discovered[0]["source"] == "mt5_terminal_discovery"
+    # Ambiguous Weltrade-MT5 (no demo/live/real token) is not invented as live.
+    assert "Weltrade-MT5" not in names
 
 
 def test_catalogue_snapshot_gateway_note() -> None:

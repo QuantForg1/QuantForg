@@ -351,9 +351,7 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_reachable and mt5_attached
-                else "degraded"
-                if gateway_reachable
-                else "offline"
+                else "degraded" if gateway_reachable else "offline"
             ),
         }
 
@@ -484,9 +482,7 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_online and mt5_connected
-                else "degraded"
-                if gateway_online
-                else "offline"
+                else "degraded" if gateway_online else "offline"
             ),
         }
 
@@ -1688,11 +1684,13 @@ class WeltradeIntegrationService:
             record_verification_success(
                 broker_slug=broker_slug or "weltrade",
                 server=server_name,
-                environment=resolved_env,  # type: ignore[arg-type]
+                environment=resolved_env,
                 login=int(login),
-                trade_allowed=bool(verified_trade_allowed)
-                if verified_trade_allowed is not None
-                else True,
+                trade_allowed=(
+                    bool(verified_trade_allowed)
+                    if verified_trade_allowed is not None
+                    else True
+                ),
                 market_data_ok=True,
                 balance=balance_f,
                 equity=equity_f,
