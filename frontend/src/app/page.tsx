@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     absolute: "QuantForg — Institutional AI Trading Platform",
   },
   description:
-    "QuantForg connects traders to MetaTrader 5 broker accounts with market intelligence, strategy evaluation, risk management, and automated execution under approved settings. Software access is not a promise of trading profits.",
+    "QuantForg connects your MT5 trading account to institutional market intelligence, strategy analysis and risk controls — keeping your capital and broker account under your control. Software access is not a promise of trading profits.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "QuantForg — Institutional AI Trading Platform",

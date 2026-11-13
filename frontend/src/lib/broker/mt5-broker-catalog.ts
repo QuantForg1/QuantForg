@@ -105,7 +105,7 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
   {
     slug: "hfm",
     name: "HFM",
-    logoSrc: "/brand/brokers/hfm-mark.svg",
+    logoSrc: "/brand/brokers/hfm-mark.png",
     website: "https://www.hfm.com",
     connectionStatus: "not_verified",
     connectable: false,
@@ -115,7 +115,7 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
   {
     slug: "justmarkets",
     name: "JustMarkets",
-    logoSrc: "/brand/brokers/justmarkets-mark.svg",
+    logoSrc: "/brand/brokers/justmarkets-mark.png",
     website: "https://justmarkets.com",
     connectionStatus: "not_verified",
     connectable: false,
@@ -125,7 +125,7 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
   {
     slug: "ic-markets",
     name: "IC Markets",
-    logoSrc: "/brand/brokers/icmarkets-mark.svg",
+    logoSrc: "/brand/brokers/icmarkets-mark.png",
     website: "https://www.icmarkets.com",
     connectionStatus: "not_verified",
     connectable: false,
@@ -145,7 +145,7 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
   {
     slug: "fp-markets",
     name: "FP Markets",
-    logoSrc: "/brand/brokers/fpmarkets-mark.png",
+    logoSrc: "/brand/brokers/fpmarkets-mark.svg",
     website: "https://www.fpmarkets.com",
     connectionStatus: "not_verified",
     connectable: false,
