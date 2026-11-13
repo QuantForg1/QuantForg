@@ -145,3 +145,27 @@ def test_resolve_live_requires_live_material(monkeypatch) -> None:
     monkeypatch.setenv("QF_DEMO_IC_MARKETS_PASSWORD", "x")
     monkeypatch.setenv("QF_DEMO_IC_MARKETS_SERVER", "ICMarkets-Demo")
     assert resolve_credentials("ic-markets", environment="live") is None
+
+
+def test_live_missing_keys_do_not_suggest_demo_fallback(monkeypatch) -> None:
+    for key in (
+        "QF_LIVE_XM_LOGIN",
+        "QF_LIVE_XM_PASSWORD",
+        "QF_LIVE_XM_SERVER",
+        "QF_DEMO_XM_LOGIN",
+        "QF_DEMO_XM_PASSWORD",
+        "QF_DEMO_XM_SERVER",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("QF_DEMO_XM_LOGIN", "464")
+    monkeypatch.setenv("QF_DEMO_XM_PASSWORD", "demo-only")
+    monkeypatch.setenv("QF_DEMO_XM_SERVER", "XMGlobal-MT5 2")
+    assert resolve_credentials("xm", environment="live") is None
+    missing = missing_credential_keys("xm", environment="live")
+    assert missing == [
+        "QF_LIVE_XM_LOGIN",
+        "QF_LIVE_XM_PASSWORD",
+        "QF_LIVE_XM_SERVER",
+    ]
+    assert all("DEMO" not in m for m in missing)
+    assert all("fallback" not in m.lower() for m in missing)

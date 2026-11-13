@@ -29,7 +29,7 @@ from services.mt5_worker_agent.broker_demo_adapters import (
     resolve_credentials,
 )
 
-SLUGS = ['exness','hfm','ic-markets','pepperstone','fp-markets','xm']
+SLUGS = ['weltrade','exness','hfm','ic-markets','pepperstone','fp-markets','xm']
 rows = []
 for slug in SLUGS:
     for env in ('demo','live'):
