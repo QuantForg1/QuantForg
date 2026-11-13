@@ -9,7 +9,15 @@ class WeltradeConnectRequest(BaseModel):
     login: int = Field(..., gt=0)
     password: str = Field(default="", max_length=256)
     server: str = Field(default="auto", max_length=128)
-    account_type: str = Field(default="demo", pattern="^(demo|live)$")
+    account_type: str = Field(default="live", pattern="^(demo|live)$")
+    broker_slug: str = Field(
+        default="",
+        max_length=64,
+        description=(
+            "Selected MT5 broker brand (weltrade, xm, exness, …). "
+            "Server must belong to this broker; never cross-borrow."
+        ),
+    )
     prefer_attach: bool = True
     path: str = Field(default="", max_length=512)
     remember_on_gateway: bool = Field(

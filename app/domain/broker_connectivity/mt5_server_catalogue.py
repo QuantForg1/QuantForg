@@ -2,21 +2,20 @@
 
 Rules
 -----
-* Weltrade is marked ``production_verified`` from the LIVE gateway path.
-* Other brokers become ``connectable`` only when Windows worker verification
-  evidence records a successful authenticated session for that slug.
-* Server rows always carry ``source`` + ``verified_at`` (or null when
-  documented-only / not yet discovered).
-* Documented ``server_hints`` from the ecosystem profile are NEVER returned
-  as verified production servers.
-* Live discovery / evidence may append servers observed on an attached MT5
-  terminal for the matching broker slug.
+* All documented MT5 brands are ``customer_selectable`` so customers can start
+  a LIVE connection flow without waiting for internal DEMO verification.
+* ``connectable`` / operational verification remains evidence-gated (admin honesty).
+* Verified server rows always carry ``source`` + ``verified_at``.
+* Documented ``server_hints`` are returned only as unconfirmed *candidates*
+  (never as verified production servers).
+* Live discovery / evidence may append servers observed on an authenticated MT5
+  session for the matching broker slug — never cross-broker borrowing.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from app.domain.broker_connectivity.broker_verification_evidence import (
     connectable_slugs_from_evidence,
@@ -50,8 +49,20 @@ def _now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+def classify_server_environment_hint(
+    server: str,
+) -> Literal["demo", "live", "unknown"]:
+    """Heuristic only — never sole proof of account type."""
+    low = (server or "").lower()
+    if any(tok in low for tok in ("demo", "trial")):
+        return "demo"
+    if any(tok in low for tok in ("real", "live")):
+        return "live"
+    return "unknown"
+
+
 def broker_registry_rows() -> list[dict[str, Any]]:
-    """UI/admin broker registry — honest verification flags."""
+    """Customer + admin broker registry — selectable vs operationally verified."""
     evidence_connectable = connectable_slugs_from_evidence()
     rows: list[dict[str, Any]] = []
     for profile in sorted(MT5_ECOSYSTEM, key=lambda p: (p.priority, p.slug)):
@@ -64,16 +75,16 @@ def broker_registry_rows() -> list[dict[str, Any]]:
             ev = evidence_for_broker(profile.slug) or {}
             status = str(ev.get("connection_status") or "demo_verified")
             notes = (
-                "Windows MT5 worker verified an authenticated session for this "
-                "broker. LIVE multi-account submit remains gated separately."
+                "Authenticated MT5 session evidence exists for this broker. "
+                "LIVE multi-account submit remains gated separately."
             )
         else:
             verified = False
             status = "not_verified"
             notes = (
-                "Documented MT5 brand only. Connection is not marked "
-                "operational until a QuantForg Windows gateway/worker "
-                "verifies login for this broker."
+                "Customers may select this broker and connect their own LIVE "
+                "MT5 account. Operational verification evidence is recorded "
+                "only after a successful gateway authenticate."
             )
         rows.append(
             {
@@ -83,6 +94,8 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 "platform": "mt5",
                 "connection_status": status,
                 "connectable": verified,
+                # Customer UX: all documented brands are selectable for LIVE connect.
+                "customer_selectable": True,
                 "notes": notes,
                 "regions": list(profile.regions),
                 "priority": profile.priority,
@@ -90,7 +103,7 @@ def broker_registry_rows() -> list[dict[str, Any]]:
         )
     return sorted(
         rows,
-        key=lambda r: (0 if r["connectable"] else 1, r["priority"], r["slug"]),
+        key=lambda r: (r["priority"], r["slug"]),
     )
 
 
@@ -108,9 +121,11 @@ def verified_servers_for_broker(
         for row in _WELTRADE_VERIFIED:
             name = str(row["name"])
             seen.add(name.lower())
-            out.append(dict(row))
+            payload = dict(row)
+            payload["confirmed"] = True
+            out.append(payload)
 
-    # Evidence-backed servers from real Windows MT5 verifies.
+    # Evidence-backed servers from real authenticated MT5 sessions.
     ev = evidence_for_broker(code)
     if ev:
         for server in ev.get("servers") or []:
@@ -119,12 +134,17 @@ def verified_servers_for_broker(
             name = str(server.get("name") or "").strip()
             if not name or name.lower() in seen:
                 continue
+            env_raw = str(server.get("environment") or "").lower()
+            if env_raw not in {"demo", "live"}:
+                # Refuse to invent environment for evidence without an explicit label.
+                continue
             out.append(
                 {
                     "name": name,
-                    "environment": server.get("environment") or "demo",
-                    "source": server.get("source") or "windows_mt5_demo_verify",
+                    "environment": env_raw,
+                    "source": server.get("source") or "windows_mt5_verify",
                     "verified_at": server.get("verified_at") or _now_iso(),
+                    "confirmed": True,
                 }
             )
             seen.add(name.lower())
@@ -140,19 +160,59 @@ def verified_servers_for_broker(
             # Only accept undiscovered names when the broker slug is unknown
             # to the matcher — still require an explicit discovery feed.
             continue
-        env = (
-            "demo" if any(tok in name.lower() for tok in ("demo", "trial")) else "live"
-        )
+        hint = classify_server_environment_hint(name)
+        if hint == "unknown":
+            # Do not invent live/demo from an ambiguous discovery name.
+            continue
         out.append(
             {
                 "name": name,
-                "environment": env,
+                "environment": hint,
                 "source": "mt5_terminal_discovery",
                 "verified_at": _now_iso(),
+                "confirmed": True,
             }
         )
         seen.add(name.lower())
 
+    return out
+
+
+def candidate_servers_for_broker(slug: str) -> list[dict[str, Any]]:
+    """Documented LIVE/DEMO search candidates — unconfirmed, never invented shards.
+
+    Customers may pick a candidate as a starting point or type the exact portal
+    server. Candidates are NOT verified connectivity evidence.
+    """
+    profile = profile_by_slug(slug)
+    if profile is None:
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for hint in profile.server_hints:
+        name = str(hint or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        matched = match_broker_for_server(name)
+        if matched is None or matched.slug != profile.slug:
+            continue
+        env_hint = classify_server_environment_hint(name)
+        if env_hint == "unknown":
+            # Ambiguous documented prefixes (e.g. XMGlobal-MT5) stay candidates
+            # without inventing LIVE — UI labels them as confirm-in-terminal.
+            environment: Literal["demo", "live"] | None = None
+        else:
+            environment = env_hint
+        out.append(
+            {
+                "name": name,
+                "environment": environment,
+                "source": "documented_candidate",
+                "verified_at": None,
+                "confirmed": False,
+            }
+        )
+        seen.add(name.lower())
     return out
 
 
@@ -172,23 +232,27 @@ def catalogue_snapshot(
 
     brokers = broker_registry_rows()
     servers: dict[str, list[dict[str, Any]]] = {}
+    candidates: dict[str, list[dict[str, Any]]] = {}
     for row in brokers:
         slug = str(row["slug"])
         servers[slug] = verified_servers_for_broker(
             slug,
             discovered=discovered_by_broker.get(slug),
         )
+        candidates[slug] = candidate_servers_for_broker(slug)
     return {
         "brokers": brokers,
         "servers": servers,
+        "candidate_servers": candidates,
         "gateway": {
             "requires_windows_mt5_terminal": True,
             "production_singleton": "weltrade_windows_gateway",
             "multi_broker_workers": "control_plane_present_evidence_gated",
+            "customer_live_connect": True,
             "note": (
-                "Railway API alone cannot host MetaTrader 5. "
-                "Extra brokers need isolated Windows workers with verified "
-                "demo/live credentials before connectable=true."
+                "Customers may connect their own LIVE MT5 accounts for any "
+                "selectable broker. Automated LIVE trading submit remains gated. "
+                "Documented candidates are not verified until authenticate succeeds."
             ),
         },
         "generated_at": _now_iso(),
@@ -196,7 +260,7 @@ def catalogue_snapshot(
 
 
 def documented_hints_for_admin(slug: str) -> list[str]:
-    """Admin-only documented search hints — never shown as verified servers."""
+    """Documented search hints — never shown as verified servers."""
     profile = profile_by_slug(slug)
     if profile is None:
         return []

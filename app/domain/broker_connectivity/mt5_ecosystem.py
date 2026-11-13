@@ -119,8 +119,9 @@ def _mt5_onboarding(
         OnboardingStep(
             title="Connect in QuantForg",
             detail=(
-                "Open /mt5 and submit login, password, and the exact server "
-                "string. Prefer demo first. Never paste credentials into docs."
+                "Open /broker and submit your LIVE MT5 login, master password, "
+                "and the exact server string from the broker portal. Demo remains "
+                "optional. Never paste credentials into docs or chat."
             ),
         ),
         OnboardingStep(
