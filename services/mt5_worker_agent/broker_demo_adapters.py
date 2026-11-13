@@ -188,12 +188,14 @@ def missing_credential_keys(
     keys = [f"{primary}_LOGIN", f"{primary}_PASSWORD", f"{primary}_SERVER"]
     missing: list[str] = []
     for key in keys:
-        alts = [key]
-        if environment == "demo":
-            alts.append(key.replace(f"QF_DEMO_{mid}", f"QF_DEMO_{mid}"))
-            alts.append(key.replace(primary, "QF_DEMO"))
+        if environment == "live":
+            # LIVE never falls back to DEMO material.
+            if not _env(key):
+                missing.append(key)
+            continue
+        alts = [key, key.replace(primary, "QF_DEMO")]
         if not _env(*alts):
-            missing.append(f"{key} (or broker-specific / QF_DEMO_* fallback)")
+            missing.append(f"{key} (or QF_DEMO_* generic fallback)")
     return missing
 
 

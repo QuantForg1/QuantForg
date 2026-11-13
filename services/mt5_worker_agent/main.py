@@ -449,6 +449,11 @@ def cmd_connect_demo(
         )
     elif creds is None:
         missing = missing_credential_keys(slug or "exness", environment=env_req)
+        cred_error = (
+            "live_credentials_not_provided"
+            if env_req == "live"
+            else "demo_credentials_not_provided"
+        )
         print(
             json.dumps(
                 {
@@ -456,10 +461,12 @@ def cmd_connect_demo(
                     "authenticated_demo_accounts": 0,
                     "broker": slug,
                     "environment": env_req,
-                    "error": "demo_credentials_not_provided",
+                    "error": cred_error,
                     "missing_env": missing,
                     "note": (
-                        "Provide approved credentials on the Windows host. "
+                        "Provide approved credentials on the Windows host "
+                        f"as QF_{'LIVE' if env_req == 'live' else 'DEMO'}_* "
+                        "(LIVE never falls back to DEMO). "
                         "Do not invent server names. connectable stays false."
                     ),
                 },
