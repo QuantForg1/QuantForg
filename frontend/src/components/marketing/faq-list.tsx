@@ -1,65 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 const ITEMS = [
   {
     q: "How does QuantForg work?",
-    a: "You create an account, connect your own broker, and choose the permissions you grant. QuantForg then reads market data, scores opportunities, and can submit an order only after the existing risk checks pass. A signal is not an order. An order is not a fill until the broker confirms it.",
+    a: "You create a QuantForg account and connect an MT5 broker account you already own. QuantForg reads that session, evaluates market structure and strategy profiles, and can submit an order only after risk validation and only when execution is authorized. A research result is not an order. An order is not a trade until the broker confirms the fill.",
   },
   {
-    q: "Is my account safe?",
-    a: "Your capital stays at your broker. QuantForg does not show broker passwords after they are entered. Orders still have to pass the risk engine and the broker’s own permissions. No control on this page changes those limits.",
+    q: "Does QuantForg hold customer funds?",
+    a: "No. Your capital stays at your broker. QuantForg does not open a brokerage account for you and does not custody customer funds.",
   },
   {
-    q: "What symbols can I trade?",
-    a: "The live desk is gold: XAUUSD. Other symbols are not offered as a public trading universe on this page. Connected sessions show the broker instruments that the gateway returns.",
-  },
-  {
-    q: "How are the results calculated?",
-    a: "Completed results come from broker deals after you are connected: entry, exit, commission, swap, and net profit when the history API returns them. This marketing page does not publish sample win rates or profit figures.",
+    q: "How do I connect my MT5 account?",
+    a: "Create your QuantForg account, then open Broker Accounts and enter the MT5 login you own. Weltrade is the production connection. QuantForg uses the permissions that broker login already grants. Email verification stays on the existing account path. This is not a separate identity check.",
   },
   {
     q: "Which brokers are supported?",
-    a: "The production connection is Weltrade through MetaTrader 5. You connect the account you own and grant the permissions that account allows. Other broker brands are not listed here as live integrations.",
+    a: "Weltrade through MetaTrader 5 is the production-verified connection, with catalogue servers Weltrade-Real and Weltrade-Demo. Exness, IC Markets, Pepperstone, FP Markets, HFM, and XM are listed in the broker catalogue and are not yet a verified connection path. MetaTrader 5 is the trading platform, not a broker.",
   },
   {
-    q: "What happens after I connect a broker?",
-    a: "The gateway session loads account status, quotes, and positions from that login. Analysis can show a research signal. Execution still waits for risk validation. If a check fails, the order is not sent. Open positions stay under the existing stop and management rules.",
+    q: "How are risk controls applied?",
+    a: "Risk checks run before an order is submitted. Customer preferences — risk per trade, maximum lot, daily loss, and open positions — can be stricter than the platform ceiling and cannot loosen it. A failed check blocks the order. A subscription plan does not bypass those checks. The autonomous desk trades XAUUSD (gold).",
   },
   {
-    q: "Can I use copy trading?",
-    a: "QuantForg does not offer a separate copy-trading product. Automatic execution, when enabled, runs on your connected account under the settings already saved for that account.",
+    q: "How is performance calculated?",
+    a: "Completed results come from broker deal history after a session is connected: entry, exit, commission, swap, and net profit when that history is returned. This page does not publish a sample win rate, profit, profit factor, drawdown, or average trade.",
+  },
+  {
+    q: "What happens if the connection fails?",
+    a: "The gateway reports the session as unavailable. QuantForg does not submit an order without that connection. Positions that are already open remain at the broker under the stops and permissions on that account.",
+  },
+  {
+    q: "Can I disconnect my broker?",
+    a: "Yes. Broker Accounts includes disconnect for the connected Weltrade session. Disconnecting stops QuantForg from using that login. It does not close the account at the broker.",
+  },
+  {
+    q: "Are profits guaranteed?",
+    a: "No. QuantForg sells software access. Trading can lose capital. A subscription, a signal, or a connected account is not a promise of profit.",
   },
 ] as const;
 
 export function FaqList() {
+  const baseId = useId();
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
+    <div className="home-faq">
       {ITEMS.map((item, index) => {
         const expanded = open === index;
+        const buttonId = `${baseId}-btn-${index}`;
+        const panelId = `${baseId}-panel-${index}`;
         return (
-          <div key={item.q}>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left text-sm font-medium text-[var(--fg)] sm:px-5"
-              aria-expanded={expanded}
-              onClick={() => setOpen(expanded ? null : index)}
-            >
-              {item.q}
-              <ChevronDown
-                className={`h-4 w-4 shrink-0 text-[var(--fg-muted)] transition-transform ${expanded ? "rotate-180" : ""}`}
-                aria-hidden
-              />
-            </button>
-            {expanded ? (
-              <p className="px-4 pb-4 text-sm leading-relaxed text-[var(--fg-muted)] sm:px-5">
-                {item.a}
-              </p>
-            ) : null}
+          <div key={item.q} className="home-faq-item">
+            <h3>
+              <button
+                id={buttonId}
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                onClick={() => setOpen(expanded ? null : index)}
+              >
+                <span>{item.q}</span>
+                <ChevronDown aria-hidden data-open={expanded ? "true" : "false"} />
+              </button>
+            </h3>
+            <div id={panelId} role="region" aria-labelledby={buttonId} hidden={!expanded}>
+              <p>{item.a}</p>
+            </div>
           </div>
         );
       })}

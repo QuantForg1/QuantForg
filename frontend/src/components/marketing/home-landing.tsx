@@ -2,713 +2,872 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
-  ArrowRight,
   BarChart3,
   Brain,
+  CandlestickChart,
   Check,
-  ChevronRight,
-  CircleCheck,
+  Eye,
+  FileLock2,
   Gauge,
-  Lock,
+  KeyRound,
+  Layers,
+  LineChart,
   Monitor,
-  Play,
-  Radar,
-  ScanSearch,
+  MoveUpRight,
+  RefreshCcw,
   Send,
   Shield,
   ShieldCheck,
-  Sparkles,
+  Target,
+  Unplug,
+  Waves,
   Workflow,
   Zap,
 } from "lucide-react";
-import { SiteFooter } from "@/components/marketing/site-footer";
-import { SiteHeader } from "@/components/marketing/site-header";
 import { FaqList } from "@/components/marketing/faq-list";
+import { HomeHeader } from "@/components/marketing/home-header";
+import { Reveal } from "@/components/marketing/reveal";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { MountainBackdrop } from "@/components/brand/mountain-backdrop";
-import { WeltradeLogo } from "@/components/brand/weltrade-logo";
 import {
-  OWNER_MAX_LOT,
-  OWNER_MAX_PLANNED_RISK_PCT,
-  OWNER_MAX_SPREAD,
-} from "@/lib/execution/ticket-risk";
+  ANNUAL_BILLING_SUPPORTED,
+  BILLING_PLANS,
+  BILLING_PROVIDER,
+  formatUsd,
+  TRIAL_DAYS,
+  TRIAL_POSITIONING,
+} from "@/lib/billing/plans";
 import styles from "./home-landing.module.css";
 
-const btn =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]";
-
-const CAPABILITIES: ReadonlyArray<{
-  title: string;
-  body: string;
-  icon: LucideIcon;
-}> = [
+const FEATURES: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }> = [
   {
     title: "MT5 Connectivity",
-    body: "Secure connection to the MetaTrader 5 account you authorize.",
+    body: "Connect the MetaTrader 5 account you already own. Weltrade is the production path. The gateway reads that login’s session.",
     icon: Monitor,
   },
   {
     title: "AI Market Intelligence",
-    body: "Research scoring on the gold desk. A score is not an executed trade.",
+    body: "The gold desk scores structure, momentum, and context. A score is research. It is not an order.",
     icon: Brain,
   },
   {
     title: "Automated Risk Management",
-    body: "Existing risk checks run before an order is handed to the broker.",
+    body: "Risk checks run before an order is handed to the broker. A failed check blocks the send.",
     icon: Shield,
   },
   {
-    title: "24/5 Trading",
-    body: "The gold session runs Monday to Friday. Weekend hours are not treated as an active session.",
-    icon: Zap,
-  },
-];
-
-const ROBOT: ReadonlyArray<{
-  title: string;
-  body: string;
-  icon: LucideIcon;
-}> = [
-  {
-    title: "Market Scanning",
-    body: "Reads the gold feed from the connected gateway.",
-    icon: ScanSearch,
-  },
-  {
-    title: "AI Analysis",
-    body: "Scores structure, momentum, and context. A signal is not an order.",
-    icon: Brain,
-  },
-  {
-    title: "Strategy Engine",
-    body: "Evaluates modules already in the product catalogue.",
-    icon: Workflow,
-  },
-  {
-    title: "Risk Validation",
-    body: "Blocks orders that fail planned risk or spread limits before send.",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Order Execution",
-    body: "Sends approved orders through OMS and MT5. An order is not a fill.",
+    title: "Trading Execution",
+    body: "Authorized orders go through the order path and MT5. An order is not a fill until the broker confirms it.",
     icon: Send,
   },
   {
-    title: "Trade Management",
-    body: "Monitors open positions and protective stops on the connected account.",
+    title: "Position Monitoring",
+    body: "Open positions and protective stops are read from the connected account and watched while the session is up.",
     icon: Activity,
   },
   {
-    title: "Trade Closure",
-    body: "Closes or updates only through the broker connection.",
-    icon: CircleCheck,
-  },
-  {
-    title: "Performance",
-    body: "History is the broker’s deals — never invented for this page.",
+    title: "Performance Analytics",
+    body: "Results come from broker deal history after you connect. This page does not publish sample statistics.",
     icon: BarChart3,
   },
 ];
 
-const STRATEGIES = [
-  "Trend Following",
-  "Liquidity Sweep",
-  "Breakout",
-  "Mean Reversion",
-  "Momentum",
-  "Order Block",
-  "Fair Value Gap",
-  "RSI / MACD",
-  "Bollinger Bands",
+const STEPS = [
+  {
+    n: "01",
+    title: "Create Your Account",
+    body: "Sign up with your email and password. Email verification stays on the existing account path. QuantForg does not add a separate identity check here.",
+    href: "/register",
+    label: "Create account",
+  },
+  {
+    n: "02",
+    title: "Connect Your Broker",
+    body: "After sign-in, Broker Accounts takes the Weltrade MT5 login you own. QuantForg uses the permissions that account already grants.",
+    href: "/brokers",
+    label: "Open Broker Accounts",
+  },
+  {
+    n: "03",
+    title: "Verify & Activate",
+    body: "Confirm the gateway session is connected and review risk status. Execution stays off until it is authorized. A connected login is not an automatic order.",
+    href: "/#security",
+    label: "Review the controls",
+  },
 ] as const;
 
-const RISK_CONTROLS = [
-  ["Risk per Trade", `${OWNER_MAX_PLANNED_RISK_PCT}%`],
-  ["Aggregate Open Risk", "30%"],
-  ["Max Lot", String(OWNER_MAX_LOT)],
-  ["Max Spread", `${OWNER_MAX_SPREAD.toFixed(2)} USD`],
-  ["Daily Loss Protection", "48%"],
-  ["ATR Stop Multiplier", "1.00"],
-  ["Max Positions", "5"],
-  ["Symbol Allowlist", "XAUUSD (Gold)"],
+/** Homepage display only — logo + name. Does not change connection capability. */
+const BROKERS: ReadonlyArray<{
+  name: string;
+  logoSrc: string;
+}> = [
+  { name: "Weltrade", logoSrc: "/brand/brokers/weltrade-logo.png" },
+  { name: "XM", logoSrc: "/brand/brokers/xm-mark.png" },
+  { name: "Exness", logoSrc: "/brand/brokers/exness-mark.png" },
+  { name: "HFM", logoSrc: "/brand/brokers/hfm-mark.png" },
+  { name: "IC Markets", logoSrc: "/brand/brokers/icmarkets-mark.png" },
+  { name: "Pepperstone", logoSrc: "/brand/brokers/pepperstone-mark.png" },
+  { name: "FP Markets", logoSrc: "/brand/brokers/fpmarkets-mark.svg" },
+  { name: "JustMarkets", logoSrc: "/brand/brokers/justmarkets-mark.png" },
+];
+
+const WORKFLOW: ReadonlyArray<{ title: string; body: string }> = [
+  { title: "Market Scanning", body: "Reads the gold feed from the connected gateway." },
+  { title: "AI Analysis", body: "Scores structure, momentum, and context." },
+  { title: "Strategy Evaluation", body: "Runs the profiles already in the strategy registry." },
+  { title: "Risk Validation", body: "Blocks an order that fails the checks before send." },
+  { title: "Order Execution", body: "Submits only an authorized order through MT5." },
+  { title: "Trade Management", body: "Monitors open positions and protective stops." },
+  { title: "Trade Closure", body: "Closes or updates only through the broker connection." },
+  { title: "Performance Review", body: "Uses broker deal history. Nothing is invented here." },
+];
+
+const RULES = [
+  "Analysis is not an order.",
+  "A signal is not an executed trade.",
+  "Risk validation happens before order submission.",
+  "Execution requires authorization and broker connectivity.",
 ] as const;
 
-const SECURITY: ReadonlyArray<{
+const EXECUTION_PROFILES: ReadonlyArray<{
   title: string;
+  status: string;
   body: string;
   icon: LucideIcon;
 }> = [
   {
-    title: "Encrypted Credentials",
-    body: "Passwords are entered to sign in or connect. They are not printed back on the screen.",
-    icon: Lock,
+    title: "Trend Following",
+    status: "Execution profile",
+    body: "Trend continuation scalping. It can be selected only after risk and execution gates.",
+    icon: MoveUpRight,
   },
   {
-    title: "Secure Connection",
-    body: "The existing MT5 gateway talks to the server on the account you connect.",
-    icon: Radar,
+    title: "Breakout",
+    status: "Execution profile",
+    body: "Breakout scalping on volatility expansion. A setup is not a broker order.",
+    icon: Zap,
   },
   {
-    title: "Account-Level Permissions",
-    body: "Trading uses the rights on that broker login. A missing permission stops the action.",
+    title: "Mean Reversion",
+    status: "Execution profile",
+    body: "Range mean-reversion scalping, used in range-like regimes.",
+    icon: RefreshCcw,
+  },
+  {
+    title: "Momentum",
+    status: "Execution profile",
+    body: "Momentum scalping. Directional confirmation still waits on risk validation.",
+    icon: Gauge,
+  },
+  {
+    title: "SMC Scalping",
+    status: "Execution profile",
+    body: "The production SMC profile. Liquidity sweep, order block, and fair value gap sit inside it.",
+    icon: CandlestickChart,
+  },
+];
+
+const ANALYSIS_FACTORS: ReadonlyArray<{
+  title: string;
+  status: string;
+  body: string;
+  icon: LucideIcon;
+}> = [
+  {
+    title: "Liquidity Sweep",
+    status: "Inside SMC",
+    body: "A weight inside SMC Scalping. Not a separate execution profile.",
+    icon: Waves,
+  },
+  {
+    title: "Order Block",
+    status: "Inside SMC",
+    body: "A structure factor in SMC scoring. It is not submitted as its own order.",
+    icon: Layers,
+  },
+  {
+    title: "Fair Value Gap",
+    status: "Inside SMC",
+    body: "A gap factor in SMC scoring. Not its own strategy id.",
+    icon: Target,
+  },
+  {
+    title: "RSI",
+    status: "Advisory vote",
+    body: "Momentum oscillator advisory. Cannot win order selection on its own.",
+    icon: Activity,
+  },
+  {
+    title: "MACD",
+    status: "Advisory vote",
+    body: "Trend-momentum advisory vote. Not an independent execution profile.",
+    icon: LineChart,
+  },
+  {
+    title: "Bollinger Bands",
+    status: "Advisory vote",
+    body: "Volatility factor advisory. Vote only — not an execution profile.",
+    icon: BarChart3,
+  },
+];
+
+const RISK_ROWS = [
+  {
+    name: "Risk per trade",
+    ceiling: "A platform ceiling is enforced before send.",
+    preference: "Your preference can be stricter. It cannot raise the ceiling.",
+  },
+  {
+    name: "Maximum lot",
+    ceiling: "Volume is hard-capped by the platform maximum.",
+    preference: "A personal maximum cannot exceed that cap.",
+  },
+  {
+    name: "Spread protection",
+    ceiling: "Spread is checked before an order is submitted.",
+    preference: "A wide spread blocks the send. It is not a plan benefit.",
+  },
+  {
+    name: "ATR stop loss",
+    ceiling: "A new order needs a protective stop. The stop is not shrunk to force a trade.",
+    preference: "Stops follow the saved policy. This page does not publish a private multiplier.",
+  },
+  {
+    name: "Daily loss protection",
+    ceiling: "New entries halt when the effective daily-loss threshold is reached.",
+    preference: "Your threshold cannot exceed the platform halt ceiling.",
+  },
+  {
+    name: "Maximum open positions",
+    ceiling: "Concurrent positions have a platform ceiling.",
+    preference: "Your concurrent-position preference cannot exceed it.",
+  },
+  {
+    name: "Symbol restrictions",
+    ceiling: "The autonomous desk trades XAUUSD (gold).",
+    preference: "Other symbols are not the public trading universe.",
+  },
+] as const;
+
+const SECURITY: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }> = [
+  {
+    title: "Encrypted credentials",
+    body: "MT5 worker credentials are sealed before delivery. Passwords are not printed back on screen.",
+    icon: KeyRound,
+  },
+  {
+    title: "Secure connections",
+    body: "The MT5 gateway talks to the server on the account you connect. A down gateway stays unavailable.",
     icon: ShieldCheck,
   },
   {
-    title: "Independent Risk Controls",
-    body: "The risk engine can refuse an order before it reaches the broker.",
+    title: "Account isolation",
+    body: "A signed-in customer works on their own broker connection. One login does not reveal another customer’s credentials.",
+    icon: Unplug,
+  },
+  {
+    title: "Role-based access",
+    body: "Customer, admin, and owner routes are separated. Operator controls are not part of this page.",
+    icon: FileLock2,
+  },
+  {
+    title: "Worker isolation",
+    body: "Authorized MT5 workers receive sealed credentials for the account they are assigned. That path is the implemented worker boundary.",
+    icon: Workflow,
+  },
+  {
+    title: "Audit logging",
+    body: "Security-relevant actions are written to the audit log. This page does not expose those records.",
+    icon: Eye,
+  },
+  {
+    title: "Monitoring and fail-safe",
+    body: "Live execution stays behind its enable switch. Risk can refuse an order, and an emergency stop can halt new auto-trading.",
     icon: Shield,
   },
 ];
 
-const MT5_CONTEXT = [
-  "MetaTrader 5",
-  "IC Markets",
-  "Exness",
-  "Pepperstone",
-  "XM",
-] as const;
-
-const PERFORMANCE_METRICS = [
-  "Total trades",
+const METRICS = [
   "Win rate",
   "Net profit",
   "Profit factor",
-  "Max drawdown",
+  "Drawdown",
+  "Number of trades",
   "Average trade",
-  "Open positions",
-  "Broker verified",
 ] as const;
 
-function SectionTitle({
-  id,
-  kicker,
-  title,
-  body,
-}: {
-  id?: string;
-  kicker: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="mb-8 max-w-3xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-        {kicker}
-      </p>
-      <h2
-        id={id}
-        className="mt-2 text-2xl font-semibold tracking-tight text-[var(--fg)] sm:text-3xl"
-      >
-        {title}
-      </h2>
-      <p className="mt-3 text-sm leading-relaxed text-[var(--fg-muted)] sm:text-base">
-        {body}
-      </p>
-    </div>
-  );
-}
+const DIFFERENTIATORS: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }> = [
+  {
+    title: "Capital stays at your broker",
+    body: "QuantForg does not custody funds and does not open the brokerage account.",
+    icon: Shield,
+  },
+  {
+    title: "Connect the account you have",
+    body: "You attach an existing MT5 login. Weltrade is the connection that is verified today.",
+    icon: Monitor,
+  },
+  {
+    title: "Analysis and execution are separate",
+    body: "Research, a signal, an approved order, and a broker fill are different states.",
+    icon: Brain,
+  },
+  {
+    title: "Risk validation before orders",
+    body: "The order is checked before submission. A failed check does not reach the broker.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Position monitoring",
+    body: "Open positions and protective stops are watched on the connected session.",
+    icon: Activity,
+  },
+  {
+    title: "Transparent activity",
+    body: "Trading activity is the broker session and its history, not a figure made for this page.",
+    icon: BarChart3,
+  },
+];
 
-function Sparkline({ seed }: { seed: number }) {
-  const points = Array.from({ length: 8 }, (_, i) => {
-    const y = 14 - ((seed * 7 + i * 11) % 12);
-    return `${4 + i * 5},${y}`;
-  }).join(" ");
-  return (
-    <svg className={styles.spark} viewBox="0 0 44 20" aria-hidden>
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-    </svg>
-  );
-}
+const FOOTER = [
+  {
+    title: "Product",
+    links: [
+      { href: "/#features", label: "Features" },
+      { href: "/#how-it-works", label: "How It Works" },
+      { href: "/#strategies", label: "Strategies" },
+      { href: "/pricing", label: "Pricing" },
+    ],
+  },
+  {
+    title: "Platform",
+    links: [
+      { href: "/#platform", label: "Platform" },
+      { href: "/live", label: "Live Market" },
+      { href: "/#brokers", label: "Brokers" },
+      { href: "/#security", label: "Security" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { href: "/contact", label: "Contact" },
+      { href: "mailto:support@quantforg.com", label: "Support" },
+      { href: "/#faq", label: "FAQ" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { href: "/login", label: "Sign In" },
+      { href: "/register", label: "Create account" },
+      { href: "/contact", label: "Contact" },
+    ],
+  },
+] as const;
 
-function TerminalPreview({ tilted = false }: { tilted?: boolean }) {
+function IconBadge({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <div className={`${styles.laptop}${tilted ? ` ${styles.ctaLaptop}` : ""}`}>
-      <div className={styles.laptopGlow} aria-hidden />
-      <div className={styles.laptopBody}>
-        <div className={styles.laptopBezel}>
-          <div className={styles.laptopScreen}>
-            <div className={styles.laptopChrome}>
-              <span className={`${styles.dot} ${styles.dotRed}`} />
-              <span className={`${styles.dot} ${styles.dotAmber}`} />
-              <span className={`${styles.dot} ${styles.dotGreen}`} />
-              <span className="ml-2 text-[10px] text-[var(--fg-subtle)]">
-                Live Trading Terminal
-              </span>
-            </div>
-            <div className={styles.terminalGrid}>
-              <aside className={styles.terminalNav} aria-hidden>
-                {[
-                  "Dashboard",
-                  "Positions",
-                  "Strategies",
-                  "Analysis",
-                  "Risk",
-                  "Broker",
-                  "History",
-                  "Settings",
-                ].map((item, i) => (
-                  <p
-                    key={item}
-                    className={i === 0 ? styles.terminalNavActive : styles.terminalNavItem}
-                  >
-                    {item}
-                  </p>
-                ))}
-              </aside>
-              <div className={styles.terminalMain}>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold">XAUUSD (Gold)</p>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-0.5 text-[10px] text-[var(--fg-muted)]">
-                    Preview
-                  </span>
-                </div>
-                <div
-                  className={styles.chartFrame}
-                  role="img"
-                  aria-label="Decorative chart frame, not a price history"
-                >
-                  {Array.from({ length: 22 }, (_, i) => {
-                    const up = i % 3 !== 0;
-                    const body = 16 + ((i * 13) % 48);
-                    return (
-                      <span
-                        key={i}
-                        className="flex flex-1 flex-col items-center justify-end"
-                        style={{ height: "100%" }}
-                      >
-                        <span
-                          className={
-                            up
-                              ? "w-1.5 rounded-sm bg-[var(--success)]/75"
-                              : "w-1.5 rounded-sm bg-[var(--danger)]/75"
-                          }
-                          style={{ height: body }}
-                        />
-                      </span>
-                    );
-                  })}
-                </div>
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)]/70 p-2">
-                  <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                    AI Market Bias
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--fg)]">
-                    Appears after connection
-                  </p>
-                  <p className="mt-1 text-[10px] text-[var(--fg-muted)]">
-                    Trend · Momentum · Volatility · Confidence stay empty until live research
-                    arrives.
-                  </p>
-                </div>
-                <dl className={styles.metricGrid}>
-                  {[
-                    ["Account Equity", "—"],
-                    ["Open Positions", "—"],
-                    ["Today’s P&L", "—"],
-                    ["Win Rate", "—"],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="rounded-md border border-[var(--border)] bg-[var(--bg)]/40 px-2 py-1.5 text-[10px]"
-                    >
-                      <dt className="text-[var(--fg-subtle)]">{label}</dt>
-                      <dd className="mt-0.5 font-medium text-[var(--fg)]">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className={styles.laptopBase} aria-hidden />
-      </div>
-    </div>
+    <span className={styles.icon}>
+      <Icon strokeWidth={1.75} aria-hidden />
+    </span>
   );
 }
 
 export function HomeLanding() {
   return (
     <div className={styles.page}>
-      <div className={styles.atmosphere} aria-hidden>
-        <MountainBackdrop intensity="soft" />
-      </div>
-      <div className={styles.shell}>
-        <SiteHeader active="home" />
-        <main id="main-content" tabIndex={-1}>
-          <section id="platform" className={styles.hero}>
-            <MountainBackdrop withCandles intensity="vivid" />
-            <div className={`${styles.section} ${styles.heroGrid}`}>
-              <div>
-                <p className={styles.badge}>
-                  <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
-                  Institutional AI Trading · MT5 · 24/5 gold session
-                </p>
-                <h1 className={styles.headline}>
-                  Your Trading.
-                  <span className="mt-1 block">Our Intelligence.</span>
-                  <span className={`mt-1 block ${styles.headlineAccent}`}>Fully Connected.</span>
-                </h1>
-                <p className={styles.lead}>
-                  QuantForg is an Institutional AI Trading Platform that connects traders to their
-                  broker accounts and provides market intelligence, strategy evaluation, risk
-                  management, and automated execution under approved settings. Software access is
-                  not a promise of profits.
-                </p>
-                <div className={styles.ctaRow}>
-                  <Link href="/register" className={`${btn} qf-btn-cta h-12 px-5`}>
-                    Connect Your Broker
-                    <ArrowRight className="h-4 w-4" aria-hidden />
-                  </Link>
-                  <Link
-                    href="/#how-it-works"
-                    className={`${btn} ${styles.secondaryBtn} h-12 px-5`}
-                  >
-                    <Play className="h-4 w-4 text-[var(--accent)]" aria-hidden />
-                    Explore How It Works
-                  </Link>
-                </div>
-                <ul className={styles.trustRow}>
-                  {[
-                    "Works with your MT5 broker.",
-                    "Your capital, your control.",
-                    "Risk checks before every order.",
-                  ].map((item) => (
-                    <li key={item} className={styles.trustItem}>
-                      <Check className="h-4 w-4 text-[var(--success)]" aria-hidden />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <TerminalPreview />
-            </div>
-          </section>
-
-          <section
-            id="features"
-            className={`${styles.section} ${styles.featureGrid}`}
-            aria-label="Platform capabilities"
-          >
-            {CAPABILITIES.map((item) => {
-              const Icon = item.icon;
-              return (
-                <article key={item.title} className={`qf-glass-card qf-glass-card--hover ${styles.featureCard}`}>
-                  <span className={styles.featureIcon}>
-                    <Icon className="h-5 w-5" aria-hidden />
-                  </span>
-                  <h2 className="text-base font-semibold">{item.title}</h2>
-                  <p className="mt-1 text-sm text-[var(--fg-muted)]">{item.body}</p>
-                </article>
-              );
-            })}
-          </section>
-
-          <section id="how-it-works" className={`${styles.section} py-12`}>
-            <SectionTitle
-              kicker="Get started"
-              title="How to Connect Your Broker — 3 Simple Steps"
-              body="You connect the account you already have. QuantForg does not open a broker account for you."
+      <HomeHeader />
+      <main id="main-content" tabIndex={-1}>
+        <section id="platform" className={styles.hero}>
+          <picture className={styles.heroPicture}>
+            <source srcSet="/images/quantforg-hero-background.webp" type="image/webp" />
+            <img
+              src="/images/quantforg-hero-background.png"
+              alt=""
+              width={1024}
+              height={576}
+              className={styles.heroBackground}
+              decoding="async"
+              fetchPriority="high"
             />
-            <ol className={styles.steps}>
-              <li className="qf-glass-card qf-glass-card--hover p-5">
-                <span className={styles.stepNumber}>1</span>
-                <h3 className="mt-3 text-lg font-semibold">Create your account</h3>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">
-                  Sign up with your email and password. Email verification stays on the existing
-                  path.
-                </p>
-                <div className={styles.formPreview} aria-hidden>
-                  {["Name", "Email", "Password"].map((field) => (
-                    <div key={field} className={styles.formField}>
-                      {field}
-                    </div>
-                  ))}
-                </div>
-                <Link href="/register" className={`${styles.formCta} mt-2 w-full`}>
-                  Create account
+          </picture>
+          <div className={`${styles.wrap} ${styles.heroGrid}`}>
+            <div className={styles.heroCopy}>
+              <p className={styles.kicker}>Institutional trading technology</p>
+              <h1 className={styles.headline}>
+                <span className={styles.headlineLine}>Trade With Intelligence.</span>
+                <span className={`${styles.headlineLine} ${styles.headlineAccent}`}>
+                  Execute With Discipline.
+                </span>
+              </h1>
+              <p className={styles.lead}>
+                QuantForg connects your MT5 trading account to institutional market intelligence,
+                strategy analysis and risk controls — keeping your capital and broker account under
+                your control.
+              </p>
+              <div className={styles.ctaRow}>
+                <Link href="/register" className={styles.buttonPrimary}>
+                  Connect Your Broker
                 </Link>
-              </li>
-              <li className="qf-glass-card qf-glass-card--hover p-5">
-                <span className={styles.stepNumber}>2</span>
-                <h3 className="mt-3 text-lg font-semibold">Connect your broker</h3>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">
-                  Enter the Weltrade MT5 login you own. QuantForg uses the permissions that account
-                  grants.
-                </p>
-                <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/40 p-4">
-                  <WeltradeLogo size={56} variant="wordmark" className="rounded-2xl" />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                    Primary Broker
-                  </p>
-                  <p className="text-center text-[10px] text-[var(--fg-subtle)]">
-                    Other names below are MT5 compatibility context only — not verified production
-                    integrations.
-                  </p>
-                  <div className={styles.brokerChipRow}>
-                    {MT5_CONTEXT.map((name) => (
-                      <span key={name} className={styles.brokerChip}>
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </li>
-              <li className="qf-glass-card qf-glass-card--hover p-5">
-                <span className={styles.stepNumber}>3</span>
-                <h3 className="mt-3 text-lg font-semibold">Verify and activate</h3>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">
-                  Confirm the session is connected, review risk status, then allow execution only if
-                  you choose to.
-                </p>
-                <ul className="mt-4 space-y-2 rounded-xl border border-[var(--border)] bg-[var(--bg)]/40 p-3 text-sm">
-                  {[
-                    "Account verification",
-                    "Broker permissions",
-                    "Risk controls reviewed",
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-2 text-[var(--fg-muted)]">
-                      <Check className="h-4 w-4 text-[var(--success)]" aria-hidden />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[var(--success)]/30 bg-[var(--success-soft)] px-3 py-2 text-xs font-medium text-[var(--success)]">
-                  <ShieldCheck className="h-4 w-4" aria-hidden />
-                  Account Verified — Ready to Trade
-                </p>
-              </li>
-            </ol>
-          </section>
+                <Link href="/#how-it-works" className={styles.buttonSecondary}>
+                  Explore How It Works
+                </Link>
+              </div>
+              <ul className={styles.trustList}>
+                <li>
+                  <Check strokeWidth={1.75} aria-hidden />
+                  Your broker account remains yours.
+                </li>
+                <li>
+                  <Check strokeWidth={1.75} aria-hidden />
+                  Risk checks before execution.
+                </li>
+                <li>
+                  <Check strokeWidth={1.75} aria-hidden />
+                  Transparent and controlled trading.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
 
-          <section id="robot" className={`${styles.section} py-6`}>
-            <SectionTitle
-              kicker="Workflow"
-              title="What Your Robot Does"
-              body="From market analysis to a broker-confirmed trade. A signal is not an order. An order is not a confirmed fill. Risk validation occurs before execution. Performance comes from actual broker history."
-            />
-            <ol className={styles.robotRow}>
-              {ROBOT.map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <li key={step.title} className={styles.robotItem}>
-                    <div className={`qf-glass-card ${styles.robotCard}`}>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
-                          {String(index + 1).padStart(2, "0")}
-                        </p>
-                        <Icon className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
+        <div className={styles.mountainRegion}>
+          {/* Same Login MountainBackdrop. Sticky + negative margin keeps viewport framing on long pages. */}
+          <div className={styles.mountainSticky} aria-hidden>
+            <MountainBackdrop intensity="vivid" />
+          </div>
+          <div className={styles.mountainContent}>
+
+        <section id="brokers" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>Broker integrations</p>
+                <h2>Our Supported Brokers</h2>
+                <p className={styles.sectionLead}>
+                  Connect through MetaTrader 5 with the brands already listed in QuantForg.
+                </p>
+              </header>
+            </Reveal>
+            <ul className={styles.brokerGrid}>
+              {BROKERS.map((broker, index) => (
+                <li key={broker.name}>
+                  <Reveal delayMs={Math.min(index * 40, 280)}>
+                    <div className={styles.brokerCard}>
+                      <div className={styles.logoWell}>
+                        {/* Native img keeps official aspect ratio. Do not recolor. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={broker.logoSrc} alt="" />
                       </div>
-                      <h3 className="text-sm font-semibold">{step.title}</h3>
-                      <p className="mt-1 text-xs leading-relaxed text-[var(--fg-muted)]">
-                        {step.body}
-                      </p>
+                      <h3>{broker.name}</h3>
                     </div>
-                    {index < ROBOT.length - 1 ? (
-                      <ChevronRight className={styles.robotArrow} aria-hidden />
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-          <section id="strategies" className={`${styles.section} py-12`}>
-            <SectionTitle
-              kicker="Strategy intelligence"
-              title="Modules the product already evaluates"
-              body="These names come from the existing strategy catalogue. Listing a module here does not mean it is currently active or executing trades."
-            />
-            <ul className={styles.strategyGrid}>
-              {STRATEGIES.map((name, index) => (
-                <li key={name} className={`qf-glass-card qf-glass-card--hover ${styles.strategyPill}`}>
-                  <Sparkline seed={index + 3} />
-                  <div>
-                    <h3 className="font-semibold">{name}</h3>
-                    <p className="mt-0.5 text-xs text-[var(--fg-muted)]">Catalogue module</p>
-                  </div>
+                  </Reveal>
                 </li>
               ))}
             </ul>
-          </section>
-
-          <section id="risk" className={`${styles.section} py-6`}>
-            <SectionTitle
-              kicker="Risk and capital protection"
-              title="Controls that run before an order"
-              body="Saved owner limits are enforced before send. Numbers below mirror the live owner policy ceilings — not sample account results."
-            />
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {RISK_CONTROLS.map(([title, value]) => (
-                <li key={title} className="qf-glass-card qf-glass-card--hover p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-subtle)]">
-                    {title}
-                  </p>
-                  <p className={styles.riskValue}>{value}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section id="performance" className={`${styles.section} py-12`}>
-            <SectionTitle
-              kicker="Performance and transparency"
-              title="Real results stay inside the account"
-              body="No sample statistics are shown here. Win rate, profit, and drawdown appear only from broker history after you connect."
-            />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {PERFORMANCE_METRICS.map((label) => (
-                <div key={label} className="qf-glass-card border-dashed p-4">
-                  <p className="text-xs uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
-                  <p className="mt-2 text-lg font-semibold">—</p>
-                  <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                    Shown from your broker session, not from this page.
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className={`${styles.section} py-6`}>
-            <SectionTitle
-              kicker="Why QuantForg is different"
-              title="Built around the account you connect"
-              body="Your capital stays at your broker. Market analysis, research signals, approved orders, and confirmed fills are distinct. Risk controls run before execution. The robot monitors positions and protective stops."
-            />
-            <div className={styles.diffGrid}>
-              <article className="qf-glass-card p-5">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                  Broker context
-                </p>
-                <div className="mb-4 flex items-center gap-3">
-                  <WeltradeLogo size={48} variant="wordmark" className="rounded-xl" />
-                  <div>
-                    <p className="text-sm font-semibold">Weltrade</p>
-                    <p className="text-xs text-[var(--fg-muted)]">Production broker path</p>
-                  </div>
-                </div>
-                <div className={styles.brokerChipRow}>
-                  {MT5_CONTEXT.map((name) => (
-                    <span key={name} className={styles.brokerChip}>
-                      {name}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-3 text-xs text-[var(--fg-subtle)]">
-                  Non-Weltrade names are contextual MT5 references only.
-                </p>
-              </article>
-              <article className="qf-glass-card p-5">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                  Operating principles
-                </p>
-                <ul className="space-y-3">
-                  {[
-                    "Your capital stays at your broker. QuantForg does not custody funds.",
-                    "Market analysis, a research signal, an approved order, and a confirmed fill are separate states.",
-                    "Risk controls run before order execution.",
-                    "The robot monitors positions and protective stops according to the settings already saved.",
-                  ].map((item) => (
-                    <li key={item} className="flex gap-3 text-sm text-[var(--fg-muted)]">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]" aria-hidden />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            </div>
-          </section>
-
-          <section id="brokers" className={`${styles.section} py-12`}>
-            <SectionTitle
-              kicker="Broker integration"
-              title="Supported connection"
-              body="Weltrade through MetaTrader 5 is the production broker path."
-            />
-            <div className={styles.brokerGrid}>
-              <article className="qf-glass-card qf-glass-card--hover p-5">
-                <WeltradeLogo size={44} variant="wordmark" className="mb-3 rounded-xl" />
-                <h3 className="text-lg font-semibold">Weltrade</h3>
-                <p className="mt-2 text-sm text-[var(--fg-muted)]">
-                  Connect the real account you own. The Broker Accounts screen shows login, server,
-                  balance, and sync status from that session.
-                </p>
-              </article>
-              <article className="qf-glass-card qf-glass-card--hover p-5">
-                <Gauge className="mb-3 h-5 w-5 text-[var(--accent)]" aria-hidden />
-                <h3 className="text-lg font-semibold">MetaTrader 5</h3>
-                <p className="mt-2 text-sm text-[var(--fg-muted)]">
-                  Orders, positions, and history travel through the existing gateway. A disconnected
-                  gateway shows an unavailable state.
-                </p>
-              </article>
-            </div>
-          </section>
-
-          <section id="security" className={`${styles.section} py-6`}>
-            <SectionTitle
-              kicker="Security and reliability"
-              title="Your account and the checks around it"
-              body="Sign-in, broker connection, and order permission stay on the systems that already exist. No unsupported security certifications are claimed here."
-            />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {SECURITY.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <article key={item.title} className="qf-glass-card qf-glass-card--hover p-4">
-                    <Icon className="mb-3 h-5 w-5 text-[var(--accent)]" aria-hidden />
-                    <h3 className="font-semibold">{item.title}</h3>
-                    <p className="mt-1 text-sm text-[var(--fg-muted)]">{item.body}</p>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          <section id="faq" className={`${styles.section} py-6`}>
-            <SectionTitle
-              kicker="Questions"
-              title="Frequently Asked Questions"
-              body="Short answers about connection, symbols, results, and what the robot is allowed to do."
-            />
-            <FaqList />
-          </section>
-
-          <section className={`${styles.section} pb-16 pt-6`}>
-            <div className={`qf-glass-card qf-glass-card--hero ${styles.ctaBand}`}>
-              <MountainBackdrop className="rounded-[1.25rem]" intensity="vivid" />
-              <div className={styles.ctaGrid}>
+            <Reveal delayMs={120}>
+              <article className={styles.platformBar}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/brokers/metatrader5-logo.png" alt="" />
                 <div>
-                  <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                    Ready to Trade <span className="text-[var(--accent)]">Smarter?</span>
-                  </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--fg-muted)] sm:text-base">
-                    Start with a subscription plan, create your account, and connect your broker when
-                    you are ready. Trading results are never guaranteed.
+                  <p className={styles.kicker}>Trading platform</p>
+                  <h3>MetaTrader 5</h3>
+                  <p>
+                    Orders, positions, and history travel through the MT5 gateway. MetaTrader 5 is
+                    not a broker.
                   </p>
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <Link href="/register" className={`${btn} qf-btn-cta h-11 px-5`}>
-                      Connect Your Broker
-                      <ArrowRight className="h-4 w-4" aria-hidden />
-                    </Link>
-                    <Link href="/pricing" className={`${btn} ${styles.secondaryBtn} h-11 px-5`}>
-                      View Pricing
-                    </Link>
-                  </div>
                 </div>
-                <TerminalPreview tilted />
+              </article>
+            </Reveal>
+          </div>
+        </section>
+
+        <section id="features" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>Platform features</p>
+                <h2>What the platform actually does</h2>
+                <p className={styles.sectionLead}>
+                  Six parts of the same path: connect, analyze, check risk, execute only when
+                  authorized, watch the position, and read the broker’s history.
+                </p>
+              </header>
+            </Reveal>
+            <div className={styles.featureGrid}>
+              {FEATURES.map((item, index) => (
+                <Reveal key={item.title} delayMs={Math.min(index * 50, 250)}>
+                  <article className={`${styles.card} ${styles.featureCard}`}>
+                    <IconBadge icon={item.icon} />
+                    <div className={styles.featureCopy}>
+                      <h3>{item.title}</h3>
+                      <p>{item.body}</p>
+                    </div>
+                  </article>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>How it works</p>
+                <h2>Three steps to a connected account</h2>
+                <p className={styles.sectionLead}>
+                  You create a QuantForg account and connect a broker login you already have.
+                  QuantForg does not open that brokerage account for you.
+                </p>
+              </header>
+            </Reveal>
+            <ol className={styles.stepGrid}>
+              {STEPS.map((step, index) => (
+                <li key={step.n}>
+                  <Reveal delayMs={Math.min(index * 60, 180)}>
+                    <div className={styles.step}>
+                      <span className={styles.stepIndex}>{step.n}</span>
+                      <h3>{step.title}</h3>
+                      <p>{step.body}</p>
+                      <Link href={step.href} className={styles.textLink}>
+                        {step.label}
+                      </Link>
+                    </div>
+                  </Reveal>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section id="workflow" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>Trading workflow</p>
+                <h2>Eight stages, in the order the desk runs</h2>
+                <p className={styles.sectionLead}>
+                  Scanning and analysis happen before any order. Risk validation sits in front of
+                  execution. Performance is the broker’s record after the fact.
+                </p>
+              </header>
+            </Reveal>
+            <ol className={styles.flowGrid}>
+              {WORKFLOW.map((step, index) => (
+                <li key={step.title}>
+                  <Reveal delayMs={Math.min(index * 35, 245)}>
+                    <div className={styles.flowCard}>
+                      <span className={styles.flowIndex}>{String(index + 1).padStart(2, "0")}</span>
+                      <h3>{step.title}</h3>
+                      <p>{step.body}</p>
+                    </div>
+                  </Reveal>
+                </li>
+              ))}
+            </ol>
+            <Reveal>
+              <div className={styles.rulePanel}>
+                {RULES.map((rule) => (
+                  <p key={rule}>{rule}</p>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        <section id="strategies" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>Strategy intelligence</p>
+                <h2>Profiles that exist in the registry</h2>
+                <p className={styles.sectionLead}>
+                  Five scalping profiles can be selected for an order, and only after the risk and
+                  execution gates. The other names are factors or advisory votes. Listing one here
+                  does not mean it is placing trades.
+                </p>
+              </header>
+            </Reveal>
+            <p className={styles.groupLabel}>Execution profiles</p>
+            <ul className={`${styles.strategyGrid} ${styles.execGrid}`}>
+              {EXECUTION_PROFILES.map((item) => (
+                <li key={item.title} className={styles.strategyCard}>
+                  <IconBadge icon={item.icon} />
+                  <h3>{item.title}</h3>
+                  <span className={`${styles.status} ${styles.statusNeutral}`}>{item.status}</span>
+                  <p>{item.body}</p>
+                </li>
+              ))}
+            </ul>
+            <p className={styles.groupLabel}>Factors and advisory votes</p>
+            <ul className={styles.strategyGrid}>
+              {ANALYSIS_FACTORS.map((item) => (
+                <li key={item.title} className={styles.strategyCard}>
+                  <IconBadge icon={item.icon} />
+                  <h3>{item.title}</h3>
+                  <span className={`${styles.status} ${styles.statusNeutral}`}>{item.status}</span>
+                  <p>{item.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section id="risk" className={styles.section}>
+          <div className={styles.wrap}>
+            <header className={styles.sectionHead}>
+              <p className={styles.kicker}>Risk and capital protection</p>
+              <h2>Ceilings and preferences are not the same thing</h2>
+              <p className={styles.sectionLead}>
+                Platform hard limits are ceilings. A customer preference can be tighter. It cannot
+                loosen a ceiling, and a subscription plan cannot bypass the check. Private account
+                settings are not published on this page.
+              </p>
+            </header>
+            <p className={styles.riskIntro}>
+              Grid, martingale, and averaging-down remain disabled. A planned limit is not a cap
+              on a realised loss if the market gaps.
+            </p>
+            <div className={styles.riskHead} aria-hidden>
+              <span>Control</span>
+              <span>Platform ceiling</span>
+              <span>Customer preference</span>
+            </div>
+            <div>
+              {RISK_ROWS.map((row) => (
+                <div key={row.name} className={styles.riskRow}>
+                  <strong>{row.name}</strong>
+                  <span>{row.ceiling}</span>
+                  <span>{row.preference}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="security" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>Security and reliability</p>
+                <h2>Controls that are actually in the product</h2>
+                <p className={styles.sectionLead}>
+                  Sign-in, broker credentials, and order permission stay on the systems that already
+                  exist. No certification, license, or regulatory approval is claimed here.
+                </p>
+              </header>
+            </Reveal>
+            <div className={styles.securityGrid}>
+              {SECURITY.map((item) => (
+                <article key={item.title} className={styles.securityCard}>
+                  <IconBadge icon={item.icon} />
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="performance" className={styles.section}>
+          <div className={styles.wrap}>
+            <header className={styles.sectionHead}>
+              <p className={styles.kicker}>Performance and transparency</p>
+              <h2>Figures appear only after a connection</h2>
+              <p className={styles.sectionLead}>
+                Win rate, profit, and drawdown are calculated from broker deals once a session
+                returns history. Until then every value on this page stays blank.
+              </p>
+            </header>
+            <ul className={styles.metricGrid}>
+              {METRICS.map((label) => (
+                <li key={label} className={styles.metricCard}>
+                  <p>{label}</p>
+                  <strong>—</strong>
+                  <span>Available from your broker history, not from this page.</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <section id="difference" className={styles.section}>
+          <div className={styles.wrap}>
+            <header className={styles.sectionHead}>
+              <p className={styles.kicker}>Why QuantForg is different</p>
+              <h2>Built around the account you connect</h2>
+              <p className={styles.sectionLead}>
+                The product is the path from a broker login you control to a checked order and a
+                record you can read back.
+              </p>
+            </header>
+            <div className={styles.whyGrid}>
+              {DIFFERENTIATORS.map((item) => (
+                <article key={item.title} className={styles.whyCard}>
+                  <IconBadge icon={item.icon} />
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className={styles.section}>
+          <div className={styles.wrap}>
+            <Reveal>
+              <header className={styles.sectionHead}>
+                <p className={styles.kicker}>Pricing</p>
+                <h2>Software access, monthly</h2>
+                <p className={styles.sectionLead}>
+                  Starter, Professional, and Premium are the production plans. A plan grants software
+                  access. It does not grant trading profits, and it does not bypass risk checks.
+                </p>
+              </header>
+            </Reveal>
+            <div className={styles.priceGrid}>
+              {BILLING_PLANS.map((plan) => (
+                <article
+                  key={plan.id}
+                  className={`${styles.priceCard} ${plan.highlighted ? styles.priceFeatured : ""}`}
+                >
+                  <div className={styles.priceFlagSlot}>
+                    {plan.highlighted ? <span className={styles.priceFlag}>Most popular</span> : null}
+                  </div>
+                  <h3>{plan.name}</h3>
+                  <p>{plan.positioning}</p>
+                  <p className={styles.priceAmount}>
+                    <strong>{formatUsd(plan.monthlyPriceUsd)}</strong>
+                    <span>/ month</span>
+                  </p>
+                  <p className={styles.priceMeta}>Paid via {BILLING_PROVIDER.paymentMethodLabel}</p>
+                  <ul className={styles.entitlements}>
+                    {plan.entitlements.map((item) => (
+                      <li key={item}>
+                        <Check strokeWidth={1.75} aria-hidden />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href={`/billing/checkout?plan=${plan.id}`}
+                    className={plan.highlighted ? styles.buttonPrimary : styles.buttonSecondary}
+                  >
+                    {plan.ctaLabel}
+                  </Link>
+                  <Link href={`/register?plan=${plan.id}`} className={styles.textLink}>
+                    Create account first, then checkout
+                  </Link>
+                </article>
+              ))}
+            </div>
+            <div className={styles.billingNote}>
+              <p>{TRIAL_POSITIONING}</p>
+              <p>
+                The trial is {TRIAL_DAYS} days of Starter access. It does not auto-convert to a
+                paid plan.
+              </p>
+              <p>{BILLING_PROVIDER.note}</p>
+              {ANNUAL_BILLING_SUPPORTED ? null : (
+                <p>Monthly price shown. Annual billing is not offered.</p>
+              )}
+              <p>
+                <Link href="/pricing" className={styles.textLink}>
+                  Compare plans on the pricing page
+                </Link>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="faq" className={styles.section}>
+          <div className={styles.wrap}>
+            <header className={styles.sectionHead}>
+              <p className={styles.kicker}>FAQ</p>
+              <h2>Questions about the product</h2>
+              <p className={styles.sectionLead}>
+                Short answers from the way the account, broker connection, and risk checks work
+                today.
+              </p>
+            </header>
+            <div className={styles.faq}>
+              <FaqList />
+            </div>
+          </div>
+        </section>
+
+        <section className={`${styles.section} ${styles.cta}`}>
+          <div className={styles.wrap}>
+            <div className={styles.ctaPanel}>
+              <p className={styles.kicker}>Get started</p>
+              <h2>Ready to Trade With More Intelligence?</h2>
+              <p>Create your account, choose your plan and connect your broker to get started.</p>
+              <div className={styles.ctaRow}>
+                <Link href="/register" className={styles.buttonPrimary}>
+                  Connect Your Broker
+                </Link>
+                <Link href="/pricing" className={styles.buttonSecondary}>
+                  View Pricing
+                </Link>
               </div>
             </div>
-          </section>
-        </main>
-        <SiteFooter />
-      </div>
+          </div>
+        </section>
+
+          <footer className={styles.footer}>
+            <div className={`${styles.wrap} ${styles.footerGrid}`}>
+              <div className={styles.footerBrand}>
+                <BrandLogo size={32} caption={false} />
+                <p>
+                  QuantForg is institutional trading technology sold by subscription. Connect your own
+                  MetaTrader 5 broker account where supported. Software access is not a promise of
+                  trading profits.
+                </p>
+              </div>
+              <div className={styles.footerCols}>
+                {FOOTER.map((column) => (
+                  <div key={column.title}>
+                    <p>{column.title}</p>
+                    <ul>
+                      {column.links.map((link) => (
+                        <li key={link.label}>
+                          {link.href.startsWith("/") ? (
+                            <Link href={link.href}>{link.label}</Link>
+                          ) : (
+                            <a href={link.href}>{link.label}</a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                <div>
+                  <p>Legal</p>
+                  <ul>
+                    <li>
+                      <Link href="/privacy">Privacy</Link>
+                    </li>
+                    <li>
+                      <Link href="/terms">Terms</Link>
+                    </li>
+                    <li>
+                      <Link href="/risk-disclosure">Risk Disclosure</Link>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className={styles.wrap}>
+              <p className={styles.legalLine}>
+                © 2026 QuantForg. Trading can lose capital. This site does not promise profits.
+              </p>
+            </div>
+          </footer>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

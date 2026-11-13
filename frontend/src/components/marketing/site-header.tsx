@@ -11,7 +11,7 @@ const LINKS = [
   { href: "/#features", label: "Features" },
   { href: "/#platform", label: "Platform" },
   { href: "/live", label: "Live Market" },
-  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#how-it-works", label: "How It Works" },
   { href: "/#strategies", label: "Strategies" },
   { href: "/#security", label: "Security" },
   { href: "/pricing", label: "Pricing" },
