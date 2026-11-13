@@ -9,7 +9,10 @@ from app.domain.broker_connectivity.mt5_server_catalogue import (
 )
 
 
-def test_only_weltrade_is_connectable() -> None:
+def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
+    # Isolate from host evidence so connectable stays evidence-gated.
+    empty = tmp_path / "empty_evidence.json"
+    monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(empty))
     rows = broker_registry_rows()
     by_slug = {r["slug"]: r for r in rows}
     assert by_slug["weltrade"]["connectable"] is True
