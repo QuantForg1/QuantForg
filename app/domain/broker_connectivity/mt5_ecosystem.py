@@ -141,7 +141,7 @@ def _mt5_onboarding(
     )
 
 
-# Canonical product order (priority 1–8). Do not sort alphabetically.
+# Canonical product order (priority 1-8). Do not sort alphabetically.
 MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
     MT5BrokerProfile(
         slug="weltrade",
@@ -270,7 +270,9 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         onboarding=_mt5_onboarding(
             brand="JustMarkets",
             website="https://justmarkets.com",
-            search_terms="JustMarkets, JustMarketsCY, JustMarkets-Live, JustMarkets-Demo",
+            search_terms=(
+                "JustMarkets, JustMarketsCY, JustMarkets-Live, JustMarkets-Demo"
+            ),
             server_note=(
                 "Copy the exact server from the JustMarkets Personal Area / "
                 "welcome email (e.g. JustMarkets-Live2). Live and Demo clusters "

@@ -31,13 +31,15 @@ def build_credential_status_rows() -> list[dict[str, object]]:
                         if creds is not None
                         else "BLOCKED_MISSING_CREDENTIALS"
                     ),
-                    "login_set": bool(getattr(creds, "login", None)) if creds else False,
-                    "password_set": bool(getattr(creds, "password", None))
-                    if creds
-                    else False,
-                    "server_set": bool(getattr(creds, "server", None))
-                    if creds
-                    else False,
+                    "login_set": (
+                        bool(getattr(creds, "login", None)) if creds else False
+                    ),
+                    "password_set": (
+                        bool(getattr(creds, "password", None)) if creds else False
+                    ),
+                    "server_set": (
+                        bool(getattr(creds, "server", None)) if creds else False
+                    ),
                     "missing_keys": missing,
                 }
             )

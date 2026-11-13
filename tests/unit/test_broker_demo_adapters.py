@@ -47,18 +47,12 @@ def test_server_matches_broker_patterns() -> None:
     )
     assert server_matches_broker(broker_slug="fp-markets", server="FPMarkets-Live")
     assert server_matches_broker(broker_slug="xm", server="XMGlobal-MT5")
-    assert server_matches_broker(
-        broker_slug="justmarkets", server="JustMarkets-Live2"
-    )
-    assert server_matches_broker(
-        broker_slug="justmarkets", server="JustMarketsCY-Demo"
-    )
+    assert server_matches_broker(broker_slug="justmarkets", server="JustMarkets-Live2")
+    assert server_matches_broker(broker_slug="justmarkets", server="JustMarketsCY-Demo")
     assert not server_matches_broker(
         broker_slug="exness", server="HFMarketsGlobal-Demo"
     )
-    assert not server_matches_broker(
-        broker_slug="justmarkets", server="Exness-MT5Real"
-    )
+    assert not server_matches_broker(broker_slug="justmarkets", server="Exness-MT5Real")
 
 
 def test_classify_environment() -> None:

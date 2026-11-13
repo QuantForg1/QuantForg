@@ -33,7 +33,7 @@ def _clear_all(monkeypatch) -> None:
 def test_build_rows_include_all_eight_brokers_and_envs(monkeypatch) -> None:
     _clear_all(monkeypatch)
     rows = build_credential_status_rows()
-    assert len(rows) == 16  # 8 brokers × demo/live
+    assert len(rows) == 16  # 8 brokers x demo/live
     ordered = []
     for r in rows:
         if r["env"] == "demo":
