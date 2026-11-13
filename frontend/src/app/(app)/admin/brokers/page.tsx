@@ -234,7 +234,7 @@ export default function AdminBrokersPage() {
         )}
       </NocPanel>
 
-      <NocPanel title="Six-broker Demo / Live verification matrix">
+      <NocPanel title="Eight-broker Demo / Live verification matrix">
         <p className="mb-3 text-[12px] text-[var(--fg-muted)]">
           {fmt(
             matrix.note,

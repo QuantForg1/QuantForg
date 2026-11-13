@@ -1,6 +1,9 @@
 ﻿# Report which broker Demo/Live credential env keys are missing.
 # Never prints secret values. Loads deploy/mt5_worker_agent/local.env if present.
 # Usage: .\deploy\mt5_worker_agent\check_broker_credentials.ps1
+#
+# Note: do not use `poetry run python -c` with a multiline here-string on Windows —
+# Poetry silently no-ops (exit 0, no stdout). Always invoke a module/script instead.
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -22,29 +25,29 @@ if (Test-Path $EnvFile) {
   Write-Host "No local.env found — reporting against process environment only"
 }
 
-poetry run python -c @"
-import json
-from services.mt5_worker_agent.broker_demo_adapters import (
-    missing_credential_keys,
-    resolve_credentials,
+$moduleArgs = @(
+  "-m",
+  "services.mt5_worker_agent.check_broker_credentials"
 )
 
-SLUGS = ['exness','hfm','ic-markets','pepperstone','fp-markets','xm']
-rows = []
-for slug in SLUGS:
-    for env in ('demo','live'):
-        missing = missing_credential_keys(slug, environment=env)
-        creds = resolve_credentials(slug, environment=env)
-        rows.append({
-            'broker': slug,
-            'env': env,
-            'status': 'READY_TO_VERIFY' if creds is not None else 'BLOCKED_MISSING_CREDENTIALS',
-            'login_set': bool(getattr(creds, 'login', None)) if creds else False,
-            'server_set': bool(getattr(creds, 'server', None)) if creds else False,
-            'missing_keys': missing,
-        })
-blocked = sum(1 for r in rows if r['status'] != 'READY_TO_VERIFY')
-print(json.dumps({'ok': True, 'blocked': blocked, 'rows': rows}, indent=2))
-raise SystemExit(1 if blocked else 0)
-"@
-exit $LASTEXITCODE
+# Prefer an existing venv first (avoids Poetry creating an empty env on fresh worktrees).
+# Module form avoids the Windows Poetry multiline `python -c` no-op.
+$code = 1
+$venvPy = Join-Path $Root ".venv\Scripts\python.exe"
+$parentVenvPy = Join-Path (Split-Path -Parent $Root) "QuantForg\.venv\Scripts\python.exe"
+if (Test-Path $venvPy) {
+  & $venvPy @moduleArgs
+  $code = $LASTEXITCODE
+} elseif (Test-Path $parentVenvPy) {
+  & $parentVenvPy @moduleArgs
+  $code = $LASTEXITCODE
+} elseif (Get-Command poetry -ErrorAction SilentlyContinue) {
+  & poetry run python @moduleArgs
+  $code = $LASTEXITCODE
+} else {
+  & python @moduleArgs
+  $code = $LASTEXITCODE
+}
+
+if ($null -eq $code) { $code = 1 }
+exit $code

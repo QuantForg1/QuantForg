@@ -88,7 +88,7 @@ async def mt5_ecosystem(
     _user: CurrentUser,
     svc: BrokerConnectivityDep,
 ) -> dict[str, Any]:
-    """MT5 Broker Ecosystem v1.1 — Weltrade, XM, Exness, IC Markets, Pepperstone."""
+    """MT5 Broker Ecosystem: eight retail brands in canonical product order."""
     return svc.ecosystem()
 
 
@@ -109,31 +109,49 @@ async def mt5_servers(
     _user: CurrentUser,
     broker: str = Query(..., min_length=1, description="Broker slug, e.g. weltrade"),
 ) -> dict[str, Any]:
-    """Verified / discovered MT5 servers for one broker — never invents names."""
+    """Verified + candidate MT5 servers for one broker — never invents names."""
+    from app.domain.broker_connectivity.mt5_ecosystem import profile_by_slug
     from app.domain.broker_connectivity.mt5_server_catalogue import (
         broker_registry_rows,
+        candidate_servers_for_broker,
         documented_hints_for_admin,
         verified_servers_for_broker,
     )
 
     slug = broker.strip().lower()
     meta = next((row for row in broker_registry_rows() if row["slug"] == slug), None)
+    profile = profile_by_slug(slug)
+    if meta is None and profile is None:
+        raise HTTPException(status_code=404, detail=f"Unknown broker '{slug}'")
     discovered = _weltrade_profile_server_names() if slug == "weltrade" else []
     rows = verified_servers_for_broker(slug, discovered=discovered)
+    candidates = candidate_servers_for_broker(slug)
+    # Prefer verified rows; candidates fill LIVE/DEMO discovery gaps without
+    # claiming confirmation.
+    verified_names = {str(r.get("name") or "").lower() for r in rows}
+    candidate_only = [
+        c for c in candidates if str(c.get("name") or "").lower() not in verified_names
+    ]
     demo = [r for r in rows if r.get("environment") == "demo"]
     live = [r for r in rows if r.get("environment") == "live"]
+    onboarding = [s.to_dict() for s in (profile.onboarding if profile else ())]
     return {
         "broker": slug,
         "connection_status": (meta["connection_status"] if meta else "not_verified"),
         "connectable": bool(meta["connectable"]) if meta else False,
+        "customer_selectable": True,
+        "preferred_environment": "live",
         "servers": rows,
+        "candidate_servers": candidate_only,
         "servers_by_environment": {"demo": demo, "live": live},
-        # Documented search hints are diagnostics only — not verified connect options.
         "documented_search_hints": documented_hints_for_admin(slug),
+        "onboarding": onboarding,
+        "manual_server_entry_allowed": True,
         "credentials_exposed": False,
         "note": (
-            "Selectable connect servers are verified rows only. "
-            "Documented hints are search aids and never invent connectivity."
+            "Confirmed servers come from authenticated MT5 evidence only. "
+            "Documented candidates and manual entry require the exact portal/"
+            "terminal server string — never invent shard numbers."
         ),
     }
 
@@ -201,7 +219,7 @@ async def mt5_worker_ops(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/mt5-verification-matrix")
 async def mt5_verification_matrix(_user: CurrentUser) -> dict[str, Any]:
-    """Six-broker Demo/Live matrix — PASS only after real Windows MT5 verify."""
+    """Non-Weltrade Demo/Live matrix — PASS only after real Windows MT5 verify."""
     from app.domain.broker_connectivity.verification_matrix import (
         build_verification_matrix,
     )

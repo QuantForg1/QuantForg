@@ -7,7 +7,7 @@ Modes:
   status          — print slot + resource status (no secrets)
   supervise       — local supervisor heartbeat loop
   connect-demo    — real MT5 login+verify for one slot (requires env creds)
-  verify-broker   — six-broker demo/live verify + evidence write
+  verify-broker   — eight-broker demo/live verify + evidence write
   reject-demo     — negative credential test (expects failure)
   capacity        — measured host portable-terminal capacity
   queue-status    — capacity wait queue (no secrets)
@@ -282,12 +282,16 @@ def _prepare_slot_terminal(slot_id: str) -> str:
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
     from services.mt5_worker_agent.slot_manager import (
         prepare_portable_slot,
+        slot_status,
         start_slot_terminal,
     )
 
     prepare_portable_slot(slot_id)
+    already = slot_status(slot_id)
     start_slot_terminal(slot_id)
-    time.sleep(5)
+    # Existing running portable needs no warm-up sleep; new start does.
+    if not already.process_running:
+        time.sleep(5)
     return LocalWorkerSupervisor().terminal_exe_for(slot_id)
 
 
@@ -316,13 +320,14 @@ def _persist_and_report_evidence(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 _BROKER_CHOICES = [
+    "weltrade",
+    "xm",
     "exness",
     "hfm",
+    "justmarkets",
     "ic-markets",
     "pepperstone",
     "fp-markets",
-    "xm",
-    "weltrade",
 ]
 
 
@@ -338,9 +343,11 @@ def cmd_connect_demo(
     Never invents success without MetaTrader5 login.
     """
     from services.mt5_worker_agent.broker_demo_adapters import (
+        account_type_mismatch,
         classify_environment,
         missing_credential_keys,
         normalize_broker_slug,
+        resolve_account_environment,
         resolve_credentials,
         server_matches_broker,
         supported_brokers,
@@ -364,8 +371,12 @@ def cmd_connect_demo(
         )
         return 2
 
+    from services.mt5_worker_agent.slot_manager import slot_status
+
+    preferred_running = bool(slot_status(slot_id).process_running)
     can_start, capacity_reason = can_start_another_portable()
-    if not can_start:
+    # Reuse an already-running preferred portable — do not queue a duplicate start.
+    if not can_start and not preferred_running:
         queued = enqueue(
             broker_slug=slug or "unknown",
             environment=env_req,
@@ -386,6 +397,12 @@ def cmd_connect_demo(
             )
         )
         return 3
+    if preferred_running and not can_start:
+        logger.info(
+            "reusing_running_portable_slot slot=%s capacity_reason=%s",
+            slot_id,
+            capacity_reason,
+        )
 
     from typing import Literal as _Lit
 
@@ -433,6 +450,11 @@ def cmd_connect_demo(
         )
     elif creds is None:
         missing = missing_credential_keys(slug or "exness", environment=env_req)
+        cred_error = (
+            "live_credentials_not_provided"
+            if env_req == "live"
+            else "demo_credentials_not_provided"
+        )
         print(
             json.dumps(
                 {
@@ -440,10 +462,12 @@ def cmd_connect_demo(
                     "authenticated_demo_accounts": 0,
                     "broker": slug,
                     "environment": env_req,
-                    "error": "demo_credentials_not_provided",
+                    "error": cred_error,
                     "missing_env": missing,
                     "note": (
-                        "Provide approved credentials on the Windows host. "
+                        "Provide approved credentials on the Windows host "
+                        f"as QF_{'LIVE' if env_req == 'live' else 'DEMO'}_* "
+                        "(LIVE never falls back to DEMO). "
                         "Do not invent server names. connectable stays false."
                     ),
                 },
@@ -468,11 +492,30 @@ def cmd_connect_demo(
     else:
         result_error = result.error
 
-    success = bool(result.ok and result.trade_allowed and broker_ok)
+    resolved_env, env_source = resolve_account_environment(
+        requested=env_lit,
+        credential_environment=creds.environment,
+        server=result.server or creds.server,
+        trade_mode=result.trade_mode,
+    )
+    mismatch = account_type_mismatch(
+        requested=env_lit,
+        resolved=resolved_env,
+        trade_mode=result.trade_mode,
+    )
+    if mismatch:
+        result_error = mismatch
+        broker_ok = False
+
+    success = bool(result.ok and result.trade_allowed and broker_ok and not mismatch)
     evidence_payload = {
         "ok": success,
         "broker_slug": creds.broker_slug if slug else (slug or "unknown"),
-        "environment": classify_environment(result.server or creds.server),
+        "environment": resolved_env,
+        "environment_source": env_source,
+        "requested_environment": env_lit,
+        "credential_environment": creds.environment,
+        "trade_mode": result.trade_mode,
         "server": result.server or creds.server,
         "login": result.login,
         "trade_allowed": result.trade_allowed,
@@ -507,10 +550,13 @@ def cmd_connect_demo(
         "symbols_total": result.symbols_total,
         "quote_symbol": result.quote_symbol,
         "quote_bid": result.quote_bid,
+        "trade_mode": result.trade_mode,
         "error": result_error,
         "slot_id": slot_id,
         "broker": slug or creds.broker_slug,
-        "environment": evidence_payload["environment"],
+        "environment": resolved_env,
+        "environment_source": env_source,
+        "requested_environment": env_lit,
         "connectable_promoted": bool(slug and success),
         "evidence": evidence_meta,
         "note": "Password not included. Mock sessions are not used here.",

@@ -9,20 +9,35 @@ from app.domain.broker_connectivity.mt5_server_catalogue import (
 )
 
 
-def test_only_weltrade_is_connectable() -> None:
+def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
+    # Isolate from host evidence so connectable stays evidence-gated.
+    empty = tmp_path / "empty_evidence.json"
+    monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(empty))
     rows = broker_registry_rows()
     by_slug = {r["slug"]: r for r in rows}
     assert by_slug["weltrade"]["connectable"] is True
     assert by_slug["weltrade"]["connection_status"] == "production_verified"
-    for slug in ("exness", "ic-markets", "pepperstone", "xm", "fp-markets", "hfm"):
+    assert all(r["customer_selectable"] is True for r in rows)
+    for slug in (
+        "xm",
+        "exness",
+        "hfm",
+        "justmarkets",
+        "ic-markets",
+        "pepperstone",
+        "fp-markets",
+    ):
         assert slug in by_slug
+        # Operational connectable remains evidence-gated; customers may still select.
         assert by_slug[slug]["connectable"] is False
         assert by_slug[slug]["connection_status"] == "not_verified"
+        assert by_slug[slug]["customer_selectable"] is True
 
 
 def test_unverified_brokers_have_no_invented_servers() -> None:
     assert verified_servers_for_broker("exness") == []
     assert verified_servers_for_broker("hfm") == []
+    assert verified_servers_for_broker("justmarkets") == []
     assert verified_servers_for_broker("fp-markets") == []
 
 
@@ -39,13 +54,16 @@ def test_weltrade_verified_servers_include_source_and_timestamp() -> None:
 def test_discovered_servers_are_tagged() -> None:
     rows = verified_servers_for_broker(
         "weltrade",
-        discovered=["Weltrade-MT5", "Weltrade-Real"],
+        discovered=["Weltrade-Live-Extra", "Weltrade-Real", "Weltrade-MT5"],
     )
     names = {r["name"] for r in rows}
     assert "Weltrade-Real" in names
-    assert "Weltrade-MT5" in names
-    discovered = [r for r in rows if r["name"] == "Weltrade-MT5"]
+    # Explicit live token is accepted from discovery.
+    assert "Weltrade-Live-Extra" in names
+    discovered = [r for r in rows if r["name"] == "Weltrade-Live-Extra"]
     assert discovered[0]["source"] == "mt5_terminal_discovery"
+    # Ambiguous Weltrade-MT5 (no demo/live/real token) is not invented as live.
+    assert "Weltrade-MT5" not in names
 
 
 def test_catalogue_snapshot_gateway_note() -> None:

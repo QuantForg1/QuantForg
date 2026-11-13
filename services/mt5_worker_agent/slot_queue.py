@@ -56,12 +56,27 @@ def enqueue(
         slot_preference=slot_preference.strip() or "demo-a",
     )
     with _LOCK:
+        for idx, existing in enumerate(_QUEUE):
+            if (
+                existing.broker_slug == item.broker_slug
+                and existing.environment == item.environment
+                and existing.slot_preference == item.slot_preference
+            ):
+                return {
+                    "ok": True,
+                    "queued": True,
+                    "duplicate": True,
+                    "position": idx + 1,
+                    "item": asdict(existing),
+                    "credentials_exposed": False,
+                }
         _QUEUE.append(item)
         _persist()
         position = len(_QUEUE)
     return {
         "ok": True,
         "queued": True,
+        "duplicate": False,
         "position": position,
         "item": asdict(item),
         "credentials_exposed": False,

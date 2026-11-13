@@ -1127,6 +1127,7 @@ export const weltradeApi = {
     password?: string;
     server?: string;
     account_type?: "demo" | "live";
+    broker_slug?: string;
     prefer_attach?: boolean;
     path?: string;
     remember_on_gateway?: boolean;

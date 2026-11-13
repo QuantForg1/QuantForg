@@ -38,7 +38,7 @@ Write-Host ("QF_ALLOW_WORKER_ON_LIVE_TERMINAL=" + ($(if (HasVal "QF_ALLOW_WORKER
 Write-Host ("QUANTFORG_API_BASE_URL set=" + (HasVal "QUANTFORG_API_BASE_URL"))
 Write-Host ("WORKER_SERVICE_TOKEN set=" + (HasVal "WORKER_SERVICE_TOKEN"))
 
-$brokers = @("EXNESS", "HFM", "IC_MARKETS", "PEPPERSTONE", "FP_MARKETS", "XM")
+$brokers = @("WELTRADE", "XM", "EXNESS", "HFM", "JUSTMARKETS", "IC_MARKETS", "PEPPERSTONE", "FP_MARKETS")
 if ($Broker) {
   $brokers = @($Broker.ToUpper().Replace("-", "_").Replace(" ", "_"))
 }

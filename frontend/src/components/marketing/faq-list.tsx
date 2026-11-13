@@ -18,7 +18,7 @@ const ITEMS = [
   },
   {
     q: "Which brokers are supported?",
-    a: "Weltrade through MetaTrader 5 is the production-verified connection, with catalogue servers Weltrade-Real and Weltrade-Demo. Exness, IC Markets, Pepperstone, FP Markets, HFM, and XM are listed in the broker catalogue and are not yet a verified connection path. MetaTrader 5 is the trading platform, not a broker.",
+    a: "Supported MT5 brands (in order): Weltrade, XM, Exness, HFM, JustMarkets, IC Markets, Pepperstone, and FP Markets. Weltrade is the production-verified connection today. Listing a brand is not the same as a verified LIVE path — authentication evidence is recorded separately. MetaTrader 5 is the trading platform, not a broker.",
   },
   {
     q: "How are risk controls applied?",

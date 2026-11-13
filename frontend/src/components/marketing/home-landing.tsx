@@ -105,10 +105,10 @@ const BROKERS: ReadonlyArray<{
   { name: "XM", logoSrc: "/brand/brokers/xm-mark.png" },
   { name: "Exness", logoSrc: "/brand/brokers/exness-mark.png" },
   { name: "HFM", logoSrc: "/brand/brokers/hfm-mark.png" },
+  { name: "JustMarkets", logoSrc: "/brand/brokers/justmarkets-mark.png" },
   { name: "IC Markets", logoSrc: "/brand/brokers/icmarkets-mark.png" },
   { name: "Pepperstone", logoSrc: "/brand/brokers/pepperstone-mark.png" },
   { name: "FP Markets", logoSrc: "/brand/brokers/fpmarkets-mark.svg" },
-  { name: "JustMarkets", logoSrc: "/brand/brokers/justmarkets-mark.png" },
 ];
 
 const WORKFLOW: ReadonlyArray<{ title: string; body: string }> = [
@@ -288,6 +288,7 @@ const SECURITY: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }>
 ];
 
 const METRICS = [
+  "Total trades",
   "Win rate",
   "Net profit",
   "Profit factor",
