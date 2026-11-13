@@ -67,21 +67,9 @@ def prepare_portable_slot(
         raise FileNotFoundError(f"MT5 source install missing: {src}")
 
     dest = slot_dir(slot_id)
-    free = disk_free_bytes(dest.parent if dest.parent.exists() else Path(dest.anchor))
-    need = _min_free_bytes_for_slots(1)
-    if free < need:
-        raise OSError(
-            f"Insufficient disk free={free} need>={need} for portable slot {slot_id}"
-        )
-
     live = live_terminal_path().resolve()
-    if src.resolve() == live.parent.resolve():
-        logger.info(
-            "preparing_portable_slot slot=%s from_live_install=copy_only "
-            "(LIVE process not modified)",
-            slot_id,
-        )
 
+    # Reuse an already-prepared portable without requiring room for a fresh copy.
     if dest.exists() and not force:
         exe = slot_terminal_exe(slot_id)
         if exe.is_file():
@@ -89,6 +77,20 @@ def prepare_portable_slot(
             logger.info("portable_slot_exists slot=%s path=%s", slot_id, dest)
             return dest
         raise FileExistsError(f"Slot directory exists but incomplete: {dest}")
+
+    free = disk_free_bytes(dest.parent if dest.parent.exists() else Path(dest.anchor))
+    need = _min_free_bytes_for_slots(1)
+    if free < need:
+        raise OSError(
+            f"Insufficient disk free={free} need>={need} for portable slot {slot_id}"
+        )
+
+    if src.resolve() == live.parent.resolve():
+        logger.info(
+            "preparing_portable_slot slot=%s from_live_install=copy_only "
+            "(LIVE process not modified)",
+            slot_id,
+        )
 
     if dest.exists() and force:
         # Never delete if it somehow points at Program Files.
@@ -145,6 +147,8 @@ def _list_terminal_processes() -> list[tuple[int, str]]:
         return []
     rows = data if isinstance(data, list) else [data]
     out: list[tuple[int, str]] = []
+    from services.mt5_worker_agent.resources import process_image_path
+
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -153,9 +157,12 @@ def _list_terminal_processes() -> list[tuple[int, str]]:
         if pid is None:
             continue
         try:
-            out.append((int(pid), str(path)))
+            pid_i = int(pid)
         except (TypeError, ValueError):
             continue
+        if not path:
+            path = process_image_path(pid_i)
+        out.append((pid_i, str(path)))
     return out
 
 
@@ -197,16 +204,34 @@ def stop_slot_terminal(slot_id: str) -> bool:
     for pid, path in _list_terminal_processes():
         if (path or "").lower() != exe:
             continue
-        completed = subprocess.run(  # noqa: S603
-            [_TASKKILL, "/PID", str(pid), "/T"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if completed.returncode == 0:
-            stopped = True
-            logger.info("slot_terminal_stopped slot=%s pid=%s", slot_id, pid)
+        for force in (False, True):
+            args = [_TASKKILL, "/PID", str(pid), "/T"]
+            if force:
+                args.append("/F")
+            completed = subprocess.run(  # noqa: S603
+                args,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if completed.returncode == 0:
+                stopped = True
+                logger.info(
+                    "slot_terminal_stopped slot=%s pid=%s force=%s",
+                    slot_id,
+                    pid,
+                    force,
+                )
+                break
+            logger.warning(
+                "slot_terminal_stop_failed slot=%s pid=%s force=%s rc=%s err=%s",
+                slot_id,
+                pid,
+                force,
+                completed.returncode,
+                (completed.stderr or completed.stdout or "")[:200],
+            )
     return stopped
 
 

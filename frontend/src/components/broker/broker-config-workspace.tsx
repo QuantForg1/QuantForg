@@ -285,12 +285,14 @@ function BrokerSelect({
                     <span
                       className={cn(
                         "rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
-                        broker.connectable
+                        broker.connectionStatus !== "not_verified"
                           ? "bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-[var(--success)]"
                           : "bg-[var(--surface-2)] text-[var(--fg-subtle)]",
                       )}
                     >
-                      {broker.connectable ? "Verified" : "Pending"}
+                      {broker.connectionStatus !== "not_verified"
+                        ? "Verified"
+                        : "Pending"}
                     </span>
                     {active ? (
                       <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />

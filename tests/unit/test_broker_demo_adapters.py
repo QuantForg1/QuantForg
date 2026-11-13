@@ -51,6 +51,46 @@ def test_classify_environment() -> None:
     assert classify_environment("Exness-MT5Trial12") == "demo"
     assert classify_environment("HFMarketsGlobal-Demo") == "demo"
     assert classify_environment("Exness-MT5Real8") == "live"
+    # Ambiguous XM server must not invent live from name alone.
+    assert classify_environment("XMGlobal-MT5") == "demo"
+
+
+def test_resolve_account_environment_demo_request_not_flipped_to_live() -> None:
+    from services.mt5_worker_agent.broker_demo_adapters import (
+        account_type_mismatch,
+        resolve_account_environment,
+    )
+
+    env, source = resolve_account_environment(
+        requested="demo",
+        credential_environment="demo",
+        server="XMGlobal-MT5",
+        trade_mode=None,
+    )
+    assert env == "demo"
+    assert "demo" in source
+    env_tm, src_tm = resolve_account_environment(
+        requested="demo",
+        credential_environment="demo",
+        server="XMGlobal-MT5",
+        trade_mode=0,
+    )
+    assert env_tm == "demo"
+    assert src_tm == "mt5_account_trade_mode"
+    live_env, live_src = resolve_account_environment(
+        requested="demo",
+        credential_environment="demo",
+        server="XMGlobal-MT5",
+        trade_mode=2,
+    )
+    assert live_env == "live"
+    assert live_src == "mt5_account_trade_mode"
+    assert (
+        account_type_mismatch(
+            requested="demo", resolved=live_env, trade_mode=2
+        )
+        == "demo_request_authenticated_live_account"
+    )
 
 
 def test_resolve_requires_all_fields(monkeypatch) -> None:
@@ -77,9 +117,26 @@ def test_resolve_exness_bundle(monkeypatch) -> None:
     assert bundle.broker_slug == "exness"
     assert bundle.server == "Exness-MT5Trial9"
     pub = bundle.public_dict()
-    assert pub.get("auth_material_present") == "false"
+    assert pub.get("auth_material_present") == "true"
     assert "password" not in str(pub).lower()
     assert "lab-only" not in str(pub)
+
+
+def test_resolve_does_not_reuse_generic_demo_for_other_broker(monkeypatch) -> None:
+    for env in (
+        "QF_DEMO_EXNESS_LOGIN",
+        "QF_DEMO_EXNESS_PASSWORD",
+        "QF_DEMO_EXNESS_SERVER",
+        "QF_DEMO_XM_LOGIN",
+        "QF_DEMO_XM_PASSWORD",
+        "QF_DEMO_XM_SERVER",
+    ):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv("QF_DEMO_LOGIN", "999")
+    monkeypatch.setenv("QF_DEMO_PASSWORD", "shared")
+    monkeypatch.setenv("QF_DEMO_SERVER", "Generic-Demo")
+    assert resolve_demo_credentials("exness") is None
+    assert resolve_demo_credentials("xm") is None
 
 
 def test_resolve_live_requires_live_material(monkeypatch) -> None:

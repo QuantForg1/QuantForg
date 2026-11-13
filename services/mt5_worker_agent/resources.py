@@ -26,6 +26,40 @@ class TerminalResourceSample:
     cpu_seconds: float
 
 
+def process_image_path(pid: int) -> str:
+    """Resolve executable path when CIM ExecutablePath is empty (common on locked-down hosts)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except ImportError:
+        return ""
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    open_process = kernel32.OpenProcess
+    open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    open_process.restype = wintypes.HANDLE
+    query = kernel32.QueryFullProcessImageNameW
+    query.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    query.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    handle = open_process(process_query_limited_information, False, int(pid))
+    if not handle:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(32768)
+        size = wintypes.DWORD(len(buf))
+        if not query(handle, 0, buf, ctypes.byref(size)):
+            return ""
+        return str(buf.value or "")
+    finally:
+        close_handle(handle)
+
+
 def sample_terminal_processes() -> list[TerminalResourceSample]:
     script = r"""
 $procs = Get-Process -Name terminal64,terminal -ErrorAction SilentlyContinue
@@ -73,10 +107,14 @@ $out | ConvertTo-Json -Compress
         if not isinstance(row, dict):
             continue
         try:
+            pid = int(row["pid"])
+            exe = str(row.get("exe_path") or "")
+            if not exe:
+                exe = process_image_path(pid)
             samples.append(
                 TerminalResourceSample(
-                    pid=int(row["pid"]),
-                    exe_path=str(row.get("exe_path") or ""),
+                    pid=pid,
+                    exe_path=exe,
                     working_set_mb=float(row.get("working_set_mb") or 0),
                     cpu_seconds=float(row.get("cpu_seconds") or 0),
                 )
