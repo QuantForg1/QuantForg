@@ -15,7 +15,7 @@
 | Item | Value |
 |---|---|
 | Base commit | `c95db3b42ecde99592d29e337061c25119904cc7` (PR #243 — Universal LIVE Broker Access) |
-| Final commit (this acceptance) | See PR merge SHA after merge of `feat/phase11-live-broker-acceptance` |
+| Final commit (this acceptance) | `69536c6a94da947426da6c444f5a795c8b15b0a3` on `feat/phase11-live-broker-acceptance` (merge SHA on `main` after PR) |
 | Prior release | PR #243 merged to `main` |
 | CI | Required checks on acceptance PR (Black / mypy / unit / frontend as applicable) |
 | Railway Production | Service **QuantForg** · Online · `https://quantforg-production.up.railway.app` · Environment ID `cb96aa83-7ace-470a-9e98-d52a1634a446` |
