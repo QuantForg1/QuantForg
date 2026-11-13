@@ -1,4 +1,4 @@
-"""Six-broker MT5 credential adapters — no invented servers."""
+"""Eight-broker MT5 credential adapters — no invented servers."""
 
 from __future__ import annotations
 
@@ -12,17 +12,20 @@ from services.mt5_worker_agent.broker_demo_adapters import (
     supported_brokers,
 )
 
+CANONICAL = (
+    "weltrade",
+    "xm",
+    "exness",
+    "hfm",
+    "justmarkets",
+    "ic-markets",
+    "pepperstone",
+    "fp-markets",
+)
 
-def test_supported_six_plus_weltrade() -> None:
-    assert set(supported_brokers()) == {
-        "exness",
-        "hfm",
-        "ic-markets",
-        "pepperstone",
-        "fp-markets",
-        "xm",
-        "weltrade",
-    }
+
+def test_supported_eight_canonical_order() -> None:
+    assert supported_brokers() == CANONICAL
 
 
 def test_normalize_broker_aliases() -> None:
@@ -30,6 +33,8 @@ def test_normalize_broker_aliases() -> None:
     assert normalize_broker_slug("HFMarkets") == "hfm"
     assert normalize_broker_slug("icmarkets") == "ic-markets"
     assert normalize_broker_slug("fpmarkets") == "fp-markets"
+    assert normalize_broker_slug("JustMarkets") == "justmarkets"
+    assert normalize_broker_slug("just-markets") == "justmarkets"
     assert normalize_broker_slug("unknown") is None
 
 
@@ -42,9 +47,12 @@ def test_server_matches_broker_patterns() -> None:
     )
     assert server_matches_broker(broker_slug="fp-markets", server="FPMarkets-Live")
     assert server_matches_broker(broker_slug="xm", server="XMGlobal-MT5")
+    assert server_matches_broker(broker_slug="justmarkets", server="JustMarkets-Live2")
+    assert server_matches_broker(broker_slug="justmarkets", server="JustMarketsCY-Demo")
     assert not server_matches_broker(
         broker_slug="exness", server="HFMarketsGlobal-Demo"
     )
+    assert not server_matches_broker(broker_slug="justmarkets", server="Exness-MT5Real")
 
 
 def test_classify_environment() -> None:
@@ -169,3 +177,39 @@ def test_live_missing_keys_do_not_suggest_demo_fallback(monkeypatch) -> None:
     ]
     assert all("DEMO" not in m for m in missing)
     assert all("fallback" not in m.lower() for m in missing)
+
+
+def test_justmarkets_live_and_demo_credentials(monkeypatch) -> None:
+    for key in (
+        "QF_LIVE_JUSTMARKETS_LOGIN",
+        "QF_LIVE_JUSTMARKETS_PASSWORD",
+        "QF_LIVE_JUSTMARKETS_SERVER",
+        "QF_DEMO_JUSTMARKETS_LOGIN",
+        "QF_DEMO_JUSTMARKETS_PASSWORD",
+        "QF_DEMO_JUSTMARKETS_SERVER",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    assert resolve_credentials("justmarkets", environment="live") is None
+    assert missing_credential_keys("justmarkets", environment="live") == [
+        "QF_LIVE_JUSTMARKETS_LOGIN",
+        "QF_LIVE_JUSTMARKETS_PASSWORD",
+        "QF_LIVE_JUSTMARKETS_SERVER",
+    ]
+    monkeypatch.setenv("QF_DEMO_JUSTMARKETS_LOGIN", "9001")
+    monkeypatch.setenv("QF_DEMO_JUSTMARKETS_PASSWORD", "demo-secret")
+    monkeypatch.setenv("QF_DEMO_JUSTMARKETS_SERVER", "JustMarkets-Demo")
+    demo = resolve_credentials("justmarkets", environment="demo")
+    assert demo is not None
+    assert demo.broker_slug == "justmarkets"
+    assert demo.environment == "demo"
+    assert "demo-secret" not in str(demo.public_dict())
+    # LIVE must not reuse DEMO material.
+    assert resolve_credentials("justmarkets", environment="live") is None
+    monkeypatch.setenv("QF_LIVE_JUSTMARKETS_LOGIN", "9002")
+    monkeypatch.setenv("QF_LIVE_JUSTMARKETS_PASSWORD", "live-secret")
+    monkeypatch.setenv("QF_LIVE_JUSTMARKETS_SERVER", "JustMarkets-Live2")
+    live = resolve_credentials("justmarkets", environment="live")
+    assert live is not None
+    assert live.environment == "live"
+    assert live.server == "JustMarkets-Live2"
+    assert "live-secret" not in str(live.public_dict())

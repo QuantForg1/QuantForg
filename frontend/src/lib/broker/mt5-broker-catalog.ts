@@ -1,19 +1,23 @@
 /**
  * MT5 broker registry for Broker Accounts.
  *
- * All seven documented brands are customer-selectable for LIVE connection.
+ * All eight documented brands are customer-selectable for LIVE connection.
  * Operational verification evidence is separate from selectability.
  * Documented candidates are never presented as confirmed servers.
+ *
+ * Canonical order (do not sort alphabetically):
+ * Weltrade → XM → Exness → HFM → JustMarkets → IC Markets → Pepperstone → FP Markets
  */
 
 export type Mt5BrokerSlug =
   | "weltrade"
+  | "xm"
   | "exness"
+  | "hfm"
+  | "justmarkets"
   | "ic-markets"
   | "pepperstone"
-  | "fp-markets"
-  | "hfm"
-  | "xm";
+  | "fp-markets";
 
 export type Mt5ConnectionStatus =
   | "production_verified"
@@ -79,10 +83,40 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     },
   },
   {
+    slug: "xm",
+    name: "XM",
+    logoSrc: "/brand/brokers/xm-mark.png",
+    website: "https://www.xm.com",
+    connectionStatus: "not_verified",
+    connectable: false,
+    customerSelectable: true,
+    servers: { live: [], demo: [] },
+  },
+  {
     slug: "exness",
     name: "Exness",
     logoSrc: "/brand/brokers/exness-mark.png",
     website: "https://www.exness.com",
+    connectionStatus: "not_verified",
+    connectable: false,
+    customerSelectable: true,
+    servers: { live: [], demo: [] },
+  },
+  {
+    slug: "hfm",
+    name: "HFM",
+    logoSrc: "/brand/brokers/hfm-mark.svg",
+    website: "https://www.hfm.com",
+    connectionStatus: "not_verified",
+    connectable: false,
+    customerSelectable: true,
+    servers: { live: [], demo: [] },
+  },
+  {
+    slug: "justmarkets",
+    name: "JustMarkets",
+    logoSrc: "/brand/brokers/justmarkets-mark.svg",
+    website: "https://justmarkets.com",
     connectionStatus: "not_verified",
     connectable: false,
     customerSelectable: true,
@@ -113,26 +147,6 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "FP Markets",
     logoSrc: "/brand/brokers/fpmarkets-mark.png",
     website: "https://www.fpmarkets.com",
-    connectionStatus: "not_verified",
-    connectable: false,
-    customerSelectable: true,
-    servers: { live: [], demo: [] },
-  },
-  {
-    slug: "hfm",
-    name: "HFM",
-    logoSrc: "/brand/brokers/hfm-mark.svg",
-    website: "https://www.hfm.com",
-    connectionStatus: "not_verified",
-    connectable: false,
-    customerSelectable: true,
-    servers: { live: [], demo: [] },
-  },
-  {
-    slug: "xm",
-    name: "XM",
-    logoSrc: "/brand/brokers/xm-mark.png",
-    website: "https://www.xm.com",
     connectionStatus: "not_verified",
     connectable: false,
     customerSelectable: true,
@@ -170,12 +184,13 @@ export function matchBrokerByServer(server: string | null | undefined): Mt5Broke
   if (!hay) return undefined;
   const patterns: Array<{ slug: Mt5BrokerSlug; needles: string[] }> = [
     { slug: "weltrade", needles: ["weltrade"] },
+    { slug: "xm", needles: ["xmglobal", "xm.com", "xmtrading", "xm-"] },
     { slug: "exness", needles: ["exness"] },
+    { slug: "hfm", needles: ["hfm", "hfmarkets", "hotforex"] },
+    { slug: "justmarkets", needles: ["justmarkets", "justmarketscy"] },
     { slug: "ic-markets", needles: ["icmarkets", "icmarketssc", "icmarketseu"] },
     { slug: "pepperstone", needles: ["pepperstone"] },
     { slug: "fp-markets", needles: ["fpmarkets", "fpmarketsllc"] },
-    { slug: "hfm", needles: ["hfm", "hfmarkets", "hotforex"] },
-    { slug: "xm", needles: ["xmglobal", "xm.com", "xmtrading", "xm-"] },
   ];
   for (const row of patterns) {
     if (row.needles.some((n) => hay.includes(n.replace(/\s+/g, "")))) {

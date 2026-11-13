@@ -141,6 +141,7 @@ def _mt5_onboarding(
     )
 
 
+# Canonical product order (priority 1-8). Do not sort alphabetically.
 MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
     MT5BrokerProfile(
         slug="weltrade",
@@ -219,57 +220,6 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         priority=3,
     ),
     MT5BrokerProfile(
-        slug="ic-markets",
-        name="IC Markets",
-        website="https://www.icmarkets.com",
-        regions=("Global", "EU", "SC"),
-        account_types=("raw_spread", "standard", "cfd", "demo"),
-        order_types=("market", "limit", "stop", "stop_limit"),
-        server_match_patterns=("icmarkets", "icmarketssc", "icmarketseu"),
-        server_hints=(
-            "ICMarketsSC-MT5",
-            "ICMarketsSC-MT5-2",
-            "ICMarketsEU-MT5",
-            "ICMarkets-Demo",
-        ),
-        onboarding=_mt5_onboarding(
-            brand="IC Markets",
-            website="https://www.icmarkets.com",
-            search_terms="ICMarketsSC, ICMarketsEU, ICMarkets",
-            server_note=(
-                "MT5-2 / MT5-4 suffixes are load clusters, not better pricing. "
-                "Use the cluster assigned to your login."
-            ),
-        ),
-        notes="Priority MT5 ECN-style retail brand — MT5 path only in v1.1.",
-        priority=4,
-    ),
-    MT5BrokerProfile(
-        slug="pepperstone",
-        name="Pepperstone",
-        website="https://pepperstone.com",
-        regions=("Global", "EU", "AU", "UK"),
-        account_types=("razor", "standard", "demo"),
-        order_types=("market", "limit", "stop", "stop_limit"),
-        server_match_patterns=("pepperstone",),
-        server_hints=(
-            "Pepperstone-MT5-Live",
-            "Pepperstone-MT5-Demo",
-            "PepperstoneLtd-Live",
-        ),
-        onboarding=_mt5_onboarding(
-            brand="Pepperstone",
-            website="https://pepperstone.com",
-            search_terms="Pepperstone, PepperstoneLtd",
-            server_note=(
-                "Entity (Ltd vs Global) and Live vs Demo must match the "
-                "portal assignment."
-            ),
-        ),
-        notes="Priority MT5 retail brand — Razor/Standard map to MT5 accounts.",
-        priority=5,
-    ),
-    MT5BrokerProfile(
         slug="hfm",
         name="HFM",
         website="https://www.hfm.com",
@@ -297,7 +247,91 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
             ),
         ),
         notes="HFM (HF Markets) MT5 — connectable only after Windows demo verify.",
+        priority=4,
+    ),
+    MT5BrokerProfile(
+        slug="justmarkets",
+        name="JustMarkets",
+        website="https://justmarkets.com",
+        regions=("Global", "CY", "SC", "SG"),
+        account_types=("standard", "pro", "raw_spread", "cent", "demo"),
+        order_types=("market", "limit", "stop", "stop_limit"),
+        server_match_patterns=("justmarkets", "justmarketscy"),
+        # Documented MetaQuotes / WebTerminal candidates only — copy exact PA server.
+        server_hints=(
+            "JustMarkets-Demo",
+            "JustMarkets-Demo2",
+            "JustMarkets-Live",
+            "JustMarkets-Live2",
+            "JustMarkets-Live3",
+            "JustMarketsCY-Demo",
+            "JustMarketsCY-Live",
+        ),
+        onboarding=_mt5_onboarding(
+            brand="JustMarkets",
+            website="https://justmarkets.com",
+            search_terms=(
+                "JustMarkets, JustMarketsCY, JustMarkets-Live, JustMarkets-Demo"
+            ),
+            server_note=(
+                "Copy the exact server from the JustMarkets Personal Area / "
+                "welcome email (e.g. JustMarkets-Live2). Live and Demo clusters "
+                "differ; do not guess the suffix."
+            ),
+        ),
+        notes="JustMarkets MT5 — connectable only after Windows verify.",
+        priority=5,
+    ),
+    MT5BrokerProfile(
+        slug="ic-markets",
+        name="IC Markets",
+        website="https://www.icmarkets.com",
+        regions=("Global", "EU", "SC"),
+        account_types=("raw_spread", "standard", "cfd", "demo"),
+        order_types=("market", "limit", "stop", "stop_limit"),
+        server_match_patterns=("icmarkets", "icmarketssc", "icmarketseu"),
+        server_hints=(
+            "ICMarketsSC-MT5",
+            "ICMarketsSC-MT5-2",
+            "ICMarketsEU-MT5",
+            "ICMarkets-Demo",
+        ),
+        onboarding=_mt5_onboarding(
+            brand="IC Markets",
+            website="https://www.icmarkets.com",
+            search_terms="ICMarketsSC, ICMarketsEU, ICMarkets",
+            server_note=(
+                "MT5-2 / MT5-4 suffixes are load clusters, not better pricing. "
+                "Use the cluster assigned to your login."
+            ),
+        ),
+        notes="Priority MT5 ECN-style retail brand — MT5 path only in v1.1.",
         priority=6,
+    ),
+    MT5BrokerProfile(
+        slug="pepperstone",
+        name="Pepperstone",
+        website="https://pepperstone.com",
+        regions=("Global", "EU", "AU", "UK"),
+        account_types=("razor", "standard", "demo"),
+        order_types=("market", "limit", "stop", "stop_limit"),
+        server_match_patterns=("pepperstone",),
+        server_hints=(
+            "Pepperstone-MT5-Live",
+            "Pepperstone-MT5-Demo",
+            "PepperstoneLtd-Live",
+        ),
+        onboarding=_mt5_onboarding(
+            brand="Pepperstone",
+            website="https://pepperstone.com",
+            search_terms="Pepperstone, PepperstoneLtd",
+            server_note=(
+                "Entity (Ltd vs Global) and Live vs Demo must match the "
+                "portal assignment."
+            ),
+        ),
+        notes="Priority MT5 retail brand — Razor/Standard map to MT5 accounts.",
+        priority=7,
     ),
     MT5BrokerProfile(
         slug="fp-markets",
@@ -326,7 +360,7 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
             ),
         ),
         notes="FP Markets MT5 — connectable only after Windows verify.",
-        priority=7,
+        priority=8,
     ),
 )
 

@@ -12,14 +12,31 @@ import {
   mapRegistryBrokers,
 } from "./mt5-broker-catalog.ts";
 
-assert.ok(MT5_BROKER_OPTIONS.length >= 7);
+assert.equal(MT5_BROKER_OPTIONS.length, 8);
+assert.deepEqual(
+  MT5_BROKER_OPTIONS.map((b) => b.slug),
+  [
+    "weltrade",
+    "xm",
+    "exness",
+    "hfm",
+    "justmarkets",
+    "ic-markets",
+    "pepperstone",
+    "fp-markets",
+  ],
+);
 assert.equal(brokerBySlug("weltrade")?.connectable, true);
 assert.equal(brokerBySlug("weltrade")?.connectionStatus, "production_verified");
 assert.equal(brokerBySlug("exness")?.connectable, false);
 assert.equal(brokerBySlug("exness")?.customerSelectable, true);
+assert.equal(brokerBySlug("justmarkets")?.name, "JustMarkets");
+assert.equal(brokerBySlug("justmarkets")?.customerSelectable, true);
+assert.equal(brokerBySlug("justmarkets")?.connectable, false);
 assert.equal(brokerBySlug("hfm")?.servers.live.length, 0);
 assert.ok(MT5_BROKER_OPTIONS.every((b) => b.customerSelectable));
 assert.equal(matchBrokerByServer("Weltrade-Real")?.slug, "weltrade");
+assert.equal(matchBrokerByServer("JustMarkets-Live2")?.slug, "justmarkets");
 
 const weltradeLive = serversForBroker(brokerBySlug("weltrade"), "live");
 assert.ok(weltradeLive.includes("Weltrade-Real"));
