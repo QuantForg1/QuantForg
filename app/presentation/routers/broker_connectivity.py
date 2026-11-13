@@ -88,7 +88,7 @@ async def mt5_ecosystem(
     _user: CurrentUser,
     svc: BrokerConnectivityDep,
 ) -> dict[str, Any]:
-    """MT5 Broker Ecosystem — Weltrade, XM, Exness, HFM, JustMarkets, IC Markets, Pepperstone, FP Markets."""
+    """MT5 Broker Ecosystem: eight retail brands in canonical product order."""
     return svc.ecosystem()
 
 
