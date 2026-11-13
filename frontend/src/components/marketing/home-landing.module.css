@@ -440,8 +440,7 @@
 
 .card,
 .securityCard,
-.whyCard,
-.strategyCard {
+.whyCard {
   display: flex;
   flex-direction: column;
   min-height: 100%;
@@ -475,8 +474,10 @@
 
 .icon {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  align-self: flex-start;
   width: 40px;
   height: 40px;
   margin-bottom: 14px;
@@ -570,7 +571,6 @@
 .featureGrid > *,
 .stepGrid > li,
 .flowGrid > li,
-.strategyGrid > li,
 .securityGrid > *,
 .whyGrid > *,
 .metricGrid > li,
@@ -582,16 +582,15 @@
 .brokerGrid > li,
 .featureGrid > *,
 .stepGrid > li,
-.flowGrid > li,
-.strategyGrid > li {
+.flowGrid > li {
   display: flex;
   flex-direction: column;
 }
 
+/* Only stretch Reveal/wrapper shells — never card inner children (icons/text). */
 .brokerGrid > li > *,
 .stepGrid > li > *,
-.flowGrid > li > *,
-.strategyGrid > li > * {
+.flowGrid > li > * {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -603,6 +602,15 @@
   flex: 1 1 auto;
   height: 100%;
   min-height: 100%;
+}
+
+.strategyGrid {
+  align-items: stretch;
+}
+
+.strategyGrid > li {
+  min-width: 0;
+  height: 100%;
 }
 
 .brokerCard {
@@ -727,7 +735,8 @@
 .status {
   display: inline-flex;
   align-self: flex-start;
-  margin-top: 10px;
+  flex: 0 0 auto;
+  margin: 0;
   padding: 4px 8px;
   border: 1px solid rgba(117, 190, 220, 0.18);
   border-radius: 999px;
@@ -738,6 +747,7 @@
   letter-spacing: 0.04em;
   line-height: 1.2;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .statusNeutral {
@@ -746,17 +756,56 @@
   color: var(--qf-text-secondary);
 }
 
-.strategyCard .icon {
-  margin-bottom: 12px;
+.statusExec {
+  border-color: rgba(0, 212, 224, 0.28);
+  background: rgba(0, 212, 224, 0.1);
+  color: var(--qf-primary);
 }
 
-.strategyCard .status {
-  margin-top: 8px;
-  margin-bottom: 2px;
+.strategyCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 100%;
+  height: 100%;
+  padding: 18px 16px;
+  overflow: hidden;
+}
+
+.strategyCard .icon {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  max-width: 40px;
+  max-height: 40px;
+  margin: 0;
+}
+
+.strategyCard h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.3;
 }
 
 .strategyCard p {
-  margin-top: 10px;
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.groupLabel + .strategyGrid {
+  margin-bottom: 4px;
+}
+
+:global(#strategies).section {
+  padding-bottom: 64px;
 }
 
 .riskIntro {
@@ -1086,6 +1135,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .strategyGrid.execGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .riskHead,
   .riskRow {
     grid-template-columns: 1.1fr 1.2fr 1.2fr;
@@ -1122,6 +1175,10 @@
 
   .strategyGrid,
   .securityGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .strategyGrid.execGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1220,6 +1277,11 @@
 @media (max-width: 719px) {
   .brokerGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .strategyGrid,
+  .strategyGrid.execGrid {
+    grid-template-columns: 1fr;
   }
 
   .featureCard {

@@ -596,8 +596,8 @@ export function HomeLanding() {
               {EXECUTION_PROFILES.map((item) => (
                 <li key={item.title} className={styles.strategyCard}>
                   <IconBadge icon={item.icon} />
+                  <span className={`${styles.status} ${styles.statusExec}`}>{item.status}</span>
                   <h3>{item.title}</h3>
-                  <span className={`${styles.status} ${styles.statusNeutral}`}>{item.status}</span>
                   <p>{item.body}</p>
                 </li>
               ))}
@@ -607,8 +607,8 @@ export function HomeLanding() {
               {ANALYSIS_FACTORS.map((item) => (
                 <li key={item.title} className={styles.strategyCard}>
                   <IconBadge icon={item.icon} />
-                  <h3>{item.title}</h3>
                   <span className={`${styles.status} ${styles.statusNeutral}`}>{item.status}</span>
+                  <h3>{item.title}</h3>
                   <p>{item.body}</p>
                 </li>
               ))}
