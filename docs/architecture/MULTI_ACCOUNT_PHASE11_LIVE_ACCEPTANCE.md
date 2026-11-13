@@ -22,7 +22,7 @@
 | Vercel preview (PR) | `frontend` `AMsmH8ittRpydwUKgXU9XEQWSjAF` · `quant-forg` `6XKpSDAxZwL4EUiHeaXaDFYQaKGd` |
 | Railway Production | Service **QuantForg** · Online · `https://quantforg-production.up.railway.app` · Environment ID `cb96aa83-7ace-470a-9e98-d52a1634a446` |
 | Railway Production SHA | `/api/v1/health` → `fbe2d0dc51de3a933da1627def7c13ec8cf77a5e` · `/health/live` → 200 (post-merge deploy verified 2026-11-13) |
-| Railway Staging | Same project; safety flags remain OFF (dispatch / LIVE submit) |
+| Railway Staging | `https://quantforg-staging.up.railway.app` · `/api/v1/health` → `fbe2d0dc51de3a933da1627def7c13ec8cf77a5e` · `/health/live` 200 · safety flags remain OFF |
 | Production domain | `https://www.quantforg.com/broker` → **HTTP 200** (2026-11-13) |
 | Apex | `https://quantforg.com/broker` → **308** redirect (expected) |
 
