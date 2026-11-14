@@ -1,9 +1,8 @@
 # Phase 11 — Demo auth proof + approved staging dispatch (checklist)
 
-**Status:** IN PROGRESS — Staging `MULTI_ACCOUNT_DISPATCH_ENABLED=true` (Owner mandate); real Staging E1–E11/E13–E15 **PASS**; **E12 BLOCKED** (Owner JWT + per-user kill-switch mutate).  
-**Blocked until:** E12 real Staging kill-switch evidence (do not arm global ITE kill-switch).  
-**Baseline runtime:** Production+Staging SHA `b310c5e3` (2026-11-14).  
-**Evidence:** `docs/production/reports/phase11/PHASE11_DISPATCH_ACCEPTANCE_2026-11-14.md`, `PHASE11_STATUS_2026-11-14.md`, `PHASE11_DEMO_AUTH_MATRIX_2026-11-14.md`
+**Status:** COMPLETE — Staging DISPATCH true; real Staging E1–E15 **PASS** including E12 (PR #265).  
+**Baseline runtime:** Production+Staging SHA `a5b4f8e1` (2026-11-14 post-E12).  
+**Evidence:** `docs/production/reports/phase11/PHASE11_FINAL_ACCEPTANCE_2026-11-14.md`, `PHASE11_DISPATCH_ACCEPTANCE_2026-11-14.md`, `PHASE11_STATUS_2026-11-14.md`
 
 ## Hard locks (never flip in Phase 11)
 
@@ -122,6 +121,4 @@ Publish a short report with:
 
 ## Exact next Owner action
 
-1. Unblock **E12**: provide Owner JWT session **and** authorize a staging-safe per-user dispatch kill-switch mutate path (or approve adding a staging-only ops route). Do **not** arm global ITE kill-switch for this proof.  
-2. After E12 PASS, Phase 11 may be marked COMPLETE.  
-3. Do **not** change Production `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED` without a separate Owner confirmation.
+Phase 11 closed. Do **not** change Production `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED` without a separate Owner confirmation. Proceed to the next roadmap phase when ready.
