@@ -263,9 +263,7 @@ class SupabaseAuthAdapter:
                 # Anti-enumeration: existing emails return 200 with empty
                 # identities instead of email_exists.
                 user_obj = getattr(response, "user", None)
-                identities = (
-                    getattr(user_obj, "identities", None) if user_obj else None
-                )
+                identities = getattr(user_obj, "identities", None) if user_obj else None
                 if user_obj is not None and not identities:
                     raise AuthenticationError(
                         "An account with this email already exists",
