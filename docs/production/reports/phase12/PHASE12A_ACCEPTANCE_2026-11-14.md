@@ -89,9 +89,11 @@ Field mapping: see onboarding/registry doc §1.
 
 | Item | Status |
 |---|---|
-| Unit: `tests/unit/test_phase12a_worker_not_ready_reasons.py` | Required green on PR |
-| Observability: `not_ready_reasons`, `dispatch_ready`, reason counts in ops | Shipped in feature PR |
-| Production deploy of observability | After CI merge (docs+code) |
+| Unit: `tests/unit/test_phase12a_worker_not_ready_reasons.py` | **PASS** (CI on PR #269) |
+| Observability: `not_ready_reasons`, `dispatch_ready`, reason counts in ops | **PASS** |
+| PR / merge | [#269](https://github.com/QuantForg1/QuantForg/pull/269) → `a95bb71c` |
+| Production + Staging runtime SHA | **PASS** `a95bb71c` |
+| Production ops after deploy | **PASS** `dispatch_ready_count=0` · `not_ready_count=6` · reason counts include `heartbeat_stale`, `login_not_verified`, `server_not_verified`, `revoked`, `stopped`, `lifecycle_error` |
 | LIVE_SUBMIT / DISPATCH flags flipped | **No** |
 
 ---
