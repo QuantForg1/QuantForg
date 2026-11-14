@@ -335,9 +335,10 @@ def test_ops_summary_includes_phase7_owner_snapshot() -> None:
     assert body["safety"]["live_submit_allowed"] is False
     assert body["feature_flags"]["MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED"] is False
 
+
 def test_verification_report_marks_registered_slot_ready() -> None:
-    """Successful portable verify must populate login/server and READY on the slot worker."""
-    client, api = _client()
+    """Successful portable verify populates login/server and READY."""
+    client, _api = _client()
     reg = client.post(
         "/api/v1/mt5-workers/register",
         json={"host_code": "local-windows-1", "slot_id": "demo-a"},
