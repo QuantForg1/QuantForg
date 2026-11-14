@@ -30,9 +30,9 @@ Evidence: `var/mt5_broker_verification.json` · source `windows_mt5_demo_verify`
 | justmarkets | JustMarkets-Demo | `***0008` | true | true | **DEMO VERIFIED** |
 | ic-markets | ICMarketsSC-Demo | `***8224` | true | true | **DEMO VERIFIED** |
 | pepperstone | Pepperstone-Demo | `***5669` | true | true | **DEMO VERIFIED** |
-| fp-markets | — | — | — | — | **NOT VERIFIED** — `initialize_failed:(-10005, 'IPC timeout')` (retry same error) |
+| fp-markets | FPMarketsSC-Demo | `***2720` | true | true | **DEMO VERIFIED** (re-verified 2026-11-14T14:19:25Z after server string correction; prior IPC timeout superseded) |
 
-**Score:** 7 / 8 DEMO VERIFIED. FP Markets remains blocked on portable IPC timeout (not claimed verified).
+**Score:** **8 / 8 DEMO VERIFIED** on portable `demo-a`.
 
 ## Safety
 
