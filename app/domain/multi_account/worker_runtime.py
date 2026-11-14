@@ -145,9 +145,52 @@ class WorkerRuntime:
         stamp = now or datetime.now(UTC)
         return stamp - self.last_heartbeat_at > max_age
 
+    def not_ready_reasons(
+        self,
+        *,
+        now: datetime | None = None,
+        stale_after: timedelta = timedelta(seconds=45),
+        revoked: bool = False,
+    ) -> list[str]:
+        """Explain why this worker is not READY for multi-account dispatch.
+
+        Never includes credentials. Empty list means lifecycle is READY and
+        heartbeat is fresh (caller may still require login/server verified).
+        """
+        reasons: list[str] = []
+        if revoked or self.lifecycle is WorkerLifecycleState.REVOKED:
+            reasons.append("revoked")
+        if self.lifecycle is WorkerLifecycleState.STOPPED:
+            reasons.append("stopped")
+        if self.lifecycle is WorkerLifecycleState.ERROR:
+            reasons.append("lifecycle_error")
+        if not self.is_ready:
+            reasons.append(f"lifecycle_not_ready:{self.lifecycle.value}")
+        if self.is_heartbeat_stale(now=now, max_age=stale_after):
+            reasons.append(
+                "heartbeat_missing"
+                if self.last_heartbeat_at is None
+                else "heartbeat_stale"
+            )
+        if not (self.account_login_verified or "").strip():
+            reasons.append("login_not_verified")
+        if not (self.server_verified or "").strip():
+            reasons.append("server_not_verified")
+        if self.trade_allowed is False:
+            reasons.append("trade_not_allowed")
+        # De-dupe while preserving order.
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for reason in reasons:
+            if reason not in seen:
+                seen.add(reason)
+                ordered.append(reason)
+        return ordered
+
     def public_status(self) -> dict[str, Any]:
         """Safe status for APIs — never includes secrets."""
         connected = self.is_ready
+        reasons = self.not_ready_reasons()
         return {
             "worker_id": str(self.worker_id),
             "user_id": str(self.user_id),
@@ -165,4 +208,7 @@ class WorkerRuntime:
             "account_login_verified": self.account_login_verified,
             "server_verified": self.server_verified,
             "attempt_count": self.attempt_count,
+            # Always surface blockers (lifecycle READY alone is not enough).
+            "not_ready_reasons": reasons,
+            "dispatch_ready": not reasons,
         }
