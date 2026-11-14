@@ -31,12 +31,13 @@
   --hot: #00d4e0;
   --hot-soft: rgba(0, 212, 224, 0.14);
 
-  --cta: #f59e3b;
-  --cta-hover: #fbbf24;
-  --cta-active: #d97706;
-  --cta-fg: #1a1208;
-  --cta-soft: rgba(245, 158, 59, 0.16);
-  --cta-gradient: linear-gradient(180deg, #fbbf24 0%, #f59e3b 48%, #d97706 100%);
+  /* CTA tokens align to brand cyan (legacy amber retired for primary actions). */
+  --cta: #00d4e0;
+  --cta-hover: #5ef6ff;
+  --cta-active: #00cac0;
+  --cta-fg: #031018;
+  --cta-soft: rgba(0, 212, 224, 0.14);
+  --cta-gradient: linear-gradient(180deg, #5ef6ff 0%, #00d4e0 48%, #00cac0 100%);
 
   --success: #00c9a7;
   --success-soft: rgba(0, 201, 167, 0.12);
@@ -125,12 +126,12 @@
   --brand-teal: #00cac0;
   --hot: #0891a8;
   --hot-soft: rgba(8, 145, 168, 0.12);
-  --cta: #ea580c;
-  --cta-hover: #f97316;
-  --cta-active: #c2410c;
+  --cta: #0891a8;
+  --cta-hover: #00d4e0;
+  --cta-active: #0e7490;
   --cta-fg: #ffffff;
-  --cta-soft: rgba(234, 88, 12, 0.12);
-  --cta-gradient: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+  --cta-soft: rgba(8, 145, 168, 0.1);
+  --cta-gradient: linear-gradient(180deg, #22d3ee 0%, #0891a8 100%);
   --success: #0f9f86;
   --success-soft: rgba(15, 159, 134, 0.12);
   --warning: #d97706;
@@ -613,9 +614,10 @@ body {
 }
 
 .qf-btn-cta {
-  background-image: var(--cta-gradient);
-  color: var(--cta-fg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cta) 40%, transparent);
+  /* Marketing primary CTA — cyan brand, not amber. */
+  background-image: var(--accent-gradient);
+  color: var(--accent-fg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .qf-btn-cta:hover {

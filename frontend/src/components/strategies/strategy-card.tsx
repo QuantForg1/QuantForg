@@ -29,8 +29,8 @@ export function StrategyCard({
         type="button"
         className={`flex h-full w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition ${
           selected
-            ? "border-[var(--cta)] bg-[var(--cta-soft)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--cta)_42%,transparent),0_0_20px_color-mix(in_srgb,var(--cta)_22%,transparent)]"
-            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--cta)]/35"
+            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_42%,transparent)]"
+            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--accent)]/35"
         }`}
         onClick={onSelect}
         aria-pressed={selected}
@@ -38,7 +38,7 @@ export function StrategyCard({
         <span
           className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
             selected
-              ? "bg-[var(--cta)] text-[var(--cta-fg)]"
+              ? "bg-[var(--accent)] text-[var(--accent-fg)]"
               : "bg-[var(--accent-soft)] text-[var(--accent)]"
           }`}
         >
