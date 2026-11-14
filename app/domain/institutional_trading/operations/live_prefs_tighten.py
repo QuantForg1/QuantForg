@@ -43,6 +43,8 @@ def tighten_risk_config_from_effective(
     max_lot = _dec(effective.get("max_lot"))
     daily = _dec(effective.get("daily_loss_pct"))
     max_open = _int_pos(effective.get("max_concurrent_positions"))
+    # Phase 3: customer aggregate open-risk ceiling — tighten exposure caps only.
+    aggregate_open = _dec(effective.get("aggregate_open_risk_pct"))
 
     updates: dict[str, Any] = {}
     if planned is not None:
@@ -54,6 +56,13 @@ def tighten_risk_config_from_effective(
         updates["max_daily_loss_pct"] = min(config.max_daily_loss_pct, daily)
     if max_open is not None:
         updates["max_open_positions"] = min(config.max_open_positions, max_open)
+    if aggregate_open is not None:
+        updates["max_total_exposure_pct"] = min(
+            config.max_total_exposure_pct, aggregate_open
+        )
+        updates["max_correlated_exposure_pct"] = min(
+            config.max_correlated_exposure_pct, aggregate_open
+        )
     if not updates:
         return config
     return replace(config, **updates)

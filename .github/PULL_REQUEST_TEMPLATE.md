@@ -28,6 +28,7 @@ See `.cursor/rules/quantforg-trading-core-freeze.mdc`.
 - [ ] `pytest -m trading_core` green
 - [ ] No `FORCE_FIRST_TRADE` / risk-lock bypass / fabricated `trade_allowed`
 - [ ] No LIVE test `order_send`
+- [ ] Phase 3 portfolio/OMS gap touch cites `docs/production/PHASE3_PORTFOLIO_INTELLIGENCE_FREEZE.md` when applicable
 
 ### Non-negotiable confirmations
 

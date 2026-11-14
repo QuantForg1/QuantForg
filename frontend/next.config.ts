@@ -48,9 +48,9 @@ const nextConfig: NextConfig = {
       { source: "/execution-intel", destination: "/executions", permanent: false },
       // /history serves the trader History desk (orders/deals). Do not alias to /executions.
 
-      // Portfolio OS (Book → Portfolio)
-      { source: "/book", destination: "/portfolio", permanent: false },
-      { source: "/wallet", destination: "/portfolio", permanent: false },
+      // Portfolio OS — Book is canonical (Phase 3); /portfolio aliases Book
+      { source: "/portfolio", destination: "/book", permanent: false },
+      { source: "/wallet", destination: "/book", permanent: false },
       { source: "/risk", destination: "/risk-center", permanent: false },
       { source: "/risk-lab", destination: "/allocation", permanent: false },
 

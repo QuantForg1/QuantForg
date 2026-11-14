@@ -17,6 +17,7 @@ import { ExposureMap } from "@/components/book/exposure-map";
 import { EquityTimeline } from "@/components/book/equity-timeline";
 import { PositionIntelligence } from "@/components/book/position-intelligence";
 import { PortfolioCounsel } from "@/components/book/portfolio-counsel";
+import { HouseholdDesk } from "@/components/book/household-desk";
 import { BookEmpty } from "@/components/book/empty-state";
 import {
   DEFAULT_BOOK_LAYOUT,
@@ -250,11 +251,13 @@ export function BookShell() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-hidden p-[var(--space-2)]">
+        <div className="grid h-full min-h-0 grid-rows-[minmax(0,auto)_minmax(0,1fr)] gap-[var(--space-2)]">
+          <HouseholdDesk />
         {!session.connected ? (
           <BookEmpty
             className="h-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]"
             title="No live book"
-            description="Attach MT5 in Broker to load equity, risk, and positions. Book never invents balances."
+            description="Attach MT5 in Broker to load equity, risk, and positions. Book never invents balances. Household registry above still shows connected accounts with honest status."
             action={
               <Button size="sm" variant="secondary" asChild>
                 <Link href="/broker">Open Broker</Link>
@@ -328,6 +331,7 @@ export function BookShell() {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       <DeskShortcutsDialog
