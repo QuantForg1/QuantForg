@@ -957,25 +957,29 @@ class InstitutionalExecutionEngine:
                         live_cs = info_cs
                 except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
                     pass
+                from app.domain.institutional_trading.operations.live_prefs_tighten import (
+                    tighten_live_risk_config_for_user,
+                )
                 from app.domain.institutional_trading.runtime_policy import (
                     active_max_open_positions,
                 )
 
-                live_risk = RiskEngine(
-                    config=replace(
-                        self.risk_engine.config,
-                        min_lot=live_constraints.min_volume,
-                        lot_step=live_constraints.volume_step,
-                        # Owner limit: never size above 0.01 lot.
-                        max_lot=min(live_constraints.max_volume, OWNER_MAX_LOT),
-                        max_open_positions=min(
-                            self.risk_engine.config.max_open_positions,
-                            active_max_open_positions(),
-                            OWNER_MAX_OPEN_POSITIONS,
-                        ),
-                        contract_size=live_cs,
-                    )
+                live_cfg = replace(
+                    self.risk_engine.config,
+                    min_lot=live_constraints.min_volume,
+                    lot_step=live_constraints.volume_step,
+                    # Owner limit: never size above 0.01 lot.
+                    max_lot=min(live_constraints.max_volume, OWNER_MAX_LOT),
+                    max_open_positions=min(
+                        self.risk_engine.config.max_open_positions,
+                        active_max_open_positions(),
+                        OWNER_MAX_OPEN_POSITIONS,
+                    ),
+                    contract_size=live_cs,
                 )
+                # Customer Risk Center prefs may only tighten ceilings.
+                live_cfg = tighten_live_risk_config_for_user(live_cfg, user_id)
+                live_risk = RiskEngine(config=live_cfg)
                 point = (
                     live_constraints.point
                     if live_constraints.point > 0

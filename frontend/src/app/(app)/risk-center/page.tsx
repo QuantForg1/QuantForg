@@ -16,12 +16,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { RiskIntelligencePanel } from "@/components/trading/dashboard-intelligence/risk-intelligence-panel";
 import { RiskRulesPanel } from "@/components/execution/risk-rules-panel";
-import { riskApi } from "@/lib/api/endpoints";
+import { riskApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { ApiError } from "@/lib/api/client";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
+import { liveTradingLabel } from "@/lib/trading/trader-ux";
 
 const checkSchema = z.object({
   symbol: z.string().min(1),
@@ -73,6 +74,28 @@ export default function RiskCenterPage() {
     retry: false,
     staleTime: 30_000,
   });
+  const tradingSessionQ = useQuery({
+    queryKey: ["trading-session"],
+    queryFn: tradingSessionApi.session,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    retry: false,
+  });
+  const tradingSnap = asRecord(tradingSessionQ.data);
+  const ordersMaySubmit = tradingSnap.orders_may_submit === true;
+  const riskLocked =
+    tradingSnap.risk_locked === true ||
+    tradingSnap.daily_loss_exceeded === true ||
+    String(tradingSnap.ownership_block_reason || "")
+      .toLowerCase()
+      .includes("risk");
+  const emergencyStop =
+    tradingSnap.emergency_stop === true ||
+    tradingSnap.kill_switch_armed === true ||
+    String(tradingSnap.live_trading_state || "")
+      .toUpperCase()
+      .includes("KILL");
+  const liveAuthorization = liveTradingLabel(tradingSnap);
 
   const prefs = asRecord(prefsQ.data);
   const preferenceBody = asRecord(prefs.preferences);
@@ -198,10 +221,10 @@ export default function RiskCenterPage() {
           floatingPnl={floating}
           todayPnl={todayPnl}
           openPositionCount={session.positions.length}
-          riskLocked={undefined}
-          emergencyStop={undefined}
-          liveAuthorization={undefined}
-          ordersMaySubmit={undefined}
+          riskLocked={riskLocked}
+          emergencyStop={emergencyStop}
+          liveAuthorization={liveAuthorization}
+          ordersMaySubmit={ordersMaySubmit}
           showRiskCenterLink={false}
           dailyLossHaltPercent={
             Number.isFinite(dailyLossHaltPercent) ? dailyLossHaltPercent : undefined
