@@ -30,11 +30,33 @@ if (Test-Path $EnvFile) {
 }
 
 Write-Host "Verifying broker=$Broker env=$Env slot=$Slot (passwords never printed)"
-poetry run python -m services.mt5_worker_agent.main capacity
-poetry run python -m services.mt5_worker_agent.main verify-broker --broker $Broker --slot $Slot --env $Env
-$code = $LASTEXITCODE
+
+function Invoke-WorkerPython {
+  param([Parameter(Mandatory = $true)][string[]]$ModuleArgs)
+  $venvPy = Join-Path $Root ".venv\Scripts\python.exe"
+  if (Test-Path $venvPy) {
+    & $venvPy @ModuleArgs
+    return $LASTEXITCODE
+  }
+  if (Get-Command poetry -ErrorAction SilentlyContinue) {
+    & poetry run python @ModuleArgs
+    return $LASTEXITCODE
+  }
+  & python @ModuleArgs
+  return $LASTEXITCODE
+}
+
+$null = Invoke-WorkerPython -ModuleArgs @("-m", "services.mt5_worker_agent.main", "capacity")
+$code = Invoke-WorkerPython -ModuleArgs @(
+  "-m", "services.mt5_worker_agent.main", "verify-broker",
+  "--broker", $Broker, "--slot", $Slot, "--env", $Env
+)
 if ($AlsoRejectTest) {
   Write-Host "Running invalid-credential rejection test"
-  poetry run python -m services.mt5_worker_agent.main reject-demo --broker $Broker --slot $Slot --env $Env
+  $code = Invoke-WorkerPython -ModuleArgs @(
+    "-m", "services.mt5_worker_agent.main", "reject-demo",
+    "--broker", $Broker, "--slot", $Slot, "--env", $Env
+  )
 }
+if ($null -eq $code) { $code = 1 }
 exit $code
