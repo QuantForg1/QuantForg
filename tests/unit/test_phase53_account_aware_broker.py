@@ -258,7 +258,7 @@ def test_password_is_cleared_from_frontend_after_submit() -> None:
     assert "clearPasswordField" in workspace
     assert "key={passwordFieldKey}" in workspace
     assert 'autoComplete="off"' in workspace
-    assert "showConnectForm = !connected" in workspace
+    assert "!(connected || accountLinked)" in workspace
     assert "localStorage.setItem" not in workspace
     assert "localStorage.getItem" not in workspace
 

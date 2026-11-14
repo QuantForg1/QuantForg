@@ -435,9 +435,7 @@ class GetTradingSessionUseCase:
             "trade_allowed": trade_allowed,
             "mt5_terminal": "connected" if terminal_started else "disconnected",
             "broker_authenticated": broker_authenticated,
-            "trading_authorization": (
-                "enabled" if trading_permitted else "disabled"
-            ),
+            "trading_authorization": ("enabled" if trading_permitted else "disabled"),
             "ownership_block_reason": ownership_block_reason,
             "connection_layers": connection_layers,
         }
