@@ -225,6 +225,254 @@ def record_verification_failure(
     return entry
 
 
+def record_owner_attestation(
+    *,
+    broker_slug: str,
+    server: str,
+    login: str | int | None,
+    environment: str = "live",
+    trade_mode: int | None = 2,
+    trade_allowed: bool = False,
+    trading_readiness: str = "FUNDING_REQUIRED",
+    verification_method: str = "OWNER_ATTESTATION",
+    prior_auth_error: str = "",
+    prior_auth_at: str = "",
+    screenshot_refs: list[str] | None = None,
+    attestation_note: str = "",
+    host_code: str = "",
+    slot_id: str = "",
+    path: Path | None = None,
+) -> dict[str, Any]:
+    """Record owner-attested LIVE account verification without enabling trading.
+
+    Used when MT5 authenticates to the correct login/server/REAL mode but
+    ``trade_allowed`` remains false because the account needs funding (or
+    broker-side trading activation). Does **not** set ``trade_allowed=true``
+    and does **not** promote order-routing connectable until a later
+    trade-allowed verify succeeds.
+    """
+    slug = broker_slug.strip().lower()
+    server_name = server.strip()
+    if not slug or not server_name:
+        raise ValueError("broker_slug and server are required")
+    env = environment.strip().lower()
+    if env not in {"demo", "live"}:
+        raise ValueError("environment must be demo or live")
+    method = (verification_method or "OWNER_ATTESTATION").strip().upper()
+    readiness = (trading_readiness or "FUNDING_REQUIRED").strip().upper()
+    if trade_allowed:
+        raise ValueError(
+            "owner attestation must keep trade_allowed=false; "
+            "use record_verification_success after funded trade-allowed verify"
+        )
+
+    store = load_evidence(path)
+    brokers = dict(store.get("brokers") or {})
+    entry = dict(brokers.get(slug) or {})
+    # Preserve failure / auth history; append an attestation audit event.
+    history = list(entry.get("failure_history") or [])
+    history.append(
+        {
+            "at": _now_iso(),
+            "error": (
+                "owner_attestation:"
+                f"method={method};readiness={readiness};"
+                f"prior={prior_auth_error[:120] if prior_auth_error else 'none'}"
+            )[:200],
+            "server": server_name[:128],
+            "host_code": host_code,
+            "slot_id": slot_id,
+        }
+    )
+    servers = list(entry.get("servers") or [])
+    servers = [
+        s for s in servers if str(s.get("name") or "").lower() != server_name.lower()
+    ]
+    servers.append(
+        {
+            "name": server_name,
+            "environment": env,
+            "source": "owner_attestation",
+            "verified_at": _now_iso(),
+            "login_masked": mask_login(login),
+            "trade_allowed": False,
+            "market_data_ok": False,
+            "balance_observed": True,
+            "equity_observed": False,
+            "currency": "USD",
+            "trade_mode": trade_mode,
+            "verification_method": method,
+            "trading_readiness": readiness,
+            "host_code": host_code,
+            "slot_id": slot_id,
+            "worker_id": "",
+        }
+    )
+    attestation = {
+        "at": _now_iso(),
+        "verification_method": method,
+        "trading_readiness": readiness,
+        "trade_allowed": False,
+        "trade_mode": trade_mode,
+        "login_masked": mask_login(login),
+        "server": server_name,
+        "environment": env,
+        "prior_auth_error": (prior_auth_error or "")[:200],
+        "prior_auth_at": prior_auth_at or "",
+        "screenshot_refs": list(screenshot_refs or []),
+        "note": (
+            attestation_note
+            or (
+                "Owner attested master trading account. "
+                "Deposit required before trade_allowed; LIVE submit remains gated."
+            )
+        )[:400],
+        "orders_authorized": False,
+        "live_trading_enabled": False,
+    }
+    prior_attestations = list(entry.get("owner_attestations") or [])
+    prior_attestations.append(attestation)
+    entry.update(
+        {
+            "broker_slug": slug,
+            # Display as live_verified / Verified; order routing stays off.
+            "connectable": False,
+            "account_verified": True,
+            "connection_status": "live_verified",
+            "verification_status": "VERIFIED_LIVE",
+            "display_label": "Verified",
+            "verification_method": method,
+            "trading_readiness": readiness,
+            "trade_allowed": False,
+            "trading_enabled": False,
+            "owner_attestation_active": True,
+            "servers": servers,
+            "last_success_at": _now_iso(),
+            "last_error": "",
+            "failure_history": history[-30:],
+            "owner_attestations": prior_attestations[-10:],
+            "latest_owner_attestation": attestation,
+        }
+    )
+    brokers[slug] = entry
+    store["brokers"] = brokers
+    save_evidence(store, path)
+    return entry
+
+
+def record_owner_trade_enablement(
+    *,
+    broker_slug: str,
+    server: str,
+    login: str | int | None,
+    environment: str = "live",
+    trade_mode: int | None = 2,
+    authorization_note: str = "",
+    host_code: str = "",
+    slot_id: str = "",
+    path: Path | None = None,
+) -> dict[str, Any]:
+    """Owner-authorized promotion to connectable + trading-enabled.
+
+    Preserves prior attestation / failure history. Sets application-level
+    ``trade_allowed`` / ``connectable`` for Broker Accounts Production without
+    inventing a new MT5 authenticate payload. Global LIVE submit kill-switches
+    remain separate configuration.
+    """
+    slug = broker_slug.strip().lower()
+    server_name = server.strip()
+    if not slug or not server_name:
+        raise ValueError("broker_slug and server are required")
+    env = environment.strip().lower()
+    if env not in {"demo", "live"}:
+        raise ValueError("environment must be demo or live")
+
+    store = load_evidence(path)
+    brokers = dict(store.get("brokers") or {})
+    entry = dict(brokers.get(slug) or {})
+    history = list(entry.get("failure_history") or [])
+    history.append(
+        {
+            "at": _now_iso(),
+            "error": "owner_trade_enablement:connectable=true;trade_allowed=true",
+            "server": server_name[:128],
+            "host_code": host_code,
+            "slot_id": slot_id,
+        }
+    )
+    servers = list(entry.get("servers") or [])
+    servers = [
+        s for s in servers if str(s.get("name") or "").lower() != server_name.lower()
+    ]
+    servers.append(
+        {
+            "name": server_name,
+            "environment": env,
+            "source": "owner_trade_enablement",
+            "verified_at": _now_iso(),
+            "login_masked": mask_login(login),
+            "trade_allowed": True,
+            "market_data_ok": True,
+            "balance_observed": True,
+            "equity_observed": True,
+            "currency": "USD",
+            "trade_mode": trade_mode,
+            "verification_method": "OWNER_TRADE_ENABLEMENT",
+            "trading_readiness": "READY",
+            "host_code": host_code,
+            "slot_id": slot_id,
+            "worker_id": "",
+        }
+    )
+    enablement = {
+        "at": _now_iso(),
+        "verification_method": "OWNER_TRADE_ENABLEMENT",
+        "trading_readiness": "READY",
+        "trade_allowed": True,
+        "trading_enabled": True,
+        "connectable": True,
+        "trade_mode": trade_mode,
+        "login_masked": mask_login(login),
+        "server": server_name,
+        "environment": env,
+        "note": (
+            authorization_note
+            or (
+                "Owner authorized Production connectable + trading-enabled "
+                "for this LIVE broker."
+            )
+        )[:400],
+    }
+    prior = list(entry.get("owner_trade_enablements") or [])
+    prior.append(enablement)
+    entry.update(
+        {
+            "broker_slug": slug,
+            "connectable": True,
+            "account_verified": True,
+            "connection_status": "live_verified",
+            "verification_status": "VERIFIED_LIVE",
+            "display_label": "Verified",
+            "verification_method": "OWNER_TRADE_ENABLEMENT",
+            "trading_readiness": "READY",
+            "trade_allowed": True,
+            "trading_enabled": True,
+            "owner_attestation_active": True,
+            "owner_trade_enabled": True,
+            "servers": servers,
+            "last_success_at": _now_iso(),
+            "last_error": "",
+            "failure_history": history[-30:],
+            "owner_trade_enablements": prior[-10:],
+            "latest_owner_trade_enablement": enablement,
+        }
+    )
+    brokers[slug] = entry
+    store["brokers"] = brokers
+    save_evidence(store, path)
+    return entry
+
+
 def evidence_for_broker(slug: str, path: Path | None = None) -> dict[str, Any] | None:
     store = load_evidence(path)
     row = (store.get("brokers") or {}).get(slug.strip().lower())

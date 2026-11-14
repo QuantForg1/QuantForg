@@ -118,7 +118,7 @@ class WorkerRuntime:
         if not trade_allowed:
             return raised.with_lifecycle(
                 WorkerLifecycleState.ERROR,
-                error="investor_or_readonly_credentials_rejected",
+                error="authenticated_trading_not_enabled",
             )
         ready = raised.with_lifecycle(WorkerLifecycleState.READY)
         assert_not_connected_until_ready(ready.lifecycle, "READY")

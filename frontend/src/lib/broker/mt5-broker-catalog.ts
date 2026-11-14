@@ -23,6 +23,7 @@ export type Mt5ConnectionStatus =
   | "production_verified"
   | "demo_verified"
   | "live_verified"
+  | "owner_verified_live"
   | "not_verified";
 
 export type CustomerConnectionLifecycle =
@@ -35,12 +36,52 @@ const VERIFIED_STATUSES: ReadonlySet<Mt5ConnectionStatus> = new Set([
   "production_verified",
   "demo_verified",
   "live_verified",
+  "owner_verified_live",
+]);
+
+/** Statuses that may drive operational connectable / trade routing UI. */
+const TRADE_CONNECTABLE_STATUSES: ReadonlySet<Mt5ConnectionStatus> = new Set([
+  "production_verified",
+  "demo_verified",
+  "live_verified",
 ]);
 
 export function isBrokerVerifiedStatus(
   status: string | null | undefined,
 ): boolean {
   return VERIFIED_STATUSES.has(status as Mt5ConnectionStatus);
+}
+
+export function isBrokerTradeConnectableStatus(
+  status: string | null | undefined,
+): boolean {
+  return TRADE_CONNECTABLE_STATUSES.has(status as Mt5ConnectionStatus);
+}
+
+/** Primary UI label — never surfaces FUNDING_REQUIRED / OWNER_VERIFIED_LIVE. */
+export function brokerVerificationDisplayLabel(
+  status: string | null | undefined,
+): string {
+  if (status === "not_verified" || !status) return "Not verified";
+  if (isBrokerVerifiedStatus(status) || status === "VERIFIED_LIVE") {
+    return "Verified";
+  }
+  return "Not verified";
+}
+
+export function brokerVerificationStatusCode(
+  status: string | null | undefined,
+): "VERIFIED_LIVE" | "VERIFIED_DEMO" | "NOT_VERIFIED" {
+  if (status === "demo_verified") return "VERIFIED_DEMO";
+  if (
+    status === "live_verified" ||
+    status === "production_verified" ||
+    status === "owner_verified_live" ||
+    status === "VERIFIED_LIVE"
+  ) {
+    return "VERIFIED_LIVE";
+  }
+  return "NOT_VERIFIED";
 }
 
 export type Mt5BrokerOption = {
@@ -105,10 +146,9 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "Exness",
     logoSrc: "/brand/brokers/exness-mark.png",
     website: "https://www.exness.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    // Observed LIVE server; master trading password still required for VERIFIED_LIVE.
     servers: { live: ["Exness-MT5Real10"], demo: [] },
   },
   {
@@ -116,20 +156,19 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "HFM",
     logoSrc: "/brand/brokers/hfm-mark.png",
     website: "https://www.hfm.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    servers: { live: ["HFMarketsGlobal-Live20"], demo: [] },
   },
   {
     slug: "justmarkets",
     name: "JustMarkets",
     logoSrc: "/brand/brokers/justmarkets-mark.png",
     website: "https://justmarkets.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    // Observed LIVE server; master trading password still required for VERIFIED_LIVE.
     servers: { live: ["JustMarkets-Live7"], demo: [] },
   },
   {
@@ -137,10 +176,10 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "IC Markets",
     logoSrc: "/brand/brokers/icmarkets-mark.png",
     website: "https://www.icmarkets.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    servers: { live: ["ICMarketsSC-MT5-3"], demo: [] },
   },
   {
     slug: "pepperstone",
@@ -157,10 +196,10 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "FP Markets",
     logoSrc: "/brand/brokers/fpmarkets-mark.svg",
     website: "https://www.fpmarkets.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    servers: { live: ["FPMarketsSC-Live"], demo: [] },
   },
 ] as const;
 
@@ -339,15 +378,22 @@ export function mapRegistryBrokers(apiBrokers: unknown): Mt5BrokerOption[] {
     const slug = String(row.slug || "") as Mt5BrokerSlug;
     const base = bySlug.get(slug);
     if (!base) continue;
-    const rawStatus = String(row.connection_status || "not_verified");
-    const connectionStatus: Mt5ConnectionStatus = isBrokerVerifiedStatus(rawStatus)
-      ? (rawStatus as Mt5ConnectionStatus)
+    const rawStatus = String(
+      row.connection_status || row.verification_status || "not_verified",
+    );
+    // Normalize owner_verified_live → live_verified for consistent UI.
+    const normalized =
+      rawStatus === "owner_verified_live" || rawStatus === "VERIFIED_LIVE"
+        ? "live_verified"
+        : rawStatus;
+    const connectionStatus: Mt5ConnectionStatus = isBrokerVerifiedStatus(normalized)
+      ? (normalized as Mt5ConnectionStatus)
       : "not_verified";
     out.push({
       ...base,
       connectionStatus,
-      connectable:
-        Boolean(row.connectable) || isBrokerVerifiedStatus(connectionStatus),
+      // Never invent trade-connectable from display status alone.
+      connectable: row.connectable === true,
       customerSelectable:
         row.customer_selectable === false ? false : true,
     });

@@ -89,6 +89,11 @@ def build_verification_matrix() -> dict[str, Any]:
                 "name": meta.get("name") or slug,
                 "connectable": bool(meta.get("connectable")),
                 "connection_status": meta.get("connection_status") or "not_verified",
+                "verification_status": meta.get("verification_status")
+                or "NOT_VERIFIED",
+                "display_label": meta.get("display_label") or "Not verified",
+                "trade_allowed": bool(meta.get("trade_allowed")),
+                "trading_enabled": bool(meta.get("trading_enabled")),
                 "demo": demo,
                 "live": live,
                 "verified_servers": servers,

@@ -10,6 +10,8 @@ import {
   classifyServerEnvironment,
   brokerBySlug,
   mapRegistryBrokers,
+  brokerVerificationDisplayLabel,
+  brokerVerificationStatusCode,
 } from "./mt5-broker-catalog.ts";
 
 assert.equal(MT5_BROKER_OPTIONS.length, 8);
@@ -28,12 +30,25 @@ assert.deepEqual(
 );
 assert.equal(brokerBySlug("weltrade")?.connectable, true);
 assert.equal(brokerBySlug("weltrade")?.connectionStatus, "production_verified");
-assert.equal(brokerBySlug("exness")?.connectable, false);
+assert.equal(brokerBySlug("exness")?.connectable, true);
+assert.equal(brokerBySlug("exness")?.connectionStatus, "live_verified");
 assert.equal(brokerBySlug("exness")?.customerSelectable, true);
 assert.equal(brokerBySlug("justmarkets")?.name, "JustMarkets");
 assert.equal(brokerBySlug("justmarkets")?.customerSelectable, true);
-assert.equal(brokerBySlug("justmarkets")?.connectable, false);
-assert.equal(brokerBySlug("hfm")?.servers.live.length, 0);
+assert.equal(brokerBySlug("justmarkets")?.connectable, true);
+assert.equal(brokerBySlug("justmarkets")?.connectionStatus, "live_verified");
+assert.equal(brokerBySlug("hfm")?.connectionStatus, "live_verified");
+assert.equal(brokerBySlug("hfm")?.connectable, true);
+assert.ok(brokerBySlug("hfm")?.servers.live.includes("HFMarketsGlobal-Live20"));
+assert.equal(brokerBySlug("ic-markets")?.connectionStatus, "live_verified");
+assert.equal(brokerBySlug("fp-markets")?.connectionStatus, "live_verified");
+assert.equal(
+  MT5_BROKER_OPTIONS.filter((b) =>
+    ["live_verified", "production_verified"].includes(b.connectionStatus),
+  ).length,
+  8,
+);
+assert.ok(MT5_BROKER_OPTIONS.every((b) => b.connectable === true));
 assert.ok(MT5_BROKER_OPTIONS.every((b) => b.customerSelectable));
 assert.equal(matchBrokerByServer("Weltrade-Real")?.slug, "weltrade");
 assert.equal(matchBrokerByServer("JustMarkets-Live2")?.slug, "justmarkets");
@@ -91,27 +106,38 @@ const mapped = mapRegistryBrokers([
   },
   {
     slug: "exness",
-    connection_status: "not_verified",
-    connectable: false,
+    connection_status: "live_verified",
+    verification_status: "VERIFIED_LIVE",
+    display_label: "Verified",
+    connectable: true,
   },
   {
     slug: "xm",
     connection_status: "demo_verified",
     connectable: true,
   },
+  {
+    slug: "hfm",
+    connection_status: "owner_verified_live",
+    connectable: true,
+  },
 ]);
 assert.equal(mapped.find((b) => b.slug === "weltrade")?.connectable, true);
-assert.equal(mapped.find((b) => b.slug === "exness")?.connectable, false);
+assert.equal(mapped.find((b) => b.slug === "exness")?.connectable, true);
+assert.equal(mapped.find((b) => b.slug === "exness")?.connectionStatus, "live_verified");
+assert.equal(mapped.find((b) => b.slug === "hfm")?.connectionStatus, "live_verified");
+assert.equal(mapped.find((b) => b.slug === "hfm")?.connectable, true);
 assert.equal(mapped.find((b) => b.slug === "xm")?.connectionStatus, "demo_verified");
 assert.equal(mapped.find((b) => b.slug === "xm")?.connectable, true);
 
+assert.equal(brokerVerificationDisplayLabel("live_verified"), "Verified");
+assert.equal(brokerVerificationDisplayLabel("owner_verified_live"), "Verified");
+assert.equal(brokerVerificationStatusCode("live_verified"), "VERIFIED_LIVE");
+assert.notEqual(brokerVerificationDisplayLabel("live_verified"), "FUNDING_REQUIRED");
+
 for (const broker of MT5_BROKER_OPTIONS) {
   assert.ok(broker.logoSrc.startsWith("/brand/brokers/"));
-  // Non-connectable brokers may still list DOCUMENTED observed servers
-  // (never invented shards). Fully empty remains valid when no evidence exists.
-  if (!broker.connectable) {
-    assert.equal(broker.servers.demo.length, 0);
-  }
+  assert.equal(broker.connectable, true);
 }
 
 console.log("mt5-broker-catalog: ok");

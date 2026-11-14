@@ -1,13 +1,15 @@
 # LIVE master trading password provisioning
 
 Several LIVE accounts authenticate to the correct broker server with
-`trade_mode=2`, but fail `trade_allowed` because an **investor / read-only**
-password was provisioned.
+`trade_mode=2`, but remain `trade_allowed=false` until trading is enabled
+(funded / activated). Owner attestation records identity without enabling
+orders — see `OWNER_ATTESTATION_FUNDING_REQUIRED.md`.
 
 | Broker | Observed LIVE server | Blocker |
 |---|---|---|
-| JustMarkets | `JustMarkets-Live7` | investor/read-only password |
-| Exness | `Exness-MT5Real10` | investor/read-only password |
+| JustMarkets | `JustMarkets-Live7` | funding / activate trading (owner-attested) |
+| Exness | `Exness-MT5Real10` | funding required (owner-attested) |
+| HFM | `HFMarketsGlobal-Live20` | funding required (owner-attested) |
 
 ## Secure procedure (owner only)
 

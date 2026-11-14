@@ -305,7 +305,10 @@ def authenticate_and_verify(
             trade_mode = None
         trade_allowed = bool(getattr(info, "trade_allowed", False))
         trade_expert = bool(getattr(info, "trade_expert", True))
-        # Investor / read-only style accounts typically have trade_allowed False.
+        # Authenticated session with trading disabled — common for unfunded LIVE
+        # accounts and investor passwords. Do not claim trade_allowed; classify
+        # neutrally so owner attestation can record FUNDING_REQUIRED without
+        # inventing investor vs master.
         if not trade_allowed:
             return Mt5VerifyResult(
                 ok=False,
@@ -313,8 +316,11 @@ def authenticate_and_verify(
                 login=int(getattr(info, "login", login) or login),
                 server=str(getattr(info, "server", server) or server),
                 name=str(getattr(info, "name", "") or ""),
+                balance=float(getattr(info, "balance", 0) or 0),
+                equity=float(getattr(info, "equity", 0) or 0),
+                currency=str(getattr(info, "currency", "") or ""),
                 trade_mode=trade_mode,
-                error="investor_or_readonly_credentials_rejected",
+                error="authenticated_trading_not_enabled",
             )
         if (
             term is not None
