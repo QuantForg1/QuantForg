@@ -5,7 +5,7 @@
  * Planned risk = (|entry - SL| + spread + slippage) x contract x lots
  * + commission, rounded up to the cent. The 20% cap is rounded down.
  * Risk is never rounded down to pass. Reward:risk counts the spread once
- * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 1.50.
+ * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 0.20.
  *
  * 20% is a maximum PLANNED risk per trade, not a cap on realised loss: gaps
  * and execution failures can make a loss larger. Omitted commission is
@@ -14,7 +14,8 @@
 
 export const OWNER_MAX_LOT = 0.01;
 export const OWNER_MAX_PLANNED_RISK_PCT = 20;
-export const OWNER_MIN_REWARD_RISK = 1.5;
+/** Mirror of owner_live_limits.OWNER_MIN_REWARD_RISK (active server floor). */
+export const OWNER_MIN_REWARD_RISK = 0.2;
 export const OWNER_MAX_SPREAD = 1;
 export const OWNER_SESSION_START_UTC_HOUR = 0;
 /** 24 means the window runs through 23:59 UTC. There is no desk-hour close. */

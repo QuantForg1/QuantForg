@@ -82,10 +82,10 @@ export const TerminalBlotter = memo(function TerminalBlotter({
           })}
         </div>
         <Link
-          href="/journal"
+          href="/history"
           className="pr-1 text-[10px] text-[var(--fg-subtle)] transition-colors duration-[var(--duration-fast)] hover:text-[var(--fg)]"
         >
-          Journal →
+          History →
         </Link>
       </div>
 
@@ -135,6 +135,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
                     <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Side</th>
                     <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Vol</th>
                     <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Price</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">State</th>
                     <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">PnL</th>
                   </tr>
                 </thead>
@@ -142,6 +143,10 @@ export const TerminalBlotter = memo(function TerminalBlotter({
                   {deals.slice(0, 80).map((raw, i) => {
                     const d = asRecord(raw);
                     const pnl = num(d.profit, 0);
+                    const ticket = str(d.ticket ?? d.deal, "");
+                    const lifecycle = ticket
+                      ? "Filled"
+                      : str(d.state ?? d.status, "Synced");
                     return (
                       <tr
                         key={str(d.ticket ?? d.deal ?? i)}
@@ -158,6 +163,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
                         <td className="px-2 py-1 tabular">
                           {formatNumber(num(d.price, 0), 2)}
                         </td>
+                        <td className="px-2 py-1 text-[var(--fg-muted)]">{lifecycle}</td>
                         <td
                           className={cn(
                             "px-2 py-1 tabular",

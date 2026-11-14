@@ -118,6 +118,20 @@ export function TerminalShell() {
     focusRef.current = focus;
   }, [focus]);
 
+  const ticketPrefill = useMemo(() => {
+    const sideRaw = (searchParams.get("side") || "").trim().toLowerCase();
+    const side =
+      sideRaw === "buy" || sideRaw === "sell" ? (sideRaw as "buy" | "sell") : undefined;
+    const stopLoss = searchParams.get("sl")?.trim() || undefined;
+    const takeProfit = searchParams.get("tp")?.trim() || undefined;
+    const signalId =
+      searchParams.get("signal")?.trim() ||
+      searchParams.get("signal_id")?.trim() ||
+      undefined;
+    if (!side && !stopLoss && !takeProfit && !signalId) return null;
+    return { side, stopLoss, takeProfit, signalId };
+  }, [searchParams]);
+
   useEffect(() => {
     const stored = loadTerminalLayout();
     setLayout(stored);
@@ -236,6 +250,7 @@ export function TerminalShell() {
     manualSymbol,
     userSelected,
     autoPayload,
+    focus.mode,
     session.positions,
     session.orders,
     session.healthKnown,
@@ -634,6 +649,7 @@ export function TerminalShell() {
                 marketOpen={marketOpen}
                 symbolAvailable={symbolAvailable}
                 ticketRef={ticketRef}
+                prefill={ticketPrefill}
               />
             </div>
           </>
@@ -708,6 +724,7 @@ export function TerminalShell() {
                   marketOpen={marketOpen}
                   symbolAvailable={symbolAvailable}
                   ticketRef={ticketRef}
+                  prefill={ticketPrefill}
                 />
               </div>
             </div>
