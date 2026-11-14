@@ -35,14 +35,58 @@ _WELTRADE_VERIFIED: tuple[dict[str, Any], ...] = (
         "environment": "live",
         "source": "production_gateway_account",
         "verified_at": "2026-11-09T00:00:00+00:00",
+        "evidence_classification": "CONFIRMED",
     },
     {
         "name": "Weltrade-Demo",
         "environment": "demo",
         "source": "weltrade_profile_defaults",
         "verified_at": "2026-11-09T00:00:00+00:00",
+        "evidence_classification": "CONFIRMED",
     },
 )
+
+# Portable LIVE authenticate+verify evidence (trade_mode=2) — never invent shards.
+_EVIDENCE_VERIFIED_LIVE: dict[str, tuple[dict[str, Any], ...]] = {
+    "xm": (
+        {
+            "name": "XMGlobal-MT5 20",
+            "environment": "live",
+            "source": "windows_mt5_live_verify",
+            "verified_at": "2026-11-13T08:13:21+00:00",
+            "evidence_classification": "CONFIRMED",
+        },
+    ),
+    "pepperstone": (
+        {
+            "name": "PepperstoneKE-MT5-Live01",
+            "environment": "live",
+            "source": "windows_mt5_live_verify",
+            "verified_at": "2026-11-13T10:36:00+00:00",
+            "evidence_classification": "CONFIRMED",
+        },
+    ),
+    # JustMarkets / Exness servers observed with trade_mode=2; master trading
+    # password still required (investor/read-only was rejected).
+    "justmarkets": (
+        {
+            "name": "JustMarkets-Live7",
+            "environment": "live",
+            "source": "windows_mt5_live_verify_readonly",
+            "verified_at": "2026-11-13T10:30:00+00:00",
+            "evidence_classification": "DOCUMENTED",
+        },
+    ),
+    "exness": (
+        {
+            "name": "Exness-MT5Real10",
+            "environment": "live",
+            "source": "windows_mt5_live_verify_readonly",
+            "verified_at": "2026-11-14T07:20:00+00:00",
+            "evidence_classification": "DOCUMENTED",
+        },
+    ),
+}
 
 
 def _now_iso() -> str:
@@ -123,7 +167,18 @@ def verified_servers_for_broker(
             seen.add(name.lower())
             payload = dict(row)
             payload["confirmed"] = True
+            payload.setdefault("evidence_classification", "CONFIRMED")
             out.append(payload)
+
+    for row in _EVIDENCE_VERIFIED_LIVE.get(code, ()):
+        name = str(row["name"])
+        if name.lower() in seen:
+            continue
+        payload = dict(row)
+        # JustMarkets DOCUMENTED until master trading password verifies trade_allowed.
+        payload["confirmed"] = payload.get("evidence_classification") == "CONFIRMED"
+        out.append(payload)
+        seen.add(name.lower())
 
     # Evidence-backed servers from real authenticated MT5 sessions.
     ev = evidence_for_broker(code)
@@ -145,6 +200,7 @@ def verified_servers_for_broker(
                     "source": server.get("source") or "windows_mt5_verify",
                     "verified_at": server.get("verified_at") or _now_iso(),
                     "confirmed": True,
+                    "evidence_classification": "CONFIRMED",
                 }
             )
             seen.add(name.lower())
@@ -210,6 +266,7 @@ def candidate_servers_for_broker(slug: str) -> list[dict[str, Any]]:
                 "source": "documented_candidate",
                 "verified_at": None,
                 "confirmed": False,
+                "evidence_classification": "CANDIDATE",
             }
         )
         seen.add(name.lower())

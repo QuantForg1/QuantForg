@@ -35,10 +35,25 @@ def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
 
 
 def test_unverified_brokers_have_no_invented_servers() -> None:
-    assert verified_servers_for_broker("exness") == []
     assert verified_servers_for_broker("hfm") == []
-    assert verified_servers_for_broker("justmarkets") == []
     assert verified_servers_for_broker("fp-markets") == []
+    # JustMarkets / Exness include portable LIVE evidence rows only
+    # (never invented shards). DOCUMENTED until master trading password.
+    jm = verified_servers_for_broker("justmarkets")
+    assert len(jm) == 1
+    assert jm[0]["name"] == "JustMarkets-Live7"
+    assert jm[0]["evidence_classification"] == "DOCUMENTED"
+    assert jm[0]["confirmed"] is False
+    ex = verified_servers_for_broker("exness")
+    assert len(ex) == 1
+    assert ex[0]["name"] == "Exness-MT5Real10"
+    assert ex[0]["confirmed"] is False
+    xm = verified_servers_for_broker("xm")
+    assert any(r["name"] == "XMGlobal-MT5 20" and r["confirmed"] for r in xm)
+    pepper = verified_servers_for_broker("pepperstone")
+    assert any(
+        r["name"] == "PepperstoneKE-MT5-Live01" and r["confirmed"] for r in pepper
+    )
 
 
 def test_weltrade_verified_servers_include_source_and_timestamp() -> None:
@@ -70,4 +85,5 @@ def test_catalogue_snapshot_gateway_note() -> None:
     snap = catalogue_snapshot()
     assert snap["gateway"]["requires_windows_mt5_terminal"] is True
     assert "brokers" in snap and "servers" in snap
-    assert snap["servers"]["exness"] == []
+    assert any(r["name"] == "Exness-MT5Real10" for r in snap["servers"]["exness"])
+    assert any(r["name"] == "XMGlobal-MT5 20" for r in snap["servers"]["xm"])

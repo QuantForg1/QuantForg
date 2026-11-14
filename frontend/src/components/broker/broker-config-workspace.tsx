@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrokerLogo, Mt5BrandMark } from "@/components/broker/broker-logo";
-import { CustomerMultiAccountPanel } from "@/components/broker/customer-multi-account-panel";
 import {
   brokerConnectivityApi,
   mt5Api,
@@ -216,20 +215,31 @@ function BrokerSelect({
         onKeyDown={onTriggerKeyDown}
         className="w-full text-left"
       >
-        <FieldShell className={cn(open && "border-[var(--accent)] ring-1 ring-[var(--ring)]")}>
+        <FieldShell
+          className={cn(
+            "h-14",
+            open && "border-[var(--accent)] ring-1 ring-[var(--ring)]",
+            selected && "border-[color-mix(in_srgb,var(--accent)_36%,var(--border))]",
+          )}
+        >
           {selected ? (
-            <BrokerLogo src={selected.logoSrc} name={selected.name} size={22} rounded="md" />
+            <BrokerLogo src={selected.logoSrc} name={selected.name} size={32} rounded="md" />
           ) : (
-            <Building2 className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+            <Building2 className="h-5 w-5 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
           )}
           <span
             className={cn(
-              "min-w-0 flex-1 truncate",
-              selected ? "text-[var(--fg)]" : "text-[var(--fg-subtle)]",
+              "min-w-0 flex-1 truncate text-[15px]",
+              selected ? "font-medium text-[var(--fg)]" : "text-[var(--fg-subtle)]",
             )}
           >
             {selected ? selected.name : "Select a broker"}
           </span>
+          {selected ? (
+            <span className="hidden rounded-md border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent)] sm:inline">
+              MT5
+            </span>
+          ) : null}
           <ChevronDown
             className={cn(
               "h-4 w-4 shrink-0 text-[var(--fg-subtle)] transition",
@@ -246,10 +256,10 @@ function BrokerSelect({
           role="listbox"
           tabIndex={-1}
           onKeyDown={onListKeyDown}
-          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_92%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
+          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_96%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
         >
           <div className="border-b border-[var(--border)] p-2">
-            <label className="flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/40 px-2.5">
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2.5">
               <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
               <input
                 autoFocus
@@ -259,12 +269,13 @@ function BrokerSelect({
                   setActiveIndex(0);
                 }}
                 onKeyDown={onListKeyDown}
-                placeholder="Search brokers..."
+                placeholder="Search brokers…"
+                aria-label="Search brokers"
                 className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
               />
             </label>
           </div>
-          <ul className="max-h-[22rem] overflow-y-auto py-1">
+          <ul className="max-h-[min(22rem,50vh)] overflow-y-auto py-1">
             {filtered.map((broker, index) => {
               const active = broker.slug === value;
               const focused = index === activeIndex;
@@ -275,26 +286,25 @@ function BrokerSelect({
                     role="option"
                     aria-selected={active}
                     className={cn(
-                      "flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)]",
+                      "flex w-full items-center gap-3 px-3 py-3 text-left text-sm transition hover:bg-[var(--accent-soft)] focus-visible:bg-[var(--accent-soft)] focus-visible:outline-none",
                       (active || focused) && "bg-[var(--accent-soft)]",
                     )}
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => pick(broker)}
                   >
-                    <BrokerLogo src={broker.logoSrc} name={broker.name} size={28} rounded="md" />
+                    <BrokerLogo src={broker.logoSrc} name={broker.name} size={36} rounded="md" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{broker.name}</span>
-                      <span className="block text-[11px] text-[var(--fg-subtle)]">
-                        MetaTrader 5 · Connect your LIVE account
+                      <span className="block truncate font-medium text-[var(--fg)]">
+                        {broker.name}
                       </span>
-                    </span>
-                    <span className="rounded-md border border-[color-mix(in_srgb,var(--accent)_40%,transparent)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent)]">
-                      MT5
+                      <span className="block text-[11px] text-[var(--fg-subtle)]">
+                        Official MetaTrader 5 · LIVE connect
+                      </span>
                     </span>
                     {active ? (
                       <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
                     ) : (
-                      <span className="w-4" />
+                      <span className="w-4" aria-hidden />
                     )}
                   </button>
                 </li>
@@ -333,7 +343,6 @@ function ServerSelect({
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = options.find((s) => s.name === value);
-  const showSearch = options.length > 6;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -436,25 +445,24 @@ function ServerSelect({
           onKeyDown={onListKeyDown}
           className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_92%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
         >
-          {showSearch ? (
-            <div className="border-b border-[var(--border)] p-2">
-              <label className="flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/40 px-2.5">
-                <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setActiveIndex(0);
-                  }}
-                  onKeyDown={onListKeyDown}
-                  placeholder="Filter servers…"
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
-                />
-              </label>
-            </div>
-          ) : null}
-          <ul className="max-h-64 overflow-y-auto py-1">
+          <div className="border-b border-[var(--border)] p-2">
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2.5">
+              <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActiveIndex(0);
+                }}
+                onKeyDown={onListKeyDown}
+                placeholder="Search MT5 servers…"
+                aria-label={`Search ${brokerName || "MT5"} servers`}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
+              />
+            </label>
+          </div>
+          <ul className="max-h-[min(18rem,45vh)] overflow-y-auto py-1">
             {filtered.map((row, index) => {
               const active = row.name === value;
               const focused = index === activeIndex;
@@ -472,7 +480,7 @@ function ServerSelect({
                     role="option"
                     aria-selected={active}
                     className={cn(
-                      "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)]",
+                      "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)] focus-visible:bg-[var(--accent-soft)] focus-visible:outline-none",
                       (active || focused) && "bg-[var(--accent-soft)]",
                     )}
                     onMouseEnter={() => setActiveIndex(index)}
@@ -485,6 +493,9 @@ function ServerSelect({
                       </span>
                       <span className="block truncate text-[11px] text-[var(--fg-subtle)]">
                         {brokerName || "MT5"} · {envLabel}
+                        {row.evidence_classification
+                          ? ` · ${row.evidence_classification.replace(/_/g, " ")}`
+                          : ""}
                       </span>
                     </span>
                     <EnvBadge environment={row.environment} />
@@ -492,7 +503,7 @@ function ServerSelect({
                     {active ? (
                       <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
                     ) : (
-                      <span className="w-4" />
+                      <span className="w-4" aria-hidden />
                     )}
                   </button>
                 </li>
@@ -500,7 +511,9 @@ function ServerSelect({
             })}
             {!filtered.length ? (
               <li className="px-3 py-4 text-center text-sm text-[var(--fg-muted)]">
-                No catalogue match — enter the exact portal server below.
+                {loading
+                  ? "Loading servers…"
+                  : "No catalogue match — enter the exact portal server below."}
               </li>
             ) : null}
           </ul>
@@ -1084,7 +1097,12 @@ export function BrokerConfigWorkspace() {
   };
 
   const serversLoading = Boolean(brokerSlug) && (serversQ.isLoading || serversQ.isFetching);
-  const connectBlocked = busy || !effectiveServer || !login || serversLoading;
+  const ownershipAttachOnly =
+    Boolean(gatewayMt5Attached && !connected && !login.trim() && !password);
+  const connectBlocked =
+    busy ||
+    serversLoading ||
+    (!ownershipAttachOnly && (!effectiveServer || !login));
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col items-center px-1 py-2 sm:px-0 sm:py-4">
@@ -1292,7 +1310,7 @@ export function BrokerConfigWorkspace() {
             {!connected && gatewayMt5Attached ? (
               <p className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[var(--warning-soft)] px-3 py-2 text-xs text-[var(--warning)]">
                 A gateway session may exist, but it is not your owned broker connection.
-                Use Connect MT5 to claim ownership.
+                Use Connect MT5 Account to authenticate and attach ownership in one step.
                 {ownershipBlockMessage(tradingSnap.ownership_block_reason)
                   ? ` ${ownershipBlockMessage(tradingSnap.ownership_block_reason)}`
                   : ""}
@@ -1530,26 +1548,16 @@ export function BrokerConfigWorkspace() {
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 className="qf-btn-hot h-12 w-full border-0 text-[15px] font-semibold text-[var(--brand-navy)]"
-                disabled={connectBlocked}
+                disabled={connectBlocked && !(gatewayMt5Attached && !login && !password)}
                 onClick={onConnect}
               >
-                {connectMut.isPending || saveMut.isPending ? (
+                {connectMut.isPending || saveMut.isPending || claimMut.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Link2 className="h-4 w-4" />
                 )}
                 Connect MT5 Account
               </Button>
-              {gatewayMt5Attached && !connected ? (
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  className="h-11 w-full"
-                  onClick={() => claimMut.mutate()}
-                >
-                  Claim ownership
-                </Button>
-              ) : null}
               {changingAccount && connected ? (
                 <Button
                   variant="ghost"
@@ -1571,10 +1579,10 @@ export function BrokerConfigWorkspace() {
           </div>
         )}
 
-        <CustomerMultiAccountPanel />
         <SecurityFooter />
         <p className="mt-3 text-center text-[11px] text-[var(--fg-subtle)]">
-          Password is never displayed after submission. Connect MT5 uses your owned session only.
+          Password is never displayed after submission. Connect MT5 Account authenticates and
+          attaches ownership in one step.
           {connected && !showConnectForm ? (
             <>
               {" "}

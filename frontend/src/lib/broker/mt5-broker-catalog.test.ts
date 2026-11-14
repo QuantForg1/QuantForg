@@ -56,7 +56,9 @@ assert.equal(classifyServerEnvironment("XMGlobal-MT5"), "unknown");
 assert.equal(classifyServerEnvironment("Exness-MT5Trial9"), "demo");
 
 const exnessRows = serverRowsForBroker(brokerBySlug("exness"), undefined, []);
-assert.equal(exnessRows.length, 0);
+// Documented observed LIVE server may appear before full VERIFIED_LIVE connectable.
+assert.ok(exnessRows.some((r) => r.name === "Exness-MT5Real10" && r.environment === "live"));
+assert.ok(exnessRows.every((r) => r.confirmed === false || r.evidence_classification === "DOCUMENTED" || r.evidence_classification === "CONFIRMED"));
 
 const apiOnly = serverRowsForBroker(brokerBySlug("exness"), undefined, [
   {
@@ -105,8 +107,9 @@ assert.equal(mapped.find((b) => b.slug === "xm")?.connectable, true);
 
 for (const broker of MT5_BROKER_OPTIONS) {
   assert.ok(broker.logoSrc.startsWith("/brand/brokers/"));
+  // Non-connectable brokers may still list DOCUMENTED observed servers
+  // (never invented shards). Fully empty remains valid when no evidence exists.
   if (!broker.connectable) {
-    assert.equal(broker.servers.live.length, 0);
     assert.equal(broker.servers.demo.length, 0);
   }
 }

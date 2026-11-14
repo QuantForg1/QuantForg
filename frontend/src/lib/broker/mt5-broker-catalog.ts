@@ -60,12 +60,20 @@ export type Mt5BrokerOption = {
   };
 };
 
+export type Mt5ServerEvidenceClass =
+  | "CONFIRMED"
+  | "DOCUMENTED"
+  | "CANDIDATE"
+  | "MANUAL_ACCOUNT_SERVER_REQUIRED";
+
 export type Mt5ServerRow = {
   name: string;
   environment: "demo" | "live" | "unknown";
   source: string;
   verified_at: string | null;
   confirmed?: boolean;
+  /** Explicit evidence class — never invent CONFIRMED from naming conventions. */
+  evidence_classification?: Mt5ServerEvidenceClass;
 };
 
 export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
@@ -87,10 +95,10 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "XM",
     logoSrc: "/brand/brokers/xm-mark.png",
     website: "https://www.xm.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    servers: { live: ["XMGlobal-MT5 20"], demo: [] },
   },
   {
     slug: "exness",
@@ -100,7 +108,8 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     connectionStatus: "not_verified",
     connectable: false,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    // Observed LIVE server; master trading password still required for VERIFIED_LIVE.
+    servers: { live: ["Exness-MT5Real10"], demo: [] },
   },
   {
     slug: "hfm",
@@ -120,7 +129,8 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     connectionStatus: "not_verified",
     connectable: false,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    // Observed LIVE server; master trading password still required for VERIFIED_LIVE.
+    servers: { live: ["JustMarkets-Live7"], demo: [] },
   },
   {
     slug: "ic-markets",
@@ -137,10 +147,10 @@ export const MT5_BROKER_OPTIONS: readonly Mt5BrokerOption[] = [
     name: "Pepperstone",
     logoSrc: "/brand/brokers/pepperstone-mark.png",
     website: "https://pepperstone.com",
-    connectionStatus: "not_verified",
-    connectable: false,
+    connectionStatus: "live_verified",
+    connectable: true,
     customerSelectable: true,
-    servers: { live: [], demo: [] },
+    servers: { live: ["PepperstoneKE-MT5-Live01"], demo: [] },
   },
   {
     slug: "fp-markets",
@@ -210,6 +220,7 @@ function documentedRows(broker: Mt5BrokerOption | undefined): Mt5ServerRow[] {
       source: "documented_verified",
       verified_at: broker.connectable ? "documented" : null,
       confirmed: broker.connectable,
+      evidence_classification: broker.connectable ? "CONFIRMED" : "DOCUMENTED",
     });
   }
   for (const name of broker.servers.demo) {
@@ -219,6 +230,7 @@ function documentedRows(broker: Mt5BrokerOption | undefined): Mt5ServerRow[] {
       source: "documented_verified",
       verified_at: broker.connectable ? "documented" : null,
       confirmed: broker.connectable,
+      evidence_classification: broker.connectable ? "CONFIRMED" : "DOCUMENTED",
     });
   }
   return out;
@@ -264,6 +276,7 @@ export function serverRowsForBroker(
       confirmed: false,
       verified_at: row.verified_at ?? null,
       source: row.source || "documented_candidate",
+      evidence_classification: row.evidence_classification || "CANDIDATE",
     });
   }
 
@@ -278,6 +291,7 @@ export function serverRowsForBroker(
       source: "weltrade_profile",
       verified_at: null,
       confirmed: false,
+      evidence_classification: "CANDIDATE",
     });
   }
 

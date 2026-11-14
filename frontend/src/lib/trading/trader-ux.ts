@@ -59,15 +59,15 @@ const OWNERSHIP_REASON_COPY: Record<string, string> = {
   role_not_privileged:
     "This sign-in cannot claim the attached terminal. Use the account password.",
   bind_timeout:
-    "Ownership verification did not finish. Refresh and try Claim ownership again.",
+    "Ownership verification did not finish. Refresh and use Connect MT5 Account again.",
   bind_failed:
-    "Ownership verification failed. Refresh and try Claim ownership again.",
+    "Ownership verification failed. Refresh and use Connect MT5 Account again.",
   gateway_handle_unavailable:
     "The gateway is online, but the terminal session is not ready to claim.",
   unresolved_live_identity:
     "The terminal did not report a verified account. Connect with login and password.",
   bind_user_session_failed:
-    "The terminal identity could not be saved to your account. Try Claim ownership again.",
+    "The terminal identity could not be saved to your account. Use Connect MT5 Account again.",
   claim_failed:
     "Ownership was not verified. A gateway that is online does not grant ownership.",
 };

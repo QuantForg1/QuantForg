@@ -313,7 +313,9 @@ def _prepare_slot_terminal(slot_id: str) -> str:
         stop_slot_terminal(slot_id)
         time.sleep(1)
     start_slot_terminal(slot_id)
-    time.sleep(8)
+    # Portable IPC is unreliable while the Weltrade LIVE singleton holds MCP 22346
+    # and host RAM/disk are tight — allow a longer warm-up before initialize().
+    time.sleep(12)
     return exe
 
 
