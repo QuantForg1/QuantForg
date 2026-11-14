@@ -279,20 +279,42 @@ def cmd_railway_dispatch_recover() -> int:
 
 
 def _prepare_slot_terminal(slot_id: str) -> str:
+    """Prepare portable install and ensure a warm terminal process.
+
+    Stale saved DEMO logins are cleared inside ``authenticate_and_verify`` before
+    ``mt5.initialize(login=..., password=..., server=..., portable=True)``.
+    Pre-starting the portable process is required on this host — initialize alone
+    frequently returns IPC send/recv/timeout (-10001/-10002/-10005).
+    """
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
+    from services.mt5_worker_agent.mt5_session import clear_portable_saved_login
     from services.mt5_worker_agent.slot_manager import (
         prepare_portable_slot,
         slot_status,
         start_slot_terminal,
+        stop_slot_terminal,
     )
 
     prepare_portable_slot(slot_id)
+    exe = LocalWorkerSupervisor().terminal_exe_for(slot_id)
+    # Drop stale Login/Server from common.ini before the process boots.
+    try:
+        clear_portable_saved_login(exe)
+    except Exception:
+        logger.exception("clear_portable_saved_login_failed slot=%s", slot_id)
     already = slot_status(slot_id)
+    if already.process_running:
+        # Restart so common.ini clear takes effect.
+        logger.info(
+            "restarting_portable_after_saved_login_clear slot=%s pid=%s",
+            slot_id,
+            already.pid,
+        )
+        stop_slot_terminal(slot_id)
+        time.sleep(1)
     start_slot_terminal(slot_id)
-    # Existing running portable needs no warm-up sleep; new start does.
-    if not already.process_running:
-        time.sleep(5)
-    return LocalWorkerSupervisor().terminal_exe_for(slot_id)
+    time.sleep(8)
+    return exe
 
 
 def _persist_and_report_evidence(payload: dict[str, Any]) -> dict[str, Any]:
