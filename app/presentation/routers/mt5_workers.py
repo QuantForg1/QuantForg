@@ -378,6 +378,17 @@ async def dispatch_lab_enqueue(
     if gate is not None:
         return _lab_forbidden(gate)
 
+    queue = get_durable_dispatch_queue()
+    if worker.user_id is not None and queue.is_user_kill_switched(worker.user_id):
+        return {
+            "ok": False,
+            "error": "user_kill_switch",
+            "live_submit_allowed": False,
+            "delivery_suppressed": True,
+            "user_id": str(worker.user_id),
+            "note": "Per-user dispatch kill switch blocks new lab enqueue.",
+        }
+
     side = (body.side or "BUY").strip().upper()
     if side not in {"BUY", "SELL"}:
         return {"ok": False, "error": "invalid_side", "live_submit_allowed": False}
@@ -453,7 +464,6 @@ async def dispatch_lab_enqueue(
         multi_account_dispatch_enabled=True,
         multi_account_live_submit_enabled=False,
     )
-    queue = get_durable_dispatch_queue()
     plan, jobs = queue.plan_and_enqueue(
         signal=signal,
         targets=[target],

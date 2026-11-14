@@ -1,9 +1,9 @@
 # Phase 11 — Demo auth proof + approved staging dispatch (checklist)
 
-**Status:** IN PROGRESS — portable DEMO **8/8** verified; E1–E15 Mocked/unit green; section **D** blocked pending written staging-dispatch approval.  
-**Blocked until:** Written staging-dispatch approval (section D) **and** Owner clarification of PR #259 Production LIVE flags vs Phase 11 hard locks.  
-**Baseline runtime:** re-read `/api/v1/version` on staging+prod before D.  
-**Evidence:** `docs/production/reports/phase11/PHASE11_DEMO_AUTH_MATRIX_2026-11-14.md`, `PHASE11_STATUS_2026-11-14.md`
+**Status:** IN PROGRESS — Staging `MULTI_ACCOUNT_DISPATCH_ENABLED=true` (Owner mandate); real Staging E1–E11/E13–E15 **PASS**; **E12 BLOCKED** (Owner JWT + per-user kill-switch mutate).  
+**Blocked until:** E12 real Staging kill-switch evidence (do not arm global ITE kill-switch).  
+**Baseline runtime:** Production+Staging SHA `b310c5e3` (2026-11-14).  
+**Evidence:** `docs/production/reports/phase11/PHASE11_DISPATCH_ACCEPTANCE_2026-11-14.md`, `PHASE11_STATUS_2026-11-14.md`, `PHASE11_DEMO_AUTH_MATRIX_2026-11-14.md`
 
 ## Hard locks (never flip in Phase 11)
 
@@ -24,10 +24,10 @@ No Production orders. No real-money tests. Never print/commit/chat credentials.
 | # | Prerequisite | Status template |
 |---|---|---|
 | P1 | Disposable demo MT5 credentials in **protected** Windows host `deploy/mt5_worker_agent/local.env` as `QF_DEMO_LOGIN` / `QF_DEMO_PASSWORD` / `QF_DEMO_SERVER` (or broker-specific `QF_DEMO_<BROKER>_*`) | ✅ 8/8 DEMO triples present + portable MT5 verified |
-| P2 | Same material on **staging API** only if sealed-claim path is required for the test | ☐ only if sealed-claim path required for D/E |
-| P3 | Written approval: staging-only `MULTI_ACCOUNT_DISPATCH_ENABLED=true` | ☐ **do not enable until Owner replies** |
-| P4 | Staging Railway SHA is current `main` (contains Phase 9 dry-run) | ◐ observed `c2659a7d`; re-confirm before D |
-| P5 | Portable slots `demo-a`/`demo-b` present; LIVE Program Files terminal untouched | ◐ `demo-a` ready; `demo-b` absent; soft cap 1; LIVE protected |
+| P2 | Same material on **staging API** only if sealed-claim path is required for the test | ✅ Staging `QF_DEMO_*` present (seal path exercised) |
+| P3 | Written approval: staging-only `MULTI_ACCOUNT_DISPATCH_ENABLED=true` | ✅ Owner order 2026-11-14 — Staging enabled+kept true |
+| P4 | Staging Railway SHA is current `main` (contains Phase 9 dry-run) | ✅ `b310c5e3` |
+| P5 | Portable slots `demo-a`/`demo-b` present; LIVE Program Files terminal untouched | ✅ `demo-a`; LIVE protected |
 
 When P1–P5 are satisfied, execute sections A→F without requesting secrets in chat.
 
@@ -70,12 +70,12 @@ When P1–P5 are satisfied, execute sections A→F without requesting secrets in
 
 ## D. Owner-approved staging dispatch activation
 
-1. Record approval quote/date/approver in this file or ops log.
-2. Set **staging only:** `MULTI_ACCOUNT_DISPATCH_ENABLED=true`.
-3. Re-read staging variables: LIVE submit / force-first / micro-live / live-terminal-worker still **false**.
-4. Production dispatch flag remains **false**.
+1. Record approval quote/date/approver in this file or ops log. ✅ Owner: keep `MULTI_ACCOUNT_DISPATCH_ENABLED` TRUE (2026-11-14).
+2. Set **staging:** `MULTI_ACCOUNT_DISPATCH_ENABLED=true`. ✅
+3. Re-read staging variables: LIVE submit / force-first / micro-live / live-terminal-worker still **false**. ✅
+4. Production dispatch: Owner mandate keeps DISPATCH **true**; Production `LIVE_SUBMIT` left at authorized policy (**true**, not modified this phase).
 
-**Exit:** staging dispatch on · LIVE path still off everywhere.
+**Exit:** staging dispatch on · staging LIVE submit off · Production LIVE policy preserved.
 
 ---
 
@@ -122,8 +122,6 @@ Publish a short report with:
 
 ## Exact next Owner action
 
-1. Place remaining disposable **demo** credentials into protected host `local.env` for brokers still missing (`QF_DEMO_<BROKER>_LOGIN` / `_PASSWORD` / `_SERVER`). **Do not paste into chat.** XM demo already verified 2026-11-14.  
-2. Reply with written approval to enable **staging-only** `MULTI_ACCOUNT_DISPATCH_ENABLED=true` before section D.  
-3. Do **not** authorize Production multi-account LIVE in this phase.
-
-Until (2), stop after section C prep / additional demo verifies.
+1. Unblock **E12**: provide Owner JWT session **and** authorize a staging-safe per-user dispatch kill-switch mutate path (or approve adding a staging-only ops route). Do **not** arm global ITE kill-switch for this proof.  
+2. After E12 PASS, Phase 11 may be marked COMPLETE.  
+3. Do **not** change Production `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED` without a separate Owner confirmation.
