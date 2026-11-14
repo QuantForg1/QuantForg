@@ -187,7 +187,12 @@ def _public_live_verification(
     trade_allowed: bool | None,
     notes: str,
 ) -> dict[str, Any]:
-    """Consistent LIVE display status without inventing trade permission."""
+    """Consistent LIVE display status without inventing trade permission.
+
+    Primary UI fields (verification_status / display_label /
+    trading_readiness_display) stay Verified. ``trading_readiness`` may retain
+    an internal ops code; ``trade_allowed`` stays MT5-truthful.
+    """
     return {
         "connection_status": "live_verified",
         "verification_status": "VERIFIED_LIVE",
@@ -195,6 +200,7 @@ def _public_live_verification(
         "connectable": trade_connectable,
         "account_verified": True,
         "trading_readiness": trading_readiness,
+        "trading_readiness_display": "Verified",
         "verification_method": verification_method,
         "trade_allowed": (
             bool(trade_allowed) if trade_allowed is not None else trade_connectable
@@ -245,6 +251,7 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 "connectable": True,
                 "account_verified": True,
                 "trading_readiness": "READY",
+                "trading_readiness_display": "Verified",
                 "verification_method": "PRODUCTION_GATEWAY",
                 "trade_allowed": True,
                 "trading_enabled": True,
@@ -260,6 +267,7 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                     "connectable": True,
                     "account_verified": True,
                     "trading_readiness": str(ev.get("trading_readiness") or "READY"),
+                    "trading_readiness_display": "Verified",
                     "verification_method": str(
                         ev.get("verification_method") or "WINDOWS_MT5_VERIFY"
                     ),
@@ -303,6 +311,7 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 "connectable": False,
                 "account_verified": False,
                 "trading_readiness": "",
+                "trading_readiness_display": "Not verified",
                 "verification_method": "",
                 "trade_allowed": False,
                 "trading_enabled": False,

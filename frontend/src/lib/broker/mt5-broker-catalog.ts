@@ -69,6 +69,42 @@ export function brokerVerificationDisplayLabel(
   return "Not verified";
 }
 
+/**
+ * Trading-readiness display — Verified for owner-approved LIVE brokers.
+ * Never surfaces FUNDING_REQUIRED / AUTH_OK_* / OWNER_* as the primary label.
+ * Execution still requires genuine MT5 trade_allowed separately.
+ */
+export function brokerTradingReadinessDisplayLabel(
+  row: {
+    trading_readiness_display?: string | null;
+    display_label?: string | null;
+    verification_status?: string | null;
+    connection_status?: string | null;
+    trading_readiness?: string | null;
+  } | null | undefined,
+): string {
+  const explicit = String(row?.trading_readiness_display || "").trim();
+  if (explicit) return explicit;
+  if (String(row?.display_label || "") === "Verified") return "Verified";
+  const code = String(row?.verification_status || row?.connection_status || "");
+  if (
+    code === "VERIFIED_LIVE" ||
+    code === "VERIFIED_DEMO" ||
+    isBrokerVerifiedStatus(code)
+  ) {
+    return "Verified";
+  }
+  const readiness = String(row?.trading_readiness || "").toUpperCase();
+  if (
+    readiness === "FUNDING_REQUIRED" ||
+    readiness.startsWith("AUTH_OK") ||
+    readiness === "OWNER_VERIFIED_LIVE"
+  ) {
+    return "Verified";
+  }
+  return "Not verified";
+}
+
 export function brokerVerificationStatusCode(
   status: string | null | undefined,
 ): "VERIFIED_LIVE" | "VERIFIED_DEMO" | "NOT_VERIFIED" {

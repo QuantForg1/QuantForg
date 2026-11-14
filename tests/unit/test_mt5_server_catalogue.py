@@ -30,6 +30,7 @@ def test_eight_live_brokers_owner_production_connectable(monkeypatch, tmp_path) 
         assert by_slug[slug]["connectable"] is True
         assert by_slug[slug]["display_label"] == "Verified"
         assert by_slug[slug]["verification_status"] == "VERIFIED_LIVE"
+        assert by_slug[slug]["trading_readiness_display"] == "Verified"
     # Genuine MT5 trade_allowed evidence (portable LIVE verify).
     for slug in ("xm", "ic-markets", "pepperstone", "fp-markets"):
         assert by_slug[slug]["trade_allowed"] is True
@@ -39,6 +40,9 @@ def test_eight_live_brokers_owner_production_connectable(monkeypatch, tmp_path) 
         assert by_slug[slug]["trade_allowed"] is False
         assert by_slug[slug]["trading_enabled"] is False
         assert by_slug[slug]["trading_readiness"] == "AUTH_OK_TRADE_NOT_ENABLED"
+        assert by_slug[slug]["trading_readiness_display"] == "Verified"
+        assert by_slug[slug]["display_label"] != "FUNDING_REQUIRED"
+        assert by_slug[slug]["display_label"] != "OWNER_VERIFIED_LIVE"
 
 
 def test_unverified_brokers_have_no_invented_servers() -> None:

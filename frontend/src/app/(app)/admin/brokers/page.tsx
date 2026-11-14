@@ -23,6 +23,7 @@ import {
   iteOpsAccessDeniedMessage,
 } from "@/lib/auth/ite-ops-access";
 import {
+  brokerTradingReadinessDisplayLabel,
   brokerVerificationDisplayLabel,
   isBrokerVerifiedStatus,
 } from "@/lib/broker/mt5-broker-catalog";
@@ -34,10 +35,23 @@ function fmt(v: unknown, fallback = "—"): string {
 
 function registryStatusLabel(row: Record<string, unknown>): string {
   const explicit = str(row.display_label, "");
-  if (explicit) return explicit;
+  if (explicit && explicit !== "FUNDING_REQUIRED" && explicit !== "OWNER_VERIFIED_LIVE") {
+    return explicit;
+  }
   const code = str(row.verification_status, "");
   if (code === "VERIFIED_LIVE" || code === "VERIFIED_DEMO") return "Verified";
+  if (code === "OWNER_VERIFIED_LIVE" || code === "FUNDING_REQUIRED") return "Verified";
   return brokerVerificationDisplayLabel(str(row.connection_status, "not_verified"));
+}
+
+function registryReadinessLabel(row: Record<string, unknown>): string {
+  return brokerTradingReadinessDisplayLabel({
+    trading_readiness_display: str(row.trading_readiness_display, ""),
+    display_label: str(row.display_label, ""),
+    verification_status: str(row.verification_status, ""),
+    connection_status: str(row.connection_status, ""),
+    trading_readiness: str(row.trading_readiness, ""),
+  });
 }
 
 function healthTone(
@@ -312,7 +326,15 @@ export default function AdminBrokersPage() {
           </p>
         ) : (
           <DeskTable
-            columns={["Broker", "Status", "Connectable", "Verified servers", "Last verified"]}
+            columns={[
+              "Broker",
+              "Status",
+              "Readiness",
+              "Connectable",
+              "Trade allowed",
+              "Verified servers",
+              "Last verified",
+            ]}
             rows={registryBrokers.map((row) => {
               const r = asRecord(row);
               const slug = str(r.slug, "");
@@ -327,9 +349,11 @@ export default function AdminBrokersPage() {
                 .filter(Boolean)
                 .join(", ");
               const statusLabel = registryStatusLabel(r);
+              const readinessLabel = registryReadinessLabel(r);
               const verified = isBrokerVerifiedStatus(
                 str(r.connection_status, ""),
               ) || statusLabel === "Verified";
+              const tradeAllowed = r.trade_allowed === true;
               return [
                 fmt(r.name, slug || "—"),
                 <Badge
@@ -338,7 +362,14 @@ export default function AdminBrokersPage() {
                 >
                   {statusLabel}
                 </Badge>,
+                <Badge
+                  key={`${slug}-ready`}
+                  tone={readinessLabel === "Verified" ? "success" : "neutral"}
+                >
+                  {readinessLabel}
+                </Badge>,
                 r.connectable === true ? "Yes" : "No",
+                tradeAllowed ? "Yes" : "No",
                 names || "—",
                 latest ? latest.slice(0, 19) : "—",
               ];
