@@ -64,6 +64,27 @@ _EVIDENCE_VERIFIED_LIVE: dict[str, tuple[dict[str, Any], ...]] = {
             "source": "windows_mt5_live_verify",
             "verified_at": "2026-11-13T10:36:00+00:00",
             "evidence_classification": "CONFIRMED",
+            "trade_allowed": True,
+        },
+    ),
+    "ic-markets": (
+        {
+            "name": "ICMarketsSC-MT5-3",
+            "environment": "live",
+            "source": "windows_mt5_live_verify",
+            "verified_at": "2026-11-14T08:40:33+00:00",
+            "evidence_classification": "CONFIRMED",
+            "trade_allowed": True,
+        },
+    ),
+    "fp-markets": (
+        {
+            "name": "FPMarketsSC-Live",
+            "environment": "live",
+            "source": "windows_mt5_live_verify",
+            "verified_at": "2026-11-14T08:41:50+00:00",
+            "evidence_classification": "CONFIRMED",
+            "trade_allowed": True,
         },
     ),
     # Owner-authorized Production LIVE brokers (connectable + trading-enabled).
