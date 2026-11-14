@@ -50,8 +50,24 @@ def test_feature_gates_default_closed() -> None:
 
 
 def test_dry_run_module_never_calls_order_send() -> None:
+    import ast
+
     import app.application.services.multi_account_dispatch_dry_run as mod
 
     src = inspect.getsource(mod)
-    assert "order_send" not in src
+    tree = ast.parse(src)
+    calls = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call)
+        and (
+            (isinstance(n.func, ast.Name) and n.func.id == "order_send")
+            or (
+                isinstance(n.func, ast.Attribute) and n.func.attr == "order_send"
+            )
+        )
+    ]
+    assert calls == [], "dry-run dispatch must never invoke order_send"
     assert "allow_live_submit" in src or "live_submit_allowed" in src
+    # Docstring may mention order_send as a non-goal; executable calls must not.
+    assert "never calls OMS, order_send" in src

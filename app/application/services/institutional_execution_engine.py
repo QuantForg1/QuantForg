@@ -957,8 +957,8 @@ class InstitutionalExecutionEngine:
                         live_cs = info_cs
                 except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
                     pass
-                from app.domain.institutional_trading.operations.live_prefs_tighten import (
-                    tighten_live_risk_config_for_user,
+                from app.domain.institutional_trading.operations import (
+                    live_prefs_tighten as _live_prefs,
                 )
                 from app.domain.institutional_trading.runtime_policy import (
                     active_max_open_positions,
@@ -978,7 +978,9 @@ class InstitutionalExecutionEngine:
                     contract_size=live_cs,
                 )
                 # Customer Risk Center prefs may only tighten ceilings.
-                live_cfg = tighten_live_risk_config_for_user(live_cfg, user_id)
+                live_cfg = _live_prefs.tighten_live_risk_config_for_user(
+                    live_cfg, user_id
+                )
                 live_risk = RiskEngine(config=live_cfg)
                 point = (
                     live_constraints.point

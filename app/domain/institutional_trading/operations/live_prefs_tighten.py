@@ -26,7 +26,7 @@ def _dec(value: object) -> Decimal | None:
 
 def _int_pos(value: object) -> int | None:
     try:
-        n = int(value)  # type: ignore[arg-type]
+        n = int(str(value))
     except (TypeError, ValueError):
         return None
     return n if n >= 1 else None
@@ -72,7 +72,8 @@ def tighten_live_risk_config_for_user(
         )
 
         payload = get_user_risk_preferences(user_id)
-    except Exception:  # noqa: BLE001 — prefs optional; keep owner ceilings
+    except Exception:
+        # Prefs optional; keep owner ceilings on any load failure.
         return config
     effective = payload.get("effective") if isinstance(payload, dict) else None
     if not isinstance(effective, dict):
