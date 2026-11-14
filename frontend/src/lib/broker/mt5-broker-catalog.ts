@@ -370,16 +370,8 @@ export function serverRowsForBroker(
     });
   }
 
-  return [...byName.values()].sort((a, b) => {
-    const aConf = a.confirmed ? 0 : 1;
-    const bConf = b.confirmed ? 0 : 1;
-    if (aConf !== bConf) return aConf - bConf;
-    if (a.environment !== b.environment) {
-      if (a.environment === "live") return -1;
-      if (b.environment === "live") return 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  // Native MT5-style: alphabetical by exact server name (no confirmed-first bias).
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function serversForBroker(

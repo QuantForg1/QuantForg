@@ -97,3 +97,34 @@ def test_catalogue_snapshot_gateway_note() -> None:
     assert "brokers" in snap and "servers" in snap
     assert any(r["name"] == "Exness-MT5Real10" for r in snap["servers"]["exness"])
     assert any(r["name"] == "XMGlobal-MT5 20" for r in snap["servers"]["xm"])
+
+
+def test_all_eight_brokers_have_selectable_genuine_servers() -> None:
+    """Verified + documented candidates; no cross-broker leaks or duplicates."""
+    from app.domain.broker_connectivity.mt5_ecosystem import (
+        MT5_ECOSYSTEM,
+        match_broker_for_server,
+    )
+
+    snap = catalogue_snapshot()
+    for profile in MT5_ECOSYSTEM:
+        slug = profile.slug
+        verified = snap["servers"][slug]
+        candidates = snap["candidate_servers"][slug]
+        verified_keys = {str(v.get("name") or "").lower() for v in verified}
+        selectable = list(verified) + [
+            c
+            for c in candidates
+            if str(c.get("name") or "").lower() not in verified_keys
+        ]
+        assert selectable, f"{slug}: empty selectable catalogue"
+        names = [str(r["name"]) for r in selectable]
+        assert len(names) == len({n.lower() for n in names}), f"{slug}: duplicates"
+        for name in names:
+            matched = match_broker_for_server(name)
+            assert matched is not None and matched.slug == slug, (
+                f"{slug}: server {name!r} matched {matched}"
+            )
+        hint_set = {n.lower() for n in names}
+        for hint in profile.server_hints:
+            assert hint.lower() in hint_set, f"{slug}: missing hint {hint!r}"
