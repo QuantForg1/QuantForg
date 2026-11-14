@@ -319,6 +319,68 @@ class GetTradingSessionUseCase:
         else:
             ownership_block_reason = "ownership_unverified"
         lt_fields = _live_trading_session_fields()
+        terminal_started = bool(
+            owned and session_code != ACCOUNT_SESSION_MISMATCH and live_login > 1
+        )
+        broker_authenticated = bool(
+            owned and session_code != ACCOUNT_SESSION_MISMATCH and balance is not None
+        )
+        market_data = bool(
+            verified_owned
+            and not catalogue_unavailable
+            and str(catalogue_source or "") not in {"", "UNAVAILABLE"}
+        )
+        synced = bool(
+            verified_owned
+            and last_verified
+            and ctx.connection_status in {"CONNECTED", "RUNNING"}
+        )
+        trading_permitted = bool(
+            lt_fields["orders_may_submit"]
+            and ctx.execution_permitted
+            and session_code != ACCOUNT_SESSION_MISMATCH
+        )
+        layer_reasons: list[str] = []
+        if not owned:
+            layer_reasons.append("account_not_linked")
+        if session_code == ACCOUNT_SESSION_MISMATCH:
+            layer_reasons.append("account_session_mismatch")
+        if owned and not terminal_started:
+            layer_reasons.append("terminal_not_attached")
+        if owned and not broker_authenticated:
+            layer_reasons.append(
+                "credentials_not_verified"
+                if balance is None
+                else "broker_not_authenticated"
+            )
+        if verified_owned and not market_data:
+            layer_reasons.append("market_data_unavailable")
+        if verified_owned and not synced:
+            layer_reasons.append("account_sync_stale")
+        if verified_owned and not trading_permitted:
+            layer_reasons.append("trading_permission_disabled")
+        # Singleton Weltrade gateway path — multi-account dispatch_ready is separate.
+        connection_layers = {
+            "linked": bool(owned),
+            "worker_assigned": None,
+            "terminal_started": terminal_started,
+            "authenticated": broker_authenticated and verified_owned,
+            "market_data": market_data,
+            "synced": synced,
+            "dispatch_ready": False,
+            "trading_permitted": trading_permitted,
+            "not_ready_reasons": layer_reasons,
+            "path": "singleton_gateway",
+            "summary": (
+                "trading_permitted"
+                if trading_permitted and synced and broker_authenticated
+                else (
+                    "authenticated"
+                    if broker_authenticated and verified_owned
+                    else ("linked" if owned else "offline")
+                )
+            ),
+        }
         return {
             "broker": "Connected" if verified_owned else "Disconnected",
             "account": ctx.broker_account_id or "—",
@@ -343,11 +405,7 @@ class GetTradingSessionUseCase:
             "live_authorization": (
                 lt_fields.get("live_authorization") or "LIVE_DISABLED"
             ),
-            "orders_may_submit": bool(
-                lt_fields["orders_may_submit"]
-                and ctx.execution_permitted
-                and session_code != ACCOUNT_SESSION_MISMATCH
-            ),
+            "orders_may_submit": trading_permitted,
             "connection_status": ctx.connection_status,
             "execution_permitted": ctx.execution_permitted
             and session_code != ACCOUNT_SESSION_MISMATCH,
@@ -375,24 +433,11 @@ class GetTradingSessionUseCase:
             "ownership": "owned" if verified_owned else "none",
             "account_mode": account_mode or None,
             "trade_allowed": trade_allowed,
-            "mt5_terminal": (
-                "connected"
-                if owned and session_code != ACCOUNT_SESSION_MISMATCH and live_login > 1
-                else "disconnected"
-            ),
-            "broker_authenticated": bool(
-                owned
-                and session_code != ACCOUNT_SESSION_MISMATCH
-                and balance is not None
-            ),
-            "trading_authorization": (
-                "enabled"
-                if lt_fields["orders_may_submit"]
-                and ctx.execution_permitted
-                and session_code != ACCOUNT_SESSION_MISMATCH
-                else "disabled"
-            ),
+            "mt5_terminal": "connected" if terminal_started else "disconnected",
+            "broker_authenticated": broker_authenticated,
+            "trading_authorization": ("enabled" if trading_permitted else "disabled"),
             "ownership_block_reason": ownership_block_reason,
+            "connection_layers": connection_layers,
         }
 
 

@@ -34,13 +34,13 @@ const TRADER_ERROR_COPY: Record<string, string> = {
   INVALID_CREDENTIALS: "Broker login or password was not accepted.",
   CONNECTION_FAILED: "Could not verify the broker connection.",
   GATEWAY_UNAVAILABLE:
-    "Broker connection offline. Open Broker Accounts to reconnect. Public market charts still use the platform feed when available.",
+    "Broker gateway unreachable. Account link may still be saved — open Broker Accounts to reconnect for live sync. Public market charts still use the platform feed when available.",
   gateway_unavailable:
-    "Broker connection offline. Open Broker Accounts to reconnect. Public market charts still use the platform feed when available.",
+    "Broker gateway unreachable. Account link may still be saved — open Broker Accounts to reconnect for live sync. Public market charts still use the platform feed when available.",
   CLOUDFLARE_ORIGIN_UNREACHABLE:
-    "Broker gateway path is unreachable. Open Broker Accounts to reconnect for account trades. Public market charts are separate from this path.",
+    "Broker gateway path is unreachable. Account link may still be saved — open Broker Accounts to reconnect for live sync. Public market charts are separate from this path.",
   cloudflare_origin_unreachable:
-    "Broker gateway path is unreachable. Open Broker Accounts to reconnect for account trades. Public market charts are separate from this path.",
+    "Broker gateway path is unreachable. Account link may still be saved — open Broker Accounts to reconnect for live sync. Public market charts are separate from this path.",
   ACCOUNT_SESSION_MISMATCH: "Your trading session needs to be reconnected.",
   account_session_mismatch: "Your trading session needs to be reconnected.",
   CATALOGUE_UNAVAILABLE: "Connect or verify your broker and refresh market data.",
@@ -92,18 +92,144 @@ export function sessionOwnership(
   return "none";
 }
 
+/** Authoritative layered connection model from /trading/session. */
+export type BrokerConnectionLayers = {
+  linked: boolean;
+  workerAssigned: boolean | null;
+  terminalStarted: boolean;
+  authenticated: boolean;
+  marketData: boolean;
+  synced: boolean;
+  dispatchReady: boolean;
+  tradingPermitted: boolean;
+  notReadyReasons: string[];
+  path: string;
+  summary: "offline" | "linked" | "authenticated" | "trading_permitted" | string;
+};
+
+const LAYER_REASON_COPY: Record<string, string> = {
+  account_not_linked: "Account not linked.",
+  account_session_mismatch: "Trading session needs reconnect.",
+  terminal_not_attached: "Terminal startup failed or not attached.",
+  credentials_not_verified: "Credentials not verified.",
+  broker_not_authenticated: "Broker authentication incomplete.",
+  market_data_unavailable: "Market data unavailable.",
+  account_sync_stale: "Account synchronization incomplete.",
+  trading_permission_disabled: "Trading permission disabled.",
+  worker_offline: "Worker offline.",
+  invalid_login: "Invalid login.",
+  invalid_password: "Invalid password.",
+  incorrect_server: "Incorrect server.",
+  broker_server_unavailable: "Broker server unavailable.",
+  authentication_timeout: "Authentication timeout.",
+  account_revoked: "Account revoked.",
+};
+
+export function connectionLayerReasonMessage(reason: unknown): string {
+  const key = String(reason || "").trim();
+  return LAYER_REASON_COPY[key] || "";
+}
+
+export function resolveBrokerConnectionLayers(
+  session: Record<string, unknown>,
+): BrokerConnectionLayers {
+  const raw =
+    session.connection_layers && typeof session.connection_layers === "object"
+      ? (session.connection_layers as Record<string, unknown>)
+      : null;
+  if (raw) {
+    const reasons = Array.isArray(raw.not_ready_reasons)
+      ? raw.not_ready_reasons.map((r) => String(r))
+      : [];
+    return {
+      linked: Boolean(raw.linked),
+      workerAssigned:
+        raw.worker_assigned == null ? null : Boolean(raw.worker_assigned),
+      terminalStarted: Boolean(raw.terminal_started),
+      authenticated: Boolean(raw.authenticated),
+      marketData: Boolean(raw.market_data),
+      synced: Boolean(raw.synced),
+      dispatchReady: Boolean(raw.dispatch_ready),
+      tradingPermitted: Boolean(raw.trading_permitted),
+      notReadyReasons: reasons,
+      path: String(raw.path || "unknown"),
+      summary: String(raw.summary || "offline"),
+    };
+  }
+  // Fallback when older payloads lack connection_layers.
+  const owned = sessionOwnership(session) === "owned";
+  const brokerConnected = String(session.broker || "") === "Connected";
+  const authenticated = Boolean(
+    owned &&
+      brokerConnected &&
+      (session.broker_authenticated === true || session.balance != null),
+  );
+  const terminalStarted =
+    String(session.mt5_terminal || "").toLowerCase() === "connected";
+  const marketData =
+    owned &&
+    session.catalogue_unavailable !== true &&
+    String(session.catalogue_source || "") !== "" &&
+    String(session.catalogue_source || "") !== "UNAVAILABLE";
+  const synced =
+    owned &&
+    Boolean(session.last_verified) &&
+    ["Healthy", "CONNECTED", "RUNNING"].includes(
+      String(session.connection || ""),
+    );
+  const tradingPermitted =
+    session.orders_may_submit === true ||
+    String(session.trading_authorization || "").toLowerCase() === "enabled";
+  const reasons: string[] = [];
+  if (!owned) reasons.push("account_not_linked");
+  if (owned && !terminalStarted) reasons.push("terminal_not_attached");
+  if (owned && !authenticated) reasons.push("credentials_not_verified");
+  if (owned && !marketData) reasons.push("market_data_unavailable");
+  if (owned && !synced) reasons.push("account_sync_stale");
+  if (owned && !tradingPermitted) reasons.push("trading_permission_disabled");
+  return {
+    linked: owned,
+    workerAssigned: null,
+    terminalStarted,
+    authenticated,
+    marketData,
+    synced,
+    dispatchReady: false,
+    tradingPermitted,
+    notReadyReasons: reasons,
+    path: "legacy_fallback",
+    summary: tradingPermitted
+      ? "trading_permitted"
+      : authenticated
+        ? "authenticated"
+        : owned
+          ? "linked"
+          : "offline",
+  };
+}
+
 export function resolveConnectionPresentation(
   session: Record<string, unknown>,
   opts?: { connecting?: boolean },
 ): ConnectionPresentation {
+  const layers = resolveBrokerConnectionLayers(session);
   const ux = String(session.ux_state || "");
   const broker = String(session.broker || "");
-  const connected = broker === "Connected";
+  // Authoritative: authenticated layer beats legacy broker label alone.
+  const connected =
+    layers.authenticated ||
+    (broker === "Connected" && layers.linked && layers.summary !== "offline");
   const mismatch =
     ux === "SESSION_MISMATCH" ||
-    String(session.session_code || "") === "ACCOUNT_SESSION_MISMATCH";
-  const catalogueUnavailable = Boolean(session.catalogue_unavailable) || ux === "CATALOGUE_UNAVAILABLE";
-  const accountUnavailable = Boolean(session.account_unavailable);
+    String(session.session_code || "") === "ACCOUNT_SESSION_MISMATCH" ||
+    layers.notReadyReasons.includes("account_session_mismatch");
+  const catalogueUnavailable =
+    Boolean(session.catalogue_unavailable) ||
+    ux === "CATALOGUE_UNAVAILABLE" ||
+    (layers.linked && !layers.marketData);
+  const accountUnavailable =
+    Boolean(session.account_unavailable) ||
+    (layers.linked && !layers.synced);
   const maskedLogin = String(session.account || "—") || "—";
   const server = String(session.server || "—") || "—";
   const lastVerified =
@@ -113,7 +239,11 @@ export function resolveConnectionPresentation(
   const healthRaw = String(session.connection || "");
   const health = mismatch
     ? "Degraded"
-    : healthRaw || (connected ? "Healthy" : "Disconnected");
+    : layers.synced
+      ? healthRaw || "Healthy"
+      : layers.authenticated
+        ? healthRaw || "Degraded"
+        : healthRaw || (connected ? "Healthy" : "Disconnected");
   const ownership = sessionOwnership(session);
 
   if (!ux && !broker && !opts?.connecting) {
@@ -160,6 +290,24 @@ export function resolveConnectionPresentation(
       lastVerified,
       connected: false,
       ownership: "none",
+      catalogueUnavailable: true,
+      accountUnavailable: true,
+      liveBrokerCatalogue: false,
+    };
+  }
+  // Gateway may report Connected while ownership is unverified — do not
+  // collapse that into BROKER_NOT_CONNECTED.
+  if (ownership !== "owned" && broker === "Connected" && ux !== "NO_BROKER") {
+    return {
+      state: "OWNERSHIP_UNVERIFIED",
+      label: "NOT OWNED",
+      tone: "danger",
+      health: "Degraded",
+      maskedLogin,
+      server,
+      lastVerified,
+      connected: false,
+      ownership,
       catalogueUnavailable: true,
       accountUnavailable: true,
       liveBrokerCatalogue: false,
@@ -1340,6 +1488,7 @@ export function researchDeskStatusLabel(input: {
 
 export function accountConnectionHint(
   connection: ConnectionPresentation,
+  layers?: BrokerConnectionLayers,
 ): { label: string; detail: string } {
   if (connection.state === "ACCOUNT_SESSION_MISMATCH") {
     return {
@@ -1347,10 +1496,16 @@ export function accountConnectionHint(
       detail: "SESSION MISMATCH",
     };
   }
-  if (connection.connected && connection.ownership === "owned") {
+  if (layers?.authenticated || (connection.connected && connection.ownership === "owned")) {
     return {
       label: "ACCOUNT",
-      detail: "CONNECTED",
+      detail: layers?.tradingPermitted ? "TRADING ENABLED" : "CONNECTED",
+    };
+  }
+  if (layers?.linked) {
+    return {
+      label: "ACCOUNT",
+      detail: "LINKED · NOT AUTHENTICATED",
     };
   }
   return {

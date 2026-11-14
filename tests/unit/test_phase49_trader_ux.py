@@ -147,6 +147,35 @@ async def test_session_payload_has_no_secrets_or_live_broker_claim() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_session_payload_includes_connection_layers() -> None:
+    factory = MemoryMT5UnitOfWorkFactory()
+    adapter = MT5Adapter(client=FakeGatewayClient())
+    user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
+    snap = await GetTradingSessionUseCase(uow_factory=factory, adapter=adapter).execute(
+        user_id=user_id
+    )
+    layers = snap.get("connection_layers")
+    assert isinstance(layers, dict)
+    for key in (
+        "linked",
+        "terminal_started",
+        "authenticated",
+        "market_data",
+        "synced",
+        "dispatch_ready",
+        "trading_permitted",
+        "not_ready_reasons",
+        "summary",
+    ):
+        assert key in layers
+    assert layers["path"] == "singleton_gateway"
+    assert layers["dispatch_ready"] is False
+    assert "password" not in str(layers).lower()
+
+
+@pytest.mark.unit
 def test_research_submit_order_still_blocked() -> None:
     assert ALLOW_LIVE_PROMOTION is False
     with pytest.raises(ResearchExecutionBlocked):
