@@ -66,14 +66,23 @@ class Mt5WorkerApiFacade:
         slot_id = ""
         if "::" in slot:
             host_code, slot_id = slot.split("::", 1)
+        revoked = (
+            worker.worker_id in self._revoked_workers
+            or worker.lifecycle is WorkerLifecycleState.REVOKED
+        )
+        reasons = worker.not_ready_reasons(
+            stale_after=self.stale_after,
+            revoked=revoked,
+        )
         status.update(
             {
                 "host_code": host_code,
                 "slot_id": slot_id,
-                "revoked": worker.worker_id in self._revoked_workers
-                or worker.lifecycle is WorkerLifecycleState.REVOKED,
+                "revoked": revoked,
                 "live_submit_enabled": multi_account_live_submit_allowed(),
                 "credentials_exposed": False,
+                "not_ready_reasons": reasons,
+                "dispatch_ready": not reasons,
             }
         )
         return status
@@ -539,6 +548,12 @@ class Mt5WorkerApiFacade:
                 control_plane_rows = len(cp_store.load_all_workers() or [])
         except Exception:
             control_plane_rows = 0
+        lifecycle_ready = sum(1 for w in workers if w.get("ready") is True)
+        dispatch_ready = sum(1 for w in workers if w.get("dispatch_ready") is True)
+        reason_counts: dict[str, int] = {}
+        for w in workers:
+            for reason in w.get("not_ready_reasons") or []:
+                reason_counts[str(reason)] = reason_counts.get(str(reason), 0) + 1
         return {
             "ok": True,
             "credentials_exposed": False,
@@ -546,11 +561,18 @@ class Mt5WorkerApiFacade:
             "hosts": hosts,
             "workers": workers,
             "worker_count": len(workers),
+            "ready_count": lifecycle_ready,
+            "dispatch_ready_count": dispatch_ready,
+            "not_ready_count": max(0, len(workers) - dispatch_ready),
+            "not_ready_reason_counts": reason_counts,
             "control_plane_worker_count": control_plane_rows,
             "execution_workers_note": (
-                "Runtime registration persists to mt5_worker_control_plane; "
-                "public.execution_workers remains the Phase-1a assignment table "
-                "and may stay at 0 until ownership-bound provisioning writes it."
+                "Runtime registration persists to mt5_worker_control_plane "
+                "(authoritative for Windows agent heartbeat/lifecycle). "
+                "public.execution_workers remains the Phase-1a ownership "
+                "assignment registry and may stay at 0 until ownership-bound "
+                "provisioning writes it. Do not treat the two tables as "
+                "duplicates or auto-backfill without Owner approval."
             ),
             "verification": ops_snapshot(),
             "verification_matrix": build_verification_matrix(),
@@ -558,7 +580,10 @@ class Mt5WorkerApiFacade:
             "note": (
                 "Windows MT5 workers report heartbeats outbound to Railway. "
                 "Brokers stay connectable=false until verification evidence exists. "
-                "Existing Windows host retained — no new VPS."
+                "Existing Windows host retained — no new VPS. "
+                "Host agents that target Staging will leave Production control-plane "
+                "rows stale — that is expected until a dedicated Production agent "
+                "onboarding is authorized."
             ),
         }
 
