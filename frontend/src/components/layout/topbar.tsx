@@ -139,7 +139,7 @@ export function Topbar({
   return (
     <header
       className={cn(
-        "z-30 flex items-center gap-2 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_92%,transparent)] px-3 backdrop-blur-md sm:gap-3 sm:px-4",
+        "z-30 flex min-w-0 items-center gap-2 overflow-x-clip border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_92%,transparent)] px-3 backdrop-blur-md sm:gap-3 sm:px-4",
         compact ? "h-[3.25rem]" : "h-16",
       )}
     >
@@ -157,7 +157,7 @@ export function Topbar({
         onClick={onOpenCommand}
         aria-label="Open command palette"
         className={cn(
-          "mx-auto flex w-full max-w-xl flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] px-3 text-left text-sm text-[var(--fg-muted)] transition-[border-color,background-color,box-shadow] duration-[var(--duration-os)] ease-[var(--ease-os)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+          "mx-auto flex min-w-0 w-full max-w-xl flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_72%,transparent)] px-3 text-left text-sm text-[var(--fg-muted)] transition-[border-color,background-color,box-shadow] duration-[var(--duration-os)] ease-[var(--ease-os)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
           compact ? "h-8 py-0" : "h-10 py-2",
         )}
       >
@@ -174,7 +174,8 @@ export function Topbar({
       <MarketChrome />
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-        <div className="hidden md:block">
+        {/* Avoid duplicate ConnectionStatus with the sm–lg chip near MobileNav. */}
+        <div className="hidden lg:block">
           <ConnectionStatus compact />
         </div>
         <Button variant="ghost" size="icon" className="relative h-9 w-9" asChild>
@@ -189,7 +190,7 @@ export function Topbar({
         </Button>
         <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
           <Link href="/settings" aria-label="Profile and settings">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-semibold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-semibold text-[var(--accent-fg)]">
               {initials}
             </span>
           </Link>
