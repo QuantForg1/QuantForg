@@ -76,6 +76,10 @@ class DurableDispatchQueue:
     _by_id: dict[UUID, str] = field(default_factory=dict, repr=False)
     _events: list[DispatchEvent] = field(default_factory=list, repr=False)
     _signals: dict[str, CentralSignalIntent] = field(default_factory=dict, repr=False)
+    # Per-user dispatch kill switch — blocks new claims/enqueues for that user
+    # only. Never arms global ITE emergency stop or flips feature flags.
+    _killed_users: set[UUID] = field(default_factory=set, repr=False)
+    _kill_audit: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     # ------------------------------------------------------------------ enqueue
     def enqueue_plan(
@@ -107,15 +111,23 @@ class DurableDispatchQueue:
                 if item.intent.state is AccountExecutionState.ELIGIBLE:
                     # Dispatch flag off → eligible but not queued for delivery.
                     delivery = DeliveryStatus.NONE
+                user_killed = item.intent.user_id in self._killed_users
+                state = item.intent.state
+                block_reason = item.intent.block_reason
+                if user_killed:
+                    state = AccountExecutionState.BLOCKED
+                    block_reason = "user_kill_switch"
+                    delivery = DeliveryStatus.NONE
                 job = DispatchJob(
                     intent_id=item.intent.execution_id,
                     signal_id=signal.signal_id,
                     user_id=item.intent.user_id,
                     broker_account_id=item.intent.broker_account_id,
                     idempotency_key=key,
-                    state=item.intent.state,
+                    state=state,
                     delivery_status=delivery,
-                    block_reason=item.intent.block_reason,
+                    block_reason=block_reason,
+                    kill_switch=user_killed,
                     max_attempts=self.max_attempts,
                     available_at=ts,
                     payload=_sanitize_payload(
@@ -127,6 +139,7 @@ class DurableDispatchQueue:
                             "live_submit_allowed": False,
                             "dispatch_allowed": plan.dispatch_allowed,
                             "effective": item.evaluation.effective,
+                            "user_kill_switch": user_killed,
                         }
                     ),
                     created_at=ts,
@@ -197,6 +210,8 @@ class DurableDispatchQueue:
         claimed: DispatchJob | None = None
         with self._lock:
             self._expire_leases_unlocked(ts)
+            if user_id in self._killed_users:
+                return None
             candidates = [
                 j
                 for j in self._jobs.values()
@@ -386,17 +401,120 @@ class DurableDispatchQueue:
         self._mirror_event(event)
         return result
 
-    def set_kill_switch(self, *, user_id: UUID, enabled: bool) -> int:
-        """Block new claims for a user; does not affect other users."""
+    def is_user_kill_switched(self, user_id: UUID) -> bool:
+        with self._lock:
+            return user_id in self._killed_users
+
+    def kill_switch_audit(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self._kill_audit[-max(1, int(limit)) :])
+
+    def set_kill_switch(
+        self,
+        *,
+        user_id: UUID,
+        enabled: bool,
+        actor_user_id: UUID | None = None,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """Block or restore dispatch for one user only.
+
+        Does not arm global ITE kill-switch, does not flip feature flags, and
+        does not cancel or manage open broker positions (PME/OMS untouched).
+        """
+        ts = datetime.now(UTC)
         n = 0
         with self._lock:
+            if enabled:
+                self._killed_users.add(user_id)
+            else:
+                self._killed_users.discard(user_id)
             for job in self._jobs.values():
                 if job.user_id != user_id:
                     continue
                 job.kill_switch = bool(enabled)
-                job.updated_at = datetime.now(UTC)
+                # Do not mutate open broker positions / PME. Queue claims are
+                # blocked via kill_switch + _killed_users; terminal ACK/DL
+                # rows stay as historical evidence.
+                job.updated_at = ts
                 n += 1
-        return n
+            entry = {
+                "actor_user_id": str(actor_user_id) if actor_user_id else None,
+                "target_user_id": str(user_id),
+                "enabled": bool(enabled),
+                "reason": (reason or "")[:500],
+                "jobs_touched": n,
+                "at": ts.isoformat(),
+                "scope": "per_user_dispatch_only",
+                "global_ite_kill_switch": False,
+                "feature_flags_unchanged": True,
+                "positions_unaffected": True,
+            }
+            self._kill_audit.append(entry)
+        self._persist_kill_audit(entry)
+        return {
+            "ok": True,
+            "user_id": str(user_id),
+            "enabled": bool(enabled),
+            "jobs_touched": n,
+            "audit": entry,
+            "live_submit_allowed": False,
+            "positions_unaffected": True,
+            "global_settings_unchanged": True,
+        }
+
+    def _persist_kill_audit(self, entry: dict[str, Any]) -> None:
+        """Best-effort durable audit — never raises to callers."""
+        try:
+            import json
+            from uuid import uuid4 as _uuid4
+
+            from app.infrastructure.persistence.direct_postgres import (
+                direct_postgres_available,
+                execute,
+            )
+
+            if not direct_postgres_available():
+                return
+            actor = entry.get("actor_user_id")
+            target = entry.get("target_user_id")
+            if not target:
+                return
+            execute(
+                """
+                INSERT INTO audit_logs (
+                    id, action, outcome, resource_type, resource_id,
+                    actor_user_id, occurred_at, ip_address, user_agent,
+                    message, metadata, created_at, updated_at
+                ) VALUES (
+                    $1, 'update', 'success', 'dispatch_user_kill_switch',
+                    $2::uuid,
+                    $3::uuid, NOW(), '', '',
+                    $4, $5::jsonb, NOW(), NOW()
+                )
+                """,
+                _uuid4(),
+                target,
+                actor or target,
+                (
+                    f"per-user dispatch kill_switch "
+                    f"{'enabled' if entry.get('enabled') else 'disabled'}: "
+                    f"{(entry.get('reason') or '')[:200]}"
+                )[:1000],
+                json.dumps(
+                    {
+                        "target_user_id": target,
+                        "enabled": bool(entry.get("enabled")),
+                        "jobs_touched": int(entry.get("jobs_touched") or 0),
+                        "scope": "per_user_dispatch_only",
+                        "global_ite_kill_switch": False,
+                        "feature_flags_unchanged": True,
+                        "positions_unaffected": True,
+                    }
+                ),
+            )
+        except Exception:
+            logger.warning("dispatch_user_kill_switch_audit_failed")
 
     def revoke_account_jobs(self, *, broker_account_id: UUID, reason: str) -> int:
         n = 0
