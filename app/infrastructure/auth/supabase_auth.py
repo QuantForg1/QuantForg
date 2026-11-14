@@ -123,6 +123,18 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
         or "too many requests" in lowered
     ):
         code = "auth_rate_limited"
+    elif (
+        (status is not None and int(status) >= 500)
+        or "internal server error" in lowered
+        or "status:500" in lowered
+    ):
+        # Supabase Auth 5xx (often SMTP/email delivery misconfig) — not a bad password.
+        code = "auth_provider_error"
+        logger.error(
+            "supabase_auth_provider_5xx",
+            provider_message=composite[:500],
+            provider_status=status,
+        )
     elif "invalid login" in lowered or "invalid credentials" in lowered:
         code = "invalid_credentials"
     elif (
@@ -204,6 +216,16 @@ class SupabaseAuthAdapter:
                         "options": options,
                     }
                 )
+                # Some GoTrue failures surface as empty user + error attrs
+                # instead of a raised exception.
+                err_obj = getattr(response, "error", None)
+                if err_obj is not None:
+                    mapped = (
+                        err_obj
+                        if isinstance(err_obj, Exception)
+                        else Exception(str(err_obj))
+                    )
+                    raise _map_auth_error(mapped)
                 return _session_from_response(response, allow_empty_session=True)
             except AuthenticationError:
                 raise

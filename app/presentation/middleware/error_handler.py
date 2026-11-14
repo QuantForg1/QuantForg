@@ -102,7 +102,10 @@ def register_exception_handlers(app: FastAPI) -> None:
             "registration_incomplete": (
                 "Registration could not be completed. Check your email or try again."
             ),
-            "auth_provider_error": "Authentication service error. Try again shortly.",
+            "auth_provider_error": (
+                "Account service is temporarily unavailable. "
+                "Try again shortly, or continue with Google."
+            ),
             "identity_mismatch": "Sign-in identity does not match this account.",
             "oauth_provider_unavailable": "Google sign-in is not available right now.",
             "oauth_redirect_failed": "OAuth redirect could not be started.",
@@ -128,6 +131,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         ):
             http_status = status.HTTP_400_BAD_REQUEST
             headers = None
+        elif exc.code == "auth_provider_error":
+            http_status = status.HTTP_503_SERVICE_UNAVAILABLE
+            headers = {"Retry-After": "30"}
         else:
             http_status = status.HTTP_401_UNAUTHORIZED
             headers = {"WWW-Authenticate": "Bearer"}

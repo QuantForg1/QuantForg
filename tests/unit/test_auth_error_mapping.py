@@ -48,6 +48,11 @@ def test_map_signup_disabled() -> None:
     assert err.code == "signup_disabled"
 
 
+def test_map_supabase_internal_500() -> None:
+    err = _map_auth_error(_StubAuthError(message="Internal Server Error", status=500))
+    assert err.code == "auth_provider_error"
+
+
 def test_public_messages_via_test_client() -> None:
     app = FastAPI()
     register_exception_handlers(app)
@@ -81,3 +86,7 @@ def test_public_messages_via_test_client() -> None:
     generic = client.get("/probe/authentication_failed")
     assert generic.status_code == 401
     assert generic.json()["error"]["message"] == "Authentication failed"
+
+    provider = client.get("/probe/auth_provider_error")
+    assert provider.status_code == 503
+    assert "temporarily unavailable" in provider.json()["error"]["message"].lower()

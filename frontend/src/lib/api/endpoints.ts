@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/api/client";
 import { buildStrategyEvaluateRequest } from "@/lib/api/strategy-evaluate";
 import type { AuthSession, AuthUser } from "@/lib/auth/session";
-import { env } from "@/lib/env";
+import { getRuntimeApiBaseUrl } from "@/lib/env";
 import { asList, asRecord } from "@/lib/desk";
 import {
   filterTradingSymbolRecords,
@@ -3411,18 +3411,18 @@ export const platformApi = {
   version: () => apiFetch<Record<string, unknown>>("/version"),
   health: () =>
     apiFetch<Record<string, unknown>>(
-      `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/health`,
+      `${getRuntimeApiBaseUrl().replace(/\/api\/v1$/, "")}/health`,
       { auth: false, silent: true },
     ),
   healthLive: () =>
     apiFetch<Record<string, unknown>>(
-      `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/health/live`,
+      `${getRuntimeApiBaseUrl().replace(/\/api\/v1$/, "")}/health/live`,
       { auth: false, silent: true },
     ),
   /** Authoritative Gateway / OMS / MT5 / AI plane (observe-only). */
   tradingComponents: () =>
     apiFetch<Record<string, unknown>>(
-      `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/api/v1/health/trading-components`,
+      `${getRuntimeApiBaseUrl().replace(/\/api\/v1$/, "")}/api/v1/health/trading-components`,
       { auth: false, silent: true, timeoutMs: 20_000 },
     ),
 };
