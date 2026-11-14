@@ -33,7 +33,6 @@ from app.domain.multi_account.dispatch_queue import (
 )
 from app.domain.multi_account.feature_gates import (
     multi_account_dispatch_allowed,
-    multi_account_live_submit_allowed,
 )
 from app.domain.multi_account.signal_dispatch import (
     AccountExecutionState,
@@ -135,6 +134,24 @@ class DurableDispatchQueue:
                             "symbol": signal.symbol,
                             "side": signal.side,
                             "quality": signal.quality,
+                            "entry": (
+                                str(signal.entry) if signal.entry is not None else None
+                            ),
+                            "stop_loss": (
+                                str(signal.stop_loss)
+                                if signal.stop_loss is not None
+                                else None
+                            ),
+                            "take_profit": (
+                                str(signal.take_profit)
+                                if signal.take_profit is not None
+                                else None
+                            ),
+                            "volume": (
+                                str(item.intent.planned_volume)
+                                if item.intent.planned_volume is not None
+                                else None
+                            ),
                             "delivery_suppressed": True,
                             "live_submit_allowed": False,
                             "dispatch_allowed": plan.dispatch_allowed,
@@ -173,16 +190,22 @@ class DurableDispatchQueue:
         settings: Any | None = None,
         require_readiness: bool = True,
     ) -> tuple[DispatchPlan, list[DispatchJob]]:
-        # Phase 9: fail closed when LIVE fan-out is armed — do not enqueue.
-        if multi_account_live_submit_allowed(settings):
-            raise RuntimeError("live_submit_armed_refused")
+        """Plan + enqueue durable delivery jobs when dispatch is enabled.
+
+        LIVE_SUBMIT must not refuse planning. Production historically set
+        MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED=true, which incorrectly blocked all
+        multi-account ITE/queue planning via ``live_submit_armed_refused``.
+
+        Queue delivery remains suppressed — this module never calls OMS or
+        order_send. LIVE submit stays gated at a dedicated OMS path.
+        """
         plan = plan_signal_dispatch(
             signal=signal,
             targets=targets,
             settings=settings,
             require_readiness=require_readiness,
         )
-        # Strip live flag even if a caller constructed a plan elsewhere.
+        # Delivery foundation: never arm submit from the queue alone.
         if plan.live_submit_allowed:
             plan = DispatchPlan(
                 signal_id=plan.signal_id,

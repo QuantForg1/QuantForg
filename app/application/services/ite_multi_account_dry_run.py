@@ -183,17 +183,11 @@ def run_ite_multi_account_dry_run(
         "dry_run": True,
     }
 
-    if multi_account_live_submit_allowed(settings):
-        audit.update(
-            {
-                "error": "live_submit_armed_refused",
-                "detail": (
-                    "Multi-account LIVE submit is armed — Phase 9 refuses "
-                    "fan-out planning fail-closed."
-                ),
-            }
-        )
-        return audit
+    # LIVE_SUBMIT arms OMS submit elsewhere — it must not refuse planning.
+    # Production runs with LIVE_SUBMIT=true; refusing here blocked all
+    # multi-account eligibility/queue work while DISPATCH was also true.
+    live_armed = multi_account_live_submit_allowed(settings)
+    audit["live_submit_flag"] = bool(live_armed)
 
     signal = build_central_signal_from_ite_decision(
         decision=decision, trace_id=trace_id

@@ -236,16 +236,24 @@ def test_global_risk_ceiling_violation() -> None:
     assert result["items"][0]["state"] == "blocked"
 
 
-def test_live_submit_armed_refused() -> None:
+def test_live_submit_armed_still_allows_planning() -> None:
+    """LIVE_SUBMIT=true must not refuse multi-account planning/enqueue.
+
+    Queue delivery remains non-executing (live_submit_allowed forced false).
+    """
     result = run_ite_multi_account_dry_run(
         decision=_decision(),
         trace_id="t-live",
         targets=[_ready_target()],
         settings=_SETTINGS_LIVE_ARMED,
     )
-    assert result["ok"] is False
-    assert result["error"] == "live_submit_armed_refused"
+    assert result["ok"] is True
+    assert result.get("error") is None
     assert result["live_submit_allowed"] is False
+    assert result["order_send"] is False
+    assert result["oms_touched"] is False
+    assert result.get("live_submit_flag") is True
+    assert int(result.get("job_count") or 0) >= 1
 
 
 def test_queue_outage_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
