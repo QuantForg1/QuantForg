@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -19,13 +19,14 @@ export const StatCard = memo(function StatCard({
   className?: string;
 }) {
   const [display, setDisplay] = useState(value);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     setDisplay(value);
   }, [value]);
 
   return (
-    <Card className={cn("qf-card-interactive", className)}>
+    <Card className={cn("qf-card-interactive h-full", className)}>
       <CardHeader className="border-0 pb-1">
         <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
           {label}
@@ -34,9 +35,13 @@ export const StatCard = memo(function StatCard({
       <CardContent>
         <motion.p
           key={display}
-          initial={{ opacity: 0.4, y: 3 }}
+          initial={reduceMotion ? false : { opacity: 0.4, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          transition={
+            reduceMotion
+              ? { duration: 0 }
+              : { duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }
+          }
           className={cn(
             "tabular text-2xl font-semibold tracking-tight text-[var(--fg)] qf-kpi-flash",
             tone === "up" && "text-[var(--success)]",

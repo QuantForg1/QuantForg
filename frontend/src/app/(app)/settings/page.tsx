@@ -345,8 +345,9 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Account"
         title="Settings"
-        description="Account, security, notifications, and workspace preferences."
+        description="Profile, subscription status, security, notifications, and desk preferences. Billing actions open the existing checkout and invoice flows — plan prices are not changed here."
         actions={
           tab === "Account" ? (
             <Button size="sm" disabled={saveProfile.isPending} onClick={() => saveProfile.mutate()}>
@@ -369,7 +370,7 @@ export default function SettingsPage() {
       />
 
       <div
-        className="mb-[var(--space-4)] flex flex-wrap gap-1 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-1"
+        className="mb-[var(--space-4)] -mx-1 flex gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-1 sm:flex-wrap sm:overflow-visible"
         role="tablist"
         aria-label="Settings sections"
       >
@@ -382,8 +383,8 @@ export default function SettingsPage() {
             variant="ghost"
             className={
               tab === t
-                ? "h-8 bg-[var(--accent-soft)] text-[var(--accent)]"
-                : "h-8 text-[var(--fg-muted)]"
+                ? "h-8 shrink-0 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] hover:text-[var(--accent-fg)]"
+                : "h-8 shrink-0 text-[var(--fg-muted)]"
             }
             onClick={() => setTab(t)}
           >

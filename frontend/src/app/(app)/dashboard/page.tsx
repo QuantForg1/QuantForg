@@ -379,7 +379,7 @@ export default function DashboardPage() {
         title={greeting}
         description={
           showMetrics
-            ? "Your trading system is running smoothly. Here's your market overview."
+            ? "Connected-session balances, open exposure, and research status. Robot process status is never proof that an order was executed."
             : "Account figures appear when your broker session is available. Market research and the chart use the platform feed independently."
         }
         actions={
