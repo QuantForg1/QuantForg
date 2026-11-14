@@ -44,8 +44,9 @@ export function BrokerLogo({
           width={size}
           height={size}
           className="h-full w-full object-contain"
-          loading="lazy"
+          loading="eager"
           decoding="async"
+          fetchPriority="high"
           onError={() => setFailed(true)}
         />
       )}

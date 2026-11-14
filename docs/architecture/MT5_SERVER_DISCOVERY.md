@@ -5,31 +5,36 @@
 QuantForg does **not** call a public MetaQuotes “list all servers” API (none is
 available for arbitrary brokers). Discovery uses:
 
-1. **CONFIRMED** — authenticated Windows portable / gateway verify (`trade_allowed`
-   from `account_info`, server string exactly as MT5 returned).
-2. **DOCUMENTED / CANDIDATE** — exact names observed in the native MT5
-   *Open an Account → Server* dropdown (owner screenshots 2026-11-13) or broker
-   portal, stored as `server_hints` on each ecosystem profile.
+1. **CONFIRMED** (internal) — authenticated Windows portable / gateway verify
+   (`trade_allowed` from `account_info`, server string exactly as MT5 returned).
+2. **Documented discovery** — exact names observed in the native MT5
+   *Open an Account → Server* dropdown (owner screenshots) or broker portal,
+   stored as `server_hints` on each ecosystem profile.
 3. **Manual paste** — customer may enter the exact portal/terminal server name.
 
-Candidates are **never** promoted to CONFIRMED by naming pattern alone.
+## Customer-facing selection (Broker Page 2.0)
 
-## Coverage (2026-11-14)
+- Every genuinely discovered server is a normal selectable option.
+- **No** Confirmed / Candidate / LIVE / DEMO badges in the dropdown.
+- Search + optional paste; QuantForg authenticates with the **exact** selected
+  or pasted name (never silently substituted).
+- Account environment is still resolved **internally** from the server name
+  heuristic and finally from MT5 account metadata after authentication.
 
-| Broker | Confirmed LIVE | Candidate / documented discovery | Limitation |
-|---|---|---|---|
-| Weltrade | `Weltrade-Real` (+ Demo) | `Weltrade-Demo`, `Weltrade-MT5` | Full native list is short (Real/Demo). |
-| XM | `XMGlobal-MT5 20` | `XMGlobal-MT5 2`…`22`, other brand prefixes | Numbered rows from MT5 Open Account; env only confirmed after login. |
-| Exness | `Exness-MT5Real10` (auth OK) | Many `Exness-MT5RealN` / `TrialN` from MT5 list | Full MetaQuotes directory not enumerable via API; list is observed subset. |
-| HFM | `HFMarketsGlobal-Live20` (auth OK) | Demo/Live entity variants | Same — no complete remote directory API. |
-| JustMarkets | `JustMarkets-Live7` (auth OK) | Live/Demo entity variants | Same. |
-| IC Markets | `ICMarketsSC-MT5-3` | SC/EU/Demo variants | Same. |
-| Pepperstone | `PepperstoneKE-MT5-Live01` | Live/Demo entity variants | Same. |
-| FP Markets | `FPMarketsSC-Live` | SC/KE/Demo variants | Same. |
+## Coverage
+
+| Broker | Genuine discovery source | Notes |
+|---|---|---|
+| Weltrade | MT5 Open Account: `Weltrade-Real`, `Weltrade-Demo` | Short native list. |
+| XM | MT5 Open Account numbered `XMGlobal-MT5 N` + verified LIVE | Env confirmed after login. |
+| Exness | MT5 Open Account `Exness-MT5RealN` / `TrialN` + verified | Observed subset; not a full MetaQuotes directory dump. |
+| HFM | Verified LIVE + documented entity variants | Same API limitation. |
+| JustMarkets | Verified LIVE + documented variants | Same. |
+| IC Markets | Verified LIVE + documented variants | Same. |
+| Pepperstone | Verified LIVE + documented variants | Same. |
+| FP Markets | Verified LIVE + documented variants | Same. |
 
 ## Refresh
 
-When new genuine servers are observed in MT5 or verified via portable login,
-append exact strings to `mt5_ecosystem.py` `server_hints` (candidates) or
-`_EVIDENCE_VERIFIED_LIVE` / evidence store (confirmed). Do not invent shard
-numbers.
+Append exact newly observed strings to `mt5_ecosystem.py` `server_hints` or
+evidence store. Never invent shard numbers.

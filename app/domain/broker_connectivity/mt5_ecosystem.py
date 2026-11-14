@@ -152,7 +152,7 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("weltrade",),
         # Weltrade-Real / Weltrade-Demo observed in native MT5 Open Account dialog.
-        server_hints=("Weltrade-Real", "Weltrade-Demo", "Weltrade-MT5"),
+        server_hints=("Weltrade-Real", "Weltrade-Demo"),
         onboarding=_mt5_onboarding(
             brand="Weltrade",
             website="https://www.weltrade.com",

@@ -68,7 +68,8 @@ assert.match(broker, /Search MT5 servers/);
 assert.match(broker, /Connect MT5 Account/);
 assert.match(broker, /Live trading/);
 assert.match(broker, /Password is never displayed/);
-assert.match(broker, /AES-256/);
+assert.doesNotMatch(broker, /AES-256/);
+assert.doesNotMatch(broker, /Account type/);
 assert.equal(broker.includes("password="), false);
 assert.equal(/\bhunter2\b/.test(broker), false);
 
