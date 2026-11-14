@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { RiskIntelligencePanel } from "@/components/trading/dashboard-intelligence/risk-intelligence-panel";
 import { RiskRulesPanel } from "@/components/execution/risk-rules-panel";
 import {
+  aiTradingIntelligenceApi,
   householdPortfolioApi,
   riskApi,
   tradingSessionApi,
@@ -90,6 +91,19 @@ export default function RiskCenterPage() {
     queryFn: () => householdPortfolioApi.riskCheck({}),
     retry: false,
     staleTime: 15_000,
+  });
+  const atiRiskQ = useQuery({
+    queryKey: ["ati-risk-center-alerts"],
+    queryFn: () =>
+      aiTradingIntelligenceApi.riskAlerts({
+        portfolio: {
+          drawdown_pct: String(num(session.profit) < 0 ? Math.abs(num(session.profit)) : 0),
+        },
+        strategy_health: {},
+        execution: {},
+      }),
+    retry: false,
+    staleTime: 20_000,
   });
   const tradingSnap = asRecord(tradingSessionQ.data);
   const householdRisk = asRecord(householdRiskQ.data);
@@ -199,11 +213,38 @@ export default function RiskCenterPage() {
             <Button asChild size="sm" variant="outline">
               <Link href="/positions">Positions</Link>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/ai-trading-intelligence">AI Intelligence</Link>
+            </Button>
           </div>
         }
       />
 
       <PageMotion className="space-y-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">AI risk alerts (advisory)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-[12px] text-[var(--fg-muted)]">
+            <p>
+              Explainable recommendations only — Risk Center prefs and server
+              gates remain authoritative. Never auto-mutates kill-switch.
+            </p>
+            {asList(asRecord(atiRiskQ.data).alerts).length === 0 ? (
+              <p>No AI alerts from current session facts.</p>
+            ) : (
+              <ul className="space-y-1">
+                {asList(asRecord(atiRiskQ.data).alerts)
+                  .map(asRecord)
+                  .map((a) => (
+                    <li key={str(a.code)}>
+                      [{str(a.severity)}] {str(a.title)} — {str(a.recommended_action)}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
         <Card className="border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,var(--accent-soft)_35%,var(--surface))]">
           <CardContent className="grid gap-3 py-4 sm:grid-cols-2">
             <div>
