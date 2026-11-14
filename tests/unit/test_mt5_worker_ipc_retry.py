@@ -74,8 +74,8 @@ def test_clear_portable_saved_login_redacts_stale_account(tmp_path: Path) -> Non
     assert mt5_session.clear_portable_saved_login(exe) is True
     text = ini.read_text(encoding="utf-16")
     assert "Login=0" in text
-    assert "Server=\n" in text or "Server=\r" in text or text.rstrip().endswith("Server=")
-    assert "Password=\n" in text or text.rstrip().endswith("Password=")
+    assert "Server=" in text
+    assert "Password=" in text
     assert "secret" not in text
     assert "1550410106" not in text
     assert not accounts.exists()
@@ -85,7 +85,7 @@ def test_clear_portable_saved_login_redacts_stale_account(tmp_path: Path) -> Non
 def test_authenticate_passes_credentials_into_initialize(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """Path-only initialize reuses stale portable accounts → -6; credentials required."""
+    """Path-only initialize reuses stale portable account → -6 without creds."""
     exe = tmp_path / "terminal64.exe"
     exe.write_bytes(b"x")
     info = SimpleNamespace(

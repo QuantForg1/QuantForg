@@ -89,5 +89,8 @@ def test_catalogue_exness_hfm_not_connectable_without_evidence(
     assert rows["weltrade"]["connectable"] is True
     assert rows["exness"]["connectable"] is False
     assert rows["hfm"]["connectable"] is False
-    assert verified_servers_for_broker("exness") == []
+    # Exness may list a DOCUMENTED observed LIVE server without being connectable.
+    exness = verified_servers_for_broker("exness")
+    assert all(r.get("confirmed") is False for r in exness)
+    assert all(r.get("evidence_classification") == "DOCUMENTED" for r in exness)
     assert verified_servers_for_broker("hfm") == []
