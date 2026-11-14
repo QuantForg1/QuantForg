@@ -62,9 +62,7 @@ def test_dry_run_module_never_calls_order_send() -> None:
         if isinstance(n, ast.Call)
         and (
             (isinstance(n.func, ast.Name) and n.func.id == "order_send")
-            or (
-                isinstance(n.func, ast.Attribute) and n.func.attr == "order_send"
-            )
+            or (isinstance(n.func, ast.Attribute) and n.func.attr == "order_send")
         )
     ]
     assert calls == [], "dry-run dispatch must never invoke order_send"
