@@ -112,7 +112,7 @@ def evaluate_household_risk(
     ):
         block = f"HOUSEHOLD_RISK: symbol concentration limit for {proposed_symbol}"
 
-    budgets = {
+    budgets: dict[str, Any] = {
         "aggregate_open_risk_pct": str(agg_cap) if agg_cap is not None else None,
         "planned_risk_pct": str(planned_cap) if planned_cap is not None else None,
         "max_lot": eff.get("max_lot"),
@@ -165,12 +165,12 @@ def household_new_entry_block_reason(
     if accounts is None and effective is None:
         return None
 
-    symbol = None
+    symbol: str | None = None
     if intent is not None:
-        symbol = getattr(intent, "symbol", None)
-        if hasattr(symbol, "value"):
-            symbol = symbol.value
-        symbol = str(symbol) if symbol else None
+        raw = getattr(intent, "symbol", None)
+        if raw is not None and hasattr(raw, "value"):
+            raw = getattr(raw, "value", None)
+        symbol = str(raw) if raw else None
 
     check = evaluate_household_risk(
         accounts=accounts or [],

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -138,7 +139,10 @@ def _metrics(name: str, trades: list[ClosedTrade]) -> StrategyMetrics:
     )
 
 
-def _group(trades: list[ClosedTrade], key_fn) -> tuple[StrategyMetrics, ...]:
+def _group(
+    trades: list[ClosedTrade],
+    key_fn: Callable[[ClosedTrade], str | None],
+) -> tuple[StrategyMetrics, ...]:
     buckets: dict[str, list[ClosedTrade]] = {}
     for t in trades:
         buckets.setdefault(key_fn(t) or "unspecified", []).append(t)

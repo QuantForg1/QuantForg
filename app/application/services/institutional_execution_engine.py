@@ -243,7 +243,7 @@ def _explicit_risk_reducing(intent: OrderIntent) -> bool:
 
 def broker_submit_block_reason(
     intent: OrderIntent,
-    user_id: UUID | None = None,
+    user_id: UUID | str | None = None,
 ) -> str | None:
     """Block broker submission. None means this intent may be sent.
 
@@ -282,7 +282,12 @@ def broker_submit_block_reason(
             household_new_entry_block_reason,
         )
 
-        hh_block = household_new_entry_block_reason(user_id=user_id, intent=intent)
+        uid: UUID | None = None
+        if isinstance(user_id, UUID):
+            uid = user_id
+        elif user_id:
+            uid = UUID(str(user_id))
+        hh_block = household_new_entry_block_reason(user_id=uid, intent=intent)
         if hh_block:
             return hh_block
     except Exception:

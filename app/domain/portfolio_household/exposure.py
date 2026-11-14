@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -35,7 +36,7 @@ class ExposureRollup:
 
 def _bucket_map(
     positions: list[PositionSlice],
-    key_fn,
+    key_fn: Callable[[PositionSlice], str | None],
     equity: Decimal | None,
     threshold: Decimal,
 ) -> list[ExposureBucket]:
