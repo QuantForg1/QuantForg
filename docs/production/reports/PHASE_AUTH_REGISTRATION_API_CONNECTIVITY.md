@@ -113,8 +113,9 @@ No CORS change required for www. Same-origin `/qf-api` proxy further reduces COR
 
 | Item | Value |
 |------|-------|
-| PR | *filled after create* |
-| Deploy | **BLOCKED** if Vercel rate limit persists — do not claim live until SHA verified on www |
+| PR | https://github.com/QuantForg1/QuantForg/pull/278 |
+| Commit | `97e77789` |
+| Deploy | **PENDING** — do not claim live until SHA verified on www (Vercel may still rate-limit) |
 
 ---
 
