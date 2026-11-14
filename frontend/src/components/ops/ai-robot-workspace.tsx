@@ -24,14 +24,14 @@ function Panel({
   action?: React.ReactNode;
 }) {
   return (
-    <section className="border border-[var(--border)] bg-[var(--surface)]">
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2">
+    <section className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
           {title}
         </h2>
         {action}
       </header>
-      <div className="p-3">{children}</div>
+      <div className="p-3 sm:p-4">{children}</div>
     </section>
   );
 }

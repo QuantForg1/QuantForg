@@ -59,7 +59,7 @@ function PrimaryLink({
               "qf-rail-link group relative flex items-center gap-2.5 rounded-xl text-[13px] font-medium",
               collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
               active
-                ? "bg-[var(--accent)] text-white shadow-[inset_3px_0_0_0_rgba(255,255,255,0.85)]"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-[inset_3px_0_0_0_color-mix(in_srgb,var(--accent-fg)_55%,transparent)]"
                 : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
             )}
           >
@@ -77,8 +77,8 @@ function PrimaryLink({
                       item.railBadge.tone === "danger"
                         ? "bg-[var(--danger)] text-white"
                         : active
-                          ? "bg-white/20 text-white"
-                          : "bg-[var(--accent)] text-white",
+                          ? "bg-[color-mix(in_srgb,var(--accent-fg)_18%,transparent)] text-[var(--accent-fg)]"
+                          : "bg-[var(--accent)] text-[var(--accent-fg)]",
                     )}
                   >
                     {item.railBadge.label}

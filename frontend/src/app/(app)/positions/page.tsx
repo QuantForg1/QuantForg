@@ -41,6 +41,7 @@ export default function PositionsPage() {
       id: "ticket",
       header: "Ticket",
       sortable: true,
+      sticky: true,
       accessor: (r) => str(r.ticket),
       cell: (r) => <span className="tabular text-[var(--fg-muted)]">{str(r.ticket)}</span>,
     },
@@ -48,17 +49,18 @@ export default function PositionsPage() {
       id: "symbol",
       header: "Symbol",
       sortable: true,
+      mobilePrimary: true,
       accessor: (r) => str(r.symbol),
       cell: (r) => <span className="font-medium">{str(r.symbol)}</span>,
     },
     {
       id: "side",
-      header: "Side",
+      header: "Direction",
       sortable: true,
       accessor: (r) => str(r.side),
       cell: (r) => (
-        <Badge tone={str(r.side).toLowerCase() === "buy" ? "success" : "warning"}>
-          {str(r.side)}
+        <Badge tone={str(r.side).toLowerCase() === "buy" ? "success" : "danger"}>
+          {str(r.side).toUpperCase() || "—"}
         </Badge>
       ),
     },
@@ -67,35 +69,35 @@ export default function PositionsPage() {
       header: "Volume",
       sortable: true,
       accessor: (r) => num(r.volume, 0),
-      cell: (r) => <span className="tabular">{str(r.volume)}</span>,
+      cell: (r) => <span className="tabular">{str(r.volume, "—")}</span>,
     },
     {
       id: "open",
-      header: "Open",
+      header: "Entry",
       sortable: true,
       accessor: (r) => num(r.open_price, 0),
-      cell: (r) => <span className="tabular">{str(r.open_price)}</span>,
+      cell: (r) => <span className="tabular">{str(r.open_price, "—")}</span>,
     },
     {
       id: "current",
       header: "Current",
       sortable: true,
       accessor: (r) => num(r.current_price, 0),
-      cell: (r) => <span className="tabular">{str(r.current_price)}</span>,
+      cell: (r) => <span className="tabular">{str(r.current_price, "—")}</span>,
     },
     {
       id: "sl",
-      header: "SL",
-      cell: (r) => str(r.stop_loss),
+      header: "Stop-loss",
+      cell: (r) => <span className="tabular">{str(r.stop_loss, "—")}</span>,
     },
     {
       id: "tp",
-      header: "TP",
-      cell: (r) => str(r.take_profit),
+      header: "Take-profit",
+      cell: (r) => <span className="tabular">{str(r.take_profit, "—")}</span>,
     },
     {
       id: "pnl",
-      header: "PnL",
+      header: "Floating P&L",
       sortable: true,
       accessor: (r) => num(r.profit, 0),
       cell: (r) => (
@@ -108,18 +110,27 @@ export default function PositionsPage() {
         </span>
       ),
     },
+    {
+      id: "status",
+      header: "Status",
+      cell: () => <Badge tone="success">Open</Badge>,
+    },
   ];
 
   return (
     <div>
       <PageHeader
+        eyebrow="Trading"
         title="Positions"
-        description="Open exposure across symbols and sides."
+        description="Open broker positions with entry, protective stops, and floating P&L from the connected MT5 session. Values stay blank until a live session returns them."
         actions={
           <div className="flex items-center gap-2">
             <RealtimeConnectionBadge status={realtime} />
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/execution">Trade</Link>
+              <Link href="/broker">Broker</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/terminal">Terminal</Link>
             </Button>
           </div>
         }
@@ -127,22 +138,27 @@ export default function PositionsPage() {
       <RealtimeMeta status={realtime} className="mb-3" />
       <SessionStrip className="mb-4" />
       <DeskQueryState
-        isLoading={q.isLoading}
+        isLoading={q.isLoading && session.connected}
         isError={q.isError}
-        errorMessage="Unable to load positions."
+        errorMessage="Unable to load positions from the broker session."
         onRetry={() => q.refetch()}
         skeleton="page"
       >
-        <PageMotion>
+        <PageMotion className="space-y-4">
           <StaggerGrid className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
-              <StatCard label="Open" value={String(positions.length)} />
+              <StatCard
+                label="Open positions"
+                value={String(positions.length)}
+                hint={session.connected ? "From connected session" : "Connect a broker to sync"}
+              />
             </StaggerItem>
             <StaggerItem>
               <StatCard
-                label="Unrealized PnL"
+                label="Floating P&L"
                 value={formatCurrency(totalPnl)}
                 tone={totalPnl >= 0 ? "up" : "down"}
+                hint="Unrealized — not a closed result"
               />
             </StaggerItem>
             <StaggerItem>
@@ -157,26 +173,36 @@ export default function PositionsPage() {
               <CardTitle>Open positions</CardTitle>
             </CardHeader>
             <CardContent>
-              <DeskDataTable
-                columns={columns}
-                rows={positions}
-                rowKey={(r, i) => str(r.ticket, String(i))}
-                searchKeys={(r) => `${str(r.symbol)} ${str(r.side)} ${str(r.ticket)}`}
-                searchPlaceholder="Filter positions…"
-                pageSize={12}
-                aria-label="Open positions"
-                empty={
-                  <DeskEmpty
-                    icon={Layers}
-                    title="No open positions"
-                    description="Live positions appear after MT5 sync."
-                    actionLabel="Go to MT5"
-                    actionHref="/broker"
-                    secondaryLabel="Paper trade"
-                    secondaryHref="/paper"
-                  />
-                }
-              />
+              {!session.connected ? (
+                <DeskEmpty
+                  icon={Layers}
+                  title="Broker not connected"
+                  description="Open positions appear after you connect an MT5 account you own. QuantForg does not invent exposure."
+                  actionLabel="Connect broker"
+                  actionHref="/broker"
+                />
+              ) : (
+                <DeskDataTable
+                  columns={columns}
+                  rows={positions}
+                  rowKey={(r, i) => str(r.ticket, String(i))}
+                  searchKeys={(r) => `${str(r.symbol)} ${str(r.side)} ${str(r.ticket)}`}
+                  searchPlaceholder="Filter positions…"
+                  pageSize={12}
+                  aria-label="Open positions"
+                  empty={
+                    <DeskEmpty
+                      icon={Layers}
+                      title="No open positions"
+                      description="When the broker session reports open trades, they appear here with stops and floating P&L."
+                      actionLabel="Open Terminal"
+                      actionHref="/terminal"
+                      secondaryLabel="Broker Accounts"
+                      secondaryHref="/broker"
+                    />
+                  }
+                />
+              )}
             </CardContent>
           </Card>
         </PageMotion>

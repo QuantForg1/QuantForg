@@ -144,12 +144,18 @@ export default function RiskCenterPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Risk"
         title="Risk Center"
-        description="Monitor your account risk and manage personal preferences within platform-allowed ranges. Global hard limits stay under Owner control."
+        description="Your preferences can only tighten risk. Platform ceilings, mandatory stop-loss, and Owner policy stay enforced server-side and are not editable here."
+        status={
+          <Badge tone={dirty ? "warning" : "success"}>
+            {dirty ? "Unsaved preference changes" : "Preferences saved"}
+          </Badge>
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
-              <Link href="/inbox">Notifications</Link>
+              <Link href="/notifications">Notifications</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href="/ai-robot">Robot desk</Link>
@@ -162,6 +168,30 @@ export default function RiskCenterPage() {
       />
 
       <PageMotion className="space-y-4">
+        <Card className="border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,var(--accent-soft)_35%,var(--surface))]">
+          <CardContent className="grid gap-3 py-4 sm:grid-cols-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
+                Your preferences
+              </p>
+              <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                Values you save below are personal desk settings. They may be
+                stricter than the platform ceiling, never looser.
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+                Platform-enforced limits
+              </p>
+              <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                Hard ceilings, mandatory stop-loss, and global restrictions remain
+                under Owner control. Ordinary customers cannot view or edit Owner
+                Policy.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <RiskIntelligencePanel
           equity={session.equity}
           balance={session.balance}
@@ -251,12 +281,19 @@ export default function RiskCenterPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {prefsQ.isError ? (
-              <p className="text-sm text-[var(--danger)]">
+              <p className="text-sm text-[var(--danger)]" role="alert">
                 Preferences could not be loaded. Retry later — defaults are not
                 invented here.
               </p>
             ) : prefsQ.isLoading ? (
-              <p className="text-sm text-[var(--fg-muted)]">Loading preferences…</p>
+              <div className="space-y-3" aria-busy="true" aria-label="Loading preferences">
+                <div className="h-10 animate-pulse rounded-md bg-[var(--surface-2)]" />
+                <div className="h-10 animate-pulse rounded-md bg-[var(--surface-2)]" />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="h-16 animate-pulse rounded-md bg-[var(--surface-2)]" />
+                  <div className="h-16 animate-pulse rounded-md bg-[var(--surface-2)]" />
+                </div>
+              </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {PREF_KEYS.map((key) => {
