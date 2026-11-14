@@ -1,6 +1,6 @@
-﻿# Eight-broker Production acceptance (2026-11-14)
+# Eight-broker Production acceptance (2026-11-14)
 
-**Production SHA (pre-this-PR):** `1e75cdf371fbf6bbf098fd29b576661d3f574faa` (PR #249)  
+**Production SHA (pre-merge):** `1e75cdf371fbf6bbf098fd29b576661d3f574faa` (PR #249)  
 **Host health:** `https://quantforg-production.up.railway.app/api/v1/health` → `status=ok`  
 **Orders submitted during acceptance:** **0**  
 **Global execution:** **OFF** (`MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED=false`)
@@ -36,8 +36,11 @@ Root cause: accounts authenticate on the correct LIVE servers with hedge `trade_
 
 ## Risk & kill-switch
 
-- Global submit remains OFF; `FORCE_FIRST_TRADE=false`; `QF_ALLOW_WORKER_ON_LIVE_TERMINAL=false`.
-- Dry-run / eligibility paths do not call OMS `order_send`.
+- Kill-switch arm/disarm: PASS (no orders).
+- Daily loss / capacity / kill-switch unit suite: PASS (prior acceptance).
+- Multi-account eligibility / dry-run / registry tests: PASS.
+- Dry-run dispatch module never calls OMS/`order_send`.
+- Safety flags remain: `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED=false`, `FORCE_FIRST_TRADE=false`, `QF_ALLOW_WORKER_ON_LIVE_TERMINAL=false`.
 - Weltrade Program Files LIVE terminal protected.
 
 ## Global execution decision
@@ -50,9 +53,9 @@ Expanded genuine MT5-observed candidates in `mt5_ecosystem.py` (Weltrade Real/De
 
 ## Distilled summary
 
-1. **Runtime MT5 connected (8/8)**  
-2. **Confirmed trading permission (5/8)** — weltrade, xm, ic-markets, pepperstone, fp-markets  
-3. **Exness / HFM / JustMarkets:** auth OK, balance 0, `trade_allowed=false`  
-4. **Risk / kill-switch:** global submit OFF  
-5. **Global execution enabled:** NO  
-6. **Real orders during acceptance:** none  
+1. **Runtime MT5 connected (8/8)**
+2. **Confirmed trading permission (5/8)** — weltrade, xm, ic-markets, pepperstone, fp-markets
+3. **Exness / HFM / JustMarkets:** auth OK, balance 0, `trade_allowed=false`
+4. **Risk / kill-switch:** PASS; global submit remains OFF
+5. **Global execution enabled:** NO
+6. **Real orders during acceptance:** none
