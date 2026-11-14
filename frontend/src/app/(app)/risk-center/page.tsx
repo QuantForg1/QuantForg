@@ -16,7 +16,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { RiskIntelligencePanel } from "@/components/trading/dashboard-intelligence/risk-intelligence-panel";
 import { RiskRulesPanel } from "@/components/execution/risk-rules-panel";
-import { riskApi, tradingSessionApi } from "@/lib/api/endpoints";
+import {
+  householdPortfolioApi,
+  riskApi,
+  tradingSessionApi,
+} from "@/lib/api/endpoints";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { ApiError } from "@/lib/api/client";
 import { useTradingSession } from "@/providers/trading-session-provider";
@@ -81,11 +85,20 @@ export default function RiskCenterPage() {
     refetchInterval: 15_000,
     retry: false,
   });
+  const householdRiskQ = useQuery({
+    queryKey: ["portfolio-household-risk-center"],
+    queryFn: () => householdPortfolioApi.riskCheck({}),
+    retry: false,
+    staleTime: 15_000,
+  });
   const tradingSnap = asRecord(tradingSessionQ.data);
-  const ordersMaySubmit = tradingSnap.orders_may_submit === true;
+  const householdRisk = asRecord(householdRiskQ.data);
+  const ordersMaySubmit =
+    tradingSnap.orders_may_submit === true && householdRisk.allowed !== false;
   const riskLocked =
     tradingSnap.risk_locked === true ||
     tradingSnap.daily_loss_exceeded === true ||
+    householdRisk.allowed === false ||
     String(tradingSnap.ownership_block_reason || "")
       .toLowerCase()
       .includes("risk");

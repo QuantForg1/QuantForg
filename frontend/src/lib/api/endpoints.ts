@@ -80,6 +80,33 @@ export const portfolioApi = {
   },
 };
 
+/** Phase 3 — multi-account household portfolio intelligence. */
+export const householdPortfolioApi = {
+  get: () => apiFetch<Record<string, unknown>>("/portfolio/household"),
+  accounts: () =>
+    apiFetch<Record<string, unknown>>("/portfolio/household/accounts"),
+  exposure: () =>
+    apiFetch<Record<string, unknown>>("/portfolio/household/exposure"),
+  riskCheck: (body: Record<string, unknown> = {}) =>
+    apiFetch<Record<string, unknown>>("/portfolio/household/risk-check", {
+      method: "POST",
+      body,
+    }),
+  performance: (params?: { broker?: string; strategy?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.broker) qs.set("broker", params.broker);
+    if (params?.strategy) qs.set("strategy", params.strategy);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return apiFetch<Record<string, unknown>>(
+      `/portfolio/household/performance${suffix}`,
+    );
+  },
+  attribution: () =>
+    apiFetch<Record<string, unknown>>("/portfolio/household/attribution"),
+  emergencyStops: () =>
+    apiFetch<Record<string, unknown>>("/portfolio/household/emergency-stops"),
+};
+
 type Mt5SymbolsPage = {
   items: unknown[];
   total: number;

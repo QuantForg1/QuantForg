@@ -241,12 +241,16 @@ def _explicit_risk_reducing(intent: OrderIntent) -> bool:
     return intent.oms_kind in {"sltp", "modify_sltp", "close", "partial_close"}
 
 
-def broker_submit_block_reason(intent: OrderIntent) -> str | None:
+def broker_submit_block_reason(
+    intent: OrderIntent,
+    user_id: UUID | str | None = None,
+) -> str | None:
     """Block broker submission. None means this intent may be sent.
 
     Kill switch armed, or an unreadable control plane, blocks every submit.
     orders_may_submit false blocks new entries and still allows an explicit
     risk-reducing close or stop update when the kill switch is confirmed clear.
+    Phase 3: household emergency stops / risk allocate new entries only.
     """
     try:
         from app.domain.institutional_trading.execution.kill_switch import KillSwitch
@@ -272,6 +276,23 @@ def broker_submit_block_reason(intent: OrderIntent) -> str | None:
         return "AUTO_TRADING_BLOCKED: live controller unreadable — new entries blocked"
     if not allowed:
         return "AUTO_TRADING_BLOCKED: orders_may_submit is false — new entries blocked"
+    # Phase 3 thin hook — household stops / allocate; fail-open on import errors.
+    try:
+        from app.domain.portfolio_household.risk_allocation import (
+            household_new_entry_block_reason,
+        )
+
+        uid: UUID | None = None
+        if isinstance(user_id, UUID):
+            uid = user_id
+        elif user_id:
+            uid = UUID(str(user_id))
+        hh_block = household_new_entry_block_reason(user_id=uid, intent=intent)
+        if hh_block:
+            return hh_block
+    except Exception:
+        # Fail-open on household hook errors; RiskEngine remains authoritative.
+        return None
     return None
 
 
@@ -1793,7 +1814,7 @@ class InstitutionalExecutionEngine:
             )
             result.journal_entry = self._write_journal(result, intent, None, uid)
             return result, decision
-        submit_block = broker_submit_block_reason(intent)
+        submit_block = broker_submit_block_reason(intent, user_id=uid)
         if submit_block:
             self._observe(
                 user_id=uid,
