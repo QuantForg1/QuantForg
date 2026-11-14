@@ -65,6 +65,8 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <ConnectionStatus compact />
         <span className="truncate qf-caption tabular text-[var(--fg-muted)]">
+          {session.connected ? "Owned" : "Offline"}
+          <span className="text-[var(--fg-subtle)]"> · </span>
           {str(session.server, "—")}
           <span className="text-[var(--fg-subtle)]"> · </span>
           {(() => {
@@ -75,6 +77,14 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
             return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
           })()}
         </span>
+        {session.executionEnabled === false ? (
+          <Badge
+            tone="warning"
+            className="hidden h-5 shrink-0 px-1.5 text-[10px] sm:inline-flex"
+          >
+            Submit gated
+          </Badge>
+        ) : null}
         {onSymbolChange ? (
           <TerminalSymbolSwitcher symbol={symbol} onSelect={onSymbolChange} />
         ) : (

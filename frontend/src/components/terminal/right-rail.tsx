@@ -18,6 +18,7 @@ export const TerminalRightRail = memo(function TerminalRightRail({
   marketOpen = null,
   symbolAvailable = null,
   ticketRef,
+  prefill = null,
 }: {
   symbol: string;
   onSymbolChange: (s: string) => void;
@@ -30,6 +31,12 @@ export const TerminalRightRail = memo(function TerminalRightRail({
   /** Catalogue/symbol known independently of quotes. */
   symbolAvailable?: boolean | null;
   ticketRef: RefObject<OrderTicketHandle | null>;
+  prefill?: {
+    side?: "buy" | "sell";
+    stopLoss?: string;
+    takeProfit?: string;
+    signalId?: string;
+  } | null;
 }) {
   return (
     <aside
@@ -54,6 +61,7 @@ export const TerminalRightRail = memo(function TerminalRightRail({
           marketOpen={marketOpen}
           symbolAvailable={symbolAvailable}
           dense
+          prefill={prefill}
         />
       </div>
     </aside>

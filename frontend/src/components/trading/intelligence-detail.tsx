@@ -191,11 +191,32 @@ export function IntelligenceDetail({
           ? "No signal evidence is available for this instrument."
           : explanation || EXPLANATION_UNAVAILABLE}
       </p>
-      <div className="border-t border-[var(--border)] pt-4">
+      <div className="border-t border-[var(--border)] pt-4 space-y-3">
         <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
-          This is research intelligence, not a guaranteed trade outcome. There is no execute
-          action on this desk.
+          This is research intelligence, not a guaranteed trade outcome. Execution
+          stays on Terminal — use Open in Terminal to prefill the ticket.
         </p>
+        {kind === "signal" && dir !== "NEUTRAL" && signal !== "NO SIGNAL" ? (
+          <Button variant="secondary" size="sm" asChild>
+            <Link
+              href={(() => {
+                const q = new URLSearchParams({
+                  symbol,
+                  side: dir === "SELL" ? "sell" : "buy",
+                });
+                const sl = String(row.stop_loss ?? row.SL_candidate ?? "").trim();
+                const tp = String(row.take_profit ?? row.TP_candidate ?? "").trim();
+                const sid = str(row.id || row.signal_id, "");
+                if (sl && Number.isFinite(Number(sl))) q.set("sl", sl);
+                if (tp && Number.isFinite(Number(tp))) q.set("tp", tp);
+                if (sid) q.set("signal", sid);
+                return `/terminal?${q.toString()}`;
+              })()}
+            >
+              Open in Terminal
+            </Link>
+          </Button>
+        ) : null}
       </div>
       {kind === "market" ? (
         <Button variant="secondary" size="sm" asChild>

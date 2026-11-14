@@ -94,6 +94,13 @@ export const ExecutionOrderTicket = forwardRef<
      * Keeps confirm / risk / OMS submit path; hides diagnostic chrome.
      */
     overviewChrome?: boolean;
+    /** Optional deep-link prefill from Signals → Terminal. */
+    prefill?: {
+      side?: "buy" | "sell";
+      stopLoss?: string;
+      takeProfit?: string;
+      signalId?: string;
+    } | null;
   }
 >(function ExecutionOrderTicket(
   {
@@ -108,10 +115,11 @@ export const ExecutionOrderTicket = forwardRef<
     dense = false,
     embedded = false,
     overviewChrome = false,
+    prefill = null,
   },
   ref,
 ) {
-  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [side, setSide] = useState<"buy" | "sell">(prefill?.side ?? "buy");
   const [orderType, setOrderType] = useState<OrderType>("market");
   const [overviewTab, setOverviewTab] = useState<"market" | "pending" | "stops">(
     "market",
@@ -120,13 +128,13 @@ export const ExecutionOrderTicket = forwardRef<
   const [volume, setVolume] = useState("0.01");
   const [sizingMode, setSizingMode] = useState<SizingMode>("percentage_risk");
   const [price, setPrice] = useState("");
-  const [stopLoss, setStopLoss] = useState("");
-  const [takeProfit, setTakeProfit] = useState("");
+  const [stopLoss, setStopLoss] = useState(prefill?.stopLoss ?? "");
+  const [takeProfit, setTakeProfit] = useState(prefill?.takeProfit ?? "");
   const stopsError = protectiveStopsError(stopLoss, takeProfit);
   const [riskPct, setRiskPct] = useState("1");
-  const [comment, setComment] = useState("");
-  const [trailingStop, setTrailingStop] = useState("");
-  const [breakEven, setBreakEven] = useState(false);
+  const [comment, setComment] = useState(
+    prefill?.signalId ? `sig:${prefill.signalId}`.slice(0, 31) : "",
+  );
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"oneclick" | "ticket">("ticket");
@@ -260,9 +268,6 @@ export const ExecutionOrderTicket = forwardRef<
     (preTradeBlocked ? "Pre-trade checks blocked — fix and Validate again" : null);
 
   const buildPayload = () => {
-    const parts = [comment.trim() || "quantforg-execution"];
-    if (trailingStop.trim()) parts.push(`trail:${trailingStop.trim()}`);
-    if (breakEven) parts.push("be:1");
     return {
       request_id: `exec_${crypto.randomUUID()}`,
       symbol: resolveTradingSymbol(symbol),
@@ -274,7 +279,7 @@ export const ExecutionOrderTicket = forwardRef<
       take_profit: takeProfit || null,
       slippage: 10,
       magic: 0,
-      comment: parts.join(" | ").slice(0, 31),
+      comment: (comment.trim() || "quantforg-execution").slice(0, 31),
     };
   };
 
@@ -1411,18 +1416,7 @@ export const ExecutionOrderTicket = forwardRef<
 
           {!dense ? (
             <>
-              <div className="space-y-1">
-                <Label htmlFor="exec-trail" className="text-[11px]">Trailing</Label>
-                <Input
-                  id="exec-trail"
-                  className="h-9"
-                  value={trailingStop}
-                  onChange={(e) => setTrailingStop(e.target.value)}
-                  placeholder="points"
-                  disabled={!connected}
-                />
-              </div>
-              <div className="space-y-1">
+              <div className="space-y-1 sm:col-span-2">
                 <Label htmlFor="exec-comment" className="text-[11px]">Comment</Label>
                 <Input
                   id="exec-comment"
@@ -1430,18 +1424,14 @@ export const ExecutionOrderTicket = forwardRef<
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   disabled={!connected}
-                  maxLength={24}
+                  maxLength={31}
                 />
               </div>
-              <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--fg-muted)]">
-                <input
-                  type="checkbox"
-                  checked={breakEven}
-                  onChange={(e) => setBreakEven(e.target.checked)}
-                  disabled={!connected}
-                />
-                Break even tag
-              </label>
+              <p className="col-span-2 text-[11px] leading-relaxed text-[var(--fg-subtle)]">
+                Break-even, trailing, and partial take-profit are managed by the
+                Position Management Engine after a confirmed fill — not as
+                comment tags on submit. Use Position Manager to adjust SL/TP.
+              </p>
             </>
           ) : null}
         </div>

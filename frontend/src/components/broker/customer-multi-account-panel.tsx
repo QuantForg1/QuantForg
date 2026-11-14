@@ -173,8 +173,23 @@ export function CustomerMultiAccountPanel() {
             Verification: {verification.verified ? "Verified" : "Unverified"} · Worker reported:{" "}
             {worker.reported ? "Yes" : "No"}
           </p>
+          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+            Heartbeat:{" "}
+            {str(
+              worker.last_heartbeat_at ||
+                worker.heartbeat_at ||
+                readiness.last_heartbeat_at,
+              worker.reported ? "Seen (time unavailable)" : "No heartbeat",
+            )}
+          </p>
           <p className="mt-1 text-[11px] text-[var(--fg-subtle)]">
-            {str(readiness.evidence_note, str(verification.note, ""))}
+            {str(
+              readiness.evidence_note,
+              str(
+                verification.note,
+                "Catalogue Verified is not MT5 trade_allowed — runtime permission is separate.",
+              ),
+            )}
           </p>
         </div>
       </div>

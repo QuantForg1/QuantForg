@@ -19,6 +19,16 @@
       [Architecture Review Checklist](../docs/engineering/ArchitectureReviewChecklist.md)
 - [ ] New or updated ADR under `docs/adr/`
 
+## Trading Core Freeze (required if touching frozen paths)
+
+See `.cursor/rules/quantforg-trading-core-freeze.mdc`.
+
+- [ ] N/A — no OMS / Risk / PME / MT5 gateway / ITE / execution changes
+- [ ] Product-owner approval cited (module + reason) in Summary
+- [ ] `pytest -m trading_core` green
+- [ ] No `FORCE_FIRST_TRADE` / risk-lock bypass / fabricated `trade_allowed`
+- [ ] No LIVE test `order_send`
+
 ### Non-negotiable confirmations
 
 - [ ] Analysis code does **not** trade or call execution (ADR-0010)
