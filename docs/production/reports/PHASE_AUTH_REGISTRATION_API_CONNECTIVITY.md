@@ -81,7 +81,7 @@ No CORS change required for www. Same-origin `/qf-api` proxy further reduces COR
 
 ## 7. SMTP delivery result
 
-**BLOCKED / not verified.** No confirmation email can be asserted while signup returns 500. Resend must be validated in Supabase SMTP settings after Auth signup returns 2xx / creates the user.
+**PASS (2026-11-14 retest).** Custom SMTP via Resend delivers confirmation mail from `no-reply@auth.quantforg.com` for deliverable inboxes (`last_event: delivered`). `@example.com` still fails GoTrue with `Error sending confirmation email` (expected Resend rejection). Full write-up: `PHASE_AUTH_SIGNUP_422_ACCEPTANCE.md`.
 
 ---
 
@@ -91,11 +91,11 @@ No CORS change required for www. Same-origin `/qf-api` proxy further reduces COR
 |------|--------|
 | Frontend sends register | **PASS** (correct path + payload) |
 | Railway receives | **PASS** |
-| Supabase creates user | **FAIL** (500) |
-| Profile provisioning | Not reached |
-| Confirmation email | Not reached |
-| Confirm callback → Production | Not reached |
-| Sign-in | Not reached |
+| Supabase creates user | **PASS** (deliverable email → Railway `201`) |
+| Profile provisioning | **PASS** |
+| Confirmation email | **PASS** (Resend delivered) |
+| Confirm callback → Production | Verify **PASS**; hash hydrate on `/` **PENDING** Vercel deploy of this PR |
+| Sign-in | **PASS** (after confirm) |
 
 ---
 

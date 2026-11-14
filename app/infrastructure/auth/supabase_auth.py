@@ -94,7 +94,14 @@ def _session_from_response(
 def _provider_error_text(exc: Exception) -> str:
     """Best-effort extract of GoTrue / httpx error fields for mapping."""
     fragments: list[str] = []
-    for attr in ("message", "msg", "error_description", "error", "code"):
+    for attr in (
+        "message",
+        "msg",
+        "error_description",
+        "error",
+        "error_code",
+        "code",
+    ):
         raw = getattr(exc, attr, None)
         if raw is not None:
             text = str(raw).strip()
@@ -103,6 +110,15 @@ def _provider_error_text(exc: Exception) -> str:
     status = getattr(exc, "status", None)
     if status is not None:
         fragments.append(f"status:{status}")
+    for attr in ("json", "body"):
+        raw = getattr(exc, attr, None)
+        if isinstance(raw, dict):
+            for key in ("msg", "message", "error_code", "error"):
+                val = raw.get(key)
+                if val is not None:
+                    text = str(val).strip()
+                    if text and text not in fragments:
+                        fragments.append(text)
     base = str(exc).strip()
     if base and base not in fragments:
         fragments.append(base)
@@ -124,11 +140,29 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
     ):
         code = "auth_rate_limited"
     elif (
+        "error sending confirmation email" in lowered
+        or "error sending magic link" in lowered
+        or "error sending recovery email" in lowered
+        or (
+            "unexpected_failure" in lowered
+            and ("confirmation email" in lowered or "sending" in lowered)
+        )
+    ):
+        # GoTrue returns 500 (sometimes surfaced/logged as 422) when SMTP cannot
+        # deliver — not invalid credentials.
+        code = "auth_email_delivery_failed"
+        logger.error(
+            "supabase_auth_email_delivery_failed",
+            provider_message=composite[:500],
+            provider_status=status,
+        )
+    elif (
         (status is not None and int(status) >= 500)
         or "internal server error" in lowered
         or "status:500" in lowered
+        or (status == 422 and "unexpected_failure" in lowered)
     ):
-        # Supabase Auth 5xx (often SMTP/email delivery misconfig) — not a bad password.
+        # Supabase Auth 5xx / unexpected 422 — not a bad password.
         code = "auth_provider_error"
         logger.error(
             "supabase_auth_provider_5xx",
@@ -226,6 +260,18 @@ class SupabaseAuthAdapter:
                         else Exception(str(err_obj))
                     )
                     raise _map_auth_error(mapped)
+                # Anti-enumeration: existing emails return 200 with empty
+                # identities instead of email_exists.
+                user_obj = getattr(response, "user", None)
+                identities = (
+                    getattr(user_obj, "identities", None) if user_obj else None
+                )
+                if user_obj is not None and not identities:
+                    raise AuthenticationError(
+                        "An account with this email already exists",
+                        code="email_already_registered",
+                        details={"source": "supabase", "signal": "empty_identities"},
+                    )
                 return _session_from_response(response, allow_empty_session=True)
             except AuthenticationError:
                 raise

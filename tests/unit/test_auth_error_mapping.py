@@ -53,6 +53,28 @@ def test_map_supabase_internal_500() -> None:
     assert err.code == "auth_provider_error"
 
 
+def test_map_confirmation_email_send_failure() -> None:
+    err = _map_auth_error(
+        _StubAuthError(
+            message="Error sending confirmation email",
+            status=500,
+            code="unexpected_failure",
+        )
+    )
+    assert err.code == "auth_email_delivery_failed"
+
+
+def test_map_confirmation_email_send_failure_422() -> None:
+    err = _map_auth_error(
+        _StubAuthError(
+            message="Error sending confirmation email",
+            status=422,
+            code="unexpected_failure",
+        )
+    )
+    assert err.code == "auth_email_delivery_failed"
+
+
 def test_public_messages_via_test_client() -> None:
     app = FastAPI()
     register_exception_handlers(app)
@@ -90,3 +112,7 @@ def test_public_messages_via_test_client() -> None:
     provider = client.get("/probe/auth_provider_error")
     assert provider.status_code == 503
     assert "temporarily unavailable" in provider.json()["error"]["message"].lower()
+
+    email_delivery = client.get("/probe/auth_email_delivery_failed")
+    assert email_delivery.status_code == 503
+    assert "confirmation email" in email_delivery.json()["error"]["message"].lower()
