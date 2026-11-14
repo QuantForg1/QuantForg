@@ -33,17 +33,24 @@ Write-Host "Verifying broker=$Broker env=$Env slot=$Slot (passwords never printe
 
 function Invoke-WorkerPython {
   param([Parameter(Mandatory = $true)][string[]]$ModuleArgs)
-  $venvPy = Join-Path $Root ".venv\Scripts\python.exe"
-  if (Test-Path $venvPy) {
-    & $venvPy @ModuleArgs
+  # Python logging to stderr must not trip $ErrorActionPreference=Stop.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $venvPy = Join-Path $Root ".venv\Scripts\python.exe"
+    if (Test-Path $venvPy) {
+      & $venvPy @ModuleArgs 2>&1 | ForEach-Object { "$_" }
+      return $LASTEXITCODE
+    }
+    if (Get-Command poetry -ErrorAction SilentlyContinue) {
+      & poetry run python @ModuleArgs 2>&1 | ForEach-Object { "$_" }
+      return $LASTEXITCODE
+    }
+    & python @ModuleArgs 2>&1 | ForEach-Object { "$_" }
     return $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prevEap
   }
-  if (Get-Command poetry -ErrorAction SilentlyContinue) {
-    & poetry run python @ModuleArgs
-    return $LASTEXITCODE
-  }
-  & python @ModuleArgs
-  return $LASTEXITCODE
 }
 
 $null = Invoke-WorkerPython -ModuleArgs @("-m", "services.mt5_worker_agent.main", "capacity")
