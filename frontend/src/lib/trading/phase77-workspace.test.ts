@@ -63,14 +63,9 @@ assert.match(broker, /Change account/);
 assert.match(broker, /Select a broker/);
 assert.match(broker, /MT5_BROKER_OPTIONS|mt5-broker-catalog/);
 assert.match(broker, /weltradeApi\.exposure/);
-assert.match(
-  broker,
-  /A gateway session may exist, but it is not your owned broker connection/,
-);
-assert.match(
-  broker,
-  /Use Connect MT5 Account to authenticate and attach ownership in one step/,
-);
+assert.match(broker, /ownershipBlockMessage/);
+assert.match(broker, /Search MT5 servers/);
+assert.match(broker, /Connect MT5 Account/);
 assert.match(broker, /Live trading/);
 assert.match(broker, /Password is never displayed/);
 assert.match(broker, /AES-256/);

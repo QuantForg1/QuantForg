@@ -272,16 +272,10 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 }
             else:
                 genuine_trade = bool(evidence_trade_allowed)
-                method = str(
-                    ev.get("verification_method") or "WINDOWS_MT5_VERIFY"
-                )
+                method = str(ev.get("verification_method") or "WINDOWS_MT5_VERIFY")
                 readiness = str(
                     ev.get("trading_readiness")
-                    or (
-                        "READY"
-                        if genuine_trade
-                        else "AUTH_OK_TRADE_NOT_ENABLED"
-                    )
+                    or ("READY" if genuine_trade else "AUTH_OK_TRADE_NOT_ENABLED")
                 )
                 public = _public_live_verification(
                     trade_connectable=True,
