@@ -134,11 +134,10 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
         code = "email_already_registered"
     elif "email not confirmed" in lowered or "email_not_confirmed" in lowered:
         code = "email_not_verified"
-    elif ("signup" in lowered or "sign up" in lowered) and (
-        "not allowed" in lowered or "disabled" in lowered
-    ):
-        code = "signup_disabled"
-    elif "signups not allowed" in lowered:
+    elif (
+        ("signup" in lowered or "sign up" in lowered)
+        and ("not allowed" in lowered or "disabled" in lowered)
+    ) or "signups not allowed" in lowered:
         code = "signup_disabled"
     elif any(
         phrase in lowered
@@ -151,8 +150,7 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
     ):
         code = "weak_password"
     elif (
-        "oauth" in lowered
-        and ("disabled" in lowered or "not enabled" in lowered)
+        "oauth" in lowered and ("disabled" in lowered or "not enabled" in lowered)
     ) or "provider is disabled" in lowered:
         code = "oauth_provider_unavailable"
     elif "identity" in lowered and "mismatch" in lowered:

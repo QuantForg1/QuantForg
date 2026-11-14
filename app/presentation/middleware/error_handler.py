@@ -121,7 +121,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         elif exc.code == "email_not_verified":
             http_status = status.HTTP_403_FORBIDDEN
             headers = None
-        elif exc.code in ("weak_password", "signup_disabled", "registration_incomplete"):
+        elif exc.code in (
+            "weak_password",
+            "signup_disabled",
+            "registration_incomplete",
+        ):
             http_status = status.HTTP_400_BAD_REQUEST
             headers = None
         else:

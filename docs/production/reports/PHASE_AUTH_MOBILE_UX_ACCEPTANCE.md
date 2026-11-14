@@ -211,7 +211,8 @@ Trading safety / OMS / risk checks unchanged.
 
 | Item | Value |
 |------|-------|
-| PR | *filled after `gh pr create`* |
+| PR | https://github.com/QuantForg1/QuantForg/pull/274 |
+| Commit | `9e4cd820` |
 | Merge commit | *pending* |
 
 ---
@@ -220,7 +221,7 @@ Trading safety / OMS / risk checks unchanged.
 
 | Surface | SHA |
 |---------|-----|
-| Frontend (Vercel) | *pending deploy* |
+| Frontend (Vercel) | **BLOCKED** — Vercel deployment rate limited (`upgradeToPro=build-rate-limit`); retry via normal workflow after window clears |
 | Backend (Railway) | Pre-change observed deployment `ee90fe44-4ada-40e7-9296-5e420cb1d604` — new SHA after merge |
 
 ---
