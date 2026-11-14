@@ -153,7 +153,9 @@ def _public_live_verification(
         "account_verified": True,
         "trading_readiness": trading_readiness,
         "verification_method": verification_method,
-        "trade_allowed": bool(trade_allowed) if trade_allowed is not None else trade_connectable,
+        "trade_allowed": (
+            bool(trade_allowed) if trade_allowed is not None else trade_connectable
+        ),
         "trading_enabled": bool(trade_connectable and trade_allowed),
         "notes": notes,
     }
@@ -166,10 +168,14 @@ def broker_registry_rows() -> list[dict[str, Any]]:
     for profile in sorted(MT5_ECOSYSTEM, key=lambda p: (p.priority, p.slug)):
         ev = evidence_for_broker(profile.slug) or {}
         ev_status = str(ev.get("connection_status") or "")
-        owner_trade_enabled = bool(ev.get("owner_trade_enabled")) or (
-            str(ev.get("verification_method") or "").upper()
-            == "OWNER_TRADE_ENABLEMENT"
-        ) or (profile.slug in _OWNER_AUTHORIZED_LIVE_TRADE)
+        owner_trade_enabled = (
+            bool(ev.get("owner_trade_enabled"))
+            or (
+                str(ev.get("verification_method") or "").upper()
+                == "OWNER_TRADE_ENABLEMENT"
+            )
+            or (profile.slug in _OWNER_AUTHORIZED_LIVE_TRADE)
+        )
 
         if profile.slug == "weltrade":
             public = {

@@ -88,7 +88,7 @@ def test_catalogue_exness_hfm_owner_authorized_connectable(
     monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(path))
     rows = {r["slug"]: r for r in broker_registry_rows()}
     assert rows["weltrade"]["connectable"] is True
-    # Owner-authorized Production enablement — connectable even without local evidence file.
+    # Owner-authorized Production enablement without local evidence.
     assert rows["exness"]["connectable"] is True
     assert rows["exness"]["trade_allowed"] is True
     assert rows["exness"]["trading_enabled"] is True

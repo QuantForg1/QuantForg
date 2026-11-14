@@ -261,7 +261,8 @@ def authenticate_and_verify(
         actual_login = int(getattr(info, "login", 0) or 0) if info is not None else 0
         if info is None or actual_login != int(login):
             logger.warning(
-                "mt5_post_initialize_login_required expected_suffix=***%s actual_suffix=***%s",
+                "mt5_post_initialize_login_required "
+                "expected_suffix=***%s actual_suffix=***%s",
                 str(int(login))[-4:],
                 str(actual_login)[-4:] if actual_login else "none",
             )
