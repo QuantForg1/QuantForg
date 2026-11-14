@@ -1,10 +1,11 @@
 # Phase 4.1 — Risk Center Production Acceptance Closure
 
-**Status:** IMPLEMENTATION COMPLETE — FINAL ACCEPTANCE PARTIALLY BLOCKED  
+**Status:** IMPLEMENTATION COMPLETE — P7 persistence VERIFIED on Owner identity (2026-11-14); ordinary-customer Owner denial still BLOCKED  
 **Closed (implementation):** 2026-11-10  
 **Baseline SHA (Risk Center):** `d1c2bce3` (PR #224)  
 **Frontend Production (at closure):** `e9df4614` / later `26a1438f` (Live Market follow-ups #225–#226)  
 **Railway API (at closure probes):** `d1c2bce3` Online  
+**Follow-up verification (2026-11-14):** Owner prefs still `10.0000` / `user_edit` on Railway `1e75cdf3`; frontend Production `55b8513d`  
 
 ## What shipped (Phase 4 / 4.1)
 
@@ -29,14 +30,14 @@
 | Multi-account LIVE flags | VERIFIED — submit/dispatch false |
 | Weltrade LIVE | VERIFIED — unchanged; no orders submitted |
 
-## Blocked production acceptance (credentials)
+## Production acceptance (credentials / identity)
 
-| Test | Status | Missing prerequisite |
+| Test | Status | Evidence |
 |---|---|---|
-| P7 logout → fresh login → preference still 10% | **BLOCKED** | Secure P7 password and/or `QUANTFORG_CUSTOMER_TOKEN` for re-auth. Do not Sign out without these. |
-| Ordinary non-owner Owner Policy denial (403) | **BLOCKED** | Separate ordinary (non-owner) customer session / `QUANTFORG_ORDINARY_CUSTOMER_TOKEN`. Current verified session was `role=owner`. |
-
-These two tests must not be marked PASS without live evidence. Automated unit coverage for Owner-role gates and preference isolation remains in `tests/unit/`.
+| P7 preference still 10% on Owner identity | **VERIFIED (2026-11-14)** | Owner `7d31c808-…` / `p7provider@gmail.com`: `/risk/preferences` → `planned_risk_pct=10.0000`, `persisted=true`, `source=user_edit`, `updated_at=2026-11-10`. See `docs/production/reports/phase2_ui/PHASE2_RELEASE_AND_P7_PREF_RESOLUTION.md`. |
+| Apparent “P7 shows 20% default_copy” during Customer suite | **NOT A REGRESSION** | Different user `8ae4b619-…` (`role=trader`) correctly received unpersisted `default_copy`; historical 10% row is Owner-scoped (`user_prefix=7d31c808` in Phase 5.1 probe). |
+| Explicit logout → fresh login persistence dance | **NOT RE-RUN** | Avoided Sign-out without disposable re-auth material; cross-session persistence already evidenced by unchanged DB/API row since 2026-11-10. |
+| Ordinary non-owner Owner Policy denial (403) | **BLOCKED** | Still needs a dedicated ordinary (non-owner) customer token for a live 403 probe. Automated Owner-gate unit tests remain in `tests/unit/`. |
 
 ## Safety preserved
 
