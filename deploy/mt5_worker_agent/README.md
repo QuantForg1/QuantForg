@@ -48,3 +48,17 @@ active terminal slot; start with 4–8 slots/host and measure before scaling.
 ## Local dry-run (no real MT5)
 
 Use `MockMt5WorkerAgent` in unit tests. That mock is **not** a real session.
+
+## Staging vs Production agent isolation
+
+| Env file | Script | Target |
+| --- | --- | --- |
+| `local.env` (from `local.env.example`) | `start_local_supervisor.ps1` | Staging Railway |
+| `local.production.env` (from `local.production.env.example`) | `start_production_supervisor.ps1` | Production Railway |
+
+Keep both files on the host. Never repoint Staging `local.env` at Production.
+`start_production_supervisor.ps1` refuses to start unless the API base is Production
+and `QF_ALLOW_WORKER_ON_LIVE_TERMINAL` remains false.
+
+`dispatch_ready` requires fresh Production heartbeats **and** verified DEMO login/server
+on a portable slot — never claim readiness from heartbeats alone.

@@ -17,7 +17,9 @@ import {
   RESEARCH_NOT_AUTHORIZATION,
   RESEARCH_OPPORTUNITY,
   RESEARCH_SIGNAL,
+  connectionLayerReasonMessage,
   ownershipBlockMessage,
+  resolveBrokerConnectionLayers,
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
@@ -137,12 +139,48 @@ import {
     catalogue_unavailable: false,
     ownership: "owned",
     owned: true,
+    broker_authenticated: true,
+    balance: 1000,
   });
   assert.equal(view.state, "CONNECTED");
   assert.equal(view.label, "CONNECTED");
   assert.equal(view.liveBrokerCatalogue, true);
   assert.equal(view.maskedLogin, "16••06");
   assert.equal(view.ownership, "owned");
+}
+
+{
+  const layers = resolveBrokerConnectionLayers({
+    connection_layers: {
+      linked: true,
+      worker_assigned: null,
+      terminal_started: true,
+      authenticated: true,
+      market_data: false,
+      synced: true,
+      dispatch_ready: false,
+      trading_permitted: false,
+      not_ready_reasons: ["market_data_unavailable", "trading_permission_disabled"],
+      path: "singleton_gateway",
+      summary: "authenticated",
+    },
+  });
+  assert.equal(layers.authenticated, true);
+  assert.equal(layers.tradingPermitted, false);
+  assert.equal(layers.dispatchReady, false);
+  assert.equal(layers.summary, "authenticated");
+  assert.ok(layers.notReadyReasons.includes("trading_permission_disabled"));
+  assert.equal(
+    connectionLayerReasonMessage("trading_permission_disabled"),
+    "Trading permission disabled.",
+  );
+  assert.equal(
+    traderFacingErrorMessage({ code: "GATEWAY_UNAVAILABLE" }).includes("offline"),
+    false,
+  );
+  assert.ok(
+    traderFacingErrorMessage({ code: "GATEWAY_UNAVAILABLE" }).includes("gateway"),
+  );
 }
 
 {

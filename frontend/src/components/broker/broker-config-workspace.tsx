@@ -39,7 +39,9 @@ import { asList, asRecord, str } from "@/lib/desk";
 import {
   MARKET_UNIVERSE_QUERY_KEY,
   SIGNAL_CENTER_QUERY_KEY,
+  connectionLayerReasonMessage,
   ownershipBlockMessage,
+  resolveBrokerConnectionLayers,
   resolveConnectionPresentation,
   researchDeskLiveTradingStatus,
   traderFacingErrorMessage,
@@ -536,11 +538,16 @@ export function BrokerConfigWorkspace() {
   );
 
   const tradingSnapEarly = asRecord(tradingSessionQ.data);
+  const layersEarly = resolveBrokerConnectionLayers(tradingSnapEarly);
   const connectionEarly = resolveConnectionPresentation(tradingSnapEarly, {
     connecting: false,
   });
+  // Connected badge = authenticated ownership, not merely a saved account row.
   const connected =
-    connectionEarly.connected && connectionEarly.ownership === "owned";
+    layersEarly.authenticated &&
+    connectionEarly.connected &&
+    connectionEarly.ownership === "owned";
+  const accountLinked = layersEarly.linked;
   const gatewayOnline = Boolean(
     health.gateway_online || health.gateway_reachable,
   );
@@ -737,19 +744,26 @@ export function BrokerConfigWorkspace() {
     mutationFn: weltradeApi.connect,
     onMutate: () => {
       clearPasswordField();
-      setProgress("Connecting…");
+      setProgress("Validating → Authenticating…");
     },
     onSuccess: async (data) => {
       clearPasswordField();
+      setProgress("Synchronizing…");
       const body = asRecord(asRecord(data).dashboard);
       if (Object.keys(body).length > 0) {
         qc.setQueryData(["weltrade-dashboard"], body);
       }
-      toast.success("Connected");
-      setChangingAccount(false);
       await qc.invalidateQueries({ queryKey: ["trading-session"] });
       await refresh();
       await refreshOwnedCatalogue();
+      const snap = asRecord(qc.getQueryData(["trading-session"]));
+      const post = resolveBrokerConnectionLayers(snap);
+      if (post.authenticated) {
+        toast.success("Connected");
+      } else {
+        toast.message("Account linked — authentication not confirmed yet");
+      }
+      setChangingAccount(false);
       setProgress(null);
     },
     onError: (e) => {
@@ -804,14 +818,21 @@ export function BrokerConfigWorkspace() {
       });
     },
     onMutate: () => {
-      setProgress("Connecting…");
+      setProgress("Validating → Authenticating…");
     },
     onSuccess: async () => {
       clearPasswordField();
-      toast.success("Connected");
-      setChangingAccount(false);
+      setProgress("Synchronizing…");
       await refresh();
       await refreshOwnedCatalogue();
+      const snap = asRecord(qc.getQueryData(["trading-session"]));
+      const post = resolveBrokerConnectionLayers(snap);
+      if (post.authenticated) {
+        toast.success("Connected");
+      } else {
+        toast.message("Account linked — authentication not confirmed yet");
+      }
+      setChangingAccount(false);
       setProgress(null);
     },
     onError: (e) => {
@@ -939,7 +960,10 @@ export function BrokerConfigWorkspace() {
     tradingSnap.ux_state,
     connected ? "CONNECTED" : "NO_BROKER",
   );
-  const showConnectForm = !connected || uxState === "SESSION_MISMATCH" || changingAccount;
+  const showConnectForm =
+    !(connected || accountLinked) ||
+    uxState === "SESSION_MISMATCH" ||
+    changingAccount;
   const exposure = asRecord(exposureQ.data);
   const exposureOpen = Number(exposure.open_positions ?? 0);
   const exposurePending = Number(exposure.pending_orders ?? 0);
@@ -999,12 +1023,41 @@ export function BrokerConfigWorkspace() {
       : "—";
   const currencyDisplay = str(tradingSnap.currency, "USD");
   const loginDisplay = connectionView.maskedLogin || login || "—";
-  const tradingEnabled = liveTradingHint.label.toLowerCase().includes("enabled");
+  const layers = resolveBrokerConnectionLayers(tradingSnap);
+  const tradingEnabled = layers.tradingPermitted;
+  const connectionActive =
+    layers.authenticated && layers.synced && (gatewayOnline || gatewayMt5Attached);
+  const dataSyncLabel = layers.synced
+    ? "Synchronized"
+    : layers.authenticated
+      ? "Sync incomplete"
+      : accountLinked
+        ? "Idle"
+        : "—";
   const lastSyncDisplay = connectionView.lastVerified
     ? new Date(connectionView.lastVerified).toLocaleString()
-    : connected
-      ? "Just now"
-      : "—";
+    : "—";
+  const blockedReasons = layers.notReadyReasons
+    .map((r) => connectionLayerReasonMessage(r))
+    .filter(Boolean);
+  const statusHeadline = layers.authenticated
+    ? "MT5 Account Connected"
+    : accountLinked
+      ? "MT5 Account Linked"
+      : "MT5 Account Not Connected";
+  const statusSubline = layers.authenticated
+    ? layers.tradingPermitted
+      ? "Authenticated and trading permitted."
+      : "Authenticated. Trading permission is separate from connection."
+    : accountLinked
+      ? "Credentials saved, but broker authentication is not confirmed."
+      : "Connect an MT5 account to QuantForg.";
+  const statusBadgeLabel = layers.authenticated
+    ? "Connected"
+    : accountLinked
+      ? "Linked"
+      : "Offline";
+  const statusBadgeOk = layers.authenticated;
 
   const onBrokerPicked = (broker: Mt5BrokerOption) => {
     setBrokerSlug(broker.slug);
@@ -1052,22 +1105,45 @@ export function BrokerConfigWorkspace() {
           </p>
         </header>
 
-        {connected && !showConnectForm ? (
+        {(connected || accountLinked) && !showConnectForm ? (
           <div className="space-y-4">
             <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-4 sm:px-5">
-              <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--success)_40%,var(--border))] bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-2.5 py-1 text-[11px] font-semibold text-[var(--success)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" aria-hidden />
-                Connected
+              <span
+                className={cn(
+                  "absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                  statusBadgeOk
+                    ? "border-[color-mix(in_srgb,var(--success)_40%,var(--border))] bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-[var(--success)]"
+                    : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] text-[var(--fg-muted)]",
+                )}
+              >
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    statusBadgeOk ? "bg-[var(--success)]" : "bg-[var(--fg-subtle)]",
+                  )}
+                  aria-hidden
+                />
+                {statusBadgeLabel}
               </span>
               <div className="flex items-start gap-3 pr-24">
-                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-[var(--success)]">
+                <span
+                  className={cn(
+                    "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+                    statusBadgeOk
+                      ? "border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-[var(--success)]"
+                      : "border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] text-[var(--fg-muted)]",
+                  )}
+                >
                   <CheckCircle2 className="h-5 w-5" aria-hidden />
                 </span>
                 <div>
-                  <p className="text-base font-semibold text-[var(--fg)]">MT5 Account Connected</p>
-                  <p className="mt-0.5 text-sm text-[var(--fg-muted)]">
-                    Your trading account is now linked to QuantForg.
-                  </p>
+                  <p className="text-base font-semibold text-[var(--fg)]">{statusHeadline}</p>
+                  <p className="mt-0.5 text-sm text-[var(--fg-muted)]">{statusSubline}</p>
+                  {blockedReasons.length > 0 ? (
+                    <p className="mt-1.5 text-xs text-[var(--fg-muted)]">
+                      {blockedReasons.join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1126,7 +1202,11 @@ export function BrokerConfigWorkspace() {
                   },
                   {
                     label: "Ownership",
-                    value: connected ? "Owned session" : "Not connected",
+                    value: layers.authenticated
+                      ? "Owned session"
+                      : accountLinked
+                        ? "Linked · verify auth"
+                        : "Not connected",
                     icon: <ShieldCheck className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
                   },
                 ] as const
@@ -1151,8 +1231,14 @@ export function BrokerConfigWorkspace() {
                 [
                   {
                     label: "Connection",
-                    value: gatewayOnline || connected ? "Active" : "Offline",
-                    ok: connected && gatewayOnline,
+                    value: connectionActive
+                      ? "Active"
+                      : layers.authenticated
+                        ? "Degraded"
+                        : accountLinked
+                          ? "Linked"
+                          : "Offline",
+                    ok: connectionActive,
                   },
                   {
                     label: "Trading Permission",
@@ -1161,8 +1247,8 @@ export function BrokerConfigWorkspace() {
                   },
                   {
                     label: "Data Sync",
-                    value: connected ? "Real-time" : "Idle",
-                    ok: connected,
+                    value: dataSyncLabel,
+                    ok: layers.synced,
                   },
                 ] as const
               ).map((row) => (
@@ -1418,7 +1504,7 @@ export function BrokerConfigWorkspace() {
           </div>
         )}
 
-        {connected && !showConnectForm ? (
+        {(connected || accountLinked) && !showConnectForm ? (
           <p className="mt-4 text-center text-[11px] text-[var(--fg-subtle)]">
             <button
               type="button"
