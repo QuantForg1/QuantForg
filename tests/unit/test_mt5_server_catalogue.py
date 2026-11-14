@@ -122,9 +122,9 @@ def test_all_eight_brokers_have_selectable_genuine_servers() -> None:
         assert len(names) == len({n.lower() for n in names}), f"{slug}: duplicates"
         for name in names:
             matched = match_broker_for_server(name)
-            assert matched is not None and matched.slug == slug, (
-                f"{slug}: server {name!r} matched {matched}"
-            )
+            assert (
+                matched is not None and matched.slug == slug
+            ), f"{slug}: server {name!r} matched {matched}"
         hint_set = {n.lower() for n in names}
         for hint in profile.server_hints:
             assert hint.lower() in hint_set, f"{slug}: missing hint {hint!r}"
