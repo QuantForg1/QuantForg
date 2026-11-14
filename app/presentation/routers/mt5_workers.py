@@ -235,11 +235,35 @@ async def dispatch_claim(
     )
     if job is None:
         return {"ok": True, "job": None, "live_submit_allowed": False}
+    from app.application.services.multi_account_oms_authorization import (
+        preview_oms_authorization,
+    )
+    from app.domain.multi_account.feature_gates import (
+        multi_account_live_submit_allowed,
+    )
+
+    public_job = job.to_public_dict()
+    payload = public_job.get("payload") or {}
+    worker_status = worker.public_status()
+    oms_preview = preview_oms_authorization(
+        user_id=worker.user_id,
+        broker_account_id=worker.broker_account_id,
+        symbol=payload.get("symbol") or payload.get("broker_symbol"),
+        side=payload.get("side") or payload.get("action"),
+        volume=payload.get("volume") or payload.get("lot") or payload.get("lots"),
+        stop_loss=payload.get("stop_loss") or payload.get("sl"),
+        worker_dispatch_ready=bool(worker_status.get("dispatch_ready")),
+        ownership_verified=True,
+        account_environment=str(payload.get("account_environment") or ""),
+    )
     return {
         "ok": True,
-        "job": job.to_public_dict(),
+        "job": public_job,
         "live_submit_allowed": False,
+        "live_submit_flag": multi_account_live_submit_allowed(),
         "delivery_suppressed": True,
+        "oms_authorization": oms_preview.to_public_dict(),
+        "order_send": False,
     }
 
 
