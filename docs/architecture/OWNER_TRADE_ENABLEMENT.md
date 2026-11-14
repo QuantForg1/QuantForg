@@ -1,43 +1,34 @@
-# Owner trade enablement — display vs MT5 permission
+# Owner trade enablement — eight LIVE brokers (2026-11-14)
 
-## Authorization (display)
+## Authorization
 
-Product-owner instruction: all eight LIVE brokers may show **Verified** and
-**connectable=true** in Broker Accounts Production after authenticated login
-evidence (or owner attestation of the correct LIVE login/server).
+Product-owner order (2026-11-14): enable **Global LIVE Execution**, set
+`MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED=true`, and mark all eight LIVE brokers
+**Verified** with **Trading Permission = YES** / `trade_allowed=true` for
+Broker Accounts, registry, and Admin.
 
-| Broker | Display | Connectable | MT5 `trade_allowed` |
+| Broker | Display | Connectable | Trading permission |
 |---|---|---|---|
-| Weltrade | Verified | true | true (gateway) |
-| XM | Verified | true | true (portable verify) |
-| Exness | Verified | true | **false** until broker activates trading |
-| HFM | Verified | true | **false** until broker activates trading |
-| JustMarkets | Verified | true | **false** until broker activates trading |
-| IC Markets | Verified | true | true (portable verify) |
-| Pepperstone | Verified | true | true (portable verify) |
-| FP Markets | Verified | true | true (portable verify) |
+| Weltrade | Verified | true | YES |
+| XM | Verified | true | YES |
+| Exness | Verified | true | YES |
+| HFM | Verified | true | YES |
+| JustMarkets | Verified | true | YES |
+| IC Markets | Verified | true | YES |
+| Pepperstone | Verified | true | YES |
+| FP Markets | Verified | true | YES |
 
-## Hard rule
+## Safety (still enforced)
 
-Never set `trade_allowed=true` / `trading_enabled=true` in catalogue, evidence,
-fixtures, or UI as a substitute for MetaTrader 5 `account_info.trade_allowed`.
+- `FORCE_FIRST_TRADE=false` (no automatic first trade)
+- `QF_ALLOW_WORKER_ON_LIVE_TERMINAL=false` (Weltrade Program Files singleton)
+- Emergency / kill-switch paths remain operational
+- `MULTI_ACCOUNT_DISPATCH_ENABLED=true` is required together with live submit
+- Setting the submit flag does **not** by itself place orders
 
-`OWNER_TRADE_ENABLEMENT` authorizes **Verified + connectable** display only.
-Re-run portable LIVE verify after funding/activation; ingest genuine
-`trade_allowed` from MT5 before treating a broker as trading-ready.
+## Note
 
-## Implementation
-
-- Catalogue: `_OWNER_AUTHORIZED_LIVE_CONNECTABLE` for Verified/connectable.
-- Catalogue: `_AUTH_OK_TRADE_NOT_ENABLED` for Exness / HFM / JustMarkets until
-  `WINDOWS_MT5_VERIFY` reports `trade_allowed=true`.
-- Catalogue: `_GENUINE_MT5_TRADE_ALLOWED` for XM / IC / Pepperstone / FP Markets.
-- Frontend static registry may mark all eight `live_verified` / `connectable`
-  for customer discovery; runtime permission gates remain separate.
-
-## Safety
-
-- `FORCE_FIRST_TRADE` remains **false**.
-- `QF_ALLOW_WORKER_ON_LIVE_TERMINAL` remains **false** (Weltrade Program Files singleton).
-- Global `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED` stays **false** until all eight
-  brokers have genuine MT5 `trade_allowed=true` plus risk/kill-switch gates.
+Prior portable verifies showed Exness / HFM / JustMarkets MT5
+`account_info.trade_allowed=false` with zero balance. Owner explicitly
+overrode the fleet gate for Production enablement. Broker-side rejects may
+still occur until those accounts are funded/activated at the broker.

@@ -87,70 +87,62 @@ _EVIDENCE_VERIFIED_LIVE: dict[str, tuple[dict[str, Any], ...]] = {
             "trade_allowed": True,
         },
     ),
-    # Authenticated LIVE sessions (Windows portable verify 2026-11-14).
-    # trade_allowed remains False until MT5 account_info.trade_allowed is true —
-    # never manufacture trading permission from owner enablement alone.
+    # Owner-ordered Production trading enablement (2026-11-14): mark confirmed
+    # trading permission YES for fleet ops. MT5 account_info may still report
+    # trade_allowed=false on unfunded accounts — OMS/kill-switch remain active.
     "justmarkets": (
         {
             "name": "JustMarkets-Live7",
             "environment": "live",
-            "source": "windows_mt5_live_verify",
-            "verified_at": "2026-11-14T08:39:00+00:00",
+            "source": "owner_trade_enablement",
+            "verified_at": "2026-11-14T13:40:00+00:00",
             "evidence_classification": "CONFIRMED",
-            "verification_method": "WINDOWS_MT5_VERIFY",
-            "trading_readiness": "AUTH_OK_TRADE_NOT_ENABLED",
-            "trade_allowed": False,
+            "verification_method": "OWNER_TRADE_ENABLEMENT",
+            "trading_readiness": "READY",
+            "trade_allowed": True,
         },
     ),
     "exness": (
         {
             "name": "Exness-MT5Real10",
             "environment": "live",
-            "source": "windows_mt5_live_verify",
-            "verified_at": "2026-11-14T08:37:00+00:00",
+            "source": "owner_trade_enablement",
+            "verified_at": "2026-11-14T13:40:00+00:00",
             "evidence_classification": "CONFIRMED",
-            "verification_method": "WINDOWS_MT5_VERIFY",
-            "trading_readiness": "AUTH_OK_TRADE_NOT_ENABLED",
-            "trade_allowed": False,
+            "verification_method": "OWNER_TRADE_ENABLEMENT",
+            "trading_readiness": "READY",
+            "trade_allowed": True,
         },
     ),
     "hfm": (
         {
             "name": "HFMarketsGlobal-Live20",
             "environment": "live",
-            "source": "windows_mt5_live_verify",
-            "verified_at": "2026-11-14T08:38:00+00:00",
+            "source": "owner_trade_enablement",
+            "verified_at": "2026-11-14T13:40:00+00:00",
             "evidence_classification": "CONFIRMED",
-            "verification_method": "WINDOWS_MT5_VERIFY",
-            "trading_readiness": "AUTH_OK_TRADE_NOT_ENABLED",
-            "trade_allowed": False,
+            "verification_method": "OWNER_TRADE_ENABLEMENT",
+            "trading_readiness": "READY",
+            "trade_allowed": True,
         },
     ),
 }
 
-# Brokers with genuine MT5 trade_allowed=true evidence (portable LIVE verify).
+# Brokers with portable MT5 trade_allowed=true evidence and/or owner LIVE trade auth.
 _GENUINE_MT5_TRADE_ALLOWED: frozenset[str] = frozenset(
     {
         "xm",
+        "exness",
+        "hfm",
+        "justmarkets",
         "ic-markets",
         "pepperstone",
         "fp-markets",
     }
 )
 
-# Authenticated LIVE (correct login/server) but MT5 trade_allowed=false —
-# typically unfunded / broker activation pending. Connectable + Verified UI OK;
-# trading_enabled stays false until MT5 reports trade_allowed.
-_AUTH_OK_TRADE_NOT_ENABLED: frozenset[str] = frozenset(
-    {
-        "exness",
-        "hfm",
-        "justmarkets",
-    }
-)
-
-# Product-owner authorized LIVE connectable / Verified display set.
-_OWNER_AUTHORIZED_LIVE_CONNECTABLE: frozenset[str] = frozenset(
+# Product-owner authorized LIVE connectable + trading-enabled set (2026-11-14 order).
+_OWNER_AUTHORIZED_LIVE_TRADE: frozenset[str] = frozenset(
     {
         "xm",
         "exness",
@@ -217,30 +209,20 @@ def broker_registry_rows() -> list[dict[str, Any]]:
     for profile in sorted(MT5_ECOSYSTEM, key=lambda p: (p.priority, p.slug)):
         ev = evidence_for_broker(profile.slug) or {}
         ev_status = str(ev.get("connection_status") or "")
-        owner_connectable = (
+        owner_trade_enabled = (
             bool(ev.get("owner_trade_enabled"))
             or (
                 str(ev.get("verification_method") or "").upper()
                 == "OWNER_TRADE_ENABLEMENT"
             )
-            or (profile.slug in _OWNER_AUTHORIZED_LIVE_CONNECTABLE)
+            or (profile.slug in _OWNER_AUTHORIZED_LIVE_TRADE)
         )
-        # Prefer durable MT5 evidence over owner display flags for permission.
-        # Never treat OWNER_TRADE_ENABLEMENT as a substitute for MT5 trade_allowed.
         evidence_trade_allowed = ev.get("trade_allowed")
-        method_upper = str(ev.get("verification_method") or "").upper()
-        if profile.slug in _AUTH_OK_TRADE_NOT_ENABLED:
-            if (
-                method_upper in {"WINDOWS_MT5_VERIFY", "WINDOWS_MT5_LIVE_VERIFY"}
-                and evidence_trade_allowed is True
-            ):
-                pass  # genuine re-verify after funding/activation
-            else:
-                evidence_trade_allowed = False
-        elif (
-            evidence_trade_allowed is None
-            and profile.slug in _GENUINE_MT5_TRADE_ALLOWED
+        if evidence_trade_allowed is None and (
+            profile.slug in _GENUINE_MT5_TRADE_ALLOWED or owner_trade_enabled
         ):
+            evidence_trade_allowed = True
+        if owner_trade_enabled:
             evidence_trade_allowed = True
 
         if profile.slug == "weltrade":
@@ -257,7 +239,7 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                 "trading_enabled": True,
                 "notes": "Production Weltrade path via Windows MT5 Gateway.",
             }
-        elif profile.slug in evidence_connectable or owner_connectable:
+        elif profile.slug in evidence_connectable or owner_trade_enabled:
             raw = ev_status or "live_verified"
             if raw == "demo_verified" and profile.slug in evidence_connectable:
                 public = {
@@ -279,28 +261,24 @@ def broker_registry_rows() -> list[dict[str, Any]]:
                     ),
                 }
             else:
-                genuine_trade = bool(evidence_trade_allowed)
-                method = str(ev.get("verification_method") or "WINDOWS_MT5_VERIFY")
-                readiness = str(
-                    ev.get("trading_readiness")
-                    or ("READY" if genuine_trade else "AUTH_OK_TRADE_NOT_ENABLED")
+                method = str(
+                    ev.get("verification_method")
+                    or (
+                        "OWNER_TRADE_ENABLEMENT"
+                        if owner_trade_enabled
+                        else "WINDOWS_MT5_VERIFY"
+                    )
                 )
                 public = _public_live_verification(
                     trade_connectable=True,
-                    trading_readiness=readiness,
+                    trading_readiness="READY",
                     verification_method=method,
-                    trade_allowed=genuine_trade,
+                    trade_allowed=True,
                     notes=(
-                        "LIVE broker is Verified and connectable. "
-                        "Trading permission reflects MT5 account_info.trade_allowed "
-                        "(never manufactured). Global LIVE submit kill-switches "
-                        "remain separate host configuration."
-                        if genuine_trade
-                        else (
-                            "LIVE login/server authenticated; MT5 reports "
-                            "trade_allowed=false (fund/activate at broker, then "
-                            "re-verify). Global LIVE submit remains gated."
-                        )
+                        "Owner-authorized LIVE trading permission YES for Broker "
+                        "Accounts / registry. Global LIVE submit uses "
+                        "MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED; emergency kill-switch "
+                        "and FORCE_FIRST_TRADE=false remain in force."
                     ),
                 )
         else:
