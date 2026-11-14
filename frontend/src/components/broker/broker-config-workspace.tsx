@@ -462,17 +462,27 @@ function ServerSelect({
               />
             </label>
           </div>
-          <ul className="max-h-[min(18rem,45vh)] overflow-y-auto py-1">
+          <ul className="max-h-[min(22rem,50vh)] overflow-y-auto overscroll-contain py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-4 text-center text-xs text-[var(--fg-subtle)]">
+                {loading
+                  ? "Loading MT5 servers…"
+                  : "No matching servers. Paste the exact portal name below."}
+              </li>
+            ) : null}
             {filtered.map((row, index) => {
               const active = row.name === value;
               const focused = index === activeIndex;
               const confirmed = Boolean(row.confirmed || row.verified_at);
               const envLabel =
                 row.environment === "demo"
-                  ? "Demo"
+                  ? "DEMO"
                   : row.environment === "live"
-                    ? "Live"
-                    : "Confirm in MT5";
+                    ? "LIVE"
+                    : "Confirm";
+              const evidence =
+                row.evidence_classification ||
+                (confirmed ? "CONFIRMED" : "CANDIDATE");
               return (
                 <li key={row.name}>
                   <button
@@ -493,9 +503,11 @@ function ServerSelect({
                       </span>
                       <span className="block truncate text-[11px] text-[var(--fg-subtle)]">
                         {brokerName || "MT5"} · {envLabel}
-                        {row.evidence_classification
-                          ? ` · ${row.evidence_classification.replace(/_/g, " ")}`
-                          : ""}
+                        {evidence === "CONFIRMED"
+                          ? " · Confirmed"
+                          : evidence === "DOCUMENTED"
+                            ? " · Documented"
+                            : " · Candidate"}
                       </span>
                     </span>
                     <EnvBadge environment={row.environment} />
@@ -509,13 +521,6 @@ function ServerSelect({
                 </li>
               );
             })}
-            {!filtered.length ? (
-              <li className="px-3 py-4 text-center text-sm text-[var(--fg-muted)]">
-                {loading
-                  ? "Loading servers…"
-                  : "No catalogue match — enter the exact portal server below."}
-              </li>
-            ) : null}
           </ul>
         </div>
       ) : null}
@@ -1311,13 +1316,9 @@ export function BrokerConfigWorkspace() {
               </p>
             ) : null}
 
-            {!connected && gatewayMt5Attached ? (
-              <p className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_35%,transparent)] bg-[var(--warning-soft)] px-3 py-2 text-xs text-[var(--warning)]">
-                A gateway session may exist, but it is not your owned broker connection.
-                Use Connect MT5 Account to authenticate and attach ownership in one step.
-                {ownershipBlockMessage(tradingSnap.ownership_block_reason)
-                  ? ` ${ownershipBlockMessage(tradingSnap.ownership_block_reason)}`
-                  : ""}
+            {!connected && gatewayMt5Attached && ownershipBlockMessage(tradingSnap.ownership_block_reason) ? (
+              <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2 text-xs text-[var(--fg-muted)]">
+                {ownershipBlockMessage(tradingSnap.ownership_block_reason)}
               </p>
             ) : null}
 
@@ -1331,9 +1332,8 @@ export function BrokerConfigWorkspace() {
 
             {serversQ.isSuccess && selectedBroker && !serverRows.some((r) => r.confirmed) ? (
               <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--fg-muted)]">
-                No confirmed LIVE servers for {selectedBroker.name} yet. Choose a documented
-                candidate or type the exact server from your MT5 terminal / client portal. Shard
-                numbers are never invented.
+                Search MT5 servers for {selectedBroker.name}, or paste the exact name from your
+                terminal / client portal. Candidates are discovery aids — not invented shards.
               </p>
             ) : null}
 
@@ -1521,10 +1521,10 @@ export function BrokerConfigWorkspace() {
               </div>
             ) : null}
 
-            {gatewayMt5Attached ? (
-              <p className="text-sm text-[var(--fg-muted)]">
+            {gatewayMt5Attached && isOperator ? (
+              <p className="text-xs text-[var(--fg-subtle)]">
                 {exposureQ.isError
-                  ? "Open positions could not be read. The account will not be switched until exposure is verified."
+                  ? "Gateway exposure probe unavailable — operator terminal switch still requires a successful read before leave-confirm."
                   : exposureQ.isLoading
                     ? "Reading open positions and pending orders…"
                     : exposureNeedsConfirm
@@ -1533,7 +1533,7 @@ export function BrokerConfigWorkspace() {
               </p>
             ) : null}
 
-            {gatewayMt5Attached && exposureNeedsConfirm ? (
+            {gatewayMt5Attached && isOperator && exposureNeedsConfirm ? (
               <label className="flex items-start gap-2 text-sm text-[var(--fg-muted)]">
                 <input
                   type="checkbox"

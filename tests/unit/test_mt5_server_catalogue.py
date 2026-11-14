@@ -28,17 +28,24 @@ def test_eight_live_brokers_owner_production_connectable(monkeypatch, tmp_path) 
         "fp-markets",
     ):
         assert by_slug[slug]["connectable"] is True
-        assert by_slug[slug]["trade_allowed"] is True
-        assert by_slug[slug]["trading_enabled"] is True
         assert by_slug[slug]["display_label"] == "Verified"
         assert by_slug[slug]["verification_status"] == "VERIFIED_LIVE"
+    # Genuine MT5 trade_allowed evidence (portable LIVE verify).
+    for slug in ("xm", "ic-markets", "pepperstone", "fp-markets"):
+        assert by_slug[slug]["trade_allowed"] is True
+        assert by_slug[slug]["trading_enabled"] is True
+    # Auth OK but MT5 trade_allowed=false — never manufacture permission.
+    for slug in ("exness", "hfm", "justmarkets"):
+        assert by_slug[slug]["trade_allowed"] is False
+        assert by_slug[slug]["trading_enabled"] is False
+        assert by_slug[slug]["trading_readiness"] == "AUTH_OK_TRADE_NOT_ENABLED"
 
 
 def test_unverified_brokers_have_no_invented_servers() -> None:
-    # Exness / HFM / JustMarkets: owner-authorized LIVE servers (trading-enabled).
+    # Exness / HFM / JustMarkets: authenticated LIVE servers; trade_allowed false.
     hfm = verified_servers_for_broker("hfm")
     assert any(r["name"] == "HFMarketsGlobal-Live20" and r["confirmed"] for r in hfm)
-    assert all(r.get("trade_allowed") is True for r in hfm)
+    assert all(r.get("trade_allowed") is False for r in hfm)
     # FP Markets / IC Markets: CONFIRMED from Windows MT5 portable auth evidence.
     fp = verified_servers_for_broker("fp-markets")
     assert any(r["name"] == "FPMarketsSC-Live" and r["confirmed"] for r in fp)
@@ -49,12 +56,13 @@ def test_unverified_brokers_have_no_invented_servers() -> None:
     assert jm[0]["name"] == "JustMarkets-Live7"
     assert jm[0]["evidence_classification"] == "CONFIRMED"
     assert jm[0]["confirmed"] is True
-    assert jm[0].get("trading_readiness") == "READY"
+    assert jm[0].get("trading_readiness") == "AUTH_OK_TRADE_NOT_ENABLED"
+    assert jm[0].get("trade_allowed") is False
     ex = verified_servers_for_broker("exness")
     assert len(ex) == 1
     assert ex[0]["name"] == "Exness-MT5Real10"
     assert ex[0]["confirmed"] is True
-    assert ex[0].get("trade_allowed") is True
+    assert ex[0].get("trade_allowed") is False
     xm = verified_servers_for_broker("xm")
     assert any(r["name"] == "XMGlobal-MT5 20" and r["confirmed"] for r in xm)
     pepper = verified_servers_for_broker("pepperstone")
