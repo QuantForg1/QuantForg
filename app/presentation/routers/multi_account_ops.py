@@ -262,9 +262,7 @@ async def staging_eligibility_probe(
         settings=lab_settings,
     )
     job = jobs[0] if jobs else None
-    blocked = bool(
-        job is not None and job.state is AccountExecutionState.BLOCKED
-    )
+    blocked = bool(job is not None and job.state is AccountExecutionState.BLOCKED)
     return {
         "ok": True,
         "mode": mode,
