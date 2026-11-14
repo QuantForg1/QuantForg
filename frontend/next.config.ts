@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
       { source: "/execution", destination: "/terminal", permanent: false },
       { source: "/paper", destination: "/terminal", permanent: false },
       { source: "/execution-intel", destination: "/executions", permanent: false },
-      { source: "/history", destination: "/executions", permanent: false },
+      // /history serves the trader History desk (orders/deals). Do not alias to /executions.
 
       // Portfolio OS (Book → Portfolio)
       { source: "/book", destination: "/portfolio", permanent: false },
