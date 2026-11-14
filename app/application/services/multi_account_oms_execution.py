@@ -203,9 +203,8 @@ def authorize_worker_execution(
             else:
                 ordered.append("live_order_send_fail_closed")
 
-    ok = len([r for r in ordered if r != "live_order_send_fail_closed"]) == 0
-    # For LIVE fail-closed, ok can still be true for authorization path checks
-    # excluding the send lock — surface clearly.
+    # LIVE fail-closed may leave live_order_send_fail_closed in reasons while
+    # auth_ok stays true for path checks excluding the send lock.
     auth_ok = len([r for r in ordered if r not in {"live_order_send_fail_closed"}]) == 0
 
     vol_s = str(volume) if volume is not None else ""

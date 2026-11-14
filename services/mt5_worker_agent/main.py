@@ -283,9 +283,7 @@ def cmd_railway_dispatch_poll(
                 entry["live_execution"] = {
                     "order_send": False,
                     "reason": "live_order_send_fail_closed",
-                    "live_path_authorized": bool(
-                        auth_body.get("live_path_authorized")
-                    ),
+                    "live_path_authorized": bool(auth_body.get("live_path_authorized")),
                 }
             elif send_ok:
                 broker = execute_market_order(
