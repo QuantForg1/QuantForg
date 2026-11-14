@@ -44,11 +44,11 @@ export const TerminalBlotter = memo(function TerminalBlotter({
       aria-label="Trading blotter"
     >
       <div
-        className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-1.5"
+        className="flex h-9 max-md:h-9 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-1.5 md:h-7"
         role="tablist"
         aria-label="Blotter tabs"
       >
-        <div className="flex items-center gap-0.5">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none">
           {TABS.map((t) => {
             const active = tab === t.id;
             const Icon = t.icon;
@@ -57,8 +57,9 @@ export const TerminalBlotter = memo(function TerminalBlotter({
                 key={t.id}
                 size="sm"
                 variant="ghost"
+                data-compact
                 className={cn(
-                  "h-6 gap-1 rounded-[var(--radius-sm)] px-1.5 text-[11px] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
+                  "h-9 shrink-0 gap-1 rounded-[var(--radius-sm)] px-2 text-[11px] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)] md:h-6 md:px-1.5",
                   active
                     ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                     : "text-[var(--fg-muted)] hover:text-[var(--fg)]",

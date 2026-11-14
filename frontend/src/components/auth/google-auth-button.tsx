@@ -4,6 +4,7 @@ import { useState } from "react";
 import { authApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { getClientAppOrigin } from "@/lib/env";
+import { assertProductionOAuthOrigins } from "@/lib/auth/oauth-origin-guard";
 
 /**
  * Google OAuth via existing Railway auth API → Supabase Auth.
@@ -18,10 +19,18 @@ export function GoogleAuthButton() {
     setBusy(true);
     setStatus(null);
     try {
-      const redirectTo = `${getClientAppOrigin()}/auth/callback`;
+      const clientOrigin = getClientAppOrigin();
+      const redirectTo = `${clientOrigin}/auth/callback`;
       const { url } = await authApi.oauthStart("google", redirectTo);
       if (!url) {
         throw new Error("Google sign-in did not return a redirect URL.");
+      }
+      if (typeof window !== "undefined") {
+        assertProductionOAuthOrigins({
+          hostname: window.location.hostname,
+          clientOrigin,
+          authorizeUrl: url,
+        });
       }
       window.location.assign(url);
     } catch (error) {
