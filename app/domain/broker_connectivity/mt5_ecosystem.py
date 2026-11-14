@@ -151,14 +151,15 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         account_types=("standard", "pro", "demo"),
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("weltrade",),
-        server_hints=("Weltrade-MT5", "Weltrade-Demo"),
+        # Weltrade-Real / Weltrade-Demo observed in native MT5 Open Account dialog.
+        server_hints=("Weltrade-Real", "Weltrade-Demo", "Weltrade-MT5"),
         onboarding=_mt5_onboarding(
             brand="Weltrade",
             website="https://www.weltrade.com",
-            search_terms="Weltrade, Weltrade MT5",
+            search_terms="Weltrade, Weltrade-Real, Weltrade-Demo",
             server_note=(
-                "Server strings vary by entity/demo; copy the assigned value "
-                "verbatim — do not invent a server name."
+                "Use Weltrade-Real (LIVE) or Weltrade-Demo from the MT5 Open "
+                "Account server list — copy verbatim."
             ),
         ),
         notes="Priority MT5 retail brand — connectivity via MetaTrader 5 only.",
@@ -172,7 +173,30 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         account_types=("standard", "micro", "ultra_low", "demo"),
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("xmglobal", "xm.com", "xmtrading", "xmau", "xm-"),
+        # Numbered XMGlobal-MT5 N rows observed in native MT5 Open Account for
+        # XM Global Limited. Environment is confirmed from MT5 account metadata
+        # after login (e.g. "XMGlobal-MT5 2" may be DEMO; "XMGlobal-MT5 20" LIVE).
         server_hints=(
+            "XMGlobal-MT5 2",
+            "XMGlobal-MT5 4",
+            "XMGlobal-MT5 5",
+            "XMGlobal-MT5 6",
+            "XMGlobal-MT5 7",
+            "XMGlobal-MT5 8",
+            "XMGlobal-MT5 9",
+            "XMGlobal-MT5 10",
+            "XMGlobal-MT5 11",
+            "XMGlobal-MT5 12",
+            "XMGlobal-MT5 13",
+            "XMGlobal-MT5 14",
+            "XMGlobal-MT5 15",
+            "XMGlobal-MT5 16",
+            "XMGlobal-MT5 17",
+            "XMGlobal-MT5 18",
+            "XMGlobal-MT5 19",
+            "XMGlobal-MT5 20",
+            "XMGlobal-MT5 21",
+            "XMGlobal-MT5 22",
             "XMGlobal-MT5",
             "XMGlobal-Real",
             "XM.COM-Real",
@@ -181,10 +205,10 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         onboarding=_mt5_onboarding(
             brand="XM",
             website="https://www.xm.com",
-            search_terms="XMGlobal, XM.COM, XMTrading, XMAU",
+            search_terms="XMGlobal-MT5, XM.COM, XMTrading",
             server_note=(
-                "Match brand prefix + Real/Demo + MT5. Wrong cluster rejects "
-                "login even with correct password."
+                "Pick the exact XMGlobal-MT5 N from the MT5 Open Account list "
+                "or Personal Area. Do not assume LIVE from the number alone."
             ),
         ),
         notes="Priority MT5 retail brand — entity prefixes differ by region.",
@@ -198,22 +222,64 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         account_types=("standard", "raw_spread", "zero", "pro", "demo"),
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("exness",),
-        # Documented search prefixes only — numbered shards are account-assigned
-        # and MUST be copied from Personal Area (never invented as verified).
+        # Exact Real/Trial names observed in native MT5 Open Account discovery
+        # for Exness Technologies Ltd (screenshot evidence 2026-11-13). Still
+        # CANDIDATE until authenticated verify; never invent unverified shards.
         server_hints=(
-            "Exness-MT5Trial",
+            "Exness-MT5Real10",
             "Exness-MT5Real",
+            "Exness-MT5Real2",
+            "Exness-MT5Real3",
+            "Exness-MT5Real6",
+            "Exness-MT5Real7",
+            "Exness-MT5Real8",
+            "Exness-MT5Real15",
+            "Exness-MT5Real16",
+            "Exness-MT5Real17",
+            "Exness-MT5Real18",
+            "Exness-MT5Real20",
+            "Exness-MT5Real21",
+            "Exness-MT5Real24",
+            "Exness-MT5Real28",
+            "Exness-MT5Real29",
+            "Exness-MT5Real30",
+            "Exness-MT5Real31",
+            "Exness-MT5Real32",
+            "Exness-MT5Real33",
+            "Exness-MT5Real34",
+            "Exness-MT5Real36",
+            "Exness-MT5Real37",
+            "Exness-MT5Real38",
+            "Exness-MT5Real39",
+            "Exness-MT5Real40",
+            "Exness-MT5Real41",
+            "Exness-MT5Real42",
+            "Exness-MT5Real43",
+            "Exness-MT5Real44",
+            "Exness-MT5Real46",
+            "Exness-MT5Real48",
+            "Exness-MT5Real50",
+            "Exness-MT5Real51",
+            "Exness-MT5Trial2",
+            "Exness-MT5Trial3",
+            "Exness-MT5Trial4",
+            "Exness-MT5Trial5",
+            "Exness-MT5Trial7",
+            "Exness-MT5Trial8",
+            "Exness-MT5Trial10",
+            "Exness-MT5Trial14",
+            "Exness-MT5Trial15",
+            "Exness-MT5Trial17",
             "ExnessSC-MT5Trial",
             "ExnessSC-MT5Real",
         ),
         onboarding=_mt5_onboarding(
             brand="Exness",
             website="https://www.exness.com",
-            search_terms="Exness, Exness-MT5Trial, Exness-MT5Real",
+            search_terms="Exness-MT5Real, Exness-MT5Trial",
             server_note=(
-                "Copy the exact Personal Area server (often Exness-MT5TrialN / "
-                "Exness-MT5RealN). Demo uses Trial; live uses Real. Do not guess "
-                "the shard number."
+                "Select the exact Exness-MT5RealN / Exness-MT5TrialN from the "
+                "MT5 Open Account list or Personal Area. Demo = Trial; LIVE = Real."
             ),
         ),
         notes="Priority MT5 retail brand — high leverage accounts still MT5-gated.",
@@ -229,6 +295,7 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         server_match_patterns=("hfm", "hfmarkets", "hotforex"),
         # Official HFM connect guide names (documented search hints only).
         server_hints=(
+            "HFMarketsGlobal-Live20",
             "HFMarketsGlobal-Demo",
             "HFMarketsGlobal-Demo3",
             "HFMarketsGlobal-Demo4",
@@ -259,6 +326,7 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         server_match_patterns=("justmarkets", "justmarketscy"),
         # Documented MetaQuotes / WebTerminal candidates only — copy exact PA server.
         server_hints=(
+            "JustMarkets-Live7",
             "JustMarkets-Demo",
             "JustMarkets-Demo2",
             "JustMarkets-Live",
@@ -291,6 +359,7 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("icmarkets", "icmarketssc", "icmarketseu"),
         server_hints=(
+            "ICMarketsSC-MT5-3",
             "ICMarketsSC-MT5",
             "ICMarketsSC-MT5-2",
             "ICMarketsEU-MT5",
@@ -317,6 +386,7 @@ MT5_ECOSYSTEM: tuple[MT5BrokerProfile, ...] = (
         order_types=("market", "limit", "stop", "stop_limit"),
         server_match_patterns=("pepperstone",),
         server_hints=(
+            "PepperstoneKE-MT5-Live01",
             "Pepperstone-MT5-Live",
             "Pepperstone-MT5-Demo",
             "PepperstoneLtd-Live",
