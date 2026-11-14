@@ -107,6 +107,61 @@ export const householdPortfolioApi = {
     apiFetch<Record<string, unknown>>("/portfolio/household/emergency-stops"),
 };
 
+/** Phase 4 — AI Trading Intelligence (advisory; never order_send). */
+export const aiTradingIntelligenceApi = {
+  health: () =>
+    apiFetch<Record<string, unknown>>("/ai-trading-intelligence/health"),
+  marketIntelligence: (body: {
+    symbol: string;
+    facts?: Record<string, unknown>;
+  }) =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/market-intelligence",
+      { method: "POST", body },
+    ),
+  regime: (body: { source_label?: string; confidence?: number }) =>
+    apiFetch<Record<string, unknown>>("/ai-trading-intelligence/regime", {
+      method: "POST",
+      body,
+    }),
+  regimeValidation: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/regime/validation",
+    ),
+  signalQuality: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/signal-quality",
+      { method: "POST", body },
+    ),
+  optimize: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ai-trading-intelligence/optimize", {
+      method: "POST",
+      body,
+    }),
+  riskAlerts: (body: Record<string, unknown> = {}) =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/risk-alerts",
+      { method: "POST", body },
+    ),
+  supervisor: () =>
+    apiFetch<Record<string, unknown>>("/ai-trading-intelligence/supervisor"),
+  setSupervisorMode: (mode: string, confirmed = true) =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/supervisor/mode",
+      { method: "POST", body: { mode, confirmed } },
+    ),
+  supervisorAction: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/supervisor/action",
+      { method: "POST", body },
+    ),
+  adaptivePropose: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/ai-trading-intelligence/adaptive/propose",
+      { method: "POST", body },
+    ),
+};
+
 type Mt5SymbolsPage = {
   items: unknown[];
   total: number;

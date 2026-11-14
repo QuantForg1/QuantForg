@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
 import { intelligenceApi } from "@/lib/api/endpoints";
@@ -66,6 +67,11 @@ export default function MarketIntelligencePage() {
       <PageHeader
         title="Market Intelligence"
         description="Real broker sync and market context. News only from configured licensed feeds — never invented."
+        actions={
+          <Button asChild size="sm" variant="secondary">
+            <a href="/ai-trading-intelligence">Phase 4 AI desks</a>
+          </Button>
+        }
       />
       <SessionStrip className="mb-4" />
       <PageMotion>

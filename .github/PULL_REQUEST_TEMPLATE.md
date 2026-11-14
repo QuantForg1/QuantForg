@@ -29,6 +29,7 @@ See `.cursor/rules/quantforg-trading-core-freeze.mdc`.
 - [ ] No `FORCE_FIRST_TRADE` / risk-lock bypass / fabricated `trade_allowed`
 - [ ] No LIVE test `order_send`
 - [ ] Phase 3 portfolio/OMS gap touch cites `docs/production/PHASE3_PORTFOLIO_INTELLIGENCE_FREEZE.md` when applicable
+- [ ] Phase 4 AI intelligence cites `docs/production/PHASE4_AI_TRADING_INTELLIGENCE_FREEZE.md` when applicable (no auto-LIVE deploy / no risk increase)
 
 ### Non-negotiable confirmations
 
