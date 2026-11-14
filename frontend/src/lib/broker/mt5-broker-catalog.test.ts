@@ -10,6 +10,7 @@ import {
   classifyServerEnvironment,
   brokerBySlug,
   mapRegistryBrokers,
+  brokerTradingReadinessDisplayLabel,
   brokerVerificationDisplayLabel,
   brokerVerificationStatusCode,
 } from "./mt5-broker-catalog.ts";
@@ -134,6 +135,20 @@ assert.equal(brokerVerificationDisplayLabel("live_verified"), "Verified");
 assert.equal(brokerVerificationDisplayLabel("owner_verified_live"), "Verified");
 assert.equal(brokerVerificationStatusCode("live_verified"), "VERIFIED_LIVE");
 assert.notEqual(brokerVerificationDisplayLabel("live_verified"), "FUNDING_REQUIRED");
+assert.equal(
+  brokerTradingReadinessDisplayLabel({
+    verification_status: "VERIFIED_LIVE",
+    trading_readiness: "FUNDING_REQUIRED",
+  }),
+  "Verified",
+);
+assert.equal(
+  brokerTradingReadinessDisplayLabel({
+    trading_readiness_display: "Verified",
+    trading_readiness: "AUTH_OK_TRADE_NOT_ENABLED",
+  }),
+  "Verified",
+);
 
 for (const broker of MT5_BROKER_OPTIONS) {
   assert.ok(broker.logoSrc.startsWith("/brand/brokers/"));
