@@ -424,7 +424,13 @@ class Mt5WorkerApiFacade:
         }
 
     def report_verification(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Persist redacted broker verification evidence. Never stores passwords."""
+        """Persist redacted broker verification evidence. Never stores passwords.
+
+        When a portable slot reports successful DEMO/LIVE auth (`trade_allowed`
+        and login/server), also promote the bound control-plane worker to READY
+        so Phase 11 section C identity fields are populated. Failures never
+        invent READY.
+        """
         from app.domain.broker_connectivity.broker_verification_evidence import (
             ingest_worker_report,
             ops_snapshot,
@@ -439,14 +445,73 @@ class Mt5WorkerApiFacade:
             ver_store.upsert_evidence(entry)
         except Exception:
             logger.warning("mt5_broker_verification_pg_persist_failed")
+
+        worker_status: dict[str, Any] | None = None
+        applied = self._apply_slot_verification_to_worker(payload)
+        if applied is not None:
+            worker_status = self._public(applied)
+
         return {
             "ok": True,
             "credentials_exposed": False,
             "broker_slug": entry.get("broker_slug"),
             "connectable": bool(entry.get("connectable")),
             "connection_status": entry.get("connection_status"),
+            "worker_ready_applied": worker_status is not None
+            and bool(worker_status.get("ready")),
+            "worker": worker_status,
             "evidence": ops_snapshot(),
         }
+
+    def _apply_slot_verification_to_worker(
+        self, payload: dict[str, Any]
+    ) -> WorkerRuntime | None:
+        """Bind successful MT5 verify evidence onto the registered slot worker."""
+        host_code = str(payload.get("host_code") or "").strip()
+        slot_id = str(payload.get("slot_id") or "").strip()
+        login = str(payload.get("login") or "").strip()
+        server = str(payload.get("server") or "").strip()
+        trade_allowed = bool(payload.get("trade_allowed"))
+        ok_flag = payload.get("ok")
+        success = bool(ok_flag is True or ok_flag is None) and trade_allowed
+        if not success or not host_code or not slot_id or not login or not server:
+            return None
+
+        key = _slot_key(host_code, slot_id)
+        with self._lock:
+            worker_id = self._slot_to_worker.get(key)
+        if worker_id is None:
+            # Best-effort hydrate then retry once.
+            self.hydrate_from_postgres()
+            with self._lock:
+                worker_id = self._slot_to_worker.get(key)
+        if worker_id is None:
+            logger.info(
+                "verification_worker_slot_unbound host=%s slot=%s",
+                host_code,
+                slot_id,
+            )
+            return None
+        if worker_id in self._revoked_workers:
+            return None
+
+        worker = self.require_worker(worker_id)
+        assert self.plane.supervisor is not None
+        session = str(
+            payload.get("runtime_session_id")
+            or worker.runtime_session_id
+            or f"verify-{slot_id}"
+        )
+        updated = self.plane.supervisor.advance_start_auth_verify(
+            worker_id=worker.worker_id,
+            user_id=worker.user_id,
+            login=login,
+            server=server,
+            trade_allowed=True,
+            runtime_session_id=session,
+        )
+        self._persist(updated)
+        return updated
 
     def ops_summary(self) -> dict[str, Any]:
         """Admin/ops snapshot of workers + verification evidence (no passwords)."""

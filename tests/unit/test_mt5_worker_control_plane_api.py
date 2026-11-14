@@ -334,3 +334,61 @@ def test_ops_summary_includes_phase7_owner_snapshot() -> None:
     assert "dispatch_queue" in body
     assert body["safety"]["live_submit_allowed"] is False
     assert body["feature_flags"]["MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED"] is False
+
+def test_verification_report_marks_registered_slot_ready() -> None:
+    """Successful portable verify must populate login/server and READY on the slot worker."""
+    client, api = _client()
+    reg = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "local-windows-1", "slot_id": "demo-a"},
+    )
+    assert reg.status_code == 200
+    worker_id = reg.json()["worker_id"]
+    assert reg.json()["ready"] is False
+
+    report = client.post(
+        "/api/v1/mt5-workers/verification/report",
+        json={
+            "ok": True,
+            "broker_slug": "xm",
+            "environment": "demo",
+            "host_code": "local-windows-1",
+            "slot_id": "demo-a",
+            "login": "169740464",
+            "server": "XMGlobal-MT5 2",
+            "trade_allowed": True,
+            "market_data_ok": True,
+            "source": "windows_mt5_demo_verify",
+        },
+    )
+    assert report.status_code == 200
+    body = report.json()
+    assert body["ok"] is True
+    assert body["credentials_exposed"] is False
+    assert body.get("worker_ready_applied") is True
+    worker = body.get("worker") or {}
+    assert worker.get("worker_id") == worker_id
+    assert worker.get("ready") is True
+    assert worker.get("account_login_verified") == "169740464"
+    assert worker.get("server_verified") == "XMGlobal-MT5 2"
+    assert worker.get("trade_allowed") is True
+    assert worker.get("live_submit_enabled") is False
+
+    # Failure reports must not invent READY.
+    fail = client.post(
+        "/api/v1/mt5-workers/verification/report",
+        json={
+            "ok": False,
+            "broker_slug": "fp-markets",
+            "environment": "demo",
+            "host_code": "local-windows-1",
+            "slot_id": "demo-a",
+            "login": "7412720",
+            "server": "FPMarketsSC-Demo",
+            "trade_allowed": False,
+            "error": "initialize_failed",
+            "source": "windows_mt5_demo_verify",
+        },
+    )
+    assert fail.status_code == 200
+    assert fail.json().get("worker_ready_applied") is False
