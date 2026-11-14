@@ -101,8 +101,9 @@ export default function PerformancePage() {
   return (
     <div>
       <PageHeader
-        title="Performance"
-        description="Net profit, risk-adjusted returns, and equity trajectory across paper and live history."
+        eyebrow="Analytics"
+        title="Trading Performance"
+        description="Equity, returns, and deal-based metrics from returned broker or paper history. Blank values mean the session has not provided that figure — nothing is fabricated."
       />
 
       <DeskQueryState

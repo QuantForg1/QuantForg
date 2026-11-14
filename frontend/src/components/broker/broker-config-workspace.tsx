@@ -1115,12 +1115,16 @@ export function BrokerConfigWorkspace() {
       >
         <header className="mb-7 flex flex-col items-center text-center">
           <Mt5BrandMark size={78} className="mb-4" />
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+            Broker Accounts
+          </p>
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-[var(--fg)] sm:text-[1.85rem]">
             Connect MT5 Account
           </h1>
-          <p className="mt-2 max-w-md text-sm text-[var(--fg-muted)]">
-            Connect your existing LIVE MetaTrader 5 account from any supported broker.
-            Connection does not enable automated trading by itself.
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--fg-muted)]">
+            Connect the MetaTrader 5 login you already own. One active account per
+            QuantForg user. Connection does not enable automated trading by itself,
+            and passwords are never shown back on screen.
           </p>
         </header>
 

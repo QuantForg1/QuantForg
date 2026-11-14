@@ -98,8 +98,8 @@ export function RobotActivityPanel({
             <Badge tone={tone(robotState)}>{robotState}</Badge>
           </div>
           <p className="mt-1 text-xs text-[var(--fg-muted)]">
-            Process health, broker connection, and trading authorization are shown
-            separately. RUNNING does not mean orders are being submitted.
+            Process running is not analysis, not a signal, not authorization, and
+            not a broker-confirmed fill. Balance changes are never shown as trades.
           </p>
         </div>
         <Button variant="ghost" size="sm" asChild>
@@ -108,7 +108,10 @@ export function RobotActivityPanel({
       </div>
 
       <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/30 px-3">
-        <Row label="Robot operational status" value={robotState} badge={robotState} />
+        <p className="pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          Process
+        </p>
+        <Row label="Robot process status" value={robotState} badge={robotState} />
         <Row
           label="Last heartbeat / activity"
           value={
@@ -117,6 +120,9 @@ export function RobotActivityPanel({
               : "No heartbeat reported"
           }
         />
+        <p className="pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          Connectivity &amp; authorization
+        </p>
         <Row label="Broker connection" value={brokerLabel} badge={brokerLabel} />
         <Row
           label="Weltrade LIVE authorization"
@@ -132,13 +138,19 @@ export function RobotActivityPanel({
           }
           badge={multiAccountDispatchLabel || "Disabled"}
         />
+        <p className="pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          Analysis → signal → submission → confirmation
+        </p>
         <Row label="Last generated signal" value={lastSignalLabel} />
         <Row
-          label="Last trade execution attempt"
+          label="Last order submission attempt"
           value={lastExecutionLabel}
           badge={executionStale ? "Stale" : undefined}
         />
-        <Row label="Last trade execution result" value={lastExecutionResult} />
+        <Row
+          label="Last broker-confirmed execution result"
+          value={lastExecutionResult}
+        />
         <Row label="OMS / processing" value={omsLabel} badge={omsLabel} />
         <Row label="Account synchronization" value={lastSyncLabel} />
         <Row

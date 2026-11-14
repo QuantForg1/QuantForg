@@ -286,9 +286,9 @@ export default function AdminPortalPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        eyebrow="Overview"
+        eyebrow="Admin Portal"
         title="Operations dashboard"
-        description="Production COP metrics only. Opening Admin never enables live trading or changes MT5 / OMS paths."
+        description="Owner-gated production metrics only. Opening Admin never enables live trading or changes MT5 / OMS paths. Ordinary customers never see this surface."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">

@@ -27,7 +27,7 @@ import {
 import { FaqList } from "@/components/marketing/faq-list";
 import { HomeHeader } from "@/components/marketing/home-header";
 import { Reveal } from "@/components/marketing/reveal";
-import { BrandLogo } from "@/components/brand/brand-logo";
+import { SiteFooter } from "@/components/marketing/site-footer";
 import { MountainBackdrop } from "@/components/brand/mountain-backdrop";
 import {
   ANNUAL_BILLING_SUPPORTED,
@@ -287,16 +287,6 @@ const SECURITY: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }>
   },
 ];
 
-const METRICS = [
-  "Total trades",
-  "Win rate",
-  "Net profit",
-  "Profit factor",
-  "Drawdown",
-  "Number of trades",
-  "Average trade",
-] as const;
-
 const DIFFERENTIATORS: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }> = [
   {
     title: "Capital stays at your broker",
@@ -329,43 +319,6 @@ const DIFFERENTIATORS: ReadonlyArray<{ title: string; body: string; icon: Lucide
     icon: BarChart3,
   },
 ];
-
-const FOOTER = [
-  {
-    title: "Product",
-    links: [
-      { href: "/#features", label: "Features" },
-      { href: "/#how-it-works", label: "How It Works" },
-      { href: "/#strategies", label: "Strategies" },
-      { href: "/pricing", label: "Pricing" },
-    ],
-  },
-  {
-    title: "Platform",
-    links: [
-      { href: "/#platform", label: "Platform" },
-      { href: "/live", label: "Live Market" },
-      { href: "/#brokers", label: "Brokers" },
-      { href: "/#security", label: "Security" },
-    ],
-  },
-  {
-    title: "Resources",
-    links: [
-      { href: "/contact", label: "Contact" },
-      { href: "mailto:support@quantforg.com", label: "Support" },
-      { href: "/#faq", label: "FAQ" },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      { href: "/login", label: "Sign In" },
-      { href: "/register", label: "Create account" },
-      { href: "/contact", label: "Contact" },
-    ],
-  },
-] as const;
 
 function IconBadge({ icon: Icon }: { icon: LucideIcon }) {
   return (
@@ -672,28 +625,6 @@ export function HomeLanding() {
           </div>
         </section>
 
-        <section id="performance" className={styles.section}>
-          <div className={styles.wrap}>
-            <header className={styles.sectionHead}>
-              <p className={styles.kicker}>Performance and transparency</p>
-              <h2>Figures appear only after a connection</h2>
-              <p className={styles.sectionLead}>
-                Win rate, profit, and drawdown are calculated from broker deals once a session
-                returns history. Until then every value on this page stays blank.
-              </p>
-            </header>
-            <ul className={styles.metricGrid}>
-              {METRICS.map((label) => (
-                <li key={label} className={styles.metricCard}>
-                  <p>{label}</p>
-                  <strong>—</strong>
-                  <span>Available from your broker history, not from this page.</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
         <section id="difference" className={styles.section}>
           <div className={styles.wrap}>
             <header className={styles.sectionHead}>
@@ -817,55 +748,7 @@ export function HomeLanding() {
           </div>
         </section>
 
-          <footer className={styles.footer}>
-            <div className={`${styles.wrap} ${styles.footerGrid}`}>
-              <div className={styles.footerBrand}>
-                <BrandLogo size={32} caption={false} />
-                <p>
-                  QuantForg is institutional trading technology sold by subscription. Connect your own
-                  MetaTrader 5 broker account where supported. Software access is not a promise of
-                  trading profits.
-                </p>
-              </div>
-              <div className={styles.footerCols}>
-                {FOOTER.map((column) => (
-                  <div key={column.title}>
-                    <p>{column.title}</p>
-                    <ul>
-                      {column.links.map((link) => (
-                        <li key={link.label}>
-                          {link.href.startsWith("/") ? (
-                            <Link href={link.href}>{link.label}</Link>
-                          ) : (
-                            <a href={link.href}>{link.label}</a>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-                <div>
-                  <p>Legal</p>
-                  <ul>
-                    <li>
-                      <Link href="/privacy">Privacy</Link>
-                    </li>
-                    <li>
-                      <Link href="/terms">Terms</Link>
-                    </li>
-                    <li>
-                      <Link href="/risk-disclosure">Risk Disclosure</Link>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            <div className={styles.wrap}>
-              <p className={styles.legalLine}>
-                © 2026 QuantForg. Trading can lose capital. This site does not promise profits.
-              </p>
-            </div>
-          </footer>
+          <SiteFooter />
           </div>
         </div>
       </main>

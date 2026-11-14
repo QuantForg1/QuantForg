@@ -59,9 +59,9 @@ function AdminNavBody({
                     aria-current={active ? "page" : undefined}
                     title={item.hint}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors",
+                      "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-os)]",
                       active
-                        ? "bg-[var(--accent)] text-white shadow-[inset_3px_0_0_0_rgba(255,255,255,0.85)]"
+                        ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-[inset_3px_0_0_0_color-mix(in_srgb,var(--accent-fg)_55%,transparent)]"
                         : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
                     )}
                   >

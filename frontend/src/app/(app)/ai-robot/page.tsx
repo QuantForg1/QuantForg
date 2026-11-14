@@ -10,8 +10,9 @@ export default function AiRobotPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Robot Desk"
         title="AI Trading Robot V1"
-        description="Institutional capital-preservation module. Discipline first — never promises profitability. Risk Engine and Safety Engine are never bypassed; Robot V1 does not place orders."
+        description="Capital-preservation discipline module. Process running is not a signal, not authorization, and not a broker-confirmed fill. Risk and Safety engines are never bypassed; this desk does not invent executions."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
@@ -21,7 +22,7 @@ export default function AiRobotPage() {
               <Link href="/auto-trading">Auto Trading</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/risk">Risk</Link>
+              <Link href="/risk-center">Risk Center</Link>
             </Button>
           </div>
         }

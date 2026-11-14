@@ -20,6 +20,8 @@ export type DeskColumn<T> = {
   /** Pin first column optically for scan speed */
   sticky?: boolean;
   className?: string;
+  /** Prefer showing this field first in the mobile card title row */
+  mobilePrimary?: boolean;
   accessor?: (row: T) => string | number | null | undefined;
   cell: (row: T) => ReactNode;
 };
@@ -85,6 +87,10 @@ export const DeskDataTable = memo(function DeskDataTable<T>({
   const pageRows = filtered.slice(safePage * pageSize, safePage * pageSize + pageSize);
   const cellPad = density === "compact" ? "px-2.5 py-1.5" : "px-3 py-2";
 
+  const primaryCol =
+    columns.find((c) => c.mobilePrimary) ?? columns[0] ?? null;
+  const secondaryCols = columns.filter((c) => c.id !== primaryCol?.id);
+
   const toggleSort = (id: string) => {
     if (sortId === id) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -104,28 +110,120 @@ export const DeskDataTable = memo(function DeskDataTable<T>({
 
   if (rows.length === 0 && empty) return <>{empty}</>;
 
+  const toolbar = searchKeys ? (
+    <div className="relative max-w-sm">
+      <Search
+        className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--fg-subtle)]"
+        aria-hidden
+      />
+      <Input
+        className="h-8 pl-8 text-[12px]"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setPage(0);
+        }}
+        placeholder={searchPlaceholder}
+        aria-label={searchPlaceholder}
+      />
+    </div>
+  ) : null;
+
+  const pagination = (
+    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--fg-subtle)]">
+      <span className="tabular">
+        {filtered.length} row{filtered.length === 1 ? "" : "s"}
+        {query ? " filtered" : ""}
+        {selectedKey ? " · row selected" : ""}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 px-0"
+          disabled={safePage <= 0}
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+        <span className="min-w-[3.5rem] text-center tabular">
+          {safePage + 1} / {pageCount}
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 px-0"
+          disabled={safePage >= pageCount - 1}
+          onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+          aria-label="Next page"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className={cn("space-y-[var(--space-2)]", className)}>
-      {searchKeys ? (
-        <div className="relative max-w-sm">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--fg-subtle)]"
-            aria-hidden
-          />
-          <Input
-            className="h-8 pl-8 text-[12px]"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(0);
-            }}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
-          />
-        </div>
-      ) : null}
+      {toolbar}
 
-      <div className="overflow-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
+      {/* Mobile: intentional card stack (not a squeezed table). */}
+      <ul
+        className="space-y-2 md:hidden"
+        aria-label={`${ariaLabel} (cards)`}
+      >
+        {pageRows.length === 0 ? (
+          <li className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-8 text-center text-sm text-[var(--fg-muted)]">
+            No rows match this filter.
+          </li>
+        ) : (
+          pageRows.map((row, i) => {
+            const key = rowKey(row, safePage * pageSize + i);
+            const selected = selectedKey === key;
+            return (
+              <li key={key}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedKey(key)}
+                  className={cn(
+                    "w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
+                    "hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)]/60",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+                    selected && "border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] bg-[var(--accent-soft)]/35",
+                  )}
+                >
+                  {primaryCol ? (
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--fg-subtle)]">
+                        {primaryCol.header}
+                      </p>
+                      <div className="min-w-0 text-sm font-semibold text-[var(--fg)]">
+                        {primaryCol.cell(row)}
+                      </div>
+                    </div>
+                  ) : null}
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    {secondaryCols.map((col) => (
+                      <div key={col.id} className="min-w-0">
+                        <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                          {col.header}
+                        </dt>
+                        <dd className="mt-0.5 truncate text-[12px] text-[var(--fg)]">
+                          {col.cell(row)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </button>
+              </li>
+            );
+          })
+        )}
+      </ul>
+
+      {/* Desktop / tablet: full table */}
+      <div className="hidden overflow-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] md:block">
         <table
           className={cn(
             "w-full min-w-[640px] text-left",
@@ -209,7 +307,9 @@ export const DeskDataTable = memo(function DeskDataTable<T>({
                           "align-middle",
                           col.sticky &&
                             "sticky left-0 z-[1] bg-[var(--surface)] shadow-[1px_0_0_0_var(--border)]",
-                          selected && col.sticky && "bg-[color-mix(in_srgb,var(--accent-soft)_50%,var(--surface))]",
+                          selected &&
+                            col.sticky &&
+                            "bg-[color-mix(in_srgb,var(--accent-soft)_50%,var(--surface))]",
                           col.className,
                         )}
                       >
@@ -224,38 +324,7 @@ export const DeskDataTable = memo(function DeskDataTable<T>({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--fg-subtle)]">
-        <span className="tabular">
-          {filtered.length} row{filtered.length === 1 ? "" : "s"}
-          {query ? " filtered" : ""}
-          {selectedKey ? " · row selected" : ""}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 px-0"
-            disabled={safePage <= 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <span className="min-w-[3.5rem] text-center tabular">
-            {safePage + 1} / {pageCount}
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 px-0"
-            disabled={safePage >= pageCount - 1}
-            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-            aria-label="Next page"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
+      {pagination}
     </div>
   );
 }) as <T>(props: {

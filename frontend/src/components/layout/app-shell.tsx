@@ -150,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
-                className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-fg)] disabled:opacity-60"
+                className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold disabled:opacity-60"
                 disabled={retrying}
                 onClick={() => {
                   setRetrying(true);
@@ -161,7 +161,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
               <button
                 type="button"
-                className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--fg)]"
+                className="inline-flex h-10 items-center rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-4 text-sm font-medium text-[var(--fg)] hover:bg-[var(--surface-2)]"
                 onClick={() => router.replace("/login")}
               >
                 Sign in again

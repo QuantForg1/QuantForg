@@ -72,7 +72,7 @@ export function SiteHeader({
               </Link>
               <Link
                 href="/settings"
-                className="qf-btn-cta inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
+                className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
               >
                 Settings
               </Link>
@@ -87,7 +87,7 @@ export function SiteHeader({
               </Link>
               <Link
                 href="/register"
-                className="qf-btn-cta inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
+                className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
               >
                 Connect Your Broker
               </Link>
