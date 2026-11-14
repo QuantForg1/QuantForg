@@ -1,5 +1,5 @@
 /**
- * Broker Accounts LIVE-first redesign contracts.
+ * Broker Accounts 2.0 — premium minimal connect form contracts.
  */
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -25,14 +25,8 @@ assert.match(workspace, /function BrokerSelect/);
 assert.match(workspace, /FieldShell/);
 assert.match(workspace, /h-12 w-full/);
 assert.match(workspace, /onBrokerPicked/);
-assert.match(workspace, /setAccountType\("live"\)/);
 assert.match(workspace, /broker_slug: selectedBroker\.slug/);
 assert.match(workspace, /Or paste exact portal server name/);
-assert.match(workspace, /connectionLifecycleLabel/);
-assert.match(workspace, /connection_failed/);
-// Selector must not show Pending/Verified badges (connection lifecycle replaces them).
-assert.equal(/["']Verified["']/.test(workspace), false);
-assert.equal(/["']Pending["']/.test(workspace), false);
 assert.match(workspace, /BrokerSelect/);
 assert.doesNotMatch(
   workspace.slice(
@@ -43,7 +37,20 @@ assert.doesNotMatch(
 );
 assert.match(workspace, /weltradeApi\.connect/);
 assert.match(workspace, /Password is never displayed after submission/);
-assert.match(workspace, /LIVE is primary/);
+
+// Broker Page 2.0 — remove customer-facing noise.
+assert.doesNotMatch(workspace, /Account type/);
+assert.doesNotMatch(workspace, /LIVE is primary/);
+assert.doesNotMatch(workspace, /Connection status/);
+assert.doesNotMatch(workspace, /function EnvBadge/);
+assert.doesNotMatch(workspace, /function ConfirmedBadge/);
+assert.doesNotMatch(workspace, /function SecurityFooter/);
+assert.doesNotMatch(workspace, /AES-256/);
+assert.doesNotMatch(workspace, /Official MetaTrader 5 · LIVE connect/);
+assert.doesNotMatch(workspace, />Confirmed</);
+assert.doesNotMatch(workspace, />Candidate</);
+assert.match(workspace, /useVirtualWindow/);
+assert.match(workspace, /Search MT5 servers/);
 
 {
   const idx = workspace.indexOf("const onBrokerPicked");

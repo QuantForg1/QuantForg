@@ -50,13 +50,11 @@ import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { cn } from "@/lib/utils";
 import {
   MT5_BROKER_OPTIONS,
-  type CustomerConnectionLifecycle,
   type Mt5BrokerOption,
   type Mt5BrokerSlug,
   type Mt5ServerRow,
   brokerBySlug,
   classifyServerEnvironment,
-  connectionLifecycleLabel,
   mapRegistryBrokers,
   matchBrokerByServer,
   serverRowsForBroker,
@@ -83,56 +81,21 @@ function FieldShell({
   );
 }
 
-function EnvBadge({ environment }: { environment: "demo" | "live" | "unknown" }) {
-  if (environment === "unknown") {
-    return (
-      <span className="rounded-md bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--fg-subtle)]">
-        Confirm
-      </span>
-    );
-  }
-  const live = environment === "live";
-  return (
-    <span
-      className={cn(
-        "rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
-        live
-          ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]"
-          : "bg-[var(--surface-2)] text-[var(--fg-muted)]",
-      )}
-    >
-      {live ? "LIVE" : "DEMO"}
-    </span>
-  );
-}
-
-function ConfirmedBadge({ confirmed }: { confirmed: boolean }) {
-  return (
-    <span
-      className={cn(
-        "rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
-        confirmed
-          ? "bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-[var(--success)]"
-          : "bg-[var(--surface-2)] text-[var(--fg-subtle)]",
-      )}
-    >
-      {confirmed ? "Confirmed" : "Candidate"}
-    </span>
-  );
-}
-
-function SecurityFooter() {
-  return (
-    <div className="mt-6 flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_55%,transparent)] px-4 py-3">
-      <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--accent)]" aria-hidden />
-      <p className="text-[12px] leading-relaxed text-[var(--fg-muted)]">
-        <span className="font-semibold text-[var(--fg)]">Secure &amp; Private Connection</span>
-        {" — "}
-        Trading passwords are encrypted at rest with AES-256-GCM, never returned in browser
-        responses, and never written to application logs.
-      </p>
-    </div>
-  );
+/** Lightweight windowing for long MT5 server catalogues (no extra dependency). */
+function useVirtualWindow(count: number, rowHeight: number, maxHeight: number) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const visible = Math.ceil(maxHeight / rowHeight) + 4;
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 2);
+  const end = Math.min(count, start + visible);
+  return {
+    start,
+    end,
+    totalHeight: count * rowHeight,
+    offsetY: start * rowHeight,
+    onScroll: (e: React.UIEvent<HTMLElement>) => {
+      setScrollTop((e.target as HTMLElement).scrollTop);
+    },
+  };
 }
 
 function BrokerSelect({
@@ -235,11 +198,6 @@ function BrokerSelect({
           >
             {selected ? selected.name : "Select a broker"}
           </span>
-          {selected ? (
-            <span className="hidden rounded-md border border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-[var(--accent)] sm:inline">
-              MT5
-            </span>
-          ) : null}
           <ChevronDown
             className={cn(
               "h-4 w-4 shrink-0 text-[var(--fg-subtle)] transition",
@@ -293,13 +251,8 @@ function BrokerSelect({
                     onClick={() => pick(broker)}
                   >
                     <BrokerLogo src={broker.logoSrc} name={broker.name} size={36} rounded="md" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-[var(--fg)]">
-                        {broker.name}
-                      </span>
-                      <span className="block text-[11px] text-[var(--fg-subtle)]">
-                        Official MetaTrader 5 · LIVE connect
-                      </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-[var(--fg)]">
+                      {broker.name}
                     </span>
                     {active ? (
                       <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
@@ -394,6 +347,14 @@ function ServerSelect({
     }
   };
 
+  const rowHeight = 44;
+  const maxHeight = 320;
+  const virt = useVirtualWindow(filtered.length, rowHeight, maxHeight);
+  const useVirt = filtered.length > 60;
+  const visibleRows = useVirt
+    ? filtered.slice(virt.start, virt.end)
+    : filtered;
+
   const placeholder = loading
     ? "Loading servers…"
     : options.length
@@ -420,13 +381,12 @@ function ServerSelect({
           )}
           <span
             className={cn(
-              "min-w-0 flex-1 truncate",
+              "min-w-0 flex-1 truncate font-medium",
               selected ? "text-[var(--fg)]" : "text-[var(--fg-subtle)]",
             )}
           >
             {selected ? selected.name : placeholder}
           </span>
-          {selected ? <EnvBadge environment={selected.environment} /> : null}
           <ChevronDown
             className={cn(
               "h-4 w-4 shrink-0 text-[var(--fg-subtle)] transition",
@@ -443,7 +403,7 @@ function ServerSelect({
           role="listbox"
           tabIndex={-1}
           onKeyDown={onListKeyDown}
-          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_92%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
+          className="absolute z-40 mt-2 w-full overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] bg-[color-mix(in_srgb,#071528_96%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
         >
           <div className="border-b border-[var(--border)] p-2">
             <label className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2.5">
@@ -462,7 +422,11 @@ function ServerSelect({
               />
             </label>
           </div>
-          <ul className="max-h-[min(22rem,50vh)] overflow-y-auto overscroll-contain py-1">
+          <ul
+            className="overflow-y-auto overscroll-contain py-1"
+            style={{ maxHeight }}
+            onScroll={useVirt ? virt.onScroll : undefined}
+          >
             {filtered.length === 0 ? (
               <li className="px-3 py-4 text-center text-xs text-[var(--fg-subtle)]">
                 {loading
@@ -470,57 +434,40 @@ function ServerSelect({
                   : "No matching servers. Paste the exact portal name below."}
               </li>
             ) : null}
-            {filtered.map((row, index) => {
+            {useVirt ? <li aria-hidden style={{ height: virt.offsetY }} /> : null}
+            {visibleRows.map((row, i) => {
+              const index = useVirt ? virt.start + i : i;
               const active = row.name === value;
               const focused = index === activeIndex;
-              const confirmed = Boolean(row.confirmed || row.verified_at);
-              const envLabel =
-                row.environment === "demo"
-                  ? "DEMO"
-                  : row.environment === "live"
-                    ? "LIVE"
-                    : "Confirm";
-              const evidence =
-                row.evidence_classification ||
-                (confirmed ? "CONFIRMED" : "CANDIDATE");
               return (
-                <li key={row.name}>
+                <li key={row.name} style={{ height: rowHeight }}>
                   <button
                     type="button"
                     role="option"
                     aria-selected={active}
                     className={cn(
-                      "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-[var(--accent-soft)] focus-visible:bg-[var(--accent-soft)] focus-visible:outline-none",
+                      "flex h-full w-full items-center gap-2.5 px-3 text-left text-sm transition hover:bg-[var(--accent-soft)] focus-visible:bg-[var(--accent-soft)] focus-visible:outline-none",
                       (active || focused) && "bg-[var(--accent-soft)]",
                     )}
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => pick(row)}
                   >
-                    <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-[var(--fg)]">
-                        {row.name}
-                      </span>
-                      <span className="block truncate text-[11px] text-[var(--fg-subtle)]">
-                        {brokerName || "MT5"} · {envLabel}
-                        {evidence === "CONFIRMED"
-                          ? " · Confirmed"
-                          : evidence === "DOCUMENTED"
-                            ? " · Documented"
-                            : " · Candidate"}
-                      </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-[var(--fg)]">
+                      {row.name}
                     </span>
-                    <EnvBadge environment={row.environment} />
-                    <ConfirmedBadge confirmed={confirmed} />
                     {active ? (
                       <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
-                    ) : (
-                      <span className="w-4" aria-hidden />
-                    )}
+                    ) : null}
                   </button>
                 </li>
               );
             })}
+            {useVirt ? (
+              <li
+                aria-hidden
+                style={{ height: Math.max(0, virt.totalHeight - virt.offsetY - visibleRows.length * rowHeight) }}
+              />
+            ) : null}
           </ul>
         </div>
       ) : null}
@@ -611,7 +558,6 @@ export function BrokerConfigWorkspace() {
   const [passwordFieldKey, setPasswordFieldKey] = useState(0);
   const [terminalPath, setTerminalPath] = useState("");
   const [progress, setProgress] = useState<string | null>(null);
-  const [connectFailed, setConnectFailed] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [changingAccount, setChangingAccount] = useState(false);
   const [brokerSwitchEpoch, setBrokerSwitchEpoch] = useState(0);
@@ -681,16 +627,10 @@ export function BrokerConfigWorkspace() {
     ],
   );
 
-  const serverRows = useMemo(
-    () =>
-      allServerRows.filter(
-        (row) =>
-          row.environment === accountType ||
-          row.environment === "unknown" ||
-          (!row.confirmed && accountType === "live" && row.environment !== "demo"),
-      ),
-    [allServerRows, accountType],
-  );
+  // Customer-facing list: every genuine discovered server is selectable (no
+  // LIVE/DEMO filter, no Confirmed/Candidate gate). Environment still resolved
+  // internally from the selected name / MT5 metadata after auth.
+  const serverRows = allServerRows;
 
   const effectiveServer = (manualServer.trim() || server).trim();
   const selectedServerRow =
@@ -698,7 +638,7 @@ export function BrokerConfigWorkspace() {
   const serverEnvironment = selectedServerRow
     ? selectedServerRow.environment
     : classifyServerEnvironment(effectiveServer);
-  // LIVE is primary: explicit account-type toggle wins when server env is unknown.
+  // Prefer server-name environment; otherwise keep internal LIVE default.
   const accountTypeResolved: AccountType =
     serverEnvironment === "demo" || serverEnvironment === "live"
       ? serverEnvironment
@@ -864,12 +804,10 @@ export function BrokerConfigWorkspace() {
       });
     },
     onMutate: () => {
-      setConnectFailed(false);
       setProgress("Connecting…");
     },
     onSuccess: async () => {
       clearPasswordField();
-      setConnectFailed(false);
       toast.success("Connected");
       setChangingAccount(false);
       await refresh();
@@ -879,7 +817,6 @@ export function BrokerConfigWorkspace() {
     onError: (e) => {
       clearPasswordField();
       setProgress(null);
-      setConnectFailed(true);
       toast.error(
         e instanceof ApiError
           ? traderFacingErrorMessage(e)
@@ -915,18 +852,11 @@ export function BrokerConfigWorkspace() {
       );
       return;
     }
-    if (
-      selectedServerRow &&
-      selectedServerRow.environment !== "unknown" &&
-      selectedServerRow.environment !== accountType
-    ) {
-      toast.error("Account type must match the selected server (Demo or Live).");
-      return;
-    }
+    // Environment is resolved from the selected/pasted server name (and finally
+    // from MT5 account metadata). No customer-facing LIVE/DEMO toggle.
     const loginNum = Number(login);
     if ((!Number.isFinite(loginNum) || loginNum <= 0) && !password) {
       void (async () => {
-        setConnectFailed(false);
         setProgress("Verifying ownership…");
         try {
           await weltradeApi.claim();
@@ -947,7 +877,6 @@ export function BrokerConfigWorkspace() {
             toast.success("Broker restored from secure profile");
             await refresh();
           } catch {
-            setConnectFailed(true);
             toast.error(
               e instanceof ApiError
                 ? traderFacingErrorMessage(e)
@@ -1011,13 +940,6 @@ export function BrokerConfigWorkspace() {
     connected ? "CONNECTED" : "NO_BROKER",
   );
   const showConnectForm = !connected || uxState === "SESSION_MISMATCH" || changingAccount;
-  const lifecycle: CustomerConnectionLifecycle = progress
-    ? "connecting"
-    : connected && !showConnectForm
-      ? "connected"
-      : connectFailed
-        ? "connection_failed"
-        : "not_connected";
   const exposure = asRecord(exposureQ.data);
   const exposureOpen = Number(exposure.open_positions ?? 0);
   const exposurePending = Number(exposure.pending_orders ?? 0);
@@ -1089,7 +1011,6 @@ export function BrokerConfigWorkspace() {
     setServer("");
     setManualServer("");
     setAccountType("live");
-    setConnectFailed(false);
     setBrokerSwitchEpoch((n) => n + 1);
   };
 
@@ -1126,10 +1047,8 @@ export function BrokerConfigWorkspace() {
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-[var(--fg)] sm:text-[1.85rem]">
             Connect MT5 Account
           </h1>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--fg-muted)]">
-            Connect the MetaTrader 5 login you already own. One active account per
-            QuantForg user. Connection does not enable automated trading by itself,
-            and passwords are never shown back on screen.
+          <p className="mt-2 max-w-sm text-sm text-[var(--fg-muted)]">
+            One active MetaTrader 5 account per user.
           </p>
         </header>
 
@@ -1309,36 +1228,21 @@ export function BrokerConfigWorkspace() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {uxState === "SESSION_MISMATCH" ? (
               <p className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
-                ACCOUNT SESSION MISMATCH. Reconnect your own account.
-              </p>
-            ) : null}
-
-            {!connected && gatewayMt5Attached && ownershipBlockMessage(tradingSnap.ownership_block_reason) ? (
-              <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/50 px-3 py-2 text-xs text-[var(--fg-muted)]">
-                {ownershipBlockMessage(tradingSnap.ownership_block_reason)}
+                Account session mismatch. Reconnect your own account.
               </p>
             ) : null}
 
             {serversQ.isError ? (
-              <p className="rounded-xl border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 py-2 text-xs text-[var(--danger)]">
-                Could not load the MT5 server catalogue for {selectedBroker?.name || "this broker"}.
-                Enter the exact server from your broker portal — another broker&apos;s servers will
-                not be substituted.
-              </p>
-            ) : null}
-
-            {serversQ.isSuccess && selectedBroker && !serverRows.some((r) => r.confirmed) ? (
-              <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 px-3 py-2 text-xs text-[var(--fg-muted)]">
-                Search MT5 servers for {selectedBroker.name}, or paste the exact name from your
-                terminal / client portal. Candidates are discovery aids — not invented shards.
+              <p className="text-xs text-[var(--danger)]">
+                Server catalogue unavailable. Paste the exact portal server name below.
               </p>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-[11px] font-medium text-[var(--fg-subtle)]">Broker</label>
                 <BrokerSelect
                   value={brokerSlug}
@@ -1347,7 +1251,7 @@ export function BrokerConfigWorkspace() {
                   onChange={onBrokerPicked}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-[11px] font-medium text-[var(--fg-subtle)]">
                   MT5 Server
                 </label>
@@ -1376,7 +1280,7 @@ export function BrokerConfigWorkspace() {
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="bw-login" className="text-[11px] font-medium text-[var(--fg-subtle)]">
-                  MT5 Login (Account Number)
+                  MT5 Login
                 </label>
                 <FieldShell>
                   <UserRound className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
@@ -1387,7 +1291,7 @@ export function BrokerConfigWorkspace() {
                     disabled={busy}
                     value={login}
                     onChange={(e) => setLogin(e.target.value)}
-                    placeholder="e.g. 81234567"
+                    placeholder="Account number"
                     className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
                   />
                 </FieldShell>
@@ -1397,7 +1301,7 @@ export function BrokerConfigWorkspace() {
                   htmlFor="bw-password"
                   className="text-[11px] font-medium text-[var(--fg-subtle)]"
                 >
-                  MT5 Password (Trading Password)
+                  MT5 Password
                 </label>
                 {showPasswordField ? (
                   <FieldShell>
@@ -1411,7 +1315,7 @@ export function BrokerConfigWorkspace() {
                       disabled={busy}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your MT5 password"
+                      placeholder="Trading password"
                       className="h-full w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-[var(--fg-subtle)]"
                     />
                     <button
@@ -1433,75 +1337,6 @@ export function BrokerConfigWorkspace() {
                   </p>
                 )}
               </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_35%,transparent)] px-3 py-2.5">
-              <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-                Account type
-              </span>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setAccountType("live");
-                    setServer("");
-                    setManualServer("");
-                  }}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
-                    accountType === "live"
-                      ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]"
-                      : "bg-[var(--surface-2)] text-[var(--fg-subtle)]",
-                  )}
-                >
-                  LIVE
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setAccountType("demo");
-                    setServer("");
-                    setManualServer("");
-                  }}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
-                    accountType === "demo"
-                      ? "bg-[var(--surface-2)] text-[var(--fg)]"
-                      : "bg-[var(--surface-2)] text-[var(--fg-subtle)]",
-                  )}
-                >
-                  DEMO
-                </button>
-              </div>
-              <span className="text-[11px] text-[var(--fg-subtle)]">
-                LIVE is primary. Final environment is confirmed from MT5 account metadata after
-                authentication — not from server-name guesses alone.
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--fg-muted)]">
-              <span className="font-medium text-[var(--fg-subtle)]">Connection status</span>
-              <span
-                className={cn(
-                  "rounded-md px-2 py-0.5 text-[11px] font-semibold",
-                  lifecycle === "connected"
-                    ? "bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-[var(--success)]"
-                    : lifecycle === "connecting"
-                      ? "bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent)]"
-                      : lifecycle === "connection_failed"
-                        ? "bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] text-[var(--danger)]"
-                        : "bg-[var(--surface-2)] text-[var(--fg-muted)]",
-                )}
-              >
-                {progress || connectionLifecycleLabel(lifecycle)}
-              </span>
-              {!gatewayOnline && lifecycle === "not_connected" ? (
-                <span className="text-[11px] text-[var(--fg-subtle)]">
-                  Gateway offline or unreachable
-                </span>
-              ) : null}
             </div>
 
             {isOperator ? (
@@ -1583,25 +1418,19 @@ export function BrokerConfigWorkspace() {
           </div>
         )}
 
-        <SecurityFooter />
-        <p className="mt-3 text-center text-[11px] text-[var(--fg-subtle)]">
-          Password is never displayed after submission. Connect MT5 Account authenticates and
-          attaches ownership in one step.
-          {connected && !showConnectForm ? (
-            <>
-              {" "}
-              <button
-                type="button"
-                className="text-[var(--fg-muted)] underline-offset-2 hover:underline"
-                disabled={busy || session.refreshing}
-                onClick={() => void refresh()}
-              >
-                <Link2Off className="mr-1 inline h-3 w-3" aria-hidden />
-                Refresh status
-              </button>
-            </>
-          ) : null}
-        </p>
+        {connected && !showConnectForm ? (
+          <p className="mt-4 text-center text-[11px] text-[var(--fg-subtle)]">
+            <button
+              type="button"
+              className="text-[var(--fg-muted)] underline-offset-2 hover:underline"
+              disabled={busy || session.refreshing}
+              onClick={() => void refresh()}
+            >
+              <Link2Off className="mr-1 inline h-3 w-3" aria-hidden />
+              Refresh status
+            </button>
+          </p>
+        ) : null}
       </article>
     </div>
   );

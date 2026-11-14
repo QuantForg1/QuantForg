@@ -33,7 +33,8 @@ assert.equal(panel.includes("fake eligibility"), false);
 assert.equal(workspace.includes("CustomerMultiAccountPanel"), false);
 assert.equal(workspace.includes("Claim ownership"), false);
 assert.match(workspace, /Connect MT5 Account/);
-assert.match(workspace, /attaches ownership in one step/);
+assert.match(workspace, /Password is never displayed after submission/);
+assert.doesNotMatch(workspace, /attaches ownership in one step/);
 
 assert.match(endpoints, /myDispatchStatus/);
 assert.match(endpoints, /\/multi-account\/dispatch\/status/);
