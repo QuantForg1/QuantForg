@@ -26,6 +26,10 @@ Queue ACK alone is **never** treated as proof of execution.
 
 PR #275 shipped OMS **preview** on claim. Phase 12B adds the missing claim → authorize → worker `order_send` → broker result → queue FILLED/REJECTED path. ACK remains delivery-only.
 
+### Why not singleton `GuardedOmsSubmitPort` / Weltrade adapter
+
+Account-session binding on the singleton LIVE path fails closed on login mismatch. Multi-account DEMO/LIVE must submit on the **assigned portable worker session**, after control-plane authorize (ownership, risk preview, mandatory SL, env gates). Worker `order_send` is sealed behind `order_send_allowed`; LIVE remains fail-closed until `MULTI_ACCOUNT_OMS_LIVE_ORDER_SEND_ENABLED`.
+
 ---
 
 ## 2. Demo order evidence
