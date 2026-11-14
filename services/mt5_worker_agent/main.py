@@ -193,9 +193,22 @@ def cmd_railway_heartbeat() -> int:
     return 0
 
 
-def cmd_railway_dispatch_poll(*, once: bool = True, ack: bool = True) -> int:
-    """Claim next assigned delivery job (delivery only; no order_send)."""
+def cmd_railway_dispatch_poll(
+    *,
+    once: bool = True,
+    ack: bool = True,
+    execute: bool = False,
+    environment: str = "demo",
+    dry_run: bool = False,
+) -> int:
+    """Claim next job; optionally OMS-authorize and DEMO order_send.
+
+    ACK alone is never treated as a broker fill. When ``execute`` is true,
+    the worker calls execute-authorize, may order_send on DEMO only, then
+    posts execution-result before optional delivery ACK.
+    """
     from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
+    from services.mt5_worker_agent.mt5_order_execute import execute_market_order
     from services.mt5_worker_agent.railway_client import (
         RailwayClientConfig,
         RailwayWorkerClient,
@@ -203,6 +216,10 @@ def cmd_railway_dispatch_poll(*, once: bool = True, ack: bool = True) -> int:
 
     if not _token_ok(os.environ.get("WORKER_SERVICE_TOKEN")):
         logger.error("WORKER_SERVICE_TOKEN missing or too short")
+        return 2
+    env = str(environment or "demo").strip().lower()
+    if env not in {"demo", "live"}:
+        logger.error("environment must be demo or live")
         return 2
     client = RailwayWorkerClient(RailwayClientConfig.from_env())
     sup = LocalWorkerSupervisor()
@@ -243,9 +260,80 @@ def cmd_railway_dispatch_poll(*, once: bool = True, ack: bool = True) -> int:
             "worker_id": worker_id,
             "claim": claim,
             "live_submit_allowed": False,
+            "order_send": False,
         }
         job = claim.get("job") if isinstance(claim, dict) else None
-        if ack and isinstance(job, dict) and job.get("intent_id"):
+        if execute and isinstance(job, dict) and job.get("intent_id"):
+            intent_id = str(job["intent_id"])
+            auth = client.dispatch_execute_authorize(
+                worker_id=worker_id,
+                intent_id=intent_id,
+                account_environment=env,
+            )
+            entry["authorization"] = auth
+            auth_body = (
+                (auth.get("authorization") or {}) if isinstance(auth, dict) else {}
+            )
+            send_ok = bool(
+                isinstance(auth, dict)
+                and auth.get("ok")
+                and auth.get("order_send_allowed")
+            )
+            if env == "live" and not send_ok:
+                entry["live_execution"] = {
+                    "order_send": False,
+                    "reason": "live_order_send_fail_closed",
+                    "live_path_authorized": bool(
+                        auth_body.get("live_path_authorized")
+                    ),
+                }
+            elif send_ok:
+                broker = execute_market_order(
+                    symbol=str(auth_body.get("symbol") or ""),
+                    side=str(auth_body.get("side") or ""),
+                    volume=str(auth_body.get("volume") or ""),
+                    stop_loss=auth_body.get("stop_loss"),
+                    take_profit=auth_body.get("take_profit"),
+                    dry_run=bool(dry_run),
+                )
+                entry["broker"] = broker
+                entry["order_send"] = bool(broker.get("order_send"))
+                # Dry-run must never be recorded as a broker fill.
+                if broker.get("dry_run"):
+                    entry["execution_result"] = {
+                        "ok": True,
+                        "dry_run": True,
+                        "broker_fill": False,
+                        "order_send": False,
+                        "note": "dry_run_no_broker_submit",
+                    }
+                else:
+                    result_payload = {
+                        "ok": bool(broker.get("ok")),
+                        "retcode": broker.get("retcode"),
+                        "order_ticket": broker.get("order_ticket"),
+                        "deal_ticket": broker.get("deal_ticket"),
+                        "symbol": broker.get("symbol") or auth_body.get("symbol"),
+                        "side": broker.get("side") or auth_body.get("side"),
+                        "volume": broker.get("volume") or auth_body.get("volume"),
+                        "price": broker.get("price"),
+                        "environment": env,
+                        "idempotency_key": auth_body.get("idempotency_key") or "",
+                        "comment": broker.get("comment") or "",
+                        "detail": broker.get("error") or broker.get("comment") or "",
+                    }
+                    entry["execution_result"] = client.dispatch_execution_result(
+                        worker_id=worker_id,
+                        intent_id=intent_id,
+                        payload=result_payload,
+                    )
+            if ack:
+                entry["ack"] = client.dispatch_ack(
+                    worker_id=worker_id,
+                    intent_id=intent_id,
+                    detail="portable_execution_cycle_ack",
+                )
+        elif ack and isinstance(job, dict) and job.get("intent_id"):
             entry["ack"] = client.dispatch_ack(
                 worker_id=worker_id,
                 intent_id=str(job["intent_id"]),
@@ -256,7 +344,14 @@ def cmd_railway_dispatch_poll(*, once: bool = True, ack: bool = True) -> int:
             break
     print(
         json.dumps(
-            {"ok": True, "results": results, "live_submit_allowed": False},
+            {
+                "ok": True,
+                "results": results,
+                "live_submit_allowed": False,
+                "execute": bool(execute),
+                "environment": env,
+                "dry_run": bool(dry_run),
+            },
             indent=2,
         )
     )
@@ -679,6 +774,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Claim only; do not ACK (for lease/recovery tests)",
     )
+    p_poll.add_argument(
+        "--execute",
+        action="store_true",
+        help="OMS-authorize and execute (DEMO order_send; LIVE fail-closed)",
+    )
+    p_poll.add_argument(
+        "--env",
+        default="demo",
+        choices=("demo", "live"),
+        help="Account environment for authorize/execute",
+    )
+    p_poll.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Authorize path only — do not call MT5 order_send",
+    )
     sub.add_parser("railway-dispatch-recover")
     sub.add_parser("capacity")
     sub.add_parser("queue-status")
@@ -731,7 +842,12 @@ def main(argv: list[str] | None = None) -> int:
     if command == "railway-heartbeat":
         return cmd_railway_heartbeat()
     if command == "railway-dispatch-poll":
-        return cmd_railway_dispatch_poll(ack=not bool(getattr(args, "no_ack", False)))
+        return cmd_railway_dispatch_poll(
+            ack=not bool(getattr(args, "no_ack", False)),
+            execute=bool(getattr(args, "execute", False)),
+            environment=str(getattr(args, "env", "demo")),
+            dry_run=bool(getattr(args, "dry_run", False)),
+        )
     if command == "railway-dispatch-recover":
         return cmd_railway_dispatch_recover()
     if command == "connect-demo":

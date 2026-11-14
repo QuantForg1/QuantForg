@@ -34,6 +34,9 @@ from app.presentation.dependencies.mt5_workers import WorkerApi, WorkerAuth
 from app.presentation.schemas.mt5_workers import (
     DispatchAckRequest,
     DispatchClaimRequest,
+    DispatchDemoEnqueueRequest,
+    DispatchExecuteAuthorizeRequest,
+    DispatchExecutionResultRequest,
     DispatchFailRequest,
     DispatchLabEnqueueRequest,
     LabAttestAssignmentRequest,
@@ -286,7 +289,150 @@ async def dispatch_ack(
         return {"ok": False, "error": "lease_owner_mismatch"}
     except TimeoutError:
         return {"ok": False, "error": "lease_expired"}
-    return {"ok": True, "job": job.to_public_dict(), "live_submit_allowed": False}
+    return {
+        "ok": True,
+        "job": job.to_public_dict(),
+        "live_submit_allowed": False,
+        "broker_fill": False,
+        "note": "delivery_ack_is_not_broker_execution",
+    }
+
+
+@router.post("/dispatch/execute-authorize")
+async def dispatch_execute_authorize(
+    body: DispatchExecuteAuthorizeRequest,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> dict[str, Any]:
+    """Authorize OMS execution for a claimed intent. Does not order_send."""
+    from app.application.services.multi_account_oms_execution import (
+        authorize_worker_execution,
+    )
+
+    try:
+        worker = api.require_worker(body.worker_id)
+    except AuthorizationError as exc:
+        return {
+            "ok": False,
+            "error": getattr(exc, "code", None) or "worker_unauthorized",
+            "order_send_allowed": False,
+        }
+    queue = get_durable_dispatch_queue()
+    job = queue.get(body.intent_id)
+    if job is None:
+        return {"ok": False, "error": "intent_not_found", "order_send_allowed": False}
+    if job.lease_owner_worker_id != body.worker_id:
+        return {
+            "ok": False,
+            "error": "lease_owner_mismatch",
+            "order_send_allowed": False,
+        }
+    if (
+        job.user_id != worker.user_id
+        or job.broker_account_id != worker.broker_account_id
+    ):
+        return {
+            "ok": False,
+            "error": "assignment_mismatch",
+            "order_send_allowed": False,
+        }
+    auth = authorize_worker_execution(
+        worker=worker,
+        intent_id=body.intent_id,
+        job_payload=dict(job.payload or {}),
+        job_user_id=job.user_id,
+        job_broker_account_id=job.broker_account_id,
+        job_idempotency_key=job.idempotency_key,
+        account_environment=body.account_environment,
+    )
+    return {
+        "ok": auth.ok,
+        "authorization": auth.to_public_dict(),
+        "order_send_allowed": auth.order_send_allowed,
+        "order_send": False,
+        "live_submit_allowed": False,
+    }
+
+
+@router.post("/dispatch/execution-result")
+async def dispatch_execution_result(
+    body: DispatchExecutionResultRequest,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> dict[str, Any]:
+    """Persist actual broker response. Never invents fills from ACK."""
+    from app.application.services.multi_account_oms_execution import (
+        build_position_reconciliation_record,
+        parse_broker_execution_report,
+    )
+
+    try:
+        worker = api.require_worker(body.worker_id)
+    except AuthorizationError as exc:
+        return {
+            "ok": False,
+            "error": getattr(exc, "code", None) or "worker_unauthorized",
+        }
+    queue = get_durable_dispatch_queue()
+    job = queue.get(body.intent_id)
+    if job is None:
+        return {"ok": False, "error": "intent_not_found"}
+    if (
+        job.user_id != worker.user_id
+        or job.broker_account_id != worker.broker_account_id
+    ):
+        return {"ok": False, "error": "assignment_mismatch"}
+    report = parse_broker_execution_report(
+        intent_id=body.intent_id,
+        worker_id=body.worker_id,
+        body={
+            "ok": body.ok,
+            "retcode": body.retcode,
+            "order_ticket": body.order_ticket,
+            "deal_ticket": body.deal_ticket,
+            "symbol": body.symbol,
+            "side": body.side,
+            "volume": body.volume,
+            "price": body.price,
+            "environment": body.environment,
+            "idempotency_key": body.idempotency_key,
+            "comment": body.comment,
+        },
+    )
+
+    try:
+        updated = queue.record_broker_execution(
+            intent_id=body.intent_id,
+            worker_id=body.worker_id,
+            ok=report.ok,
+            retcode=report.retcode,
+            order_ticket=report.order_ticket,
+            deal_ticket=report.deal_ticket,
+            detail=body.detail or report.broker_comment,
+            broker_payload=report.raw_safe,
+        )
+    except KeyError:
+        return {"ok": False, "error": "intent_not_found"}
+    except PermissionError:
+        return {"ok": False, "error": "lease_owner_mismatch"}
+    except TimeoutError:
+        return {"ok": False, "error": "lease_expired"}
+    reconcile = build_position_reconciliation_record(
+        report=report,
+        user_id=worker.user_id,
+        broker_account_id=worker.broker_account_id,
+    )
+    return {
+        "ok": True,
+        "job": updated.to_public_dict(),
+        "broker_fill": bool(report.ok),
+        "order_send": True,
+        "retcode": report.retcode,
+        "order_ticket": report.order_ticket,
+        "deal_ticket": report.deal_ticket,
+        "position_reconciliation": reconcile,
+        "live_submit_allowed": False,
+    }
 
 
 @router.post("/dispatch/fail")
@@ -505,5 +651,120 @@ async def dispatch_lab_enqueue(
             "worker_id": str(worker.worker_id),
             "user_id": str(worker.user_id),
             "broker_account_id": str(worker.broker_account_id),
+        },
+    }
+
+
+@router.post("/dispatch/demo-enqueue", response_model=None)
+async def dispatch_demo_enqueue(
+    body: DispatchDemoEnqueueRequest,
+    _: WorkerAuth,
+    api: WorkerApi,
+) -> Any:
+    """Enqueue a DEMO-only intent for a dispatch_ready verified worker.
+
+    Allowed in Production. Never enables LIVE order_send. Requires real
+    login/server verification — no synthetic readiness.
+    """
+    try:
+        worker = api.require_worker(body.worker_id)
+    except NotFoundError:
+        return {"ok": False, "error": "worker_unauthorized", "order_send": False}
+    except AuthorizationError as exc:
+        return {
+            "ok": False,
+            "error": getattr(exc, "code", None) or "worker_unauthorized",
+            "order_send": False,
+        }
+
+    status = worker.public_status()
+    if not status.get("dispatch_ready"):
+        return {
+            "ok": False,
+            "error": "worker_not_dispatch_ready",
+            "not_ready_reasons": status.get("not_ready_reasons") or [],
+            "order_send": False,
+        }
+    if (
+        not (worker.account_login_verified or "").strip()
+        or not (worker.server_verified or "").strip()
+    ):
+        return {"ok": False, "error": "assignment_unverified", "order_send": False}
+    if worker.user_id is None or worker.broker_account_id is None:
+        return {"ok": False, "error": "assignment_incomplete", "order_send": False}
+
+    queue = get_durable_dispatch_queue()
+    if queue.is_user_kill_switched(worker.user_id):
+        return {"ok": False, "error": "user_kill_switch", "order_send": False}
+
+    side = (body.side or "BUY").strip().upper()
+    if side not in {"BUY", "SELL"}:
+        return {"ok": False, "error": "invalid_side", "order_send": False}
+
+    key = (body.idempotency_key or "").strip() or f"demo:{body.worker_id}:{uuid4()}"
+    signal = CentralSignalIntent.create(
+        symbol=(body.symbol or "XAUUSD").strip().upper(),
+        side=side,
+        quality=int(body.quality),
+        entry=Decimal(str(body.entry)),
+        stop_loss=Decimal(str(body.stop_loss)),
+        take_profit=Decimal(str(body.take_profit)),
+        idempotency_key=key,
+        metadata={
+            "account_environment": "demo",
+            "volume": str(body.volume or "0.01"),
+            "demo_enqueue": True,
+            "live_submit_allowed": False,
+        },
+    )
+    proposal = RiskSettingProposal(
+        planned_risk_pct=Decimal("10"),
+        aggregate_open_risk_pct=Decimal("30"),
+        max_lot=Decimal(str(body.volume or "0.01")),
+        daily_loss_pct=Decimal("48"),
+        max_concurrent_positions=1,
+    )
+    target = DispatchTarget(
+        user_id=worker.user_id,
+        broker_account_id=worker.broker_account_id,
+        proposal=proposal,
+        account=AccountReadiness(
+            status="active",
+            ownership_verified=True,
+            user_id=worker.user_id,
+        ),
+        worker=WorkerReadiness(
+            present=True,
+            ready=True,
+            trade_allowed=worker.trade_allowed,
+        ),
+    )
+    demo_settings = SimpleNamespace(
+        multi_account_dispatch_enabled=True,
+        multi_account_live_submit_enabled=multi_account_live_submit_allowed(),
+    )
+    plan, jobs = queue.plan_and_enqueue(
+        signal=signal,
+        targets=[target],
+        settings=demo_settings,
+    )
+    return {
+        "ok": True,
+        "account_environment": "demo",
+        "live_submit_allowed": False,
+        "order_send": False,
+        "dispatch_allowed": plan.dispatch_allowed,
+        "job_count": len(jobs),
+        "jobs": [j.to_public_dict() for j in jobs],
+        "assignment": {
+            "worker_id": str(worker.worker_id),
+            "user_id": str(worker.user_id),
+            "broker_account_id": str(worker.broker_account_id),
+            "login_masked": (
+                str(worker.account_login_verified or "")[-4:].rjust(7, "*")
+                if worker.account_login_verified
+                else ""
+            ),
+            "server_verified": worker.server_verified,
         },
     }

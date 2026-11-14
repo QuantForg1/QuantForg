@@ -150,7 +150,19 @@ class DurableDispatchQueue:
                             "volume": (
                                 str(item.intent.planned_volume)
                                 if item.intent.planned_volume is not None
-                                else None
+                                else (
+                                    str(
+                                        (signal.metadata or {}).get("volume")
+                                        or (item.evaluation.effective or {}).get(
+                                            "max_lot"
+                                        )
+                                        or "0.01"
+                                    )
+                                )
+                            ),
+                            "account_environment": str(
+                                (signal.metadata or {}).get("account_environment")
+                                or "demo"
                             ),
                             "delivery_suppressed": True,
                             "live_submit_allowed": False,
@@ -330,6 +342,101 @@ class DurableDispatchQueue:
                 worker_id=worker_id,
                 event_type="acked",
                 detail=detail or "delivery_ack",
+            )
+            self._events.append(event)
+            result = deepcopy(job)
+        self._mirror_job(result)
+        self._mirror_event(event)
+        return result
+
+    def record_broker_execution(
+        self,
+        *,
+        intent_id: UUID,
+        worker_id: UUID,
+        ok: bool,
+        retcode: int | None,
+        order_ticket: int | None,
+        deal_ticket: int | None,
+        detail: str = "",
+        broker_payload: dict[str, Any] | None = None,
+        now: datetime | None = None,
+    ) -> DispatchJob:
+        """Record actual broker response. Idempotent on filled/rejected terminal.
+
+        ACK alone is insufficient — this is the only path that marks FILLED /
+        REJECTED from multi-account OMS execution.
+        """
+        ts = now or datetime.now(UTC)
+        with self._lock:
+            key = self._by_id.get(intent_id)
+            if key is None:
+                raise KeyError("intent_not_found")
+            job = self._jobs[key]
+            if job.lease_owner_worker_id != worker_id and job.delivery_status not in {
+                DeliveryStatus.ACKED,
+                DeliveryStatus.DELIVERED,
+                DeliveryStatus.CLAIMED,
+            }:
+                raise PermissionError("lease_owner_mismatch")
+            # Idempotent: already terminal with same ticket → return as-is.
+            if job.state in {
+                AccountExecutionState.FILLED,
+                AccountExecutionState.REJECTED,
+            }:
+                existing_ticket = str((job.payload or {}).get("order_ticket") or "")
+                if order_ticket is not None and existing_ticket == str(order_ticket):
+                    return deepcopy(job)
+                if ok and job.state is AccountExecutionState.FILLED:
+                    return deepcopy(job)
+                if not ok and job.state is AccountExecutionState.REJECTED:
+                    return deepcopy(job)
+
+            if job.delivery_status is DeliveryStatus.CLAIMED:
+                job.delivery_status = DeliveryStatus.DELIVERED
+                job.delivered_at = ts
+            if job.delivery_status is DeliveryStatus.DELIVERED:
+                job.delivery_status = DeliveryStatus.ACKED
+                job.acked_at = ts
+            job.lease_owner_worker_id = worker_id
+            job.lease_expires_at = None
+            job.updated_at = ts
+            safe = dict(job.payload or {})
+            if broker_payload:
+                for k, v in broker_payload.items():
+                    if str(k).lower() in {
+                        "password",
+                        "token",
+                        "secret",
+                        "sealed",
+                        "credential",
+                    }:
+                        continue
+                    safe[k] = v
+            if order_ticket is not None:
+                safe["order_ticket"] = order_ticket
+            if deal_ticket is not None:
+                safe["deal_ticket"] = deal_ticket
+            if retcode is not None:
+                safe["retcode"] = retcode
+            safe["broker_execution_at"] = ts.isoformat()
+            safe["broker_execution_ok"] = bool(ok)
+            job.payload = safe
+            if ok:
+                job.state = AccountExecutionState.FILLED
+                job.last_error = ""
+                event_type = "broker_filled"
+            else:
+                job.state = AccountExecutionState.REJECTED
+                job.last_error = (detail or f"retcode={retcode}")[:500]
+                event_type = "broker_rejected"
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                worker_id=worker_id,
+                event_type=event_type,
+                detail=detail or event_type,
             )
             self._events.append(event)
             result = deepcopy(job)
