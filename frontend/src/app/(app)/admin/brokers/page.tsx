@@ -22,10 +22,22 @@ import {
   canAccessIteOps,
   iteOpsAccessDeniedMessage,
 } from "@/lib/auth/ite-ops-access";
+import {
+  brokerVerificationDisplayLabel,
+  isBrokerVerifiedStatus,
+} from "@/lib/broker/mt5-broker-catalog";
 
 function fmt(v: unknown, fallback = "—"): string {
   if (v === null || v === undefined || v === "") return fallback;
   return String(v);
+}
+
+function registryStatusLabel(row: Record<string, unknown>): string {
+  const explicit = str(row.display_label, "");
+  if (explicit) return explicit;
+  const code = str(row.verification_status, "");
+  if (code === "VERIFIED_LIVE" || code === "VERIFIED_DEMO") return "Verified";
+  return brokerVerificationDisplayLabel(str(row.connection_status, "not_verified"));
 }
 
 function healthTone(
@@ -314,13 +326,17 @@ export default function AdminBrokersPage() {
                 .map((s) => str(asRecord(s).name, ""))
                 .filter(Boolean)
                 .join(", ");
+              const statusLabel = registryStatusLabel(r);
+              const verified = isBrokerVerifiedStatus(
+                str(r.connection_status, ""),
+              ) || statusLabel === "Verified";
               return [
                 fmt(r.name, slug || "—"),
                 <Badge
                   key={`${slug}-status`}
-                  tone={r.connection_status === "production_verified" ? "success" : "neutral"}
+                  tone={verified ? "success" : "neutral"}
                 >
-                  {fmt(r.connection_status, "not_verified")}
+                  {statusLabel}
                 </Badge>,
                 r.connectable === true ? "Yes" : "No",
                 names || "—",

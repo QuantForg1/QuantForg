@@ -9,8 +9,8 @@ from app.domain.broker_connectivity.mt5_server_catalogue import (
 )
 
 
-def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
-    # Isolate from host evidence so connectable stays evidence-gated.
+def test_eight_live_brokers_owner_production_connectable(monkeypatch, tmp_path) -> None:
+    # Isolate from host evidence; owner-authorized LIVE set still connectable.
     empty = tmp_path / "empty_evidence.json"
     monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(empty))
     rows = broker_registry_rows()
@@ -27,18 +27,40 @@ def test_only_weltrade_is_connectable(monkeypatch, tmp_path) -> None:
         "pepperstone",
         "fp-markets",
     ):
-        assert slug in by_slug
-        # Operational connectable remains evidence-gated; customers may still select.
-        assert by_slug[slug]["connectable"] is False
-        assert by_slug[slug]["connection_status"] == "not_verified"
-        assert by_slug[slug]["customer_selectable"] is True
+        assert by_slug[slug]["connectable"] is True
+        assert by_slug[slug]["trade_allowed"] is True
+        assert by_slug[slug]["trading_enabled"] is True
+        assert by_slug[slug]["display_label"] == "Verified"
+        assert by_slug[slug]["verification_status"] == "VERIFIED_LIVE"
 
 
 def test_unverified_brokers_have_no_invented_servers() -> None:
-    assert verified_servers_for_broker("exness") == []
-    assert verified_servers_for_broker("hfm") == []
-    assert verified_servers_for_broker("justmarkets") == []
-    assert verified_servers_for_broker("fp-markets") == []
+    # Exness / HFM / JustMarkets: owner-authorized LIVE servers (trading-enabled).
+    hfm = verified_servers_for_broker("hfm")
+    assert any(r["name"] == "HFMarketsGlobal-Live20" and r["confirmed"] for r in hfm)
+    assert all(r.get("trade_allowed") is True for r in hfm)
+    # FP Markets / IC Markets: CONFIRMED from Windows MT5 portable auth evidence.
+    fp = verified_servers_for_broker("fp-markets")
+    assert any(r["name"] == "FPMarketsSC-Live" and r["confirmed"] for r in fp)
+    ic = verified_servers_for_broker("ic-markets")
+    assert any(r["name"] == "ICMarketsSC-MT5-3" and r["confirmed"] for r in ic)
+    jm = verified_servers_for_broker("justmarkets")
+    assert len(jm) == 1
+    assert jm[0]["name"] == "JustMarkets-Live7"
+    assert jm[0]["evidence_classification"] == "CONFIRMED"
+    assert jm[0]["confirmed"] is True
+    assert jm[0].get("trading_readiness") == "READY"
+    ex = verified_servers_for_broker("exness")
+    assert len(ex) == 1
+    assert ex[0]["name"] == "Exness-MT5Real10"
+    assert ex[0]["confirmed"] is True
+    assert ex[0].get("trade_allowed") is True
+    xm = verified_servers_for_broker("xm")
+    assert any(r["name"] == "XMGlobal-MT5 20" and r["confirmed"] for r in xm)
+    pepper = verified_servers_for_broker("pepperstone")
+    assert any(
+        r["name"] == "PepperstoneKE-MT5-Live01" and r["confirmed"] for r in pepper
+    )
 
 
 def test_weltrade_verified_servers_include_source_and_timestamp() -> None:
@@ -70,4 +92,5 @@ def test_catalogue_snapshot_gateway_note() -> None:
     snap = catalogue_snapshot()
     assert snap["gateway"]["requires_windows_mt5_terminal"] is True
     assert "brokers" in snap and "servers" in snap
-    assert snap["servers"]["exness"] == []
+    assert any(r["name"] == "Exness-MT5Real10" for r in snap["servers"]["exness"])
+    assert any(r["name"] == "XMGlobal-MT5 20" for r in snap["servers"]["xm"])

@@ -73,7 +73,7 @@ assert.deepEqual(
 
 const mapped = mapRegistryBrokers([
   { slug: "xm", connection_status: "demo_verified", connectable: true, customer_selectable: true },
-  { slug: "exness", connection_status: "not_verified", connectable: false, customer_selectable: true },
+  { slug: "exness", connection_status: "live_verified", connectable: true, customer_selectable: true },
 ]);
 assert.equal(mapped.find((b) => b.slug === "xm")?.customerSelectable, true);
 assert.equal(mapped.find((b) => b.slug === "exness")?.customerSelectable, true);

@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 /** Official / brand mark for a documented MT5 broker. */
@@ -14,6 +17,7 @@ export function BrokerLogo({
   className?: string;
   rounded?: "md" | "lg" | "full";
 }) {
+  const [failed, setFailed] = useState(false);
   const radius =
     rounded === "full" ? "rounded-full" : rounded === "md" ? "rounded-md" : "rounded-lg";
   return (
@@ -25,14 +29,26 @@ export function BrokerLogo({
       )}
       style={{ width: size, height: size, padding: Math.max(2, size * 0.08) }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={name}
-        width={size}
-        height={size}
-        className="h-full w-full object-contain"
-      />
+      {failed ? (
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]"
+          aria-hidden
+        >
+          {name.slice(0, 2)}
+        </span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={`${name} official logo`}
+          width={size}
+          height={size}
+          className="h-full w-full object-contain"
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      )}
     </span>
   );
 }
@@ -55,7 +71,7 @@ export function Mt5BrandMark({ size = 72, className }: { size?: number; classNam
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/brand/brokers/metatrader5-logo.png"
-        alt="MetaTrader 5"
+        alt="MetaTrader 5 official logo"
         width={size}
         height={size}
         className="relative z-[1] h-full w-full rounded-2xl object-contain"

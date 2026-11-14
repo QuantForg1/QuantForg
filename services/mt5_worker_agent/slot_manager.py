@@ -113,12 +113,29 @@ def prepare_portable_slot(
     return dest
 
 
+def _exe_from_command_line(command_line: str) -> str:
+    """Best-effort exe path from Win32 CommandLine when ExecutablePath is empty."""
+    raw = (command_line or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith('"'):
+        end = raw.find('"', 1)
+        if end > 1:
+            return raw[1:end]
+    return raw.split(" ", 1)[0]
+
+
 def _list_terminal_processes() -> list[tuple[int, str]]:
-    """Return (pid, executable_path) for terminal64/terminal via CIM."""
+    """Return (pid, executable_path) for terminal64/terminal via CIM.
+
+    On locked-down hosts ExecutablePath is often empty; fall back to
+    QueryFullProcessImageNameW, then CommandLine (needed to stop portable slots).
+    """
     script = (
         "Get-CimInstance Win32_Process -Filter "
         "\"Name='terminal64.exe' OR Name='terminal.exe'\" | "
-        "Select-Object ProcessId,ExecutablePath | ConvertTo-Json -Compress"
+        "Select-Object ProcessId,ExecutablePath,CommandLine | "
+        "ConvertTo-Json -Compress"
     )
     try:
         completed = subprocess.run(  # noqa: S603
@@ -162,6 +179,8 @@ def _list_terminal_processes() -> list[tuple[int, str]]:
             continue
         if not path:
             path = process_image_path(pid_i)
+        if not path:
+            path = _exe_from_command_line(str(row.get("CommandLine") or ""))
         out.append((pid_i, str(path)))
     return out
 
@@ -169,7 +188,7 @@ def _list_terminal_processes() -> list[tuple[int, str]]:
 def _find_slot_process(slot_id: str) -> tuple[int | None, bool]:
     exe = str(slot_terminal_exe(slot_id).resolve()).lower()
     for pid, path in _list_terminal_processes():
-        if (path or "").lower() == exe:
+        if _path_belongs_to_slot(path, slot_id=slot_id, exe=exe):
             return pid, True
     return None, False
 
@@ -194,15 +213,28 @@ def start_slot_terminal(slot_id: str) -> int:
     return int(proc.pid)
 
 
+def _path_belongs_to_slot(path: str, *, slot_id: str, exe: str) -> bool:
+    """True when process path is this portable slot (never LIVE Program Files)."""
+    norm = (path or "").lower().replace("/", "\\")
+    if not norm:
+        return False
+    if norm == exe:
+        return True
+    marker = f"mt5_worker_slots\\{slot_id}\\".lower()
+    return marker in norm and "program files" not in norm
+
+
 def stop_slot_terminal(slot_id: str) -> bool:
     """Stop only this slot's terminal process. Never touches LIVE path."""
+    import time
+
     exe = str(slot_terminal_exe(slot_id).resolve()).lower()
     live = str(live_terminal_path().resolve()).lower()
     if exe == live:
         raise RuntimeError("Refusing to stop LIVE terminal via slot manager")
     stopped = False
     for pid, path in _list_terminal_processes():
-        if (path or "").lower() != exe:
+        if not _path_belongs_to_slot(path, slot_id=slot_id, exe=exe):
             continue
         for force in (False, True):
             args = [_TASKKILL, "/PID", str(pid), "/T"]
@@ -232,7 +264,32 @@ def stop_slot_terminal(slot_id: str) -> bool:
                 completed.returncode,
                 (completed.stderr or completed.stdout or "")[:200],
             )
-    return stopped
+    time.sleep(0.5)
+    # Soft taskkill can report success while the process briefly remains.
+    for pid, path in _list_terminal_processes():
+        if not _path_belongs_to_slot(path, slot_id=slot_id, exe=exe):
+            continue
+        completed = subprocess.run(  # noqa: S603
+            [_TASKKILL, "/PID", str(pid), "/T", "/F"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if completed.returncode == 0:
+            stopped = True
+            logger.info("slot_terminal_force_reaped slot=%s pid=%s", slot_id, pid)
+    time.sleep(0.3)
+    _, still = _find_slot_process(slot_id)
+    if still:
+        # Also match via slot marker when ExecutablePath resolution differs.
+        for pid, path in _list_terminal_processes():
+            if _path_belongs_to_slot(path, slot_id=slot_id, exe=exe):
+                still = True
+                break
+        else:
+            still = False
+    return bool(stopped) and not still
 
 
 def slot_status(slot_id: str) -> SlotStatus:

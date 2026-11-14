@@ -277,4 +277,5 @@ docs/production/execution/execution_history.*
 
 # Local MT5 worker agent secrets + portable slot trees (outside or inside workspace)
 deploy/mt5_worker_agent/local.env
+deploy/mt5_worker_agent/verify_results/
 mt5_worker_slots/

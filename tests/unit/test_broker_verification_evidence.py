@@ -8,6 +8,7 @@ from app.domain.broker_connectivity.broker_verification_evidence import (
     connectable_slugs_from_evidence,
     ingest_worker_report,
     load_evidence,
+    record_owner_trade_enablement,
     record_verification_failure,
     record_verification_success,
 )
@@ -80,14 +81,80 @@ def test_ingest_strips_password_keys(tmp_path: Path) -> None:
     assert "HFMarketsGlobal-Demo" in raw
 
 
-def test_catalogue_exness_hfm_not_connectable_without_evidence(
+def test_catalogue_exness_hfm_owner_authorized_connectable(
     monkeypatch, tmp_path: Path
 ) -> None:
     path = tmp_path / "empty.json"
     monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(path))
     rows = {r["slug"]: r for r in broker_registry_rows()}
     assert rows["weltrade"]["connectable"] is True
-    assert rows["exness"]["connectable"] is False
-    assert rows["hfm"]["connectable"] is False
-    assert verified_servers_for_broker("exness") == []
-    assert verified_servers_for_broker("hfm") == []
+    # Owner-authorized Production enablement without local evidence.
+    assert rows["exness"]["connectable"] is True
+    assert rows["exness"]["trade_allowed"] is True
+    assert rows["exness"]["trading_enabled"] is True
+    assert rows["hfm"]["connectable"] is True
+    assert rows["justmarkets"]["connectable"] is True
+    exness = verified_servers_for_broker("exness")
+    assert all(r.get("confirmed") is True for r in exness)
+    assert all(r.get("trade_allowed") is True for r in exness)
+    hfm = verified_servers_for_broker("hfm")
+    assert any(r["name"] == "HFMarketsGlobal-Live20" for r in hfm)
+
+
+def test_owner_attestation_funding_required_does_not_enable_trading(
+    tmp_path: Path,
+) -> None:
+    from app.domain.broker_connectivity.broker_verification_evidence import (
+        record_owner_attestation,
+    )
+
+    path = tmp_path / "evidence.json"
+    # Preserve a prior auth failure in the trail first.
+    record_verification_failure(
+        broker_slug="exness",
+        error="authenticated_trading_not_enabled",
+        server="Exness-MT5Real10",
+        path=path,
+    )
+    entry = record_owner_attestation(
+        broker_slug="exness",
+        server="Exness-MT5Real10",
+        login=409906277,
+        prior_auth_error="authenticated_trading_not_enabled",
+        prior_auth_at="2026-11-14T09:08:43+00:00",
+        screenshot_refs=["owner_attestation/exness_portal.png"],
+        path=path,
+    )
+    assert entry["connection_status"] == "live_verified"
+    assert entry["verification_status"] == "VERIFIED_LIVE"
+    assert entry["display_label"] == "Verified"
+    assert entry["verification_method"] == "OWNER_ATTESTATION"
+    assert entry["trading_readiness"] == "FUNDING_REQUIRED"
+    assert entry["trade_allowed"] is False
+    assert entry["trading_enabled"] is False
+    assert entry["connectable"] is False
+    assert entry["account_verified"] is True
+    assert connectable_slugs_from_evidence(path) == set()
+    assert len(entry["failure_history"]) >= 2
+    raw = path.read_text(encoding="utf-8").lower()
+    assert "master_password" not in raw
+    assert "kigaliyacu" not in raw
+    assert "409906277" not in path.read_text(encoding="utf-8")
+    assert "***6277" in path.read_text(encoding="utf-8")
+
+
+def test_owner_trade_enablement_promotes_connectable(tmp_path: Path) -> None:
+    path = tmp_path / "evidence.json"
+    entry = record_owner_trade_enablement(
+        broker_slug="hfm",
+        server="HFMarketsGlobal-Live20",
+        login=261122172,
+        path=path,
+    )
+    assert entry["connectable"] is True
+    assert entry["trade_allowed"] is True
+    assert entry["trading_enabled"] is True
+    assert entry["verification_status"] == "VERIFIED_LIVE"
+    assert entry["display_label"] == "Verified"
+    assert connectable_slugs_from_evidence(path) == {"hfm"}
+    assert "261122172" not in path.read_text(encoding="utf-8")
