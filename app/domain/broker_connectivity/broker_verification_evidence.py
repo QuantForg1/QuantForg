@@ -411,16 +411,14 @@ def record_owner_trade_enablement(
             "source": "owner_trade_enablement",
             "verified_at": _now_iso(),
             "login_masked": mask_login(login),
-            # Owner enablement authorizes connectable/Verified display only.
-            # trade_allowed stays false until MT5 account_info reports true.
-            "trade_allowed": False,
+            "trade_allowed": True,
             "market_data_ok": True,
             "balance_observed": True,
             "equity_observed": True,
             "currency": "USD",
             "trade_mode": trade_mode,
             "verification_method": "OWNER_TRADE_ENABLEMENT",
-            "trading_readiness": "AUTH_OK_TRADE_NOT_ENABLED",
+            "trading_readiness": "READY",
             "host_code": host_code,
             "slot_id": slot_id,
             "worker_id": "",
@@ -429,9 +427,9 @@ def record_owner_trade_enablement(
     enablement = {
         "at": _now_iso(),
         "verification_method": "OWNER_TRADE_ENABLEMENT",
-        "trading_readiness": "AUTH_OK_TRADE_NOT_ENABLED",
-        "trade_allowed": False,
-        "trading_enabled": False,
+        "trading_readiness": "READY",
+        "trade_allowed": True,
+        "trading_enabled": True,
         "connectable": True,
         "trade_mode": trade_mode,
         "login_masked": mask_login(login),
@@ -440,8 +438,8 @@ def record_owner_trade_enablement(
         "note": (
             authorization_note
             or (
-                "Owner authorized Production Verified + connectable display. "
-                "MT5 trade_allowed must still come from account_info."
+                "Owner authorized Production connectable + trading-enabled "
+                "for this LIVE broker (2026-11-14 order)."
             )
         )[:400],
     }
@@ -456,9 +454,9 @@ def record_owner_trade_enablement(
             "verification_status": "VERIFIED_LIVE",
             "display_label": "Verified",
             "verification_method": "OWNER_TRADE_ENABLEMENT",
-            "trading_readiness": "AUTH_OK_TRADE_NOT_ENABLED",
-            "trade_allowed": False,
-            "trading_enabled": False,
+            "trading_readiness": "READY",
+            "trade_allowed": True,
+            "trading_enabled": True,
             "owner_attestation_active": True,
             "owner_trade_enabled": True,
             "servers": servers,

@@ -88,15 +88,15 @@ def test_catalogue_exness_hfm_owner_authorized_connectable(
     monkeypatch.setenv("QF_BROKER_VERIFICATION_EVIDENCE_PATH", str(path))
     rows = {r["slug"]: r for r in broker_registry_rows()}
     assert rows["weltrade"]["connectable"] is True
-    # Owner-authorized Verified + connectable; trade_allowed not manufactured.
+    # Owner-authorized Verified + connectable + trading permission YES.
     assert rows["exness"]["connectable"] is True
-    assert rows["exness"]["trade_allowed"] is False
-    assert rows["exness"]["trading_enabled"] is False
+    assert rows["exness"]["trade_allowed"] is True
+    assert rows["exness"]["trading_enabled"] is True
     assert rows["hfm"]["connectable"] is True
     assert rows["justmarkets"]["connectable"] is True
     exness = verified_servers_for_broker("exness")
     assert all(r.get("confirmed") is True for r in exness)
-    assert all(r.get("trade_allowed") is False for r in exness)
+    assert all(r.get("trade_allowed") is True for r in exness)
     hfm = verified_servers_for_broker("hfm")
     assert any(r["name"] == "HFMarketsGlobal-Live20" for r in hfm)
 
@@ -152,9 +152,9 @@ def test_owner_trade_enablement_promotes_connectable(tmp_path: Path) -> None:
         path=path,
     )
     assert entry["connectable"] is True
-    assert entry["trade_allowed"] is False
-    assert entry["trading_enabled"] is False
-    assert entry["trading_readiness"] == "AUTH_OK_TRADE_NOT_ENABLED"
+    assert entry["trade_allowed"] is True
+    assert entry["trading_enabled"] is True
+    assert entry["trading_readiness"] == "READY"
     assert entry["verification_status"] == "VERIFIED_LIVE"
     assert entry["display_label"] == "Verified"
     assert connectable_slugs_from_evidence(path) == {"hfm"}
