@@ -1,5 +1,26 @@
 # Phase 5 — Institutional Control Center delivery report
 
+**PR:** https://github.com/QuantForg1/QuantForg/pull/273 — **MERGED** 2026-11-14  
+**Merge commit:** `2a8b5d0fd242cbcf43931b7fd6bbc73e06799db1`  
+**Branch:** `feat/phase5-institutional-control-center`  
+**Freeze citation:** `docs/production/PHASE5_INSTITUTIONAL_CONTROL_CENTER_FREEZE.md`
+
+## Production verify
+
+| Surface | Result |
+|---|---|
+| Railway `/api/v1/health` | **200** `ok` commit `2a8b5d0f…` |
+| Railway `/api/v1/version` | production `git_commit` matches merge |
+| Railway `/api/v1/institutional-ops/health` | **401** without auth (route live; auth required) |
+| `www.quantforg.com/login` | **200** |
+| Vercel frontend + quant-forg (merge SHA) | **rate-limited** (Pro build limit; retry ~24h) — new UI routes **404** until frontend redeploys |
+| LIVE test orders | **not performed** |
+
+## CI
+
+GitHub Actions (lint, typecheck, unit, trading_core, frontend, integration): **SUCCESS**  
+Vercel Production statuses on merge: failed due to account build rate limit (not code). Preview on PR: frontend passed; quant-forg rate-limited.
+
 ## Summary
 
 Phase 5 productizes existing ops/governance/execution surfaces behind seven
@@ -40,5 +61,7 @@ No parallel trading architecture. No LIVE order submission from this phase.
 
 ## Tests
 
-- `tests/unit/test_phase5_institutional_ops_control.py`
-- `frontend/src/lib/trading/phase5-ops-contract.test.ts`
+- `tests/unit/test_phase5_institutional_ops_control.py` — 12 passed
+- `pytest -m trading_core` — 2186 passed, 3 xfailed
+- `frontend/src/lib/trading/phase5-ops-contract.test.ts` — ok
+- `tsc --noEmit` — clean
