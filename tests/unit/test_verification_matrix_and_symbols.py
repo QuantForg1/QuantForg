@@ -25,7 +25,10 @@ def test_matrix_targets_seven_non_weltrade_brokers(monkeypatch, tmp_path: Path) 
     assert "justmarkets" in ordered
     assert "weltrade" not in ordered
     for row in matrix["brokers"]:
-        assert row["connectable"] is False
+        # Owner-authorized LIVE brokers are connectable in Production catalogue.
+        assert row["connectable"] is True
+        assert row["display_label"] == "Verified"
+        # Session PASS still requires authenticated evidence rows.
         assert row["demo"]["status"] == "BLOCKED"
         assert row["live"]["status"] == "BLOCKED"
 
