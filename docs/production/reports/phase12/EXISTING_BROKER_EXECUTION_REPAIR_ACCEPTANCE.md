@@ -1,7 +1,7 @@
 # Existing Broker Execution Repair — Acceptance
 
 **Date (UTC):** 2026-11-14  
-**Verdict: PARTIAL** — planning refuse gate repaired; Production `dispatch_ready≥1` and OMS `order_send` fan-out remain blocked  
+**Verdict: PARTIAL** — planning refuse gate repaired; ≥1 Production `dispatch_ready=true` proven with XM DEMO; OMS `order_send` fan-out still blocked  
 **Orders submitted:** **0**  
 **Broker catalogue / servers / adapters:** **unchanged** (no re-verification campaign)  
 **Flags preserved:** Prod `MULTI_ACCOUNT_DISPATCH_ENABLED=true` · `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED=true` · `FORCE_FIRST_TRADE=false` · `QF_ALLOW_WORKER_ON_LIVE_TERMINAL=false`
@@ -14,7 +14,7 @@
 |---|---|---|
 | R1 | `live_submit_armed_refused` refused **all** multi-account ITE/queue planning whenever LIVE_SUBMIT=true | **PASS** (fixed) — planning now allowed; queue still never arms submit |
 | R2 | Claim/ACK never called OMS / `order_send` | **BLOCKED** — OMS **preview** added; broker submit still unwired by design |
-| R3 | Production workers `dispatch_ready=0` (agent historically → Staging) | **BLOCKED** — Production env file prepared on host; readiness proof pending portable DEMO auth against Production |
+| R3 | Production workers `dispatch_ready=0` (agent historically → Staging) | **PASS** — Production-targeted agent registered; XM DEMO portable verify; fresh heartbeat → `dispatch_ready=true` |
 | R4 | Singleton Weltrade remains sole LIVE `order_send` path | **PASS** (preserved) |
 
 Audit confirmation: [execution path audit](b51531a4-5bb3-45f8-a70d-60a18eea6a2a).
@@ -57,7 +57,7 @@ Audit confirmation: [execution path audit](b51531a4-5bb3-45f8-a70d-60a18eea6a2a)
 | Production `WORKER_SERVICE_TOKEN` | Present (Railway; value not printed) |
 | Staging `local.env` | Preserved (untouched) |
 | `local.production.env` on host | Created (gitignored) targeting Production |
-| Production `dispatch_ready` proven this session | **0** / **BLOCKED** |
+| Production `dispatch_ready` proven this session | **≥1 PASS** (`prod-windows-1` / `demo-a`, XM DEMO `XMGlobal-MT5 2`, login masked `***0464`, `trade_allowed=true`, `not_ready_reasons=[]`) |
 | Weltrade LIVE Program Files | Not used as worker slot |
 
 ---
@@ -79,7 +79,7 @@ Audit confirmation: [execution path audit](b51531a4-5bb3-45f8-a70d-60a18eea6a2a)
 |---|---|
 | Per-account claim binding | **PASS** (existing) |
 | Cross-user routing | Fail-closed on assignment mismatch |
-| Concurrent Production DEMO proof | **BLOCKED** (no dispatch-ready worker) |
+| Concurrent Production DEMO proof | **PARTIAL** — one Production worker dispatch-ready; multi-slot concurrency not re-proven this session |
 
 ---
 
@@ -167,6 +167,6 @@ Audit confirmation: [execution path audit](b51531a4-5bb3-45f8-a70d-60a18eea6a2a)
 |---|---|
 | Refuse-when-armed incorrectly blocking authorized DISPATCH path | **PASS** (fixed) |
 | Existing brokers re-verified | **N/A** (not done — by Owner instruction) |
-| Production dispatch-ready workers | **FAIL / BLOCKED** |
+| Production dispatch-ready workers | **PASS** (≥1 XM DEMO) |
 | Multi-account OMS `order_send` | **BLOCKED** |
-| Completion (connect → ready → signal → execute) | **NOT COMPLETE** |
+| Completion (connect → ready → signal → execute) | **NOT COMPLETE** (execute still delivery-only / no order_send) |
