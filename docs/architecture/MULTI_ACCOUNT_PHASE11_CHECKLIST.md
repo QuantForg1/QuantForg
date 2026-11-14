@@ -1,9 +1,9 @@
 # Phase 11 — Demo auth proof + approved staging dispatch (checklist)
 
-**Status:** IN PROGRESS — prep + first real demo auth (XM) captured 2026-11-14.  
-**Blocked until:** Remaining protected `QF_DEMO_*` for other brokers **and** written staging-dispatch approval (section D).  
-**Baseline runtime:** current `main` / Railway staging+prod (re-read `/api/v1/version` before D).  
-**Evidence:** `docs/production/reports/phase11/PHASE11_PREP_AND_XM_DEMO_AUTH_2026-11-14.md`
+**Status:** IN PROGRESS — portable DEMO **8/8** verified; E1–E15 Mocked/unit green; section **D** blocked pending written staging-dispatch approval.  
+**Blocked until:** Written staging-dispatch approval (section D) **and** Owner clarification of PR #259 Production LIVE flags vs Phase 11 hard locks.  
+**Baseline runtime:** re-read `/api/v1/version` on staging+prod before D.  
+**Evidence:** `docs/production/reports/phase11/PHASE11_DEMO_AUTH_MATRIX_2026-11-14.md`, `PHASE11_STATUS_2026-11-14.md`
 
 ## Hard locks (never flip in Phase 11)
 
@@ -23,10 +23,10 @@ No Production orders. No real-money tests. Never print/commit/chat credentials.
 
 | # | Prerequisite | Status template |
 |---|---|---|
-| P1 | Disposable demo MT5 credentials in **protected** Windows host `deploy/mt5_worker_agent/local.env` as `QF_DEMO_LOGIN` / `QF_DEMO_PASSWORD` / `QF_DEMO_SERVER` (or broker-specific `QF_DEMO_<BROKER>_*`) | ◐ XM demo present+verified; 7 other demos missing keys (2026-11-14) |
-| P2 | Same material on **staging API** only if sealed-claim path is required for the test | ☐ |
+| P1 | Disposable demo MT5 credentials in **protected** Windows host `deploy/mt5_worker_agent/local.env` as `QF_DEMO_LOGIN` / `QF_DEMO_PASSWORD` / `QF_DEMO_SERVER` (or broker-specific `QF_DEMO_<BROKER>_*`) | ✅ 8/8 DEMO triples present + portable MT5 verified |
+| P2 | Same material on **staging API** only if sealed-claim path is required for the test | ☐ only if sealed-claim path required for D/E |
 | P3 | Written approval: staging-only `MULTI_ACCOUNT_DISPATCH_ENABLED=true` | ☐ **do not enable until Owner replies** |
-| P4 | Staging Railway SHA is current `main` (contains Phase 9 dry-run) | ◐ re-confirm `/api/v1/version` before section D |
+| P4 | Staging Railway SHA is current `main` (contains Phase 9 dry-run) | ◐ observed `c2659a7d`; re-confirm before D |
 | P5 | Portable slots `demo-a`/`demo-b` present; LIVE Program Files terminal untouched | ◐ `demo-a` ready; `demo-b` absent; soft cap 1; LIVE protected |
 
 When P1–P5 are satisfied, execute sections A→F without requesting secrets in chat.
