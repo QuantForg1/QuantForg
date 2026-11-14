@@ -109,6 +109,7 @@ export function TerminalShell() {
   const layoutRef = useRef(layout);
   const focusRef = useRef(focus);
   const lastAuditKey = useRef("");
+  const mobileLayoutSeeded = useRef(false);
 
   useEffect(() => {
     layoutRef.current = layout;
@@ -178,7 +179,12 @@ export function TerminalShell() {
           ...prev,
           leftCollapsed: true,
           rightCollapsed: true,
+          counselCollapsed: true,
+          ...(mobileLayoutSeeded.current
+            ? {}
+            : { bottomCollapsed: true }),
         }));
+        mobileLayoutSeeded.current = true;
       }
     };
     apply();
@@ -430,7 +436,7 @@ export function TerminalShell() {
   const showRight =
     !isMobile && !layout.rightCollapsed && !layout.chartFullscreen;
   const showBottom = !layout.bottomCollapsed && !layout.chartFullscreen;
-  const showCounsel = !layout.chartFullscreen;
+  const showCounsel = !isMobile && !layout.chartFullscreen;
 
   const bidOk = Number.isFinite(bid) ? bid : undefined;
   const askOk = Number.isFinite(ask) ? ask : undefined;
@@ -452,6 +458,11 @@ export function TerminalShell() {
             <h1 className="shrink-0 text-[11px] font-semibold tracking-tight text-[var(--fg)]">
               Terminal
             </h1>
+            {isMobile ? (
+              <span className="truncate font-mono text-[11px] font-medium text-[var(--accent)]">
+                {symbol}
+              </span>
+            ) : null}
             <span className="hidden h-3 w-px bg-[var(--border)] sm:block" aria-hidden />
             <span className="qf-caption hidden truncate text-[var(--fg-subtle)] sm:inline">
               Chart primary
@@ -523,21 +534,25 @@ export function TerminalShell() {
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-[11px]"
+              data-compact
               onClick={() =>
                 patchLayout({ bottomCollapsed: !layout.bottomCollapsed })
               }
             >
               {layout.bottomCollapsed ? "Blotter" : "Hide"}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Keyboard shortcuts"
-              onClick={() => setHelpOpen(true)}
-            >
-              <Keyboard className="h-4 w-4" />
-            </Button>
+            {!isMobile ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                data-compact
+                aria-label="Keyboard shortcuts"
+                onClick={() => setHelpOpen(true)}
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
         </div>
         <TerminalSessionBar
@@ -660,30 +675,37 @@ export function TerminalShell() {
       {isMobile && !layout.chartFullscreen ? (
         <>
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-[4.75rem] z-20 flex justify-center gap-3 px-4"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="pointer-events-none absolute inset-x-0 z-20 px-3"
+            style={{
+              bottom: `calc(var(--shell-mobile-fab-offset) + ${showBottom ? layout.bottomHeight : 0}px)`,
+            }}
           >
-            <Button
-              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-[var(--shadow-elevated)]"
-              disabled={!connected}
-              onClick={() => {
-                patchLayout({ mobileTicketOpen: true });
-                window.setTimeout(() => ticketRef.current?.buy(), 60);
-              }}
-            >
-              BUY
-            </Button>
-            <Button
-              variant="danger"
-              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-[var(--shadow-elevated)]"
-              disabled={!connected}
-              onClick={() => {
-                patchLayout({ mobileTicketOpen: true });
-                window.setTimeout(() => ticketRef.current?.sell(), 60);
-              }}
-            >
-              SELL
-            </Button>
+            <div className="pointer-events-auto flex items-center gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_94%,transparent)] p-2 shadow-[var(--shadow-elevated)] backdrop-blur-md">
+              <span className="shrink-0 truncate font-mono text-xs font-semibold text-[var(--fg)]">
+                {symbol}
+              </span>
+              <Button
+                className="h-11 min-w-0 flex-1 text-sm font-semibold"
+                disabled={!connected}
+                onClick={() => {
+                  patchLayout({ mobileTicketOpen: true });
+                  window.setTimeout(() => ticketRef.current?.buy(), 60);
+                }}
+              >
+                BUY
+              </Button>
+              <Button
+                variant="danger"
+                className="h-11 min-w-0 flex-1 text-sm font-semibold"
+                disabled={!connected}
+                onClick={() => {
+                  patchLayout({ mobileTicketOpen: true });
+                  window.setTimeout(() => ticketRef.current?.sell(), 60);
+                }}
+              >
+                SELL
+              </Button>
+            </div>
           </div>
 
           <div

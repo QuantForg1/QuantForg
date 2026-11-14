@@ -370,7 +370,7 @@ export default function SettingsPage() {
       />
 
       <div
-        className="mb-[var(--space-4)] -mx-1 flex gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-1 sm:flex-wrap sm:overflow-visible"
+        className="mb-[var(--space-4)] -mx-1 flex h-9 gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-1 scrollbar-none sm:h-auto sm:flex-wrap sm:overflow-visible"
         role="tablist"
         aria-label="Settings sections"
       >
@@ -383,8 +383,8 @@ export default function SettingsPage() {
             variant="ghost"
             className={
               tab === t
-                ? "h-8 shrink-0 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] hover:text-[var(--accent-fg)]"
-                : "h-8 shrink-0 text-[var(--fg-muted)]"
+                ? "h-9 shrink-0 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] hover:text-[var(--accent-fg)] sm:h-8"
+                : "h-9 shrink-0 text-[var(--fg-muted)] sm:h-8"
             }
             onClick={() => setTab(t)}
           >

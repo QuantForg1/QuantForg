@@ -91,24 +91,83 @@ def _session_from_response(
     )
 
 
+def _provider_error_text(exc: Exception) -> str:
+    """Best-effort extract of GoTrue / httpx error fields for mapping."""
+    fragments: list[str] = []
+    for attr in ("message", "msg", "error_description", "error", "code"):
+        raw = getattr(exc, attr, None)
+        if raw is not None:
+            text = str(raw).strip()
+            if text:
+                fragments.append(text)
+    status = getattr(exc, "status", None)
+    if status is not None:
+        fragments.append(f"status:{status}")
+    base = str(exc).strip()
+    if base and base not in fragments:
+        fragments.append(base)
+    return " ".join(fragments) if fragments else "Authentication failed"
+
+
 def _map_auth_error(exc: Exception) -> AuthenticationError:
-    message = str(exc).strip() or "Authentication failed"
-    lowered = message.lower()
+    composite = _provider_error_text(exc)
+    lowered = composite.lower()
     code = "authentication_failed"
     details: dict[str, object] = {"source": "supabase"}
-    if "rate limit" in lowered or "over_email_send_rate_limit" in lowered:
+    status = getattr(exc, "status", None)
+
+    if (
+        status == 429
+        or "rate limit" in lowered
+        or "over_email_send_rate_limit" in lowered
+        or "too many requests" in lowered
+    ):
         code = "auth_rate_limited"
-        logger.warning(
-            "supabase_auth_rate_limited",
-            provider_message=message[:300],
-        )
     elif "invalid login" in lowered or "invalid credentials" in lowered:
         code = "invalid_credentials"
-    elif "already registered" in lowered or "user already" in lowered:
+    elif (
+        "already registered" in lowered
+        or "user already" in lowered
+        or "email_exists" in lowered
+        or "email address is already" in lowered
+    ):
         code = "email_already_registered"
-    elif "email not confirmed" in lowered:
+    elif "email not confirmed" in lowered or "email_not_confirmed" in lowered:
         code = "email_not_verified"
-    return AuthenticationError(message, code=code, details=details)
+    elif (
+        ("signup" in lowered or "sign up" in lowered)
+        and ("not allowed" in lowered or "disabled" in lowered)
+    ) or "signups not allowed" in lowered:
+        code = "signup_disabled"
+    elif any(
+        phrase in lowered
+        for phrase in (
+            "weak password",
+            "password is too weak",
+            "password strength",
+            "password should be",
+        )
+    ):
+        code = "weak_password"
+    elif (
+        "oauth" in lowered and ("disabled" in lowered or "not enabled" in lowered)
+    ) or "provider is disabled" in lowered:
+        code = "oauth_provider_unavailable"
+    elif "identity" in lowered and "mismatch" in lowered:
+        code = "identity_mismatch"
+    elif "redirect" in lowered and "oauth" in lowered:
+        code = "oauth_redirect_failed"
+
+    if code == "authentication_failed":
+        logger.warning(
+            "supabase_auth_error_unmapped",
+            error_type=type(exc).__name__,
+            provider_message=composite[:500],
+            mapped_code=code,
+        )
+
+    public_message = composite if composite else "Authentication failed"
+    return AuthenticationError(public_message, code=code, details=details)
 
 
 class SupabaseAuthAdapter:
@@ -129,16 +188,20 @@ class SupabaseAuthAdapter:
     ) -> AuthSession:
         def _call() -> AuthSession:
             try:
+                options: dict[str, Any] = {
+                    "data": {
+                        "display_name": display_name,
+                        "full_name": display_name,
+                    }
+                }
+                redirect = (self._supabase.settings.auth_redirect_url or "").strip()
+                if redirect:
+                    options["email_redirect_to"] = redirect
                 response = self._client().auth.sign_up(
                     {
                         "email": email,
                         "password": password,
-                        "options": {
-                            "data": {
-                                "display_name": display_name,
-                                "full_name": display_name,
-                            }
-                        },
+                        "options": options,
                     }
                 )
                 return _session_from_response(response, allow_empty_session=True)
