@@ -161,8 +161,9 @@ async def accounts_overview(user: CurrentUser) -> dict[str, Any]:
     ops_summary: dict[str, Any] = {}
     dispatch_status: dict[str, Any] = {}
     try:
-        from app.application.services import multi_account_ops as ma
+        import importlib
 
+        ma = importlib.import_module("app.application.services.multi_account_ops")
         if hasattr(ma, "ops_summary"):
             raw = ma.ops_summary()
             if isinstance(raw, dict):
