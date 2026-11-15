@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { env, getRuntimeApiBaseUrl } from "@/lib/env";
 import {
   clearSession,
   getAccessToken,
@@ -156,7 +156,7 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!refresh) return null;
   const { signal, cleanup } = mergeAbortSignals(undefined, API_AUTH_TIMEOUT_MS);
   try {
-    const res = await fetch(`${env.apiBaseUrl}/auth/refresh`, {
+    const res = await fetch(`${getRuntimeApiBaseUrl()}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
@@ -200,14 +200,17 @@ function toNetworkApiError(err: unknown, requestId: string): ApiError {
       requestId,
     );
   }
+  const cause = err instanceof Error ? err.message : String(err);
+  const apiBaseUrl = getRuntimeApiBaseUrl();
   return new ApiError(
-    "Unable to reach the QuantForg API. Check connection and API base URL.",
+    "Unable to reach the QuantForg API. Check your connection and try again.",
     0,
     "network_error",
     {
       fault: "API_UNREACHABLE",
-      cause: err instanceof Error ? err.message : String(err),
-      apiBaseUrl: env.apiBaseUrl,
+      cause,
+      apiBaseUrl,
+      configuredApiBaseUrl: env.apiBaseUrl,
     },
     requestId,
   );
@@ -254,7 +257,8 @@ async function apiFetchUndeduped<T>(
     explicitToken: token === undefined ? undefined : token,
     storedToken: getAccessToken(),
   });
-  const url = path.startsWith("http") ? path : `${env.apiBaseUrl}${path}`;
+  const apiBase = getRuntimeApiBaseUrl();
+  const url = path.startsWith("http") ? path : `${apiBase}${path}`;
   const safePath = path.startsWith("http") ? new URL(path).pathname : path;
   if (authResolution.rejectCode) {
     throw new ApiError(

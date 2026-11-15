@@ -52,115 +52,152 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
       ? ask - bid
       : null;
 
+  const maskedLogin = (() => {
+    const raw = str(session.login, "");
+    const digits = raw.replace(/\D/g, "") || raw.trim();
+    if (!digits) return "—";
+    if (digits.length <= 4) return "••••";
+    return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
+  })();
+
+  const accountLine = (
+    <span className="truncate qf-caption tabular text-[var(--fg-muted)]">
+      {session.connected ? "Owned" : "Offline"}
+      <span className="text-[var(--fg-subtle)]"> · </span>
+      {str(session.server, "—")}
+      <span className="text-[var(--fg-subtle)]"> · </span>
+      {maskedLogin}
+    </span>
+  );
+
+  const syncBroker = (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 w-6 px-0"
+        data-compact
+        disabled={session.refreshing}
+        onClick={() => void session.invalidateAll()}
+        aria-label="Sync session"
+      >
+        <RefreshCw
+          className={cn("h-3.5 w-3.5", session.refreshing && "animate-spin")}
+        />
+      </Button>
+      <Button size="sm" variant="ghost" className="h-6 w-6 px-0" data-compact asChild>
+        <Link href="/broker" aria-label="Open Broker">
+          <Cable className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
+    </div>
+  );
+
+  const metricsDl = (dense: boolean) => (
+    <dl
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-2 text-[10px]",
+        dense ? "justify-between" : "gap-3.5 text-[11px]",
+      )}
+    >
+      <div className="flex items-baseline gap-1">
+        <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Eq</dt>
+        <dd className="tabular font-medium text-[var(--fg)]">
+          {Number.isFinite(equity) ? formatCurrency(equity) : "—"}
+        </dd>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Free</dt>
+        <dd className="tabular font-medium text-[var(--fg)]">
+          {Number.isFinite(free) ? formatCurrency(free) : "—"}
+        </dd>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Float</dt>
+        <dd
+          className={cn(
+            "tabular font-medium",
+            Number.isFinite(openPnl)
+              ? openPnl >= 0
+                ? "text-[var(--success)]"
+                : "text-[var(--danger)]"
+              : "text-[var(--fg)]",
+          )}
+        >
+          {Number.isFinite(openPnl) ? formatCurrency(openPnl) : "—"}
+        </dd>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Pos</dt>
+        <dd className="tabular font-medium text-[var(--fg)]">{session.positions.length}</dd>
+      </div>
+    </dl>
+  );
+
   return (
     <div
       className={cn(
-        "flex h-8 shrink-0 items-center gap-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2",
+        "shrink-0 border-b border-[var(--border)] bg-[var(--bg-elevated)]",
         className,
       )}
       role="status"
       aria-live="polite"
       aria-label="Session"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <ConnectionStatus compact />
-        <span className="truncate qf-caption tabular text-[var(--fg-muted)]">
-          {session.connected ? "Owned" : "Offline"}
-          <span className="text-[var(--fg-subtle)]"> · </span>
-          {str(session.server, "—")}
-          <span className="text-[var(--fg-subtle)]"> · </span>
-          {(() => {
-            const raw = str(session.login, "");
-            const digits = raw.replace(/\D/g, "") || raw.trim();
-            if (!digits) return "—";
-            if (digits.length <= 4) return "••••";
-            return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
-          })()}
-        </span>
-        {session.executionEnabled === false ? (
-          <Badge
-            tone="warning"
-            className="hidden h-5 shrink-0 px-1.5 text-[10px] sm:inline-flex"
-          >
-            Submit gated
-          </Badge>
-        ) : null}
-        {onSymbolChange ? (
-          <TerminalSymbolSwitcher symbol={symbol} onSelect={onSymbolChange} />
-        ) : (
-          <span className="hidden truncate font-mono text-[11px] font-medium text-[var(--fg)] sm:inline">
-            {symbol}
-          </span>
-        )}
-        {isAutonomousTerminalMode(terminalMode) ? (
-          <Badge
-            tone="accent"
-            className="hidden h-5 shrink-0 px-1.5 text-[10px] sm:inline-flex"
-          >
-            {terminalMode === "AUTONOMOUS_POSITION_OPEN" ? "Position" : "Auto"}
-          </Badge>
-        ) : null}
-        {spread != null ? (
-          <span className="hidden tabular text-[10px] text-[var(--fg-subtle)] md:inline">
-            spr {spread.toFixed(5)}
-          </span>
-        ) : null}
+      {/* Desktop — single row (legacy layout). */}
+      <div className="hidden h-8 items-center gap-2.5 px-2 md:flex">
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+          <ConnectionStatus compact />
+          {accountLine}
+          {session.executionEnabled === false ? (
+            <Badge tone="warning" className="h-5 shrink-0 px-1.5 text-[10px]">
+              Submit gated
+            </Badge>
+          ) : null}
+          {onSymbolChange ? (
+            <TerminalSymbolSwitcher symbol={symbol} onSelect={onSymbolChange} />
+          ) : (
+            <span className="truncate font-mono text-[11px] font-medium text-[var(--fg)]">
+              {symbol}
+            </span>
+          )}
+          {isAutonomousTerminalMode(terminalMode) ? (
+            <Badge tone="accent" className="h-5 shrink-0 px-1.5 text-[10px]">
+              {terminalMode === "AUTONOMOUS_POSITION_OPEN" ? "Position" : "Auto"}
+            </Badge>
+          ) : null}
+          {spread != null ? (
+            <span className="tabular text-[10px] text-[var(--fg-subtle)]">
+              spr {spread.toFixed(5)}
+            </span>
+          ) : null}
+        </div>
+        {metricsDl(false)}
+        {syncBroker}
       </div>
 
-      <dl className="hidden items-center gap-3.5 text-[11px] md:flex">
-        <div className="flex items-baseline gap-1">
-          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Eq</dt>
-          <dd className="tabular font-medium text-[var(--fg)]">
-            {Number.isFinite(equity) ? formatCurrency(equity) : "—"}
-          </dd>
+      {/* Mobile — status row + symbol/metrics row. */}
+      <div className="flex flex-col md:hidden">
+        <div className="flex h-8 items-center gap-2 px-2">
+          <ConnectionStatus compact />
+          <div className="min-w-0 flex-1 overflow-hidden">{accountLine}</div>
+          {syncBroker}
         </div>
-        <div className="flex items-baseline gap-1">
-          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Free</dt>
-          <dd className="tabular font-medium text-[var(--fg)]">
-            {Number.isFinite(free) ? formatCurrency(free) : "—"}
-          </dd>
+        <div className="flex h-8 items-center gap-2 border-t border-[var(--border)] px-2">
+          {onSymbolChange ? (
+            <TerminalSymbolSwitcher symbol={symbol} onSelect={onSymbolChange} />
+          ) : (
+            <span className="truncate font-mono text-[11px] font-medium text-[var(--fg)]">
+              {symbol}
+            </span>
+          )}
+          {spread != null ? (
+            <span className="shrink-0 tabular text-[10px] text-[var(--fg-subtle)]">
+              spr {spread.toFixed(5)}
+            </span>
+          ) : null}
+          {metricsDl(true)}
         </div>
-        <div className="flex items-baseline gap-1">
-          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Float</dt>
-          <dd
-            className={cn(
-              "tabular font-medium",
-              Number.isFinite(openPnl)
-                ? openPnl >= 0
-                  ? "text-[var(--success)]"
-                  : "text-[var(--danger)]"
-                : "text-[var(--fg)]",
-            )}
-          >
-            {Number.isFinite(openPnl) ? formatCurrency(openPnl) : "—"}
-          </dd>
-        </div>
-        <div className="flex items-baseline gap-1">
-          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Pos</dt>
-          <dd className="tabular font-medium text-[var(--fg)]">
-            {session.positions.length}
-          </dd>
-        </div>
-      </dl>
-
-      <div className="flex shrink-0 items-center gap-0.5">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 w-6 px-0"
-          disabled={session.refreshing}
-          onClick={() => void session.invalidateAll()}
-          aria-label="Sync session"
-        >
-          <RefreshCw
-            className={cn("h-3.5 w-3.5", session.refreshing && "animate-spin")}
-          />
-        </Button>
-        <Button size="sm" variant="ghost" className="h-6 w-6 px-0" asChild>
-          <Link href="/broker" aria-label="Open Broker">
-            <Cable className="h-3.5 w-3.5" />
-          </Link>
-        </Button>
       </div>
     </div>
   );

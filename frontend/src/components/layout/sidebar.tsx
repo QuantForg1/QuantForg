@@ -190,8 +190,8 @@ function NavBody({
 /** Mobile drawer only — desktop brand lives once in the top header. */
 function MobileBrand() {
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2.5 px-3">
-      <BrandLogo size={28} />
+    <div className="flex h-10 shrink-0 items-center gap-2 px-2.5">
+      <BrandLogo size={24} />
     </div>
   );
 }
@@ -394,7 +394,8 @@ export function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
+            className="absolute inset-y-0 left-0 flex w-[min(17rem,85vw)] flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pr-2">
               <div id={titleId}>
@@ -413,6 +414,9 @@ export function MobileNav() {
             <Suspense fallback={<div className="flex-1" aria-hidden />}>
               <NavBody onNavigate={() => setOpen(false)} />
             </Suspense>
+            <p className="shrink-0 border-t border-[var(--border)] px-3 py-2 text-[10px] leading-snug text-[var(--fg-subtle)]">
+              Full desks · Overview through Settings
+            </p>
           </aside>
         </div>
       ) : null}

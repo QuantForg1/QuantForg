@@ -98,3 +98,18 @@ export function getClientAppOrigin(): string {
   }
   return env.appUrl;
 }
+
+/**
+ * Runtime API base for browser fetches.
+ * On Production QuantForg hosts, prefer the same-origin `/qf-api` rewrite so
+ * registration/login do not depend on the visitor resolving Railway DNS.
+ * SSR and non-QuantForg hosts keep `env.apiBaseUrl` (Railway / configured).
+ */
+export function getRuntimeApiBaseUrl(): string {
+  if (typeof window === "undefined") return env.apiBaseUrl;
+  const host = window.location.hostname.toLowerCase();
+  if (host === "www.quantforg.com" || host === "quantforg.com") {
+    return `${stripTrailingSlash(window.location.origin)}/qf-api/api/v1`;
+  }
+  return env.apiBaseUrl;
+}

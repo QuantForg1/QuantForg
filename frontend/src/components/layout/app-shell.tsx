@@ -207,8 +207,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             "flex min-h-0 flex-1 flex-col",
             isFullBleed
               ? "overflow-hidden p-0"
-              : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
-            "pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0",
+              : "overflow-x-clip overflow-y-auto p-3 sm:p-6 lg:p-8",
+            "pb-[var(--shell-mobile-content-pad-bottom)] lg:pb-0",
           )}
           tabIndex={-1}
         >

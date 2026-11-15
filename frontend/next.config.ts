@@ -118,6 +118,23 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  /**
+   * Same-origin reverse proxy to the Railway API.
+   * Browsers call `https://www.quantforg.com/qf-api/...` so flaky client DNS
+   * to `*.up.railway.app` and cross-origin edge cases do not block auth.
+   * Server-side / SSR can still use NEXT_PUBLIC_API_BASE_URL → Railway directly.
+   */
+  async rewrites() {
+    const railwayOrigin =
+      process.env.QUANTFORG_RAILWAY_ORIGIN?.replace(/\/$/, "") ||
+      "https://quantforg-production.up.railway.app";
+    return [
+      {
+        source: "/qf-api/:path*",
+        destination: `${railwayOrigin}/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

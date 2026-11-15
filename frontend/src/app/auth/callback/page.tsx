@@ -6,17 +6,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { BrandMark } from "@/components/brand/brand-logo";
 import { authApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
+import { consumeAuthHashSession } from "@/lib/auth/email-confirm-hash";
 import { saveSession } from "@/lib/auth/session";
 import { getClientAppOrigin } from "@/lib/env";
 
 /**
- * OAuth return path for Supabase Auth (Google).
- * Expects ?code=… (PKCE). Cancelled attempts show a recoverable error.
+ * Auth return path for:
+ * - Google OAuth PKCE (`?code=…`)
+ * - Email confirmation / magic-link hash tokens (`#access_token=…&type=signup`)
  */
 function OAuthCallbackInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const [message, setMessage] = useState("Completing Google sign-in…");
+  const [message, setMessage] = useState("Completing sign-in…");
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -39,6 +41,29 @@ function OAuthCallbackInner() {
 
       const code = params.get("code");
       if (!code) {
+        try {
+          const hashResult = await consumeAuthHashSession();
+          if (cancelled) return;
+          if (hashResult.kind === "recovery") {
+            router.replace(`/reset-password${window.location.hash}`);
+            return;
+          }
+          if (hashResult.kind === "signup") {
+            setMessage("Email confirmed. Redirecting…");
+            router.replace("/get-started");
+            return;
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setFailed(true);
+            setMessage(
+              err instanceof ApiError
+                ? err.message
+                : "Email confirmation completed, but sign-in could not finish. Please log in.",
+            );
+          }
+          return;
+        }
         if (!cancelled) {
           setFailed(true);
           setMessage(
@@ -84,7 +109,7 @@ function OAuthCallbackInner() {
     >
       <BrandMark size={56} priority />
       <h1 className="text-xl font-semibold tracking-tight">
-        {failed ? "Sign-in interrupted" : "Connecting Google"}
+        {failed ? "Sign-in interrupted" : "Completing sign-in"}
       </h1>
       <p className="max-w-md text-sm leading-relaxed text-[var(--fg-muted)]">{message}</p>
       {failed ? (

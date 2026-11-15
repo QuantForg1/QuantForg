@@ -91,20 +91,53 @@ def register_exception_handlers(app: FastAPI) -> None:
         public_messages = {
             "invalid_credentials": "Invalid login credentials",
             "email_already_registered": "An account with this email already exists",
-            "auth_rate_limited": "Too many authentication attempts. Try again later.",
+            "auth_rate_limited": (
+                "Too many sign-in or sign-up attempts. Wait a few minutes, "
+                "or continue with Google if your account already exists."
+            ),
             "email_not_verified": "Email address has not been verified",
             "missing_token": "Missing bearer access token",
+            "weak_password": "Password does not meet security requirements",
+            "signup_disabled": "New account registration is currently disabled",
+            "registration_incomplete": (
+                "Registration could not be completed. Check your email or try again."
+            ),
+            "auth_provider_error": (
+                "Account service is temporarily unavailable. "
+                "Try again shortly, or continue with Google."
+            ),
+            "auth_email_delivery_failed": (
+                "We could not send the confirmation email. "
+                "Check the address and try again in a few minutes."
+            ),
+            "identity_mismatch": "Sign-in identity does not match this account.",
+            "oauth_provider_unavailable": "Google sign-in is not available right now.",
+            "oauth_redirect_failed": "OAuth redirect could not be started.",
+            "oauth_failed": "Google sign-in could not be completed.",
+            "password_update_failed": "Password could not be updated.",
+            "invalid_token": "Session expired or invalid. Sign in again.",
         }
         message = public_messages.get(exc.code, "Authentication failed")
+        headers: dict[str, str] | None
         if exc.code == "email_already_registered":
             http_status = status.HTTP_409_CONFLICT
-            headers: dict[str, str] | None = None
+            headers = None
         elif exc.code == "auth_rate_limited":
             http_status = status.HTTP_429_TOO_MANY_REQUESTS
             headers = {"Retry-After": "60"}
         elif exc.code == "email_not_verified":
             http_status = status.HTTP_403_FORBIDDEN
             headers = None
+        elif exc.code in (
+            "weak_password",
+            "signup_disabled",
+            "registration_incomplete",
+        ):
+            http_status = status.HTTP_400_BAD_REQUEST
+            headers = None
+        elif exc.code in ("auth_provider_error", "auth_email_delivery_failed"):
+            http_status = status.HTTP_503_SERVICE_UNAVAILABLE
+            headers = {"Retry-After": "30"}
         else:
             http_status = status.HTTP_401_UNAUTHORIZED
             headers = {"WWW-Authenticate": "Bearer"}

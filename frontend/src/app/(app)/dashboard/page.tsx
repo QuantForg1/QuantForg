@@ -373,7 +373,7 @@ export default function DashboardPage() {
       : "—");
 
   return (
-    <div className="min-w-0 space-y-5">
+    <div className="qf-page-stack min-w-0 space-y-4 sm:space-y-5">
       <PageHeader
         eyebrow="Overview"
         title={greeting}

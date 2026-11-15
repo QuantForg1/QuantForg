@@ -14,10 +14,15 @@ export function MobileTabBar() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 w-full max-w-[100vw] overflow-x-clip border-t border-[var(--border)] bg-[var(--bg-elevated)]/95 backdrop-blur-md lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{
+        paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
+      }}
       aria-label="Primary mobile"
     >
-      <ul className="grid h-[4.25rem] grid-cols-5">
+      <ul
+        className="grid grid-cols-5"
+        style={{ height: "var(--shell-mobile-tab-height)" }}
+      >
         {mobileTabNav.map((item) => {
           const desk = primaryRail.find((d) => d.href === item.href);
           const active = desk
@@ -36,13 +41,20 @@ export function MobileTabBar() {
                     : "text-[var(--fg-muted)] active:text-[var(--fg)]",
                 )}
               >
-                <Icon
+                <span
                   className={cn(
-                    "h-5 w-5 shrink-0 transition-transform duration-[var(--duration-os)] ease-[var(--ease-os)]",
-                    active && "scale-105",
+                    "flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+                    active && "bg-[var(--accent-soft)]",
                   )}
-                  aria-hidden
-                />
+                >
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 shrink-0 transition-transform duration-[var(--duration-os)] ease-[var(--ease-os)]",
+                      active && "scale-105",
+                    )}
+                    aria-hidden
+                  />
+                </span>
                 <span className="truncate">{item.label}</span>
               </Link>
             </li>
