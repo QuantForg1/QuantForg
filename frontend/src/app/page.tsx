@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { EmailConfirmHashBridge } from "@/components/auth/email-confirm-hash-bridge";
 import { HomeLanding } from "@/components/marketing/home-landing";
 import { PublicStructuredData } from "@/components/marketing/structured-data";
 import { AuthFormProviders } from "@/providers/auth-form-providers";
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
 export default function LandingPage() {
   return (
     <AuthFormProviders>
+      <EmailConfirmHashBridge />
       <PublicStructuredData />
       <HomeLanding />
     </AuthFormProviders>

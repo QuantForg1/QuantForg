@@ -4,6 +4,7 @@ Code-side Google sign-in is implemented:
 
 - Frontend button: `frontend/src/components/auth/google-auth-button.tsx`
 - Callback page: `frontend/src/app/auth/callback/page.tsx`
+- Root OAuth capture: `frontend/src/middleware.ts` (forwards `/` + `code` / `error` → `/auth/callback`)
 - API: `GET /api/v1/auth/oauth/google` and `POST /api/v1/auth/oauth/callback`
 - Kill switch: Railway `AUTH_OAUTH_ENABLED=true` (default true in settings)
 
@@ -47,14 +48,27 @@ Login can still work for allowed test users while branding verification is pendi
 1. Authentication → Providers → **Google** → Enable.
 2. Paste Google Client ID + Client Secret.
 3. Authentication → URL configuration:
-   - **Site URL:** `https://www.quantforg.com`
+   - **Site URL:** `https://www.quantforg.com` — **never** `http://localhost:*` in production. Localhost belongs only in per-environment Redirect URL allowlists for dev.
    - **Redirect URLs** (add all that apply):
      - `https://www.quantforg.com/auth/callback`
      - `https://quantforg.com/auth/callback`
-     - `http://localhost:3000/auth/callback`
+     - `http://localhost:3000/auth/callback` (dev only — not Site URL)
      - password reset: `https://www.quantforg.com/reset-password` (and `/forgot-password` if used)
 
-## 4. Railway (API)
+If Site URL is localhost while users hit `www.quantforg.com`, OAuth authorize links and email confirmations will point at the wrong host.
+
+## 4. SMTP and email (signup rate limits)
+
+Supabase default mail has strict rate limits (`auth_rate_limited` / HTTP 429). For production registration volume:
+
+1. Authentication → **SMTP Settings** — configure a transactional provider (SendGrid, Resend, AWS SES, etc.).
+2. Set a branded **From** address on your domain (e.g. `noreply@quantforg.com`).
+3. Keep **Confirm email** enabled if you require verification; align templates with `https://www.quantforg.com`.
+4. Until custom SMTP is live, advise users hitting rate limits to wait a few minutes or use **Continue with Google**.
+
+Railway `AUTH_REDIRECT_URL` should match the verified callback used in signup emails.
+
+## 5. Railway (API)
 
 Confirm:
 
@@ -64,19 +78,20 @@ Confirm:
 - `AUTH_OAUTH_ENABLED=true`
 - CORS includes `https://www.quantforg.com` (and apex)
 
-## 5. Vercel (frontend)
+## 6. Vercel (frontend)
 
 - `NEXT_PUBLIC_API_BASE_URL` → Railway `/api/v1`
-- `NEXT_PUBLIC_APP_URL=https://www.quantforg.com`
+- `NEXT_PUBLIC_APP_URL=https://www.quantforg.com` (must not be localhost in production)
 
-## 6. Verification checklist
+## 7. Verification checklist
 
 1. Open `/login` → **Continue with Google** (no explanatory paragraph under the button).
-2. API `GET /api/v1/auth/oauth/google?redirect_to=https://www.quantforg.com/auth/callback` returns a Supabase `…/auth/v1/authorize?provider=google…` URL.
+2. API `GET /api/v1/auth/oauth/google?redirect_to=https://www.quantforg.com/auth/callback` returns a Supabase `…/auth/v1/authorize?provider=google…` URL whose `redirect_to` is **not** localhost when called from production.
 3. Approve → land on `/auth/callback` → session restored → authenticated app surface.
-4. Cancel Google consent → recoverable error + link back to `/login`.
-5. Email/password login and forgot-password still work.
-6. Search Console domain ownership verified if public branding is required.
+4. Supabase landing on `/` with `?code=` redirects to `/auth/callback` via Next middleware.
+5. Cancel Google consent → recoverable error + link back to `/login`.
+6. Email/password login and forgot-password still work.
+7. Search Console domain ownership verified if public branding is required.
 
 ## Status language
 

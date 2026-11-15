@@ -93,6 +93,16 @@
   --space-7: 3rem;
   --space-8: 4rem;
 
+  --shell-mobile-tab-height: 4.25rem;
+  --shell-mobile-fab-gap: 0.75rem;
+  --shell-mobile-content-pad-bottom: calc(
+    var(--shell-mobile-tab-height) + env(safe-area-inset-bottom, 0px)
+  );
+  --shell-mobile-fab-offset: calc(
+    var(--shell-mobile-tab-height) + env(safe-area-inset-bottom, 0px) +
+      var(--shell-mobile-fab-gap)
+  );
+
   --ease-os: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-os-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-os-in: cubic-bezier(0.4, 0, 1, 1);
@@ -170,6 +180,14 @@ body {
   min-height: 100%;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 224, 0.28) transparent;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -866,9 +884,40 @@ body {
 }
 
 @media (max-width: 767px) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   .qf-desk-shell,
   [data-desk] {
     overflow-x: clip;
+  }
+
+  [data-desk="terminal"] button:not([data-compact]),
+  [data-desk="terminal"] [role="button"]:not([data-compact]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  button[data-compact],
+  [role="button"][data-compact] {
+    min-height: unset;
+    min-width: unset;
+  }
+
+  .qf-page-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-width: 0;
+  }
+
+  .qf-mobile-card-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    min-width: 0;
   }
 
   button:not([data-compact]),

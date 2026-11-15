@@ -64,13 +64,20 @@ export default function RegisterPage() {
             toast.success("Account created");
             router.replace("/get-started");
           } catch (e) {
-            toast.error(
-              e instanceof ApiError
-                ? e.message
-                : e instanceof Error
-                  ? e.message
-                  : "Registration failed",
-            );
+            if (e instanceof ApiError) {
+              if (e.code === "email_already_registered" || e.status === 409) {
+                toast.error(e.message);
+                router.push("/login");
+                return;
+              }
+              if (e.code === "auth_rate_limited" || e.status === 429) {
+                toast.error(e.message);
+                return;
+              }
+              toast.error(e.message);
+              return;
+            }
+            toast.error(e instanceof Error ? e.message : "Registration failed");
           }
         })}
       >

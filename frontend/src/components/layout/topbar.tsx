@@ -52,7 +52,7 @@ function MarketChrome() {
   return (
     <>
       <div
-        className="flex min-w-0 max-w-[7.5rem] items-center sm:max-w-none md:hidden"
+        className="hidden min-w-0 max-w-[7.5rem] items-center sm:flex sm:max-w-none md:hidden"
         aria-label="Account balance"
       >
         <div className="min-w-0">
@@ -140,7 +140,7 @@ export function Topbar({
     <header
       className={cn(
         "z-30 flex min-w-0 items-center gap-2 overflow-x-clip border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_92%,transparent)] px-3 backdrop-blur-md sm:gap-3 sm:px-4",
-        compact ? "h-[3.25rem]" : "h-16",
+        compact ? "h-12" : "h-16",
       )}
     >
       <div className="shrink-0 lg:hidden">
@@ -171,14 +171,30 @@ export function Topbar({
         </kbd>
       </button>
 
-      <MarketChrome />
+      {compact ? (
+        <div className="hidden sm:contents">
+          <MarketChrome />
+        </div>
+      ) : (
+        <MarketChrome />
+      )}
 
-      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+      <div
+        className={cn(
+          "ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5",
+          compact && "gap-0.5",
+        )}
+      >
         {/* Avoid duplicate ConnectionStatus with the sm–lg chip near MobileNav. */}
         <div className="hidden lg:block">
           <ConnectionStatus compact />
         </div>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9" asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("relative", compact ? "h-8 w-8" : "h-9 w-9")}
+          asChild
+        >
           <Link href="/notifications" aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}>
             <Bell className="h-4 w-4" />
             {unread > 0 ? (
@@ -188,7 +204,12 @@ export function Topbar({
             ) : null}
           </Link>
         </Button>
-        <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(compact ? "h-8 w-8" : "h-9 w-9")}
+          asChild
+        >
           <Link href="/settings" aria-label="Profile and settings">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-semibold text-[var(--accent-fg)]">
               {initials}
@@ -198,7 +219,7 @@ export function Topbar({
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9"
+          className={cn("hidden sm:inline-flex", compact ? "h-8 w-8" : "h-9 w-9")}
           aria-label="Sign out"
           onClick={async () => {
             try {
