@@ -170,6 +170,91 @@ export const householdPortfolioApi = {
     apiFetch<Record<string, unknown>>("/portfolio/household/emergency-stops"),
 };
 
+/** Phase 7 — Autonomous Trading Control (OBSERVE_ONLY default; never order_send). */
+export const autonomousTradingControlApi = {
+  health: () =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/health"),
+  summary: () =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/summary"),
+  decisions: () =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/decisions"),
+  createDecision: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/decisions", {
+      method: "POST",
+      body,
+    }),
+  getDecision: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/autonomous-trading-control/decisions/${encodeURIComponent(id)}`,
+    ),
+  strategySelection: () =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/strategy/selection",
+    ),
+  validateSignal: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/signals/validate",
+      { method: "POST", body },
+    ),
+  proposeSizing: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/sizing/propose",
+      { method: "POST", body },
+    ),
+  authorizeExecution: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/execution/authorize",
+      { method: "POST", body },
+    ),
+  modes: () =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/modes"),
+  setMode: (mode: string, note = "") =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/modes", {
+      method: "POST",
+      body: { mode, note },
+    }),
+  approvals: () =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/approvals"),
+  createApproval: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/autonomous-trading-control/approvals", {
+      method: "POST",
+      body,
+    }),
+  approvalAction: (
+    id: string,
+    action: string,
+    note = "",
+    current_params?: Record<string, unknown>,
+  ) =>
+    apiFetch<Record<string, unknown>>(
+      `/autonomous-trading-control/approvals/${encodeURIComponent(id)}/action`,
+      {
+        method: "POST",
+        body: { action, note, current_params },
+      },
+    ),
+  ordersLifecycle: () =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/orders/lifecycle",
+    ),
+  tradeIntelligence: () =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/trade-intelligence/overview",
+    ),
+  feedback: () =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/feedback/overview",
+    ),
+  opsOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/ops/overview",
+    ),
+  audit: () =>
+    apiFetch<Record<string, unknown>>(
+      "/autonomous-trading-control/governance/audit",
+    ),
+};
+
 /** Phase 6 — Institutional Intelligence (advisory; never order_send). */
 export const institutionalIntelligenceApi = {
   health: () =>
