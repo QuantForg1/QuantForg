@@ -50,7 +50,7 @@ function OAuthCallbackInner() {
           }
           if (hashResult.kind === "signup") {
             setMessage("Email confirmed. Redirecting…");
-            router.replace("/get-started");
+            router.replace("/dashboard");
             return;
           }
         } catch (err) {

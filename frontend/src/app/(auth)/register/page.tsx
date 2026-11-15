@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/lib/api/client";
+import { setPendingVerifyEmail } from "@/lib/auth/session";
 
 const schema = z
   .object({
@@ -57,12 +58,15 @@ export default function RegisterPage() {
               values.display_name,
             );
             if (typeof pending === "string" && pending) {
+              setPendingVerifyEmail(values.email);
               toast.success(pending);
-              router.replace("/verify-email");
+              router.replace(
+                `/verify-email?email=${encodeURIComponent(values.email.trim().toLowerCase())}`,
+              );
               return;
             }
             toast.success("Account created");
-            router.replace("/get-started");
+            router.replace("/dashboard");
           } catch (e) {
             if (e instanceof ApiError) {
               if (e.code === "email_already_registered" || e.status === 409) {

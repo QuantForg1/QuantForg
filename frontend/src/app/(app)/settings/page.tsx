@@ -18,6 +18,7 @@ import { asList, asRecord, str } from "@/lib/desk";
 import { clearSession } from "@/lib/auth/session";
 import { useAuth } from "@/providers/auth-provider";
 import { SubscriptionPanel } from "@/components/settings/subscription-panel";
+import { MfaSecurityPanel } from "@/components/settings/mfa-security-panel";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
@@ -506,12 +507,10 @@ export default function SettingsPage() {
                       }
                     />
                   </div>
-                  <p className="text-xs text-[var(--fg-subtle)]">
-                    Two-factor authentication is not enabled on this account yet. Contact support if
-                    you need elevated protection.
-                  </p>
                 </CardContent>
               </Card>
+
+              <MfaSecurityPanel />
 
               <Card className="qf-card-interactive">
                 <CardHeader>
@@ -677,6 +676,21 @@ export default function SettingsPage() {
 
           {tab === "Preferences" ? (
             <div className="grid gap-4 lg:grid-cols-2">
+              <Card className="qf-card-interactive">
+                <CardHeader>
+                  <CardTitle>Optional onboarding</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-[var(--fg-muted)]">
+                    New accounts land on Overview. The product guide is optional and never blocks
+                    access.
+                  </p>
+                  <Button variant="secondary" asChild>
+                    <Link href="/get-started">Open get-started guide</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+
               <Card className="qf-card-interactive">
                 <CardHeader>
                   <CardTitle>Timezone</CardTitle>

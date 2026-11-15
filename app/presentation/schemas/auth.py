@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.domain.interfaces.auth import OAuthProvider
 
@@ -25,8 +25,57 @@ class RefreshRequest(BaseModel):
 
 
 class VerifyEmailRequest(BaseModel):
-    token_hash: str = Field(min_length=1)
+    token_hash: str | None = Field(default=None, min_length=1, max_length=512)
+    email: EmailStr | None = None
+    token: str | None = Field(default=None, min_length=6, max_length=6)
     type: str = Field(default="email", min_length=1, max_length=32)
+
+    @field_validator("token")
+    @classmethod
+    def _otp_digits(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value.isdigit() or len(value) != 6:
+            raise ValueError("Verification code must be exactly six digits")
+        return value
+
+    @model_validator(mode="after")
+    def _require_otp_or_hash(self) -> VerifyEmailRequest:
+        if self.token and self.email:
+            return self
+        if self.token_hash:
+            return self
+        raise ValueError("Provide email with a six-digit code, or a legacy token hash")
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class MfaChallengeRequest(BaseModel):
+    factor_id: str = Field(min_length=1, max_length=128)
+
+
+class MfaVerifyRequest(BaseModel):
+    factor_id: str = Field(min_length=1, max_length=128)
+    challenge_id: str | None = Field(default=None, max_length=128)
+    code: str = Field(min_length=6, max_length=6)
+    issue_recovery_codes: bool = False
+
+    @field_validator("code")
+    @classmethod
+    def _code_digits(cls, value: str) -> str:
+        if not value.isdigit():
+            raise ValueError("Authenticator code must be six digits")
+        return value
+
+
+class MfaUnenrollRequest(BaseModel):
+    factor_id: str = Field(min_length=1, max_length=128)
+
+
+class MfaRecoveryConsumeRequest(BaseModel):
+    code: str = Field(min_length=8, max_length=32)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -58,6 +107,8 @@ class AuthSessionResponse(BaseModel):
     expires_in: int
     token_type: str
     user: AuthUserResponse
+    mfa_required: bool = False
+    aal: str | None = None
 
 
 class MessageResponse(BaseModel):

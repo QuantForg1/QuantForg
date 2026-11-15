@@ -30,7 +30,58 @@ export type AuthSession = {
   expires_in: number;
   token_type: string;
   user: AuthUser;
+  mfa_required?: boolean;
+  aal?: string | null;
 };
+
+const PENDING_VERIFY_EMAIL = "qf_pending_verify_email";
+const MFA_PENDING = "qf_mfa_pending";
+
+export function setMfaPending(pending: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (pending) window.sessionStorage.setItem(MFA_PENDING, "1");
+    else window.sessionStorage.removeItem(MFA_PENDING);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isMfaPending(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(MFA_PENDING) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setPendingVerifyEmail(email: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PENDING_VERIFY_EMAIL, email.trim().toLowerCase());
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getPendingVerifyEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(PENDING_VERIFY_EMAIL);
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingVerifyEmail() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(PENDING_VERIFY_EMAIL);
+  } catch {
+    /* ignore */
+  }
+}
 
 const ACCESS = "qf_access_token";
 const REFRESH = "qf_refresh_token";

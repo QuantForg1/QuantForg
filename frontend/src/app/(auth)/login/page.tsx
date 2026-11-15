@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/lib/api/client";
+import { setPendingVerifyEmail } from "@/lib/auth/session";
 
 const schema = z.object({
   email: z.string().email(),
@@ -42,15 +43,23 @@ export default function LoginPage() {
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
           try {
-            await login(values.email, values.password, {
+            const result = await login(values.email, values.password, {
               remember: values.remember !== false,
             });
+            if (result.mfaRequired) {
+              toast.message("Enter your authenticator code to continue");
+              router.replace("/mfa");
+              return;
+            }
             toast.success("Signed in");
             router.replace("/dashboard");
           } catch (e) {
             if (e instanceof ApiError && e.code === "email_not_verified") {
+              setPendingVerifyEmail(values.email);
               toast.error("Verify your email before signing in.");
-              router.push("/verify-email");
+              router.push(
+                `/verify-email?email=${encodeURIComponent(values.email.trim().toLowerCase())}`,
+              );
               return;
             }
             toast.error(

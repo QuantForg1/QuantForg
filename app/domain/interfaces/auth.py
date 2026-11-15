@@ -89,6 +89,57 @@ class AuthProviderPort(Protocol):
         """Confirm an email address using a verification token hash."""
         ...
 
+    async def verify_email_otp(
+        self,
+        *,
+        email: str,
+        token: str,
+        type: str = "email",
+    ) -> AuthSession:
+        """Confirm signup email using a six-digit OTP."""
+        ...
+
+    async def resend_signup_email(self, *, email: str) -> None:
+        """Resend signup confirmation email / OTP (anti-enumeration)."""
+        ...
+
+    async def list_mfa_factors(self, *, access_token: str) -> list[dict[str, object]]:
+        """Return verified/unverified MFA factors for the session user."""
+        ...
+
+    async def enroll_totp(
+        self, *, access_token: str, friendly_name: str = "Authenticator"
+    ) -> dict[str, object]:
+        """Begin TOTP enrollment; returns QR/secret payload."""
+        ...
+
+    async def challenge_mfa(
+        self, *, access_token: str, factor_id: str
+    ) -> dict[str, object]:
+        """Create an MFA challenge for a factor."""
+        ...
+
+    async def verify_mfa(
+        self,
+        *,
+        access_token: str,
+        factor_id: str,
+        challenge_id: str,
+        code: str,
+    ) -> AuthSession:
+        """Verify MFA challenge and return upgraded session when available."""
+        ...
+
+    async def unenroll_mfa(self, *, access_token: str, factor_id: str) -> None:
+        """Remove an MFA factor."""
+        ...
+
+    async def get_authenticator_assurance_level(
+        self, *, access_token: str
+    ) -> dict[str, object]:
+        """Return current/next AAL for the session."""
+        ...
+
     async def request_password_reset(self, *, email: str, redirect_to: str) -> None:
         """Send a password-reset email (always succeeds from caller's view)."""
         ...

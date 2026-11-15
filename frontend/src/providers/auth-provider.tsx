@@ -26,6 +26,7 @@ import {
   getStoredUser,
   onSessionCleared,
   saveSession,
+  setMfaPending,
   type AuthSession,
   type AuthUser,
 } from "@/lib/auth/session";
@@ -42,7 +43,11 @@ type AuthContextValue = {
   authPhase: AuthPhase;
   /** True only after /auth/me settled (success or timeout-with-token). */
   opsReady: boolean;
-  login: (email: string, password: string, options?: { remember?: boolean }) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    options?: { remember?: boolean },
+  ) => Promise<{ mfaRequired: boolean }>;
   register: (email: string, password: string, displayName: string) => Promise<string | void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -188,11 +193,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const session = await authApi.login(email, password);
       saveSession(session, { remember: options?.remember !== false });
+      const mfaRequired = Boolean(session.mfa_required);
+      setMfaPending(mfaRequired);
       setHasToken(true);
       setUser(session.user);
       setMeStatus("success");
       setBootError(null);
-      recordAudit("login", "success", "User signed in", { email });
+      recordAudit(
+        "login",
+        "success",
+        mfaRequired ? "Password accepted; MFA required" : "User signed in",
+        { email },
+      );
+      return { mfaRequired };
     } catch (e) {
       recordAudit("login", "failure", "Sign-in failed", { email });
       throw e;
