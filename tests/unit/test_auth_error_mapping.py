@@ -75,6 +75,11 @@ def test_map_confirmation_email_send_failure_422() -> None:
     assert err.code == "auth_email_delivery_failed"
 
 
+def test_map_invalid_mfa_code() -> None:
+    err = _map_auth_error(_StubAuthError(message="Invalid TOTP code presented"))
+    assert err.code == "invalid_mfa_code"
+
+
 def test_public_messages_via_test_client() -> None:
     app = FastAPI()
     register_exception_handlers(app)
