@@ -86,9 +86,9 @@ def build_market_overview(
 
         facts: dict[str, Any] = {
             "regime_label": regime_label or "unknown",
-            "regime_confidence": regime_confidence
-            if regime_confidence is not None
-            else 40,
+            "regime_confidence": (
+                regime_confidence if regime_confidence is not None else 40
+            ),
             "data_sources": ["caller_facts"],
             "confidence": regime_confidence if regime_confidence is not None else 40,
         }
@@ -176,9 +176,7 @@ def build_strategy_overview(
         }:
             result_class = "unavailable"
         raw_metrics = row.get("metrics")
-        metrics: dict[str, Any] = (
-            raw_metrics if isinstance(raw_metrics, dict) else {}
-        )
+        metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
         # Only pass through numeric metrics that are present — never invent.
         clean_metrics = {
             k: metrics[k]
