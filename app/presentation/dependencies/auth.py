@@ -18,9 +18,17 @@ from app.application.use_cases.auth import (
     GetCurrentUserUseCase,
     LoginUseCase,
     LogoutUseCase,
+    MfaChallengeUseCase,
+    MfaEnrollUseCase,
+    MfaRecoveryConsumeUseCase,
+    MfaRecoveryGenerateUseCase,
+    MfaStatusUseCase,
+    MfaUnenrollUseCase,
+    MfaVerifyUseCase,
     RefreshSessionUseCase,
     RegisterWithEmailUseCase,
     RequestPasswordResetUseCase,
+    ResendVerificationUseCase,
     StartOAuthUseCase,
     VerifyEmailUseCase,
 )
@@ -28,6 +36,7 @@ from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.enums.user import UserRole
 from app.domain.exceptions.auth import AuthenticationError, AuthorizationError
 from app.domain.interfaces.unit_of_work import UnitOfWorkFactory
+from app.infrastructure.auth.mfa_recovery import MfaRecoveryCodeStore
 from app.infrastructure.auth.supabase_auth import SupabaseAuthAdapter
 from core.config.settings import Settings, get_settings
 from core.di.container import get_container
@@ -83,6 +92,8 @@ def get_auth_service(
     uow_factory = get_uow_factory()
     audit = RecordAuditEventUseCase(uow_factory=uow_factory)
     redirect = settings.auth_redirect_url
+    container = get_container()
+    recovery = MfaRecoveryCodeStore(container.require_supabase(), settings)
     return AuthService(
         register_email=RegisterWithEmailUseCase(
             auth=auth, uow_factory=uow_factory, audit=audit
@@ -93,6 +104,7 @@ def get_auth_service(
         verify_email=VerifyEmailUseCase(
             auth=auth, uow_factory=uow_factory, audit=audit
         ),
+        resend_verification=ResendVerificationUseCase(auth=auth, audit=audit),
         request_password_reset=RequestPasswordResetUseCase(
             auth=auth, audit=audit, default_redirect_to=redirect
         ),
@@ -105,6 +117,19 @@ def get_auth_service(
             default_redirect_to=redirect,
         ),
         get_current_user=GetCurrentUserUseCase(auth=auth, uow_factory=uow_factory),
+        mfa_status=MfaStatusUseCase(auth=auth),
+        mfa_enroll=MfaEnrollUseCase(auth=auth, audit=audit),
+        mfa_challenge=MfaChallengeUseCase(auth=auth),
+        mfa_verify=MfaVerifyUseCase(
+            auth=auth, uow_factory=uow_factory, audit=audit, recovery=recovery
+        ),
+        mfa_unenroll=MfaUnenrollUseCase(auth=auth, audit=audit),
+        mfa_recovery_generate=MfaRecoveryGenerateUseCase(
+            recovery=recovery, audit=audit
+        ),
+        mfa_recovery_consume=MfaRecoveryConsumeUseCase(
+            auth=auth, recovery=recovery, uow_factory=uow_factory, audit=audit
+        ),
     )
 
 

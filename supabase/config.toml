@@ -16,12 +16,71 @@ max_rows = 1000
 
 [db]
 port = 54322
-major_version = 15
+major_version = 17
 
 [db.seed]
 enabled = true
 sql_paths = ["./seed.sql"]
 
+[db.pooler]
+default_pool_size = 15
+max_client_conn = 200
+
 [studio]
 enabled = true
 port = 54323
+
+[auth]
+additional_redirect_urls = ["https://www.quantforg.com", "https://www.quantforg.com/auth/callback"]
+password_requirements = "lower_upper_letters_digits_symbols"
+site_url = "https://www.quantforg.com"
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.rate_limit]
+email_sent = 30
+
+[auth.external.google]
+client_id = "120864427775-du4r6jni2gsjgbhr8nlhlmk9evlffor2.apps.googleusercontent.com"
+enabled = true
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email.notification.email_changed]
+enabled = true
+
+[auth.email.notification.identity_linked]
+enabled = true
+
+[auth.email.notification.identity_unlinked]
+enabled = true
+
+[auth.email.notification.mfa_factor_enrolled]
+enabled = true
+
+[auth.email.notification.mfa_factor_unenrolled]
+enabled = true
+
+[auth.email.notification.password_changed]
+enabled = true
+
+[auth.email.notification.phone_changed]
+enabled = true
+
+[storage.analytics]
+enabled = true
+max_namespaces = 10
+
+[storage.image_transformation]
+enabled = true
+
+[auth.email.template.confirmation]
+subject = "Your QuantForg verification code"
+content_path = "./supabase/templates/confirmation.html"
+

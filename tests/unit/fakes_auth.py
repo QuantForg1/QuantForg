@@ -145,6 +145,110 @@ class FakeAuthProvider:
         record["confirmed"] = True
         return self._session_for(email, confirmed=True)
 
+    async def verify_email_otp(
+        self,
+        *,
+        email: str,
+        token: str,
+        type: str = "email",
+    ) -> AuthSession:
+        self._maybe_fail("verify_email_otp")
+        _ = type
+        key = email.lower()
+        record = self.users.get(key)
+        if record is None or not (token.isdigit() and len(token) == 6):
+            raise AuthenticationError("Invalid OTP", code="invalid_otp")
+        if token != "123456" and token != str(record.get("otp", "123456")):
+            raise AuthenticationError("Invalid OTP", code="invalid_otp")
+        record["confirmed"] = True
+        return self._session_for(key, confirmed=True)
+
+    async def resend_signup_email(self, *, email: str) -> None:
+        self._maybe_fail("resend_signup")
+        _ = email
+
+    async def list_mfa_factors(self, *, access_token: str) -> list[dict[str, object]]:
+        email = self.tokens.get(access_token)
+        if email is None:
+            raise AuthenticationError("Invalid access token", code="invalid_token")
+        factors = self.users[email].get("mfa_factors") or []
+        return list(factors)  # type: ignore[arg-type]
+
+    async def enroll_totp(
+        self, *, access_token: str, friendly_name: str = "Authenticator"
+    ) -> dict[str, object]:
+        email = self.tokens.get(access_token)
+        if email is None:
+            raise AuthenticationError("Invalid access token", code="invalid_token")
+        factor_id = str(uuid4())
+        self.users[email]["pending_factor"] = {
+            "id": factor_id,
+            "friendly_name": friendly_name,
+            "factor_type": "totp",
+            "status": "unverified",
+        }
+        return {
+            "factor_id": factor_id,
+            "qr_code": "data:image/svg+xml,<svg></svg>",
+            "secret": "JBSWY3DPEHPK3PXP",
+            "uri": "otpauth://totp/QuantForg",
+            "friendly_name": friendly_name,
+        }
+
+    async def challenge_mfa(
+        self, *, access_token: str, factor_id: str
+    ) -> dict[str, object]:
+        _ = access_token
+        return {"challenge_id": f"chal-{factor_id}", "factor_id": factor_id}
+
+    async def verify_mfa(
+        self,
+        *,
+        access_token: str,
+        factor_id: str,
+        challenge_id: str,
+        code: str,
+    ) -> AuthSession:
+        _ = challenge_id
+        email = self.tokens.get(access_token)
+        if email is None:
+            raise AuthenticationError("Invalid access token", code="invalid_token")
+        if code != "654321":
+            raise AuthenticationError("Invalid MFA code", code="invalid_mfa_code")
+        factors = list(self.users[email].get("mfa_factors") or [])
+        factors.append(
+            {
+                "id": factor_id,
+                "factor_type": "totp",
+                "status": "verified",
+                "friendly_name": "Authenticator",
+            }
+        )
+        self.users[email]["mfa_factors"] = factors
+        self.users[email].pop("pending_factor", None)
+        return self._session_for(email, confirmed=True)
+
+    async def unenroll_mfa(self, *, access_token: str, factor_id: str) -> None:
+        email = self.tokens.get(access_token)
+        if email is None:
+            raise AuthenticationError("Invalid access token", code="invalid_token")
+        factors = [
+            f
+            for f in (self.users[email].get("mfa_factors") or [])
+            if str(f.get("id")) != factor_id  # type: ignore[union-attr]
+        ]
+        self.users[email]["mfa_factors"] = factors
+
+    async def get_authenticator_assurance_level(
+        self, *, access_token: str
+    ) -> dict[str, object]:
+        factors = await self.list_mfa_factors(access_token=access_token)
+        verified = any(str(f.get("status", "")).lower() == "verified" for f in factors)
+        return {
+            "current_level": "aal1",
+            "next_level": "aal2" if verified else "aal1",
+        }
+
     async def request_password_reset(self, *, email: str, redirect_to: str) -> None:
         self._maybe_fail("reset_request")
         _ = (email, redirect_to)

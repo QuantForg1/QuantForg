@@ -1,4 +1,4 @@
-"""VerifyEmailUseCase — confirm email via Supabase token hash."""
+"""VerifyEmailUseCase — confirm email via OTP or legacy token hash."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from app.application.use_cases.auth._profile import sync_profile_from_identity
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.exceptions.auth import AuthenticationError
+from app.domain.exceptions.base import ValidationError
 from app.domain.interfaces.auth import AuthProviderPort
 from app.domain.interfaces.unit_of_work import UnitOfWorkFactory
 
@@ -21,10 +22,32 @@ class VerifyEmailUseCase:
     audit: RecordAuditEventUseCase
 
     async def execute(self, command: VerifyEmailCommand) -> AuthSessionDTO:
-        session = await self.auth.verify_email(
-            token_hash=command.token_hash,
-            type=command.type,
-        )
+        token = (command.token or "").strip()
+        email = (command.email or "").strip().lower()
+        token_hash = (command.token_hash or "").strip()
+
+        if token and email:
+            if not (token.isdigit() and len(token) == 6):
+                raise ValidationError(
+                    "Enter the six-digit verification code",
+                    code="invalid_otp",
+                )
+            session = await self.auth.verify_email_otp(
+                email=email,
+                token=token,
+                type=command.type or "email",
+            )
+        elif token_hash:
+            session = await self.auth.verify_email(
+                token_hash=token_hash,
+                type=command.type or "email",
+            )
+        else:
+            raise ValidationError(
+                "Verification code and email are required",
+                code="invalid_otp",
+            )
+
         identity = session.user
         if identity is None:
             if not session.access_token:

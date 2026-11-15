@@ -29,7 +29,10 @@ type FormValues = z.infer<typeof schema>;
 
 async function hydrateRecoverySession(tokenHash: string | null, type: string) {
   if (tokenHash) {
-    const result = await authApi.verifyEmail(tokenHash, type || "recovery");
+    const result = await authApi.verifyEmail({
+      token_hash: tokenHash,
+      type: type || "recovery",
+    });
     if (result && typeof result === "object" && "access_token" in result) {
       saveSession(result as AuthSession);
       return true;

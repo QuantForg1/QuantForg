@@ -101,6 +101,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [loading, isAuthenticated, router]);
 
   useEffect(() => {
+    if (loading || !isAuthenticated) return;
+    try {
+      if (window.sessionStorage.getItem("qf_mfa_pending") === "1") {
+        router.replace("/mfa");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [loading, isAuthenticated, router]);
+
+  useEffect(() => {
     if (!pathname || pathname.startsWith("/login")) return;
     pushRecentPage({ href: pathname, label: labelForHref(pathname) });
   }, [pathname]);

@@ -78,6 +78,30 @@ class LoginUseCase:
             await uow.users.update(user)
             await uow.commit()
 
+        mfa_required = False
+        aal: str | None = None
+        try:
+            factors = await self.auth.list_mfa_factors(
+                access_token=session.access_token
+            )
+            mfa_required = any(
+                str(f.get("status", "")).lower() == "verified"
+                and str(f.get("factor_type", "")).lower() == "totp"
+                for f in factors
+            )
+            aal_info = await self.auth.get_authenticator_assurance_level(
+                access_token=session.access_token
+            )
+            current = str(aal_info.get("current_level") or "aal1")
+            next_level = str(aal_info.get("next_level") or current)
+            aal = current
+            if mfa_required and next_level == "aal2" and current != "aal2":
+                mfa_required = True
+            elif current == "aal2":
+                mfa_required = False
+        except Exception:
+            logger.exception("login_mfa_status_check_failed")
+
         await self._audit(
             RecordAuditEventCommand(
                 action=AuditAction.LOGIN,
@@ -90,4 +114,6 @@ class LoginUseCase:
                 user_agent=command.user_agent,
             )
         )
-        return AuthSessionDTO.from_session(session, user)
+        return AuthSessionDTO.from_session(
+            session, user, mfa_required=mfa_required, aal=aal
+        )

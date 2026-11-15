@@ -122,6 +122,40 @@ class TestVerifyRefreshLogoutPassword:
         assert session.user.status == UserStatus.ACTIVE.value
 
     @pytest.mark.asyncio
+    async def test_verify_email_otp_activates(self) -> None:
+        factory, provider, audit = _wire(confirm=True)
+        await RegisterWithEmailUseCase(
+            auth=provider, uow_factory=factory, audit=audit
+        ).execute(
+            RegisterEmailCommand(
+                email="otp@quantforg.com",
+                password="securepass1",
+                display_name="Otp",
+            )
+        )
+        session = await VerifyEmailUseCase(
+            auth=provider, uow_factory=factory, audit=audit
+        ).execute(
+            VerifyEmailCommand(email="otp@quantforg.com", token="123456", type="email")
+        )
+        assert session.user.status == UserStatus.ACTIVE.value
+        assert session.access_token
+
+    @pytest.mark.asyncio
+    async def test_verify_email_otp_rejects_malformed(self) -> None:
+        factory, provider, audit = _wire(confirm=True)
+        with pytest.raises(ValidationError):
+            await VerifyEmailUseCase(
+                auth=provider, uow_factory=factory, audit=audit
+            ).execute(
+                VerifyEmailCommand(
+                    email="otp@quantforg.com",
+                    token="12ab",
+                    type="email",
+                )
+            )
+
+    @pytest.mark.asyncio
     async def test_refresh_and_logout(self) -> None:
         factory, provider, audit = _wire()
         registered = await RegisterWithEmailUseCase(

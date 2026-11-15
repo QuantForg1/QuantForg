@@ -18,7 +18,14 @@ export function FirstRunChecklist() {
   const [state, setState] = useState<ChecklistState | null>(null);
 
   useEffect(() => {
+    // Optional only — never auto-present after registration.
+    // Surface from Settings / Help via localStorage flag when requested.
     if (isFirstRunDismissed()) return;
+    try {
+      if (localStorage.getItem("qf.onboarding.first_run.show.v1") !== "1") return;
+    } catch {
+      return;
+    }
     setState(getChecklist());
     setVisible(true);
   }, []);

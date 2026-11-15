@@ -29,7 +29,7 @@ export function EmailConfirmHashBridge() {
         }
         if (result.kind === "signup") {
           toast.success("Email confirmed. You are signed in.");
-          router.replace("/get-started");
+          router.replace("/dashboard");
         }
       } catch {
         if (!cancelled) {

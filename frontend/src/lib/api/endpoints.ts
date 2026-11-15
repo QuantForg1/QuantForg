@@ -33,16 +33,79 @@ export const authApi = {
       body: { email, redirect_to },
       auth: false,
     }),
-  verifyEmail: (token_hash: string, type = "email") =>
+  verifyEmail: (payload: {
+    email?: string;
+    token?: string;
+    token_hash?: string;
+    type?: string;
+  }) =>
     apiFetch<AuthSession | { message: string }>("/auth/verify-email", {
       method: "POST",
-      body: { token_hash, type },
+      body: {
+        email: payload.email,
+        token: payload.token,
+        token_hash: payload.token_hash,
+        type: payload.type ?? "email",
+      },
+      auth: false,
+    }),
+  resendVerification: (email: string) =>
+    apiFetch<{ message: string }>("/auth/resend-verification", {
+      method: "POST",
+      body: { email },
       auth: false,
     }),
   changePassword: (new_password: string) =>
     apiFetch<{ message: string }>("/auth/change-password", {
       method: "POST",
       body: { new_password },
+    }),
+  mfaStatus: () =>
+    apiFetch<{
+      enabled: boolean;
+      factors: Array<Record<string, unknown>>;
+      aal: Record<string, unknown>;
+    }>("/auth/mfa/status"),
+  mfaEnroll: () =>
+    apiFetch<{
+      factor_id: string;
+      qr_code: string;
+      secret: string;
+      uri: string;
+      friendly_name: string;
+    }>("/auth/mfa/enroll", { method: "POST", body: {} }),
+  mfaChallenge: (factor_id: string) =>
+    apiFetch<{ challenge_id: string; factor_id: string }>("/auth/mfa/challenge", {
+      method: "POST",
+      body: { factor_id },
+    }),
+  mfaVerify: (payload: {
+    factor_id: string;
+    challenge_id?: string;
+    code: string;
+    issue_recovery_codes?: boolean;
+  }) =>
+    apiFetch<
+      | AuthSession
+      | { session: AuthSession; recovery_codes: string[] }
+    >("/auth/mfa/verify", {
+      method: "POST",
+      body: payload,
+    }),
+  mfaUnenroll: (factor_id: string) =>
+    apiFetch<{ message: string }>("/auth/mfa/unenroll", {
+      method: "POST",
+      body: { factor_id },
+    }),
+  mfaRecoveryGenerate: () =>
+    apiFetch<{ recovery_codes: string[] }>("/auth/mfa/recovery/generate", {
+      method: "POST",
+      body: {},
+    }),
+  mfaRecoveryConsume: (code: string) =>
+    apiFetch<AuthSession>("/auth/mfa/recovery/consume", {
+      method: "POST",
+      body: { code },
     }),
   /** Start Supabase OAuth (Google/GitHub). Returns IdP redirect URL. */
   oauthStart: (provider: "google" | "github", redirect_to?: string) => {

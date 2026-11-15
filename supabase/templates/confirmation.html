@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Verify your email</title>
+</head>
+<body style="margin:0;padding:0;background:#F3F6FA;font-family:'IBM Plex Sans',Segoe UI,Helvetica,Arial,sans-serif;color:#111827">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0">Your QuantForg verification code is {{ .Token }}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA;padding:32px 16px">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width:560px;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px;overflow:hidden">
+          <tr>
+            <td style="padding:28px 28px 8px;text-align:center;background:linear-gradient(180deg,#0B1F33 0%,#12304A 100%)">
+              <img src="https://www.quantforg.com/brand/quantforg-mark-256.png" width="56" height="56" alt="QuantForg" style="display:block;margin:0 auto 14px" />
+              <p style="margin:0;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#7DD3E8;font-weight:600">Institutional Trading Intelligence</p>
+              <h1 style="margin:10px 0 18px;font-size:22px;line-height:1.3;font-weight:600;color:#F8FAFC">Verify your email address</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 8px;font-size:15px;line-height:1.6;color:#374151">
+              <p style="margin:0 0 16px">Welcome to QuantForg. Enter this six-digit code on the verification page to secure your account.</p>
+              <p style="margin:24px 0;text-align:center">
+                <span style="display:inline-block;font-family:'IBM Plex Mono',Consolas,Monaco,monospace;font-size:32px;letter-spacing:0.28em;font-weight:700;color:#0B1F33;background:#F0FDFF;border:1px solid #B6EAF2;border-radius:12px;padding:16px 22px">{{ .Token }}</span>
+              </p>
+              <p style="margin:0 0 12px;font-size:14px;color:#6B7280">This code expires soon. If you did not create a QuantForg account, you can ignore this email.</p>
+              <p style="margin:0 0 8px;font-size:14px;color:#6B7280"><strong style="color:#111827">Security:</strong> Never share this code with anyone. QuantForg will never ask for it by phone or chat.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 28px;text-align:center">
+              <a href="https://www.quantforg.com/verify-email" style="display:inline-block;background:#00D4E0;color:#0B1F33;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;font-size:14px">Open verification page</a>
+              <p style="margin:18px 0 0;font-size:13px">
+                <a href="https://www.quantforg.com/support" style="color:#0E7490;text-decoration:none">Contact support</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 28px 24px;border-top:1px solid #E5E7EB;font-size:12px;line-height:1.5;color:#9CA3AF;text-align:center">
+              QuantForg — Institutional AI Trading Platform. Software access only; trading outcomes are not guaranteed.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -42,15 +42,26 @@ class AuthSessionDTO:
     expires_in: int
     token_type: str
     user: AuthUserDTO
+    mfa_required: bool = False
+    aal: str | None = None
 
     @classmethod
-    def from_session(cls, session: AuthSession, user: User) -> AuthSessionDTO:
+    def from_session(
+        cls,
+        session: AuthSession,
+        user: User,
+        *,
+        mfa_required: bool = False,
+        aal: str | None = None,
+    ) -> AuthSessionDTO:
         return cls(
             access_token=session.access_token,
             refresh_token=session.refresh_token,
             expires_in=session.expires_in,
             token_type=session.token_type,
             user=AuthUserDTO.from_entity(user),
+            mfa_required=mfa_required,
+            aal=aal,
         )
 
 
@@ -89,8 +100,17 @@ class RefreshSessionCommand:
 
 @dataclass(frozen=True, slots=True)
 class VerifyEmailCommand:
-    token_hash: str
+    token_hash: str | None = None
+    email: str | None = None
+    token: str | None = None
     type: str = "email"
+    ip_address: str = ""
+    user_agent: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ResendVerificationCommand:
+    email: str
     ip_address: str = ""
     user_agent: str = ""
 

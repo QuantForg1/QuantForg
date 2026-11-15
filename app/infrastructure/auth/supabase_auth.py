@@ -362,6 +362,232 @@ class SupabaseAuthAdapter:
 
         return await asyncio.to_thread(_call)
 
+    async def verify_email_otp(
+        self,
+        *,
+        email: str,
+        token: str,
+        type: str = "email",
+    ) -> AuthSession:
+        def _call() -> AuthSession:
+            try:
+                response = self._client().auth.verify_otp(
+                    {
+                        "email": email.strip().lower(),
+                        "token": token.strip(),
+                        "type": type,
+                    }
+                )
+                return _session_from_response(response)
+            except AuthenticationError:
+                raise
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        return await asyncio.to_thread(_call)
+
+    async def resend_signup_email(self, *, email: str) -> None:
+        def _call() -> None:
+            try:
+                self._client().auth.resend(
+                    {
+                        "type": "signup",
+                        "email": email.strip().lower(),
+                    }
+                )
+            except Exception as exc:
+                # Anti-enumeration: never reveal whether the email exists.
+                logger.warning(
+                    "supabase_signup_resend_failed",
+                    error_type=type(exc).__name__,
+                )
+
+        await asyncio.to_thread(_call)
+
+    def _bind_session(self, access_token: str) -> None:
+        # Refresh token is required by set_session; reuse access when unknown.
+        self._client().auth.set_session(access_token, access_token)
+
+    async def list_mfa_factors(self, *, access_token: str) -> list[dict[str, object]]:
+        def _call() -> list[dict[str, object]]:
+            try:
+                self._bind_session(access_token)
+                response = self._client().auth.mfa.list_factors()
+                data = getattr(response, "data", response) or {}
+                totp = list(getattr(data, "totp", None) or data.get("totp", []) or [])
+                phone = list(
+                    getattr(data, "phone", None) or data.get("phone", []) or []
+                )
+                out: list[dict[str, object]] = []
+                for factor in [*totp, *phone]:
+                    if isinstance(factor, dict):
+                        out.append(factor)
+                    else:
+                        out.append(
+                            {
+                                "id": str(getattr(factor, "id", "")),
+                                "friendly_name": str(
+                                    getattr(factor, "friendly_name", "") or ""
+                                ),
+                                "factor_type": str(
+                                    getattr(factor, "factor_type", "") or ""
+                                ),
+                                "status": str(getattr(factor, "status", "") or ""),
+                            }
+                        )
+                return out
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        return await asyncio.to_thread(_call)
+
+    async def enroll_totp(
+        self, *, access_token: str, friendly_name: str = "Authenticator"
+    ) -> dict[str, object]:
+        def _call() -> dict[str, object]:
+            try:
+                self._bind_session(access_token)
+                response = self._client().auth.mfa.enroll(
+                    {
+                        "factor_type": "totp",
+                        "friendly_name": friendly_name,
+                    }
+                )
+                data = getattr(response, "data", response)
+                totp = getattr(data, "totp", None) or (
+                    data.get("totp") if isinstance(data, dict) else None
+                )
+                factor_id = str(
+                    getattr(data, "id", None)
+                    or (data.get("id") if isinstance(data, dict) else "")
+                    or ""
+                )
+                qr = ""
+                secret = ""
+                uri = ""
+                if totp is not None:
+                    if isinstance(totp, dict):
+                        qr = str(totp.get("qr_code") or "")
+                        secret = str(totp.get("secret") or "")
+                        uri = str(totp.get("uri") or "")
+                    else:
+                        qr = str(getattr(totp, "qr_code", "") or "")
+                        secret = str(getattr(totp, "secret", "") or "")
+                        uri = str(getattr(totp, "uri", "") or "")
+                return {
+                    "factor_id": factor_id,
+                    "qr_code": qr,
+                    "secret": secret,
+                    "uri": uri,
+                    "friendly_name": friendly_name,
+                }
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        return await asyncio.to_thread(_call)
+
+    async def challenge_mfa(
+        self, *, access_token: str, factor_id: str
+    ) -> dict[str, object]:
+        def _call() -> dict[str, object]:
+            try:
+                self._bind_session(access_token)
+                response = self._client().auth.mfa.challenge({"factor_id": factor_id})
+                data = getattr(response, "data", response)
+                challenge_id = str(
+                    getattr(data, "id", None)
+                    or (data.get("id") if isinstance(data, dict) else "")
+                    or ""
+                )
+                if not challenge_id:
+                    raise AuthenticationError(
+                        "MFA challenge could not be created",
+                        code="mfa_challenge_failed",
+                    )
+                return {"challenge_id": challenge_id, "factor_id": factor_id}
+            except AuthenticationError:
+                raise
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        return await asyncio.to_thread(_call)
+
+    async def verify_mfa(
+        self,
+        *,
+        access_token: str,
+        factor_id: str,
+        challenge_id: str,
+        code: str,
+    ) -> AuthSession:
+        def _call() -> AuthSession:
+            try:
+                self._bind_session(access_token)
+                response = self._client().auth.mfa.verify(
+                    {
+                        "factor_id": factor_id,
+                        "challenge_id": challenge_id,
+                        "code": code.strip(),
+                    }
+                )
+                # Prefer refreshed session when GoTrue returns one.
+                try:
+                    refreshed = self._client().auth.get_session()
+                    if refreshed is not None and getattr(
+                        refreshed, "access_token", None
+                    ):
+                        return _session_from_response(refreshed)
+                except Exception:
+                    logger.debug(
+                        "mfa_verify_get_session_fallback",
+                        exc_info=True,
+                    )
+                return _session_from_response(response, allow_empty_session=False)
+            except AuthenticationError:
+                raise
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        return await asyncio.to_thread(_call)
+
+    async def unenroll_mfa(self, *, access_token: str, factor_id: str) -> None:
+        def _call() -> None:
+            try:
+                self._bind_session(access_token)
+                self._client().auth.mfa.unenroll({"factor_id": factor_id})
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        await asyncio.to_thread(_call)
+
+    async def get_authenticator_assurance_level(
+        self, *, access_token: str
+    ) -> dict[str, object]:
+        def _call() -> dict[str, object]:
+            try:
+                self._bind_session(access_token)
+                response = self._client().auth.mfa.get_authenticator_assurance_level()
+                data = getattr(response, "data", response) or {}
+                if isinstance(data, dict):
+                    return {
+                        "current_level": data.get("current_level"),
+                        "next_level": data.get("next_level"),
+                        "current_authentication_methods": data.get(
+                            "current_authentication_methods"
+                        ),
+                    }
+                return {
+                    "current_level": getattr(data, "current_level", None),
+                    "next_level": getattr(data, "next_level", None),
+                    "current_authentication_methods": getattr(
+                        data, "current_authentication_methods", None
+                    ),
+                }
+            except Exception as exc:
+                raise _map_auth_error(exc) from exc
+
+        return await asyncio.to_thread(_call)
+
     async def request_password_reset(self, *, email: str, redirect_to: str) -> None:
         def _call() -> None:
             try:
