@@ -1,8 +1,38 @@
 # Phase 8 — Quantitative Research & Strategy Factory delivery report
 
+**PR:** https://github.com/QuantForg1/QuantForg/pull/293 — **MERGED** 2026-11-15  
+**Merge commit:** `3697ce30`  
 **Branch:** `feat/phase8-quantitative-research-control`  
 **Freeze citation:** `docs/production/PHASE8_QUANTITATIVE_RESEARCH_CONTROL_FREEZE.md`  
 **Model:** `phase8-research-1.0.0`
+
+## Production verify
+
+| Surface | Result |
+|---|---|
+| Railway `/api/v1/health` | **200** |
+| Railway `/api/v1/version` | production `git_commit` = `3697ce30…` |
+| Railway `/api/v1/quantitative-research-control/health` | **401** without auth (route live) |
+| Railway `/api/v1/quantitative-research-control/summary` | **401** without auth |
+| Railway `/api/v1/quantitative-research-control/validation/pipeline` | **401** without auth |
+| `www.quantforg.com/login` | **200** |
+| `www.quantforg.com/quant-research` | **200** |
+| `www.quantforg.com/strategy-factory` | **200** |
+| `www.quantforg.com/research-data` | **200** |
+| `www.quantforg.com/strategy-backtesting` | **200** |
+| `www.quantforg.com/strategy-optimization` | **200** |
+| `www.quantforg.com/research-leaderboard` | **200** |
+| `www.quantforg.com/research-governance` | **200** |
+| `www.quantforg.com/quantforg-strategy-factory` | **200** |
+| `www.quantforg.com/autonomous-trading` | **200** |
+| Vercel Production frontend | Ready (`frontend-63y27kutk…`); www aliased |
+| LIVE test orders | **not performed** |
+| Research defaults | research-only / never_order_send / never_auto_live_deploy |
+
+## CI
+
+GitHub Actions (lint, typecheck, unit, trading_core, frontend, integration): **SUCCESS**  
+Vercel preview for `frontend` hit Pro rate-limit on the PR; production deploy verified post-merge.
 
 ## Summary
 
@@ -38,10 +68,7 @@ surfaces. Never order_send. Never auto LIVE deploy.
 
 ## Tests
 
-- `tests/unit/test_phase8_quantitative_research_control.py`
-- `frontend/src/lib/trading/phase8-research-contract.test.ts`
-- Gates: ruff, black, mypy, unit, `pytest -m trading_core`, `tsc --noEmit`, production build
-
-## Production verify
-
-_Filled after merge / Railway + Vercel verification._
+- `tests/unit/test_phase8_quantitative_research_control.py` — 10 passed
+- `frontend/src/lib/trading/phase8-research-contract.test.ts` — ok
+- `pytest -m trading_core` — 2186 passed, 3 xfailed (local); CI SUCCESS
+- `tsc --noEmit` — clean
