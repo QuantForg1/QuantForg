@@ -777,6 +777,21 @@ class Settings(BaseSettings):
             ),
         ),
     ] = False
+    multi_account_oms_live_order_send_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Phase 12B explicit unlock for multi-account LIVE order_send on "
+                "workers. Distinct from MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED. "
+                "Default false — LIVE path may authorize checks but must not "
+                "submit real-money orders until Owner sets this true."
+            ),
+            validation_alias=AliasChoices(
+                "MULTI_ACCOUNT_OMS_LIVE_ORDER_SEND_ENABLED",
+                "multi_account_oms_live_order_send_enabled",
+            ),
+        ),
+    ] = False
     qf_dispatch_lab_enabled: Annotated[
         bool,
         Field(

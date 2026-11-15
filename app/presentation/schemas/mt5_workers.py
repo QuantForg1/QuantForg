@@ -84,6 +84,34 @@ class DispatchFailRequest(BaseModel):
     reason: str = Field(default="failed", max_length=500)
 
 
+class DispatchExecuteAuthorizeRequest(BaseModel):
+    """Worker requests OMS execution authorization for a claimed intent."""
+
+    worker_id: UUID
+    intent_id: UUID
+    account_environment: str = Field(default="demo", max_length=16)
+
+
+class DispatchExecutionResultRequest(BaseModel):
+    """Worker reports actual broker response (not delivery ACK)."""
+
+    worker_id: UUID
+    intent_id: UUID
+    ok: bool = False
+    retcode: int | None = None
+    order_ticket: int | None = None
+    deal_ticket: int | None = None
+    symbol: str = Field(default="", max_length=32)
+    side: str = Field(default="", max_length=8)
+    volume: str = Field(default="", max_length=32)
+    price: str | None = Field(default=None, max_length=32)
+    environment: str = Field(default="demo", max_length=16)
+    idempotency_key: str = Field(default="", max_length=256)
+    comment: str = Field(default="", max_length=200)
+    detail: str = Field(default="", max_length=500)
+    uncertain: bool = False
+
+
 class DispatchLabEnqueueRequest(BaseModel):
     """Staging lab enqueue for assigned worker only. Never LIVE submit."""
 
@@ -91,6 +119,20 @@ class DispatchLabEnqueueRequest(BaseModel):
     symbol: str = Field(default="XAUUSD", min_length=3, max_length=32)
     side: str = Field(default="BUY", max_length=8)
     quality: int = Field(default=80, ge=1, le=100)
+    idempotency_key: str = Field(default="", max_length=128)
+
+
+class DispatchDemoEnqueueRequest(BaseModel):
+    """Production/Staging DEMO enqueue for a dispatch_ready worker only."""
+
+    worker_id: UUID
+    symbol: str = Field(default="XAUUSD", min_length=3, max_length=32)
+    side: str = Field(default="BUY", max_length=8)
+    quality: int = Field(default=80, ge=1, le=100)
+    volume: str = Field(default="0.01", max_length=16)
+    entry: str = Field(default="4000", max_length=32)
+    stop_loss: str = Field(default="3990", max_length=32)
+    take_profit: str = Field(default="4010", max_length=32)
     idempotency_key: str = Field(default="", max_length=128)
 
 
