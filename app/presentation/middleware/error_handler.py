@@ -116,6 +116,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             "oauth_failed": "Google sign-in could not be completed.",
             "password_update_failed": "Password could not be updated.",
             "invalid_token": "Session expired or invalid. Sign in again.",
+            "invalid_mfa_code": "Invalid authenticator code. Try again.",
+            "invalid_recovery_code": "Invalid or already-used recovery code.",
+            "mfa_challenge_failed": "Could not start MFA challenge. Try again.",
         }
         message = public_messages.get(exc.code, "Authentication failed")
         headers: dict[str, str] | None

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from uuid import UUID
+
+from supabase_auth.helpers import decode_jwt
+from supabase_auth.types import Session as GoTrueSession
 
 from app.domain.exceptions.auth import AuthenticationError
 from app.domain.interfaces.auth import (
@@ -17,6 +21,22 @@ from app.infrastructure.supabase.client import SupabaseClient
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _factor_to_dict(factor: Any) -> dict[str, object]:
+    if isinstance(factor, dict):
+        return {
+            "id": str(factor.get("id") or ""),
+            "friendly_name": str(factor.get("friendly_name") or ""),
+            "factor_type": str(factor.get("factor_type") or ""),
+            "status": str(factor.get("status") or ""),
+        }
+    return {
+        "id": str(getattr(factor, "id", "") or ""),
+        "friendly_name": str(getattr(factor, "friendly_name", "") or ""),
+        "factor_type": str(getattr(factor, "factor_type", "") or ""),
+        "status": str(getattr(factor, "status", "") or ""),
+    }
 
 
 def _as_uuid(value: str | UUID) -> UUID:
@@ -203,6 +223,24 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
         code = "identity_mismatch"
     elif "redirect" in lowered and "oauth" in lowered:
         code = "oauth_redirect_failed"
+    elif any(
+        phrase in lowered
+        for phrase in (
+            "invalid totp",
+            "invalid mfa",
+            "invalid code",
+            "challenge has expired",
+            "mfa challenge",
+            "totp code",
+            "verification failed",
+            "invalid credentials for mfa",
+        )
+    ):
+        code = "invalid_mfa_code"
+    elif "session" in lowered and (
+        "missing" in lowered or "not found" in lowered or "auth session" in lowered
+    ):
+        code = "invalid_token"
 
     if code == "authentication_failed":
         logger.warning(
@@ -404,38 +442,52 @@ class SupabaseAuthAdapter:
 
         await asyncio.to_thread(_call)
 
-    def _bind_session(self, access_token: str) -> None:
-        # Refresh token is required by set_session; reuse access when unknown.
-        self._client().auth.set_session(access_token, access_token)
+    def _bind_session(
+        self, access_token: str, refresh_token: str | None = None
+    ) -> None:
+        """Bind a user JWT onto the shared GoTrue client without refresh races.
+
+        ``set_session(access, access)`` is unsafe: near-expiry or shared-client
+        ``get_session`` may treat the access JWT as a refresh token and fail.
+        Bind via ``get_user(jwt)`` + ``_save_session`` instead.
+        """
+        auth = self._client().auth
+        user_response = auth.get_user(access_token)
+        user = getattr(user_response, "user", None)
+        if user is None:
+            raise AuthenticationError(
+                "Invalid or expired access token",
+                code="invalid_token",
+            )
+        payload = decode_jwt(access_token)["payload"]
+        expires_at = int(payload.get("exp") or 0)
+        time_now = int(time.time())
+        # Prefer a real refresh token when the caller has one. Fall back to the
+        # access token only as a non-empty placeholder; expires_at stays future
+        # so get_session will not attempt refresh during this request.
+        refresh = (refresh_token or "").strip() or access_token
+        bearer_type = "bearer"
+        session = GoTrueSession(
+            access_token=access_token,
+            refresh_token=refresh,
+            user=user,
+            token_type=bearer_type,
+            expires_in=max(expires_at - time_now, 0),
+            expires_at=expires_at if expires_at > 0 else time_now + 3600,
+        )
+        # Intentional: bind JWT onto shared GoTrue client for MFA network calls.
+        auth._save_session(session)
 
     async def list_mfa_factors(self, *, access_token: str) -> list[dict[str, object]]:
         def _call() -> list[dict[str, object]]:
             try:
-                self._bind_session(access_token)
-                response = self._client().auth.mfa.list_factors()
-                data = getattr(response, "data", response) or {}
-                totp = list(getattr(data, "totp", None) or data.get("totp", []) or [])
-                phone = list(
-                    getattr(data, "phone", None) or data.get("phone", []) or []
-                )
-                out: list[dict[str, object]] = []
-                for factor in [*totp, *phone]:
-                    if isinstance(factor, dict):
-                        out.append(factor)
-                    else:
-                        out.append(
-                            {
-                                "id": str(getattr(factor, "id", "")),
-                                "friendly_name": str(
-                                    getattr(factor, "friendly_name", "") or ""
-                                ),
-                                "factor_type": str(
-                                    getattr(factor, "factor_type", "") or ""
-                                ),
-                                "status": str(getattr(factor, "status", "") or ""),
-                            }
-                        )
-                return out
+                # JWT-direct: avoid shared-session list_factors() cache races.
+                response = self._client().auth.get_user(access_token)
+                user = getattr(response, "user", None)
+                factors = list(getattr(user, "factors", None) or []) if user else []
+                return [_factor_to_dict(f) for f in factors]
+            except AuthenticationError:
+                raise
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
@@ -530,18 +582,25 @@ class SupabaseAuthAdapter:
                         "code": code.strip(),
                     }
                 )
-                # Prefer refreshed session when GoTrue returns one.
-                try:
-                    refreshed = self._client().auth.get_session()
-                    if refreshed is not None and getattr(
-                        refreshed, "access_token", None
-                    ):
-                        return _session_from_response(refreshed)
-                except Exception:
-                    logger.debug(
-                        "mfa_verify_get_session_fallback",
-                        exc_info=True,
+                # AuthMFAVerifyResponse carries tokens directly (no .session).
+                access = str(getattr(response, "access_token", "") or "")
+                if access:
+                    identity = None
+                    user = getattr(response, "user", None)
+                    if user is not None:
+                        identity = _identity_from_user(user)
+                    return AuthSession(
+                        access_token=access,
+                        refresh_token=str(getattr(response, "refresh_token", "") or ""),
+                        expires_in=int(getattr(response, "expires_in", 0) or 0),
+                        token_type=str(
+                            getattr(response, "token_type", "bearer") or "bearer"
+                        ),
+                        user=identity,
                     )
+                refreshed = self._client().auth.get_session()
+                if refreshed is not None and getattr(refreshed, "access_token", None):
+                    return _session_from_response(refreshed)
                 return _session_from_response(response, allow_empty_session=False)
             except AuthenticationError:
                 raise
@@ -565,24 +624,42 @@ class SupabaseAuthAdapter:
     ) -> dict[str, object]:
         def _call() -> dict[str, object]:
             try:
-                self._bind_session(access_token)
-                response = self._client().auth.mfa.get_authenticator_assurance_level()
-                data = getattr(response, "data", response) or {}
-                if isinstance(data, dict):
-                    return {
-                        "current_level": data.get("current_level"),
-                        "next_level": data.get("next_level"),
-                        "current_authentication_methods": data.get(
-                            "current_authentication_methods"
-                        ),
-                    }
+                payload = decode_jwt(access_token)["payload"]
+                current_level = payload.get("aal")
+                amr = payload.get("amr") or []
+                methods: list[dict[str, object]] = []
+                if isinstance(amr, list):
+                    for entry in amr:
+                        if isinstance(entry, dict):
+                            methods.append(
+                                {
+                                    "method": str(entry.get("method") or ""),
+                                    "timestamp": entry.get("timestamp"),
+                                }
+                            )
+                        else:
+                            methods.append(
+                                {
+                                    "method": str(getattr(entry, "method", "") or ""),
+                                    "timestamp": getattr(entry, "timestamp", None),
+                                }
+                            )
+                # next_level is aal2 when a verified factor exists on the user.
+                user_response = self._client().auth.get_user(access_token)
+                user = getattr(user_response, "user", None)
+                factors = list(getattr(user, "factors", None) or []) if user else []
+                has_verified = any(
+                    str(getattr(f, "status", "") or "").lower() == "verified"
+                    for f in factors
+                )
+                next_level = "aal2" if has_verified else current_level
                 return {
-                    "current_level": getattr(data, "current_level", None),
-                    "next_level": getattr(data, "next_level", None),
-                    "current_authentication_methods": getattr(
-                        data, "current_authentication_methods", None
-                    ),
+                    "current_level": current_level,
+                    "next_level": next_level,
+                    "current_authentication_methods": methods,
                 }
+            except AuthenticationError:
+                raise
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
@@ -608,8 +685,7 @@ class SupabaseAuthAdapter:
     ) -> AuthUserIdentity:
         def _call() -> AuthUserIdentity:
             try:
-                # Bound session for the update_user call.
-                self._client().auth.set_session(access_token, access_token)
+                self._bind_session(access_token)
                 response = self._client().auth.update_user({"password": new_password})
                 user = getattr(response, "user", None)
                 if user is None:
