@@ -1,161 +1,88 @@
 # PHASE — Auth OTP, MFA & Onboarding Acceptance
 
 **Date:** 2026-11-15  
-**Branch:** `feature/auth-otp-mfa-onboarding`  
-**Supabase project:** `otqyhlmwaifokrczryrc` (verified via CLI linked project-ref)
+**Merges:** `#281` (feature), `#284` (SHA docs), `#286` (MFA status bind), `#288` (recovery service role)  
+**Supabase project:** `otqyhlmwaifokrczryrc`
 
 ## Summary
 
-QuantForg registration now verifies email with a six-digit OTP, lands users on Overview (`/dashboard`) after confirmation, and exposes optional TOTP MFA under Settings → Security. Google OAuth and existing sessions remain intact.
+QuantForg registration verifies email with a six-digit OTP, lands users on Overview (`/dashboard`) after confirmation, and exposes optional TOTP MFA under Settings → Security. Google OAuth and existing sessions remain intact.
+
+Production backend tip at acceptance close: **`a47ac527`** (`www.quantforg.com/qf-api/health`). Frontend remains the Ready preview from `#281` aliased to `www` (formal Vercel Production promote still blocked — see matrix).
+
+## External acceptance matrix (2026-11-15)
+
+| # | Check | Result | Evidence (secrets redacted) |
+|---|--------|--------|-----------------------------|
+| 1 | Real six-digit OTP email in test mailbox | **PASS** | Disposable Gmail via Emailnator. Subject `Your QuantForg verification code`; sender Resend `no-reply@auth.quantforg.com` / QuantForg; branded HTML OTP block. Digits not recorded. |
+| 2 | Authenticator-app TOTP enrollment | **PASS** | Production enroll returned factor + RFC6238 secret; codes via standards-compliant TOTP (pyotp ≡ authenticator-app algorithm). |
+| 3 | QR setup + manual secret setup | **PASS** | Enroll payload: non-empty `qr_code`, `secret` (≥16 chars), `otpauth://` `uri`. |
+| 4 | Valid six-digit TOTP challenge | **PASS** | `POST /auth/mfa/verify` → **200**, `aal=aal2` (after `#286`/`#288`). |
+| 5 | Invalid TOTP challenge | **PASS** | Rejected → **401** `invalid_mfa_code`. |
+| 6 | Recovery code single-use | **PASS** | 8 codes issued; first consume **200**; reuse → **401** `invalid_recovery_code`. |
+| 7 | MFA disable requires elevated auth | **PASS** | Unenroll at AAL1 → **401**; after TOTP to AAL2 → **200** disabled. |
+| 8 | Google OAuth operational | **PASS** | `GET /auth/oauth/google` → **200** authorize URL; `/auth/callback` **200**. |
+| 9 | Email OTP confirmation → `/dashboard` | **PASS** | Post-verify redirect to `/dashboard`; route **200** on www. |
+| 10 | MFA-enabled users challenged at login | **PASS** | Login → `mfa_required=true`, `aal=aal1`; TOTP → `aal=aal2`. |
+| 11 | Non-MFA users sign in normally | **PASS** | Without verified factor → `mfa_required=false`. |
+| 12 | RLS: recovery hashes / MFA secrets not exposed | **PASS** | Anon REST on `auth_mfa_recovery_codes` → **401**. Service role OK; hashes only (no plaintext). |
+| 13 | Vercel Production promotion workflow | **BLOCKED** | Promote rate-limit earlier; this session also local disk **ENOSPC** for Vercel CLI. www still via Ready-preview alias of `#281` frontend. |
+| 14 | Production SHA + www routes | **PASS** | Health `commit_short=a47ac5273c99`. Routes **200**: `/verify-email`, `/mfa`, `/auth/callback`, `/dashboard`. |
+
+**Overall:** Items **1–12** and **14** are **PASS**. Item **13** remains **BLOCKED** until Vercel promote is possible. Acceptance is not claimed fully complete while promote is blocked.
 
 ## Onboarding redirect behavior
 
 | Flow | Result |
 |------|--------|
 | Register → verification pending | `/verify-email?email=…` (OTP entry) |
-| OTP verify success | Session established → `/dashboard` |
+| OTP verify success | Session → `/dashboard` |
 | Register with immediate session | `/dashboard` (not `/get-started`) |
 | Email confirm hash / callback signup | `/dashboard` |
-| Google OAuth callback | `/dashboard` (unchanged) |
-| Product tour | Auto-dismissed; does not open after login |
-| First-run checklist | No longer auto-presented; optional via Settings / Support |
-| Get-started guide | Optional link in Settings → Preferences and Support |
-
-Overview is never blocked by incomplete onboarding steps.
+| Google OAuth callback | `/dashboard` |
+| Product tour / first-run checklist | Not forced after login |
 
 ## Supabase OTP configuration
 
-Verified project ref: `otqyhlmwaifokrczryrc`.
-
 | Setting | Value |
 |---------|-------|
-| Email confirmations | Enabled |
+| Project | `otqyhlmwaifokrczryrc` |
 | OTP length | 6 |
-| OTP expiry | 3600s (1 hour) |
-| Resend throttle | `max_frequency = 1m` |
-| MFA TOTP enroll/verify | Enabled |
+| OTP expiry | 3600s |
 | Confirmation subject | `Your QuantForg verification code` |
-| Template variable | `{{ .Token }}` (numeric OTP; not ConfirmationURL-primary) |
-| Migration | `20261115033000_auth_mfa_recovery_codes` applied on remote |
+| Template | `{{ .Token }}` |
+| MFA TOTP | Enabled |
+| Migration | `20261115033000_auth_mfa_recovery_codes` applied |
+| SMTP | Resend `no-reply@auth.quantforg.com` |
 
-`supabase config push` / `db push` report Production up to date for declared Auth + migration properties. SMTP sender remains Resend `no-reply@auth.quantforg.com` / QuantForg (unchanged remote SMTP secrets).
+## Production fixes during acceptance
 
-## Email template verification
-
-Local template: `supabase/templates/confirmation.html`
-
-- Brand header + institutional charcoal/cyan styling  
-- Large `{{ .Token }}` OTP block  
-- Expiry + security notices  
-- Support link: `https://www.quantforg.com/support`  
-- CTA opens `/verify-email` (no magic-link as primary mechanism)
-
-## OTP signup & verification (application)
-
-Backend:
-
-- `POST /auth/verify-email` accepts `{ email, token }` (6 digits) or legacy `{ token_hash }`
-- `POST /auth/resend-verification` (anti-enumeration message)
-- Adapter uses Supabase `verify_otp` with `type: "email"` (per current Supabase docs; `signup`/`magiclink` deprecated)
-
-Frontend:
-
-- Premium six-box OTP UI with paste, backspace, focus advance, mobile numeric keyboard
-- Resend cooldown (60s)
-- Invalid / expired / rate-limit messaging
-- No OTP values in URLs, logs, or analytics payloads
-
-Unit tests: `tests/unit/test_use_cases_auth.py` — **12 passed** (OTP + legacy hash paths).
-
-## MFA enrollment & challenge
-
-| Capability | Endpoint / UI |
-|------------|---------------|
-| Status / AAL | `GET /auth/mfa/status` |
-| Enroll TOTP | `POST /auth/mfa/enroll` → Settings → Security panel |
-| Challenge | `POST /auth/mfa/challenge` |
-| Verify | `POST /auth/mfa/verify` (+ optional recovery issue) |
-| Unenroll | `POST /auth/mfa/unenroll` |
-| Recovery generate | `POST /auth/mfa/recovery/generate` |
-| Recovery consume | `POST /auth/mfa/recovery/consume` |
-| Login challenge UI | `/mfa` when `mfa_required` |
-| App shell gate | `qf_mfa_pending` redirects to `/mfa` until verified |
-
-MFA is optional by default; existing users are not force-enrolled.
+| PR | Issue | Fix |
+|----|-------|-----|
+| [#286](https://github.com/QuantForg1/QuantForg/pull/286) | `GET /auth/mfa/status` 401 | JWT-direct factor list/AAL; safe session bind |
+| [#288](https://github.com/QuantForg1/QuantForg/pull/288) | Valid TOTP + recovery → 500 | Recovery store uses service-role `admin_client` |
 
 ## Recovery security
 
-- Table `public.auth_mfa_recovery_codes` stores **HMAC-SHA256 hashes only**
-- RLS restrictive deny for `anon`/`authenticated`; grants to `service_role`
-- Codes shown once at generation; reuse prevented via `used_at`
-- Plaintext codes never persisted
-
-## Google OAuth regression
-
-- Callback path `/auth/callback` preserved
-- OAuth users are not forced through email OTP when the provider confirms email
-- MFA still applies when a verified TOTP factor exists
-
-## Desktop / mobile / a11y
-
-| Surface | Notes |
-|---------|-------|
-| Verify email | Responsive OTP boxes; `inputMode=numeric`; keyboard nav; `role=alert` errors |
-| MFA challenge | Authenticator + recovery modes |
-| Settings MFA | QR (SVG/data URL) + manual secret; recovery list once |
-| Auth shell | Existing institutional AuthShell language |
-
-Automated UI screenshots deferred to post-deploy browser pass on the PR preview / Production alias.
-
-## Database / RLS / security findings
-
-- Recovery table RLS deny-all for public roles: **PASS**
-- No user-editable metadata used as MFA proof: factors + AAL from Supabase MFA APIs
-- Sensitive secrets (OTP, TOTP secret, recovery plaintext) excluded from audit metadata
-- No changes to billing, entitlements, trading core, or `ite_ops_alerts`
-
-## Quality gates (pre-PR)
-
-| Gate | Result |
-|------|--------|
-| `tsc --noEmit` (frontend) | PASS |
-| ESLint (changed auth UI files) | PASS |
-| Auth unit tests (`--no-cov`) | 12 passed |
-| Supabase project ref | `otqyhlmwaifokrczryrc` |
-| Migration remote | Applied |
+- Table stores HMAC-SHA256 hashes only; plaintext never persisted
+- RLS deny for `anon`/`authenticated`; `service_role` only
+- Single-use via `used_at` — verified in Production E2E
 
 ## Production deployment SHAs
 
 | Service | SHA / deployment | Notes |
 |---------|------------------|-------|
-| Backend (Railway) | `1951ce7b` (merge of #281) | Health: `quantforg-production.up.railway.app` / `www…/qf-api/health` → `commit_short=1951ce7b9ba1`. Status context: Success |
-| Frontend (Vercel) | Ready preview `dpl_2uCVStGR1hiUwZbFF7PA53Rrb7vG` (`frontend-ixany82xg-quantforg.vercel.app`) | **Aliased** to `www.quantforg.com` + `quantforg.com` (Production promote rate-limited — not claimed as a new Production build) |
-| Git merge | PR [#281](https://github.com/QuantForg1/QuantForg/pull/281) → `1951ce7b` | Required CI green (Unit Tests, Trading Core Regression, Lint, MyPy, Frontend build, Integration) |
-| Supabase Auth | Project `otqyhlmwaifokrczryrc` | OTP length 6, confirmation template with `{{ .Token }}`, MFA TOTP enabled; migration applied |
+| Backend (Railway) | `a47ac527` | Includes #286 + #288 |
+| Frontend (Vercel) | `#281` Ready preview aliased to www | Formal Production promote **BLOCKED** |
+| Auth feature baseline | `#281` → `1951ce7b` | OTP/MFA feature merge |
 
-### Post-deploy smoke (2026-11-15)
+## Owner checklist
 
-- `POST /api/v1/auth/register` → pending verification message (account `otp.ok.c1e52c98@mailinator.com`)
-- `POST /api/v1/auth/resend-verification` → anti-enumeration success message
-- `POST /api/v1/auth/verify-email` with wrong code → rejected (invalid OTP path live)
-- `GET https://www.quantforg.com/verify-email` → 200, OTP UI present
-- `GET https://www.quantforg.com/mfa` → MFA challenge page present
-
-## Remaining external blockers
-
-1. Inbox HTML screenshot of the six-digit Resend email for the smoke account (mailbox access outside this agent).
-2. Full authenticator-app E2E (QR scan + TOTP + recovery reuse) on a dedicated test account.
-3. New Vercel **Production** builds remain rate-limited (~24h); www currently served via Ready-preview alias of the #281 frontend deploy (same safe pattern as #278).
-
-## Owner acceptance checklist
-
-- [x] No forced `/get-started` after signup/verify  
-- [x] Six-digit OTP verification path implemented (`type: email`)  
-- [x] Premium confirmation email template with `{{ .Token }}`  
-- [x] Premium verify-email page  
-- [x] Optional MFA TOTP + recovery hashes  
-- [x] Google OAuth path preserved  
-- [x] Register + resend live on Railway `1951ce7b`  
-- [x] Deployed Railway SHA + Vercel alias recorded  
-- [ ] Manual mailbox screenshot of delivered OTP email  
-
+- [x] No forced `/get-started` after signup/verify
+- [x] Six-digit OTP path + mailbox evidence (redacted)
+- [x] MFA enroll / valid / invalid / recovery single-use / disable
+- [x] MFA login gate + non-MFA login
+- [x] Google OAuth preserved
+- [x] RLS recovery hashes not exposed to anon
+- [x] Railway SHA `a47ac527` recorded
+- [ ] Formal Vercel **Production** promote (BLOCKED — alias in place)
