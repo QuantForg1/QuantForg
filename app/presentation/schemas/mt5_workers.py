@@ -109,6 +109,7 @@ class DispatchExecutionResultRequest(BaseModel):
     idempotency_key: str = Field(default="", max_length=256)
     comment: str = Field(default="", max_length=200)
     detail: str = Field(default="", max_length=500)
+    uncertain: bool = False
 
 
 class DispatchLabEnqueueRequest(BaseModel):

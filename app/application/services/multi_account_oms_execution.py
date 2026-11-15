@@ -288,6 +288,67 @@ def build_position_reconciliation_record(
     }
 
 
+# MT5 trade retcodes treated as definitive reject (not uncertain).
+_DEFINITE_REJECT_RETCODES = frozenset(
+    {
+        10004,  # REQUOTE
+        10006,  # REJECT
+        10007,  # CANCEL
+        10013,  # INVALID
+        10014,  # INVALID_VOLUME
+        10015,  # INVALID_PRICE
+        10016,  # INVALID_STOPS
+        10017,  # TRADE_DISABLED
+        10018,  # MARKET_CLOSED
+        10019,  # NO_MONEY
+        10030,  # INVALID_FILL
+    }
+)
+_UNCERTAIN_RETCODES = frozenset(
+    {
+        10012,  # TIMEOUT
+        10024,  # PRICE_CHANGED
+        10031,  # CONNECTION
+    }
+)
+
+
+def classify_broker_execution_outcome(
+    *,
+    ok: bool,
+    retcode: int | None,
+    order_ticket: int | None,
+    detail: str = "",
+    uncertain_flag: bool = False,
+) -> str:
+    """Classify broker outcome for durable state.
+
+    Returns ``filled``, ``rejected``, or ``unknown``.
+    Unknown must never trigger a blind order_send retry.
+    """
+    detail_l = (detail or "").lower()
+    if uncertain_flag or "order_send_null" in detail_l or "uncertain" in detail_l:
+        return "unknown"
+    if retcode == 10009 and order_ticket:
+        return "filled"
+    if retcode == 10009 and not order_ticket:
+        return "unknown"
+    if retcode in _UNCERTAIN_RETCODES and not order_ticket:
+        return "unknown"
+    if retcode is None and not order_ticket and not ok:
+        # Send attempted but no broker retcode → do not invent reject/fill.
+        if "dry_run" in detail_l:
+            return "rejected"
+        return "unknown"
+    if ok and order_ticket:
+        return "filled"
+    if retcode in _DEFINITE_REJECT_RETCODES - _UNCERTAIN_RETCODES:
+        return "rejected"
+    if not ok:
+        return "rejected"
+    return "unknown"
+
+
 def parse_broker_execution_report(
     *,
     intent_id: UUID,
@@ -313,6 +374,19 @@ def parse_broker_execution_report(
     ok = bool(safe.get("ok"))
     if retcode_i == 10009:  # TRADE_RETCODE_DONE
         ok = True
+    outcome = classify_broker_execution_outcome(
+        ok=ok,
+        retcode=retcode_i,
+        order_ticket=order_i,
+        detail=str(safe.get("detail") or safe.get("comment") or ""),
+        uncertain_flag=bool(safe.get("uncertain")),
+    )
+    if outcome == "filled":
+        ok = True
+    elif outcome == "rejected":
+        ok = False
+    safe["execution_outcome"] = outcome
+    safe["retry_order_send_allowed"] = outcome == "rejected"
     return BrokerExecutionReport(
         intent_id=intent_id,
         worker_id=worker_id,

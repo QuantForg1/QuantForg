@@ -336,6 +336,19 @@ async def dispatch_execute_authorize(
             "error": "assignment_mismatch",
             "order_send_allowed": False,
         }
+    # Already terminal / uncertain → never re-arm order_send.
+    if job.state.value in {"filled", "rejected", "unknown"}:
+        payload = dict(job.payload or {})
+        return {
+            "ok": False,
+            "error": "intent_terminal",
+            "state": job.state.value,
+            "order_send_allowed": False,
+            "order_send": False,
+            "retry_order_send_allowed": bool(payload.get("retry_order_send_allowed")),
+            "order_send_uncertain": bool(payload.get("order_send_uncertain")),
+            "live_submit_allowed": False,
+        }
     auth = authorize_worker_execution(
         worker=worker,
         intent_id=body.intent_id,
@@ -345,6 +358,17 @@ async def dispatch_execute_authorize(
         job_idempotency_key=job.idempotency_key,
         account_environment=body.account_environment,
     )
+    if auth.order_send_allowed:
+        try:
+            queue.mark_submitting(intent_id=body.intent_id, worker_id=body.worker_id)
+        except (KeyError, PermissionError, TimeoutError):
+            return {
+                "ok": False,
+                "error": "lease_invalid_for_submit",
+                "order_send_allowed": False,
+                "order_send": False,
+                "live_submit_allowed": False,
+            }
     return {
         "ok": auth.ok,
         "authorization": auth.to_public_dict(),
@@ -397,9 +421,12 @@ async def dispatch_execution_result(
             "environment": body.environment,
             "idempotency_key": body.idempotency_key,
             "comment": body.comment,
+            "detail": body.detail,
+            "uncertain": body.uncertain,
         },
     )
 
+    outcome = str((report.raw_safe or {}).get("execution_outcome") or "")
     try:
         updated = queue.record_broker_execution(
             intent_id=body.intent_id,
@@ -410,6 +437,7 @@ async def dispatch_execution_result(
             deal_ticket=report.deal_ticket,
             detail=body.detail or report.broker_comment,
             broker_payload=report.raw_safe,
+            outcome=outcome or None,
         )
     except KeyError:
         return {"ok": False, "error": "intent_not_found"}
@@ -422,10 +450,16 @@ async def dispatch_execution_result(
         user_id=worker.user_id,
         broker_account_id=worker.broker_account_id,
     )
+    resolved = str((updated.payload or {}).get("execution_outcome") or outcome)
     return {
         "ok": True,
         "job": updated.to_public_dict(),
-        "broker_fill": bool(report.ok),
+        "broker_fill": resolved == "filled",
+        "execution_outcome": resolved,
+        "order_send_uncertain": resolved == "unknown",
+        "retry_order_send_allowed": bool(
+            (updated.payload or {}).get("retry_order_send_allowed")
+        ),
         "order_send": True,
         "retcode": report.retcode,
         "order_ticket": report.order_ticket,

@@ -306,6 +306,15 @@ def cmd_railway_dispatch_poll(
                         "note": "dry_run_no_broker_submit",
                     }
                 else:
+                    detail = str(broker.get("error") or broker.get("comment") or "")
+                    uncertain = bool(
+                        broker.get("error") == "order_send_null"
+                        or (
+                            broker.get("order_send")
+                            and broker.get("retcode") is None
+                            and not broker.get("order_ticket")
+                        )
+                    )
                     result_payload = {
                         "ok": bool(broker.get("ok")),
                         "retcode": broker.get("retcode"),
@@ -318,13 +327,19 @@ def cmd_railway_dispatch_poll(
                         "environment": env,
                         "idempotency_key": auth_body.get("idempotency_key") or "",
                         "comment": broker.get("comment") or "",
-                        "detail": broker.get("error") or broker.get("comment") or "",
+                        "detail": detail,
+                        "uncertain": uncertain,
                     }
                     entry["execution_result"] = client.dispatch_execution_result(
                         worker_id=worker_id,
                         intent_id=intent_id,
                         payload=result_payload,
                     )
+                    # Uncertain outcomes must not be treated as safe delivery-only ACK
+                    # for a fresh send — execution-result already terminalizes UNKNOWN.
+                    if uncertain:
+                        entry["order_send_uncertain"] = True
+                        entry["retry_order_send_allowed"] = False
             if ack:
                 entry["ack"] = client.dispatch_ack(
                     worker_id=worker_id,

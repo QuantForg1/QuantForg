@@ -349,6 +349,42 @@ class DurableDispatchQueue:
         self._mirror_event(event)
         return result
 
+    def mark_submitting(
+        self,
+        *,
+        intent_id: UUID,
+        worker_id: UUID,
+        now: datetime | None = None,
+    ) -> DispatchJob:
+        """Mark claimed intent as SUBMITTING before broker order_send."""
+        ts = now or datetime.now(UTC)
+        with self._lock:
+            job = self._require_leased(intent_id, worker_id, ts)
+            if job.state in {
+                AccountExecutionState.FILLED,
+                AccountExecutionState.REJECTED,
+                AccountExecutionState.UNKNOWN,
+            }:
+                return deepcopy(job)
+            job.state = AccountExecutionState.SUBMITTING
+            job.updated_at = ts
+            safe = dict(job.payload or {})
+            safe["submitting_at"] = ts.isoformat()
+            job.payload = safe
+            event = DispatchEvent.create(
+                intent_id=job.intent_id,
+                user_id=job.user_id,
+                broker_account_id=job.broker_account_id,
+                worker_id=worker_id,
+                event_type="submitting",
+                detail="oms_authorized_order_send",
+            )
+            self._events.append(event)
+            result = deepcopy(job)
+        self._mirror_job(result)
+        self._mirror_event(event)
+        return result
+
     def record_broker_execution(
         self,
         *,
@@ -360,14 +396,29 @@ class DurableDispatchQueue:
         deal_ticket: int | None,
         detail: str = "",
         broker_payload: dict[str, Any] | None = None,
+        outcome: str | None = None,
         now: datetime | None = None,
     ) -> DispatchJob:
-        """Record actual broker response. Idempotent on filled/rejected terminal.
+        """Record actual broker response. Idempotent on terminal states.
 
         ACK alone is insufficient — this is the only path that marks FILLED /
-        REJECTED from multi-account OMS execution.
+        REJECTED / UNKNOWN from multi-account OMS execution.
+
+        ``unknown`` means order_send may have reached the broker; retries must
+        reconcile before any new order_send.
         """
+        from app.application.services.multi_account_oms_execution import (
+            classify_broker_execution_outcome,
+        )
+
         ts = now or datetime.now(UTC)
+        resolved = (outcome or "").strip().lower() or classify_broker_execution_outcome(
+            ok=ok,
+            retcode=retcode,
+            order_ticket=order_ticket,
+            detail=detail,
+            uncertain_flag=bool((broker_payload or {}).get("uncertain")),
+        )
         with self._lock:
             key = self._by_id.get(intent_id)
             if key is None:
@@ -383,14 +434,22 @@ class DurableDispatchQueue:
             if job.state in {
                 AccountExecutionState.FILLED,
                 AccountExecutionState.REJECTED,
+                AccountExecutionState.UNKNOWN,
             }:
                 existing_ticket = str((job.payload or {}).get("order_ticket") or "")
                 if order_ticket is not None and existing_ticket == str(order_ticket):
                     return deepcopy(job)
-                if ok and job.state is AccountExecutionState.FILLED:
+                if resolved == "filled" and job.state is AccountExecutionState.FILLED:
                     return deepcopy(job)
-                if not ok and job.state is AccountExecutionState.REJECTED:
+                if (
+                    resolved == "rejected"
+                    and job.state is AccountExecutionState.REJECTED
+                ):
                     return deepcopy(job)
+                if resolved == "unknown" and job.state is AccountExecutionState.UNKNOWN:
+                    return deepcopy(job)
+                # Already terminal with a different outcome — keep first evidence.
+                return deepcopy(job)
 
             if job.delivery_status is DeliveryStatus.CLAIMED:
                 job.delivery_status = DeliveryStatus.DELIVERED
@@ -420,16 +479,27 @@ class DurableDispatchQueue:
             if retcode is not None:
                 safe["retcode"] = retcode
             safe["broker_execution_at"] = ts.isoformat()
-            safe["broker_execution_ok"] = bool(ok)
-            job.payload = safe
-            if ok:
+            safe["broker_execution_ok"] = resolved == "filled"
+            safe["execution_outcome"] = resolved
+            if resolved == "unknown":
+                safe["order_send_uncertain"] = True
+                safe["retry_order_send_allowed"] = False
+                job.state = AccountExecutionState.UNKNOWN
+                job.last_error = (detail or "uncertain_broker_outcome")[:500]
+                event_type = "broker_uncertain"
+            elif resolved == "filled":
+                safe["order_send_uncertain"] = False
+                safe["retry_order_send_allowed"] = False
                 job.state = AccountExecutionState.FILLED
                 job.last_error = ""
                 event_type = "broker_filled"
             else:
+                safe["order_send_uncertain"] = False
+                safe["retry_order_send_allowed"] = True
                 job.state = AccountExecutionState.REJECTED
                 job.last_error = (detail or f"retcode={retcode}")[:500]
                 event_type = "broker_rejected"
+            job.payload = safe
             event = DispatchEvent.create(
                 intent_id=job.intent_id,
                 user_id=job.user_id,

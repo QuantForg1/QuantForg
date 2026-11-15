@@ -245,6 +245,84 @@ def test_revoked_and_disabled_customer_block_send() -> None:
     assert "customer_trading_disabled" in auth.reasons
 
 
+def test_uncertain_order_send_is_unknown_not_retryable() -> None:
+    from app.application.services.multi_account_oms_execution import (
+        classify_broker_execution_outcome,
+    )
+
+    assert (
+        classify_broker_execution_outcome(
+            ok=False,
+            retcode=None,
+            order_ticket=None,
+            detail="order_send_null",
+            uncertain_flag=True,
+        )
+        == "unknown"
+    )
+    q = DurableDispatchQueue()
+    user, account = uuid4(), uuid4()
+    settings = SimpleNamespace(
+        multi_account_dispatch_enabled=True,
+        multi_account_live_submit_enabled=True,
+    )
+    signal = CentralSignalIntent.create(
+        symbol="XAUUSD",
+        side="BUY",
+        quality=80,
+        entry=Decimal("4000"),
+        stop_loss=Decimal("3990"),
+        take_profit=Decimal("4010"),
+        idempotency_key="sig:12b-uncertain",
+        metadata={"volume": "0.01", "account_environment": "demo"},
+    )
+    target = DispatchTarget(
+        user_id=user,
+        broker_account_id=account,
+        proposal=RiskSettingProposal(
+            planned_risk_pct=Decimal("10"),
+            aggregate_open_risk_pct=Decimal("30"),
+            max_lot=Decimal("0.01"),
+            daily_loss_pct=Decimal("48"),
+            max_concurrent_positions=1,
+        ),
+        account=AccountReadiness(
+            status="active", ownership_verified=True, user_id=user
+        ),
+        worker=WorkerReadiness(present=True, ready=True),
+    )
+    _plan, jobs = q.plan_and_enqueue(signal=signal, targets=[target], settings=settings)
+    assert jobs
+    worker_id = uuid4()
+    claimed = q.claim_next(worker_id=worker_id, user_id=user, broker_account_id=account)
+    assert claimed is not None
+    q.mark_submitting(intent_id=claimed.intent_id, worker_id=worker_id)
+    unknown = q.record_broker_execution(
+        intent_id=claimed.intent_id,
+        worker_id=worker_id,
+        ok=False,
+        retcode=None,
+        order_ticket=None,
+        deal_ticket=None,
+        detail="order_send_null",
+        broker_payload={"uncertain": True},
+        outcome="unknown",
+    )
+    assert unknown.state is AccountExecutionState.UNKNOWN
+    assert unknown.payload.get("retry_order_send_allowed") is False
+    again = q.record_broker_execution(
+        intent_id=claimed.intent_id,
+        worker_id=worker_id,
+        ok=True,
+        retcode=10009,
+        order_ticket=999,
+        deal_ticket=1,
+        detail="late_fill_ignored",
+        outcome="filled",
+    )
+    assert again.state is AccountExecutionState.UNKNOWN
+
+
 def test_ack_is_not_fill() -> None:
     q = DurableDispatchQueue()
     user, account = uuid4(), uuid4()
