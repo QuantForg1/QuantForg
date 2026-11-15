@@ -1,53 +1,61 @@
 # PHASE — Production Signup HTTP 422 / Confirmation Email
 
-**Date:** 2026-11-14  
-**Branch:** `fix/registration-api-connectivity`  
-**PR:** https://github.com/QuantForg1/QuantForg/pull/278  
+**Date:** 2026-11-14 → 2026-11-15  
+**Code PR:** https://github.com/QuantForg1/QuantForg/pull/278 (merged)  
+**Docs closeout:** https://github.com/QuantForg1/QuantForg/pull/279 (merged)
 
 | Gate | Status |
 |------|--------|
 | Exact Auth error metadata captured | **PASS** |
 | Root cause classified | **PASS** (see §2) |
-| Signup creates user (deliverable email) | **PASS** (Railway `201`) |
-| Confirmation email → Resend | **PASS** (`last_event: delivered` on prior Gmail probe) |
-| Confirm verify + login | **PASS** |
-| Specific UI/API errors (mapping) | **PASS** on Railway tip `c904fd0b` |
-| `/qf-api` same-origin proxy on www | **BLOCKED** — Vercel Production promote rate-limited |
-| `ite_ops_alerts` null `id` | **SEPARATE** — not causing signup failure; no code change |
+| Signup creates user | **PASS** |
+| Confirmation email → Resend | **PASS** (SMTP accepted; see delivery notes) |
+| Confirm verify + hash auto-login | **PASS** (browser) |
+| Session persist / logout / login | **PASS** (browser) |
+| Specific API error mapping | **PASS** on Railway `c904fd0b` |
+| `/qf-api` same-origin proxy on www | **PASS** |
+| Google OAuth authorize redirect | **PASS** (no localhost) |
+| `ite_ops_alerts` null `id` | **SEPARATE** — unchanged |
 
-### Post-merge Production retest (2026-11-15)
+---
 
-| Check | Result |
-|-------|--------|
-| PR #278 | **MERGED** (`c904fd0b`) |
-| Railway `/health` | `commit: c904fd0b…` |
-| `@example.com` register | **503** `auth_email_delivery_failed` (specific message) |
-| Duplicate register | **409** `email_already_registered` |
-| Fresh Gmail register | **201** success message |
-| www `/qf-api/health` | **404** — Production alias still on pre-#278 Vercel tip; promote blocked (`api-deployments-free-per-day`) |
-| Browser register toast | Uses Railway `NEXT_PUBLIC_API_BASE_URL` today → **receives new public messages** without `/qf-api` |
+## Independent deployment SHAs
+
+| Surface | SHA / tip | Evidence |
+|---------|-----------|----------|
+| **Railway Production** | `c904fd0b17722a20fdd129ba9cd610a33e1cd317` | `GET https://quantforg-production.up.railway.app/health` |
+| **Vercel www** | Deployment `dpl_E6qqt8wQDfuXeAyL9VpSoCqVb7Mg` (`quant-forg-kspns9m29…`) containing #278 frontend (build meta `76b4107d…` / merged tip `c904fd0b`) | `vercel alias set` → www; `GET https://www.quantforg.com/qf-api/health` → Railway health JSON |
+
+**Vercel note:** `vercel promote` / new Production builds remained rate-limited (`api-deployments-free-per-day`). Production was completed by **aliasing the already-built Ready preview** that contained the #278 frontend onto `www.quantforg.com` and `quantforg.com` — no new build, no env var changes, no protection bypass.
+
+---
+
+## Browser E2E — email confirmation auto-login (2026-11-15)
+
+| Step | Result |
+|------|--------|
+| Register on `www.quantforg.com/register` | **PASS** → `/verify-email` |
+| Confirmation email created | Resend id `01a1dc9c-a062-…` from `no-reply@auth.quantforg.com` (`last_event: bounced` for this plus-address probe; link body still valid) |
+| Open Supabase verify link | **PASS** → `https://www.quantforg.com/auth/callback#access_token=…&type=signup` |
+| Hash hydrate + session | **PASS** — callback showed “Completing sign-in…” then routed to `/get-started` (authenticated shell) |
+| Refresh / navigate | **PASS** — session tokens persist; password login to `/dashboard` as `signup.frontend+promote8aea@gmail.com` |
+| Sign out | **PASS** — Settings → Danger Zone → Sign out → `/login`, tokens cleared |
+| Sign back in | **PASS** → `/dashboard` with same account |
+| Google OAuth start | **PASS** — `GET /qf-api/api/v1/auth/oauth/google?redirect_to=…/auth/callback` returns authorize URL with `redirect_to=https://www.quantforg.com/auth/callback` (no localhost); `/auth/callback` **200** |
+
+Email confirmation remains enabled. Security controls unchanged.
 
 ---
 
 ## 1. Exact Supabase Auth response (safe metadata)
 
-Direct `POST {SUPABASE_URL}/auth/v1/signup` (anon/publishable key):
-
 | Recipient class | HTTP | Body (safe) |
 |-----------------|------|-------------|
-| Undeliverable / reserved (`@example.com`) | **500** | `error_code=unexpected_failure`, `msg=Error sending confirmation email`, `error_id=01a1dc70-…` / `01a1dc74-…` |
-| Deliverable (`@gmail.com`, `@auth.quantforg.com`) | **200** | User created; `confirmation_sent_at` set |
-| Existing email (anti-enumeration) | **200** | User-shaped payload with **`identities: []`** (no hard `email_exists`) |
+| Undeliverable (`@example.com`) | **500** | `error_code=unexpected_failure`, `msg=Error sending confirmation email` |
+| Deliverable | **200** | User created; `confirmation_sent_at` set |
+| Existing email (anti-enumeration) | **200** | `identities: []` |
 
-Dashboard/logs may label related Auth failures as **422**; live GoTrue for the confirmation-email failure returned **500** with the `msg` above. Both are mapped in this PR.
-
-Railway (pre-deploy tip `41bc970`) for `@example.com`:
-
-```json
-{"error":{"code":"authentication_failed","message":"Authentication failed","details":{}}}
-```
-
-That generic toast is **not** SMTP being “unknown” — it is unmapped Auth provider failure on the still-live tip.
+Dashboard may label related failures as **422**; live GoTrue for confirmation-email failure returned **500**. Both mapped.
 
 ---
 
@@ -55,16 +63,12 @@ That generic toast is **not** SMTP being “unknown” — it is unmapped Auth p
 
 | Hypothesis | Verdict |
 |------------|---------|
-| Invalid email / signup payload | **No** for normal addresses; payload accepted |
+| Invalid email / payload | **No** for normal addresses |
 | Password validation | **No** |
-| Existing account | **Partial** — GoTrue returns empty `identities` (200); live app remapped that to `identity_mismatch` / “Authentication failed” |
-| Email rate limiting | **No** in these probes |
-| SMTP delivery / Resend | **Was** the historical blocker; **now works** for deliverable inboxes from `no-reply@auth.quantforg.com` |
-| Auth callback / redirect | Confirm links use Site URL + **hash tokens**; `/auth/callback` previously only handled OAuth `?code=` |
-
-**Primary user-visible failure during SMTP outage:** GoTrue `Error sending confirmation email` → Railway `authentication_failed` → UI toast **Authentication failed**.
-
-**Current Production happy path (API):** deliverable email → register `201` → Resend delivered → verify link confirms → login `200`.
+| Existing account | GoTrue empty `identities` → mapped to `email_already_registered` |
+| Rate limiting | **No** in these probes |
+| SMTP / Resend | Historical blocker; **working** for Auth SMTP from `no-reply@auth.quantforg.com` |
+| Callback | Hash tokens on `/auth/callback` (and `/` bridge) — **fixed and verified** |
 
 ---
 
@@ -72,72 +76,63 @@ That generic toast is **not** SMTP being “unknown” — it is unmapped Auth p
 
 | Check | Result |
 |-------|--------|
-| Sender observed in Resend | `"QuantForg" <no-reply@auth.quantforg.com>` |
+| Sender | `"QuantForg" <no-reply@auth.quantforg.com>` |
 | Subject | `Confirm your QuantForg email` |
-| Domains | Owner reports `auth.quantforg.com` + `quantforg.com` verified |
-| Railway `RESEND_API_KEY` | Present (length recorded only; value not logged) |
-| Recent Auth confirmations | `delivered` to Gmail probe; `sent` to `@auth.quantforg.com` probe |
+| Domains | Owner-verified `auth.quantforg.com` + `quantforg.com` |
+| Railway `RESEND_API_KEY` | Present (length only; not logged) |
 
-Do **not** disable email confirmation. Prefer Resend SMTP password = API key; host `smtp.resend.com`; port **465** or **587** per Resend docs.
-
----
-
-## 4. Production frontend API config
-
-| Item | Live now | This PR |
-|------|----------|---------|
-| Register path | Browser → Railway `…/api/v1/auth/register` (baked `NEXT_PUBLIC_API_BASE_URL`) | Prefer `https://www.quantforg.com/qf-api/api/v1` rewrite |
-| `/qf-api/health` | **404** (rewrite not on live Vercel tip) | Deploy required |
-| CORS / Railway reachability | **PASS** | Unchanged |
+Do **not** disable email confirmation.
 
 ---
 
-## 5. Why UI shows `Authentication failed`
+## 4. Production frontend API config (after promotion)
 
-1. `error_handler` public map defaults unknown/`authentication_failed` → `"Authentication failed"`.  
-2. Live Railway tip predates 5xx / confirmation-email mapping (`commit: 41bc970`).  
-3. Register page already surfaces `ApiError.message` — so fixing the **backend code** fixes the toast.  
-4. Duplicate signup empty-identities path incorrectly became `identity_mismatch` with the same generic message on live.
-
----
-
-## 6. Fixes in this PR (additional)
-
-1. Map `Error sending confirmation email` / related → `auth_email_delivery_failed` (503, specific public copy).  
-2. Treat GoTrue signup `identities: []` as `email_already_registered` (409).  
-3. Client `EmailConfirmHashBridge` on `/` + hash handling on `/auth/callback` for `#access_token&type=signup`.  
-4. Keep email confirmation enabled.
+| Item | Live |
+|------|------|
+| Same-origin API | `https://www.quantforg.com/qf-api/api/v1` via Next rewrite |
+| `/qf-api/health` | **200** → Railway tip `c904fd0b` |
+| Baked fallback | `NEXT_PUBLIC_API_BASE_URL` still Railway; runtime prefers `/qf-api` on QF hosts |
 
 ---
 
-## 7. E2E Production evidence (API / Resend)
+## 5. Why UI showed `Authentication failed` (historical)
+
+Unmapped GoTrue confirmation-email / empty-identities failures on pre-`c904fd0b` Railway tip collapsed to generic `authentication_failed`. Fixed in #278.
+
+---
+
+## 6. Code fixes (merged in #278)
+
+1. `auth_email_delivery_failed` (503) for confirmation-email send failures.  
+2. Empty signup `identities` → `email_already_registered` (409).  
+3. `EmailConfirmHashBridge` on `/` + hash handling on `/auth/callback`.  
+4. Same-origin `/qf-api` rewrite + runtime API base.  
+5. Email confirmation left enabled.
+
+---
+
+## 7. API E2E (Railway — retained)
 
 | Step | Evidence |
 |------|----------|
-| Signup | Railway `POST /api/v1/auth/register` → **201** for `signup.prod+…@gmail.com` |
-| User created | Supabase user id in signup response; profile login succeeded |
-| Resend | Email id `01a1dc71-f213-…`, `last_event: delivered` |
-| Confirm | `GET /auth/v1/verify?token=…&type=signup` → **303** to `https://www.quantforg.com#access_token=…&type=signup` |
-| Sign-in | Railway `POST /api/v1/auth/login` → **200** with session |
-
-Browser hash auto-login on `/` requires the frontend deploy of this PR.
+| Register | **201** |
+| Error mapping | `@example.com` → **503** `auth_email_delivery_failed`; duplicate → **409** |
+| Login after confirm | **200** |
 
 ---
 
-## 8. PR #278 / deploy status
+## 8. Deploy timeline
 
-| Surface | Status |
-|---------|--------|
-| GitHub CI (Lint/Type/Unit/Trading/Frontend/Integration) | **SUCCESS** (prior head); re-run after this push |
-| Mergeable | **MERGEABLE** (prior) |
-| Vercel check | **FAILURE** — build rate-limit (`upgradeToPro=build-rate-limit`) |
-| Railway live tip | `41bc970` — **not** yet this branch |
-| Vercel www tip | Pre-`/qf-api` (404 on `/qf-api/health`) |
-
-Verify Railway and Vercel **independently** after merge/deploy; do not treat CI green as Production green.
+| Event | Status |
+|-------|--------|
+| PR #278 merge | **MERGED** → `c904fd0b` |
+| Railway | Live on `c904fd0b` |
+| Vercel new Production build | **Rate-limited** |
+| Vercel alias of Ready #278 preview → www/apex | **PASS** |
+| Browser auto-login | **PASS** |
 
 ---
 
 ## 9. `ite_ops_alerts` (separate)
 
-Null `id` constraint noise in Railway logs is unrelated to Auth signup (ITE operator alert persist path). **No change** in this PR without evidence it blocks registration.
+Null `id` constraint noise is unrelated to Auth. **No change**.
