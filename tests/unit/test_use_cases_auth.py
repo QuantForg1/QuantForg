@@ -148,7 +148,11 @@ class TestVerifyRefreshLogoutPassword:
             await VerifyEmailUseCase(
                 auth=provider, uow_factory=factory, audit=audit
             ).execute(
-                VerifyEmailCommand(email="otp@quantforg.com", token="12ab", type="email")
+                VerifyEmailCommand(
+                    email="otp@quantforg.com",
+                    token="12ab",
+                    type="email",
+                )
             )
 
     @pytest.mark.asyncio

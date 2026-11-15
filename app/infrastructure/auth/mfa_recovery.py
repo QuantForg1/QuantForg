@@ -17,7 +17,14 @@ _ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 def _pepper(settings: Settings) -> bytes:
-    return (settings.secret_key or "quantforg-dev-pepper").encode("utf-8")
+    raw = settings.secret_key
+    if raw is None:
+        value = "quantforg-dev-pepper"
+    elif hasattr(raw, "get_secret_value"):
+        value = str(raw.get_secret_value() or "quantforg-dev-pepper")
+    else:
+        value = str(raw) or "quantforg-dev-pepper"
+    return value.encode("utf-8")
 
 
 def hash_recovery_code(settings: Settings, code: str) -> str:
@@ -51,7 +58,11 @@ class MfaRecoveryCodeStore:
         rows = [{"user_id": str(user_id), "code_hash": h} for h in hashes]
         if rows:
             table.insert(rows).execute()
-        logger.info("mfa_recovery_codes_rotated", user_id=str(user_id), count=len(codes))
+        logger.info(
+            "mfa_recovery_codes_rotated",
+            user_id=str(user_id),
+            count=len(codes),
+        )
 
     def consume(self, *, user_id: UUID, code: str) -> bool:
         code_hash = hash_recovery_code(self._settings, code)

@@ -81,7 +81,10 @@ class MfaVerifyUseCase:
         issue_recovery_codes: bool = False,
     ) -> AuthSessionDTO | dict[str, object]:
         if not (code.isdigit() and len(code) == 6):
-            raise ValidationError("Enter a six-digit authenticator code", code="invalid_otp")
+            raise ValidationError(
+                "Enter a six-digit authenticator code",
+                code="invalid_otp",
+            )
         challenge = challenge_id
         if not challenge:
             created = await self.auth.challenge_mfa(
@@ -213,12 +216,13 @@ class MfaRecoveryConsumeUseCase:
         # Recovery proves possession; session remains current AAL until refresh.
         from app.domain.interfaces.auth import AuthSession
 
+        bearer_type = "bearer"
         return AuthSessionDTO.from_session(
             AuthSession(
                 access_token=access_token,
                 refresh_token="",
                 expires_in=3600,
-                token_type="bearer",
+                token_type=bearer_type,
                 user=identity,
             ),
             user,

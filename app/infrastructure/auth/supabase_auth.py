@@ -538,7 +538,10 @@ class SupabaseAuthAdapter:
                     ):
                         return _session_from_response(refreshed)
                 except Exception:
-                    pass
+                    logger.debug(
+                        "mfa_verify_get_session_fallback",
+                        exc_info=True,
+                    )
                 return _session_from_response(response, allow_empty_session=False)
             except AuthenticationError:
                 raise
