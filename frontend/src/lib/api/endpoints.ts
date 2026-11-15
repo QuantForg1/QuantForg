@@ -107,6 +107,30 @@ export const householdPortfolioApi = {
     apiFetch<Record<string, unknown>>("/portfolio/household/emergency-stops"),
 };
 
+/** Phase 5 — Institutional Ops Control Center (read-mostly; never order_send). */
+export const institutionalOpsApi = {
+  health: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/health"),
+  summary: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/summary"),
+  operations: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/operations/overview"),
+  strategyLifecycle: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-ops/strategy-lifecycle/overview",
+    ),
+  execution: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/execution/overview"),
+  accounts: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/accounts/overview"),
+  risk: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/risk/overview"),
+  incidents: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/incidents/overview"),
+  governance: () =>
+    apiFetch<Record<string, unknown>>("/institutional-ops/governance/summary"),
+};
+
 /** Phase 4 — AI Trading Intelligence (advisory; never order_send). */
 export const aiTradingIntelligenceApi = {
   health: () =>
