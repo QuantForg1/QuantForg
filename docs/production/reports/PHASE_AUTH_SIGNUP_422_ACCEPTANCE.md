@@ -9,11 +9,23 @@
 | Exact Auth error metadata captured | **PASS** |
 | Root cause classified | **PASS** (see §2) |
 | Signup creates user (deliverable email) | **PASS** (Railway `201`) |
-| Confirmation email → Resend | **PASS** (`last_event: delivered`) |
+| Confirmation email → Resend | **PASS** (`last_event: delivered` on prior Gmail probe) |
 | Confirm verify + login | **PASS** |
-| Specific UI/API errors (mapping) | **PASS** in branch; **PENDING** live until Railway+Vercel deploy |
-| `/qf-api` same-origin proxy on www | **PENDING** Vercel (live `/qf-api/health` still 404) |
+| Specific UI/API errors (mapping) | **PASS** on Railway tip `c904fd0b` |
+| `/qf-api` same-origin proxy on www | **BLOCKED** — Vercel Production promote rate-limited |
 | `ite_ops_alerts` null `id` | **SEPARATE** — not causing signup failure; no code change |
+
+### Post-merge Production retest (2026-11-15)
+
+| Check | Result |
+|-------|--------|
+| PR #278 | **MERGED** (`c904fd0b`) |
+| Railway `/health` | `commit: c904fd0b…` |
+| `@example.com` register | **503** `auth_email_delivery_failed` (specific message) |
+| Duplicate register | **409** `email_already_registered` |
+| Fresh Gmail register | **201** success message |
+| www `/qf-api/health` | **404** — Production alias still on pre-#278 Vercel tip; promote blocked (`api-deployments-free-per-day`) |
+| Browser register toast | Uses Railway `NEXT_PUBLIC_API_BASE_URL` today → **receives new public messages** without `/qf-api` |
 
 ---
 
