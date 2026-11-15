@@ -255,6 +255,130 @@ export const autonomousTradingControlApi = {
     ),
 };
 
+/** Phase 8 — Quantitative Research Control (research-only; never order_send / LIVE). */
+export const quantitativeResearchControlApi = {
+  health: () =>
+    apiFetch<Record<string, unknown>>("/quantitative-research-control/health"),
+  summary: () =>
+    apiFetch<Record<string, unknown>>("/quantitative-research-control/summary"),
+  projects: () =>
+    apiFetch<Record<string, unknown>>("/quantitative-research-control/projects"),
+  createProject: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quantitative-research-control/projects", {
+      method: "POST",
+      body,
+    }),
+  getProject: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/quantitative-research-control/projects/${encodeURIComponent(id)}`,
+    ),
+  experiments: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/experiments",
+    ),
+  createExperiment: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/experiments",
+      { method: "POST", body },
+    ),
+  templates: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/strategy/spec/templates",
+    ),
+  validateSpec: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/strategy/spec/validate",
+      { method: "POST", body },
+    ),
+  hypothesize: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/strategy/ai/hypothesize",
+      { method: "POST", body },
+    ),
+  dataOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/data/overview",
+    ),
+  backtestsOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/backtests/overview",
+    ),
+  runBacktest: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/backtests/run",
+      { method: "POST", body },
+    ),
+  walkforwardOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/walkforward/overview",
+    ),
+  runWalkforward: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/walkforward/run",
+      { method: "POST", body },
+    ),
+  montecarloOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/montecarlo/overview",
+    ),
+  runMontecarlo: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/montecarlo/run",
+      { method: "POST", body },
+    ),
+  robustnessOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/robustness/overview",
+    ),
+  optimizationOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/optimization/overview",
+    ),
+  runOptimization: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/optimization/run",
+      { method: "POST", body },
+    ),
+  leaderboard: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/leaderboard",
+    ),
+  validationPipeline: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/validation/pipeline",
+    ),
+  approvals: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/validation/approvals",
+    ),
+  createApproval: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/validation/approvals",
+      { method: "POST", body },
+    ),
+  approvalAction: (
+    id: string,
+    action: string,
+    note = "",
+    current_params?: Record<string, unknown>,
+  ) =>
+    apiFetch<Record<string, unknown>>(
+      `/quantitative-research-control/validation/approvals/${encodeURIComponent(id)}/action`,
+      {
+        method: "POST",
+        body: { action, note, current_params },
+      },
+    ),
+  paperOverview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/paper/overview",
+    ),
+  audit: () =>
+    apiFetch<Record<string, unknown>>(
+      "/quantitative-research-control/governance/audit",
+    ),
+};
+
 /** Phase 6 — Institutional Intelligence (advisory; never order_send). */
 export const institutionalIntelligenceApi = {
   health: () =>
