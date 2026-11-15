@@ -267,6 +267,27 @@ class RailwayWorkerClient:
             "POST", "/api/v1/mt5-workers/dispatch/lab-enqueue", payload
         )
 
+    def dispatch_demo_enqueue(
+        self,
+        *,
+        worker_id: str,
+        symbol: str = "XAUUSD",
+        side: str = "BUY",
+        volume: str = "0.01",
+        idempotency_key: str = "",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "worker_id": worker_id,
+            "symbol": symbol,
+            "side": side,
+            "volume": volume,
+        }
+        if idempotency_key:
+            payload["idempotency_key"] = idempotency_key
+        return self._request(
+            "POST", "/api/v1/mt5-workers/dispatch/demo-enqueue", payload
+        )
+
     def dispatch_claim(
         self,
         *,
@@ -295,6 +316,33 @@ class RailwayWorkerClient:
                 "intent_id": intent_id,
                 "detail": detail,
             },
+        )
+
+    def dispatch_execute_authorize(
+        self,
+        *,
+        worker_id: str,
+        intent_id: str,
+        account_environment: str = "demo",
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/dispatch/execute-authorize",
+            {
+                "worker_id": worker_id,
+                "intent_id": intent_id,
+                "account_environment": account_environment,
+            },
+        )
+
+    def dispatch_execution_result(
+        self, *, worker_id: str, intent_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        body = {"worker_id": worker_id, "intent_id": intent_id, **payload}
+        return self._request(
+            "POST",
+            "/api/v1/mt5-workers/dispatch/execution-result",
+            body,
         )
 
     def dispatch_fail(
