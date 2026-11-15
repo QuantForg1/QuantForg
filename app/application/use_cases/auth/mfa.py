@@ -122,9 +122,7 @@ class MfaVerifyUseCase:
                 message="MFA factor verified",
             )
         )
-        dto = AuthSessionDTO.from_session(
-            session, user, mfa_required=False, aal="aal2"
-        )
+        dto = AuthSessionDTO.from_session(session, user, mfa_required=False, aal="aal2")
         if issue_recovery_codes and self.recovery is not None:
             codes = generate_recovery_codes()
             self.recovery.replace_codes(user_id=user.id, codes=codes)

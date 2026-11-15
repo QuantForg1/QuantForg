@@ -321,9 +321,7 @@ async def mfa_challenge(
     access_token: AccessToken,
     auth: Annotated[AuthService, Depends(get_auth_service)],
 ) -> dict[str, Any]:
-    return await auth.challenge_mfa(
-        access_token=access_token, factor_id=body.factor_id
-    )
+    return await auth.challenge_mfa(access_token=access_token, factor_id=body.factor_id)
 
 
 @router.post("/mfa/verify")

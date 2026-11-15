@@ -30,7 +30,5 @@ class ResendVerificationUseCase:
             )
         )
         return MessageDTO(
-            message=(
-                "If an account needs verification, a new code has been sent."
-            )
+            message=("If an account needs verification, a new code has been sent.")
         )

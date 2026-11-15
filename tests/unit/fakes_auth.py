@@ -243,9 +243,7 @@ class FakeAuthProvider:
         self, *, access_token: str
     ) -> dict[str, object]:
         factors = await self.list_mfa_factors(access_token=access_token)
-        verified = any(
-            str(f.get("status", "")).lower() == "verified" for f in factors
-        )
+        verified = any(str(f.get("status", "")).lower() == "verified" for f in factors)
         return {
             "current_level": "aal1",
             "next_level": "aal2" if verified else "aal1",
