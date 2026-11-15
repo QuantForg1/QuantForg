@@ -412,12 +412,18 @@ class DurableDispatchQueue:
         )
 
         ts = now or datetime.now(UTC)
+        payload = broker_payload or {}
+        order_send_raw = payload.get("order_send")
+        order_send_attempted: bool | None = (
+            None if order_send_raw is None else bool(order_send_raw)
+        )
         resolved = (outcome or "").strip().lower() or classify_broker_execution_outcome(
             ok=ok,
             retcode=retcode,
             order_ticket=order_ticket,
             detail=detail,
-            uncertain_flag=bool((broker_payload or {}).get("uncertain")),
+            uncertain_flag=bool(payload.get("uncertain")),
+            order_send_attempted=order_send_attempted,
         )
         with self._lock:
             key = self._by_id.get(intent_id)

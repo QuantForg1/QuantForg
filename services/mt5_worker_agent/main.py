@@ -286,14 +286,38 @@ def cmd_railway_dispatch_poll(
                     "live_path_authorized": bool(auth_body.get("live_path_authorized")),
                 }
             elif send_ok:
-                broker = execute_market_order(
-                    symbol=str(auth_body.get("symbol") or ""),
-                    side=str(auth_body.get("side") or ""),
-                    volume=str(auth_body.get("volume") or ""),
-                    stop_loss=auth_body.get("stop_loss"),
-                    take_profit=auth_body.get("take_profit"),
-                    dry_run=bool(dry_run),
+                from services.mt5_worker_agent.mt5_session import (
+                    initialize_portable,
+                    shutdown as mt5_shutdown,
                 )
+
+                try:
+                    terminal_exe = LocalWorkerSupervisor().terminal_exe_for(
+                        str(slot_id)
+                    )
+                    attached = bool(initialize_portable(terminal_exe))
+                except Exception as exc:
+                    attached = False
+                    entry["mt5_attach_error"] = type(exc).__name__
+                if not attached and not dry_run:
+                    broker = {
+                        "ok": False,
+                        "error": "mt5_attach_failed",
+                        "order_send": False,
+                    }
+                else:
+                    broker = execute_market_order(
+                        symbol=str(auth_body.get("symbol") or ""),
+                        side=str(auth_body.get("side") or ""),
+                        volume=str(auth_body.get("volume") or ""),
+                        stop_loss=auth_body.get("stop_loss"),
+                        take_profit=auth_body.get("take_profit"),
+                        dry_run=bool(dry_run),
+                    )
+                    try:
+                        mt5_shutdown()
+                    except Exception:
+                        pass
                 entry["broker"] = broker
                 entry["order_send"] = bool(broker.get("order_send"))
                 # Dry-run must never be recorded as a broker fill.
@@ -329,14 +353,13 @@ def cmd_railway_dispatch_poll(
                         "comment": broker.get("comment") or "",
                         "detail": detail,
                         "uncertain": uncertain,
+                        "order_send": bool(broker.get("order_send")),
                     }
                     entry["execution_result"] = client.dispatch_execution_result(
                         worker_id=worker_id,
                         intent_id=intent_id,
                         payload=result_payload,
                     )
-                    # Uncertain outcomes must not be treated as safe delivery-only ACK
-                    # for a fresh send — execution-result already terminalizes UNKNOWN.
                     if uncertain:
                         entry["order_send_uncertain"] = True
                         entry["retry_order_send_allowed"] = False

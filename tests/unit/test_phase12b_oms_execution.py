@@ -260,6 +260,16 @@ def test_uncertain_order_send_is_unknown_not_retryable() -> None:
         )
         == "unknown"
     )
+    assert (
+        classify_broker_execution_outcome(
+            ok=False,
+            retcode=None,
+            order_ticket=None,
+            detail="symbol_select_failed",
+            order_send_attempted=False,
+        )
+        == "rejected"
+    )
     q = DurableDispatchQueue()
     user, account = uuid4(), uuid4()
     settings = SimpleNamespace(

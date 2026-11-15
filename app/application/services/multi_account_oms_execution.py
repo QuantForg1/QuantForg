@@ -313,6 +313,21 @@ _UNCERTAIN_RETCODES = frozenset(
 )
 
 
+_PRE_SEND_REJECT_MARKERS = frozenset(
+    {
+        "symbol_select_failed",
+        "symbol_quote_unavailable",
+        "invalid_symbol_or_side",
+        "mandatory_stop_loss_missing",
+        "invalid_numeric_fields",
+        "volume_non_positive",
+        "mt5_package_unavailable",
+        "mt5_attach_failed",
+        "dry_run",
+    }
+)
+
+
 def classify_broker_execution_outcome(
     *,
     ok: bool,
@@ -320,6 +335,7 @@ def classify_broker_execution_outcome(
     order_ticket: int | None,
     detail: str = "",
     uncertain_flag: bool = False,
+    order_send_attempted: bool | None = None,
 ) -> str:
     """Classify broker outcome for durable state.
 
@@ -327,6 +343,8 @@ def classify_broker_execution_outcome(
     Unknown must never trigger a blind order_send retry.
     """
     detail_l = (detail or "").lower()
+    if any(m in detail_l for m in _PRE_SEND_REJECT_MARKERS):
+        return "rejected"
     if uncertain_flag or "order_send_null" in detail_l or "uncertain" in detail_l:
         return "unknown"
     if retcode == 10009 and order_ticket:
@@ -336,13 +354,16 @@ def classify_broker_execution_outcome(
     if retcode in _UNCERTAIN_RETCODES and not order_ticket:
         return "unknown"
     if retcode is None and not order_ticket and not ok:
-        # Send attempted but no broker retcode → do not invent reject/fill.
-        if "dry_run" in detail_l:
+        # No retcode: only UNKNOWN if a broker send may have left the process.
+        if order_send_attempted is False:
             return "rejected"
+        if order_send_attempted is True:
+            return "unknown"
+        # Ambiguous legacy payloads without order_send flag → fail closed unknown.
         return "unknown"
     if ok and order_ticket:
         return "filled"
-    if retcode in _DEFINITE_REJECT_RETCODES - _UNCERTAIN_RETCODES:
+    if retcode in _DEFINITE_REJECT_RETCODES:
         return "rejected"
     if not ok:
         return "rejected"
@@ -374,12 +395,17 @@ def parse_broker_execution_report(
     ok = bool(safe.get("ok"))
     if retcode_i == 10009:  # TRADE_RETCODE_DONE
         ok = True
+    order_send_raw = safe.get("order_send")
+    order_send_attempted: bool | None = (
+        None if order_send_raw is None else bool(order_send_raw)
+    )
     outcome = classify_broker_execution_outcome(
         ok=ok,
         retcode=retcode_i,
         order_ticket=order_i,
         detail=str(safe.get("detail") or safe.get("comment") or ""),
         uncertain_flag=bool(safe.get("uncertain")),
+        order_send_attempted=order_send_attempted,
     )
     if outcome == "filled":
         ok = True

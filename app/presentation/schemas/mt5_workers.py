@@ -110,6 +110,7 @@ class DispatchExecutionResultRequest(BaseModel):
     comment: str = Field(default="", max_length=200)
     detail: str = Field(default="", max_length=500)
     uncertain: bool = False
+    order_send: bool | None = None
 
 
 class DispatchLabEnqueueRequest(BaseModel):

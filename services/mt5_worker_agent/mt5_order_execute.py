@@ -75,7 +75,25 @@ def execute_market_order(
         }
 
     if not mt5.symbol_select(sym, True):
-        return {"ok": False, "error": "symbol_select_failed", "symbol": sym}
+        # Broker-specific aliases (e.g. XM GOLD vs XAUUSD).
+        aliases = []
+        if sym.upper() == "XAUUSD":
+            aliases = ["GOLD", "XAUUSDm", "XAUUSD.a", "XAUUSD#"]
+        elif sym.upper() == "GOLD":
+            aliases = ["XAUUSD", "XAUUSDm"]
+        resolved = None
+        for alt in aliases:
+            if mt5.symbol_select(alt, True):
+                resolved = alt
+                break
+        if resolved is None:
+            return {
+                "ok": False,
+                "error": "symbol_select_failed",
+                "symbol": sym,
+                "order_send": False,
+            }
+        sym = resolved
 
     info = mt5.symbol_info(sym)
     tick = mt5.symbol_info_tick(sym)
