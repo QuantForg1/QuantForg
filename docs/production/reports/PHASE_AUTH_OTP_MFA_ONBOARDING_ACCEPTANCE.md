@@ -126,19 +126,26 @@ Automated UI screenshots deferred to post-deploy browser pass on the PR preview 
 
 ## Production deployment SHAs
 
-_Filled after Railway/Vercel promotion of this PR._
-
 | Service | SHA / deployment | Notes |
 |---------|------------------|-------|
-| Backend (Railway) | _pending PR merge_ | |
-| Frontend (Vercel) | _pending PR merge_ | Do not claim Production if promote is rate-limited; use Ready alias if required |
-| Supabase Auth | Config already matches declared OTP/MFA template settings | |
+| Backend (Railway) | `1951ce7b` (merge of #281) | Health: `quantforg-production.up.railway.app` / `www…/qf-api/health` → `commit_short=1951ce7b9ba1`. Status context: Success |
+| Frontend (Vercel) | Ready preview `dpl_2uCVStGR1hiUwZbFF7PA53Rrb7vG` (`frontend-ixany82xg-quantforg.vercel.app`) | **Aliased** to `www.quantforg.com` + `quantforg.com` (Production promote rate-limited — not claimed as a new Production build) |
+| Git merge | PR [#281](https://github.com/QuantForg1/QuantForg/pull/281) → `1951ce7b` | Required CI green (Unit Tests, Trading Core Regression, Lint, MyPy, Frontend build, Integration) |
+| Supabase Auth | Project `otqyhlmwaifokrczryrc` | OTP length 6, confirmation template with `{{ .Token }}`, MFA TOTP enabled; migration applied |
+
+### Post-deploy smoke (2026-11-15)
+
+- `POST /api/v1/auth/register` → pending verification message (account `otp.ok.c1e52c98@mailinator.com`)
+- `POST /api/v1/auth/resend-verification` → anti-enumeration success message
+- `POST /api/v1/auth/verify-email` with wrong code → rejected (invalid OTP path live)
+- `GET https://www.quantforg.com/verify-email` → 200, OTP UI present
+- `GET https://www.quantforg.com/mfa` → MFA challenge page present
 
 ## Remaining external blockers
 
-1. Live mailbox proof of six-digit delivery requires a disposable registration against Production SMTP (Resend) — run on deployed SHA.
-2. Authenticator-app E2E (QR scan + TOTP) requires a real enrolled factor on a test account after deploy.
-3. Vercel Production promote may hit deploy quota; fallback is Ready-preview alias (same pattern as PR #278).
+1. Inbox HTML screenshot of the six-digit Resend email for the smoke account (mailbox access outside this agent).
+2. Full authenticator-app E2E (QR scan + TOTP + recovery reuse) on a dedicated test account.
+3. New Vercel **Production** builds remain rate-limited (~24h); www currently served via Ready-preview alias of the #281 frontend deploy (same safe pattern as #278).
 
 ## Owner acceptance checklist
 
@@ -148,5 +155,7 @@ _Filled after Railway/Vercel promotion of this PR._
 - [x] Premium verify-email page  
 - [x] Optional MFA TOTP + recovery hashes  
 - [x] Google OAuth path preserved  
-- [ ] Live Production email delivery evidence (post-deploy)  
-- [ ] Deployed Railway + Vercel SHAs recorded  
+- [x] Register + resend live on Railway `1951ce7b`  
+- [x] Deployed Railway SHA + Vercel alias recorded  
+- [ ] Manual mailbox screenshot of delivered OTP email  
+
