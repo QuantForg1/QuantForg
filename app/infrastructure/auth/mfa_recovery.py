@@ -49,7 +49,8 @@ class MfaRecoveryCodeStore:
         self._settings = settings
 
     def _client(self) -> Any:
-        return self._supabase.client
+        # Recovery hashes are service-role only (RLS deny for anon/authenticated).
+        return self._supabase.admin_client
 
     def replace_codes(self, *, user_id: UUID, codes: list[str]) -> None:
         hashes = [hash_recovery_code(self._settings, c) for c in codes]
