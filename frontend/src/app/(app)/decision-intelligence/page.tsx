@@ -5,32 +5,37 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
 import { Button } from "@/components/ui/button";
 import { DecisionIntelligenceWorkspace } from "@/components/ops/decision-intelligence-workspace";
+import { Phase6DecisionDesk } from "@/components/ops/phase6/decision-desk";
 
 export default function DecisionIntelligencePage() {
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Decision Intelligence Center"
-        description="Final institutional gate before execution. May REJECT or HOLD — never force-executes, never bypasses Risk Engine or Safety Engine, never places orders. Every decision is auditable."
+        eyebrow="Intelligence"
+        title="Decision Intelligence"
+        description="Unified advisory recommendations with explicit approval lifecycle — Approved never means LIVE."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/intelligence-center">Intelligence Center</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/institutional-decision">AI Decision</Link>
+              <Link href="/ai-trading-intelligence">Phase 4 ATI</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/risk">Risk</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/market-intelligence">Market Intel</Link>
+              <Link href="/operations">Phase 5 Ops</Link>
             </Button>
           </div>
         }
       />
-      <PageMotion>
-        <DecisionIntelligenceWorkspace />
+      <PageMotion className="min-h-0 flex-1 space-y-6 overflow-auto p-4">
+        <Phase6DecisionDesk />
+        <div className="border-t border-border/60 pt-4">
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+            Legacy Decision Center workspace
+          </h2>
+          <DecisionIntelligenceWorkspace />
+        </div>
       </PageMotion>
     </div>
   );

@@ -170,6 +170,72 @@ export const householdPortfolioApi = {
     apiFetch<Record<string, unknown>>("/portfolio/household/emergency-stops"),
 };
 
+/** Phase 6 — Institutional Intelligence (advisory; never order_send). */
+export const institutionalIntelligenceApi = {
+  health: () =>
+    apiFetch<Record<string, unknown>>("/institutional-intelligence/health"),
+  summary: () =>
+    apiFetch<Record<string, unknown>>("/institutional-intelligence/summary"),
+  market: (params?: {
+    symbol?: string;
+    regime_label?: string;
+    regime_confidence?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.symbol) sp.set("symbol", params.symbol);
+    if (params?.regime_label) sp.set("regime_label", params.regime_label);
+    if (params?.regime_confidence != null) {
+      sp.set("regime_confidence", String(params.regime_confidence));
+    }
+    const q = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/institutional-intelligence/market/overview${q ? `?${q}` : ""}`,
+    );
+  },
+  strategy: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/strategy/overview",
+    ),
+  risk: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/risk/overview",
+    ),
+  portfolio: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/portfolio/overview",
+    ),
+  execution: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/execution/overview",
+    ),
+  decision: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/decision/overview",
+    ),
+  recommendations: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/decision/recommendations",
+    ),
+  createRecommendation: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/decision/recommendations",
+      { method: "POST", body },
+    ),
+  setRecommendationStatus: (id: string, status: string, note = "") =>
+    apiFetch<Record<string, unknown>>(
+      `/institutional-intelligence/decision/recommendations/${encodeURIComponent(id)}/status`,
+      { method: "POST", body: { status, note } },
+    ),
+  reports: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/reports/overview",
+    ),
+  dataQuality: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-intelligence/governance/data-quality",
+    ),
+};
+
 /** Phase 5 — Institutional Ops Control Center (read-mostly; never order_send). */
 export const institutionalOpsApi = {
   health: () =>
