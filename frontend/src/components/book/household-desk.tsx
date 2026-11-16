@@ -119,7 +119,7 @@ export function HouseholdDesk() {
             Household portfolio
           </h2>
           <p className="qf-caption text-[var(--fg-muted)]">
-            Multi-account view · nulls when data unavailable · no fabricated zeros
+            All your broker accounts in one view. Figures show “—” until the broker reports them.
           </p>
         </div>
         <div className="flex flex-wrap gap-1">

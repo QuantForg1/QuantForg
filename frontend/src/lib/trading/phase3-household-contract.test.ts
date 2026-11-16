@@ -36,7 +36,8 @@ assert.match(
 );
 
 assert.match(shell, /HouseholdDesk/);
-assert.match(desk, /no fabricated zeros/);
+// Missing figures render as "—", never as invented zeros.
+assert.match(desk, /show “—” until the broker reports them/);
 assert.match(desk, /data_status/);
 assert.match(desk, /Export CSV/);
 

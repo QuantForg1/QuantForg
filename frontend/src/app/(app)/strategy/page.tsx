@@ -390,7 +390,7 @@ export default function StrategyPage() {
               }
               subtitle={
                 str(selectedPlugin?.description) ||
-                "Select a strategy. Bars load from MT5 when connected — never fabricated."
+                "Select a strategy. Price bars load from your broker when it is connected."
               }
               configTab={configTab}
               onConfigTab={setConfigTab}

@@ -253,7 +253,7 @@ export function PortfolioWorkspace() {
       <PageHeader
         eyebrow="Account"
         title="Portfolio"
-        description="Equity, margin, positions, and exposure from your own broker session. Never fabricated."
+        description="Equity, margin, positions and exposure from your own broker account."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
