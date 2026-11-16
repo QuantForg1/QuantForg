@@ -133,6 +133,16 @@ Known inputs:
 | Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
 | Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
 
+## Session 4 (16 Nov, 18:45–19:10 UTC): full evidence audit
+
+- Authoritative status by objective: **`docs/production/FINAL_ACCEPTANCE_MATRIX.md`**. Verdict: NOT ACCEPTED.
+- New fixes:
+  - #315: two slots could alias one worker when a user had two accounts.
+  - #316: entitlement enforcement (active license or trial) for customer robots and worker entries; renewal reminders were never queued.
+- Verified:
+  - Supabase organization is on the **Pro** plan: daily backups with 7-day retention; leaked-password protection available without an upgrade.
+  - Broker evidence: XM DEMO verified; Weltrade, IC Markets, Pepperstone and FP Markets LIVE-authenticated with `trade_allowed=true`; Exness, HFM and JustMarkets authenticated but `trade_allowed=false`. **No broker is robot-ready for customers.**
+
 ## Gateway target (authoritative)
 
 | | |

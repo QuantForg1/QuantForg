@@ -5,7 +5,7 @@
 Source: Supabase docs, "Password security" (https://supabase.com/docs/guides/auth/password-security), checked on 16 Nov 2026.
 
 - Supabase Auth checks passwords against the HaveIBeenPwned Pwned Passwords API and rejects ones that are known to have leaked.
-- **This requires the Supabase Pro plan or above.** If the project is on the Free plan, upgrade first.
+- **This requires the Supabase Pro plan or above.** The QuantForg organization is already on **Pro** (verified 16 Nov via the Supabase API, `plan: pro`), so no upgrade is needed. Only the toggle is missing.
 - The setting lives on the project's **Auth settings → Providers → Email** page: `https://supabase.com/dashboard/project/otqyhlmwaifokrczryrc/auth/providers?provider=Email`.
 
 Steps (owner):
