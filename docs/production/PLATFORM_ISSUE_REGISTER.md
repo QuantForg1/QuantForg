@@ -7,6 +7,7 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 | ID | Issue | Evidence | Status |
 |---|---|---|---|
 | C1 | API froze ~3 min after every deploy: `/health/live` returned 499 and login took up to 104 s | Railway http logs 20:12–20:14 UTC; three startup recovery steps read broker history synchronously on the event loop | **FIXED #325** (health ≤ 9 s during the next restart, 3–12 ms after) |
+| C1b | Event loop blocked 7–45 s by sync gateway calls in async handlers and the ITE loop | Watchdog stacks (21:23–21:52 UTC) | **FIXED #328, #330, #331** (guard test + watchdog stay on) |
 | C2 | Login timeouts | Broker reads shared the default thread pool with Supabase auth; login 8.7 s, refresh 3.2 s, `/auth/me` 1–1.6 s on every request | **FIXED #322** (separate pools; 20 s per-token user cache; logout evicts) |
 | C3 | `/history/deals` hangs on the Windows gateway | Every call times out | **OWNER A1** (redeploy gateway `a150730e`). Contained by #307/#319/#326 |
 | C4 | Owner-only risk policy visible to customers | RCC card, Overview order ticket, risk bounds API | **FIXED #323** (UI removed, API omits ceilings, activity reasons categorized; server enforcement unchanged) |
