@@ -11,7 +11,19 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
-import { OverviewTradePanel } from "@/components/trading/overview-trade-panel";
+import dynamic from "next/dynamic";
+import { useAuth } from "@/providers/auth-provider";
+import { normalizePlatformRole } from "@/lib/auth/ite-ops-access";
+
+// Manual order entry is an owner/admin desk tool (customers trade through
+// their robot). Loaded on demand so customer sessions never fetch it.
+const OverviewTradePanel = dynamic(
+  () =>
+    import("@/components/trading/overview-trade-panel").then(
+      (m) => m.OverviewTradePanel,
+    ),
+  { ssr: false },
+);
 import {
   TRADING_SYMBOL,
   displayTradingSymbol,
@@ -133,6 +145,9 @@ export function OverviewReferenceDesk({
   topSignal: Record<string, unknown> | null;
   lastPrice?: number;
 }) {
+  const { user } = useAuth();
+  const role = normalizePlatformRole(user?.role);
+  const canUseManualTicket = role === "owner" || role === "admin";
   const [timeframe, setTimeframe] = useState("M15");
   const [chartType, setChartType] = useState<"candles" | "line" | "area">("candles");
   const [showVolume, setShowVolume] = useState(false);
@@ -380,7 +395,9 @@ export function OverviewReferenceDesk({
         </section>
       </div>
 
-      <OverviewTradePanel connected={brokerConnected} />
+      {canUseManualTicket ? (
+        <OverviewTradePanel connected={brokerConnected} />
+      ) : null}
     </div>
   );
 }

@@ -173,6 +173,141 @@ def recent_events(*, user_id: UUID, limit: int = 50) -> list[dict[str, Any]]:
     ]
 
 
+# -- Customer-facing activity and status (no owner policy details) ---------
+
+# Execution intents carry internal block reasons (e.g. OWNER_MIN_RR with the
+# threshold). Customers see a category only; the reason text never leaves
+# the server through this API.
+_ACTIVITY_OUTCOME = {
+    "filled": "Executed",
+    "executed": "Executed",
+    "acked": "Executed",
+    "submitted": "Sent to broker",
+    "dispatched": "Sent to broker",
+    "leased": "Sent to broker",
+    "pending": "Queued",
+    "queued": "Queued",
+    "blocked": "Blocked by risk checks",
+    "rejected": "Blocked by risk checks",
+    "failed": "Failed at broker",
+    "expired": "Expired",
+    "cancelled": "Cancelled",
+}
+
+
+def activity_outcome(state: str, block_reason: str | None) -> str:
+    key = str(state or "").strip().lower()
+    if block_reason and key not in {"filled", "executed", "acked"}:
+        reason = block_reason.upper()
+        if "SUBSCRIPTION" in reason:
+            return "Blocked: subscription inactive"
+        if "ROBOT_" in reason:
+            return "Blocked: robot paused or stopped"
+        if "TRADE_ALLOWED" in reason or "PERMISSION" in reason:
+            return "Blocked: trading disabled by broker"
+        return "Blocked by risk checks"
+    return _ACTIVITY_OUTCOME.get(key, "Recorded")
+
+
+def recent_activity(*, user_id: UUID, limit: int = 20) -> list[dict[str, Any]]:
+    """The caller's own recent execution attempts, sanitized."""
+    dp = _db()
+    if dp is None:
+        return []
+    rows = dp.fetch(
+        """
+        SELECT broker_account_id, state, block_reason, planned_volume,
+               broker_ticket, payload, created_at
+          FROM public.account_execution_intents
+         WHERE user_id = $1::uuid
+         ORDER BY created_at DESC
+         LIMIT $2
+        """,
+        str(user_id),
+        int(max(1, min(limit, 100))),
+    )
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        payload = r.get("payload") or {}
+        if isinstance(payload, str):
+            import json
+
+            try:
+                payload = json.loads(payload)
+            except ValueError:
+                payload = {}
+        out.append(
+            {
+                "broker_account_id": str(r["broker_account_id"]),
+                "symbol": str(payload.get("symbol") or ""),
+                "side": str(payload.get("side") or "").upper(),
+                "volume": (
+                    str(r["planned_volume"])
+                    if r.get("planned_volume") is not None
+                    else None
+                ),
+                "ticket": r.get("broker_ticket"),
+                "outcome": activity_outcome(
+                    str(r.get("state") or ""), r.get("block_reason")
+                ),
+                "at": r["created_at"].isoformat(),
+            }
+        )
+    return out
+
+
+# What the customer sees as the robot's real status. RUNNING is shown only
+# when the control state is RUNNING *and* the backend has evidence that the
+# account can trade *and* the subscription is active.
+ROBOT_RUNNING = "ROBOT_RUNNING"
+WAITING = "WAITING"
+
+
+def robot_status(
+    *,
+    control_state: str,
+    connection: dict[str, Any],
+    entitled: bool | None,
+    execution_enabled: bool | None = True,
+) -> dict[str, str]:
+    """``execution_enabled``: whether the platform path serving this account
+    may submit orders right now (owner gateway: Live Trading Control; worker
+    accounts: multi-account dispatch / LIVE submit flags). None = unknown."""
+    if control_state in {PAUSED, STOPPED, EMERGENCY_STOPPED}:
+        labels = {
+            PAUSED: "Paused · no new entries",
+            STOPPED: "Stopped",
+            EMERGENCY_STOPPED: "Emergency stopped",
+        }
+        return {"code": control_state, "label": labels[control_state]}
+    conn = str(connection.get("state") or "")
+    if entitled is False:
+        return {
+            "code": WAITING,
+            "label": "Not trading · subscription inactive",
+        }
+    if conn == ROBOT_READY and entitled is True:
+        if execution_enabled is True:
+            return {"code": ROBOT_RUNNING, "label": "Running"}
+        return {
+            "code": WAITING,
+            "label": (
+                "Not trading · automated execution is paused by the platform"
+                if execution_enabled is False
+                else "Not trading · execution status not confirmed"
+            ),
+        }
+    reason = {
+        UNAVAILABLE: "broker data unavailable",
+        NOT_CONNECTED: "account not connected to a trading terminal yet",
+        TRADING_PERMISSION_DISABLED: "trading disabled by the broker",
+        REQUIRES_USER_ACTION: "check your MT5 login details",
+        DEGRADED: "terminal degraded",
+        CONNECTED: "trade permission not yet confirmed",
+    }.get(conn, "status not yet confirmed")
+    return {"code": WAITING, "label": f"Not trading · {reason}"}
+
+
 def apply_action(
     *,
     user_id: UUID,
