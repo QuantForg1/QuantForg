@@ -1,15 +1,37 @@
-# Trading-core freeze — paths below are production-critical.
-# Enable required reviews in GitHub Settings → Branches / Rulesets.
-# Optionally map these paths to a GitHub team when available.
+# Production-critical paths: risk, execution, gateway, vault, workers.
+# Owner review is enforced once branch protection is enabled on `main`
+# (needs GitHub Pro on this user-owned private repo; see
+# docs/production/SECURITY_GOVERNANCE_ACTIONS.md).
 
-/app/application/services/institutional_ite_runtime.py
-/app/application/services/risk_engine.py
-/app/application/services/institutional_position_management.py
-/app/application/services/mt5_position_truth.py
-/app/domain/institutional_trading/execution/
-/app/domain/institutional_trading/management/
-/app/domain/institutional_trading/ai_scalping/
-/app/domain/institutional_trading/production_hardening/
-/app/infrastructure/brokers/mt5/
-/tests/unit/test_trading_core_regression.py
-/docs/production/TRADING_CORE_LOCKDOWN.md
+# Trading core
+/app/application/services/institutional_ite_runtime.py      @QuantForg1
+/app/application/services/institutional_execution_engine.py @QuantForg1
+/app/application/services/risk_engine.py                    @QuantForg1
+/app/application/services/institutional_position_management.py @QuantForg1
+/app/application/services/mt5_position_truth.py             @QuantForg1
+/app/application/services/live_account_risk_tracker.py      @QuantForg1
+/app/domain/institutional_trading/                          @QuantForg1
+
+# Multi-account execution, robot controls, vault
+/app/application/services/multi_account_oms_execution.py    @QuantForg1
+/app/application/services/multi_account_owner_guard.py      @QuantForg1
+/app/application/services/robot_control_service.py          @QuantForg1
+/app/application/services/worker_credential_vault.py        @QuantForg1
+/app/application/services/account_commission.py            @QuantForg1
+/app/application/services/customer_account_assignment.py   @QuantForg1
+/app/application/services/mt5_worker_api.py                 @QuantForg1
+/app/application/services/mt5_worker_credential_seal.py     @QuantForg1
+
+# Broker / gateway / workers
+/app/infrastructure/brokers/mt5/                            @QuantForg1
+/services/mt5_gateway/                                      @QuantForg1
+/services/mt5_worker_agent/                                 @QuantForg1
+/deploy/mt5_gateway/                                        @QuantForg1
+/deploy/mt5_worker_agent/                                   @QuantForg1
+
+# Database and CI
+/supabase/migrations/                                       @QuantForg1
+/.github/workflows/                                         @QuantForg1
+
+/tests/unit/test_trading_core_regression.py                 @QuantForg1
+/docs/production/TRADING_CORE_LOCKDOWN.md                   @QuantForg1

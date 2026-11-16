@@ -28,3 +28,30 @@ Until branch protection is available, every agent PR merges only after all 7 CI 
   - `function_search_path_mutable` was fixed (migration `20261116115054`).
   - The three SECURITY DEFINER helpers (`current_app_user_id`, `is_org_admin`, `is_org_member`) are used by RLS policies and only return the caller's own facts. They are intended.
 - API audit: path-ID routes are owner-scoped in their use cases. `/ite/research/*` had no authentication; it now requires owner/admin (#303). The billing cron secret now uses a constant-time compare (#303).
+
+## Branch protection plan (requires a plan upgrade)
+
+`QuantForg1` is a **user** account, and the repository is private. GitHub only offers branch protection and rulesets on private repositories with **GitHub Pro** (user) or Team/Enterprise (organization). The API currently answers 403: *"Upgrade to GitHub Pro or make this repository public"*.
+
+After upgrading, run this from any machine with `gh` signed in as the owner:
+
+```bash
+gh api -X PUT repos/QuantForg1/QuantForg/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {"strict": true, "contexts": [
+    "Lint & Format", "Type Check", "Unit Tests", "Trading Core Regression",
+    "Integration Tests", "Frontend Lint Typecheck Build", "Design Governance Docs"]},
+  "enforce_admins": false,
+  "required_pull_request_reviews": {"required_approving_review_count": 1,
+    "require_code_owner_reviews": true, "dismiss_stale_reviews": true},
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_linear_history": true
+}
+JSON
+```
+
+- `.github/CODEOWNERS` already maps every risk, execution, gateway, vault, worker, migration and CI path to the owner, so owner review is enforced on those paths.
+- `enforce_admins: false` lets the owner merge in an emergency.
+- The agent bot identity (section above) must **not** be an admin, so its PRs always need the 7 checks and owner review on CODEOWNERS paths.
