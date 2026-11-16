@@ -9,7 +9,7 @@ Statuses:
 - **PASS**: verified, but not a deployment.
 - **MERGED**, **PR OPEN**, **IN PROGRESS**, **BLOCKED** (with owner action), **NOT STARTED**.
 
-- Last update: 2026-11-16 ~18:10 UTC
+- Last update: 2026-11-16 ~18:45 UTC
 - Production backend SHA: `9b52ce67` (Railway deployment `7e649d4e`, SUCCESS)
 - Production frontend SHA: Vercel `frontend` deploys `main`; `/terminal` → `/dashboard` redirect verified live
 
@@ -132,6 +132,36 @@ Known inputs:
 | Multi-account worker (`authorize_worker_execution`) | yes (MT5 snapshot) | yes (snapshot deals) | yes | yes | verified per account, else reject |
 | Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
 | Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
+
+## Gateway target (authoritative)
+
+| | |
+|---|---|
+| **Gateway target SHA** | **`a150730e9ec59cf8189a4beb92639178fa0cbe5e`** |
+| Why | Gateway-loaded code (`services/mt5_gateway` plus the 153 `app.*` modules it imports) is identical to the Production backend `9b52ce67`. This SHA adds the reviewed deploy script with the hung-gateway flat confirmation. |
+| Procedure | `docs/production/GATEWAY_RECOVERY_2026-11-16.md`: run the script from git, because the PC checkout has the old script |
+| Status | **BLOCKED (owner A1)**. Last heartbeat 10:18:37 UTC; `/history` still times out at 18:4x UTC (History page shows "Loading timed out", honestly). |
+
+## Session 3 (16 Nov, 18:10–18:45 UTC)
+
+| Item | Status | Evidence |
+|---|---|---|
+| Gateway target SHA verified, recovery procedure | **DONE** (#310, #313) | See the table above |
+| Cross-user isolation (unit, end to end) | **PASS** (#311) | 3 customers / 2 slots: distinct slots, third queued; envelope only opens for its own worker; restart keeps the binding |
+| Cross-user isolation (Production RLS) | **PRODUCTION VERIFIED** | User A JWT (rolled-back transaction): 1 own account, 0 foreign accounts / risk rows; `live_trade_journal` and ops state permission-denied |
+| Vault grants hardened | **PRODUCTION VERIFIED** (migration `20261116180243`) | `authenticated` can no longer SELECT `broker_credentials`; robot-control tables are read-only for users |
+| CODEOWNERS + branch protection plan | **DONE** (#312) | CODEOWNERS previously listed paths with no owner. Protection needs GitHub Pro (user-owned private repo); the exact command is documented. |
+| Leaked-password protection | **DOCUMENTED** (#312), owner action | Verified against Supabase docs: needs the **Supabase Pro plan**; dashboard link and steps in `SECURITY_GOVERNANCE_ACTIONS.md` |
+| History / Portfolio signed-in acceptance | **BLOCKED (A1)** | Page renders and shows a truthful timeout; the data needs gateway history |
+| Multi-DEMO assignment / queue / recovery on real terminals | **BLOCKED (A5 + DEMO accounts)** | Proven in-process (#306, #311). Real proof needs the supervisor running plus at least 3 DEMO accounts connected by different users. |
+| Per-account DEMO commission evidence | **BLOCKED (owner: DEMO accounts)** | No DEMO account exists in Production yet (`broker_accounts`: 4 LIVE rows) |
+
+**Users cannot trade through QuantForg yet.** Not verified so far for any customer:
+- the customer's own broker connection on a worker;
+- worker assignment on real terminals;
+- MT5 trade permission evidence from a worker;
+- commission evidence;
+- an executed DEMO order.
 
 ## Owner actions required
 
