@@ -2,7 +2,7 @@
 
 Hard caps are the approved owner limits. A saved document may be stricter.
 It cannot loosen them, disable gold-only, drop protective stops, bypass the
-kill switch, or reintroduce a shorter UTC session gate.
+kill switch, or widen the owner Monday-Friday 07:00-17:00 UTC entry window.
 
 Weekly loss percent defaults to 0 (off). A nonzero weekly halt is stored
 only when an owner save sets it. There is no hidden weekly default.
@@ -173,11 +173,11 @@ def active_max_spread() -> Decimal:
 def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     """Floor a document actually applies after estimated trading costs.
 
-    Owner floor: the live minimum net reward:risk is **0.20**.
+    Owner floor: the live minimum net reward:risk is ``OWNER_MIN_REWARD_RISK``.
     Candidates 0.10 / 0.15 may still be stored under ``experimental``
     for documentation, but ``experimental_promoted`` must never lower the
     active enforcement floor below :data:`OWNER_MIN_REWARD_RISK`.
-    A stricter saved floor (≥ 0.20) remains allowed.
+    A stricter saved floor remains allowed.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -196,14 +196,14 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     if authorized is None:
         return OWNER_MIN_REWARD_RISK
     # Never allow experimental promotion (or stale persisted candidates) to
-    # undercut the owner-approved 0.20 net RR floor.
+    # undercut the owner-approved net RR floor.
     if authorized < OWNER_MIN_REWARD_RISK:
         return OWNER_MIN_REWARD_RISK
     return authorized
 
 
 def active_min_reward_risk() -> Decimal:
-    """Active floor is always ≥ 0.20. See :func:`enforced_min_reward_risk`."""
+    """Active floor is never below the owner floor. See enforced_min_reward_risk."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
@@ -291,8 +291,8 @@ def approved_baseline() -> dict[str, Any]:
     )
 
     return {
-        "max_planned_risk_pct": "20.0",
-        "daily_loss_pct": "48.0",
+        "max_planned_risk_pct": format(OWNER_MAX_PLANNED_RISK_PCT, "f"),
+        "daily_loss_pct": format(OWNER_DAILY_LOSS_PCT, "f"),
         "weekly_loss_pct": "0",
         "weekly_loss_documented": (
             "0 means off. A weekly halt is enforced only after an owner save "
@@ -304,13 +304,13 @@ def approved_baseline() -> dict[str, Any]:
             "high-water mark and is enforced only after an owner save. A missing "
             "mark fails closed while the halt is on."
         ),
-        "max_aggregate_open_risk_pct": "30.0",
+        "max_aggregate_open_risk_pct": format(OWNER_MAX_AGGREGATE_OPEN_RISK_PCT, "f"),
         "max_concurrent_positions": OWNER_MAX_OPEN_POSITIONS,
         "min_lot": None,
         "max_lot": "0.01",
-        "max_spread": "1.00",
+        "max_spread": format(OWNER_MAX_SPREAD, "f"),
         "min_reward_risk": str(OWNER_MIN_REWARD_RISK),
-        "preferred_reward_risk": "0.50",
+        "preferred_reward_risk": str(OWNER_MIN_REWARD_RISK),
         "commission": owner_commission_configuration(),
         "min_trade_quality": OWNER_MIN_TRADE_QUALITY,
         "stop_atr_multiplier": "1.00",
@@ -327,7 +327,7 @@ def approved_baseline() -> dict[str, Any]:
         # persists false via Admin policy + Railway env (does not force-close).
         "m1_live_submit": None,
         "experimental_promoted": False,
-        "session_utc": "00:00-23:59",
+        "session_utc": "07:00-17:00 Mon-Fri",
     }
 
 
@@ -471,16 +471,13 @@ def _clean_commission(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
 
 
 def _active_rr_is_candidate(value: object) -> bool:
-    from app.domain.institutional_trading.owner_live_limits import (
-        authorized_min_reward_risk,
-    )
-
     try:
         rr = _dec(value)
     except Exception:
         return False
-    authorized = authorized_min_reward_risk(rr)
-    return authorized is not None and authorized < OWNER_MIN_REWARD_RISK
+    # Any parseable value below the owner floor is a stale candidate and is
+    # rewritten to the floor (no experimental floor below it exists).
+    return rr < OWNER_MIN_REWARD_RISK
 
 
 def validate_policy_changes(
@@ -559,9 +556,7 @@ def validate_policy_changes(
             authorized = authorized_min_reward_risk(rr)
             if authorized is None or authorized < OWNER_MIN_REWARD_RISK:
                 errors.append(
-                    "active min_reward_risk must be at least 0.20. "
-                    "Candidates 0.10 and 0.15 belong under experimental "
-                    "and stay inactive until that experiment is promoted."
+                    f"active min_reward_risk must be at least {OWNER_MIN_REWARD_RISK}"
                 )
     if "min_trade_quality" in changes:
         try:

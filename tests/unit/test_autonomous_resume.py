@@ -219,19 +219,21 @@ def test_positions_must_be_reconciled(world: World, unknown, blocker) -> None:
     assert svc.resume_live_trading_after_safe_recovery() == "ENABLED"
 
 
-def test_resume_does_not_wait_for_the_former_desk_window(world: World) -> None:
-    ctrl = _restart(_enabled().persist_payload())
+def test_resume_waits_for_the_owner_desk_window(world: World) -> None:
+    _restart(_enabled().persist_payload())
     for moment in (
-        datetime(2026, 10, 26, 3, 0, tzinfo=UTC),  # Monday, former closed
+        datetime(2026, 10, 26, 3, 0, tzinfo=UTC),  # Monday before 07:00
         datetime(2026, 10, 26, 18, 30, tzinfo=UTC),  # Monday evening
         datetime(2026, 10, 24, 10, 0, tzinfo=UTC),  # Saturday
         datetime(2026, 10, 25, 22, 0, tzinfo=UTC),  # Sunday
     ):
         world.now = moment
         blockers = svc.autonomous_resume_blockers(dict(OK_FACTS))
-        assert "outside_session" not in blockers
-        assert svc.resume_live_trading_after_safe_recovery() == "ENABLED"
-    assert ctrl.research_can_execute() is True
+        assert "outside_session" in blockers
+        assert svc.resume_live_trading_after_safe_recovery() == "PAUSED"
+    world.now = datetime(2026, 10, 26, 7, 0, tzinfo=UTC)  # Monday open
+    assert "outside_session" not in svc.autonomous_resume_blockers(dict(OK_FACTS))
+    assert svc.resume_live_trading_after_safe_recovery() == "ENABLED"
 
 
 @pytest.mark.parametrize(

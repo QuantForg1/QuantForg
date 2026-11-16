@@ -37,12 +37,12 @@ _SETTINGS_OFF = SimpleNamespace(
 )
 
 
-def _proposal(pct: str = "10") -> RiskSettingProposal:
+def _proposal(pct: str = "5") -> RiskSettingProposal:
     return RiskSettingProposal(
         planned_risk_pct=Decimal(pct),
-        aggregate_open_risk_pct=Decimal("30"),
+        aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal("0.01"),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=Decimal("25"),
         max_concurrent_positions=1,
     )
 
@@ -283,10 +283,10 @@ def test_risk_ceiling_blocks_enqueue_delivery() -> None:
         user_id=user,
         broker_account_id=account,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("1.00"),  # exceeds 0.01 Owner ceiling
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         account=AccountReadiness(

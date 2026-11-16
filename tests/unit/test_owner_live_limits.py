@@ -1,7 +1,8 @@
-"""Owner live limits: 20% planned risk, 48% daily stop, entry guard."""
+"""Owner live limits: 9% planned risk, 25% daily stop, entry guard."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal
 
 import pytest
@@ -37,6 +38,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_SL_RISK_USD,
     OWNER_RISK_REFERENCE_USD,
+    DailyLossContext,
     daily_loss_cap_pct,
     daily_loss_cap_usd,
     daily_loss_exceeded,
@@ -65,7 +67,7 @@ def _account(balance: str) -> AccountSnapshot:
 
 def _entry(**overrides: object) -> list[str]:
     # SELL 0.01 at 4116.43, SL 1.60 away (planned $1.98 incl. spread), TP 3.50
-    # away -> RR 3.50/1.98 = 1.77. Equity $50.84 -> 20% cap $10.16.
+    # away -> RR 3.50/1.98 = 1.77. Equity $50.84 -> 9% cap $4.57.
     args: dict[str, object] = {
         "symbol": "XAUUSD_i",
         "side": "sell",
@@ -78,6 +80,9 @@ def _entry(**overrides: object) -> list[str]:
         "equity": D("50.84"),
         # Fixture declares a known zero. Unknown commission is rejected.
         "commission": D("0"),
+        # Thursday 10:00 UTC, inside the owner Mon-Fri 07:00-17:00 window.
+        "now": datetime(2026, 10, 22, 10, 0, tzinfo=UTC),
+        "daily": DailyLossContext(trusted=True, balance=D("50.84"), equity=D("50.84")),
     }
     args.update(overrides)
     return evaluate_owner_entry(**args)  # type: ignore[arg-type]
@@ -87,22 +92,22 @@ def _entry(**overrides: object) -> list[str]:
 
 
 def test_owner_constants_replace_80_percent_caps() -> None:
-    assert D("48.0") == MAX_DAILY_LOSS_PCT
-    assert D("48.0") == MAX_DAILY_LOSS_CEILING_PCT
+    assert D("25.0") == MAX_DAILY_LOSS_PCT
+    assert D("25.0") == MAX_DAILY_LOSS_CEILING_PCT
     # Static values follow the reference capital; live checks use equity.
-    reference_trade = (OWNER_RISK_REFERENCE_USD * D("20") / D("100")).quantize(
+    reference_trade = (OWNER_RISK_REFERENCE_USD * D("9") / D("100")).quantize(
         D("0.01"), rounding=ROUND_DOWN
     )
     assert reference_trade == MAX_PLANNED_SL_RISK_USD
     assert reference_trade == TARGET_PLANNED_RISK_USD
     assert MIN_PLANNED_RISK_USD == D("0") < TARGET_PLANNED_RISK_USD
-    assert D("0.20") == MIN_REWARD_RISK
-    assert MicroAccountProfile().hard_max_risk_pct == D("20.0")
+    assert D("1.50") == MIN_REWARD_RISK
+    assert MicroAccountProfile().hard_max_risk_pct == D("9.0")
 
 
 def test_default_configs_respect_owner_limits() -> None:
     assert DEFAULT_ITE_CONFIG.max_daily_loss_pct <= MAX_DAILY_LOSS_CEILING_PCT
-    assert DEFAULT_ITE_CONFIG.risk_per_trade_pct <= D("20.0")
+    assert DEFAULT_ITE_CONFIG.risk_per_trade_pct <= D("9.0")
     assert DEFAULT_ITE_CONFIG.max_open_trades == OWNER_MAX_OPEN_POSITIONS
     assert SCALPING_V1.max_open_trades == OWNER_MAX_OPEN_POSITIONS
     assert SCALPING_V1.max_entries_per_cycle == 1
@@ -120,9 +125,9 @@ def test_default_configs_respect_owner_limits() -> None:
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("max_daily_loss_pct", D("48.01")),
+        ("max_daily_loss_pct", D("25.01")),
         ("max_daily_loss_pct", D("80.0")),
-        ("risk_per_trade_pct", D("20.01")),
+        ("risk_per_trade_pct", D("9.01")),
         ("max_open_trades", 6),
     ],
 )
@@ -135,8 +140,8 @@ def test_ite_config_rejects_values_above_owner_ceilings(
 
 def test_ite_config_accepts_the_owner_ceilings() -> None:
     cfg = ITEConfig(
-        max_daily_loss_pct=D("48"),
-        risk_per_trade_pct=D("20"),
+        max_daily_loss_pct=D("25"),
+        risk_per_trade_pct=D("9"),
         max_planned_sl_risk_usd=OWNER_MAX_SL_RISK_USD,
         max_open_trades=OWNER_MAX_OPEN_POSITIONS,
     )
@@ -159,15 +164,15 @@ def test_live_scalp_cap_never_exceeds_owner_maximum() -> None:
     assert align_live_scalp_cap(50, trading_mode="alpha") == OWNER_MAX_OPEN_POSITIONS
 
 
-# --- Daily stop: 48% of the UTC day's starting equity ---
+# --- Daily stop: 25% of the UTC day's starting equity ---
 
 
 @pytest.mark.parametrize(
     "sod,expected",
     [
-        ("50.84", "24.40"),
-        ("20.00", "9.60"),
-        ("1000", "480.00"),
+        ("50.84", "12.71"),
+        ("20.00", "5.00"),
+        ("1000", "250.00"),
     ],
 )
 def test_daily_loss_cap_usd(sod: str, expected: str) -> None:
@@ -175,22 +180,22 @@ def test_daily_loss_cap_usd(sod: str, expected: str) -> None:
 
 
 def test_daily_loss_at_cap_does_not_block_and_one_cent_over_does() -> None:
-    # Start of day 50.84 -> cap $24.40. Equal to the cap does not halt.
-    assert daily_loss_exceeded(daily_pnl=D("-24.40"), base_now=D("26.44")) is False
-    assert daily_loss_exceeded(daily_pnl=D("-24.41"), base_now=D("26.43")) is True
+    # Start of day 50.84 -> cap $12.71. Equal to the cap does not halt.
+    assert daily_loss_exceeded(daily_pnl=D("-12.71"), base_now=D("38.13")) is False
+    assert daily_loss_exceeded(daily_pnl=D("-12.72"), base_now=D("38.12")) is True
 
 
-def test_forty_eight_percent_boundary_on_larger_account() -> None:
-    # SOD 1000 -> cap $480. One cent over blocks; the exact cap does not.
-    assert daily_loss_exceeded(daily_pnl=D("-480.01"), base_now=D("519.99")) is True
-    assert daily_loss_exceeded(daily_pnl=D("-480.00"), base_now=D("520.00")) is False
+def test_twenty_five_percent_boundary_on_larger_account() -> None:
+    # SOD 1000 -> cap $250. One cent over blocks; the exact cap does not.
+    assert daily_loss_exceeded(daily_pnl=D("-250.01"), base_now=D("749.99")) is True
+    assert daily_loss_exceeded(daily_pnl=D("-250.00"), base_now=D("750.00")) is False
 
 
 def test_utc_lock_uses_owner_daily_stop() -> None:
     assert utc_daily_loss_exceeded(
-        daily_pnl=D("-24.41"),
-        balance=D("26.43"),
-        equity=D("26.43"),
+        daily_pnl=D("-12.72"),
+        balance=D("38.12"),
+        equity=D("38.12"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
     )
     assert not utc_daily_loss_exceeded(
@@ -203,7 +208,7 @@ def test_utc_lock_uses_owner_daily_stop() -> None:
 
 def test_risk_engine_drawdown_blocks_above_owner_daily_stop() -> None:
     engine = RiskEngine()
-    _s, reasons, _w = engine.evaluate_drawdown(_account("26.43"), daily_pnl=D("-24.41"))
+    _s, reasons, _w = engine.evaluate_drawdown(_account("38.12"), daily_pnl=D("-12.72"))
     assert any("owner daily stop" in r for r in reasons)
     _s, reasons_ok, _w = engine.evaluate_drawdown(
         _account("49.24"), daily_pnl=D("-1.60")
@@ -213,15 +218,15 @@ def test_risk_engine_drawdown_blocks_above_owner_daily_stop() -> None:
 
 def test_daily_loss_cap_pct_matches_usd_stop() -> None:
     pct = daily_loss_cap_pct(daily_pnl=D("0"), base_now=D("50.84"))
-    assert (D("50.84") * pct / 100).quantize(D("0.01")) == D("24.40")
+    assert (D("50.84") * pct / 100).quantize(D("0.01")) == D("12.71")
 
 
-# --- Per-trade planned-risk cap: 20% of equity ---
+# --- Per-trade planned-risk cap: 9% of equity ---
 
 
 def test_max_sl_risk_usd() -> None:
-    assert max_sl_risk_usd(D("50.84")) == D("10.16")
-    assert max_sl_risk_usd(D("150")) == D("30.00")
+    assert max_sl_risk_usd(D("50.84")) == D("4.57")
+    assert max_sl_risk_usd(D("150")) == D("13.50")
 
 
 # --- Final owner entry guard ---
@@ -232,8 +237,9 @@ def test_valid_gold_entry_passes() -> None:
 
 
 def test_production_order_of_2026_10_20_is_rejected() -> None:
-    # SELL XAUUSD 0.02 sent at 23:37:07Z: 0.02 lot, $8.46 SL risk, RR ~1.08.
-    # Lot still illegal; RR ~1.08 clears the owner floor of 0.20.
+    # SELL XAUUSD 0.02 sent at 23:37:07Z: 0.02 lot, $9.22 SL risk, RR ~1.08.
+    # Under the owner baseline the lot, the 9% cap and the 1.50 RR floor
+    # each reject it on their own.
     reasons = _entry(
         symbol="XAUUSD",
         volume=D("0.02"),
@@ -242,35 +248,35 @@ def test_production_order_of_2026_10_20_is_rejected() -> None:
     )
     codes = {r.split(":")[0] for r in reasons}
     assert "OWNER_MAX_LOT" in codes
-    assert "OWNER_SL_RISK" not in codes
-    assert "OWNER_MIN_RR" not in codes
+    assert "OWNER_SL_RISK" in codes
+    assert "OWNER_MIN_RR" in codes
 
 
 def test_volume_002_is_rejected() -> None:
     assert any(r.startswith("OWNER_MAX_LOT") for r in _entry(volume=D("0.02")))
 
 
-def test_planned_risk_one_cent_over_20_percent_is_rejected() -> None:
-    # Equity 50.84 -> cap $10.16. SL 9.78 + spread 0.38 = $10.16 allowed;
-    # SL 9.79 + 0.38 = $10.17 rejected. TP far enough for owner RR 0.20.
+def test_planned_risk_one_cent_over_9_percent_is_rejected() -> None:
+    # Equity 50.84 -> cap $4.57. SL 4.19 + spread 0.38 = $4.57 allowed;
+    # SL 4.20 + 0.38 = $4.58 rejected. TP far enough for owner RR 1.50.
     assert any(
         r.startswith("OWNER_SL_RISK")
-        for r in _entry(stop_loss=D("4126.22"), take_profit=D("4101.00"))
+        for r in _entry(stop_loss=D("4120.63"), take_profit=D("4101.00"))
     )
-    assert _entry(stop_loss=D("4126.21"), take_profit=D("4101.00")) == []
+    assert _entry(stop_loss=D("4120.62"), take_profit=D("4101.00")) == []
 
 
-def test_reward_risk_below_0_20_after_spread_rejected() -> None:
-    # SL 1.60, TP 0.376: 0.376 / (1.60 + 0.38) = 0.1899 < 0.20
-    assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4116.054")))
+def test_reward_risk_below_1_50_after_spread_rejected() -> None:
+    # SL 1.60, TP 2.96: 2.96 / (1.60 + 0.38) = 1.4949 < 1.50
+    assert any(r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4113.47")))
 
 
 def test_reward_risk_counts_spread_once_boundary() -> None:
-    # SL $2.00 + spread 0.44 -> net loss 2.44; min TP distance 0.488 (RR 0.20).
+    # SL $2.00 + spread 0.44 -> net loss 2.44; min TP distance 3.66 (RR 1.50).
     kw = {"stop_loss": D("4118.43"), "spread": D("0.44")}
-    assert _entry(take_profit=D("4115.942"), **kw) == []
+    assert _entry(take_profit=D("4112.77"), **kw) == []
     assert any(
-        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4115.943"), **kw)
+        r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=D("4112.771"), **kw)
     )
 
 

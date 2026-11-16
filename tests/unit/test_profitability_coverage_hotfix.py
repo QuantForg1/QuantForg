@@ -347,7 +347,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         confidence=70,
         atr_pct=Decimal("0.2"),
     )
-    # Owner floor 0.20: RR below the floor is a hard OWNER_MIN_RR reject.
+    # Owner floor 1.50: RR below the floor is a hard OWNER_MIN_RR reject.
     below = evaluate_quality_gates(
         direction=direction,
         momentum=80,
@@ -358,7 +358,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         thresholds=thresholds,
         confidence=80,
         trade_quality=80,
-        expected_rr=Decimal("0.19"),
+        expected_rr=Decimal("1.49"),
         atr_pct=Decimal("0.2"),
     )
     assert below.passed is False
@@ -374,7 +374,7 @@ def test_quality_gates_hard_reject_tp_equal_or_below_sl() -> None:
         thresholds=thresholds,
         confidence=80,
         trade_quality=80,
-        expected_rr=Decimal("0.20"),
+        expected_rr=Decimal("1.50"),
         atr_pct=Decimal("0.2"),
     )
     assert cleared.checks.get("min_rr") is True

@@ -141,8 +141,8 @@ class TestPositionSizingUsdTarget:
         assert TARGET_PLANNED_RISK_USD == TARGET_RISK_PER_TRADE_USD
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
         assert Decimal("0") == MIN_PLANNED_RISK_USD
-        assert Decimal("10.00") == MAX_PLANNED_SL_RISK_USD
-        assert Decimal("0.50") == PREFERRED_REWARD_RISK
+        assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
+        assert Decimal("1.50") == PREFERRED_REWARD_RISK
 
     def test_tight_gold_stop_is_not_upsized_past_owner_max_lot(self) -> None:
         # $0.50 at 0.01: no floor, so it trades — at 0.01, never stepped up.
@@ -328,7 +328,7 @@ class TestAggregatePlannedRisk:
             positions=[open_leg],
         )
         assert second.decision is RiskDecision.REJECT
-        assert Decimal("15.00") == MAX_TOTAL_PLANNED_RISK_USD
+        assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
 
     def test_daily_loss_protection_still_rejects(
         self, monkeypatch: pytest.MonkeyPatch
@@ -563,22 +563,22 @@ class TestRewardRisk:
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.09900")))
         assert gate.passed is False
 
-    def test_tp_equal_to_sl_clears_owner_reward_floor_of_0_50(self) -> None:
-        # Reward equals the stop. Ratio 1.0 clears the active 0.20 floor.
+    def test_tp_equal_to_sl_is_below_the_owner_floor_of_1_50(self) -> None:
+        # Reward equals the stop. Ratio 1.0 is below the active 1.50 floor.
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10200")))
-        assert gate.passed is True
+        assert gate.passed is False
 
     def test_tp_larger_than_sl_but_below_owner_rr_rejected(self) -> None:
-        # Reward 0.0003 / risk 0.0020 = 0.15 < owner minimum 0.20.
+        # Reward 0.0003 / risk 0.0020 = 0.15 < owner minimum 1.50.
         gate = _rr_gate(_quality_req(take_profit=Decimal("1.10030")))
         assert gate.passed is False
 
     def test_preferred_rr_eligible(self) -> None:
-        # Reward 0.0010 / risk 0.0020 = 0.50 at the preferred floor.
-        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10100")))
+        # Reward 0.0030 / risk 0.0020 = 1.50 at the preferred floor.
+        gate = _rr_gate(_quality_req(take_profit=Decimal("1.10300")))
         assert gate.passed is True
         risk = Decimal("0.00200")
-        reward = Decimal("0.00100")
+        reward = Decimal("0.00300")
         assert reward / risk == PREFERRED_REWARD_RISK
 
 

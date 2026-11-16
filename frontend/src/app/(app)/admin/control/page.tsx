@@ -357,7 +357,7 @@ export default function AdminControlPage() {
           </div>
           <div className="grid gap-2 text-xs text-[var(--fg-muted)] sm:grid-cols-2">
             <p>Max concurrent positions: 1. This cap is saved and cannot be raised.</p>
-            <p>Trading schedule: 00:00–23:59 UTC, seven days. Broker closures still block entries.</p>
+            <p>Trading schedule: Monday–Friday 07:00–17:00 UTC. Broker closures still block entries.</p>
             <p>Symbol: XAUUSD only. This cannot be turned off.</p>
             <p>Every new entry still requires a protective Stop Loss.</p>
           </div>

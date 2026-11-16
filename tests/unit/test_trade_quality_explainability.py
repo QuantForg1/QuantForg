@@ -35,7 +35,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
 def test_owner_quality_floor_stays_70() -> None:
-    assert OWNER_MIN_TRADE_QUALITY == 70
+    assert OWNER_MIN_TRADE_QUALITY == 75
 
 
 def test_tokyo_open_and_live_spread_are_known_quality_inputs() -> None:

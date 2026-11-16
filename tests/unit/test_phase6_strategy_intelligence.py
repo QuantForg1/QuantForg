@@ -129,16 +129,16 @@ def test_evaluate_owner_entry_respects_spread_buffer_flag() -> None:
         "volume": Decimal("0.01"),
         "entry": Decimal("100"),
         "stop_loss": Decimal("98"),  # stop dist 2.00 (buffer already in)
-        "take_profit": Decimal("100.40"),  # tp dist 0.40
+        "take_profit": Decimal("103.00"),  # tp dist 3.00
         "spread": Decimal("0.30"),
         "contract_size": Decimal("100"),
         "equity": Decimal("50"),
         "commission": Decimal("0"),
     }
-    # Without flag: risk = 2.30 → RR 0.40/2.30 < 0.20 → reject.
+    # Without flag: risk = 2.30 → RR 3.00/2.30 = 1.30 < 1.50 → reject.
     blocked = evaluate_owner_entry(**common, stop_includes_spread_buffer=False)
     assert any(r.startswith("OWNER_MIN_RR") for r in blocked)
-    # With flag: risk = 2.00 → RR 0.40/2.00 = 0.20 → clear RR floor.
+    # With flag: risk = 2.00 → RR 3.00/2.00 = 1.50 → clear RR floor.
     ok = evaluate_owner_entry(**common, stop_includes_spread_buffer=True)
     assert not any(r.startswith("OWNER_MIN_RR") for r in ok)
 
@@ -158,7 +158,7 @@ def test_presend_respects_stop_includes_spread_buffer() -> None:
         "bid": Decimal("99.85"),
         "ask": Decimal("100.15"),  # spread 0.30
         "stop_loss": Decimal("98"),  # dist 2.00 already includes buffer
-        "take_profit": Decimal("100.40"),
+        "take_profit": Decimal("103.00"),
         "plan_price": Decimal("100"),
         "contract_size": Decimal("100"),
         "equity": Decimal("50"),

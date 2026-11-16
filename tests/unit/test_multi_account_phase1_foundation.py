@@ -67,19 +67,19 @@ def test_default_proposal_copies_hard_ceilings() -> None:
     proposal = default_user_risk_proposal()
     effective = resolve_effective_risk(proposal)
     assert effective.ok is True
-    assert effective.planned_risk_pct == Decimal("20.0")
+    assert effective.planned_risk_pct == Decimal("9.0")
     assert effective.max_lot == Decimal("0.01")
     assert effective.max_concurrent_positions == 1
-    assert effective.daily_loss_pct == Decimal("48.0")
-    assert effective.aggregate_open_risk_pct == Decimal("30.0")
+    assert effective.daily_loss_pct == Decimal("25.0")
+    assert effective.aggregate_open_risk_pct == Decimal("9.0")
 
 
 def test_user_cannot_exceed_hard_ceiling() -> None:
     proposal = RiskSettingProposal(
-        planned_risk_pct=Decimal("25"),
-        aggregate_open_risk_pct=Decimal("30"),
+        planned_risk_pct=Decimal("10"),
+        aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal("0.01"),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=Decimal("25"),
         max_concurrent_positions=1,
     )
     effective = resolve_effective_risk(proposal)
@@ -90,15 +90,15 @@ def test_user_cannot_exceed_hard_ceiling() -> None:
 
 def test_admin_ceiling_stricter_than_user_request() -> None:
     proposal = RiskSettingProposal(
-        planned_risk_pct=Decimal("15"),
-        aggregate_open_risk_pct=Decimal("20"),
+        planned_risk_pct=Decimal("8"),
+        aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal("0.01"),
         daily_loss_pct=Decimal("20"),
         max_concurrent_positions=1,
     )
     effective = resolve_effective_risk(
         proposal,
-        admin_maxima={"planned_risk_pct": "10", "daily_loss_pct": "15"},
+        admin_maxima={"planned_risk_pct": "5", "daily_loss_pct": "15"},
     )
     assert effective.ok is False
     assert any(
@@ -116,10 +116,10 @@ def test_missing_profile_fails_closed() -> None:
 
 def test_aggregate_below_planned_fails_closed() -> None:
     proposal = RiskSettingProposal(
-        planned_risk_pct=Decimal("20"),
-        aggregate_open_risk_pct=Decimal("10"),
+        planned_risk_pct=Decimal("9"),
+        aggregate_open_risk_pct=Decimal("5"),
         max_lot=Decimal("0.01"),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=Decimal("25"),
         max_concurrent_positions=1,
     )
     effective = resolve_effective_risk(proposal)

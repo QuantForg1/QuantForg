@@ -17,9 +17,6 @@ GROUP_ISSUES: dict[str, str] = {
     "owner-policy": (
         "#69 Tests pinned to the pre-owner 80% / $6-$20 risk policy " "(fixed by FT-1)"
     ),
-    "strategy-rr": (
-        "#70 SCALPING_V1 min_expected_rr 1.20 vs owner 1.50 " "(ATR-geometry cap)"
-    ),
     "infra": (
         "#71 Environment/infra tests " "(PowerShell encoding, Weltrade HTTP, readiness)"
     ),
@@ -146,18 +143,6 @@ KNOWN_FAILURES: dict[str, tuple[str, str]] = {
     + "test_never_force_min_lot": (
         "owner-policy",
         "reason code changed with the $6-$20 band",
-    ),
-    # --- strategy-rr ---
-    _G
-    + "test_ai_scalping_v6_1_hardening.py::test_v61_version_preserves_v6_safety": (
-        "strategy-rr",
-        "min_expected_rr 1.20 != fixed_tp_r 1.50",
-    ),
-    _G
-    + "test_ai_scalping_v6_3_adaptive.py::"
-    + "test_v63_version_preserves_quality_and_risk": (
-        "strategy-rr",
-        "min_expected_rr 1.20 != fixed_tp_r 1.50",
     ),
     # --- infra ---
     _G

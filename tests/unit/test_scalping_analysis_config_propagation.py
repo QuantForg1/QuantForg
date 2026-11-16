@@ -54,6 +54,7 @@ from app.domain.institutional_trading.operations.models import OpsExecutionMode
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MIN_REWARD_RISK,
     OWNER_MIN_TRADE_QUALITY,
+    DailyLossContext,
     daily_loss_exceeded,
     evaluate_owner_entry,
     max_aggregate_risk_usd,
@@ -179,6 +180,9 @@ def _entry(**overrides: object) -> list[str]:
         "equity": Decimal("1000"),
         "now": datetime(2026, 10, 27, 14, 0, tzinfo=UTC),
         "commission": Decimal("0"),
+        "daily": DailyLossContext(
+            trusted=True, balance=Decimal("1000"), equity=Decimal("1000")
+        ),
     }
     payload.update(overrides)
     return evaluate_owner_entry(**payload)  # type: ignore[arg-type]
@@ -643,18 +647,18 @@ async def test_research_scan_uses_scalping_configuration(
     assert cfg.primary_structure_tf is Timeframe.M15
 
 
-def test_quality_below_70_is_still_rejected() -> None:
-    assert OWNER_MIN_TRADE_QUALITY == 70
-    gates = _gates(69)
+def test_quality_below_75_is_still_rejected() -> None:
+    assert OWNER_MIN_TRADE_QUALITY == 75
+    gates = _gates(74)
     assert gates.passed is False
     assert any(
-        r.startswith("OWNER_MIN_TRADE_QUALITY: trade quality 69 < 70")
+        r.startswith("OWNER_MIN_TRADE_QUALITY: trade quality 74 < 75")
         for r in gates.hard_rejects
     )
 
 
-def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
-    gates = _gates(70)
+def test_quality_at_or_above_75_does_not_skip_later_gates() -> None:
+    gates = _gates(75)
     assert gates.checks["owner_min_trade_quality"] is True
     low_rr = _gates(90, expected_rr=Decimal("0.15"))
     assert low_rr.checks["min_rr"] is False
@@ -662,7 +666,7 @@ def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
     assert any(
         r.startswith("OWNER_MIN_RR") for r in _entry(take_profit=Decimal("100.30"))
     )
-    assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("1.01")))
+    assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("0.46")))
     assert any(r.startswith("OWNER_MAX_LOT") for r in _entry(volume=Decimal("0.02")))
     assert any(r.startswith("OWNER_SL_REQUIRED") for r in _entry(stop_loss=None))
     assert any(r.startswith("OWNER_TP_REQUIRED") for r in _entry(take_profit=None))
@@ -708,19 +712,19 @@ def test_quality_at_or_above_70_does_not_skip_later_gates() -> None:
     assert incomplete.allow_new_entry is False
 
 
-def test_reward_risk_below_0_20_stays_rejected() -> None:
-    assert Decimal("0.20") == OWNER_MIN_REWARD_RISK
+def test_reward_risk_below_1_50_stays_rejected() -> None:
+    assert Decimal("1.50") == OWNER_MIN_REWARD_RISK
     reasons = _entry(take_profit=Decimal("100.35"))
-    assert any("0.20" in r for r in reasons)
+    assert any("1.50" in r for r in reasons)
     assert any(r.startswith("OWNER_MIN_RR") for r in reasons)
     cleared = _entry()
     assert not any(r.startswith("OWNER_MIN_RR") for r in cleared)
 
 
 def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
-    assert daily_loss_exceeded(daily_pnl=Decimal("-48.01"), base_now=Decimal("51.99"))
+    assert daily_loss_exceeded(daily_pnl=Decimal("-25.01"), base_now=Decimal("74.99"))
     assert (
-        daily_loss_exceeded(daily_pnl=Decimal("-48.00"), base_now=Decimal("52.00"))
+        daily_loss_exceeded(daily_pnl=Decimal("-25.00"), base_now=Decimal("75.00"))
         is False
     )
     token = use_runtime_policy(
@@ -739,8 +743,8 @@ def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
             peak_equity=Decimal("100"),
         )
         assert any(r.startswith("OWNER_DRAWDOWN") for r in reasons)
-        assert max_planned_risk_usd(Decimal("100")) == Decimal("20.00")
-        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("30.00")
+        assert max_planned_risk_usd(Decimal("100")) == Decimal("9.00")
+        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("9.00")
     finally:
         reset_runtime_policy(token)
     halt = DurableHaltController()
@@ -773,6 +777,6 @@ def test_apply_trading_mode_selects_scalping_without_changing_the_floor() -> Non
     assert runtime.decision_pipeline.config.is_scalping()
     assert runtime.decision_pipeline.config.primary_structure_tf is Timeframe.M15
     assert Timeframe.H4 not in runtime.decision_pipeline.config.analysis_timeframes()
-    assert OWNER_MIN_TRADE_QUALITY == 70
+    assert OWNER_MIN_TRADE_QUALITY == 75
     assert DEFAULT_ITE_CONFIG.trading_mode == "swing"
     assert DEFAULT_ITE_CONFIG.min_trade_quality_score == 80

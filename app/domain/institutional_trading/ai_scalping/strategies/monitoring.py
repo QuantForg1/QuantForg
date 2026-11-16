@@ -286,21 +286,7 @@ def build_robot_health_monitor(
         "eligibility_registry": performance.get("eligibility_registry"),
         "collaboration": performance.get("collaboration"),
         "live_execution_authorization": performance.get("live_execution_authorization"),
-        "risk_policy_defaults": {
-            "max_concurrent_positions": 1,
-            "minimum_net_reward_risk": "0.20",
-            "preferred_reward_risk": "0.50",
-            "minimum_trade_quality": 70,
-            "max_lot": "0.01",
-            "daily_loss_halt_percent": "48",
-            "weekly_loss_halt_percent": "0 (off)",
-            "overall_drawdown_halt_percent": "0 (off)",
-            "note": (
-                "Owner floor: experimental_promoted cannot lower the "
-                "active net RR floor below 0.20. 20% per-trade and 48% daily "
-                "halt are aggressive. Broker constraints still bind."
-            ),
-        },
+        "risk_policy_defaults": _owner_risk_policy_defaults(),
         "disclaimer": (
             "Operational status is evidence-based. Registry membership alone "
             "never implies ACTIVE. Broker P&L is authoritative for "
@@ -309,4 +295,30 @@ def build_robot_health_monitor(
         "mutates_engines": False,
         "advisory_only": True,
         "auto_authorize_live": False,
+    }
+
+
+def _owner_risk_policy_defaults() -> dict[str, Any]:
+    """Owner baseline, read from the single source of truth."""
+    from app.domain.institutional_trading import owner_live_limits as ol
+
+    return {
+        "max_concurrent_positions": ol.OWNER_MAX_OPEN_POSITIONS,
+        "minimum_net_reward_risk": str(ol.OWNER_MIN_REWARD_RISK),
+        "preferred_reward_risk": str(ol.OWNER_PREFERRED_REWARD_RISK),
+        "minimum_trade_quality": ol.OWNER_MIN_TRADE_QUALITY,
+        "max_lot": str(ol.OWNER_MAX_LOT),
+        "risk_per_trade_percent": str(ol.OWNER_MAX_PLANNED_RISK_PCT),
+        "daily_loss_halt_percent": str(ol.OWNER_DAILY_LOSS_PCT),
+        "max_spread": str(ol.OWNER_MAX_SPREAD),
+        "entry_session_utc": (
+            f"Mon-Fri {ol.OWNER_SESSION_START_UTC:%H:%M}-"
+            f"{ol.OWNER_SESSION_END_UTC:%H:%M}"
+        ),
+        "weekly_loss_halt_percent": "0 (off)",
+        "overall_drawdown_halt_percent": "0 (off)",
+        "note": (
+            "Owner baseline. A saved policy or a customer setting may only be "
+            "stricter. Broker constraints still bind."
+        ),
     }

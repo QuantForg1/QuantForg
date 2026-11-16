@@ -1,5 +1,5 @@
 /**
- * Order ticket risk vs owner limits (20% planned risk, spread included).
+ * Order ticket risk vs owner limits (9% planned risk, spread included).
  * Run: node --experimental-strip-types src/lib/execution/ticket-risk.test.ts
  */
 import assert from "node:assert/strict";
@@ -17,27 +17,27 @@ const base = {
   commission: 0,
 };
 
-// $50 equity -> cap $10.00. SL 9.70 + spread 0.30 = $10.00 accepted.
-// TP clears owner min reward:risk 0.20 (reward >= 2.0 on risk 10.0).
+// $50 equity -> cap $4.50. SL 4.20 + spread 0.30 = $4.50 accepted.
+// TP clears owner min reward:risk 1.50 (reward 7.00 on risk 4.50 = 1.56).
 const atCap = ticketRisk({
   ...base,
-  stopLoss: 4123.3,
-  takeProfit: 4148.0,
+  stopLoss: 4128.8,
+  takeProfit: 4140.0,
   spread: 0.3,
 });
-assert.equal(atCap.riskUsd, 10);
-assert.equal(atCap.maxSlRiskUsd, 10);
+assert.equal(atCap.riskUsd, 4.5);
+assert.equal(atCap.maxSlRiskUsd, 4.5);
 assert.deepEqual(atCap.violations, []);
 
-// SL 9.71 + spread 0.30 = $10.01 rejected.
+// SL 4.21 + spread 0.30 = $4.51 rejected.
 const over = ticketRisk({
   ...base,
-  stopLoss: 4123.29,
-  takeProfit: 4148.0,
+  stopLoss: 4128.79,
+  takeProfit: 4140.0,
   spread: 0.3,
 });
-assert.equal(over.riskUsd, 10.01);
-assert.ok(over.violations.some((v) => v.includes("owner cap $10.00")), over.violations.join("; "));
+assert.equal(over.riskUsd, 4.51);
+assert.ok(over.violations.some((v) => v.includes("owner cap $4.50")), over.violations.join("; "));
 
 // Owner screenshot: SL 23.05 away -> about $23.39 incl. spread, far above the cap.
 const shot = ticketRisk({
@@ -51,9 +51,9 @@ assert.ok(shot.riskUsd != null && Math.abs(shot.riskUsd - 23.39) < 0.02);
 assert.ok(shot.violations.some((v) => v.includes("owner cap")));
 
 // Dynamic cap at other equity values.
-assert.equal(maxSlRiskUsd(50), 10);
-assert.equal(maxSlRiskUsd(80), 16);
-assert.equal(maxSlRiskUsd(33.33), 6.66);
+assert.equal(maxSlRiskUsd(50), 4.5);
+assert.equal(maxSlRiskUsd(80), 7.2);
+assert.equal(maxSlRiskUsd(33.33), 2.99);
 assert.equal(maxSlRiskUsd(0), 0);
 
 // Omitted commission is unknown. A present zero is a known zero.
@@ -74,10 +74,10 @@ const negativeFee = ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4140, spre
 assert.equal(negativeFee.riskUsd, null);
 assert.ok(negativeFee.violations.some((v) => v.includes("cannot be negative")));
 
-// Spread above $1.00, low RR, volume above 0.01, missing SL.
-// 22:00 UTC is inside the full-day window: the old 07:00-17:00 gate must not fire.
+// Spread above $0.45, low RR, volume above 0.01, missing SL.
+// Entries only Monday-Friday 07:00-17:00 UTC.
 assert.ok(
-  ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4140, spread: 1.01 }).violations.some((v) =>
+  ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4140, spread: 0.46 }).violations.some((v) =>
     v.startsWith("Spread"),
   ),
 );
@@ -88,11 +88,7 @@ const night = ticketRisk({
   spread: 0.3,
   now: NIGHT,
 });
-assert.equal(
-  night.violations.some((v) => v.startsWith("Entries only")),
-  false,
-);
-assert.deepEqual(night.violations, []);
+assert.deepEqual(night.violations, ["Entries only Mon–Fri 07:00–17:00 UTC"]);
 const weekend = ticketRisk({
   ...base,
   stopLoss: 4130,
@@ -100,8 +96,24 @@ const weekend = ticketRisk({
   spread: 0.3,
   now: new Date("2026-10-24T10:00:00Z"),
 });
-assert.deepEqual(weekend.violations, []);
-// RR ≈ 0.12 < 0.20 floor (risk 3.3, reward 0.4) — buy TP above entry.
+assert.deepEqual(weekend.violations, ["Entries only Mon–Fri 07:00–17:00 UTC"]);
+const open = ticketRisk({
+  ...base,
+  stopLoss: 4130,
+  takeProfit: 4140,
+  spread: 0.3,
+  now: new Date("2026-10-22T07:00:00Z"),
+});
+assert.deepEqual(open.violations, []);
+const close = ticketRisk({
+  ...base,
+  stopLoss: 4130,
+  takeProfit: 4140,
+  spread: 0.3,
+  now: new Date("2026-10-22T17:00:00Z"),
+});
+assert.deepEqual(close.violations, ["Entries only Mon–Fri 07:00–17:00 UTC"]);
+// RR ≈ 0.12 < 1.50 floor (risk 3.3, reward 0.4) — buy TP above entry.
 assert.ok(
   ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4133.4, spread: 0.3 }).violations.some((v) =>
     v.startsWith("Reward:risk"),
@@ -123,32 +135,32 @@ assert.deepEqual(
   [],
 );
 
-// Equity 29.86 → cap $5.97. Stop 5.670 + spread 0.310 = $5.98.
+// Equity 29.86 → cap $2.68. Stop 2.380 + spread 0.310 = $2.69.
 const reported = ticketRisk({
   ...base,
   equity: 29.86,
   entry: 4000,
-  stopLoss: 3994.33,
+  stopLoss: 3997.62,
   takeProfit: 4010,
   spread: 0.31,
 });
-assert.equal(reported.maxSlRiskUsd, 5.97);
-assert.equal(reported.riskUsd, 5.98);
-assert.ok(reported.violations.some((v) => v.includes("$5.98 > owner cap $5.97")));
-assert.equal(reported.fittedStopDistance, 5.66);
-assert.ok(reported.correction?.includes("5.66"));
+assert.equal(reported.maxSlRiskUsd, 2.68);
+assert.equal(reported.riskUsd, 2.69);
+assert.ok(reported.violations.some((v) => v.includes("$2.69 > owner cap $2.68")));
+assert.equal(reported.fittedStopDistance, 2.37);
+assert.ok(reported.correction?.includes("2.37"));
 
-// 5.971 must ceiling to $5.98 and fail. It must not half-even down to $5.97.
+// 2.681 must ceiling to $2.69 and fail. It must not half-even down to $2.68.
 const raw = ticketRisk({
   ...base,
   equity: 29.86,
   entry: 4000,
-  stopLoss: 3994.029,
+  stopLoss: 3997.319,
   takeProfit: 4010,
   spread: 0,
 });
-assert.equal(raw.riskUsd, 5.98);
-assert.ok(raw.violations.some((v) => v.includes("owner cap $5.97")));
+assert.equal(raw.riskUsd, 2.69);
+assert.ok(raw.violations.some((v) => v.includes("owner cap $2.68")));
 
 // Exact cap still passes. One extra cent fails.
 assert.deepEqual(
@@ -156,7 +168,7 @@ assert.deepEqual(
     ...base,
     equity: 29.86,
     entry: 4000,
-    stopLoss: 3994.03,
+    stopLoss: 3997.32,
     takeProfit: 4010,
     spread: 0,
   }).violations,
@@ -167,7 +179,7 @@ assert.ok(
     ...base,
     equity: 29.86,
     entry: 4000,
-    stopLoss: 3994.02,
+    stopLoss: 3997.31,
     takeProfit: 4010,
     spread: 0,
   }).violations.some((v) => v.startsWith("Planned risk")),
