@@ -6,7 +6,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { robotStateLabel, robotStateTone } from "./robot-control.ts";
+import {
+  connectionStateLabel,
+  connectionStateTone,
+  robotStateLabel,
+  robotStateTone,
+} from "./robot-control.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../");
 const nav = readFileSync(join(root, "components/layout/nav-config.ts"), "utf8");
@@ -30,5 +35,11 @@ assert.doesNotMatch(page, /close_position|closePosition/);
 assert.equal(robotStateLabel("EMERGENCY_STOPPED"), "Emergency stopped");
 assert.equal(robotStateTone("PAUSED"), "warning");
 assert.equal(robotStateTone("RUNNING"), "success");
+
+// Connected is never shown as allowed to trade.
+assert.equal(connectionStateTone("TRADING_PERMISSION_DISABLED"), "danger");
+assert.match(connectionStateLabel("CONNECTED"), /unknown/);
+assert.equal(connectionStateTone("ROBOT_READY"), "success");
+assert.match(page, /connectionStateLabel/);
 
 console.log("robot-control-center contract ok");

@@ -203,3 +203,77 @@ def test_readiness_for_worker_accounts_needs_a_ready_worker() -> None:
     assert rc.account_readiness(acct, workers=[w]).reasons == ("worker_not_ready",)
     w["trade_allowed"] = True
     assert rc.account_readiness(acct, workers=[w]).ready
+
+
+# --- verified connection state ---------------------------------------------
+
+
+def _acct(login: str = "1001") -> dict[str, Any]:
+    return {"id": uuid4(), "external_account_id": login}
+
+
+def test_gateway_trade_allowed_is_robot_ready() -> None:
+    gw = SimpleNamespace(login=1001, trade_allowed=True)
+    assert rc.connection_state(_acct(), gateway_account=gw)["state"] == "ROBOT_READY"
+
+
+def test_authenticated_but_trading_disabled_is_not_ready() -> None:
+    # Investor/read-only logins authenticate but MT5 reports trade_allowed=false.
+    gw = SimpleNamespace(login=1001, trade_allowed=False)
+    out = rc.connection_state(_acct(), gateway_account=gw)
+    assert out["state"] == "TRADING_PERMISSION_DISABLED"
+
+
+def test_unknown_permission_is_only_connected() -> None:
+    gw = SimpleNamespace(login=1001, trade_allowed=None)
+    assert rc.connection_state(_acct(), gateway_account=gw)["state"] == "CONNECTED"
+
+
+def test_no_session_is_not_connected() -> None:
+    assert rc.connection_state(_acct())["state"] == "NOT_CONNECTED"
+
+
+def test_worker_states() -> None:
+    a = _acct("5005")
+    base = {"broker_account_id": str(a["id"])}
+    cases = [
+        (
+            {"last_error": "login_failed:(-6, 'Authorization failed')"},
+            "REQUIRES_USER_ACTION",
+        ),
+        ({"connected": False, "ready": False}, "DEGRADED"),
+        (
+            {"connected": True, "ready": True, "trade_allowed": False},
+            "TRADING_PERMISSION_DISABLED",
+        ),
+        (
+            {
+                "connected": True,
+                "ready": True,
+                "trade_allowed": True,
+                "dispatch_ready": False,
+            },
+            "DEGRADED",
+        ),
+        (
+            {
+                "connected": True,
+                "ready": True,
+                "trade_allowed": True,
+                "dispatch_ready": True,
+            },
+            "ROBOT_READY",
+        ),
+    ]
+    for extra, want in cases:
+        assert rc.connection_state(a, workers=[{**base, **extra}])["state"] == want
+
+
+def test_another_accounts_worker_does_not_count() -> None:
+    other = {
+        "broker_account_id": str(uuid4()),
+        "connected": True,
+        "trade_allowed": True,
+        "dispatch_ready": True,
+    }
+    assert rc.connection_state(_acct(), workers=[other])["state"] == "NOT_CONNECTED"
