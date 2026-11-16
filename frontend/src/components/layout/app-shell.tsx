@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { isCustomerRoute, isPrivilegedRole } from "@/lib/navigation/customer-routes";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { useAuth } from "@/providers/auth-provider";
 import { BrandMark } from "@/components/brand/brand-logo";
@@ -88,6 +89,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
   }, [loading, isAuthenticated, router]);
+
+  // Customers see the product desks only; operator/legacy pages redirect.
+  const customerBlocked =
+    !loading &&
+    isAuthenticated &&
+    !adminPortal &&
+    !isPrivilegedRole(user?.role) &&
+    !isCustomerRoute(pathname || "/");
+  useEffect(() => {
+    if (customerBlocked) router.replace("/dashboard");
+  }, [customerBlocked, router]);
 
   useEffect(() => {
     if (loading || !isAuthenticated) return;
@@ -176,6 +188,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (adminPortal) {
     return <AdminShell>{children}</AdminShell>;
+  }
+
+  if (customerBlocked) {
+    return null;
   }
 
   return (

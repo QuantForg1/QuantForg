@@ -609,7 +609,7 @@ function RiskSettingsCard() {
   useEffect(() => {
     if (!q.data) return;
     const next: Record<string, string> = {};
-    for (const f of fields) next[f.key] = str(prefs[f.key], "");
+    for (const f of fields) next[f.key] = trimNumber(str(prefs[f.key], ""));
     setDraft(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data]);
@@ -633,7 +633,9 @@ function RiskSettingsCard() {
     onError: (err) => toast.error(errorText(err)),
   });
 
-  const dirty = fields.some((f) => (draft[f.key] ?? "") !== str(prefs[f.key], ""));
+  const dirty = fields.some(
+    (f) => (draft[f.key] ?? "") !== trimNumber(str(prefs[f.key], "")),
+  );
 
   return (
     <Card>
@@ -689,4 +691,10 @@ function RiskSettingsCard() {
       </CardContent>
     </Card>
   );
+}
+
+/** "9.0000" -> "9"; leaves non-numeric text untouched. */
+function trimNumber(raw: string): string {
+  const n = Number(raw);
+  return raw.trim() !== "" && Number.isFinite(n) ? String(n) : raw;
 }
