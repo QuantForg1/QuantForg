@@ -141,7 +141,10 @@ async def run_auth_io[**P, T](
     fn: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
 ) -> T:
     """Supabase auth calls: never share threads with broker I/O."""
-    return await AUTH_IO.run(fn, *args, **kwargs)
+    from core.utils import request_trace
+
+    with request_trace.timed("auth", getattr(fn, "__qualname__", "call")):
+        return await AUTH_IO.run(fn, *args, **kwargs)
 
 
 async def run_broker_read[**P, T](

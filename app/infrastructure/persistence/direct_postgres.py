@@ -83,9 +83,12 @@ def _ensure_loop() -> asyncio.AbstractEventLoop:
 
 
 def _run(coro: Any, *, timeout: float = 8.0) -> Any:
+    from core.utils import request_trace
+
     loop = _ensure_loop()
-    fut = asyncio.run_coroutine_threadsafe(coro, loop)
-    return fut.result(timeout=timeout)
+    with request_trace.timed("postgres", getattr(coro, "__qualname__", "query")):
+        fut = asyncio.run_coroutine_threadsafe(coro, loop)
+        return fut.result(timeout=timeout)
 
 
 async def _ensure_pool() -> Any:

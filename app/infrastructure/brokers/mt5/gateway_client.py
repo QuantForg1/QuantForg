@@ -64,6 +64,7 @@ from app.infrastructure.brokers.mt5.gateway_budget import (
 from app.infrastructure.brokers.mt5.gateway_circuit import GatewayUnavailableError
 from app.infrastructure.brokers.mt5.metrics import gateway_metrics
 from core.logging import get_logger
+from core.utils import request_trace
 
 logger = get_logger(__name__)
 
@@ -552,6 +553,20 @@ class GatewayMT5Client:
                 "MT5_GATEWAY_CALLER_TOKEN is not configured on the API "
                 "(must match Windows MT5_GATEWAY_TOKEN)"
             )
+        with request_trace.timed("gateway", f"{method} {path}"):
+            return self._request_traced(
+                method, path, json_body=json_body, params=params, auth=auth
+            )
+
+    def _request_traced(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        auth: bool = True,
+    ) -> dict[str, Any]:
         key = coalesce_key(method, path, json_body, params)
         if key is None:
             return self._request_leader(

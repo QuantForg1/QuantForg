@@ -12,12 +12,14 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from core.logging import bind_context, clear_context, get_logger
+from core.utils import request_trace
 from core.utils.identifiers import new_request_id
 from core.utils.timing import Timer
 
 logger = get_logger(__name__)
 
 REQUEST_ID_HEADER = "X-Request-ID"
+SLOW_REQUEST_MS = 1500.0
 
 
 class RequestContextMiddleware:
@@ -40,6 +42,7 @@ class RequestContextMiddleware:
         clear_context()
         bind_context(request_id=request_id)
 
+        trace_token = request_trace.start()
         timer = Timer()
         timer.__enter__()
         status_code_box: dict[str, int | None] = {"code": None}
@@ -58,6 +61,15 @@ class RequestContextMiddleware:
                     status=status_code_box["code"],
                     duration_ms=duration_ms,
                 )
+                if duration_ms >= SLOW_REQUEST_MS:
+                    with suppress(Exception):
+                        logger.warning(
+                            "slow_request",
+                            method=scope.get("method"),
+                            path=scope.get("path"),
+                            duration_ms=duration_ms,
+                            **request_trace.summary(),
+                        )
                 # Best-effort metrics (container may not be ready yet).
                 with suppress(Exception):
                     from core.di.container import get_container
@@ -74,4 +86,6 @@ class RequestContextMiddleware:
         try:
             await self.app(scope, receive, send_with_request_id)
         finally:
+            with suppress(Exception):
+                request_trace.reset(trace_token)
             clear_context()
