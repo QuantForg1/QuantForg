@@ -241,6 +241,117 @@ class LocalWorkerSupervisor:
                 )
         return payload
 
+    def provision_assigned_accounts(
+        self,
+        *,
+        authenticate: Any | None = None,
+        unwrap: Any | None = None,
+    ) -> dict[str, Any]:
+        """Log each assigned slot into its customer's own MT5 account.
+
+        For every registered, not-yet-ready slot with an assignment: claim the
+        sealed envelope (vault credentials of exactly that account), unwrap it
+        locally, authenticate on the slot's isolated portable terminal, and
+        report redacted evidence. ``ready`` follows MT5's real trade_allowed;
+        an authenticated account that cannot trade stays not ready. The
+        password exists only in this call's memory and is never logged.
+        """
+        if self.railway is None:
+            return {"ok": False, "error": "railway_client_unavailable"}
+        token = (os.environ.get("WORKER_SERVICE_TOKEN") or "").strip()
+        if len(token) < 16:
+            return {"ok": False, "error": "worker_service_token_missing"}
+        if authenticate is None:
+            from services.mt5_worker_agent.mt5_session import authenticate_and_verify
+
+            authenticate = authenticate_and_verify
+        if unwrap is None:
+            from app.application.services.mt5_worker_credential_seal import (
+                unwrap_credential_material,
+            )
+
+            unwrap = unwrap_credential_material
+        out: dict[str, Any] = {}
+        for slot_id, st in self.states.items():
+            if not st.worker_id or st.revoked or st.ready:
+                continue
+            assign = self.railway.get_assignment(worker_id=st.worker_id)
+            assignment = (assign or {}).get("assignment") or {}
+            if not assignment.get("broker_account_id"):
+                out[slot_id] = {"ok": False, "error": "no_assignment"}
+                continue
+            claim = self.railway.claim_sealed_credentials(worker_id=st.worker_id)
+            envelope = str((claim or {}).get("sealed_envelope") or "")
+            if not envelope:
+                st.last_error = str((claim or {}).get("error") or "no_envelope")
+                out[slot_id] = {"ok": False, "error": st.last_error}
+                continue
+            try:
+                material = unwrap(
+                    service_token=token,
+                    worker_id=st.worker_id,
+                    sealed_envelope=envelope,
+                )
+            except ValueError as exc:
+                st.last_error = str(exc)
+                out[slot_id] = {"ok": False, "error": st.last_error}
+                continue
+            try:
+                result = authenticate(
+                    terminal_exe=self.terminal_exe_for(slot_id),
+                    login=int(material["login"]),
+                    password=material["secret"],
+                    server=material["server"],
+                )
+            except Exception as exc:  # terminal/IPC failure: retry next tick
+                st.last_error = f"authenticate_error:{type(exc).__name__}"
+                out[slot_id] = {"ok": False, "error": st.last_error}
+                continue
+            finally:
+                material = {}
+            trade_ok = bool(result.ok and result.trade_allowed)
+            env = {0: "demo", 1: "demo", 2: "live"}.get(
+                result.trade_mode if result.trade_mode is not None else -1, "unknown"
+            )
+            report = self.railway.report_verification(
+                {
+                    "ok": trade_ok,
+                    "broker_slug": str(assignment.get("broker_slug") or "unknown"),
+                    "environment": env,
+                    "server": result.server,
+                    "login": str(result.login or ""),
+                    "trade_allowed": bool(result.trade_allowed),
+                    "market_data_ok": bool(result.market_data_ok),
+                    "balance": result.balance,
+                    "equity": result.equity,
+                    "currency": result.currency,
+                    "symbols_total": result.symbols_total,
+                    "quote_symbol": result.quote_symbol,
+                    "host_code": self.host_code,
+                    "slot_id": slot_id,
+                    "worker_id": st.worker_id,
+                    "source": "windows_mt5_customer_vault",
+                    "error": result.error[:200],
+                }
+            )
+            st.ready = trade_ok and bool(report.get("worker_ready_applied"))
+            st.verified_login = str(result.login or "")
+            st.verified_server = result.server
+            st.last_error = "" if st.ready else (result.error or "not_ready")
+            out[slot_id] = {
+                "ok": st.ready,
+                "trade_allowed": bool(result.trade_allowed),
+                "error": st.last_error,
+            }
+            logger.info(
+                "slot_provision slot=%s ready=%s trade_allowed=%s error=%s",
+                slot_id,
+                st.ready,
+                bool(result.trade_allowed),
+                st.last_error or "-",
+            )
+        return {"ok": True, "slots": out}
+
     def run_forever(self, *, interval_seconds: float = 30.0) -> None:
         logger.info(
             "local_supervisor_start host=%s slots=%s",
@@ -254,6 +365,10 @@ class LocalWorkerSupervisor:
                 reg.get("ok"),
             )
         while True:
+            try:
+                self.provision_assigned_accounts()
+            except Exception:
+                logger.exception("slot_provision_cycle_failed")
             report = self.heartbeat_once()
             ready_count = sum(1 for s in report["slots"] if s.get("ready"))
             running = sum(1 for s in report["slots"] if s.get("process_running"))
