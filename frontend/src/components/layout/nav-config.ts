@@ -103,6 +103,7 @@ export const TRADER_DESK_HREFS = new Set([
   "/research",
   "/broker",
   "/strategy",
+  "/robot-control-center",
   "/risk-center",
   "/trading-journal",
   "/notifications",
@@ -200,6 +201,7 @@ export const TRADER_DESK_ORDER = [
   "/broker",
   "/research",
   "/strategy",
+  "/robot-control-center",
   "/risk-center",
   "/settings",
 ] as const;
@@ -444,6 +446,14 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Target,
     hint: "Symbol and side exposure",
     match: ["/exposure"],
+    section: "Portfolio",
+  },
+  {
+    href: "/robot-control-center",
+    label: "Robot Control Center",
+    icon: Bot,
+    hint: "Pause, resume, stop your robot per account",
+    match: ["/robot-control-center"],
     section: "Portfolio",
   },
   {

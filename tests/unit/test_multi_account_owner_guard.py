@@ -245,3 +245,27 @@ def test_authorize_rejects_a_non_compliant_demo_entry() -> None:
     )
     assert auth.order_send_allowed is False
     assert "OWNER_MIN_RR" in _codes(auth.reasons)
+
+
+def test_paused_account_never_gets_order_send(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.services import robot_control_service as rc
+
+    monkeypatch.setattr(
+        rc, "entry_block", lambda **_: "ROBOT_PAUSED: new entries are blocked"
+    )
+    w = _worker()
+    auth = authorize_worker_execution(
+        worker=w,
+        intent_id=uuid4(),
+        job_payload=dict(BUY),
+        job_user_id=w.user_id,
+        job_broker_account_id=w.broker_account_id,
+        job_idempotency_key="k",
+        account_environment="demo",
+        settings=SETTINGS,
+        account_snapshot=_snap(),
+        now=NOW,
+        user_caps=CAPS,
+    )
+    assert auth.order_send_allowed is False
+    assert "ROBOT_PAUSED" in auth.reasons

@@ -210,6 +210,16 @@ def authorize_worker_execution(
     )
     reasons.extend(guard.reasons)
 
+    from app.application.services.robot_control_service import (
+        entry_block as _robot_entry_block,
+    )
+
+    robot_block = _robot_entry_block(
+        user_id=worker.user_id, broker_account_id=worker.broker_account_id
+    )
+    if robot_block:
+        reasons.append(robot_block.split(":")[0])
+
     # De-dupe reasons
     seen: set[str] = set()
     ordered: list[str] = []
