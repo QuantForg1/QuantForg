@@ -610,9 +610,17 @@ class GatewayMT5Client:
         try:
             with contextlib.suppress(Exception):
                 gateway_metrics.begin_inflight(mutation=mutation, calc=calc)
-            return self._request_http(
+            data = self._request_http(
                 method, path, json_body=json_body, params=params, auth=auth
             )
+            if path.startswith("/quotes/") and isinstance(data, dict):
+                # Learn the MT5 trade-server clock offset from fresh ticks.
+                with contextlib.suppress(Exception):
+                    from app.domain.institutional_trading import broker_clock
+
+                    if data.get("time"):
+                        broker_clock.observe_server_epoch(int(data["time"]))
+            return data
         finally:
             with contextlib.suppress(Exception):
                 gateway_metrics.end_inflight(mutation=mutation, calc=calc)
@@ -2187,10 +2195,9 @@ class GatewayMT5Client:
             raw_t = row.get("time_setup") or row.get("time_done") or row.get("time")
             if raw_t is not None and (start is not None or end is not None):
                 try:
-                    ts = int(raw_t)
-                    if ts > 10_000_000_000:
-                        ts = ts // 1000
-                    order_time = datetime.fromtimestamp(ts, tz=UTC)
+                    from app.domain.institutional_trading import broker_clock
+
+                    order_time = broker_clock.server_epoch_to_utc(int(raw_t))
                     if start is not None and order_time < start:
                         continue
                     if end is not None and order_time > end:
@@ -2269,10 +2276,10 @@ class GatewayMT5Client:
             raw_t = row.get("time")
             if raw_t:
                 try:
-                    ts = int(raw_t)
-                    if ts > 10_000_000_000:
-                        ts = ts // 1000
-                    deal_time = datetime.fromtimestamp(ts, tz=UTC)
+                    from app.domain.institutional_trading import broker_clock
+
+                    # MT5 deal times are trade-server wall clock, not UTC.
+                    deal_time = broker_clock.server_epoch_to_utc(int(raw_t))
                 except (TypeError, ValueError, OSError):
                     deal_time = None
             if deal_time is None:
