@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import contextvars
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -112,8 +113,11 @@ class _Pool:
                 )
             self._inflight += 1
         call = partial(fn, *args, **kwargs) if kwargs else partial(fn, *args)
+        # Carry context variables (gateway lane, request id) into the thread,
+        # as asyncio.to_thread does.
+        ctx = contextvars.copy_context()
         try:
-            fut = self.executor().submit(call)
+            fut = self.executor().submit(ctx.run, call)
         except BaseException:
             self._release()
             raise

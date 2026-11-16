@@ -57,6 +57,13 @@ def start_loop_watchdog(
                 return
             time.sleep(1.0)
             lag = time.monotonic() - last_tick[0]
+            if reported_for is not None and reported_for != last_tick[0]:
+                # Loop recovered: report how long the stall really lasted.
+                logger.warning(
+                    "event_loop_unblocked",
+                    stalled_s=round(last_tick[0] - reported_for, 1),
+                )
+                reported_for = None
             if lag >= threshold_s and reported_for != last_tick[0]:
                 reported_for = last_tick[0]
                 logger.warning(

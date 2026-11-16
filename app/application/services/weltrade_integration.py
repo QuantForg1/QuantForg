@@ -1406,7 +1406,7 @@ class WeltradeIntegrationService:
         # Gateway already has a live MT5 session: adopt it and never re-login.
         if already_connected:
             try:
-                session_ref = self.adapter.attach(path=path)
+                session_ref = await run_broker_read(self.adapter.attach, path=path)
                 attached = True
                 steps.append(
                     {
@@ -1456,7 +1456,7 @@ class WeltradeIntegrationService:
 
         elif prefer_attach:
             try:
-                session_ref = self.adapter.attach(path=path)
+                session_ref = await run_broker_read(self.adapter.attach, path=path)
                 attached = True
                 steps.append(
                     {
@@ -1946,7 +1946,9 @@ class WeltradeIntegrationService:
             try:
                 health = await asyncio.to_thread(gw.gateway_health)
                 if _gateway_mt5_already_connected(health):
-                    self.adapter.attach(path=profile.terminal_path or "")
+                    await asyncio.to_thread(
+                        self.adapter.attach, path=profile.terminal_path or ""
+                    )
                     logger.info(
                         "broker_reconnected",
                         login=profile.login,
@@ -2103,7 +2105,7 @@ class WeltradeIntegrationService:
         )
 
     async def attach(self, *, user_id: UUID, path: str = "") -> dict[str, Any]:
-        session_ref = self.adapter.attach(path=path)
+        session_ref = await run_broker_read(self.adapter.attach, path=path)
         await self.bind_user_session(
             user_id=user_id, path=path, session_ref=session_ref
         )
