@@ -133,6 +133,19 @@ Known inputs:
 | Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
 | Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
 
+## Session 5 (16 Nov, 19:50–20:40 UTC): login, RCC, owner-policy privacy
+
+- Register: **`docs/production/PLATFORM_ISSUE_REGISTER.md`** (Critical / High / Medium / Low).
+- Production now runs `e8c9997` (Railway `799416d6`).
+- Merged:
+  - #322: separate thread pools for auth, broker reads and research; per-token user cache.
+  - #325: startup broker-history recovery off the event loop. This was the main cause of the "Request timed out" sign-ins: the API froze ~3 min per deploy.
+  - #323: Robot Control Center redesign. Owner policy removed from customer UI and APIs; RUNNING only with full backend evidence.
+  - #324: mobile drawer fixes.
+- Open: #326 (15 s history timeout).
+- Incident during this session: the #322 deploy hit the pre-existing startup freeze. A precautionary rollback was triggered, then superseded by #325. After the fix, health stayed ≤ 9 s during the next restart and 3–12 ms afterwards.
+- Not verifiable by Claude: authenticated UI on mobile and desktop. The built-in browser is not signed in (owner action A12).
+
 ## Session 4 (16 Nov, 18:45–19:10 UTC): full evidence audit
 
 - Authoritative status by objective: **`docs/production/FINAL_ACCEPTANCE_MATRIX.md`**. Verdict: NOT ACCEPTED.
