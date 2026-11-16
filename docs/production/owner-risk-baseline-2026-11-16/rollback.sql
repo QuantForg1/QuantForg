@@ -16,5 +16,12 @@ UPDATE public.user_risk_settings
 SET planned_risk_pct = 10, aggregate_open_risk_pct = 30, daily_loss_pct = 48,
     updated_at = now()
 WHERE user_id = :'owner_user_id'::uuid AND is_active = true;
--- ite_ops_runtime_state: restore from the JSON export taken before apply.sql.
+UPDATE public.ite_ops_runtime_state
+SET payload = jsonb_set(jsonb_set(payload, '{risk_profile_id}', '"ULTRA_AGGRESSIVE"'),
+                        '{risk_per_trade_pct}', '"8.00"')
+              || jsonb_build_object('live_trading_risk', :'ops_live_trading_risk'::jsonb),
+    updated_at = now()
+WHERE singleton = true;
+-- :ops_live_trading_risk = ite_ops_runtime_state_payload_keys.live_trading_risk
+-- from rollback_pre_apply_state.json. live_trading_state is not changed.
 -- COMMIT;

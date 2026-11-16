@@ -1,6 +1,7 @@
 -- Owner risk baseline 2026-11-16 — Production data change (gate G1).
 -- NOT APPLIED. Run only after written owner approval, in one transaction.
--- LIVE trading stays DISABLED; this script never touches live_trading_state.
+-- This script never touches live_trading_state, the kill switch or auto-trading run state.
+-- Order: deploy PR #295 code (Railway) first, then run this. Pre-apply state: rollback_pre_apply_state.json.
 -- Usage (psql): \set owner_user_id '<owner auth user uuid>'
 BEGIN;
 
@@ -54,7 +55,7 @@ SET payload = jsonb_set(
     updated_at = now()
 WHERE singleton = true;
 
--- Verify before COMMIT: exactly one row per statement, LIVE still DISABLED.
+-- Verify before COMMIT: each UPDATE reported exactly 1 row; live_state unchanged from before BEGIN.
 SELECT version, document->>'max_planned_risk_pct' AS risk, document->>'daily_loss_pct' AS daily,
        document->>'min_reward_risk' AS rr, document->>'max_spread' AS spread,
        document->>'min_trade_quality' AS quality, document->>'session_utc' AS session
