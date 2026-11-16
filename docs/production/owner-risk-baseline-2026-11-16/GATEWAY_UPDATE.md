@@ -43,32 +43,25 @@ git rev-parse HEAD          # record as PREVIOUS_SHA (rollback target)
 git status --porcelain      # must be empty; stop if not
 ```
 
-## 2. Check out the merged commit
+## 2–3. Deploy the merged commit and restart
+
+From `$Root` (PowerShell as Administrator):
 
 ```powershell
-git fetch origin main
-git checkout --detach <MERGED_SHA>
-git rev-parse HEAD          # must equal MERGED_SHA
-.\.venv\Scripts\python.exe -c "from app.domain.institutional_trading import owner_live_limits as o; print(o.OWNER_MAX_PLANNED_RISK_PCT, o.OWNER_DAILY_LOSS_PCT, o.OWNER_MIN_REWARD_RISK, o.OWNER_MAX_SPREAD)"
-# expected: 9.0 25.0 1.50 0.45
+.\deploy\mt5_gateway\deploy_main_gateway.ps1 -TargetSha <MERGED_SHA>
 ```
+
+The script (fixed in this PR):
+
+- deploys exactly `<MERGED_SHA>`, detached, and checks that `HEAD` matches it;
+- refuses a dirty tree;
+- refuses to restart while there is an open position or a pending order. It checks once before the checkout and again right before the restart;
+- prints the owner limits it loaded (expected `9.0 25.0 1.50 0.45`);
+- restarts through `supervise_gateway.ps1 -Once`;
+- verifies `/health`, `/account`, `/quotes/XAUUSD` and `/candles/XAUUSD`;
+- writes `previous_commit` to `docs\production\reports\oat_v71\deploy_main_gateway_verify.json`.
 
 PR #295 adds no new dependencies, so `pip install` is not needed.
-
-## 3. Restart
-
-Use the existing supervisor so that the process stays detached:
-
-```powershell
-Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue |
-  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
-powershell -NoProfile -ExecutionPolicy Bypass -File "$Root\deploy\mt5_gateway\supervise_gateway.ps1" -Once
-```
-
-Do **not** use `deploy_main_gateway.ps1` as it stands:
-
-- It runs `git checkout main; git pull`, which may not be the reviewed SHA.
-- Its quote check uses `XAUUSD_I`. The broker symbol is now `XAUUSD`, so the script reports a failure after a good restart.
 
 ## 4. Verify
 
@@ -83,9 +76,7 @@ Then check from Railway that `gateway_http_response path=/account status_code=20
 ## Rollback
 
 ```powershell
-cd $Root
-git checkout --detach <PREVIOUS_SHA>
-# then repeat step 3 and step 4
+.\deploy\mt5_gateway\deploy_main_gateway.ps1 -TargetSha <PREVIOUS_SHA>
 ```
 
 The rollback restores the old guard (20%). If the backend is also rolled back, roll back the gateway with it.

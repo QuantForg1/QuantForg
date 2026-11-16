@@ -1,5 +1,14 @@
-# QuantForg - deploy latest main MT5 Gateway on the Windows production host.
-# Run elevated on the Windows VPS only. Cloud agents cannot execute this.
+# QuantForg - deploy one reviewed commit of the MT5 Gateway on the Windows host.
+# Run elevated on the Windows host only. Cloud agents cannot execute this.
+#
+# Usage:
+#   .\deploy\mt5_gateway\deploy_main_gateway.ps1 -TargetSha <40-hex merged commit>
+#
+# Safety:
+#   - deploys exactly -TargetSha (detached), never "whatever main is now"
+#   - refuses a dirty working tree
+#   - refuses to restart while the account has open positions or pending orders
+#   - records the previous commit for rollback (deploy again with -TargetSha <previous>)
 #
 # Success criteria after restart:
 #   gateway_version matches services.mt5_gateway.__version__
@@ -8,7 +17,15 @@
 #
 # Compatible with Windows PowerShell 5.1 (ASCII-only source; no UTF-8 em-dashes).
 
+param(
+  [Parameter(Mandatory = $true)][string]$TargetSha,
+  [string]$Symbol = "XAUUSD"
+)
+
 $ErrorActionPreference = "Stop"
+if ($TargetSha -notmatch '^[0-9a-f]{40}$') {
+  throw "TargetSha must be the full 40-character commit SHA that was reviewed and merged"
+}
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not (Test-Path (Join-Path $RepoRoot "pyproject.toml"))) {
   $RepoRoot = (Get-Location).Path
@@ -33,12 +50,56 @@ New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 Write-Log "begin deploy_main_gateway"
 
 Set-Location $RepoRoot
-Write-Log "git fetch/checkout/pull main"
-git fetch origin main
-git checkout main
-git pull origin main
+
+# Gateway token (needed for the pre-restart position check and verification)
+$tokenLine = Get-Content -Path ".env" |
+  Where-Object { $_ -match '^\s*MT5_GATEWAY_TOKEN\s*=' } |
+  Select-Object -Last 1
+if (-not $tokenLine) {
+  throw "MT5_GATEWAY_TOKEN missing from .env"
+}
+$token = (($tokenLine -split "=", 2)[1]).Trim().Trim('"').Trim("'")
+$authHeaders = @{
+  Authorization = ("Bearer {0}" -f $token)
+}
+
+# Never restart under an open position or a pending order.
+function Assert-Flat([string]$stage) {
+  try {
+    $openPositions = Invoke-RestMethod -Uri "http://127.0.0.1:8765/positions" -Headers $authHeaders -TimeoutSec 15
+    $openOrders = Invoke-RestMethod -Uri "http://127.0.0.1:8765/orders" -Headers $authHeaders -TimeoutSec 15
+  } catch {
+    throw ("cannot read positions/orders from the running gateway; refusing to restart blind: {0}" -f $_.Exception.Message)
+  }
+  $posCount = @($openPositions.items).Count
+  $ordCount = @($openOrders.items).Count
+  Write-Log ("{0}: open_positions={1} pending_orders={2}" -f $stage, $posCount, $ordCount)
+  if ($posCount -gt 0 -or $ordCount -gt 0) {
+    throw "open positions or pending orders exist; wait until flat before deploying"
+  }
+}
+Assert-Flat "pre-checkout"
+
+$dirty = (git status --porcelain)
+if ($dirty) {
+  throw "working tree is not clean; refusing to deploy"
+}
+$PreviousCommit = (git rev-parse HEAD).Trim()
+Write-Log ("previous HEAD={0} (rollback target)" -f $PreviousCommit)
+Write-Log ("git fetch origin; checkout --detach {0}" -f $TargetSha)
+git fetch origin
+git checkout --detach $TargetSha
 $Commit = (git rev-parse HEAD).Trim()
+if ($Commit -ne $TargetSha) {
+  throw ("HEAD {0} != TargetSha {1}" -f $Commit, $TargetSha)
+}
 Write-Log ("HEAD={0}" -f $Commit)
+
+$Limits = & $Python -c "from app.domain.institutional_trading import owner_live_limits as o; print(o.OWNER_MAX_PLANNED_RISK_PCT, o.OWNER_DAILY_LOSS_PCT, o.OWNER_MIN_REWARD_RISK, o.OWNER_MAX_SPREAD)"
+if ($LASTEXITCODE -ne 0) {
+  throw "Cannot import owner_live_limits"
+}
+Write-Log ("owner_limits={0}" -f ("{0}" -f $Limits).Trim())
 
 $Version = & $Python -c "from services.mt5_gateway import __version__; print(__version__)"
 if ($LASTEXITCODE -ne 0) {
@@ -53,6 +114,7 @@ if ($LASTEXITCODE -ne 0) {
   throw $hint
 }
 
+Assert-Flat "pre-restart"
 $pids = @()
 Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue |
   ForEach-Object { $pids += $_.OwningProcess }
@@ -74,21 +136,13 @@ if ($LASTEXITCODE -ne 0) {
 Start-Sleep -Seconds 3
 
 # Attach existing terminal session (no password through API)
-$tokenLine = Get-Content -Path ".env" |
-  Where-Object { $_ -match '^\s*MT5_GATEWAY_TOKEN\s*=' } |
-  Select-Object -Last 1
-if (-not $tokenLine) {
-  throw "MT5_GATEWAY_TOKEN missing from .env"
-}
-$token = (($tokenLine -split "=", 2)[1]).Trim().Trim('"').Trim("'")
-
 $attachUri = "http://127.0.0.1:8765/session/attach"
 $healthUri = "http://127.0.0.1:8765/health"
 $accountUri = "http://127.0.0.1:8765/account"
 $heartbeatUri = "http://127.0.0.1:8765/heartbeat"
-$quotesUri = "http://127.0.0.1:8765/quotes/XAUUSD_I"
+$quotesUri = "http://127.0.0.1:8765/quotes/{0}" -f $Symbol
 # Query string uses single-quoted literal so '&' is never a call operator.
-$candlesUri = 'http://127.0.0.1:8765/candles/XAUUSD_I?timeframe=H1&count=200'
+$candlesUri = ('http://127.0.0.1:8765/candles/{0}' -f $Symbol) + '?timeframe=H1&count=200'
 
 try {
   $attachHeaders = @{
@@ -101,10 +155,6 @@ try {
   Write-Log "session/attach ok"
 } catch {
   Write-Log ("session/attach failed (may already be attached): {0}" -f $_.Exception.Message)
-}
-
-$authHeaders = @{
-  Authorization = ("Bearer {0}" -f $token)
 }
 
 $health = Invoke-RestMethod -Uri $healthUri -TimeoutSec 15
@@ -128,6 +178,8 @@ if ($null -ne $candles.items) {
 $payload = [ordered]@{
   deployed_at = (Get-Date).ToUniversalTime().ToString("o")
   commit = $Commit
+  previous_commit = $PreviousCommit
+  owner_limits = ("{0}" -f $Limits).Trim()
   package_version = $Version
   gateway_version = $health.gateway_version
   bridge_available = $health.bridge_available
