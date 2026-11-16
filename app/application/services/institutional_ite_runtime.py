@@ -7906,7 +7906,8 @@ class InstitutionalIteRuntime:
             except TimeoutError:
                 stalled = False
                 try:
-                    stalled = bool(self.note_scheduler_stalled())
+                    # May re-attach MT5 over the gateway: never on the loop.
+                    stalled = bool(await asyncio.to_thread(self.note_scheduler_stalled))
                 except Exception:
                     logger.exception("ite_watchdog_stall_check_failed")
                 if stalled:

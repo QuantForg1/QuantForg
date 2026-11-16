@@ -27,8 +27,12 @@ SYNC_GATEWAY_CALLS = {
     "_protect_open_positions",
     "_manage_open_positions_after_timeout",
     "_ensure_process_gateway_handle",
+    "validate_order",
+    "note_scheduler_stalled",
+    "attach",
 }
 RECEIVERS = (
+    "self.validation_service",
     "self.market_data",
     "self",
     "self.adapter",

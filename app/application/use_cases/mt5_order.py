@@ -12,6 +12,7 @@ from app.application.dto.mt5 import (
     MT5OrderValidateCommand,
     MT5OrderValidationDTO,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.mt5_order_validation import MT5OrderValidationService
 from app.application.services.mt5_session_guard import require_live_mt5_connection
@@ -79,9 +80,13 @@ class ValidateMT5OrderUseCase:
             self.uow_factory, self.validation_service.adapter, command.user_id
         )
         intent = _parse_intent(command)
-        try:
+
+        def _validate() -> Any:
             with use_gateway_lane(LANE_UI):
-                result = self.validation_service.validate_order(intent)
+                return self.validation_service.validate_order(intent)
+
+        try:
+            result = await run_broker_read(_validate)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 humanize_reason(str(exc)),
@@ -178,8 +183,12 @@ class CalculateMT5OrderUseCase:
         intent = _parse_intent(command)
         logical_symbol = (command.symbol or intent.symbol or "").strip()
         try:
-            with use_gateway_lane(LANE_UI):
-                request, margin, profit = self.validation_service.calculate(intent)
+
+            def _calculate() -> Any:
+                with use_gateway_lane(LANE_UI):
+                    return self.validation_service.calculate(intent)
+
+            request, margin, profit = await run_broker_read(_calculate)
         except (OSError, RuntimeError, ValueError) as exc:
             details = {
                 "failure_class": _FAILURE_CLASS_CALCULATION,
