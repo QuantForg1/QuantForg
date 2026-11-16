@@ -116,23 +116,39 @@ def preference_bounds() -> dict[str, Any]:
             "max": str(OWNER_MAX_LOT),
             "unit": "lots",
             "label": "Personal maximum lot",
-            "help": "Hard-capped by the platform maximum lot size.",
+            "help": "The platform lot limit also applies.",
         },
         "daily_loss_pct": {
             "min": "0.1",
             "max": str(OWNER_DAILY_LOSS_PCT),
             "unit": "percent",
             "label": "Personal daily loss threshold",
-            "help": "Cannot exceed the platform daily-loss halt ceiling.",
+            "help": "Loss for the day at which your robot stops opening trades.",
         },
         "max_concurrent_positions": {
             "min": 1,
             "max": OWNER_MAX_OPEN_POSITIONS,
             "unit": "count",
             "label": "Personal maximum concurrent positions",
-            "help": "Cannot exceed the platform concurrent-position ceiling.",
+            "help": "The platform position limit also applies.",
         },
     }
+
+
+def customer_bounds() -> dict[str, Any]:
+    """Bounds for customer APIs: which fields are configurable and how to
+    label them. Ceiling values are omitted; the server validates every write
+    (strictest wins) and the owner policy is never published to customers."""
+    out: dict[str, Any] = {}
+    for key, b in preference_bounds().items():
+        configurable = str(b["min"]) != str(b["max"])
+        out[key] = {
+            "label": b["label"],
+            "help": b["help"],
+            "unit": b["unit"],
+            "configurable": configurable,
+        }
+    return out
 
 
 def protection_status() -> list[dict[str, str]]:
@@ -184,7 +200,7 @@ def _serialize_prefs(row: dict[str, Any] | None, *, source: str) -> dict[str, An
         "updated_at": str(row.get("updated_at") or "") if row else None,
         "persisted": bool(row),
         "effective": effective.to_dict(),
-        "bounds": preference_bounds(),
+        "bounds": customer_bounds(),
         "protections": protection_status(),
     }
 

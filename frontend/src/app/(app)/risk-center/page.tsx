@@ -196,7 +196,7 @@ export default function RiskCenterPage() {
       <PageHeader
         eyebrow="Risk"
         title="Risk Center"
-        description="Your preferences can only tighten risk. Platform ceilings, mandatory stop-loss, and Owner policy stay enforced server-side and are not editable here."
+        description="Your preferences can only tighten risk. Platform protections and the mandatory stop-loss stay enforced on the server."
         status={
           <Badge tone={dirty ? "warning" : "success"}>
             {dirty ? "Unsaved preference changes" : "Preferences saved"}
@@ -261,9 +261,9 @@ export default function RiskCenterPage() {
                 Platform-enforced limits
               </p>
               <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                Hard ceilings, mandatory stop-loss, and global restrictions remain
-                under Owner control. Ordinary customers cannot view or edit Owner
-                Policy.
+                Hard limits, the mandatory stop-loss and global restrictions
+                are managed by QuantForg and enforced on the server for every
+                order.
               </p>
             </div>
           </CardContent>
@@ -341,8 +341,9 @@ export default function RiskCenterPage() {
             <div>
               <CardTitle>My Risk Preferences</CardTitle>
               <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                Personal values only. Saves are validated server-side against
-                platform hard ceilings and never mutate Owner policy.
+                Your personal limits. The server validates every change; the
+                platform&apos;s own protections always apply and the stricter
+                limit wins.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -373,10 +374,10 @@ export default function RiskCenterPage() {
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {PREF_KEYS.map((key) => {
+                {PREF_KEYS.filter(
+                  (key) => asRecord(bounds[key]).configurable === true,
+                ).map((key) => {
                   const bound = asRecord(bounds[key]);
-                  const min = str(bound.min, "");
-                  const max = str(bound.max, "");
                   const label = str(bound.label, key);
                   const help = str(bound.help, "");
                   return (
@@ -394,7 +395,7 @@ export default function RiskCenterPage() {
                         inputMode="decimal"
                       />
                       <p className="text-[11px] text-[var(--fg-subtle)]">
-                        Allowed range {min || "—"} – {max || "—"}. {help}
+                        {help}
                       </p>
                     </div>
                   );

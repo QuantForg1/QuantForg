@@ -9,8 +9,10 @@ import { fileURLToPath } from "node:url";
 import {
   connectionStateLabel,
   connectionStateTone,
+  editableRiskFields,
   robotStateLabel,
   robotStateTone,
+  robotStatusTone,
 } from "./robot-control.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../");
@@ -29,7 +31,7 @@ assert.match(nav, /"\/robot-control-center",\n\s+"\/risk-center",/);
 // State shown comes from the backend response, not from the click.
 assert.match(page, /robotControlApi\.act/);
 assert.match(page, /asRecord\(res\)\.state/);
-assert.match(page, /never closed by these controls/);
+assert.match(page, /never close open positions/);
 assert.doesNotMatch(page, /close_position|closePosition/);
 
 assert.equal(robotStateLabel("EMERGENCY_STOPPED"), "Emergency stopped");
@@ -41,5 +43,36 @@ assert.equal(connectionStateTone("TRADING_PERMISSION_DISABLED"), "danger");
 assert.match(connectionStateLabel("CONNECTED"), /unknown/);
 assert.equal(connectionStateTone("ROBOT_READY"), "success");
 assert.match(page, /connectionStateLabel/);
+
+// Customer UI never shows owner-only policy values or labels.
+for (const banned of [
+  /Owner risk policy/i,
+  /OWNER_MIN_REWARD_RISK|OWNER_MAX_SPREAD|OWNER_SESSION_LABEL/,
+  /ticket-risk/,
+  /after spread/i,
+  /Quality ≥/,
+  /\$0\.45|≤ \$/,
+]) {
+  assert.doesNotMatch(page, banned);
+}
+
+// "Running" only comes from the backend status code.
+assert.equal(robotStateLabel("RUNNING"), "Enabled");
+assert.equal(robotStatusTone("ROBOT_RUNNING"), "success");
+assert.equal(robotStatusTone("WAITING"), "warning");
+assert.equal(robotStatusTone(""), "neutral");
+assert.match(connectionStateLabel("UNAVAILABLE"), /unavailable/i);
+assert.notEqual(connectionStateTone("UNAVAILABLE"), "success");
+
+// Only backend-configurable risk fields are editable; no ceilings shown.
+const fields = editableRiskFields({
+  planned_risk_pct: { label: "Risk", help: "h", unit: "percent", configurable: true },
+  max_lot: { label: "Lot", help: "h", unit: "lots", configurable: false },
+});
+assert.deepEqual(
+  fields.map((f) => f.key),
+  ["planned_risk_pct"],
+);
+assert.doesNotMatch(page, /bound\.max|\.max\b/);
 
 console.log("robot-control-center contract ok");

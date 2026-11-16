@@ -14,9 +14,9 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from app.application.services.user_risk_preferences_service import (
+    customer_bounds,
     get_user_risk_preferences,
     list_risk_history,
-    preference_bounds,
     protection_status,
     update_user_risk_preferences,
 )
@@ -82,7 +82,7 @@ async def read_effective_preferences(user: CurrentUser) -> dict[str, Any]:
 async def read_preference_bounds(user: CurrentUser) -> dict[str, Any]:
     _ = user
     return {
-        "bounds": preference_bounds(),
+        "bounds": customer_bounds(),
         "protections": protection_status(),
         # Explicitly omit full owner/runtime policy documents.
         "owner_policy_document": None,

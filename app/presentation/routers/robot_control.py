@@ -87,9 +87,17 @@ def _evidence(request: Request) -> tuple[Any, list[dict[str, Any]]]:
 @router.get("/accounts")
 async def my_robot_accounts(user: CurrentUser, request: Request) -> dict[str, Any]:
     uid = UUID(str(user.id))
-    accounts, events, (gateway_account, workers, complete) = await asyncio.gather(
+    (
+        accounts,
+        events,
+        activity,
+        entitlement,
+        (gateway_account, workers, complete),
+    ) = await asyncio.gather(
         asyncio.to_thread(rc.list_accounts, user_id=uid),
         asyncio.to_thread(rc.recent_events, user_id=uid, limit=50),
+        _safe_activity(uid),
+        _safe_entitlement(uid),
         _evidence_async(request),
     )
     for acct in accounts:
@@ -102,13 +110,110 @@ async def my_robot_accounts(user: CurrentUser, request: Request) -> dict[str, An
             workers=workers,
             evidence_available=complete,
         )
+        acct["status"] = rc.robot_status(
+            control_state=str(acct.get("robot_state") or ""),
+            connection=acct["connection"],
+            entitled=entitlement,
+            execution_enabled=_execution_enabled(
+                source=str(acct["connection"].get("source") or ""),
+                environment=str(acct.get("environment") or ""),
+            ),
+        )
+        acct["worker"] = _worker_health(workers, acct["broker_account_id"])
     return {
         "accounts": accounts,
-        "events": events,
+        "events": [_public_event(e) for e in events],
+        "activity": activity,
+        "strategy": _strategy(),
+        "subscription_active": entitlement,
         "broker_evidence": "complete" if complete else "unavailable",
         "states": sorted(rc.STATES),
         "actions": {k: sorted(v[0]) for k, v in rc.TRANSITIONS.items()},
         "positions_closed_by_controls": False,
+    }
+
+
+async def _safe_activity(uid: UUID) -> list[dict[str, Any]]:
+    try:
+        return await asyncio.to_thread(rc.recent_activity, user_id=uid, limit=20)
+    except Exception:
+        return []
+
+
+async def _safe_entitlement(uid: UUID) -> bool | None:
+    """True/False from billing; None when it could not be read."""
+    try:
+        from app.application.services.entitlements import check_trading_entitlement
+
+        ent = await asyncio.to_thread(check_trading_entitlement, user_id=uid)
+        return bool(ent.allowed)
+    except Exception:
+        return None
+
+
+def _worker_health(
+    workers: list[dict[str, Any]], broker_account_id: str
+) -> dict[str, Any] | None:
+    for w in workers:
+        if str(w.get("broker_account_id")) == str(broker_account_id):
+            return {
+                "assigned": True,
+                "connected": bool(w.get("connected")),
+                "heartbeat_at": w.get("last_heartbeat_at") or w.get("heartbeat_at"),
+            }
+    return None
+
+
+def _public_event(e: dict[str, Any]) -> dict[str, Any]:
+    """Control history without internal readiness details."""
+    readiness = e.get("readiness") or {}
+    return {
+        "broker_account_id": e.get("broker_account_id"),
+        "action": e.get("action"),
+        "state_before": e.get("state_before"),
+        "state_after": e.get("state_after"),
+        "reason": e.get("reason"),
+        "verified": bool(readiness.get("ready")) if readiness else None,
+        "at": e.get("at"),
+    }
+
+
+def _execution_enabled(*, source: str, environment: str) -> bool | None:
+    """Can the path that serves this account submit orders right now?"""
+    try:
+        if source == "gateway":
+            from app.domain.institutional_trading.live_trading_control import (
+                get_live_trading_controller,
+            )
+
+            return bool(get_live_trading_controller().research_can_execute())
+        if source == "worker":
+            from core.config.settings import get_settings
+
+            cfg = get_settings()
+            if not bool(getattr(cfg, "multi_account_dispatch_enabled", False)):
+                return False
+            if environment.upper() == "LIVE":
+                return bool(getattr(cfg, "multi_account_live_submit_enabled", False))
+            return True
+    except Exception:
+        return None
+    return None
+
+
+def _strategy() -> dict[str, Any]:
+    """The platform strategy every customer robot runs (no parameters)."""
+    try:
+        from core.config.settings import get_settings
+
+        gold_only = bool(getattr(get_settings(), "gold_only_mode", True))
+    except Exception:
+        gold_only = True
+    return {
+        "name": "QuantForg Gold Intraday",
+        "instruments": ["XAUUSD"] if gold_only else ["XAUUSD", "multi-asset"],
+        "style": "Intraday · every trade has a stop-loss and a target",
+        "assigned_by": "platform",
     }
 
 
