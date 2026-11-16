@@ -26,6 +26,7 @@ SYNC_GATEWAY_CALLS = {
     "health",
     "_protect_open_positions",
     "_manage_open_positions_after_timeout",
+    "_ensure_process_gateway_handle",
 }
 RECEIVERS = (
     "self.market_data",

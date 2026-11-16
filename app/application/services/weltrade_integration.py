@@ -856,7 +856,7 @@ class WeltradeIntegrationService:
         if self.uow_factory is None:
             diag["reason"] = "uow_factory_missing"
             return diag
-        live_ref = self._ensure_process_gateway_handle()
+        live_ref = await run_broker_read(self._ensure_process_gateway_handle)
         client = self.adapter.client
         diag["has_live_ref"] = bool(live_ref)
         diag["client_connected"] = bool(getattr(client, "is_connected", False))
@@ -993,7 +993,7 @@ class WeltradeIntegrationService:
             diag["reason"] = "uow_factory_missing"
             return diag
 
-        live_ref = self._ensure_process_gateway_handle()
+        live_ref = await run_broker_read(self._ensure_process_gateway_handle)
         if not live_ref:
             diag["reason"] = "gateway_handle_unavailable"
             return diag
@@ -1868,7 +1868,7 @@ class WeltradeIntegrationService:
 
         live_login = 0
         try:
-            self._ensure_process_gateway_handle()
+            await asyncio.to_thread(self._ensure_process_gateway_handle)
             info = await asyncio.to_thread(self.adapter.account_info)
             live_login = int(getattr(info, "login", 0) or 0)
         except Exception:
