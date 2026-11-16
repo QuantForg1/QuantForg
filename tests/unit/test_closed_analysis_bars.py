@@ -97,16 +97,17 @@ def test_forming_bar_is_not_swing_confirmation() -> None:
     assert Decimal("15.8") not in confirmed
     assert confirmed == {Decimal("15.4"), Decimal("22")}
 
-    # Nearest two raw levels are 15.8 then 15.4. At floor 0.20, 15.8 clears
-    # (0.8/2.2) so a forming-bar swing wrongly fills the target slot.
+    # Nearest two raw levels are 15.4 and the forming-bar 15.8. Both miss the
+    # 1.50 floor, so the forming swing takes the second slot and the real
+    # target 22 is never reached: no TP at all.
     blocked = _choice(raw)
     opened = _choice(confirmed)
-    assert blocked.price == Decimal("15.8")
-    # Confirmed nearest 15.4 fails 0.20 (0.4/2.2); level-2 22 clears.
+    assert blocked.price is None
+    # Confirmed nearest 15.4 fails 1.50 (0.4/2.2); level-2 22 clears.
     assert opened.price == Decimal("22")
     assert opened.level == 2
     assert opened.rr_after_spread is not None
-    assert opened.rr_after_spread >= Decimal("0.20")
+    assert opened.rr_after_spread >= Decimal("1.50")
 
 
 @pytest.mark.unit

@@ -45,10 +45,10 @@ def _owner() -> AuthUserDTO:
 
 def _proposal(*, max_lot: str = "0.01") -> RiskSettingProposal:
     return RiskSettingProposal(
-        planned_risk_pct=Decimal("10"),
-        aggregate_open_risk_pct=Decimal("30"),
+        planned_risk_pct=Decimal("5"),
+        aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal(max_lot),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=Decimal("25"),
         max_concurrent_positions=1,
     )
 

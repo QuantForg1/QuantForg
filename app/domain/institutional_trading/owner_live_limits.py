@@ -1,36 +1,34 @@
-"""Owner live limits (2026-10-22 final decision, Gold only, real account).
+"""Owner live limits (owner baseline 2026-11-16, Gold only, real account).
 
 Single source for the owner's hard trading limits. Every dollar amount is
 derived from live equity; nothing below is a fixed USD cap. Every other risk
 layer may be stricter, never looser.
 
-- Max PLANNED risk per trade: 20% of live equity. The aggregate open-risk
-  budget for every position and pending order together is 30% of live equity.
-  One concurrent position is the maximum count. It does not grant 20% to each one.
+- Max PLANNED risk per trade: 9% of live equity. The aggregate open-risk
+  budget for every position and pending order together is also 9% (one
+  concurrent position is the maximum count).
   Planned risk = (|entry - SL| + spread + order slippage) x contract x
   volume + known commission, rounded up to the cent. The cap is rounded down.
   An amount is never rounded down to pass. Unknown commission is not zero:
   the entry is rejected. A verified owner commission of 0.00 is a known zero.
   This is a planned maximum, not a cap on realised loss: gaps and execution
   failures can make a loss larger.
-- Daily loss limit: 48% of the UTC day's starting equity.
-- No weekly, monthly or overall-drawdown limit (owner 2026-10-23).
+- Daily loss limit: 25% of the UTC day's starting equity, enforced as a
+  pre-trade budget: realised loss today + floating loss + the new entry's
+  planned risk must fit inside it. Unknown daily P/L blocks new entries.
+  A deposit never forgives a loss already taken that day.
+- A customer's own saved risk settings may only tighten these limits.
+- No weekly, monthly or overall-drawdown limit unless an owner save sets one.
 - Stop loss: max(1.00 x ATR(M1|M5), beyond the nearest structure + spread).
-  A stop is never shrunk to fit the budget: too wide -> no trade. 1.00 is the
-  noise boundary. A structural stop wider than that is kept. A setup whose
-  1.00 x ATR stop is not a valid protective stop is rejected.
-- Active reward:risk floor is 0.20 after spread, expected slippage, and a
-  confirmed commission. Candidates 0.10 and 0.15 can be saved as an
-  experiment only. They do not become the live floor unless that experiment is
-  explicitly promoted. Net reward:risk includes those costs. Unknown
-  commission is omitted and is not a verified net. TP is a real structure
-  level: the nearest one that clears the active floor, at most the second
-  level out (2026-10-23). Neither clears -> no trade. The stop is never
-  shrunk to manufacture that floor.
-- Entries any UTC hour, every day. Broker symbol session, weekend close,
-  holidays, and maintenance remain the availability gate. Spread <= 1.00.
+  A stop is never shrunk to fit the budget: too wide -> no trade.
+- Net reward:risk floor is 1.50 after spread, expected slippage, and a
+  confirmed commission. No experimental floor below it exists. TP is a real
+  structure level, at most the second level out. Neither clears -> no trade.
+- New entries Monday-Friday 07:00-17:00 UTC only. Broker symbol session,
+  holidays and maintenance remain an additional gate. Spread <= 0.45.
+- AI trade quality >= 75.
 - Volume 0.01 (gateway max); at most 1 open position; 1 entry per cycle.
-- No consecutive-loss pause (owner 2026-10-23).
+- No martingale, grid, averaging down or forced trades.
 
 ``evaluate_owner_entry`` is the final deterministic guard for NEW entries on
 the live submit path. Closes and SL/TP management are never blocked here.
@@ -68,39 +66,36 @@ OWNER_MAX_LOT = Decimal("0.01")
 # Starting reference capital (configurable). Live equity is the risk reference;
 # this value is the documented starting point and the $-figures shown at rest.
 OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
-OWNER_MAX_PLANNED_RISK_PCT = Decimal("20.0")
+OWNER_MAX_PLANNED_RISK_PCT = Decimal("9.0")
 # Shared book cap. It is not the per-trade cap and it is not multiplied by
-# the position count.
-OWNER_MAX_AGGREGATE_OPEN_RISK_PCT = Decimal("30.0")
-# Authoritative daily stop: 48% of the UTC day's starting equity.
-# A loss equal to the cap does not halt; a loss above the cap does.
-OWNER_DAILY_LOSS_PCT = Decimal("48.0")
+# the position count. With one open position it equals the per-trade cap.
+OWNER_MAX_AGGREGATE_OPEN_RISK_PCT = Decimal("9.0")
+# Authoritative daily stop: 25% of the UTC day's starting equity (owner
+# baseline 2026-11-16). Enforced twice: as a halt once realised loss is
+# above the cap, and as a pre-trade budget (loss so far + floating loss +
+# the new entry's planned risk must fit inside the cap).
+OWNER_DAILY_LOSS_PCT = Decimal("25.0")
 # Weekly / monthly loss limits removed (0 = disabled, as for drawdown). Weekly
 # and monthly P/L are still computed for reporting (summaries, journal).
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
-OWNER_MIN_REWARD_RISK = Decimal("0.20")
-# Soft geometry target used when a farther structure level already clears the
-# floor. Never raises the hard floor above OWNER_MIN_REWARD_RISK.
-OWNER_PREFERRED_REWARD_RISK = Decimal("0.50")
-# Active floor is 0.20. These two values are the only floors below 0.20 an
-# owner may save, and only inside the experimental block. They stay inactive
-# until that experiment is promoted. Any other value below 0.20 is rejected
-# and the active floor fails closed to 0.20.
-OWNER_EXPERIMENTAL_REWARD_RISK = (
-    Decimal("0.10"),
-    Decimal("0.15"),
-)
-OWNER_MIN_REWARD_RISK_FLOOR = Decimal("0.10")
-# Owner 2026-10-26: the fixed Monday-Friday 07:00-17:00 desk window is retired.
-# Eligibility is 00:00-23:59 UTC every day. Broker symbol sessions, weekend
-# closures, holidays, and maintenance stay the availability gate. A stale
-# OWNER_SESSION_* environment value cannot put the desk clock back.
-# Hard ceiling. A saved policy may be tighter. A stale environment value
-# cannot put the old 0.45 ceiling back.
-OWNER_MAX_SPREAD = Decimal("1.00")
-OWNER_SESSION_START_UTC = time(0, 0)
-OWNER_SESSION_END_UTC = time(23, 59, 59, 999999)
+# Owner baseline 2026-11-16: net reward:risk after spread, slippage and a known
+# commission must be at least 1.50. A saved policy may only be stricter.
+OWNER_MIN_REWARD_RISK = Decimal("1.50")
+# Soft geometry target. Never below the hard floor.
+OWNER_PREFERRED_REWARD_RISK = Decimal("1.50")
+# No experimental floor below OWNER_MIN_REWARD_RISK may be saved or promoted.
+OWNER_EXPERIMENTAL_REWARD_RISK: tuple[Decimal, ...] = ()
+OWNER_MIN_REWARD_RISK_FLOOR = OWNER_MIN_REWARD_RISK
+# Owner baseline 2026-11-16: hard spread ceiling 0.45. A saved policy may be
+# tighter. No environment value can raise it.
+OWNER_MAX_SPREAD = Decimal("0.45")
+# Owner baseline 2026-11-16: new entries only Monday-Friday, 07:00 inclusive
+# to 17:00 exclusive UTC. Broker sessions, holidays and maintenance remain an
+# additional gate. Closes and SL/TP management are never blocked by this.
+OWNER_SESSION_START_UTC = time(7, 0)
+OWNER_SESSION_END_UTC = time(17, 0)
+OWNER_SESSION_WEEKDAYS = frozenset({0, 1, 2, 3, 4})
 # Owner 2026-10-30 experiment: 1.00 x ATR. Structure + spread still wins when
 # wider. The stop is never shrunk to fit 0.01 lot.
 OWNER_SL_ATR_MULTIPLIER = _env_decimal("OWNER_SL_ATR_MULTIPLIER", "1.00")
@@ -131,11 +126,11 @@ OWNER_MAX_ENTRIES_PER_CYCLE = 1
 OWNER_MAX_CONSECUTIVE_LOSSES = 0
 # Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
-# Hard floor on the AI trade quality of a robot entry (owner target 70).
-# Unset policy stays 70. A saved integer from 70 to 100 is used. Below 70
-# fails closed to 70. No environment variable can lower the unset default.
-OWNER_MIN_TRADE_QUALITY = 70
-OWNER_MIN_TRADE_QUALITY_FLOOR = 70
+# Hard floor on the AI trade quality of a robot entry (owner baseline 75).
+# Unset policy stays 75. A saved integer from 75 to 100 is used. Below 75
+# fails closed to 75. No environment variable can lower the unset default.
+OWNER_MIN_TRADE_QUALITY = 75
+OWNER_MIN_TRADE_QUALITY_FLOOR = 75
 
 # Owner-confirmed Weltrade tariff. This is not a broker deal record.
 # Spread, swap, and slippage stay separate costs. A missing or altered
@@ -156,7 +151,7 @@ OWNER_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_PCT
 
 
 def _active_planned_risk_pct() -> Decimal:
-    """Saved policy may be stricter than 20%. It cannot be looser."""
+    """Saved policy may be stricter than the owner cap. It cannot be looser."""
     from app.domain.institutional_trading.runtime_policy import (
         active_max_planned_risk_pct,
     )
@@ -165,7 +160,7 @@ def _active_planned_risk_pct() -> Decimal:
 
 
 def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
-    """Shared open-risk budget. The 30% book cap is not the 20% trade cap."""
+    """Shared open-risk budget for every open position and pending order."""
     eq = Decimal(str(equity or 0))
     if eq <= 0:
         return Decimal("0")
@@ -180,8 +175,8 @@ def max_aggregate_risk_usd(equity: Decimal) -> Decimal:
 def max_planned_risk_usd(equity: Decimal) -> Decimal:
     """Planned-risk cap for live equity, rounded down to the cent.
 
-    The approved ceiling is 20%. An installed runtime policy may use a lower
-    percent. A missing policy uses 20%.
+    The approved ceiling is ``OWNER_MAX_PLANNED_RISK_PCT``. An installed
+    runtime policy may use a lower percent. A missing policy uses the ceiling.
     """
     eq = Decimal(str(equity or 0))
     if eq <= 0:
@@ -250,8 +245,8 @@ def owner_risk_cap_usd(
 ) -> Decimal:
     """Live equity cap. ``positions`` does not multiply the budget.
 
-    The book cap is 30% of equity. The per-trade cap is 20%. A stricter
-    explicit dollar configuration stays. Five positions cannot spend 20% each.
+    The book cap and the per-trade cap come from the owner limits. A stricter
+    explicit dollar configuration stays. Positions never multiply the budget.
     """
     del positions
     eq = Decimal(str(equity or 0))
@@ -555,10 +550,11 @@ def format_owner_sl_risk(
 def daily_loss_cap_usd(
     start_of_day_equity: Decimal, pct: Decimal | None = None
 ) -> Decimal:
-    """Daily stop in USD: pct (max 48%) of the UTC day's starting equity.
+    """Daily stop in USD: pct of the UTC day's starting equity.
 
-    ``pct is None`` uses the installed runtime policy, or 48% when no policy
-    is installed. An explicit percent cannot exceed 48%.
+    ``pct is None`` uses the installed runtime policy, or the owner ceiling
+    when no policy is installed. An explicit percent cannot exceed the
+    owner ceiling ``OWNER_DAILY_LOSS_PCT``.
     """
     sod = Decimal(str(start_of_day_equity or 0))
     if sod <= 0:
@@ -619,17 +615,19 @@ def daily_loss_cap_pct(
 
 
 def in_owner_session(now: datetime | None = None) -> bool:
-    """True for every UTC clock time, Monday through Sunday.
+    """True Monday-Friday from 07:00 (inclusive) to 17:00 (exclusive) UTC.
 
-    Owner 2026-10-26: 07:00-17:00 Monday-Friday is not a gate. Broker symbol
-    sessions, weekend closures, holidays, and maintenance are enforced by
-    broker session truth, not by this clock.
+    Owner baseline 2026-11-16. Broker symbol sessions, weekend closures,
+    holidays and maintenance are still enforced separately by broker session
+    truth. This gate only applies to NEW entries.
     """
     clock = now or _now()
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
     utc = clock.astimezone(UTC)
-    return OWNER_SESSION_START_UTC <= utc.time() <= OWNER_SESSION_END_UTC
+    if utc.weekday() not in OWNER_SESSION_WEEKDAYS:
+        return False
+    return OWNER_SESSION_START_UTC <= utc.time() < OWNER_SESSION_END_UTC
 
 
 def next_utc_day_start(now: datetime | None = None) -> datetime:
@@ -682,7 +680,7 @@ def _quantize_cent(value: Decimal) -> Decimal:
 def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
     """Return an enforceable net floor, or None when the saved value is illegal.
 
-    Any value at least 0.20 is allowed. Below that, only 0.10 and 0.15.
+    Any value at least ``OWNER_MIN_REWARD_RISK`` is allowed. Nothing below.
     """
     try:
         rr = Decimal(str(value))
@@ -697,7 +695,7 @@ def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
 
 
 def authorized_min_trade_quality(value: object) -> int | None:
-    """70-100 is savable. The unset default remains 70."""
+    """75-100 is savable. The unset default remains 75."""
     if isinstance(value, bool) or not isinstance(value, int | float | str | Decimal):
         return None
     try:
@@ -792,25 +790,22 @@ def net_reward_risk(
 def gross_distance_rr_block(
     *, tp_distance: Decimal, stop_distance: Decimal
 ) -> str | None:
-    """Block geometry that cannot meet the active floor.
+    """Block geometry whose gross reward:risk cannot meet the active floor.
 
-    The published default still rejects a target that does not exceed the stop.
-    A saved floor below 1 compares gross reward/risk with that floor. Gross is
-    only an upper bound; the owner entry check applies spread, slippage, and
-    known commission.
+    Gross is only an upper bound on net; the owner entry check then applies
+    spread, slippage, and known commission. A target that does not exceed the
+    stop is reported as such when the floor is at least 1.
     """
     from app.domain.institutional_trading.runtime_policy import active_min_reward_risk
 
     floor = active_min_reward_risk()
     tp = Decimal(str(tp_distance or 0))
     stop = Decimal(str(stop_distance or 0))
-    if floor >= Decimal("1"):
-        if stop <= 0 or tp <= stop:
-            return (
-                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-                f"planned TP {tp} <= planned SL {stop}"
-            )
-        return None
+    if floor >= Decimal("1") and (stop <= 0 or tp <= stop):
+        return (
+            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+            f"planned TP {tp} <= planned SL {stop}"
+        )
     if stop <= 0 or tp <= 0 or (tp / stop) < floor:
         return (
             f"OWNER_MIN_RR: gross reward:risk "
@@ -827,13 +822,11 @@ def estimated_rr_block(estimated_rr: Decimal | None) -> str | None:
 
     floor = active_min_reward_risk()
     rr = Decimal(str(estimated_rr))
-    if floor >= Decimal("1"):
-        if rr <= Decimal("1"):
-            return (
-                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-                f"planned RR {rr} does not exceed 1.0"
-            )
-        return None
+    if floor >= Decimal("1") and rr <= Decimal("1"):
+        return (
+            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
+            f"planned RR {rr} does not exceed 1.0"
+        )
     if rr < floor:
         return f"OWNER_MIN_RR: estimated reward:risk {rr} < {floor}"
     return None
@@ -889,6 +882,79 @@ def stop_shrink_violation(
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class DailyLossContext:
+    """Today's (UTC) realised trading result for the pre-trade daily budget.
+
+    ``realized_pnl`` is the sum of every trade deal closed today, including
+    trades before a deposit: a deposit never forgives a loss. ``deposits`` is
+    verified broker cash added today. ``trusted`` is False whenever the deal
+    history could not be read; new entries are then blocked.
+    """
+
+    trusted: bool
+    realized_pnl: Decimal = Decimal("0")
+    deposits: Decimal = Decimal("0")
+    balance: Decimal = Decimal("0")
+    equity: Decimal = Decimal("0")
+    source: str = ""
+
+    @property
+    def day_start_equity(self) -> Decimal:
+        """Balance at 00:00 UTC, reconstructed from today's deals."""
+        start = self.balance - self.realized_pnl - max(self.deposits, Decimal("0"))
+        return start if start > 0 else Decimal("0")
+
+    @property
+    def budget_base(self) -> Decimal:
+        """Day-start equity plus capital deposited today."""
+        return self.day_start_equity + max(self.deposits, Decimal("0"))
+
+    @property
+    def committed_loss(self) -> Decimal:
+        """Realised loss today plus current floating loss (never negative)."""
+        realised = max(-self.realized_pnl, Decimal("0"))
+        floating = max(self.balance - self.equity, Decimal("0"))
+        return realised + floating
+
+
+def daily_budget_violation(
+    context: DailyLossContext | None,
+    *,
+    planned_risk: Decimal | None,
+    pct: Decimal | None = None,
+) -> str | None:
+    """Reject a NEW entry that could push today's loss past the daily stop.
+
+    Unknown or untrusted daily P/L rejects. The check is
+    ``committed_loss + planned_risk <= pct x budget_base``. Closes and
+    protective management never call this.
+    """
+    if context is None or not context.trusted:
+        return (
+            "OWNER_DAILY_PNL_UNAVAILABLE: today's realised P/L could not be "
+            "verified from broker deals, so new entries are blocked"
+        )
+    base = context.budget_base
+    if base <= 0:
+        return "OWNER_DAILY_BASE_UNAVAILABLE: day-start equity is unknown"
+    cap = daily_loss_cap_usd(base, pct)
+    committed = context.committed_loss
+    if committed > cap:
+        return (
+            f"OWNER_DAILY_STOP: loss today {committed.quantize(_CENT)} is above "
+            f"the daily stop {cap} of day-start equity {base.quantize(_CENT)}"
+        )
+    risk = _nonneg(planned_risk)
+    if committed + risk > cap:
+        return (
+            f"OWNER_DAILY_BUDGET: loss today {committed.quantize(_CENT)} + "
+            f"planned risk {risk.quantize(_CENT)} > daily stop {cap} "
+            f"(day-start equity {base.quantize(_CENT)})"
+        )
+    return None
+
+
 def evaluate_owner_entry(
     *,
     symbol: str,
@@ -909,8 +975,15 @@ def evaluate_owner_entry(
     commission: Decimal | None = None,
     tick_size: Decimal | None = None,
     stop_includes_spread_buffer: bool = False,
+    daily: DailyLossContext | None = None,
+    user_planned_risk_pct: Decimal | None = None,
+    user_daily_loss_pct: Decimal | None = None,
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
+
+    ``daily`` is required: without a trusted daily P/L the entry is rejected.
+    ``user_planned_risk_pct`` / ``user_daily_loss_pct`` are the account owner's
+    own saved settings; they can only tighten the owner caps (strictest wins).
 
     Planned risk includes the spread once, plus the order's slippage and the
     supplied commission, rounded up to the cent:
@@ -918,8 +991,7 @@ def evaluate_owner_entry(
     ``commission is None`` rejects the entry. It is not treated as zero.
     A known zero is included. Reward:risk counts the spread once, on the risk
     leg, plus order slippage and a known commission. The ratio must clear the
-    active owner floor (0.20; a promoted experiment may be 0.10 or 0.15).
-    A saved but unpromoted experiment stays at 0.20.
+    active owner floor (``OWNER_MIN_REWARD_RISK``, or a stricter saved value).
     When ``stop_includes_spread_buffer`` is True, ``|entry - sl|`` already embeds
     the owner spread buffer; spread is not added again to planned risk or net RR
     (Phase-6 — avoid double-count; slippage + commission still apply).
@@ -1017,6 +1089,7 @@ def evaluate_owner_entry(
     elif fee < 0:
         violations.append("OWNER_COMMISSION_INVALID: commission cannot be negative")
         fee = None
+    risk_usd: Decimal | None = None
     if fee is not None:
         risk_usd = planned_risk_usd(
             stop_distance=sl_dist,
@@ -1027,6 +1100,11 @@ def evaluate_owner_entry(
             commission=fee,
         )
         cap = max_planned_risk_usd(eq)
+        user_pct = _nonneg(user_planned_risk_pct)
+        if user_pct > 0:
+            user_cap = (eq * user_pct / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
+            if user_cap < cap:
+                cap = user_cap
         if risk_usd > cap:
             violations.append(
                 format_owner_sl_risk(
@@ -1042,6 +1120,21 @@ def evaluate_owner_entry(
                     tick_size=tick_size,
                 )
             )
+    daily_pct: Decimal | None = None
+    user_daily = _nonneg(user_daily_loss_pct)
+    if user_daily > 0:
+        from app.domain.institutional_trading.runtime_policy import (
+            active_daily_loss_pct,
+        )
+
+        daily_pct = min(user_daily, active_daily_loss_pct())
+    daily_reason = daily_budget_violation(
+        daily,
+        planned_risk=risk_usd,
+        pct=daily_pct,
+    )
+    if daily_reason:
+        violations.append(daily_reason)
     min_dist = Decimal(str(min_stop_distance or 0))
     if min_dist > 0 and (sl_dist < min_dist or tp_dist < min_dist):
         violations.append(
@@ -1134,6 +1227,9 @@ def presend_owner_violations(
     tick_size: Decimal | None = None,
     commission: Decimal | None = None,
     stop_includes_spread_buffer: bool = False,
+    daily: DailyLossContext | None = None,
+    user_planned_risk_pct: Decimal | None = None,
+    user_daily_loss_pct: Decimal | None = None,
 ) -> list[str]:
     """Final owner check on the exact tick the market request was built from.
 
@@ -1166,6 +1262,9 @@ def presend_owner_violations(
         tick_size=tick_size,
         commission=commission,
         stop_includes_spread_buffer=stop_includes_spread_buffer,
+        daily=daily,
+        user_planned_risk_pct=user_planned_risk_pct,
+        user_daily_loss_pct=user_daily_loss_pct,
     )
     drift = stop_shrink_violation(
         side=side,

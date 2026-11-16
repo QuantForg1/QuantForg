@@ -66,8 +66,9 @@ def _reset_phase_a_plane() -> Iterator[None]:
 def _owner_session_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin the owner clock to 10:00 UTC on a weekday.
 
-    Day-boundary helpers read this clock. The session gate itself is the full
-    UTC day; broker availability is tested with explicit broker facts.
+    Day-boundary helpers and the owner Mon-Fri 07:00-17:00 UTC entry window
+    read this clock, so tests that do not pass ``now`` sit inside the window.
+    Tests of the window itself pass an explicit ``now``.
     """
     from datetime import UTC, datetime, time, timedelta
 

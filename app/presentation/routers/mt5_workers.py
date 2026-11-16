@@ -27,6 +27,11 @@ from app.application.services.multi_account_eligibility_service import (
 from app.application.services.multi_account_ops_service import owner_ops_snapshot
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import NotFoundError
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_DAILY_LOSS_PCT,
+    OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
+    OWNER_MAX_PLANNED_RISK_PCT,
+)
 from app.domain.multi_account.effective_risk import RiskSettingProposal
 from app.domain.multi_account.feature_gates import multi_account_live_submit_allowed
 from app.domain.multi_account.signal_dispatch import CentralSignalIntent
@@ -626,10 +631,10 @@ async def dispatch_lab_enqueue(
     )
     if use_synthetic:
         proposal = RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=OWNER_MAX_PLANNED_RISK_PCT,
+            aggregate_open_risk_pct=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
             max_lot=Decimal("0.01"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=OWNER_DAILY_LOSS_PCT,
             max_concurrent_positions=1,
         )
         account = AccountReadiness(
@@ -641,10 +646,10 @@ async def dispatch_lab_enqueue(
     else:
         # Non-staging lab path: broker-verified only; no synthetic ownership.
         proposal = RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=OWNER_MAX_PLANNED_RISK_PCT,
+            aggregate_open_risk_pct=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
             max_lot=Decimal("0.01"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=OWNER_DAILY_LOSS_PCT,
             max_concurrent_positions=1,
         )
         account = AccountReadiness(
@@ -753,10 +758,10 @@ async def dispatch_demo_enqueue(
         },
     )
     proposal = RiskSettingProposal(
-        planned_risk_pct=Decimal("10"),
-        aggregate_open_risk_pct=Decimal("30"),
+        planned_risk_pct=OWNER_MAX_PLANNED_RISK_PCT,
+        aggregate_open_risk_pct=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
         max_lot=Decimal(str(body.volume or "0.01")),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=OWNER_DAILY_LOSS_PCT,
         max_concurrent_positions=1,
     )
     target = DispatchTarget(

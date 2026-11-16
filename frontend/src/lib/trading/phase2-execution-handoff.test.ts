@@ -22,7 +22,7 @@ const riskCenter = readFileSync(
   "utf8",
 );
 
-assert.equal(OWNER_MIN_REWARD_RISK, 0.2);
+assert.equal(OWNER_MIN_REWARD_RISK, 1.5);
 assert.doesNotMatch(ticket, /trail:/);
 assert.doesNotMatch(ticket, /be:1/);
 assert.doesNotMatch(ticket, /Break even tag/);

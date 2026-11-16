@@ -7,21 +7,22 @@
  * Risk is never rounded down to pass. Reward:risk counts the spread once
  * on the risk leg: |TP - entry| / (|entry - SL| + spread) >= 0.20.
  *
- * 20% is a maximum PLANNED risk per trade, not a cap on realised loss: gaps
+ * 9% is a maximum PLANNED risk per trade, not a cap on realised loss: gaps
  * and execution failures can make a loss larger. Omitted commission is
  * unknown and is not treated as zero.
  */
 
 export const OWNER_MAX_LOT = 0.01;
-export const OWNER_MAX_PLANNED_RISK_PCT = 20;
+export const OWNER_MAX_PLANNED_RISK_PCT = 9;
 /** Mirror of owner_live_limits.OWNER_MIN_REWARD_RISK (active server floor). */
-export const OWNER_MIN_REWARD_RISK = 0.2;
-export const OWNER_MAX_SPREAD = 1;
-export const OWNER_SESSION_START_UTC_HOUR = 0;
-/** 24 means the window runs through 23:59 UTC. There is no desk-hour close. */
-export const OWNER_SESSION_END_UTC_HOUR = 24;
+export const OWNER_MIN_REWARD_RISK = 1.5;
+export const OWNER_MAX_SPREAD = 0.45;
+export const OWNER_SESSION_START_UTC_HOUR = 7;
+/** Exclusive end: entries 07:00–16:59 UTC, Monday–Friday only. */
+export const OWNER_SESSION_END_UTC_HOUR = 17;
+export const OWNER_SESSION_LABEL = "Mon–Fri 07:00–17:00 UTC";
 export const PLANNED_RISK_NOTE =
-  "20% is the maximum planned risk per trade, not a cap on realised loss: " +
+  "9% is the maximum planned risk per trade, not a cap on realised loss: " +
   "slippage, gaps, commissions and execution failures can make a loss larger.";
 
 export type TicketRiskInput = {
@@ -97,7 +98,7 @@ function finitePositive(n: number): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
-/** Per-trade planned-risk cap in USD: 20% of equity, rounded down to the cent. */
+/** Per-trade planned-risk cap in USD: 9% of equity, rounded down to the cent. */
 export function maxSlRiskUsd(equity: number): number {
   if (!finitePositive(equity)) return 0;
   return Math.floor(equity * OWNER_MAX_PLANNED_RISK_PCT + 1e-9) / 100;
@@ -105,6 +106,8 @@ export function maxSlRiskUsd(equity: number): number {
 
 export function inOwnerSession(now: Date = new Date()): boolean {
   if (Number.isNaN(now.getTime())) return false;
+  const day = now.getUTCDay();
+  if (day === 0 || day === 6) return false;
   const minute = now.getUTCHours() * 60 + now.getUTCMinutes();
   const start = OWNER_SESSION_START_UTC_HOUR * 60;
   const end =
@@ -121,7 +124,7 @@ export function ticketRisk(input: TicketRiskInput): TicketRisk {
     violations.push(`Volume ${lots} exceeds owner max ${OWNER_MAX_LOT} lot`);
   if (!finitePositive(equity)) violations.push("Equity unavailable — cannot size risk");
   if (!inOwnerSession(input.now))
-    violations.push("Entries only 00:00–23:59 UTC");
+    violations.push(`Entries only ${OWNER_SESSION_LABEL}`);
   if (!finitePositive(entry) || !finitePositive(stopLoss) || !finitePositive(takeProfit)) {
     violations.push("Entry, stop loss and take profit are required");
     return {

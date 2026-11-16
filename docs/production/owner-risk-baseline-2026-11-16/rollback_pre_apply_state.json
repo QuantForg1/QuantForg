@@ -1,0 +1,57 @@
+{
+  "captured_at_utc": "2026-11-16T10:25Z",
+  "source": "Production Supabase, read-only SELECT; owner user_id omitted (pass it as :owner_user_id)",
+  "platform_risk_policy_active": {
+    "max_planned_risk_pct": 20,
+    "default_planned_risk_pct": 20,
+    "max_aggregate_open_risk_pct": 30,
+    "default_aggregate_open_risk_pct": 30,
+    "max_daily_loss_pct": 48,
+    "default_daily_loss_pct": 48,
+    "max_spread": 1.0,
+    "min_trade_quality": 70,
+    "min_reward_risk": 0.2,
+    "max_lot": 0.01,
+    "max_concurrent_positions": 1,
+    "notes": "Phase 1a seed — mirrors owner hard ceilings; one account per user"
+  },
+  "user_risk_settings_owner_active": {
+    "planned_risk_pct": 10,
+    "aggregate_open_risk_pct": 30,
+    "daily_loss_pct": 48,
+    "max_lot": 0.01,
+    "max_concurrent_positions": 1,
+    "source": "user_edit"
+  },
+  "ite_ops_runtime_state_payload_keys": {
+    "risk_profile_id": "ULTRA_AGGRESSIVE",
+    "risk_per_trade_pct": "8.00",
+    "live_trading_risk": {
+      "min_score": "75",
+      "max_spread": "1.00",
+      "hard_ceiling": {
+        "max_daily_loss_pct": "48.00",
+        "max_open_positions": 5,
+        "risk_per_trade_pct": "20.0",
+        "max_consecutive_losses": 3,
+        "max_total_exposure_pct": "50.00",
+        "max_margin_utilization_pct": "40.00"
+      },
+      "max_slippage": "0.50",
+      "min_reward_risk": "0.20",
+      "allow_martingale": false,
+      "max_daily_loss_pct": "48.0",
+      "max_open_positions": 1,
+      "risk_per_trade_pct": "20.0",
+      "allow_grid_averaging": false,
+      "allow_revenge_sizing": false,
+      "duplicate_ttl_seconds": 120,
+      "max_quote_age_seconds": "3.00",
+      "max_consecutive_losses": 0,
+      "max_total_exposure_pct": "30.00",
+      "close_positions_on_kill": false,
+      "max_margin_utilization_pct": "25.00"
+    },
+    "live_trading_state_at_capture": "ENABLED (owner-operated, not touched by apply.sql)"
+  }
+}

@@ -33,18 +33,18 @@ def test_unknown_commission_rejects_every_small_equity() -> None:
         assert row.volume == OBSERVED_VOLUME_MIN
         assert row.stop_distance == OBSERVED_STOP_DISTANCE
         # Arithmetic only. A zero-commission figure is not a certification.
-        assert row.uncertified_zero_commission_equity_usd == Decimal("24.05")
+        assert row.uncertified_zero_commission_equity_usd == Decimal("53.45")
 
 
-def test_known_zero_commission_uses_the_twenty_percent_cap() -> None:
+def test_known_zero_commission_uses_the_nine_percent_cap() -> None:
     rows = observed_min_lot_rows(commission=Decimal("0"))
     for row in rows:
         assert row.planned_risk_usd == Decimal("4.81")
-        assert row.risk_cap_usd == risk_cap_usd(row.equity, Decimal("20"))
-        assert row.minimum_equity_usd == Decimal("24.05")
+        assert row.risk_cap_usd == risk_cap_usd(row.equity, Decimal("9"))
+        assert row.minimum_equity_usd == Decimal("53.45")
         assert row.stop_distance == OBSERVED_STOP_DISTANCE
         assert row.volume == Decimal("0.01")
-        if row.equity < Decimal("24.05"):
+        if row.equity < Decimal("53.45"):
             assert row.accepted is False
             assert row.reason == "OWNER_SL_RISK"
             assert row.planned_risk_usd > row.risk_cap_usd
@@ -114,7 +114,7 @@ def test_owner_entry_rejects_the_same_over_cap_geometry() -> None:
 
 def test_equity_that_covers_the_zero_commission_risk_can_pass() -> None:
     covered = evaluate_min_volume(
-        equity=Decimal("24.05"),
+        equity=Decimal("53.45"),
         stop_distance=OBSERVED_STOP_DISTANCE,
         spread=OBSERVED_SPREAD,
         slippage=OBSERVED_SLIPPAGE,
@@ -124,7 +124,7 @@ def test_equity_that_covers_the_zero_commission_risk_can_pass() -> None:
     assert covered.planned_risk_usd == Decimal("4.81")
     assert covered.risk_cap_usd >= covered.planned_risk_usd
     short = evaluate_min_volume(
-        equity=Decimal("24.04"),
+        equity=Decimal("53.44"),
         stop_distance=OBSERVED_STOP_DISTANCE,
         spread=OBSERVED_SPREAD,
         slippage=OBSERVED_SLIPPAGE,

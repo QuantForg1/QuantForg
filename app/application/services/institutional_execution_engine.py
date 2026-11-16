@@ -866,6 +866,9 @@ class InstitutionalExecutionEngine:
                 Decimal,
                 Decimal | None,
                 Decimal | None,
+                Any,
+                Decimal | None,
+                Decimal | None,
             ]
             | None
         ) = None
@@ -946,6 +949,13 @@ class InstitutionalExecutionEngine:
                         "DEAL_HISTORY_UNAVAILABLE: deal history retrieval failed; "
                         "new entries blocked"
                     )
+                from app.domain.institutional_trading.owner_live_limits import (
+                    DailyLossContext,
+                )
+
+                daily_ctx: DailyLossContext = DailyLossContext(
+                    trusted=False, source="deal_history_unavailable"
+                )
                 if history_failed:
                     # Do not call resolve_for_risk(deals=[]). An empty day would
                     # clear the daily stop while a close is still allowed.
@@ -958,6 +968,16 @@ class InstitutionalExecutionEngine:
                         balance=account.balance,
                         deals=deals,
                     )
+                    try:
+                        daily_ctx = self.risk_tracker.daily_loss_context(
+                            deals,
+                            balance=account.balance,
+                            equity=account.equity,
+                        )
+                    except Exception as exc:
+                        daily_ctx = DailyLossContext(
+                            trusted=False, source=f"daily_context_failed: {exc}"
+                        )
                 from app.domain.entities.risk_engine import contract_size_for_symbol
 
                 live_constraints = self.order_validation.constraints_for(intent.symbol)
@@ -1127,10 +1147,17 @@ class InstitutionalExecutionEngine:
                     owner_min_stop = live_constraints.point * Decimal(
                         live_constraints.stops_level
                     )
+                    user_caps = _live_prefs.load_user_live_caps(user_id)
                     if not installed.ok:
                         risk_reject = [
                             "CONFIG_UNAVAILABLE: runtime trading policy "
                             "could not be read"
+                        ]
+                    elif not user_caps.available:
+                        risk_reject = [
+                            "USER_RISK_UNAVAILABLE: the account owner's saved risk "
+                            f"settings could not be read ({user_caps.reason}); "
+                            "new entries are blocked"
                         ]
                     else:
                         weekly_raw = getattr(account, "weekly_pnl", None)
@@ -1175,6 +1202,9 @@ class InstitutionalExecutionEngine:
                             commission=known_fee,
                             # Owner structure SL already embeds the spread buffer.
                             stop_includes_spread_buffer=True,
+                            daily=daily_ctx,
+                            user_planned_risk_pct=user_caps.planned_risk_pct,
+                            user_daily_loss_pct=user_caps.daily_loss_pct,
                         )
                         owner_presend_ctx = (
                             account.equity,
@@ -1186,6 +1216,9 @@ class InstitutionalExecutionEngine:
                             slip_price,
                             fit_tick,
                             known_fee,
+                            daily_ctx,
+                            user_caps.planned_risk_pct,
+                            user_caps.daily_loss_pct,
                         )
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
@@ -1701,6 +1734,9 @@ class InstitutionalExecutionEngine:
                     p_slip,
                     p_tick,
                     p_fee,
+                    p_daily,
+                    p_user_risk,
+                    p_user_daily,
                 ) = owner_presend_ctx
                 # Mirror evaluate_owner_entry on the LIVE structure path:
                 # SL already embeds the owner spread buffer.
@@ -1724,6 +1760,9 @@ class InstitutionalExecutionEngine:
                     tick_size=p_tick,
                     commission=p_fee,
                     stop_includes_spread_buffer=True,
+                    daily=p_daily,
+                    user_planned_risk_pct=p_user_risk,
+                    user_daily_loss_pct=p_user_daily,
                 )
             except (
                 OSError,

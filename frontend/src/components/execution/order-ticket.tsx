@@ -43,6 +43,7 @@ import {
   OWNER_MAX_PLANNED_RISK_PCT,
   OWNER_MAX_SPREAD,
   OWNER_MIN_REWARD_RISK,
+  OWNER_SESSION_LABEL,
   PLANNED_RISK_NOTE,
   ticketRisk,
 } from "@/lib/execution/ticket-risk";
@@ -1200,11 +1201,11 @@ export const ExecutionOrderTicket = forwardRef<
             <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
               Owner caps: planned risk ≤ ${ownerRisk.maxSlRiskUsd.toFixed(2)} (
               {OWNER_MAX_PLANNED_RISK_PCT}% of equity) · RR ≥{" "}
-              {OWNER_MIN_REWARD_RISK.toFixed(1)} after spread
+              {OWNER_MIN_REWARD_RISK.toFixed(2)} after spread
               {ownerRisk.rewardRiskAfterSpread != null
                 ? ` (now ${formatNumber(ownerRisk.rewardRiskAfterSpread, 2)})`
                 : ""}
-              {" "}· spread ≤ {OWNER_MAX_SPREAD.toFixed(2)} · 00:00–23:59 UTC
+              {" "}· spread ≤ {OWNER_MAX_SPREAD.toFixed(2)} · {OWNER_SESSION_LABEL}
             </p>
             <p className="col-span-3 text-[10px] text-[var(--fg-subtle)]">
               {PLANNED_RISK_NOTE}

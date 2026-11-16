@@ -41,10 +41,10 @@ _SETTINGS_LIVE_ARMED = SimpleNamespace(
 
 def _proposal() -> RiskSettingProposal:
     return RiskSettingProposal(
-        planned_risk_pct=Decimal("10"),
-        aggregate_open_risk_pct=Decimal("30"),
+        planned_risk_pct=Decimal("5"),
+        aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal("0.01"),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=Decimal("25"),
         max_concurrent_positions=1,
     )
 
@@ -215,10 +215,10 @@ def test_global_risk_ceiling_violation() -> None:
         user_id=user,
         broker_account_id=uuid4(),
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("5.00"),  # above global ceiling
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         account=AccountReadiness(

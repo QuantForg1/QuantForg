@@ -50,10 +50,10 @@ def _intent(user_id, account_id) -> AccountExecutionIntent:
 
 def _ok_proposal() -> RiskSettingProposal:
     return RiskSettingProposal(
-        planned_risk_pct=Decimal("10"),
-        aggregate_open_risk_pct=Decimal("30"),
+        planned_risk_pct=Decimal("5"),
+        aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal("0.01"),
-        daily_loss_pct=Decimal("48"),
+        daily_loss_pct=Decimal("25"),
         max_concurrent_positions=1,
     )
 
@@ -100,10 +100,10 @@ def test_case_b_risk_preference_blocked() -> None:
         actor_user_id=user,
         intent=_intent(user, uuid4()),
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("1.00"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         settings=_SETTINGS_OFF,
@@ -259,4 +259,4 @@ def test_case_h_concurrent_users_no_cross_leak() -> None:
         assert user == out_user
         assert account == out_account
         assert state == "eligible"
-        assert planned == "10"
+        assert planned == "5"

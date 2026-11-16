@@ -1,7 +1,8 @@
-"""The owner clock is the full UTC day, seven days a week.
+"""Owner entry window: Monday-Friday, 07:00 (inclusive) to 17:00 (exclusive) UTC.
 
-Owner 2026-10-26: 07:00-17:00 Monday-Friday no longer blocks a valid entry.
-Broker-closed, unknown weekend, and the risk limits still do.
+Owner baseline 2026-11-16. Broker-closed, unknown weekend, and the risk
+limits still block on their own. Closes and SL/TP management are never
+gated by this clock.
 """
 
 from __future__ import annotations
@@ -20,18 +21,20 @@ from tests.unit.test_auto_trading_safety import _all_pass_facts
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
-# Times the retired desk window rejected, plus the old open and close edges.
-_FULL_DAY = (
+_INSIDE = (
+    datetime(2026, 10, 26, 7, 0, tzinfo=UTC),  # Monday open edge
+    datetime(2026, 10, 26, 12, 30, tzinfo=UTC),  # Monday midday
+    datetime(2026, 10, 23, 16, 59, tzinfo=UTC),  # Friday last minute
+    datetime(2026, 10, 22, 10, 0, tzinfo=UTC),  # Thursday London
+)
+
+_OUTSIDE = (
     datetime(2026, 10, 26, 0, 0, tzinfo=UTC),  # Monday 00:00
-    datetime(2026, 10, 26, 3, 0, tzinfo=UTC),  # Monday 03:00
-    datetime(2026, 10, 26, 6, 59, tzinfo=UTC),  # Monday pre-London
-    datetime(2026, 10, 26, 7, 0, tzinfo=UTC),  # former open
-    datetime(2026, 10, 23, 16, 59, tzinfo=UTC),  # Friday 16:59
-    datetime(2026, 10, 23, 17, 0, tzinfo=UTC),  # former close
-    datetime(2026, 10, 23, 18, 0, tzinfo=UTC),  # Friday evening
+    datetime(2026, 10, 26, 6, 59, tzinfo=UTC),  # Monday pre-open
+    datetime(2026, 10, 23, 17, 0, tzinfo=UTC),  # Friday close edge
     datetime(2026, 10, 23, 23, 59, tzinfo=UTC),  # Friday 23:59
     datetime(2026, 10, 24, 10, 0, tzinfo=UTC),  # Saturday
-    datetime(2026, 10, 25, 22, 0, tzinfo=UTC),  # Sunday evening
+    datetime(2026, 10, 25, 12, 0, tzinfo=UTC),  # Sunday
 )
 
 
@@ -47,6 +50,9 @@ def _valid(**kw: object) -> list[str]:
         "contract_size": D("100"),
         "equity": D("32.88"),
         "commission": D("0"),
+        "daily": ol.DailyLossContext(
+            trusted=True, balance=D("32.88"), equity=D("32.88")
+        ),
     }
     base.update(kw)
     return ol.evaluate_owner_entry(**base)  # type: ignore[arg-type]
@@ -56,35 +62,40 @@ def _codes(reasons: list[str]) -> set[str]:
     return {r.split(":", 1)[0] for r in reasons}
 
 
-def test_reported_window_is_the_full_utc_day() -> None:
-    assert f"{ol.OWNER_SESSION_START_UTC:%H:%M}" == "00:00"
-    assert f"{ol.OWNER_SESSION_END_UTC:%H:%M}" == "23:59"
+def test_reported_window_is_the_owner_desk() -> None:
+    assert f"{ol.OWNER_SESSION_START_UTC:%H:%M}" == "07:00"
+    assert f"{ol.OWNER_SESSION_END_UTC:%H:%M}" == "17:00"
+    assert frozenset({0, 1, 2, 3, 4}) == ol.OWNER_SESSION_WEEKDAYS
 
 
-@pytest.mark.parametrize("moment", _FULL_DAY)
-def test_session_gate_accepts_the_full_utc_day(moment: datetime) -> None:
+@pytest.mark.parametrize("moment", _INSIDE)
+def test_session_gate_accepts_the_owner_window(moment: datetime) -> None:
     assert ol.in_owner_session(moment) is True
     reasons = _valid(now=moment)
     assert reasons == [], reasons
-    assert "OWNER_SESSION" not in _codes(reasons)
+
+
+@pytest.mark.parametrize("moment", _OUTSIDE)
+def test_session_gate_rejects_outside_the_owner_window(moment: datetime) -> None:
+    assert ol.in_owner_session(moment) is False
+    assert "OWNER_SESSION" in _codes(_valid(now=moment))
 
 
 def test_naive_and_offset_clocks_use_utc() -> None:
     plus3 = timezone(timedelta(hours=3))
-    # Sunday 23:30 UTC is Monday 02:30 at +03:00. Both are eligible.
-    assert ol.in_owner_session(datetime(2026, 10, 26, 2, 30, tzinfo=plus3))
+    # Monday 10:30 at +03:00 is 07:30 UTC: inside. 09:30 at +03:00 is 06:30.
+    assert ol.in_owner_session(datetime(2026, 10, 26, 10, 30, tzinfo=plus3))
+    assert not ol.in_owner_session(datetime(2026, 10, 26, 9, 30, tzinfo=plus3))
     assert ol.in_owner_session(datetime(2026, 10, 26, 10, 0))
 
 
-@pytest.mark.parametrize("moment", _FULL_DAY)
-def test_risk_limits_still_reject_outside_the_former_window(
-    moment: datetime,
-) -> None:
-    assert "OWNER_MAX_SPREAD" in _codes(_valid(now=moment, spread=D("1.01")))
+@pytest.mark.parametrize("moment", _INSIDE)
+def test_risk_limits_still_reject_inside_the_window(moment: datetime) -> None:
+    assert "OWNER_MAX_SPREAD" in _codes(_valid(now=moment, spread=D("0.46")))
     assert "OWNER_GOLD_ONLY" in _codes(_valid(now=moment, symbol="EURUSD"))
     assert "OWNER_GOLD_ONLY" in _codes(_valid(now=moment, symbol="XAUJPY"))
     assert "OWNER_SL_REQUIRED" in _codes(_valid(now=moment, stop_loss=None))
-    low_rr = _valid(now=moment, take_profit=D("3999.60"))
+    low_rr = _valid(now=moment, take_profit=D("3997.00"))
     assert "OWNER_MIN_RR" in _codes(low_rr)
     wide = _valid(
         now=moment,
@@ -95,11 +106,11 @@ def test_risk_limits_still_reject_outside_the_former_window(
     assert "OWNER_SL_RISK" in _codes(wide)
 
 
-def test_daily_loss_cap_still_blocks_above_48_percent() -> None:
-    assert D("48.0") == ol.OWNER_DAILY_LOSS_PCT
-    assert D("20.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
-    assert ol.daily_loss_exceeded(daily_pnl=D("-24.01"), base_now=D("25.99")) is True
-    assert ol.daily_loss_exceeded(daily_pnl=D("-24.00"), base_now=D("26.00")) is False
+def test_daily_loss_cap_blocks_above_25_percent() -> None:
+    assert D("25.0") == ol.OWNER_DAILY_LOSS_PCT
+    assert D("9.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
+    assert ol.daily_loss_exceeded(daily_pnl=D("-12.51"), base_now=D("37.49")) is True
+    assert ol.daily_loss_exceeded(daily_pnl=D("-12.50"), base_now=D("37.50")) is False
 
 
 def test_broker_closed_still_blocks_outside_the_former_window() -> None:
@@ -123,7 +134,7 @@ def test_unknown_broker_does_not_invent_a_weekend_open() -> None:
     assert any("off_hours" in r for r in result.failed_reasons)
 
 
-def test_former_window_does_not_block_auto_resume(
+def test_auto_resume_waits_for_the_owner_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.application.services import live_trading_control_service as svc
@@ -139,6 +150,9 @@ def test_former_window_does_not_block_auto_resume(
         "equity": D("32.88"),
         "balance": D("32.88"),
     }
-    for moment in _FULL_DAY:
+    for moment in _INSIDE:
         blockers = svc.autonomous_resume_blockers(facts, now=moment)
         assert "outside_session" not in blockers
+    for moment in _OUTSIDE:
+        blockers = svc.autonomous_resume_blockers(facts, now=moment)
+        assert "outside_session" in blockers

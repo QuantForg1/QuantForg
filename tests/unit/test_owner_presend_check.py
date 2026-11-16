@@ -46,6 +46,7 @@ def _sell(
         equity=D("55"),
         rr_buffer=D(buffer),
         commission=D("0"),
+        daily=ol.DailyLossContext(trusted=True, balance=D("55"), equity=D("55")),
     )
 
 
@@ -54,14 +55,14 @@ def test_slippage_buffer_defaults_to_zero() -> None:
 
 
 def test_trade_4_at_the_send_tick_is_refused() -> None:
-    # 0.600 / (3.168 + 0.424) = 0.167 < 0.20
+    # 0.600 / (3.168 + 0.424) = 0.167 < 1.50
     reasons = _sell("4018.033", "4021.201", "4017.433", "0.424")
     assert any(r.startswith("PRESEND OWNER_MIN_RR") for r in reasons), reasons
 
 
 def test_trade_1_is_refused_by_rr_not_by_the_drift_guard() -> None:
     # Plan 4019.155 -> stop 2.715; send tick 4018.853 -> 3.017 (wider, no
-    # drift). RR 0.600 / (3.017 + 0.424) = 0.174 < 0.20.
+    # drift). RR 0.600 / (3.017 + 0.424) = 0.174 < 1.50.
     reasons = _sell("4018.853", "4021.870", "4018.253", "0.424", plan="4019.155")
     assert any("OWNER_MIN_RR" in r for r in reasons), reasons
     assert not any("OWNER_PRICE_DRIFT" in r for r in reasons)
@@ -73,17 +74,16 @@ def test_trade_2_passes() -> None:
 
 
 def test_buffer_is_applied_to_rr_when_set() -> None:
-    # Trade 2 with B = 8.00: 6.100-8 < 0 after buffer fails closed, use
-    # smaller TP so buffer pushes net under 0.20:
-    # 1.000 / (3.057 + 3.00 + 0.344) = 0.156 < 0.20.
-    reasons = _sell("4019.813", "4022.870", "4018.813", "0.344", buffer="3.00")
+    # Trade 2 clears 1.50 without a buffer (1.794). With B = 3.00 the
+    # worse fill gives (6.100 - 3.00) / (3.057 + 3.00 + 0.344) = 0.48 < 1.50.
+    reasons = _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="3.00")
     assert reasons and reasons[0].startswith("PRESEND OWNER_MIN_RR_SLIPPAGE")
     assert _sell("4019.813", "4022.870", "4013.713", "0.344", buffer="0.25") == []
 
 
 def test_spread_comes_from_the_same_tick() -> None:
-    # Same price, spread above the 1.00 cap at the send tick.
-    reasons = _sell("4019.813", "4022.870", "4013.713", "1.01")
+    # Same price, spread above the 0.45 cap at the send tick.
+    reasons = _sell("4019.813", "4022.870", "4013.713", "0.46")
     assert any("OWNER_MAX_SPREAD" in r for r in reasons), reasons
 
 
@@ -146,9 +146,9 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
 ) -> None:
     # After Execution Check a band gate uses a fresh tick (gross RR). Presend
     # then re-checks with stop_includes_spread_buffer=True + order slippage.
-    # Need gross RR >= 0.20 so the band does not fire first, but net RR with
-    # +0.10 slip < 0.20 so PRESEND refuses:
-    # stop ∈ (4.40, 4.4167] → move ≈ 2.61 from base ask 2320.80.
+    # Need gross RR >= 1.50 so the band does not fire first, but net RR with
+    # +0.10 slip < 1.50 so PRESEND refuses: move ∈ (0.26, 0.32].
+    # move 0.30: gross 3.20 / 2.10 = 1.52, net 3.20 / 2.20 = 1.45.
     from app.domain.institutional_trading.live_trading_control import (
         reset_live_trading_controller_for_tests,
     )
@@ -156,7 +156,7 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
 
     _allow_broker_submit()
     try:
-        pipeline, sent, client = _run(monkeypatch, move="2.61")
+        pipeline, sent, client = _run(monkeypatch, move="0.30")
         assert pipeline.outcome == "rejected"
         assert "PRESEND OWNER_MIN_RR" in pipeline.message
         assert sent == []
@@ -166,7 +166,7 @@ def test_run_submit_refuses_when_rr_fails_at_the_send_tick(
             for s in pipeline.stages
             if (s.meta or {}).get("component") == "owner_presend_check"
         )
-        assert meta["check_price"] == "2323.41"
+        assert meta["check_price"] == "2321.10"
         assert meta["check_spread"] == "0.30"
     finally:
         reset_live_trading_controller_for_tests()

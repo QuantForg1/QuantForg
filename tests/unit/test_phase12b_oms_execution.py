@@ -155,10 +155,10 @@ def test_record_broker_execution_idempotent_and_not_ack() -> None:
         user_id=user,
         broker_account_id=account,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("0.01"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         account=AccountReadiness(
@@ -290,10 +290,10 @@ def test_uncertain_order_send_is_unknown_not_retryable() -> None:
         user_id=user,
         broker_account_id=account,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("0.01"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         account=AccountReadiness(
@@ -354,10 +354,10 @@ def test_ack_is_not_fill() -> None:
         user_id=user,
         broker_account_id=account,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("0.01"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         account=AccountReadiness(

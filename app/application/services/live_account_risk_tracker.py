@@ -394,6 +394,51 @@ class LiveAccountRiskTracker:
         return total
 
     @staticmethod
+    def daily_loss_context(
+        deals: list[Any],
+        *,
+        balance: Decimal,
+        equity: Decimal,
+        now: datetime | None = None,
+    ) -> Any:
+        """Daily budget inputs for the final owner guard.
+
+        Unlike :meth:`daily_pnl_from_deals`, every trade closed today counts,
+        including trades before a deposit. A deposit raises the budget base;
+        it never erases a loss already taken.
+        """
+        from app.domain.institutional_trading.owner_live_limits import (
+            DailyLossContext,
+        )
+
+        resolved = LiveAccountRiskTracker.session_pnl_resolution(
+            list(deals), now=now, ending_balance=balance
+        )
+        day = utc_session_day(now)
+        seen: set[int] = set()
+        deposits = Decimal("0")
+        for deal in deals:
+            if not LiveAccountRiskTracker._is_verified_deposit(deal):
+                continue
+            moment = LiveAccountRiskTracker._deal_time(deal)
+            if moment is None or utc_session_day(moment) != day:
+                continue
+            ticket = LiveAccountRiskTracker._deal_ticket(deal)
+            if ticket > 0:
+                if ticket in seen:
+                    continue
+                seen.add(ticket)
+            deposits += LiveAccountRiskTracker._deal_cash_delta(deal)
+        return DailyLossContext(
+            trusted=True,
+            realized_pnl=Decimal(str(resolved["session_trade_pnl"])),
+            deposits=deposits,
+            balance=Decimal(str(balance or 0)),
+            equity=Decimal(str(equity or 0)),
+            source="mt5_history_deals",
+        )
+
+    @staticmethod
     def daily_pnl_from_deals(
         deals: list[Any],
         *,

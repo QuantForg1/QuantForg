@@ -21,15 +21,16 @@ from app.domain.institutional_trading.config import PREFERRED_REWARD_RISK
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_ENTRIES_PER_CYCLE,
     OWNER_MAX_OPEN_POSITIONS,
+    OWNER_MIN_REWARD_RISK,
 )
 
 PROFILE_ID = "SCALPING_V1"
 PROFILE_VERSION = "ai-scalping-v8.2.0+SCALPING_V1+UNIVERSE_GATE_FIX"
 
 # Professional scalping RR target — min gate MUST stay <= preferred TP R.
-# The owner minimum (0.20 net after costs) is enforced at submit by
-# owner_live_limits.evaluate_owner_entry.
-_SCALP_RR = Decimal("0.20")
+# The owner minimum (net after costs) is enforced at submit by
+# owner_live_limits.evaluate_owner_entry; the scan gate uses the same floor.
+_SCALP_RR = OWNER_MIN_REWARD_RISK
 
 
 def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalpingConfig:

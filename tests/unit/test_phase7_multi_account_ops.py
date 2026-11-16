@@ -48,10 +48,10 @@ def test_owner_ops_snapshot_flags_and_metrics() -> None:
                 user_id=user,
                 broker_account_id=account,
                 proposal=RiskSettingProposal(
-                    planned_risk_pct=Decimal("10"),
-                    aggregate_open_risk_pct=Decimal("30"),
+                    planned_risk_pct=Decimal("5"),
+                    aggregate_open_risk_pct=Decimal("9"),
                     max_lot=Decimal("0.01"),
-                    daily_loss_pct=Decimal("48"),
+                    daily_loss_pct=Decimal("25"),
                     max_concurrent_positions=1,
                 ),
                 account=AccountReadiness(
@@ -86,10 +86,10 @@ def test_customer_status_is_user_scoped() -> None:
                     user_id=uid,
                     broker_account_id=aid,
                     proposal=RiskSettingProposal(
-                        planned_risk_pct=Decimal("10"),
-                        aggregate_open_risk_pct=Decimal("30"),
+                        planned_risk_pct=Decimal("5"),
+                        aggregate_open_risk_pct=Decimal("9"),
                         max_lot=Decimal("0.01"),
-                        daily_loss_pct=Decimal("48"),
+                        daily_loss_pct=Decimal("25"),
                         max_concurrent_positions=1,
                     ),
                     account=AccountReadiness(

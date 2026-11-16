@@ -350,7 +350,7 @@ def test_classify_min_lot_abort_is_risk_not_direction_none() -> None:
 def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> None:
     """0.01 lot at a $10.01 stop exceeds 20% of $50. Do not upsize."""
     assert Decimal("0.01") == VOLUME_MIN
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("20.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
 
     engine = RiskEngine()
     wide = engine.size_position(
@@ -409,7 +409,7 @@ def test_live_min_lot_above_owner_cap_is_rejected_and_tight_stop_approved() -> N
 
 
 def test_hard_max_and_min_lot_owner_values() -> None:
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("20.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
     assert Decimal("0.01") == VOLUME_MIN
     assert RiskEngine().config.min_lot == Decimal("0.01")
     assert RiskEngine().config.max_lot == Decimal("0.01")

@@ -50,10 +50,10 @@ def test_flags_off_marks_dry_run_and_never_claims_live_submit() -> None:
         actor_user_id=user,
         intent=intent,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("0.01"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         settings=settings,
@@ -77,8 +77,8 @@ def test_stricter_user_prefs_remain_eligible_under_ceilings() -> None:
         actor_user_id=user,
         intent=intent,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("20"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("0.01"),
             daily_loss_pct=Decimal("20"),
             max_concurrent_positions=1,
@@ -86,7 +86,7 @@ def test_stricter_user_prefs_remain_eligible_under_ceilings() -> None:
         settings=settings,
     )
     assert evaluation.state is AccountExecutionState.ELIGIBLE
-    assert evaluation.effective["planned_risk_pct"] == "10"
+    assert evaluation.effective["planned_risk_pct"] == "5"
     assert evaluation.block_reason is None
 
 
@@ -101,10 +101,10 @@ def test_over_ceiling_max_lot_blocks() -> None:
         actor_user_id=user,
         intent=intent,
         proposal=RiskSettingProposal(
-            planned_risk_pct=Decimal("10"),
-            aggregate_open_risk_pct=Decimal("30"),
+            planned_risk_pct=Decimal("5"),
+            aggregate_open_risk_pct=Decimal("9"),
             max_lot=Decimal("0.05"),
-            daily_loss_pct=Decimal("48"),
+            daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),
         settings=settings,
@@ -125,10 +125,10 @@ def test_foreign_actor_denied() -> None:
             actor_user_id=stranger,
             intent=intent,
             proposal=RiskSettingProposal(
-                planned_risk_pct=Decimal("10"),
-                aggregate_open_risk_pct=Decimal("30"),
+                planned_risk_pct=Decimal("5"),
+                aggregate_open_risk_pct=Decimal("9"),
                 max_lot=Decimal("0.01"),
-                daily_loss_pct=Decimal("48"),
+                daily_loss_pct=Decimal("25"),
                 max_concurrent_positions=1,
             ),
             settings=SimpleNamespace(
@@ -147,10 +147,10 @@ def test_preference_loader_source_propagates() -> None:
             "source": "user_edit",
             "persisted": True,
             "preferences": {
-                "planned_risk_pct": "10.0000",
-                "aggregate_open_risk_pct": "30.0000",
+                "planned_risk_pct": "5.0000",
+                "aggregate_open_risk_pct": "9.0000",
                 "max_lot": "0.01",
-                "daily_loss_pct": "48.0",
+                "daily_loss_pct": "25.0",
                 "max_concurrent_positions": 1,
             },
         }

@@ -40,7 +40,7 @@ _GOLD_CS = D("100")
 _STEP = D("0.01")
 _MIN = D("0.01")
 # LIVE near-miss geometry (NOC OWNER_SL_RISK dump).
-_LIVE_EQUITY = D("15.52")
+_LIVE_EQUITY = D("32.00")  # 9% cap $2.88
 _LIVE_STOP = D("1.2671428600")
 _LIVE_SPREAD = D("0.424")
 
@@ -157,8 +157,8 @@ def test_planned_002_candidate_normalized_to_001_when_001_passes_owner_sl_risk()
 
 
 def test_owner_sl_risk_still_rejects_when_even_min_lot_exceeds_cap() -> None:
-    # Stop-only risk fits normalize band ($2.80 <= $3.10) but inclusive
-    # stop+spread at 0.01 exceeds the 20% owner cap → OWNER_SL_RISK.
+    # Stop-only risk fits normalize band ($2.80 <= $2.88) but inclusive
+    # stop+spread at 0.01 ($3.23) exceeds the 9% owner cap → OWNER_SL_RISK.
     stop = D("2.80")
     cap = max_planned_risk_usd(_LIVE_EQUITY)
     stop_only = (stop * _GOLD_CS * OWNER_MAX_LOT).quantize(D("0.01"))

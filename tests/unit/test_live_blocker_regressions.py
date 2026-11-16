@@ -8,6 +8,7 @@ spelling, and the strategy symbol stays XAUUSD. No order is sent.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -36,6 +37,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MIN_REWARD_RISK,
     OWNER_MIN_TRADE_QUALITY,
     OWNER_SL_ATR_MULTIPLIER,
+    DailyLossContext,
     evaluate_owner_entry,
 )
 from app.domain.institutional_trading.runtime_policy import (
@@ -65,13 +67,13 @@ ATR = Decimal("2.00")
 
 
 def test_owner_policy_floors_stay_at_the_authorized_values() -> None:
-    assert Decimal("20.0") == OWNER_MAX_PLANNED_RISK_PCT
-    assert Decimal("30.0") == OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
-    assert Decimal("48.0") == OWNER_DAILY_LOSS_PCT
-    assert Decimal("0.20") == OWNER_MIN_REWARD_RISK
-    assert OWNER_MIN_TRADE_QUALITY == 70
+    assert Decimal("9.0") == OWNER_MAX_PLANNED_RISK_PCT
+    assert Decimal("9.0") == OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
+    assert Decimal("25.0") == OWNER_DAILY_LOSS_PCT
+    assert Decimal("1.50") == OWNER_MIN_REWARD_RISK
+    assert OWNER_MIN_TRADE_QUALITY == 75
     assert Decimal("0.01") == OWNER_MAX_LOT
-    assert Decimal("1.00") == OWNER_MAX_SPREAD
+    assert Decimal("0.45") == OWNER_MAX_SPREAD
     assert OWNER_MAX_OPEN_POSITIONS == 1
     assert Decimal("1.00") == OWNER_SL_ATR_MULTIPLIER
     assert GOLD_SYMBOL == "XAUUSD"
@@ -176,14 +178,18 @@ def _entry(**overrides: object) -> list[str]:
         "contract_size": Decimal("100"),
         "equity": Decimal("50.84"),
         "commission": Decimal("0"),
+        "now": datetime(2026, 10, 22, 10, 0, tzinfo=UTC),
+        "daily": DailyLossContext(
+            trusted=True, balance=Decimal("50.84"), equity=Decimal("50.84")
+        ),
     }
     args.update(overrides)
     return evaluate_owner_entry(**args)  # type: ignore[arg-type]
 
 
 def test_spread_minimum_lot_and_stop_distance_constraints() -> None:
-    assert _entry(spread=Decimal("1.00")) == []
-    assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("1.01")))
+    assert _entry(spread=Decimal("0.45")) == []
+    assert any(r.startswith("OWNER_MAX_SPREAD") for r in _entry(spread=Decimal("0.46")))
     assert any(
         r.startswith("OWNER_STOPS_LEVEL")
         for r in _entry(min_stop_distance=Decimal("2.00"))
@@ -244,7 +250,8 @@ def test_duplicate_submission_and_missing_stops_never_fill() -> None:
         "symbol": "XAUUSD",
         "action": "sell",
         "volume": 0.01,
-        "sl": 3881.306,
+        # 2.650 + spread 0.344 + slippage 0.010 = $3.01 = 9% of $33.52.
+        "sl": 3880.306,
         "tp": 3874.000,
         "position": 0,
         "client_order_id": "same-id",

@@ -448,14 +448,14 @@ def test_worker_applies_saved_policy_version():
         type(confirmed)(
             True,
             3,
-            {**approved_baseline(), "min_reward_risk": "0.20"},
+            {**approved_baseline(), "min_reward_risk": "1.50"},
             "persisted",
             applied_version=3,
         )
     )
     assert candidate["worker_confirmed"] is True
-    assert candidate["document"]["min_reward_risk"] == "0.20"
-    assert candidate["enforced_min_reward_risk"] == "0.20"
+    assert candidate["document"]["min_reward_risk"] == "1.50"
+    assert candidate["enforced_min_reward_risk"] == "1.50"
     assert candidate["experimental_promoted"] is False
 
 
@@ -531,8 +531,8 @@ def test_book_cap_is_separate_from_the_per_trade_cap():
     equity = Decimal("100")
     token = use_runtime_policy(approved_baseline())
     try:
-        assert max_planned_risk_usd(equity) == Decimal("20.00")
-        assert max_aggregate_risk_usd(equity) == Decimal("30.00")
+        assert max_planned_risk_usd(equity) == Decimal("9.00")
+        assert max_aggregate_risk_usd(equity) == Decimal("9.00")
     finally:
         reset_runtime_policy(token)
     tighter = use_runtime_policy(
@@ -544,7 +544,7 @@ def test_book_cap_is_separate_from_the_per_trade_cap():
     finally:
         reset_runtime_policy(tighter)
     below_trade = validate_policy_changes(
-        approved_baseline(), {"max_aggregate_open_risk_pct": "10"}
+        approved_baseline(), {"max_aggregate_open_risk_pct": "5"}
     )
     assert below_trade.ok is False
 

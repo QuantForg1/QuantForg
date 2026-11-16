@@ -225,23 +225,27 @@ def evaluate_quality_gates(
     if min_rr < owner_floor:
         min_rr = owner_floor
     rr_ok = expected_rr is not None and expected_rr >= min_rr
+    owner_ok = expected_rr is not None and expected_rr >= owner_floor
     checks["min_rr"] = bool(rr_ok)
-    if owner_floor < Decimal("1"):
-        checks["tp_profit_exceeds_sl_loss"] = bool(rr_ok)
-        if not rr_ok:
-            hard_rejects.append(
-                f"OWNER_MIN_RR: net reward:risk {expected_rr} < {owner_floor}"
-            )
-    else:
-        profit_exceeds_loss = expected_rr is not None and expected_rr > Decimal("1")
-        checks["tp_profit_exceeds_sl_loss"] = bool(profit_exceeds_loss)
-        if expected_rr is not None and expected_rr <= Decimal("1"):
-            hard_rejects.append(
-                "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned TP profit must exceed "
-                f"planned SL loss (rr={expected_rr})"
-            )
-        if not rr_ok:
-            soft_rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
+    checks["tp_profit_exceeds_sl_loss"] = (
+        bool(expected_rr is not None and expected_rr > Decimal("1"))
+        if owner_floor >= Decimal("1")
+        else bool(owner_ok)
+    )
+    # Below the owner net floor is always a hard reject, whatever the floor.
+    if not owner_ok:
+        hard_rejects.append(
+            f"OWNER_MIN_RR: net reward:risk {expected_rr} < {owner_floor}"
+        )
+    if owner_floor >= Decimal("1") and (
+        expected_rr is not None and expected_rr <= Decimal("1")
+    ):
+        hard_rejects.append(
+            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned TP profit must exceed "
+            f"planned SL loss (rr={expected_rr})"
+        )
+    if owner_ok and not rr_ok:
+        soft_rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
 
     pa_ok = True
     if pa_confluence is not None:

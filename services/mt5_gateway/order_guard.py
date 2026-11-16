@@ -391,15 +391,6 @@ def _check_entry(
             slippage=slip,
             commission=fee,
         )
-    book_cap = max_aggregate_risk_usd(equity)
-    if open_loss + loss > book_cap:
-        raise OrderGuardRejected(
-            "GUARD_AGGREGATE_RISK",
-            (
-                f"planned book {open_loss + loss} exceeds the aggregate cap "
-                f"{book_cap}; open {open_loss}; new {loss}"
-            ),
-        )
     if loss > cap:
         from app.domain.institutional_trading.runtime_policy import (
             active_max_planned_risk_pct,
@@ -413,6 +404,15 @@ def _check_entry(
                 f"stop distance {abs(reference - stop)} plus spread "
                 f"{_quote_spread(quote)} plus slippage {slip} plus "
                 f"commission {fee}"
+            ),
+        )
+    book_cap = max_aggregate_risk_usd(equity)
+    if open_loss + loss > book_cap:
+        raise OrderGuardRejected(
+            "GUARD_AGGREGATE_RISK",
+            (
+                f"planned book {open_loss + loss} exceeds the aggregate cap "
+                f"{book_cap}; open {open_loss}; new {loss}"
             ),
         )
     client_order_id = str(body.get("client_order_id") or "").strip()

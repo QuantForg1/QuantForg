@@ -6,7 +6,7 @@ Missing or invalid prefs leave the incoming config unchanged (fail to owner).
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
@@ -90,3 +90,47 @@ def tighten_live_risk_config_for_user(
     if effective.get("ok") is False:
         return config
     return tighten_risk_config_from_effective(config, effective)
+
+
+@dataclass(frozen=True, slots=True)
+class UserLiveCaps:
+    """The account owner's own saved limits for the final owner guard.
+
+    ``available`` is False when durable storage is configured but the saved
+    row could not be read; the caller must then block new entries. When no
+    durable storage is configured (local/test) or the user saved nothing, the
+    owner ceilings apply unchanged.
+    """
+
+    available: bool
+    planned_risk_pct: Decimal | None = None
+    daily_loss_pct: Decimal | None = None
+    reason: str = ""
+
+
+def load_user_live_caps(user_id: UUID | None) -> UserLiveCaps:
+    """Read the raw saved row. Values are only ever used to tighten."""
+    if user_id is None:
+        return UserLiveCaps(available=True)
+    try:
+        from app.infrastructure.persistence.direct_postgres import (
+            direct_postgres_available,
+        )
+
+        if not direct_postgres_available():
+            return UserLiveCaps(available=True, reason="no_durable_storage")
+        from app.application.services.user_risk_preferences_service import (
+            _load_active_row,
+        )
+
+        row = _load_active_row(user_id)
+    except Exception as exc:
+        return UserLiveCaps(available=False, reason=f"read_failed: {exc}")
+    if not row:
+        return UserLiveCaps(available=True, reason="no_saved_row")
+    return UserLiveCaps(
+        available=True,
+        planned_risk_pct=_dec(row.get("planned_risk_pct")),
+        daily_loss_pct=_dec(row.get("daily_loss_pct")),
+        reason="saved_row",
+    )

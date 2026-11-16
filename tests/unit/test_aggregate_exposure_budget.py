@@ -1,4 +1,4 @@
-"""Combined planned risk stays inside one 30% equity book budget."""
+"""Combined planned risk stays inside one 9% equity book budget."""
 
 from __future__ import annotations
 
@@ -80,11 +80,11 @@ def _evaluate(
 
 def test_open_risk_plus_new_entry_cannot_exceed_the_cap() -> None:
     # 0.01 lot and contract 100: dollar risk equals the stop distance.
-    # Open $16 + new $15 = $31, above 30% of $100. Each leg is under 20%.
+    # Open $5 + new $5 = $10, above 9% of $100. Each leg is under 9%.
     assessment = _evaluate(
         equity="100",
-        stop="15.00",
-        positions=[_position(stop="3984")],
+        stop="5.00",
+        positions=[_position(stop="3995")],
     )
     assert assessment.decision is RiskDecision.REJECT
     assert any(
@@ -95,11 +95,11 @@ def test_open_risk_plus_new_entry_cannot_exceed_the_cap() -> None:
 
 
 def test_exact_combined_cap_is_allowed() -> None:
-    # Open $15 + new $15 = $30, exactly 30% of $100.
+    # Open $4 + new $5 = $9, exactly 9% of $100.
     assessment = _evaluate(
         equity="100",
-        stop="15.00",
-        positions=[_position(stop="3985")],
+        stop="5.00",
+        positions=[_position(stop="3996")],
     )
     assert not any(
         "aggregate planned SL risk" in reason and "exceeds" in reason
@@ -107,8 +107,8 @@ def test_exact_combined_cap_is_allowed() -> None:
     )
     over = _evaluate(
         equity="100",
-        stop="15.00",
-        positions=[_position(stop="3984.99")],
+        stop="5.00",
+        positions=[_position(stop="3995.99")],
     )
     assert over.decision is RiskDecision.REJECT
 
@@ -156,7 +156,7 @@ def test_unmeasured_manual_position_blocks_a_new_entry() -> None:
 
 
 def test_measured_manual_exposure_counts_toward_the_cap() -> None:
-    manual = _position(stop="3984")
+    manual = _position(stop="3995")
     manual = manual.__class__(
         ticket=manual.ticket,
         symbol=manual.symbol,
@@ -168,8 +168,8 @@ def test_measured_manual_exposure_counts_toward_the_cap() -> None:
         initial_stop=manual.initial_stop,
         magic=0,
     )
-    # Open $16 + new $15 = $31, above 30% of $100.
-    assessment = _evaluate(equity="100", stop="15.00", positions=[manual])
+    # Open $5 + new $5 = $10, above 9% of $100.
+    assessment = _evaluate(equity="100", stop="5.00", positions=[manual])
     assert assessment.decision is RiskDecision.REJECT
     assert any(
         "exceeds" in reason or "REMAINING_PORTFOLIO_RISK_EXCEEDED" in reason
@@ -178,11 +178,11 @@ def test_measured_manual_exposure_counts_toward_the_cap() -> None:
 
 
 def test_a_looser_dollar_cap_cannot_raise_the_percent_budget() -> None:
-    # Configured $50 is above 30% of $100. Open $16 + new $15 = $31 still rejects.
+    # Configured $50 is above 9% of $100. Open $5 + new $5 = $10 still rejects.
     assessment = _evaluate(
         equity="100",
-        stop="15.00",
-        positions=[_position(stop="3984")],
+        stop="5.00",
+        positions=[_position(stop="3995")],
         max_total="50",
     )
     assert assessment.decision is RiskDecision.REJECT
