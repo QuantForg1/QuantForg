@@ -21,6 +21,7 @@ from app.domain.exceptions.base import (
     ServiceUnavailableError,
     ValidationError,
 )
+from app.infrastructure.brokers.mt5.gateway_circuit import GatewayUnavailableError
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -191,6 +192,30 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code=exc.code,
                 message=exc.message,
                 details=exc.details,
+                request_id=_request_id_from(request),
+            ),
+        )
+
+    @app.exception_handler(GatewayUnavailableError)
+    async def gateway_unavailable_handler(
+        request: Request, exc: GatewayUnavailableError
+    ) -> JSONResponse:
+        logger.warning(
+            "gateway_unavailable_response",
+            method=request.method,
+            path=request.url.path,
+            reason=str(exc)[:160],
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            headers={"Retry-After": "30"},
+            content=_error_body(
+                code="gateway_unavailable",
+                message=(
+                    "The MT5 gateway is not responding. Broker data is temporarily "
+                    "unavailable; no trading action was taken."
+                ),
+                details=None,
                 request_id=_request_id_from(request),
             ),
         )

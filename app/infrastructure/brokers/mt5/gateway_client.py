@@ -61,6 +61,7 @@ from app.infrastructure.brokers.mt5.gateway_budget import (
     is_mutation_path,
     request_attempts,
 )
+from app.infrastructure.brokers.mt5.gateway_circuit import GatewayUnavailableError
 from app.infrastructure.brokers.mt5.metrics import gateway_metrics
 from core.logging import get_logger
 
@@ -835,7 +836,7 @@ class GatewayMT5Client:
                 diagnostic=label,
                 cloudflare=cloudflare,
             )
-            raise RuntimeError(f"{label}: {detail}") from exc
+            raise GatewayUnavailableError(f"{label}: {detail}") from exc
         except httpx.HTTPError as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
             gateway_metrics.record_request(latency_ms=latency_ms, error=True, path=path)
@@ -870,7 +871,7 @@ class GatewayMT5Client:
                 diagnostic=label,
                 cloudflare=cloudflare,
             )
-            raise RuntimeError(f"{label}: {detail}") from exc
+            raise GatewayUnavailableError(f"{label}: {detail}") from exc
 
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         body_text = response.text or ""

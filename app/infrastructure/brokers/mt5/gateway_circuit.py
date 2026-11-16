@@ -30,6 +30,14 @@ def family(path: str) -> str:
     return parts[0] if parts else ""
 
 
+class GatewayUnavailableError(RuntimeError):
+    """The MT5 gateway timed out, is unreachable, or its circuit is open.
+
+    Subclasses RuntimeError so existing ``except RuntimeError`` callers keep
+    working; the API maps it to 503 instead of an anonymous 500.
+    """
+
+
 def check(path: str, *, now: float | None = None) -> None:
     fam = family(path)
     t = time.monotonic() if now is None else now
@@ -38,7 +46,7 @@ def check(path: str, *, now: float | None = None) -> None:
         if until is None:
             return
         if t < until:
-            raise RuntimeError(
+            raise GatewayUnavailableError(
                 f"Gateway circuit open for /{fam} ({int(until - t)}s): "
                 "recent calls timed out; failing fast"
             )
