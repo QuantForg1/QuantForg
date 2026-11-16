@@ -393,3 +393,34 @@ def test_verification_report_marks_registered_slot_ready() -> None:
     )
     assert fail.status_code == 200
     assert fail.json().get("worker_ready_applied") is False
+
+
+def test_verification_for_another_login_never_marks_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A slot logged into a login other than its assigned account stays not ready."""
+    from app.application.services import worker_credential_vault as vault
+
+    monkeypatch.setattr(vault, "assigned_account_login", lambda **_: "11111111")
+    client, _api = _client()
+    reg = client.post(
+        "/api/v1/mt5-workers/register",
+        json={"host_code": "local-windows-1", "slot_id": "demo-b"},
+    )
+    assert reg.status_code == 200
+    report = client.post(
+        "/api/v1/mt5-workers/verification/report",
+        json={
+            "ok": True,
+            "broker_slug": "xm",
+            "environment": "demo",
+            "host_code": "local-windows-1",
+            "slot_id": "demo-b",
+            "login": "22222222",
+            "server": "XMGlobal-MT5 2",
+            "trade_allowed": True,
+            "source": "windows_mt5_customer_vault",
+        },
+    )
+    assert report.status_code == 200
+    assert report.json().get("worker_ready_applied") is False

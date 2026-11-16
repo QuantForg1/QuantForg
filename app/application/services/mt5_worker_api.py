@@ -505,6 +505,22 @@ class Mt5WorkerApiFacade:
             return None
 
         worker = self.require_worker(worker_id)
+        # The terminal must be logged into the assigned customer's account.
+        # A slot that reports another login is never marked ready.
+        from app.application.services.worker_credential_vault import (
+            assigned_account_login,
+        )
+
+        expected = assigned_account_login(
+            broker_account_id=worker.broker_account_id, user_id=worker.user_id
+        )
+        if expected is not None and expected != login:
+            logger.warning(
+                "verification_login_mismatch host=%s slot=%s",
+                host_code,
+                slot_id,
+            )
+            return None
         assert self.plane.supervisor is not None
         session = str(
             payload.get("runtime_session_id")
@@ -616,15 +632,28 @@ class Mt5WorkerApiFacade:
                 "Worker credential seal not configured",
                 code="worker_seal_not_configured",
             )
-        # Prefer verified login/server; fall back to env demo material for lab.
-        login = (
-            worker.account_login_verified
-            or (os.environ.get("QF_DEMO_LOGIN") or "").strip()
+        # The customer's own credentials from the encrypted vault, bound to
+        # this worker's assigned account and its owner. Lab env material is
+        # only a fallback when no vault row exists.
+        from app.application.services.worker_credential_vault import (
+            load_vault_credential,
         )
-        server = (
-            worker.server_verified or (os.environ.get("QF_DEMO_SERVER") or "").strip()
+
+        vault = load_vault_credential(
+            broker_account_id=worker.broker_account_id, user_id=worker.user_id
         )
-        secret = (os.environ.get("QF_DEMO_PASSWORD") or "").strip()
+        if vault is not None:
+            login, server, secret = vault.login, vault.server, vault.password
+        else:
+            login = (
+                worker.account_login_verified
+                or (os.environ.get("QF_DEMO_LOGIN") or "").strip()
+            )
+            server = (
+                worker.server_verified
+                or (os.environ.get("QF_DEMO_SERVER") or "").strip()
+            )
+            secret = (os.environ.get("QF_DEMO_PASSWORD") or "").strip()
         # Never log secret. If no material, authorize=false without inventing.
         if not login or not server or not secret:
             return {
@@ -648,7 +677,11 @@ class Mt5WorkerApiFacade:
             server=server,
             password=secret,
         )
-        return {"ok": True, **sealed}
+        return {
+            "ok": True,
+            "credential_source": "vault" if vault is not None else "lab_env",
+            **sealed,
+        }
 
     def hydrate_from_postgres(self) -> int:
         """Restore in-memory indexes from durable table when available."""
