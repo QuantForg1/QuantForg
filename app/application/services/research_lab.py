@@ -13,6 +13,7 @@ from app.application.services.backtest_engine import (
     BacktestEngine,
     BacktestRunInput,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.mt5_market_data import MT5MarketDataService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.walkforward_engine import (
@@ -615,7 +616,7 @@ class ResearchLabService:
             }
         bid = ask = None
         try:
-            tick = self.market_data.latest_tick(symbol)
+            tick = await run_broker_read(self.market_data.latest_tick, symbol)
             bid, ask = float(tick.bid), float(tick.ask)
         except Exception:
             bid = None

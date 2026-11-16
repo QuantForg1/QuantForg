@@ -347,7 +347,7 @@ class GetMT5TickUseCase:
             self.uow_factory, self.market_data.adapter, user_id
         )
         try:
-            tick = self.market_data.latest_tick(symbol)
+            tick = await run_broker_read(self.market_data.latest_tick, symbol)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 "Failed to read MT5 tick",
@@ -413,7 +413,7 @@ class GetResearchMarketTickUseCase:
         symbol = resolve_trading_symbol(symbol)
         await require_platform_market_feed(self.market_data.adapter)
         try:
-            tick = self.market_data.latest_tick(symbol)
+            tick = await run_broker_read(self.market_data.latest_tick, symbol)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 "Failed to read market tick",

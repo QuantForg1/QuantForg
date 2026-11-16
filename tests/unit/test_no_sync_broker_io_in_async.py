@@ -21,8 +21,15 @@ SYNC_GATEWAY_CALLS = {
     "gateway_health",
     "force_sync_positions",
     "list_symbols",
+    "latest_tick",
+    "symbol_info",
+    "health",
+    "_protect_open_positions",
+    "_manage_open_positions_after_timeout",
 }
 RECEIVERS = (
+    "self.market_data",
+    "self",
     "self.adapter",
     "self._client",
     "self.portfolio_sync",
