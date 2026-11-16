@@ -7995,7 +7995,9 @@ class InstitutionalIteRuntime:
                 recover_buy_cascade_on_startup,
             )
 
-            recover_buy_cascade_on_startup(self.mt5_adapter)
+            # Reads broker history (can hang 60-180 s): never on the event
+            # loop, or every API request stalls during startup (16 Nov).
+            await asyncio.to_thread(recover_buy_cascade_on_startup, self.mt5_adapter)
         except Exception:
             logger.exception("buy_cascade_startup_recover_failed")
         try:
@@ -8003,7 +8005,9 @@ class InstitutionalIteRuntime:
                 recover_sell_cascade_on_startup,
             )
 
-            recover_sell_cascade_on_startup(self.mt5_adapter)
+            # Reads broker history (can hang 60-180 s): never on the event
+            # loop, or every API request stalls during startup (16 Nov).
+            await asyncio.to_thread(recover_sell_cascade_on_startup, self.mt5_adapter)
         except Exception:
             logger.exception("sell_cascade_startup_recover_failed")
         try:
@@ -8011,7 +8015,11 @@ class InstitutionalIteRuntime:
                 recover_strategy_attribution_on_startup,
             )
 
-            recover_strategy_attribution_on_startup(self.mt5_adapter)
+            # Reads broker history (can hang 60-180 s): never on the event
+            # loop, or every API request stalls during startup (16 Nov).
+            await asyncio.to_thread(
+                recover_strategy_attribution_on_startup, self.mt5_adapter
+            )
         except Exception:
             logger.exception("strategy_attribution_startup_recover_failed")
         while not self._stop.is_set():
