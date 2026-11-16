@@ -14,6 +14,9 @@ from app.application.dto.mt5 import (
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.mt5 import MT5Svc
 from app.presentation.dto_mapping import dto_to_dict
+from app.presentation.routers.weltrade import (
+    _SHARED_TERMINAL_GUARD as SHARED_TERMINAL_GUARD,
+)
 from app.presentation.schemas.mt5 import (
     MT5AccountResponse,
     MT5CandleResponse,
@@ -40,7 +43,9 @@ async def mt5_status(
     return MT5StatusResponse(**dto_to_dict(dto))
 
 
-@router.post("/connect", response_model=MT5ConnectionResponse)
+@router.post(
+    "/connect", response_model=MT5ConnectionResponse, dependencies=SHARED_TERMINAL_GUARD
+)
 async def mt5_connect(
     body: MT5ConnectRequest,
     request: Request,
@@ -76,7 +81,9 @@ async def mt5_connect(
     )
 
 
-@router.post("/disconnect", response_model=MT5StatusResponse)
+@router.post(
+    "/disconnect", response_model=MT5StatusResponse, dependencies=SHARED_TERMINAL_GUARD
+)
 async def mt5_disconnect(
     request: Request,
     user: CurrentUser,

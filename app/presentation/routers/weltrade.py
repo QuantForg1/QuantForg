@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.domain.exceptions.base import NotFoundError
 from app.presentation.broker_trader_errors import raise_trader_broker_failure
@@ -22,6 +22,33 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/weltrade", tags=["weltrade"])
+
+
+def _shared_terminal_operator_only(user: CurrentUser) -> None:
+    """The platform terminal is one MT5 session shared by the platform.
+
+    16-17 Nov 2026: a customer's restore-profile disconnected the owner's LIVE
+    Weltrade session on it and logged it into the customer's XM account. Only
+    the owner/admin may change that session; customer accounts are served by
+    dedicated worker terminals.
+    """
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    if role not in {"owner", "admin"}:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "SHARED_TERMINAL_OWNER_ONLY",
+                "message": (
+                    "Your broker account is connected through a dedicated "
+                    "QuantForg trading terminal, not the platform terminal. "
+                    "Add it in Broker Accounts; it is assigned to a terminal "
+                    "automatically."
+                ),
+            },
+        )
+
+
+_SHARED_TERMINAL_GUARD = [Depends(_shared_terminal_operator_only)]
 
 
 @router.get("/profile")
@@ -42,7 +69,7 @@ async def weltrade_dashboard(user: CurrentUser, svc: WeltradeSvc) -> dict[str, A
     )
 
 
-@router.post("/connect")
+@router.post("/connect", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_connect(
     body: WeltradeConnectRequest, user: CurrentUser, svc: WeltradeSvc
 ) -> dict[str, Any]:
@@ -67,7 +94,7 @@ async def weltrade_connect(
         raise_trader_broker_failure(exc)
 
 
-@router.post("/attach")
+@router.post("/attach", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_attach(
     body: WeltradeAttachRequest, user: CurrentUser, svc: WeltradeSvc
 ) -> dict[str, Any]:
@@ -78,7 +105,7 @@ async def weltrade_attach(
         raise_trader_broker_failure(exc)
 
 
-@router.post("/claim")
+@router.post("/claim", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_claim(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     """Claim the verified terminal for this user. Gateway-online is not enough."""
     try:
@@ -101,12 +128,12 @@ async def weltrade_exposure(user: CurrentUser, svc: WeltradeSvc) -> dict[str, An
         raise_trader_broker_failure(exc)
 
 
-@router.post("/disconnect")
+@router.post("/disconnect", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_disconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     return await svc.disconnect(user_id=user.id)
 
 
-@router.post("/reconnect")
+@router.post("/reconnect", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_reconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     try:
         return await svc.reconnect(user_id=user.id)
@@ -133,7 +160,7 @@ async def weltrade_runtime_profile(
     return {"ok": True, "profile": profile}
 
 
-@router.post("/restore-profile")
+@router.post("/restore-profile", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_restore_profile(
     user: CurrentUser, svc: WeltradeSvc
 ) -> dict[str, Any]:

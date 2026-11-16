@@ -15,6 +15,9 @@ from app.application.dto.broker import (
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.broker import BrokerSvc
 from app.presentation.dto_mapping import dto_to_dict
+from app.presentation.routers.weltrade import (
+    _SHARED_TERMINAL_GUARD as SHARED_TERMINAL_GUARD,
+)
 from app.presentation.schemas.broker import (
     BrokerConnectionResponse,
     ConnectBrokerRequest,
@@ -95,7 +98,11 @@ async def disconnect_broker(
     return _to_response(dto)
 
 
-@router.post("/validate", response_model=ValidateBrokerResponse)
+@router.post(
+    "/validate",
+    response_model=ValidateBrokerResponse,
+    dependencies=SHARED_TERMINAL_GUARD,
+)
 async def validate_broker(
     body: ConnectBrokerRequest,
     request: Request,
