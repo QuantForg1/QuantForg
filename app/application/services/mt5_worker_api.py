@@ -173,7 +173,8 @@ class Mt5WorkerApiFacade:
                 )
 
                 picked = next_unassigned_account(
-                    taken_account_ids=self._bound_account_ids()
+                    taken_account_ids=self._bound_account_ids(),
+                    taken_user_ids=self._bound_user_ids(),
                 )
                 if picked is not None:
                     user_id, broker_account_id = picked
@@ -221,13 +222,28 @@ class Mt5WorkerApiFacade:
                 out.add(str(w.broker_account_id))
         return out
 
+    def _bound_user_ids(self) -> set[str]:
+        """Users that already own a live worker (one worker per user)."""
+        assert self.plane.provisioner is not None
+        out: set[str] = set()
+        for wid in list(self._slot_to_worker.values()):
+            if wid in self._revoked_workers:
+                continue
+            w = self.plane.provisioner.get(wid)
+            if w is not None and w.lifecycle is not WorkerLifecycleState.REVOKED:
+                out.add(str(w.user_id))
+        return out
+
     def _has_waiting_customer(self) -> bool:
         from app.application.services.customer_account_assignment import (
             next_unassigned_account,
         )
 
         return (
-            next_unassigned_account(taken_account_ids=self._bound_account_ids())
+            next_unassigned_account(
+                taken_account_ids=self._bound_account_ids(),
+                taken_user_ids=self._bound_user_ids(),
+            )
             is not None
         )
 

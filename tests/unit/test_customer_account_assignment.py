@@ -30,8 +30,10 @@ def accounts(monkeypatch: pytest.MonkeyPatch) -> _Accounts:
     monkeypatch.setattr(
         caa,
         "next_unassigned_account",
-        lambda *, taken_account_ids, fetch=None: real(  # noqa: ARG005
-            taken_account_ids=taken_account_ids, fetch=acc
+        lambda *, taken_account_ids, fetch=None, taken_user_ids=None: real(  # noqa: ARG005
+            taken_account_ids=taken_account_ids,
+            fetch=acc,
+            taken_user_ids=taken_user_ids,
         ),
     )
     return acc
@@ -80,3 +82,16 @@ def test_live_accounts_not_assigned_by_default(monkeypatch: pytest.MonkeyPatch) 
     assert caa.allowed_environments() == ("demo",)
     monkeypatch.setenv("QF_AUTO_ASSIGN_ENVIRONMENTS", "demo,live,bogus")
     assert caa.allowed_environments() == ("demo", "live")
+
+
+def test_a_user_with_two_accounts_never_aliases_a_slot(accounts: _Accounts) -> None:
+    """One worker per user: the second account waits; slots stay distinct."""
+    alice = uuid4()
+    a1, a2, bob = (alice, uuid4()), (alice, uuid4()), (uuid4(), uuid4())
+    accounts.rows = [a1, a2, bob]
+    api = _api()
+    s1 = api.register(host_code="h1", slot_id="demo-a")
+    s2 = api.register(host_code="h1", slot_id="demo-b")
+    assert s1["worker_id"] != s2["worker_id"]
+    assert s1["broker_account_id"] == str(a1[1])
+    assert s2["broker_account_id"] == str(bob[1])  # Alice's 2nd account waits

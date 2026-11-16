@@ -37,9 +37,15 @@ def world(monkeypatch: pytest.MonkeyPatch) -> dict[str, tuple[UUID, UUID]]:
     rows = [users[n] for n in ("alice", "bob", "carol")]  # oldest first
     real_next = caa.next_unassigned_account
 
-    def fake_next(*, taken_account_ids: set[str], fetch: object = None):
+    def fake_next(
+        *,
+        taken_account_ids: set[str],
+        fetch: object = None,
+        taken_user_ids: set[str] | None = None,
+    ):
         return real_next(
             taken_account_ids=taken_account_ids,
+            taken_user_ids=taken_user_ids,
             fetch=lambda *_a: [{"user_id": u, "id": a} for u, a in rows],
         )
 
