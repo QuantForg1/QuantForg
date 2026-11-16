@@ -168,7 +168,7 @@ export function TradingPerformancePanel({
       ) : stats.insufficient ? (
         <p className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/40 px-3 py-4 text-sm text-[var(--fg-muted)]">
           Insufficient closed-trade history for this period. Metrics stay
-          unavailable rather than showing fabricated zeros.
+          unavailable instead of showing zeros.
         </p>
       ) : (
         <>

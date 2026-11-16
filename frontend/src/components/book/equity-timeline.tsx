@@ -28,7 +28,7 @@ export const EquityTimeline = memo(function EquityTimeline({
     >
       <header className="mb-2 shrink-0">
         <h2 className="qf-label text-[var(--fg)]">Equity Timeline</h2>
-        <p className="qf-caption">Built from synced deals — never fabricated</p>
+        <p className="qf-caption">Built from your synced broker deals</p>
       </header>
       <div className="min-h-0 flex-1">
         {series.length === 0 ? (
