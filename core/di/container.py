@@ -524,7 +524,7 @@ class Container:
                                 bootstrap_owner_control_plane,
                             )
 
-                            bootstrap_owner_control_plane()
+                            await asyncio.to_thread(bootstrap_owner_control_plane)
                         except Exception as schema_exc:
                             logger.warning(
                                 "owner_control_bootstrap_failed",
