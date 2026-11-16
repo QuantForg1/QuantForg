@@ -343,6 +343,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """
     import sys
     import time
+    from contextlib import suppress as _suppress
+
+    with _suppress(Exception):  # diagnostics must never block startup
+        from app.infrastructure.observability.loop_watchdog import (
+            start_loop_watchdog,
+        )
+
+        start_loop_watchdog(asyncio.get_running_loop())
 
     t0 = time.perf_counter()
     print("Server starting...", flush=True)
