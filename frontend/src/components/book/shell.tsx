@@ -58,7 +58,8 @@ const SHORTCUTS: { keys: string; action: string }[] = [
 
 /**
  * Book OS — institutional equity, exposure, and risk operating surface.
- * Zero page scroll; panels scroll internally. Terminal remains sole execution.
+ * Content-sized sections in one scroll area: no stretched rows, so no
+ * empty gaps between panels when data is short.
  */
 export function BookShell() {
   const session = useTradingSession();
@@ -220,7 +221,7 @@ export function BookShell() {
                 />
               </Button>
               <Button size="sm" variant="secondary" className="h-7 px-2 text-[11px]" asChild>
-                <Link href="/terminal">Terminal</Link>
+                <Link href="/dashboard">Dashboard</Link>
               </Button>
               <Button
                 size="sm"
@@ -250,12 +251,12 @@ export function BookShell() {
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden p-[var(--space-2)]">
-        <div className="grid h-full min-h-0 grid-rows-[minmax(0,auto)_minmax(0,1fr)] gap-[var(--space-2)]">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-[var(--space-2)]">
+        <div className="flex flex-col gap-[var(--space-2)]">
           <HouseholdDesk />
         {!session.connected ? (
           <BookEmpty
-            className="h-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]"
+            className="min-h-[220px] rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]"
             title="No live book"
             description="Attach MT5 in Broker to load equity, risk, and positions. Book never invents balances. Household registry above still shows connected accounts with honest status."
             action={
@@ -265,20 +266,20 @@ export function BookShell() {
             }
           />
         ) : loading ? (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex min-h-[220px] items-center justify-center">
             <DeskSkeleton rows={5} />
           </div>
         ) : hardError ? (
-          <div className="flex h-full items-center justify-center p-4">
+          <div className="flex min-h-[220px] items-center justify-center p-4">
             <DeskError
               message="Unable to load portfolio. Sync the session and retry."
               onRetry={() => void portfolioQ.refetch()}
             />
           </div>
         ) : (
-          <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1.1fr)_minmax(0,1fr)] gap-[var(--space-2)]">
+          <div className="flex flex-col gap-[var(--space-2)]">
             {/* 1. Portfolio first */}
-            <div className="min-h-0 max-h-[38%] space-y-[var(--space-2)] overflow-y-auto overflow-x-auto">
+            <div className="space-y-[var(--space-2)] overflow-x-auto">
               <PortfolioOverview
                 account={account}
                 positions={positions}

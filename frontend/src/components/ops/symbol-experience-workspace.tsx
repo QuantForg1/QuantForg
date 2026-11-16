@@ -129,8 +129,8 @@ export function SymbolExperienceWorkspace({ code }: { code: string }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm" variant="secondary">
-            <Link href={`/terminal?symbol=${encodeURIComponent(symbol)}`}>
-              Open in Terminal
+            <Link href={`/symbols/${encodeURIComponent(symbol)}`}>
+              Open symbol page
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline">

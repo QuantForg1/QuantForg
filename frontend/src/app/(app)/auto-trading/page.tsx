@@ -15,7 +15,7 @@ export default function AutoTradingPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href="/monitoring">Monitoring</Link>

@@ -21,7 +21,7 @@ export default function RealMarketIntelligencePlatformPage() {
               <Link href="/institutional-validation-program">IVP</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }

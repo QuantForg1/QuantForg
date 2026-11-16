@@ -94,7 +94,7 @@ export function InstrumentDetail({ code }: { code: string }) {
               <Link href="/dashboard">Overview</Link>
             </Button>
             <Button variant="secondary" asChild>
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </>
         }

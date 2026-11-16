@@ -26,7 +26,7 @@ import { formatNumber } from "@/lib/utils";
 
 const ACTIONS = [
   { href: "/mission-control", label: "Mission Control", icon: Radar },
-  { href: "/terminal", label: "Terminal", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/trading-journal", label: "Trading Journal", icon: LineChart },
   { href: "/ai-coach", label: "AI Coach", icon: Brain },
   { href: "/daily-reports", label: "Daily Reports", icon: Gauge },

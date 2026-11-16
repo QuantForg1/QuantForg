@@ -54,9 +54,9 @@ export const RecommendationCard = memo(function RecommendationCard({
         <h2 className="qf-label text-[var(--fg)]">Recommendation</h2>
         <Button size="sm" variant="secondary" className="h-7 text-[11px]" asChild>
           <Link
-            href={`/terminal?symbol=${encodeURIComponent(recommendation.symbol)}`}
+            href={`/symbols/${encodeURIComponent(recommendation.symbol)}`}
           >
-            Open Terminal
+            Open symbol
           </Link>
         </Button>
       </header>
@@ -107,7 +107,7 @@ export const RecommendationCard = memo(function RecommendationCard({
           </div>
         ) : null}
         <p className="qf-caption pt-1 text-[var(--fg-subtle)]">
-          Advisory only. Execution happens exclusively in Terminal after human approval.
+          Advisory only. Execution happens only through the robot or the Dashboard ticket, under the owner risk policy.
         </p>
       </dl>
     </section>

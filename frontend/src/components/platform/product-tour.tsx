@@ -38,8 +38,8 @@ const STEPS = [
   },
   {
     title: "Trading",
-    body: "The execution desk. Live trading stays gated until you explicitly authorize it.",
-    href: "/terminal",
+    body: "Dashboard order ticket and robot status. Live trading stays gated until you explicitly authorize it.",
+    href: "/dashboard",
   },
 ] as const;
 

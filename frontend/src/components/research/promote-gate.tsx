@@ -61,7 +61,7 @@ export const PromoteGate = memo(function PromoteGate({
             {evaluating ? "Evaluating…" : "Evaluate"}
           </Button>
           <Button size="sm" variant="secondary" className="h-7 text-[11px]" asChild>
-            <Link href="/terminal">Terminal</Link>
+            <Link href="/dashboard">Dashboard</Link>
           </Button>
           <Button size="sm" variant="ghost" className="h-7 text-[11px]" asChild>
             <Link href="/counsel">Counsel</Link>

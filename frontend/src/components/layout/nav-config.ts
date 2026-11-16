@@ -100,7 +100,6 @@ export const TRADER_DESK_HREFS = new Set([
   "/history",
   "/markets",
   "/portfolio",
-  "/terminal",
   "/research",
   "/broker",
   "/strategy",
@@ -283,15 +282,6 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Gauge,
     hint: "CEO intelligence desk",
     match: ["/executive-home", "/executive-dashboard"],
-    section: "Trading",
-  },
-  {
-    href: "/terminal",
-    label: "Trading",
-    icon: LayoutTemplate,
-    hint: "Trade — chart · watchlist · ticket",
-    match: ["/terminal", "/workspace", "/execution"],
-    shortcut: "6",
     section: "Trading",
   },
   {
@@ -715,12 +705,6 @@ export const appNav: NavGroup[] = [
   {
     title: "Trading",
     items: [
-      {
-        href: "/terminal",
-        label: "Terminal",
-        icon: LayoutTemplate,
-        hint: "Chart · ticket · blotter",
-      },
       {
         href: "/alerts",
         label: "Alerts",
@@ -1681,12 +1665,6 @@ export const mobileTabNav: NavItem[] = [
     label: "Broker",
     icon: Building2,
     hint: "Broker",
-  },
-  {
-    href: "/terminal",
-    label: "Trading",
-    icon: LayoutTemplate,
-    hint: "Trading",
   },
 ];
 

@@ -171,11 +171,15 @@ class GetHistoryUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        orders = await asyncio.to_thread(
-            self.sync_service.history_orders, date_from=date_from, date_to=date_to
-        )
-        deals = await asyncio.to_thread(
-            self.sync_service.history_deals, date_from=date_from, date_to=date_to
+        # Orders and deals are independent broker reads; run them together so
+        # the History ledger waits for the slower one, not for both in turn.
+        orders, deals = await asyncio.gather(
+            asyncio.to_thread(
+                self.sync_service.history_orders, date_from=date_from, date_to=date_to
+            ),
+            asyncio.to_thread(
+                self.sync_service.history_deals, date_from=date_from, date_to=date_to
+            ),
         )
         return HistoryDTO(
             orders=[HistoryOrderDTO.from_entity(o) for o in orders],

@@ -47,3 +47,10 @@ assert.match(riskCenter, /householdPortfolioApi/);
 assert.match(riskCenter, /householdRisk\.allowed/);
 
 console.log("phase3-household-contract: ok");
+
+// Book layout: content-sized sections in one scroll area (no stretched rows
+// that leave large empty gaps when a panel has little data).
+assert.doesNotMatch(shell, /grid-rows-\[auto_auto_minmax/);
+assert.doesNotMatch(shell, /max-h-\[38%\]/);
+assert.match(shell, /overflow-y-auto overflow-x-hidden/);
+console.log("book layout contract ok");

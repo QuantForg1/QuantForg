@@ -144,8 +144,8 @@ export default function OrdersPage() {
                     icon={ListOrdered}
                     title="No pending orders"
                     description="Limit and stop orders will appear here after sync."
-                    actionLabel="Open execution"
-                    actionHref="/execution"
+                    actionLabel="Open Dashboard"
+                    actionHref="/dashboard"
                   />
                 }
               />

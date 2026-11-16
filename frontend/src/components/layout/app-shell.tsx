@@ -21,22 +21,12 @@ import { isAdminPath } from "@/components/admin/admin-nav-config";
 
 /** Full-bleed zero-scroll operating surfaces. */
 const OS_FULLBLEED_PATHS = [
-  "/terminal",
-  "/workspace",
-  "/execution",
   "/book",
   "/research",
   "/ai-signals",
 ];
 
 function deskId(pathname: string): string {
-  if (
-    pathname.startsWith("/terminal") ||
-    pathname.startsWith("/workspace") ||
-    pathname.startsWith("/execution")
-  ) {
-    return "terminal";
-  }
   if (
     pathname.startsWith("/portfolio") ||
     pathname.startsWith("/performance") ||
@@ -93,8 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     OS_FULLBLEED_PATHS.some(
       (p) => pathname === p || pathname.startsWith(`${p}/`),
     );
-  const isTerminal = deskId(pathname) === "terminal";
-  const compactChrome = isTerminal || isFullBleed;
+  const compactChrome = isFullBleed;
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");

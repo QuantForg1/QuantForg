@@ -21,7 +21,7 @@ export default function ResearchValidationPage() {
               <Link href="/trading-brain-v3">Trading Brain</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }

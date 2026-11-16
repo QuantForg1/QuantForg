@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const ACTIONS = [
   { href: "/mission-control", label: "Mission Control", icon: Radar },
-  { href: "/terminal", label: "Terminal", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portfolio-intelligence", label: "Portfolio Intel", icon: LineChart },
   { href: "/trading-journal", label: "Journal", icon: NotebookPen },
   { href: "/daily-reports", label: "Reports", icon: FileText },

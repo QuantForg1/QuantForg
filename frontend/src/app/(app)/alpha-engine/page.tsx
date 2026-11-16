@@ -21,7 +21,7 @@ export default function AlphaEnginePage() {
               <Link href="/market-intelligence">Market Intel</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }

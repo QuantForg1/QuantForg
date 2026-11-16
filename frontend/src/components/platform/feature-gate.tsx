@@ -25,8 +25,8 @@ export function FeatureGate({
         actionHref="/settings"
       />
       <p className="mt-3 text-center text-xs text-[var(--fg-muted)]">
-        <Link href="/terminal" className="text-[var(--accent)]">
-          Back to Terminal
+        <Link href="/dashboard" className="text-[var(--accent)]">
+          Back to Dashboard
         </Link>
       </p>
     </div>

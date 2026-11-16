@@ -32,8 +32,19 @@ export function requestPathname(path: string): string {
   return raw.replace(/\/$/, "") || "/";
 }
 
+/**
+ * Trader History ledger (GET /history): broker orders + deals over MT5.
+ * It reads the broker, so it gets the heavy budget. An 8s telemetry cap
+ * cut it off and showed "Unable to load trading history" in Production.
+ */
+export function isBrokerHistoryPath(path: string): boolean {
+  const p = requestPathname(path);
+  return p === "/history" || p.endsWith("/api/v1/history");
+}
+
 export function isTelemetryPath(path: string): boolean {
   const p = requestPathname(path);
+  if (isBrokerHistoryPath(p)) return false;
   return (
     p.includes("/institutional-observability") ||
     p.includes("/execution/journal") ||
@@ -105,6 +116,7 @@ export function defaultTimeoutForPath(path: string): number {
     return API_HEAVY_TIMEOUT_MS;
   }
   if (
+    isBrokerHistoryPath(p) ||
     p.includes("/mt5") ||
     p.includes("/weltrade") ||
     p.includes("/ite") ||
