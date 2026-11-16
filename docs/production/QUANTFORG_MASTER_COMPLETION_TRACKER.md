@@ -9,8 +9,8 @@ Statuses:
 - **PASS**: verified, but not a deployment.
 - **MERGED**, **PR OPEN**, **IN PROGRESS**, **BLOCKED** (with owner action), **NOT STARTED**.
 
-- Last update: 2026-11-16 ~11:55 UTC
-- Production backend SHA: `c54e7f51` (Railway deployment `ef57bdc8`, SUCCESS)
+- Last update: 2026-11-16 ~18:10 UTC
+- Production backend SHA: `9b52ce67` (Railway deployment `7e649d4e`, SUCCESS)
 - Production frontend SHA: Vercel `frontend` deploys `main`; `/terminal` → `/dashboard` redirect verified live
 
 ## Ground truth as of this update (measured, not assumed)
@@ -22,8 +22,8 @@ Statuses:
 | Multi-account workers / hosts | **0 / 0**. The worker code can now log customers in from the vault (#299), but no Production supervisor runs on the host yet (owner action A5). | `execution_workers`, `worker_hosts` |
 | LIVE enablement | ENABLED by the owner 15 Nov 23:45 UTC. The owner chose to keep it running on 16 Nov. Not changed by any release. | `ite_ops_runtime_state.live_trading_audit` |
 | LIVE trades 16 Nov (old 20/48/0.20 code) | 20 entries, balance ~$20.69 → $12.30 | `live_trade_journal` |
-| Gateway heartbeat | **stalled since 10:18 UTC**. `/history/deals` times out (60–140 s) since ~10:40 UTC. | gateway `/health`, Railway logs |
-| Repository visibility | PUBLIC | GitHub |
+| Gateway heartbeat | **Still stalled at 18:05 UTC** (last heartbeat 10:18:37 UTC). `/history/deals` times out. The owner is restarting it (A1). | gateway `/health` |
+| Repository visibility | **PRIVATE** (owner, verified). Branch protection needs GitHub Pro/Team. | GitHub API |
 
 **Answer to "can many users just enter MT5 login and have the robot trade?": not yet.** No multi-account worker or terminal is provisioned. The only working execution path is the owner's single Weltrade account through the existing gateway. This is workstream **W2**.
 
@@ -108,6 +108,31 @@ These start after P1 acceptance, in the order above.
 Known inputs:
 - Billing routes exist (`billing` router). Entitlement enforcement has not been verified.
 
+## Session 2 (16 Nov, 17:00–18:10 UTC)
+
+| Item | Status | Evidence |
+|---|---|---|
+| **Production incident: API degraded** (`/health/live` took 10–120 s; 502s on auth/me, session, robot-control) while gateway history hung | **PRODUCTION VERIFIED fixed** (#307 `9b52ce67`) | Gateway read circuit breaker. History reads in the weltrade, market-intelligence and quant-ai dashboards moved off the event loop. After deploy: `/health/live` 3–21 ms, `robot-control/accounts` 200 (1.8 s). `/history` and `/portfolio` fail fast (500) until the gateway is restarted. |
+| RLS / IDOR audit | **DEPLOYED** (#303) | `/ite/research/*` was anonymous → owner/admin. Constant-time cron secret. Path-ID routes verified owner-scoped. RLS on every public table. See `SECURITY_GOVERNANCE_ACTIONS.md`. |
+| Robot Control Center, signed-in check | **PRODUCTION VERIFIED** (read-only) | Signed-in owner session shows Weltrade •••799 LIVE, connection ROBOT_READY (gateway `trade_allowed=true`), robot RUNNING, actions Pause / Stop / Emergency. No control was clicked, so LIVE was not altered. The session card read wrong fields; fixed in #308. |
+| Book, signed-in check | **PRODUCTION VERIFIED** (layout) | Sections are content-sized and the nav order is correct (RCC above Risk Center, no Terminal). Household data shows "Loading" because `/portfolio` depends on gateway history (A1). |
+| MT5 server time vs UTC | **DEPLOYED** (#305) | Evidence: position 704115432 closed at 07:47:50 UTC (Railway); MT5 reported 09:47:43, i.e. server time is UTC+2. Deal and order times are now converted using an offset learned from live ticks; daily P/L fails closed while the offset is unknown. **Note:** `live_trade_journal` times recorded before this fix are server time (+2 h). The 16 Nov trades actually ran from 00:16 UTC. Open-position open_time and candle times are still raw (tracked). |
+| DEMO commission validation | **DEPLOYED** (#304) | Owner records a verified per-account commission: `POST /api/v1/robot-control/admin/accounts/{id}/verified-commission` (source + evidence). Unknown commission still rejects. |
+| Multi-user provisioning | **DEPLOYED** (#299 vault creds, #306 auto-assignment) | Oldest waiting customer account with vault credentials gets the next free slot (`QF_AUTO_ASSIGN_ENVIRONMENTS`, default demo). Queue when full; idle lab slot rebinds. Runbook: `WORKER_SUPERVISOR_PRODUCTION.md`. |
+| Production worker supervisor | **BLOCKED (owner action A5)** | Railway has `WORKER_SERVICE_TOKEN` and `MULTI_ACCOUNT_DISPATCH_ENABLED` (names verified). The host needs `local.production.env`, then `start_production_supervisor.ps1`. |
+| Leaked password protection | **BLOCKED (owner action A6)** | Steps in `SECURITY_GOVERNANCE_ACTIONS.md` |
+| Branch protection | **BLOCKED (owner: GitHub plan)** | API: requires GitHub Pro/Team on a private repo |
+
+### Execution-path risk audit (16 Nov, after #296, #300, #304, #305)
+
+| Path | Owner guard (9/25/1.5/0.45/session/1 pos) | Daily budget, real UTC | User caps (strictest) | Robot controls | Commission |
+|---|---|---|---|---|---|
+| Weltrade robot (ITE → `InstitutionalExecutionEngine`) | yes + presend | yes; fails closed if P/L untrusted or clock unknown | yes | yes (entry_block) | verified 0.00 (runtime policy) |
+| Manual Dashboard ticket (`/execution` API → same engine) | yes | yes | yes | yes | same |
+| Multi-account worker (`authorize_worker_execution`) | yes (MT5 snapshot) | yes (snapshot deals) | yes | yes | verified per account, else reject |
+| Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
+| Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
+
 ## Owner actions required
 
 | ID | Action | Why |
@@ -135,7 +160,8 @@ Known inputs:
 
 ## Handoff (next exact actions)
 
-1. A1, the gateway restart, unblocks history, the daily-P/L check and robot entries. The ITE has been held PAUSED since restart, waiting for gateway probes. The heartbeat has been stalled since 10:18 UTC.
+1. **After A1**, verify in order: gateway heartbeat fresh and `/health` OK; the gateway's deployed commit (`deploy_main_gateway_verify.json`); `/account` login 12439799 on Weltrade-Real; `/history/deals` 200; `broker_clock` offset learned (+2 h); the daily-loss context trusted; and owner rejects (`OWNER_*`) in the cycle logs.
+2. Earlier note: A1, the gateway restart, unblocks history, the daily-P/L check and robot entries. The ITE has been held PAUSED since restart, waiting for gateway probes. The heartbeat has been stalled since 10:18 UTC.
 2. After A1: watch the logs for `OWNER_*` rejects and confirm `runtime_policy` v17 in the cycle; verify the MT5 server-time day boundary on real deals.
 3. W2: connection state machine in the Broker Accounts UI (CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY), using worker evidence.
 4. Security: RLS/IDOR audit of user-scoped APIs. Advisor: no ERROR-level findings; 1 WARN fixed; 3 SECURITY DEFINER helpers are intended (used by RLS); A6 is pending.
