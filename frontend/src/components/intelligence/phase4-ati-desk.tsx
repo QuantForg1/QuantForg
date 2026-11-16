@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuth } from "@/providers/auth-provider";
+import { isPrivilegedRole } from "@/lib/navigation/customer-routes";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,6 +34,8 @@ const TABS: { id: Tab; label: string }[] = [
  * Phase 4 AI Trading Intelligence desks — RC4, explainable, no fake live AI.
  */
 export function Phase4AtiDesk() {
+  const { user } = useAuth();
+  const canChangeMode = isPrivilegedRole(user?.role);
   const [tab, setTab] = useState<Tab>("market");
   const qc = useQueryClient();
 
@@ -94,7 +98,11 @@ export function Phase4AtiDesk() {
     queryFn: () =>
       aiTradingIntelligenceApi.optimize({
         strategy_id: "gold-default",
-        backtest: { profit_factor: "1.2", expectancy: "0.4", max_drawdown_pct: "8" },
+        backtest: {
+          profit_factor: "1.2",
+          expectancy: "0.4",
+          max_drawdown_pct: "8",
+        },
         walk_forward: { profit_factor: "1.1", trades: 40 },
         out_of_sample: { profit_factor: "1.05" },
         owner_promotion_approved: false,
@@ -128,7 +136,8 @@ export function Phase4AtiDesk() {
 
   const health = asRecord(healthQ.data);
   const supervisor = asRecord(supervisorQ.data);
-  const mode = str(supervisor.mode) || str(health.supervisor_mode) || "MONITOR_ONLY";
+  const mode =
+    str(supervisor.mode) || str(health.supervisor_mode) || "MONITOR_ONLY";
 
   const freshness = useMemo(() => {
     if (healthQ.isFetching) return "refreshing";
@@ -186,12 +195,23 @@ export function Phase4AtiDesk() {
         ))}
       </div>
 
-      {tab === "market" ? <MarketPanel data={asRecord(marketQ.data)} loading={marketQ.isLoading} /> : null}
+      {tab === "market" ? (
+        <MarketPanel
+          data={asRecord(marketQ.data)}
+          loading={marketQ.isLoading}
+        />
+      ) : null}
       {tab === "regime" ? (
-        <RegimePanel data={asRecord(regimeValQ.data)} loading={regimeValQ.isLoading} />
+        <RegimePanel
+          data={asRecord(regimeValQ.data)}
+          loading={regimeValQ.isLoading}
+        />
       ) : null}
       {tab === "signals" || tab === "health" ? (
-        <SignalPanel data={asRecord(signalQ.data)} loading={signalQ.isLoading} />
+        <SignalPanel
+          data={asRecord(signalQ.data)}
+          loading={signalQ.isLoading}
+        />
       ) : null}
       {tab === "optimizer" ? (
         <OptimizerPanel data={asRecord(optQ.data)} loading={optQ.isLoading} />
@@ -203,7 +223,7 @@ export function Phase4AtiDesk() {
         <SupervisorPanel
           mode={mode}
           snapshot={supervisor}
-          onSetMode={(m) => modeMut.mutate(m)}
+          onSetMode={canChangeMode ? (m) => modeMut.mutate(m) : undefined}
           pending={modeMut.isPending}
         />
       ) : null}
@@ -229,7 +249,8 @@ function MarketPanel({
   data: Record<string, unknown>;
   loading: boolean;
 }) {
-  if (loading) return <p className="qf-caption">Loading market intelligence…</p>;
+  if (loading)
+    return <p className="qf-caption">Loading market intelligence…</p>;
   const regime = asRecord(data.regime);
   const notes = asList(data.notes).map(String);
   return (
@@ -241,7 +262,9 @@ function MarketPanel({
         <Metric label="Model" value={str(data.model_version)} />
       </div>
       {notes.length ? (
-        <p className="qf-caption text-[var(--fg-subtle)]">{notes.join(" · ")}</p>
+        <p className="qf-caption text-[var(--fg-subtle)]">
+          {notes.join(" · ")}
+        </p>
       ) : null}
       <p className="qf-caption text-[var(--fg-muted)]">
         Sources: {asList(data.data_sources).map(String).join(", ") || "—"}
@@ -306,13 +329,12 @@ function SignalPanel({
         <Metric label="Quality" value={str(data.quality)} />
         <Metric label="Confidence" value={str(data.confidence)} />
         <Metric label="Regime" value={str(data.regime)} />
-        <Metric
-          label="Actionable"
-          value={data.actionable ? "yes" : "no"}
-        />
+        <Metric label="Actionable" value={data.actionable ? "yes" : "no"} />
       </div>
       <p className="text-[12px] text-[var(--fg)]">{str(data.explanation)}</p>
-      <p className="qf-caption text-[var(--fg-muted)]">{str(data.disclaimer)}</p>
+      <p className="qf-caption text-[var(--fg-muted)]">
+        {str(data.disclaimer)}
+      </p>
     </div>
   );
 }
@@ -371,7 +393,9 @@ function RiskPanel({
             [{str(a.severity)}] {str(a.title)}
           </div>
           <div className="text-[var(--fg-muted)]">{str(a.explanation)}</div>
-          <div className="qf-caption">Recommend: {str(a.recommended_action)}</div>
+          <div className="qf-caption">
+            Recommend: {str(a.recommended_action)}
+          </div>
         </li>
       ))}
     </ul>
@@ -386,7 +410,8 @@ function SupervisorPanel({
 }: {
   mode: string;
   snapshot: Record<string, unknown>;
-  onSetMode: (mode: string) => void;
+  /** Absent for customers: the mode is platform-wide (owner/admin only). */
+  onSetMode?: (mode: string) => void;
   pending: boolean;
 }) {
   const modes = [
@@ -401,21 +426,25 @@ function SupervisorPanel({
         Default is MONITOR_ONLY. Automation never enables LIVE, raises risk, or
         disables safety.
       </p>
-      <div className="flex flex-wrap gap-2">
-        {modes.map((m) => (
-          <Button
-            key={m}
-            size="sm"
-            variant={mode === m ? "default" : "secondary"}
-            className="h-7 text-[11px]"
-            disabled={pending}
-            type="button"
-            onClick={() => onSetMode(m)}
-          >
-            {m}
-          </Button>
-        ))}
-      </div>
+      {onSetMode ? (
+        <div className="flex flex-wrap gap-2">
+          {modes.map((m) => (
+            <Button
+              key={m}
+              size="sm"
+              variant={mode === m ? "default" : "secondary"}
+              className="h-7 text-[11px]"
+              disabled={pending}
+              type="button"
+              onClick={() => onSetMode(m)}
+            >
+              {m}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <p className="qf-caption">Current mode: {mode}</p>
+      )}
       <p className="qf-caption font-mono text-[var(--fg-subtle)]">
         allowed_auto=
         {asList(snapshot.allowed_auto_actions).map(String).join(",") || "—"}

@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.presentation.dependencies.auth import CurrentUser
+from app.domain.enums.user import UserRole
+from app.presentation.dependencies.auth import CurrentUser, require_roles
 from app.presentation.dependencies.broker_connectivity import BrokerConnectivityDep
 from app.presentation.schemas.broker_connectivity import (
     ConnectivityTradingRequest,
@@ -22,6 +23,9 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/broker-connectivity", tags=["broker-connectivity"])
+
+# Platform-wide actions: owner/admin only (customers keep read endpoints).
+_OPERATOR = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
 
 
 def _weltrade_profile_server_names() -> list[str]:
@@ -288,7 +292,7 @@ async def certification_history(
     return svc.certification_history(broker_slug=broker, limit=limit)
 
 
-@router.post("/certification/run")
+@router.post("/certification/run", dependencies=_OPERATOR)
 async def certification_run(
     body: RunCertificationRequest,
     _user: CurrentUser,
@@ -335,7 +339,7 @@ async def platform_heartbeat(
     return svc.invoke(platform, "heartbeat")
 
 
-@router.post("/invoke")
+@router.post("/invoke", dependencies=_OPERATOR)
 async def invoke_capability(
     body: InvokeConnectivityRequest,
     _user: CurrentUser,

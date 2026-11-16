@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.application.services import ai_trading_intelligence_service as ati
-from app.presentation.dependencies.auth import CurrentUser
+from app.domain.enums.user import UserRole
+from app.presentation.dependencies.auth import CurrentUser, require_roles
 
 router = APIRouter(
     prefix="/ai-trading-intelligence",
     tags=["ai-trading-intelligence"],
 )
+
+# Platform-wide actions: owner/admin only (customers keep read endpoints).
+_OPERATOR = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
 
 
 class MarketIntelBody(BaseModel):
@@ -174,7 +178,7 @@ async def post_signal_quality(
     return ati.serialize_signal(score)
 
 
-@router.post("/adaptive/propose")
+@router.post("/adaptive/propose", dependencies=_OPERATOR)
 async def post_adaptive_propose(
     body: AdaptBody,
     user: CurrentUser,
@@ -190,7 +194,7 @@ async def post_adaptive_propose(
     return ati.serialize_proposal(proposal)
 
 
-@router.post("/adaptive/{proposal_id}/approve")
+@router.post("/adaptive/{proposal_id}/approve", dependencies=_OPERATOR)
 async def post_adaptive_approve(
     proposal_id: str,
     user: CurrentUser,
@@ -202,7 +206,7 @@ async def post_adaptive_approve(
     return {"ok": True, "proposal": ati.serialize_proposal(out)}
 
 
-@router.post("/adaptive/{strategy_id}/rollback")
+@router.post("/adaptive/{strategy_id}/rollback", dependencies=_OPERATOR)
 async def post_adaptive_rollback(
     strategy_id: str,
     user: CurrentUser,
@@ -263,7 +267,7 @@ async def get_supervisor_state(user: CurrentUser) -> dict[str, Any]:
     return ati.get_supervisor().snapshot()
 
 
-@router.post("/supervisor/mode")
+@router.post("/supervisor/mode", dependencies=_OPERATOR)
 async def set_supervisor_mode(
     body: SupervisorModeBody,
     user: CurrentUser,
@@ -287,7 +291,7 @@ async def set_supervisor_mode(
     }
 
 
-@router.post("/supervisor/action")
+@router.post("/supervisor/action", dependencies=_OPERATOR)
 async def supervisor_action(
     body: SupervisorActionBody,
     user: CurrentUser,

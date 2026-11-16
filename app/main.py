@@ -42,6 +42,87 @@ _CORE_ROUTER_NAMES: frozenset[str] = frozenset(
 
 # Routers are registered one-by-one (lazy import) so a single broken module
 # can be skipped via QF_DISABLED_COMPONENTS without taking down the process.
+# Operator/research desks with no per-endpoint role checks. Customers must
+# not read or change platform-wide state through them (security audit,
+# 17 Nov 2026): every endpoint requires OWNER or ADMIN.
+_OPERATOR_ONLY_ROUTER_MODULES: frozenset[str] = frozenset(
+    {
+        "adaptive_scalping_intelligence",
+        "ai_quant_copilot",
+        "ai_quant_scientist",
+        "alpha_engine",
+        "alpha_factory",
+        "audit_governance",
+        "autonomous_trading_control",
+        "candidate_validation",
+        "continuous_validation_framework",
+        "decision_engine",
+        "decision_intelligence",
+        "ecosystem",
+        "execution_intelligence",
+        "execution_quality_suite",
+        "gateway_manager",
+        "gold_unified_brain",
+        "institutional_ai_decision",
+        "institutional_control_plane",
+        "institutional_data_warehouse",
+        "institutional_edge_engine",
+        "institutional_experimentation_platform",
+        "institutional_intelligence",
+        "institutional_observability",
+        "institutional_ops_control",
+        "institutional_release_deployment",
+        "institutional_research_lab",
+        "institutional_risk_analytics",
+        "institutional_simulation_engine",
+        "institutional_strategy_lifecycle",
+        "institutional_validation_program",
+        "integration_sprint_v1",
+        "intelligence_platform",
+        "live_learning_program",
+        "market_intelligence",
+        "micro_account_analyzer",
+        "mission_control",
+        "multi_agent_ai",
+        "openai_advisor",
+        "performance_intelligence",
+        "production_readiness",
+        "production_readiness_certification",
+        "production_replay",
+        "quant_knowledge_graph",
+        "quant_studio",
+        "quantforg_autonomous_operations",
+        "quantforg_canonical_data_model",
+        "quantforg_certification_suite",
+        "quantforg_decision_intelligence",
+        "quantforg_event_mesh",
+        "quantforg_paper_trading_campaign",
+        "quantforg_portfolio_manager",
+        "quantforg_strategy_factory",
+        "quantforg_strategy_marketplace",
+        "quantitative_research_control",
+        "real_market_intelligence_platform",
+        "reliability_engineering_suite",
+        "replay_evidence_lab",
+        "scalping_ai_v2",
+        "strategy_research_lab",
+        "threshold_performance_analysis",
+        "trading_brain_v3",
+        "trading_kernel",
+        "trading_operations_center",
+    }
+)
+
+
+def _operator_dependencies() -> list[Any]:
+    from fastapi import Depends
+
+    from app.domain.enums.user import UserRole
+    from app.presentation.dependencies.auth import require_roles
+
+    return [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
+
+
 _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("health", "app.presentation.routers.health"),
     ("version", "app.presentation.routers.version"),
@@ -991,7 +1072,12 @@ def _register_routers(
         try:
             module = importlib.import_module(module_path)
             router = module.router
-            application.include_router(router, prefix=prefix)
+            if module_path.rsplit(".", 1)[-1] in _OPERATOR_ONLY_ROUTER_MODULES:
+                application.include_router(
+                    router, prefix=prefix, dependencies=_operator_dependencies()
+                )
+            else:
+                application.include_router(router, prefix=prefix)
             registered.append(name)
             already.add(name)
             ms = round((time.perf_counter() - t_r) * 1000.0, 1)
