@@ -133,6 +133,29 @@ Known inputs:
 | Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
 | Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
 
+## Session 6 (16–17 Nov, 22:30–23:30 UTC): routes, authorization, latency evidence
+
+- **Critical security fix (#333).** 97 routers checked for a session but no role, so any registered user could change platform-wide state (scalping emergency-stop clear, AI supervisor mode, autonomous-trading modes, broker certification). Now:
+  - 63 operator routers require OWNER or ADMIN.
+  - Platform-wide actions inside customer routers are gated per endpoint.
+  - Customers can open only 31 desk routes; other in-app URLs redirect to `/dashboard`.
+  - All 336 pages are classified in **`ROUTE_REGISTER.md`**. Nothing was deleted.
+- **Authenticated verification (owner session, built-in browser, 375 px).**
+  - Robot Control Center loads real data: Weltrade •••799, Robot ready; status "Not trading · automated execution is paused by the platform" (correct, Live Trading Control is PAUSED).
+  - Risk settings show 9 / 25 / 9.
+  - No horizontal overflow at mobile width.
+  - Customer APIs (`/robot-control/accounts`, `/risk/preferences*`, `/auth/me`) contain no owner-only fields.
+- **Latency evidence:**
+  - Round trip Cairo ↔ Railway SFO is about 400 ms.
+  - The API runs in **SFO** while Supabase is in **eu-central-1**. Every database and auth call crosses the Atlantic.
+  - Gateway calls cost 380–450 ms each.
+  - `slow_request` traces (#335) show the breakdown per request.
+- **Fixed from traces:**
+  - #334: event-loop stalls in the ITE stall check, order validate/calc and Weltrade attach. The broker-read pool now carries context variables.
+  - #336: history is no longer retried (it was 3 × 15 s); verified-user cache raised to 60 s.
+  - #337: routers are imported off the event loop (removes an 11 s stall per deploy).
+- **Recommended (owner decision):** move the Railway service from `sfo` to an EU region next to Supabase (eu-central-1) and the gateway. No volume is attached, so this is a redeploy. It cuts every database/auth round trip from ~150 ms to ~10 ms and the user round trip from Cairo by ~300 ms.
+
 ## Session 5 (16 Nov, 19:50–20:40 UTC): login, RCC, owner-policy privacy
 
 - Register: **`docs/production/PLATFORM_ISSUE_REGISTER.md`** (Critical / High / Medium / Low).

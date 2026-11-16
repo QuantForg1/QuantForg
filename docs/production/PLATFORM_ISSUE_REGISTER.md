@@ -12,6 +12,8 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 | C3 | `/history/deals` hangs on the Windows gateway | Every call times out | **OWNER A1** (redeploy gateway `a150730e`). Contained by #307/#319/#326 |
 | C4 | Owner-only risk policy visible to customers | RCC card, Overview order ticket, risk bounds API | **FIXED #323** (UI removed, API omits ceilings, activity reasons categorized; server enforcement unchanged) |
 
+| C5 | 97 routers had session-only auth: any user could change platform-wide state | Code audit 17 Nov | **FIXED #333** (63 routers owner/admin; per-endpoint gates; test `test_operator_api_rbac.py`) |
+
 ## High
 
 | ID | Issue | Evidence | Status |
@@ -27,12 +29,16 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 
 | ID | Issue | Status |
 |---|---|---|
-| M1 | 196 app routes but only about 16 customer desks in the rail; many legacy/ops pages are reachable by URL | OPEN: audit and retire pages that are not in nav or admin (needs a route-by-route pass with a signed-in session) |
+| M1 | 336 page files (customers: 31) | **MITIGATED #333** (customer route boundary + `ROUTE_REGISTER.md`); retirement of 112 unlinked pages needs owner confirmation |
+| M1-old | 196 app routes but only about 16 customer desks in the rail; many legacy/ops pages are reachable by URL | OPEN: audit and retire pages that are not in nav or admin (needs a route-by-route pass with a signed-in session) |
 | M2 | Owner risk constants still ship in the client bundle (owner ticket chunk) even though customers never load it | OPEN: move the ticket pre-check to the server-only `/execution/check` |
 | M3 | Mobile shell: drawer scroll bleed; content under the tab bar | **FIXED #324**; full visual pass needs a signed-in browser session (OWNER A12) |
 | M4 | Open-position `open_time` and candle times are raw broker server time (UTC+2) | OPEN |
 | M5 | No external uptime monitor on the gateway | OPEN |
 | M6 | Owner cannot see the gateway's deployed SHA (`/health` has none) | OPEN: add the commit to gateway `/health` in the next gateway release |
+
+| M7 | API region (SFO) far from Supabase (eu-central-1), gateway and users | **OWNER decision**: move Railway region to EU |
+| M8 | Customer pages contain technical copy (e.g. Book: "nulls when data unavailable · no fabricated zeros"); Dashboard waits on slow session reads | OPEN |
 
 ## Low / cosmetic
 
