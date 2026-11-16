@@ -207,6 +207,7 @@ def authorize_worker_execution(
         take_profit=take_profit,
         now=now,
         user_caps=user_caps,
+        broker_account_id=worker.broker_account_id,
     )
     reasons.extend(guard.reasons)
 

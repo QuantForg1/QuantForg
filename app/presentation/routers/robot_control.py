@@ -12,14 +12,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+from decimal import Decimal
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.application.dto.auth import AuthUserDTO
 from app.application.services import robot_control_service as rc
-from app.presentation.dependencies.auth import CurrentUser
+from app.domain.enums.user import UserRole
+from app.presentation.dependencies.auth import CurrentUser, require_roles
 
 router = APIRouter(prefix="/robot-control", tags=["robot-control"])
 
@@ -102,3 +105,34 @@ async def control_robot(
         raise HTTPException(
             status_code=exc.status, detail={"code": exc.code, "message": str(exc)}
         ) from exc
+
+
+class VerifiedCommissionBody(BaseModel):
+    usd_per_order: Decimal = Field(ge=0, le=100)
+    source: str
+    evidence: str = Field(min_length=10, max_length=500)
+
+
+@router.post("/admin/accounts/{broker_account_id}/verified-commission")
+async def set_verified_commission(
+    broker_account_id: UUID,
+    body: VerifiedCommissionBody,
+    owner: Annotated[AuthUserDTO, Depends(require_roles(UserRole.OWNER))],
+) -> dict[str, Any]:
+    """Owner records the broker-verified per-order commission for an account."""
+    from app.application.services.account_commission import (
+        record_verified_commission,
+    )
+
+    try:
+        recorded = await asyncio.to_thread(
+            record_verified_commission,
+            broker_account_id=broker_account_id,
+            usd_per_order=body.usd_per_order,
+            source=body.source,
+            evidence=body.evidence,
+            actor_id=UUID(str(owner.id)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "verified_commission": recorded}
