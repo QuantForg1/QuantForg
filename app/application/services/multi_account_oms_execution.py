@@ -121,23 +121,40 @@ def authorize_worker_execution(
     account_environment: str | None = None,
     customer_trading_enabled: bool = True,
     settings: Any | None = None,
+    account_snapshot: dict[str, Any] | None = None,
+    now: datetime | None = None,
+    user_caps: Any | None = None,
 ) -> ExecutionAuthorization:
-    """Revalidate ownership + risk + OMS gates at execution time."""
+    """Revalidate ownership + risk + OMS gates at execution time.
+
+    The environment comes from MT5 ``trade_mode`` in the worker's account
+    snapshot, never from the job payload. Every new entry passes the same
+    final owner guard as the Weltrade robot path.
+    """
+    from app.application.services.multi_account_owner_guard import (
+        environment_from_snapshot,
+        evaluate_worker_entry,
+    )
+
     reasons: list[str] = []
     status = worker.public_status()
-    env = (
+    claimed = (
         str(
             account_environment
             or job_payload.get("account_environment")
             or job_payload.get("environment")
-            or "demo"
+            or ""
         )
         .strip()
         .lower()
+        or None
     )
-    if env not in {"demo", "live"}:
+    if claimed is not None and claimed not in {"demo", "live"}:
         reasons.append("account_environment_invalid")
-        env = "demo"
+        claimed = None
+    verified_env = environment_from_snapshot(account_snapshot)
+    # Unknown environment is treated as LIVE for the send lock: never as demo.
+    env = verified_env or "live"
 
     if revoked or status.get("lifecycle") == "revoked":
         reasons.append("account_revoked")
@@ -177,6 +194,21 @@ def authorize_worker_execution(
         settings=settings,
     )
     reasons.extend(list(preview.reasons))
+
+    guard = evaluate_worker_entry(
+        snapshot=account_snapshot,
+        claimed_environment=claimed,
+        user_id=worker.user_id,
+        symbol=symbol,
+        side=side,
+        volume=volume,
+        entry=entry,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        now=now,
+        user_caps=user_caps,
+    )
+    reasons.extend(guard.reasons)
 
     # De-dupe reasons
     seen: set[str] = set()
@@ -229,6 +261,8 @@ def authorize_worker_execution(
         audit={
             "authorized_at": datetime.now(UTC).isoformat(),
             "oms_preview_authorized": preview.authorized,
+            "environment_source": "mt5_trade_mode" if verified_env else "unverified",
+            "owner_guard_inputs": guard.planned_inputs,
             "dispatch_ready": bool(status.get("dispatch_ready")),
         },
     )

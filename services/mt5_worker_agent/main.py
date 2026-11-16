@@ -21,6 +21,7 @@ Never provisions a new Windows VPS.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -265,10 +266,42 @@ def cmd_railway_dispatch_poll(
         job = claim.get("job") if isinstance(claim, dict) else None
         if execute and isinstance(job, dict) and job.get("intent_id"):
             intent_id = str(job["intent_id"])
+            from services.mt5_worker_agent.account_snapshot import (
+                build_account_snapshot,
+            )
+            from services.mt5_worker_agent.mt5_session import (
+                initialize_portable,
+                shutdown as mt5_shutdown,
+            )
+
+            # Attach first: the backend owner guard needs a fresh snapshot of
+            # this terminal's account (mode, equity, quote, deals today).
+            snapshot: dict[str, Any] | None = None
+            try:
+                terminal_exe = LocalWorkerSupervisor().terminal_exe_for(str(slot_id))
+                attached = bool(initialize_portable(terminal_exe))
+            except Exception as exc:
+                attached = False
+                entry["mt5_attach_error"] = type(exc).__name__
+            if attached:
+                try:
+                    import MetaTrader5 as mt5  # type: ignore[import-not-found]
+
+                    job_payload = job.get("payload") or {}
+                    snapshot = build_account_snapshot(
+                        mt5,
+                        str(job_payload.get("symbol") or job.get("symbol") or ""),
+                        verified_commission_usd=os.environ.get(
+                            f"WORKER_VERIFIED_COMMISSION_USD_{slot_id}".upper()
+                        ),
+                    )
+                except Exception as exc:
+                    entry["snapshot_error"] = type(exc).__name__
             auth = client.dispatch_execute_authorize(
                 worker_id=worker_id,
                 intent_id=intent_id,
                 account_environment=env,
+                account_snapshot=snapshot,
             )
             entry["authorization"] = auth
             auth_body = (
@@ -279,6 +312,9 @@ def cmd_railway_dispatch_poll(
                 and auth.get("ok")
                 and auth.get("order_send_allowed")
             )
+            if not send_ok and attached:
+                with contextlib.suppress(Exception):
+                    mt5_shutdown()
             if env == "live" and not send_ok:
                 entry["live_execution"] = {
                     "order_send": False,
@@ -286,19 +322,6 @@ def cmd_railway_dispatch_poll(
                     "live_path_authorized": bool(auth_body.get("live_path_authorized")),
                 }
             elif send_ok:
-                from services.mt5_worker_agent.mt5_session import (
-                    initialize_portable,
-                    shutdown as mt5_shutdown,
-                )
-
-                try:
-                    terminal_exe = LocalWorkerSupervisor().terminal_exe_for(
-                        str(slot_id)
-                    )
-                    attached = bool(initialize_portable(terminal_exe))
-                except Exception as exc:
-                    attached = False
-                    entry["mt5_attach_error"] = type(exc).__name__
                 if not attached and not dry_run:
                     broker = {
                         "ok": False,
@@ -314,10 +337,8 @@ def cmd_railway_dispatch_poll(
                         take_profit=auth_body.get("take_profit"),
                         dry_run=bool(dry_run),
                     )
-                    try:
+                    with contextlib.suppress(Exception):
                         mt5_shutdown()
-                    except Exception:
-                        pass
                 entry["broker"] = broker
                 entry["order_send"] = bool(broker.get("order_send"))
                 # Dry-run must never be recorded as a broker fill.

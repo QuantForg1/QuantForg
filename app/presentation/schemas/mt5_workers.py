@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -89,7 +90,10 @@ class DispatchExecuteAuthorizeRequest(BaseModel):
 
     worker_id: UUID
     intent_id: UUID
-    account_environment: str = Field(default="demo", max_length=16)
+    account_environment: str | None = Field(default=None, max_length=16)
+    # Fresh MT5 snapshot from the worker's own terminal. Required for any
+    # new entry; the owner guard rejects when it is missing or stale.
+    account_snapshot: dict[str, Any] | None = None
 
 
 class DispatchExecutionResultRequest(BaseModel):
