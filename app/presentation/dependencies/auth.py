@@ -141,7 +141,7 @@ def get_auth_service(
 # network and re-synced the profile (~1-1.6 s each in Production, 16 Nov).
 # A verified result is reused briefly per token. The TTL bounds how long a
 # revoked token or a role/status change can lag; logout evicts immediately.
-_USER_CACHE_TTL_S = 20.0
+_USER_CACHE_TTL_S = 60.0
 _USER_CACHE_MAX = 2048
 _user_cache: dict[str, tuple[float, AuthUserDTO]] = {}
 

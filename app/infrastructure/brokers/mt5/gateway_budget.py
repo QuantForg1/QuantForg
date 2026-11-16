@@ -92,6 +92,11 @@ def request_attempts(method: str, path: str, *, light: bool = False) -> int:
         # 3x30s hang that burns the ITE cycle budget.
         if str(path or "").split("?", 1)[0].startswith("/candles/"):
             return GET_ATTEMPTS
+        if str(path or "").split("?", 1)[0].startswith("/history/"):
+            # A hung MT5 history read does not recover on retry: 3 attempts x
+            # 15 s kept History/Portfolio waiting 23-45 s (trace 17 Nov). One
+            # attempt, then the circuit breaker fails fast.
+            return 1
         return GET_HEAVY_ATTEMPTS
     if is_read_only_post(path):
         return READ_ONLY_POST_ATTEMPTS
