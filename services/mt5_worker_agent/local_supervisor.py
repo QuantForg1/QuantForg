@@ -241,6 +241,34 @@ class LocalWorkerSupervisor:
                 )
         return payload
 
+    def refresh_registrations(self) -> dict[str, Any]:
+        """Re-register slots that are not ready (idempotent on the backend).
+
+        A free lab slot is re-provisioned by the backend for the next waiting
+        customer account; the slot then picks up its new worker id here.
+        """
+        if self.railway is None:
+            return {"ok": False, "error": "railway_client_unavailable"}
+        out: dict[str, Any] = {}
+        for slot_id, st in self.states.items():
+            if st.ready:
+                continue
+            resp = self.railway.register_worker(
+                host_code=self.host_code, slot_id=slot_id
+            )
+            new_id = str(resp.get("worker_id") or "")
+            if resp.get("ok") and new_id:
+                if new_id != st.worker_id:
+                    logger.info("slot_rebound slot=%s worker_id=%s", slot_id, new_id)
+                    st.ready = False
+                    st.verified_login = ""
+                    st.verified_server = ""
+                st.worker_id = new_id
+                st.revoked = bool(resp.get("revoked"))
+                st.railway_ok = True
+            out[slot_id] = {"ok": bool(resp.get("ok")), "worker_id": new_id or None}
+        return {"ok": True, "slots": out}
+
     def provision_assigned_accounts(
         self,
         *,
@@ -365,6 +393,10 @@ class LocalWorkerSupervisor:
                 reg.get("ok"),
             )
         while True:
+            try:
+                self.refresh_registrations()
+            except Exception:
+                logger.exception("slot_refresh_cycle_failed")
             try:
                 self.provision_assigned_accounts()
             except Exception:

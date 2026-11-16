@@ -141,6 +141,20 @@ class Mt5WorkerApiFacade:
                 if (
                     worker is not None
                     and worker.lifecycle is not WorkerLifecycleState.REVOKED
+                    and user_id is None
+                    and broker_account_id is None
+                    and worker.metadata.get("lab_binding")
+                    and self._has_waiting_customer()
+                ):
+                    # A customer is waiting: retire the lab binding and
+                    # re-provision this slot for them below.
+                    self._revoked_workers.add(worker.worker_id)
+                    self._slot_to_worker.pop(key, None)
+                    self._worker_to_slot.pop(worker.worker_id, None)
+                    worker = None
+                if (
+                    worker is not None
+                    and worker.lifecycle is not WorkerLifecycleState.REVOKED
                 ):
                     logger.info(
                         "mt5_worker_register_idempotent worker_id=%s slot=%s",
@@ -151,6 +165,18 @@ class Mt5WorkerApiFacade:
                     return {"ok": True, "idempotent": True, **self._public(worker)}
 
             lab_user, lab_acct = lab_ids_for_slot(host_code=host_code, slot_id=slot)
+            if user_id is None and broker_account_id is None:
+                # Free slot: take the oldest connected customer account that has
+                # vault credentials and no worker yet (else stay a lab slot).
+                from app.application.services.customer_account_assignment import (
+                    next_unassigned_account,
+                )
+
+                picked = next_unassigned_account(
+                    taken_account_ids=self._bound_account_ids()
+                )
+                if picked is not None:
+                    user_id, broker_account_id = picked
             owner = user_id or lab_user
             account = broker_account_id or lab_acct
             worker = self.plane.provision_worker(
@@ -182,6 +208,28 @@ class Mt5WorkerApiFacade:
             slot,
         )
         return {"ok": True, "idempotent": False, **self._public(worker)}
+
+    def _bound_account_ids(self) -> set[str]:
+        """Broker accounts already bound to a live (non-revoked) worker."""
+        assert self.plane.provisioner is not None
+        out: set[str] = set()
+        for wid in list(self._slot_to_worker.values()):
+            if wid in self._revoked_workers:
+                continue
+            w = self.plane.provisioner.get(wid)
+            if w is not None and w.lifecycle is not WorkerLifecycleState.REVOKED:
+                out.add(str(w.broker_account_id))
+        return out
+
+    def _has_waiting_customer(self) -> bool:
+        from app.application.services.customer_account_assignment import (
+            next_unassigned_account,
+        )
+
+        return (
+            next_unassigned_account(taken_account_ids=self._bound_account_ids())
+            is not None
+        )
 
     def require_worker(self, worker_id: UUID) -> WorkerRuntime:
         assert self.plane.provisioner is not None
