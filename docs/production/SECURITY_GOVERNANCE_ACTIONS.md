@@ -2,13 +2,20 @@
 
 ## Supabase: Leaked Password Protection (security advisor WARN)
 
-Supabase checks new and changed passwords against HaveIBeenPwned and rejects known-leaked ones. Existing passwords and existing sessions are not affected.
+Source: Supabase docs, "Password security" (https://supabase.com/docs/guides/auth/password-security), checked on 16 Nov 2026.
 
-1. Supabase dashboard → project `otqyhlmwaifokrczryrc` (Production) → **Authentication** → **Providers** → **Email**. On newer dashboards it is under **Authentication → Settings → Password security**.
-2. Turn on **Prevent use of leaked passwords**. Optionally also set a minimum length of 10 or more and require letters + digits.
+- Supabase Auth checks passwords against the HaveIBeenPwned Pwned Passwords API and rejects ones that are known to have leaked.
+- **This requires the Supabase Pro plan or above.** If the project is on the Free plan, upgrade first.
+- The setting lives on the project's **Auth settings → Providers → Email** page: `https://supabase.com/dashboard/project/otqyhlmwaifokrczryrc/auth/providers?provider=Email`.
+
+Steps (owner):
+1. Open the link above, then turn on **Prevent use of leaked passwords**.
+2. On the same page, set the minimum password length to 10 or more and require digits, lowercase letters, uppercase letters and symbols.
 3. Save, then re-run the security advisor. The finding `auth_leaked_password_protection` should be gone.
 
-This is a project setting with no SQL or API exposed to the agent, so the owner must turn it on in the dashboard.
+Effect: new sign-ups and password changes must meet the rules. Existing users keep signing in, but a weak password raises `WeakPasswordError` at sign-in, which tells them to change it. Make sure the sign-in UI shows that message.
+
+The agent cannot change this project setting, so the owner must do it.
 
 ## GitHub repository
 
