@@ -361,9 +361,19 @@ export function MobileNav() {
       }
     };
     window.addEventListener("keydown", onKey);
+    // Lock page scroll behind the open drawer (iOS scroll bleed).
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    body.style.overflow = "hidden";
+    // Close if the viewport grows to desktop while the drawer is open.
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onMq = () => mq.matches && setOpen(false);
+    mq.addEventListener("change", onMq);
     return () => {
       window.clearTimeout(t);
       window.removeEventListener("keydown", onKey);
+      mq.removeEventListener("change", onMq);
+      body.style.overflow = prevOverflow;
       (prev ?? trigger)?.focus?.();
     };
   }, [open]);
@@ -394,7 +404,7 @@ export function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute inset-y-0 left-0 flex w-[min(17rem,85vw)] flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
+            className="absolute inset-y-0 left-0 flex h-[100dvh] w-[min(18rem,86vw)] flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pr-2">
