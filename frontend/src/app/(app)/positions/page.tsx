@@ -130,7 +130,7 @@ export default function PositionsPage() {
               <Link href="/broker">Broker</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }
@@ -195,8 +195,8 @@ export default function PositionsPage() {
                       icon={Layers}
                       title="No open positions"
                       description="When the broker session reports open trades, they appear here with stops and floating P&L."
-                      actionLabel="Open Terminal"
-                      actionHref="/terminal"
+                      actionLabel="Open Dashboard"
+                      actionHref="/dashboard"
                       secondaryLabel="Broker Accounts"
                       secondaryHref="/broker"
                     />

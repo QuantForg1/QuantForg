@@ -1157,4 +1157,21 @@ assert.equal(
   assert.notEqual(presentLevel(null, "SL"), "0");
 }
 
+{
+  // Signals board: the NEUTRAL count and the NEUTRAL list use the same rows.
+  // An expired NEUTRAL card must not be counted while the list hides it.
+  const { filterSignalRows: f, signalSummary: summary, EMPTY_SIGNAL_FILTERS: E } =
+    await import("./trader-ux.ts");
+  const rows = [
+    { symbol: "XAUUSD", direction: "NEUTRAL", card_status: "EXPIRED" },
+    { symbol: "XAUUSD", direction: "BUY", card_status: "TRADEABLE" },
+  ];
+  const counted = f(rows, { ...E, direction: "ALL" });
+  const s = summary({ availability: "LIVE_ROWS", rows: counted, instrumentCount: 1, lastUpdate: null });
+  const neutralList = f(counted, { ...E, direction: "NEUTRAL" });
+  assert.equal(String(s.neutral), String(neutralList.length));
+  assert.equal(neutralList.length, 0);
+  assert.equal(String(s.buy), "1");
+}
+
 console.log("trader-ux.test.ts ok");

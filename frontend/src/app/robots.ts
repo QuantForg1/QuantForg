@@ -11,7 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         allow: ["/", "/pricing", "/contact", "/login", "/register", "/privacy", "/terms", "/risk-disclosure"],
         disallow: [
           "/dashboard",
-          "/terminal",
           "/admin",
           "/settings",
           "/profile",

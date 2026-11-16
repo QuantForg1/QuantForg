@@ -16,7 +16,6 @@ const detail = readFileSync(
   join(root, "components/trading/intelligence-detail.tsx"),
   "utf8",
 );
-const shell = readFileSync(join(root, "components/terminal/shell.tsx"), "utf8");
 const riskCenter = readFileSync(
   join(root, "app/(app)/risk-center/page.tsx"),
   "utf8",
@@ -28,9 +27,7 @@ assert.doesNotMatch(ticket, /be:1/);
 assert.doesNotMatch(ticket, /Break even tag/);
 assert.match(ticket, /Position Management Engine/);
 assert.match(ticket, /prefill/);
-assert.match(detail, /Open in Terminal/);
-assert.match(shell, /ticketPrefill/);
-assert.match(shell, /searchParams\.get\("sl"\)/);
+assert.doesNotMatch(detail, /\/terminal/);
 assert.match(riskCenter, /ordersMaySubmit=\{ordersMaySubmit\}/);
 assert.doesNotMatch(riskCenter, /ordersMaySubmit=\{undefined\}/);
 

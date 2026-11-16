@@ -162,3 +162,38 @@ class TestPortfolioUseCases:
         ).execute(user_id=user_id)
         assert len(history.orders) >= 1
         assert len(history.deals) >= 1
+
+
+@pytest.mark.asyncio
+async def test_history_reads_orders_and_deals_concurrently() -> None:
+    """History waits for the slower broker read, not for both in sequence."""
+    import threading
+    import time
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from uuid import uuid4
+
+    from app.application.use_cases import portfolio as uc
+
+    barrier = threading.Barrier(2, timeout=2)
+
+    def _orders(**_: object) -> list[object]:
+        barrier.wait()  # deadlocks (BrokenBarrierError) if run sequentially
+        return []
+
+    def _deals(**_: object) -> list[object]:
+        barrier.wait()
+        return []
+
+    sync = SimpleNamespace(history_orders=_orders, history_deals=_deals)
+
+    async def _ok(*_a: object, **_k: object) -> None:
+        return None
+
+    with patch.object(uc, "_require_active_connection", _ok):
+        started = time.monotonic()
+        dto = await uc.GetHistoryUseCase(
+            mt5_uow_factory=None, sync_service=sync  # type: ignore[arg-type]
+        ).execute(user_id=uuid4())
+    assert dto.orders == [] and dto.deals == []
+    assert time.monotonic() - started < 2

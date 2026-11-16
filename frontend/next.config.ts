@@ -41,10 +41,13 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // Terminal aliases
-      { source: "/workspace", destination: "/terminal", permanent: false },
-      { source: "/execution", destination: "/terminal", permanent: false },
-      { source: "/paper", destination: "/terminal", permanent: false },
+      // /terminal was retired (2026-11-16). Old links land on the Dashboard,
+      // which keeps the order ticket and robot status.
+      { source: "/terminal", destination: "/dashboard", permanent: true },
+      { source: "/terminal/:path*", destination: "/dashboard", permanent: true },
+      { source: "/workspace", destination: "/dashboard", permanent: true },
+      { source: "/execution", destination: "/dashboard", permanent: true },  // /execution/diagnostics stays
+      { source: "/paper", destination: "/dashboard", permanent: false },
       { source: "/execution-intel", destination: "/executions", permanent: false },
       // /history serves the trader History desk (orders/deals). Do not alias to /executions.
 
@@ -91,7 +94,7 @@ const nextConfig: NextConfig = {
       { source: "/oms", destination: "/executions", permanent: false },
       { source: "/multi-asset", destination: "/institutional-alpha", permanent: false },
       { source: "/trading-engine", destination: "/trading-kernel", permanent: false },
-      { source: "/watchlist", destination: "/terminal", permanent: false },
+      { source: "/watchlist", destination: "/markets", permanent: false },
       { source: "/favorites", destination: "/symbol-management", permanent: false },
       { source: "/users", destination: "/admin/customer-ops", permanent: false },
       { source: "/system-health", destination: "/monitoring", permanent: false },

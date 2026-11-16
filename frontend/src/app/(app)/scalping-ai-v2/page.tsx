@@ -21,7 +21,7 @@ export default function ScalpingAiV2Page() {
               <Link href="/decision-intelligence">Decision Center</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }

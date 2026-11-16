@@ -37,7 +37,7 @@ export const EquityTimeline = memo(function EquityTimeline({
             description="When deals sync from the live book, the equity path appears here."
           />
         ) : (
-          <div className="h-full min-h-[140px]">
+          <div className="h-[200px]">
             <LazyEquityChart data={series} emptyLabel="No equity history" />
           </div>
         )}

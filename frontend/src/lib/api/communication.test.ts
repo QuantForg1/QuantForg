@@ -168,6 +168,10 @@ const CANONICAL = "XAUUSD_i";
 // 10. Telemetry failure does not block decision
 {
   assert.equal(isTelemetryPath("/institutional-observability/dashboard"), true);
+  // Broker History ledger is a heavy MT5 read, not telemetry.
+  assert.equal(isTelemetryPath("/history"), false);
+  assert.equal(defaultTimeoutForPath("/history"), API_HEAVY_TIMEOUT_MS);
+  assert.equal(isTelemetryPath("/alpha-engine/history"), true);
   assert.equal(isTelemetryPath("/execution/audits"), true);
   assert.equal(isCriticalTradingPath("/institutional-observability/health"), false);
   assert.equal(isNoTradeFault("SERVER_ERROR"), false);

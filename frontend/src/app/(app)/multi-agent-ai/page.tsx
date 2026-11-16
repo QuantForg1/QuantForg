@@ -21,7 +21,7 @@ export default function MultiAgentAiPage() {
               <Link href="/trading-kernel">Trading Kernel</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }

@@ -131,7 +131,6 @@ export function pushRecentSymbol(symbol: string): string[] {
 
 export function labelForHref(href: string, fallback?: string): string {
   const known: Record<string, string> = {
-    "/terminal": "Terminal",
     "/dashboard": "Home",
     "/markets": "Markets",
     "/portfolio": "Portfolio",

@@ -108,7 +108,7 @@ export default function ExecutionsPage() {
         description="Fill tape and deal history from the live session."
         actions={
           <Button variant="secondary" size="sm" asChild>
-            <Link href="/terminal">Terminal</Link>
+            <Link href="/dashboard">Dashboard</Link>
           </Button>
         }
       />

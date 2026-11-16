@@ -135,7 +135,7 @@ export function ExecutionDiagnosticsPanel({ dense = false }: { dense?: boolean }
             Refresh
           </Button>
           <Button type="button" variant="ghost" size="sm" asChild>
-            <Link href="/terminal">Open Terminal</Link>
+            <Link href="/dashboard">Open Dashboard</Link>
           </Button>
         </div>
       </div>
@@ -144,9 +144,9 @@ export function ExecutionDiagnosticsPanel({ dense = false }: { dense?: boolean }
         <DeskEmpty
           icon={Activity}
           title="No executions yet"
-          description="Submit a live BUY/SELL from Terminal — each attempt appears here with full stage audit."
-          actionLabel="Open Terminal"
-          actionHref="/terminal"
+          description="Submit a BUY/SELL from the Dashboard ticket — each attempt appears here with full stage audit."
+          actionLabel="Open Dashboard"
+          actionHref="/dashboard"
         />
       ) : (
         <DeskTable

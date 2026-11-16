@@ -99,7 +99,7 @@ export function Phase5ExecutionDesk() {
               <Link href="/order-monitor">Order monitor</Link>
             </Button>
             <Button size="sm" variant="secondary" asChild>
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         </div>

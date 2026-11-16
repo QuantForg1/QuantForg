@@ -260,7 +260,7 @@ export function PortfolioWorkspace() {
               <Link href="/signals">Signals</Link>
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           </div>
         }
@@ -429,7 +429,7 @@ export function PortfolioWorkspace() {
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Open positions</CardTitle>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/terminal">Terminal</Link>
+            <Link href="/dashboard">Dashboard</Link>
           </Button>
         </CardHeader>
         <CardContent>

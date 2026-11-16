@@ -49,7 +49,7 @@ export const PositionIntelligence = memo(function PositionIntelligence({
           <p className="qf-caption">Ranked by risk weight · live book</p>
         </div>
         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" asChild>
-          <Link href="/terminal">Trade</Link>
+          <Link href="/dashboard">Trade</Link>
         </Button>
       </header>
 
@@ -59,7 +59,7 @@ export const PositionIntelligence = memo(function PositionIntelligence({
           description="When the book carries risk, positions rank here by weight and P&L."
           action={
             <Button size="sm" variant="secondary" asChild>
-              <Link href="/terminal">Open Terminal</Link>
+              <Link href="/dashboard">Open Dashboard</Link>
             </Button>
           }
         />
@@ -85,7 +85,7 @@ export const PositionIntelligence = memo(function PositionIntelligence({
                   >
                     <td className="py-1.5 pr-2">
                       <Link
-                        href={`/terminal?symbol=${encodeURIComponent(symbol)}`}
+                        href={`/symbols/${encodeURIComponent(symbol)}`}
                         className="font-medium text-[var(--fg)] hover:text-[var(--accent)]"
                       >
                         {symbol}
