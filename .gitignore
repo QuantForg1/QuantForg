@@ -280,3 +280,6 @@ deploy/mt5_worker_agent/local.env
 deploy/mt5_worker_agent/local.production.env
 deploy/mt5_worker_agent/verify_results/
 mt5_worker_slots/
+
+# Gateway deploy verification output (written on the Windows host)
+docs/production/reports/oat_v71/deploy_main_gateway_verify.json
