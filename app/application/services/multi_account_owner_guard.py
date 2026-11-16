@@ -79,6 +79,7 @@ def evaluate_worker_entry(
     take_profit: object,
     now: datetime | None = None,
     user_caps: Any | None = None,
+    broker_account_id: UUID | None = None,
 ) -> WorkerGuardResult:
     """Run the final owner guard on a worker's account snapshot."""
     from app.application.services.live_account_risk_tracker import (
@@ -126,6 +127,13 @@ def evaluate_worker_entry(
     commission: Decimal | None = None
     if snapshot.get("commission_source") in VERIFIED_COMMISSION_SOURCES:
         commission = _dec(snapshot.get("commission_usd"))
+    if commission is None and broker_account_id is not None:
+        # Owner-verified value recorded for this exact account.
+        from app.application.services.account_commission import (
+            verified_commission_usd,
+        )
+
+        commission = verified_commission_usd(broker_account_id=broker_account_id)
 
     deals = snapshot.get("deals_today")
     if isinstance(deals, list):
