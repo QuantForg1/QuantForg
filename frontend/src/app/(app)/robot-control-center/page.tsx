@@ -83,10 +83,10 @@ export default function RobotControlCenterPage() {
   const events = asList(data.events).map(asRecord);
   const allowed = asRecord(data.actions);
   const session = asRecord(sessionQ.data);
-  const autoTrading = str(
-    asRecord(session.auto_trading).run_state ?? session.auto_trading_run_state,
-    "unknown",
-  );
+  // Fields as the backend's /trading/session returns them.
+  const connection = str(session.connection, "");
+  const robotSession = str(session.robot, "unknown");
+  const liveState = str(session.live_trading_state, "unknown");
 
   function run(id: string, action: RobotAction) {
     let reason = "";
@@ -136,15 +136,12 @@ export default function RobotControlCenterPage() {
             <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
               <p>
                 Connection:{" "}
-                <Badge tone={session.connected ? "success" : "warning"}>
-                  {session.connected
-                    ? "Connected"
-                    : sessionQ.isError
-                      ? "Unavailable"
-                      : "Not connected"}
+                <Badge tone={connection === "Healthy" ? "success" : "warning"}>
+                  {sessionQ.isError ? "Unavailable" : connection || "Unknown"}
                 </Badge>
               </p>
-              <p>Auto-trading run state (bound account): {autoTrading}</p>
+              <p>Robot (bound account): {robotSession}</p>
+              <p>LIVE runtime state: {liveState}</p>
             </CardContent>
           </Card>
           <Card>
@@ -193,8 +190,7 @@ export default function RobotControlCenterPage() {
                           {str(a.broker, "Broker")} · {str(a.login_masked, "")}
                         </p>
                         <p className="text-xs text-[var(--fg-muted)]">
-                          {str(a.server, "")} · {str(a.environment, "")} · trade
-                          allowed: {str(a.trade_allowed_reported, "unknown")}
+                          {str(a.server, "")} · {str(a.environment, "")}
                         </p>
                       </div>
                       <Badge
