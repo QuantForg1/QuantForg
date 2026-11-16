@@ -114,6 +114,14 @@ _OPERATOR_ONLY_ROUTER_MODULES: frozenset[str] = frozenset(
 )
 
 
+def _preimport_router_modules(specs: tuple[tuple[str, str], ...]) -> None:
+    for _name, module_path in specs:
+        try:
+            importlib.import_module(module_path)
+        except Exception:  # registration reports the failure with context
+            logger.debug("router_preimport_failed", module=module_path)
+
+
 def _operator_dependencies() -> list[Any]:
     from fastapi import Depends
 
@@ -572,6 +580,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
         if pending:
             t_routes = time.perf_counter()
+            # Importing ~100 router modules took ~11 s on the event loop after
+            # each deploy (/health/live and sign-in stalled). Import them in a
+            # worker thread first; registration below then hits the cache.
+            await asyncio.to_thread(_preimport_router_modules, pending)
             summary = _register_routers(
                 _app,
                 settings,
