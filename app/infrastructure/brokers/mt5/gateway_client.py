@@ -425,6 +425,12 @@ class GatewayMT5Client:
         # for the 15s frontend abort window.
         if self._is_light_gateway_path(path):
             return httpx.Timeout(3.5, connect=2.0, read=3.5, write=3.5, pool=2.0)
+        if str(path or "").split("?", 1)[0].startswith("/history/"):
+            # A healthy gateway answers history in ~1 s. When MT5 history
+            # hangs, a 30 s read (plus lane queueing) kept History/Portfolio
+            # spinning 40-66 s before a 503 (16 Nov). Fail closed sooner; the
+            # circuit breaker then fails fast until a probe succeeds.
+            return httpx.Timeout(15.0, connect=8.0, read=15.0, write=8.0, pool=8.0)
         if str(path or "").split("?", 1)[0].startswith("/candles/"):
             # Multi-symbol scans fetch 5 TFs per desk. A 30s hang per TF
             # exhausts CYCLE_TIMEOUT before Risk/OMS. Fail closed faster.
