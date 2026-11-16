@@ -108,7 +108,7 @@ class QuantAIService:
 
         if status.connected:
             try:
-                snap = self.portfolio_sync.account_snapshot()
+                snap = await run_broker_read(self.portfolio_sync.account_snapshot)
                 account = {
                     "balance": _dec(snap.balance),
                     "equity": _dec(snap.equity),
@@ -132,7 +132,7 @@ class QuantAIService:
                         "open_price": _dec(getattr(p, "open_price", 0)),
                         "current_price": _dec(getattr(p, "current_price", 0)),
                     }
-                    for p in self.portfolio_sync.list_positions()
+                    for p in (await run_broker_read(self.portfolio_sync.list_positions))
                 ]
             except Exception:
                 positions = []
@@ -423,7 +423,7 @@ class QuantAIService:
         positions: list[dict[str, Any]] = []
         if status.connected:
             try:
-                snap = self.portfolio_sync.account_snapshot()
+                snap = await run_broker_read(self.portfolio_sync.account_snapshot)
                 account = {
                     "balance": _dec(snap.balance),
                     "equity": _dec(snap.equity),
@@ -440,7 +440,7 @@ class QuantAIService:
                         "volume": _dec(p.volume),
                         "profit": _dec(getattr(p, "profit", 0)),
                     }
-                    for p in self.portfolio_sync.list_positions()
+                    for p in (await run_broker_read(self.portfolio_sync.list_positions))
                 ]
             except Exception:
                 positions = []

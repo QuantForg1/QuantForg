@@ -88,7 +88,7 @@ class MarketIntelligencePlatformService:
 
         if status.connected:
             try:
-                snap = self.portfolio_sync.account_snapshot()
+                snap = await run_broker_read(self.portfolio_sync.account_snapshot)
                 account = {
                     "login": snap.login,
                     "balance": _dec(snap.balance),
@@ -114,7 +114,7 @@ class MarketIntelligencePlatformService:
                         "profit": _dec(getattr(p, "profit", 0)),
                         "open_price": _dec(getattr(p, "open_price", 0)),
                     }
-                    for p in self.portfolio_sync.list_positions()
+                    for p in (await run_broker_read(self.portfolio_sync.list_positions))
                 ]
                 pending = [
                     {
@@ -124,7 +124,7 @@ class MarketIntelligencePlatformService:
                         "volume": _dec(o.volume),
                         "price": _dec(o.price),
                     }
-                    for o in self.portfolio_sync.list_orders()
+                    for o in (await run_broker_read(self.portfolio_sync.list_orders))
                 ]
                 history_deals = len(
                     await run_broker_read(self.portfolio_sync.history_deals)

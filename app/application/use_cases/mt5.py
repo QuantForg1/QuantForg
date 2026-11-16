@@ -19,6 +19,7 @@ from app.application.dto.mt5 import (
     MT5SymbolsPageDTO,
     MT5TickDTO,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.mt5_market_data import MT5MarketDataService
 from app.application.services.mt5_session_guard import (
     require_live_mt5_connection,
@@ -178,7 +179,7 @@ class GetMT5AccountUseCase:
     async def execute(self, *, user_id: UUID) -> MT5AccountDTO:
         await require_live_mt5_connection(self.uow_factory, self.adapter, user_id)
         try:
-            info = self.adapter.account_info()
+            info = await run_broker_read(self.adapter.account_info)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 "Failed to read MT5 account info",
@@ -235,7 +236,8 @@ class ListMT5SymbolsUseCase:
 
         try:
             # Catalogue without quote fan-out; optional quotes only for the page.
-            catalogue = self.adapter.list_symbols(
+            catalogue = await run_broker_read(
+                self.adapter.list_symbols,
                 include_quotes=False,
                 codes=codes,
             )
@@ -248,7 +250,8 @@ class ListMT5SymbolsUseCase:
         # If broker uses an alternate gold code, fall back to full catalogue filter.
         if gold_only_enabled() and not catalogue and codes:
             try:
-                catalogue = self.adapter.list_symbols(
+                catalogue = await run_broker_read(
+                    self.adapter.list_symbols,
                     include_quotes=False,
                     codes=None,
                 )
@@ -269,7 +272,8 @@ class ListMT5SymbolsUseCase:
         page = filtered[safe_offset : safe_offset + safe_limit]
         if include_quotes and page:
             try:
-                quoted = self.adapter.list_symbols(
+                quoted = await run_broker_read(
+                    self.adapter.list_symbols,
                     include_quotes=True,
                     codes=[getattr(s, "code", "") for s in page],
                 )
@@ -321,7 +325,7 @@ class GetMT5SymbolUseCase:
             self.uow_factory, self.market_data.adapter, user_id
         )
         try:
-            info = self.market_data.symbol_info(symbol)
+            info = await run_broker_read(self.market_data.symbol_info, symbol)
         except (OSError, RuntimeError, ValueError) as exc:
             raise NotFoundError(
                 "MT5 symbol not found",
