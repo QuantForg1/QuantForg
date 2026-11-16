@@ -123,6 +123,7 @@ def list_accounts(*, user_id: UUID) -> list[dict[str, Any]]:
         out.append(
             {
                 "broker_account_id": str(r["id"]),
+                "_login": login,  # popped by the router; never returned
                 "broker": str(r.get("broker_name") or r.get("broker_slug") or ""),
                 "broker_slug": str(r.get("broker_slug") or ""),
                 "login_masked": f"•••{login[-3:]}" if login else "",
@@ -357,3 +358,74 @@ def entry_block(
         return None
     state = sorted(blocked)[0]
     return f"ROBOT_{state}: new entries are blocked for this account"
+
+
+# --- verified connection state (never inferred from a "Connected" badge) -----
+
+NOT_CONNECTED = "NOT_CONNECTED"
+CONNECTED = "CONNECTED"
+TRADING_PERMISSION_DISABLED = "TRADING_PERMISSION_DISABLED"
+ROBOT_READY = "ROBOT_READY"
+DEGRADED = "DEGRADED"
+REQUIRES_USER_ACTION = "REQUIRES_USER_ACTION"
+
+_USER_ACTION_ERRORS = ("login_failed", "password", "server_required", "invalid_account")
+
+
+def connection_state(
+    account: dict[str, Any],
+    *,
+    gateway_account: Any | None = None,
+    workers: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Separate verified states from real MT5 evidence.
+
+    CONNECTED means MT5 authenticated the login; it is not trading
+    permission. ROBOT_READY additionally needs MT5 trade_allowed=true and a
+    dispatch-ready session. Investor/read-only logins report
+    trade_allowed=false and therefore stay TRADING_PERMISSION_DISABLED.
+    """
+    login = str(account.get("external_account_id") or "")
+    gw_login = (
+        str(getattr(gateway_account, "login", "") or "")
+        if gateway_account is not None
+        else ""
+    )
+    if gw_login and gw_login == login:
+        allowed = getattr(gateway_account, "trade_allowed", None)
+        if allowed is True:
+            return {"state": ROBOT_READY, "source": "gateway", "trade_allowed": True}
+        if allowed is False:
+            return {
+                "state": TRADING_PERMISSION_DISABLED,
+                "source": "gateway",
+                "trade_allowed": False,
+            }
+        return {"state": CONNECTED, "source": "gateway", "trade_allowed": None}
+    bound = [
+        w
+        for w in (workers or [])
+        if str(w.get("broker_account_id")) == str(account.get("id"))
+    ]
+    if not bound:
+        return {"state": NOT_CONNECTED, "source": "none", "trade_allowed": None}
+    w = bound[0]
+    err = str(w.get("last_error") or "").lower()
+    if any(tok in err for tok in _USER_ACTION_ERRORS):
+        return {
+            "state": REQUIRES_USER_ACTION,
+            "source": "worker",
+            "trade_allowed": None,
+            "detail": "Check the MT5 login, master password and exact server.",
+        }
+    if not w.get("connected") and not w.get("ready"):
+        return {"state": DEGRADED, "source": "worker", "trade_allowed": None}
+    if w.get("trade_allowed") is not True:
+        return {
+            "state": TRADING_PERMISSION_DISABLED,
+            "source": "worker",
+            "trade_allowed": False,
+        }
+    if not w.get("dispatch_ready"):
+        return {"state": DEGRADED, "source": "worker", "trade_allowed": True}
+    return {"state": ROBOT_READY, "source": "worker", "trade_allowed": True}

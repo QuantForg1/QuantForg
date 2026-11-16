@@ -28,21 +28,7 @@ class ControlBody(BaseModel):
     reason: str = Field(default="", max_length=300)
 
 
-@router.get("/accounts")
-async def my_robot_accounts(user: CurrentUser) -> dict[str, Any]:
-    uid = UUID(str(user.id))
-    accounts = await asyncio.to_thread(rc.list_accounts, user_id=uid)
-    events = await asyncio.to_thread(rc.recent_events, user_id=uid, limit=50)
-    return {
-        "accounts": accounts,
-        "events": events,
-        "states": sorted(rc.STATES),
-        "actions": {k: sorted(v[0]) for k, v in rc.TRANSITIONS.items()},
-        "positions_closed_by_controls": False,
-    }
-
-
-def _readiness_probe(request: Request) -> Any:
+def _evidence(request: Request) -> tuple[Any, list[dict[str, Any]]]:
     gateway_account = None
     with contextlib.suppress(Exception):
         from core.di.container import get_container
@@ -53,6 +39,35 @@ def _readiness_probe(request: Request) -> Any:
     if api is not None:
         with contextlib.suppress(Exception):
             workers = list(api.ops_summary().get("workers") or [])
+    return gateway_account, workers
+
+
+@router.get("/accounts")
+async def my_robot_accounts(user: CurrentUser, request: Request) -> dict[str, Any]:
+    uid = UUID(str(user.id))
+    accounts = await asyncio.to_thread(rc.list_accounts, user_id=uid)
+    events = await asyncio.to_thread(rc.recent_events, user_id=uid, limit=50)
+    gateway_account, workers = await asyncio.to_thread(_evidence, request)
+    for acct in accounts:
+        acct["connection"] = rc.connection_state(
+            {
+                "id": acct["broker_account_id"],
+                "external_account_id": acct.pop("_login", ""),
+            },
+            gateway_account=gateway_account,
+            workers=workers,
+        )
+    return {
+        "accounts": accounts,
+        "events": events,
+        "states": sorted(rc.STATES),
+        "actions": {k: sorted(v[0]) for k, v in rc.TRANSITIONS.items()},
+        "positions_closed_by_controls": False,
+    }
+
+
+def _readiness_probe(request: Request) -> Any:
+    gateway_account, workers = _evidence(request)
 
     def probe(account: dict[str, Any]) -> rc.Readiness:
         return rc.account_readiness(
