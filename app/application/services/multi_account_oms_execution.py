@@ -221,6 +221,12 @@ def authorize_worker_execution(
     if robot_block:
         reasons.append(robot_block.split(":")[0])
 
+    from app.application.services.entitlements import check_trading_entitlement
+
+    entitlement = check_trading_entitlement(user_id=worker.user_id)
+    if not entitlement.allowed:
+        reasons.append(entitlement.reason)
+
     # De-dupe reasons
     seen: set[str] = set()
     ordered: list[str] = []

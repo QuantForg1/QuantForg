@@ -1402,6 +1402,14 @@ class BillingService:
         with contextlib.suppress(Exception):
             expiring_queued = await queue_trial_expiring_reminders(within_hours=48)
 
+        renewal_queued = 0
+        with contextlib.suppress(Exception):
+            from app.application.services.billing_email_service import (
+                queue_renewal_reminders,
+            )
+
+            renewal_queued = await queue_renewal_reminders(within_hours=72)
+
         email_result: dict[str, Any] = {"ok": True, "processed": 0}
         with contextlib.suppress(Exception):
             email_result = await process_billing_email_queue(self.settings)
@@ -1410,6 +1418,7 @@ class BillingService:
             "ok": True,
             "expired_count": expired,
             "trial_expiring_queued": expiring_queued,
+            "renewal_reminders_queued": renewal_queued,
             "email_queue": email_result,
         }
 

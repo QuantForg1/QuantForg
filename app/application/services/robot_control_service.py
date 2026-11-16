@@ -203,6 +203,16 @@ def apply_action(
             "A reason is required to start after an emergency stop",
             400,
         )
+    if action in {"resume", "start"}:
+        from app.application.services.entitlements import check_trading_entitlement
+
+        ent = check_trading_entitlement(user_id=user_id)
+        if not ent.allowed:
+            raise RobotControlError(
+                "subscription_required",
+                "An active subscription or trial is required to run the robot",
+                402,
+            )
     readiness = Readiness(ready=True)
     if needs_ready:
         probe = readiness_probe or account_readiness

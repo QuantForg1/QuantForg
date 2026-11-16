@@ -358,3 +358,58 @@ async def queue_trial_expiring_reminders(*, within_hours: int = 48) -> int:
         if ok:
             queued += 1
     return queued
+
+
+async def queue_renewal_reminders(*, within_hours: int = 72) -> int:
+    """Queue renewal reminders for paid licenses that expire soon.
+
+    Crypto payments do not auto-renew: the customer pays a new invoice before
+    the period ends. One reminder per license and expiry date (idempotent).
+    """
+    uow = await _uow()
+    queued = 0
+    try:
+        session = uow._require_session()
+        rows = (
+            (
+                await session.execute(
+                    text("""
+                        SELECT l.id, l.user_id, lower(u.email) AS email_norm,
+                               l.expires_at
+                        FROM licenses l
+                        JOIN users u ON u.id = l.user_id
+                        WHERE l.status = 'active'
+                          AND l.expires_at IS NOT NULL
+                          AND l.expires_at > timezone('utc', now())
+                          AND l.expires_at <= timezone('utc', now())
+                               + make_interval(hours => :hours)
+                          AND lower(coalesce(u.role::text, ''))
+                              NOT IN ('owner', 'admin')
+                        """),
+                    {"hours": max(1, min(int(within_hours), 336))},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        await session.commit()
+    finally:
+        with contextlib.suppress(Exception):
+            await uow.__aexit__(None, None, None)
+
+    for row in rows:
+        expires = row["expires_at"]
+        ok = await queue_billing_email(
+            user_id=str(row["user_id"]),
+            email_norm=str(row["email_norm"] or ""),
+            template_key="renewal_reminder",
+            dedupe_key=f"renewal_reminder:{row['id']}:{expires.date().isoformat()}",
+            payload={
+                "summary": "Your QuantForg subscription period ends on "
+                f"{expires.date().isoformat()}. Pay a new Crypto Payment invoice "
+                "before then to keep the robot running."
+            },
+        )
+        if ok:
+            queued += 1
+    return queued
