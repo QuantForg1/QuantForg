@@ -446,6 +446,7 @@ class OperatorWatch:
     now_utc: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     _gateway: _Down = field(default_factory=_Down)
     _mt5: _Down = field(default_factory=_Down)
+    _heartbeat: _Down = field(default_factory=_Down)
     _close_only_alerted: bool = False
     _stops_checked_at: float = -1e9
     _summary_marks: dict[str, str] = field(default_factory=dict)
@@ -500,6 +501,7 @@ class OperatorWatch:
         )
         if not gateway_ok:
             return
+        self._heartbeat_watch(now=now, utc=utc)
         mt5_ok = bool(getattr(health, "connected", False))
         self._track(
             self._mt5,
@@ -524,6 +526,28 @@ class OperatorWatch:
             self._stops(balance=balance, utc=utc)
         self._summaries(equity=equity, utc=utc)
         self._shadow(utc=utc)
+
+    def _heartbeat_watch(self, *, now: float, utc: datetime) -> None:
+        """Alert when the gateway's own MT5 heartbeat stops advancing.
+
+        16 Nov 2026: /account and /positions kept answering while the gateway
+        heartbeat was frozen for 8+ hours and history hung; nothing alerted.
+        """
+        age = gateway_heartbeat_age_seconds(self.adapter, now_utc=utc)
+        if age is None:
+            return
+        self._track(
+            self._heartbeat,
+            ok=age <= HEARTBEAT_STALE_AFTER_S,
+            now=now,
+            down_kind="GATEWAY HEARTBEAT STALE",
+            up_kind="GATEWAY HEARTBEAT RECOVERED",
+            what=(
+                f"Gateway MT5 heartbeat is {int(age // 60)} min old. History and the "
+                "daily-loss check may fail; new entries are blocked. Restart the "
+                "Windows gateway (docs/production/GATEWAY_RECOVERY_2026-11-16.md)."
+            ),
+        )
 
     def _shadow(self, *, utc: datetime) -> None:
         """Follow the open shadow trade with live prices (shadow mode only)."""
@@ -951,6 +975,32 @@ def _load_summary_marks() -> dict[str, str]:
 
 
 _watch: OperatorWatch | None = None
+
+
+HEARTBEAT_STALE_AFTER_S = 300.0
+
+
+def gateway_heartbeat_age_seconds(adapter: Any, *, now_utc: datetime) -> float | None:
+    """Age of the gateway's ``mt5.last_heartbeat_at``; None when unreadable."""
+    client = getattr(adapter, "client", None)
+    fetch = getattr(client, "gateway_health", None)
+    if not callable(fetch):
+        return None
+    try:
+        payload = fetch() or {}
+    except Exception:
+        return None
+    mt5 = payload.get("mt5") if isinstance(payload, dict) else None
+    raw = (mt5 or {}).get("last_heartbeat_at") if isinstance(mt5, dict) else None
+    if not raw:
+        return None
+    try:
+        beat = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if beat.tzinfo is None:
+        beat = beat.replace(tzinfo=UTC)
+    return max(0.0, (now_utc - beat).total_seconds())
 
 
 def get_operator_watch() -> OperatorWatch | None:
