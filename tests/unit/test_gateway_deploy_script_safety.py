@@ -64,3 +64,14 @@ def test_verifies_the_broker_symbol_not_the_old_alias(source: str) -> None:
 
 def test_reports_the_owner_limits_loaded(source: str) -> None:
     assert "owner_live_limits" in source
+
+
+def test_hung_gateway_needs_explicit_terminal_confirmation(source: str) -> None:
+    assert "[switch]$ConfirmFlatInTerminal" in source
+    assert 'Read-Host "MT5 terminal Trade tab' in source
+    assert '$answer -ne "FLAT"' in source
+    # The override is only reachable from the catch branch (gateway silent),
+    # never when the gateway reports exposure.
+    catch = source.index("} catch {", source.index("function Assert-Flat"))
+    exposure = source.index("open positions or pending orders exist")
+    assert catch < source.index("ConfirmFlatInTerminal)", catch) < exposure

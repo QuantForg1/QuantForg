@@ -19,7 +19,11 @@
 
 param(
   [Parameter(Mandatory = $true)][string]$TargetSha,
-  [string]$Symbol = "XAUUSD"
+  [string]$Symbol = "XAUUSD",
+  # Only for a hung gateway that cannot answer /positions: the operator has
+  # checked the MT5 terminal Trade tab (no positions, no pending orders).
+  # Never overrides a gateway answer that shows exposure.
+  [switch]$ConfirmFlatInTerminal
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,7 +73,16 @@ function Assert-Flat([string]$stage) {
     $openPositions = Invoke-RestMethod -Uri "http://127.0.0.1:8765/positions" -Headers $authHeaders -TimeoutSec 15
     $openOrders = Invoke-RestMethod -Uri "http://127.0.0.1:8765/orders" -Headers $authHeaders -TimeoutSec 15
   } catch {
-    throw ("cannot read positions/orders from the running gateway; refusing to restart blind: {0}" -f $_.Exception.Message)
+    if (-not $ConfirmFlatInTerminal) {
+      throw ("cannot read positions/orders from the running gateway; refusing to restart blind: {0}. If the gateway is hung, check the MT5 terminal Trade tab and re-run with -ConfirmFlatInTerminal" -f $_.Exception.Message)
+    }
+    Write-Log ("{0}: gateway did not answer ({1})" -f $stage, $_.Exception.Message)
+    $answer = Read-Host "MT5 terminal Trade tab shows NO open positions and NO pending orders? Type FLAT to continue"
+    if ($answer -ne "FLAT") {
+      throw "operator did not confirm a flat account; aborting"
+    }
+    Write-Log ("{0}: operator confirmed flat in MT5 terminal" -f $stage)
+    return
   }
   $posCount = @($openPositions.items).Count
   $ordCount = @($openOrders.items).Count
