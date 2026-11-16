@@ -76,6 +76,15 @@ def _reset_gateway_circuit() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _clear_auth_user_cache() -> Iterator[None]:
+    from app.presentation.dependencies.auth import clear_user_cache
+
+    clear_user_cache()
+    yield
+    clear_user_cache()
+
+
+@pytest.fixture(autouse=True)
 def _reset_phase_a_plane() -> Iterator[None]:
     """Phase A halt is a process singleton — a kill in one test must not leak."""
     from app.domain.institutional_trading.phase_a.plane import (

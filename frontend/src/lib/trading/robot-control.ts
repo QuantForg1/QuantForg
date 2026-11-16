@@ -48,6 +48,8 @@ export function connectionStateLabel(state: string): string {
       return "Action required";
     case "NOT_CONNECTED":
       return "Not connected";
+    case "UNAVAILABLE":
+      return "Broker data unavailable · new entries blocked";
     default:
       return state || "Unknown";
   }

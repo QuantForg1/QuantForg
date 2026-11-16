@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.mt5_market_data import MT5MarketDataService
 from app.application.services.news_intelligence import NewsIntelligenceService
 from app.application.services.portfolio_sync import PortfolioSyncService
@@ -138,7 +138,7 @@ class QuantAIService:
                 positions = []
 
             try:
-                raw_deals = await asyncio.to_thread(self.portfolio_sync.history_deals)
+                raw_deals = await run_broker_read(self.portfolio_sync.history_deals)
                 for d in raw_deals[:300]:
                     deals.append(
                         {
@@ -397,7 +397,7 @@ class QuantAIService:
         deals: list[dict[str, Any]] = []
         if status.connected:
             try:
-                raw_deals = await asyncio.to_thread(self.portfolio_sync.history_deals)
+                raw_deals = await run_broker_read(self.portfolio_sync.history_deals)
                 for d in raw_deals[:500]:
                     deals.append(
                         {

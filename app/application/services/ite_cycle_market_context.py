@@ -127,13 +127,14 @@ async def _offload_sync(
     research batch cannot saturate the 5-worker ITE pool (4 symbols x 5
     timeframes) and leave LIVE non-gold desks stuck as UNKNOWN stubs.
     """
-    import asyncio
     from functools import partial
 
     if research_io:
+        from app.application.services.blocking_io_offload import run_research_io
+
         if kwargs:
-            return await asyncio.to_thread(partial(fn, *args, **kwargs))
-        return await asyncio.to_thread(fn, *args)
+            return await run_research_io(partial(fn, *args, **kwargs))
+        return await run_research_io(fn, *args)
 
     from app.application.services.blocking_io_offload import offload_blocking
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Any
 from uuid import UUID
@@ -10,6 +9,7 @@ from uuid import UUID
 from supabase_auth.helpers import decode_jwt
 from supabase_auth.types import Session as GoTrueSession
 
+from app.application.services.blocking_io_offload import run_auth_io
 from app.domain.exceptions.auth import AuthenticationError
 from app.domain.interfaces.auth import (
     AuthSession,
@@ -314,7 +314,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def sign_in(self, *, email: str, password: str) -> AuthSession:
         def _call() -> AuthSession:
@@ -328,7 +328,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def sign_out(self, *, access_token: str) -> None:
         def _call() -> None:
@@ -349,7 +349,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 logger.warning("supabase_sign_out_failed", error=str(exc))
 
-        await asyncio.to_thread(_call)
+        await run_auth_io(_call)
 
     async def refresh_session(self, *, refresh_token: str) -> AuthSession:
         def _call() -> AuthSession:
@@ -361,7 +361,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def get_user(self, *, access_token: str) -> AuthUserIdentity:
         def _call() -> AuthUserIdentity:
@@ -379,7 +379,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def verify_email(
         self,
@@ -398,7 +398,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def verify_email_otp(
         self,
@@ -422,7 +422,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def resend_signup_email(self, *, email: str) -> None:
         def _call() -> None:
@@ -440,7 +440,7 @@ class SupabaseAuthAdapter:
                     error_type=type(exc).__name__,
                 )
 
-        await asyncio.to_thread(_call)
+        await run_auth_io(_call)
 
     def _bind_session(
         self, access_token: str, refresh_token: str | None = None
@@ -491,7 +491,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def enroll_totp(
         self, *, access_token: str, friendly_name: str = "Authenticator"
@@ -536,7 +536,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def challenge_mfa(
         self, *, access_token: str, factor_id: str
@@ -562,7 +562,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def verify_mfa(
         self,
@@ -607,7 +607,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def unenroll_mfa(self, *, access_token: str, factor_id: str) -> None:
         def _call() -> None:
@@ -617,7 +617,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        await asyncio.to_thread(_call)
+        await run_auth_io(_call)
 
     async def get_authenticator_assurance_level(
         self, *, access_token: str
@@ -663,7 +663,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def request_password_reset(self, *, email: str, redirect_to: str) -> None:
         def _call() -> None:
@@ -675,7 +675,7 @@ class SupabaseAuthAdapter:
                 # Do not leak whether the email exists.
                 logger.warning("supabase_password_reset_request_failed", error=str(exc))
 
-        await asyncio.to_thread(_call)
+        await run_auth_io(_call)
 
     async def update_password(
         self,
@@ -699,7 +699,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def get_oauth_redirect(
         self,
@@ -727,7 +727,7 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)
 
     async def exchange_oauth_code(
         self,
@@ -749,4 +749,4 @@ class SupabaseAuthAdapter:
             except Exception as exc:
                 raise _map_auth_error(exc) from exc
 
-        return await asyncio.to_thread(_call)
+        return await run_auth_io(_call)

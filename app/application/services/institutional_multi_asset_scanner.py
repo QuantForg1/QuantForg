@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.application.services.ai_scalping_portfolio import run_multi_asset_scan
+from app.application.services.blocking_io_offload import run_research_io
 from app.application.services.ite_cycle_market_context import (
     build_ite_cycle_market_context,
 )
@@ -1333,7 +1334,7 @@ async def _run_institutional_multi_asset_scan_body(
             fetch_broker_symbol_rows = _qf_universe_discovery.fetch_broker_symbol_rows
 
             # Offload sync catalogue I/O so login/health stay responsive.
-            broker_rows = await asyncio.to_thread(fetch_broker_symbol_rows, mt5_adapter)
+            broker_rows = await run_research_io(fetch_broker_symbol_rows, mt5_adapter)
         except Exception:
             logger.exception("broker_universe_fetch_failed")
     try:

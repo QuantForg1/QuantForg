@@ -17,6 +17,7 @@ from app.application.dto.portfolio import (
     PortfolioDTO,
     PositionDTO,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.mt5_session_guard import require_live_mt5_connection
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.domain.exceptions.base import NotFoundError
@@ -38,7 +39,7 @@ class GetPortfolioUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        record = await asyncio.to_thread(self.sync_service.synchronize, user_id=user_id)
+        record = await run_broker_read(self.sync_service.synchronize, user_id=user_id)
         _ = self.sync_service.drain_events()
         async with self.portfolio_uow_factory() as uow:
             await uow.syncs.add(record)
@@ -65,7 +66,7 @@ class GetPortfolioUseCase:
             )
 
         positions_raw, pending_raw, hist_orders_raw, hist_deals_raw, account_raw = (
-            await asyncio.to_thread(_fresh_snapshot)
+            await run_broker_read(_fresh_snapshot)
         )
         positions = [PositionDTO.from_entity(p) for p in positions_raw]
         pending = [PendingOrderDTO.from_entity(o) for o in pending_raw]
@@ -99,11 +100,11 @@ class ListPositionsUseCase:
         if symbol:
             refresh = getattr(adapter, "force_refresh_positions", None)
             if callable(refresh):
-                await asyncio.to_thread(refresh)
-            rows = await asyncio.to_thread(self.sync_service.position_by_symbol, symbol)
+                await run_broker_read(refresh)
+            rows = await run_broker_read(self.sync_service.position_by_symbol, symbol)
         else:
             refresh = getattr(adapter, "force_refresh_positions", None)
-            rows = await asyncio.to_thread(
+            rows = await run_broker_read(
                 refresh if callable(refresh) else self.sync_service.list_positions
             )
         return [PositionDTO.from_entity(p) for p in rows]
@@ -121,8 +122,8 @@ class GetPositionByTicketUseCase:
         adapter = self.sync_service.adapter
         refresh = getattr(adapter, "force_refresh_positions", None)
         if callable(refresh):
-            await asyncio.to_thread(refresh)
-        pos = await asyncio.to_thread(self.sync_service.position_by_ticket, ticket)
+            await run_broker_read(refresh)
+        pos = await run_broker_read(self.sync_service.position_by_ticket, ticket)
         if pos is None:
             raise NotFoundError(f"Position ticket {ticket} not found")
         return PositionDTO.from_entity(pos)
@@ -137,7 +138,7 @@ class ListOrdersUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        orders = await asyncio.to_thread(self.sync_service.list_orders)
+        orders = await run_broker_read(self.sync_service.list_orders)
         return [PendingOrderDTO.from_entity(o) for o in orders]
 
 
@@ -150,7 +151,7 @@ class GetOrderByTicketUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        order = await asyncio.to_thread(self.sync_service.order_by_ticket, ticket)
+        order = await run_broker_read(self.sync_service.order_by_ticket, ticket)
         if order is None:
             raise NotFoundError(f"Pending order ticket {ticket} not found")
         return PendingOrderDTO.from_entity(order)
@@ -174,10 +175,10 @@ class GetHistoryUseCase:
         # Orders and deals are independent broker reads; run them together so
         # the History ledger waits for the slower one, not for both in turn.
         orders, deals = await asyncio.gather(
-            asyncio.to_thread(
+            run_broker_read(
                 self.sync_service.history_orders, date_from=date_from, date_to=date_to
             ),
-            asyncio.to_thread(
+            run_broker_read(
                 self.sync_service.history_deals, date_from=date_from, date_to=date_to
             ),
         )
@@ -196,5 +197,5 @@ class GetAccountSnapshotUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        snap = await asyncio.to_thread(self.sync_service.account_snapshot)
+        snap = await run_broker_read(self.sync_service.account_snapshot)
         return AccountSnapshotDTO.from_entity(snap)

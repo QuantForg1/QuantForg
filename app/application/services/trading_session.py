@@ -19,6 +19,7 @@ from app.application.services.account_execution_gate import (
     bound_execution_account,
     classify_account_session,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.institutional_ite_runtime import get_ite_runtime
 from app.application.services.mt5_session_guard import ensure_live_mt5_session_for_user
 from app.domain.exceptions.auth import AuthorizationError
@@ -198,7 +199,7 @@ class GetTradingSessionUseCase:
             try:
                 try:
                     info = await asyncio.wait_for(
-                        asyncio.to_thread(self.adapter.account_info),
+                        run_broker_read(self.adapter.account_info),
                         timeout=3.0,
                     )
                 except TimeoutError:
@@ -261,7 +262,7 @@ class GetTradingSessionUseCase:
                 # the whole trading-session endpoint (dashboard/signals).
                 try:
                     research = await asyncio.wait_for(
-                        asyncio.to_thread(discover_live_catalogue, self.adapter),
+                        run_broker_read(discover_live_catalogue, self.adapter),
                         timeout=2.5,
                     )
                 except TimeoutError:

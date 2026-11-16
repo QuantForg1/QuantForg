@@ -378,6 +378,9 @@ TRADING_PERMISSION_DISABLED = "TRADING_PERMISSION_DISABLED"
 ROBOT_READY = "ROBOT_READY"
 DEGRADED = "DEGRADED"
 REQUIRES_USER_ACTION = "REQUIRES_USER_ACTION"
+# Broker evidence could not be read (gateway/worker status timed out). Never
+# shown as connected; new entries stay blocked by the execution path.
+UNAVAILABLE = "UNAVAILABLE"
 
 _USER_ACTION_ERRORS = ("login_failed", "password", "server_required", "invalid_account")
 
@@ -387,6 +390,7 @@ def connection_state(
     *,
     gateway_account: Any | None = None,
     workers: list[dict[str, Any]] | None = None,
+    evidence_available: bool = True,
 ) -> dict[str, Any]:
     """Separate verified states from real MT5 evidence.
 
@@ -418,6 +422,8 @@ def connection_state(
         if str(w.get("broker_account_id")) == str(account.get("id"))
     ]
     if not bound:
+        if not evidence_available:
+            return {"state": UNAVAILABLE, "source": "none", "trade_allowed": None}
         return {"state": NOT_CONNECTED, "source": "none", "trade_allowed": None}
     w = bound[0]
     err = str(w.get("last_error") or "").lower()
