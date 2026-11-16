@@ -26,6 +26,7 @@ from app.domain.interfaces.auth import OAuthProvider
 from app.presentation.dependencies.auth import (
     AccessToken,
     CurrentUser,
+    evict_cached_user,
     get_auth_service,
     get_client_meta,
 )
@@ -133,6 +134,7 @@ async def logout(
     auth: Annotated[AuthService, Depends(get_auth_service)],
 ) -> MessageResponse:
     ip, ua = get_client_meta(request)
+    evict_cached_user(access_token)
     result = await auth.sign_out(
         LogoutCommand(
             access_token=access_token,

@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
+from app.application.services.blocking_io_offload import run_broker_read
 from app.domain.entities.mt5 import MT5Connection
 from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
@@ -182,7 +183,7 @@ class WeltradeIntegrationService:
             }
 
         try:
-            gateway_payload = await asyncio.to_thread(gw.gateway_health)
+            gateway_payload = await run_broker_read(gw.gateway_health)
             tunnel_reachable = True
             gateway_reachable = gateway_payload.get("status") == "ok"
             if not gateway_reachable:
@@ -206,7 +207,7 @@ class WeltradeIntegrationService:
 
         if gateway_reachable:
             try:
-                snap = await asyncio.to_thread(self.adapter.health)
+                snap = await run_broker_read(self.adapter.health)
                 latency_ms = snap.latency_ms
                 version = snap.version or ""
                 server = snap.server or None
@@ -218,7 +219,7 @@ class WeltradeIntegrationService:
                     getattr(self.adapter.client, "session_mode", "none") or "none"
                 )
                 if mt5_attached:
-                    info = await asyncio.to_thread(self.adapter.account_info)
+                    info = await run_broker_read(self.adapter.account_info)
                     account = {
                         "login": info.login,
                         "name": info.name,
@@ -389,7 +390,7 @@ class WeltradeIntegrationService:
                         self.adapter.history_deals(),
                     )
 
-                snap, raw_pos, raw_ord, raw_hist = await asyncio.to_thread(_read_book)
+                snap, raw_pos, raw_ord, raw_hist = await run_broker_read(_read_book)
                 account = {
                     "login": snap.login,
                     "balance": str(snap.balance),

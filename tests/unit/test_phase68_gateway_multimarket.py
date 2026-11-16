@@ -103,7 +103,9 @@ def test_merge_requests_all_live_non_gold_unknown_stubs() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_research_mode_offload_uses_to_thread_not_ite_pool() -> None:
+async def test_research_mode_offload_uses_research_pool_not_ite_pool() -> None:
+    """Research I/O runs on its own pool: not the ITE pool, and (since the
+    16 Nov login-timeout fix) not the default executor shared with auth."""
     from app.application.services import ite_cycle_market_context as mctx
 
     called: dict[str, int] = {"to_thread": 0, "ite_pool": 0}
@@ -120,7 +122,10 @@ async def test_research_mode_offload_uses_to_thread_not_ite_pool() -> None:
         return "ok"
 
     with (
-        patch("asyncio.to_thread", new=_fake_to_thread),
+        patch(
+            "app.application.services.blocking_io_offload.run_research_io",
+            new=_fake_to_thread,
+        ),
         patch(
             "app.application.services.blocking_io_offload.offload_blocking",
             new=_fake_offload,

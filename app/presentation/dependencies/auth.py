@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
+import time
 from collections.abc import Callable, Coroutine
 from dataclasses import replace
 from typing import Annotated, Any
@@ -133,11 +137,57 @@ def get_auth_service(
     )
 
 
+# Every authenticated request verified the token with Supabase over the
+# network and re-synced the profile (~1-1.6 s each in Production, 16 Nov).
+# A verified result is reused briefly per token. The TTL bounds how long a
+# revoked token or a role/status change can lag; logout evicts immediately.
+_USER_CACHE_TTL_S = 20.0
+_USER_CACHE_MAX = 2048
+_user_cache: dict[str, tuple[float, AuthUserDTO]] = {}
+
+
+def _token_key(access_token: str) -> str:
+    return hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+
+
+def _token_expiry(access_token: str) -> float | None:
+    """``exp`` claim (already verified upstream); None when unreadable."""
+    try:
+        payload = access_token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        exp = json.loads(base64.urlsafe_b64decode(payload)).get("exp")
+        return float(exp) if exp is not None else None
+    except Exception:
+        return None
+
+
+def evict_cached_user(access_token: str) -> None:
+    _user_cache.pop(_token_key(access_token), None)
+
+
+def clear_user_cache() -> None:
+    _user_cache.clear()
+
+
 async def get_current_user(
     access_token: Annotated[str, Depends(get_access_token)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> AuthUserDTO:
+    key = _token_key(access_token)
+    now = time.monotonic()
+    hit = _user_cache.get(key)
+    if hit is not None and hit[0] > now:
+        exp = _token_expiry(access_token)
+        if exp is None or exp > time.time():
+            return hit[1]
+        _user_cache.pop(key, None)
     user = await auth_service.me(access_token=access_token)
+    if len(_user_cache) >= _USER_CACHE_MAX:
+        for stale in [k for k, v in _user_cache.items() if v[0] <= now]:
+            _user_cache.pop(stale, None)
+        if len(_user_cache) >= _USER_CACHE_MAX:
+            _user_cache.clear()
+    _user_cache[key] = (now + _USER_CACHE_TTL_S, user)
     return user
 
 

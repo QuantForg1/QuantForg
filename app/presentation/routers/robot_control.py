@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from app.application.dto.auth import AuthUserDTO
 from app.application.services import robot_control_service as rc
+from app.application.services.blocking_io_offload import run_broker_read
 from app.domain.enums.user import UserRole
 from app.presentation.dependencies.auth import CurrentUser, require_roles
 
@@ -31,26 +32,66 @@ class ControlBody(BaseModel):
     reason: str = Field(default="", max_length=300)
 
 
+# Broker evidence must never hold the page hostage: accounts and controls come
+# from the database; the gateway/worker read is bounded and optional.
+EVIDENCE_TIMEOUT_S = 6.0
+
+
+def _gateway_account() -> Any:
+    from core.di.container import get_container
+
+    return get_container().mt5_adapter.account_info()
+
+
+def _workers(request: Request) -> list[dict[str, Any]]:
+    api = getattr(request.app.state, "mt5_worker_api", None)
+    if api is None:
+        return []
+    return list(api.ops_summary().get("workers") or [])
+
+
+async def _evidence_async(
+    request: Request,
+) -> tuple[Any, list[dict[str, Any]], bool]:
+    """(gateway_account, workers, complete). Fails soft, never blocks > 6 s."""
+
+    async def gw() -> Any:
+        return await asyncio.wait_for(
+            run_broker_read(_gateway_account), timeout=EVIDENCE_TIMEOUT_S
+        )
+
+    async def wk() -> list[dict[str, Any]]:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_workers, request), timeout=EVIDENCE_TIMEOUT_S
+        )
+
+    gw_res, wk_res = await asyncio.gather(gw(), wk(), return_exceptions=True)
+    complete = not isinstance(gw_res, BaseException) and not isinstance(
+        wk_res, BaseException
+    )
+    gateway_account = None if isinstance(gw_res, BaseException) else gw_res
+    workers = [] if isinstance(wk_res, BaseException) else wk_res
+    return gateway_account, workers, complete
+
+
 def _evidence(request: Request) -> tuple[Any, list[dict[str, Any]]]:
     gateway_account = None
     with contextlib.suppress(Exception):
-        from core.di.container import get_container
-
-        gateway_account = get_container().mt5_adapter.account_info()
+        gateway_account = _gateway_account()
     workers: list[dict[str, Any]] = []
-    api = getattr(request.app.state, "mt5_worker_api", None)
-    if api is not None:
-        with contextlib.suppress(Exception):
-            workers = list(api.ops_summary().get("workers") or [])
+    with contextlib.suppress(Exception):
+        workers = _workers(request)
     return gateway_account, workers
 
 
 @router.get("/accounts")
 async def my_robot_accounts(user: CurrentUser, request: Request) -> dict[str, Any]:
     uid = UUID(str(user.id))
-    accounts = await asyncio.to_thread(rc.list_accounts, user_id=uid)
-    events = await asyncio.to_thread(rc.recent_events, user_id=uid, limit=50)
-    gateway_account, workers = await asyncio.to_thread(_evidence, request)
+    accounts, events, (gateway_account, workers, complete) = await asyncio.gather(
+        asyncio.to_thread(rc.list_accounts, user_id=uid),
+        asyncio.to_thread(rc.recent_events, user_id=uid, limit=50),
+        _evidence_async(request),
+    )
     for acct in accounts:
         acct["connection"] = rc.connection_state(
             {
@@ -59,10 +100,12 @@ async def my_robot_accounts(user: CurrentUser, request: Request) -> dict[str, An
             },
             gateway_account=gateway_account,
             workers=workers,
+            evidence_available=complete,
         )
     return {
         "accounts": accounts,
         "events": events,
+        "broker_evidence": "complete" if complete else "unavailable",
         "states": sorted(rc.STATES),
         "actions": {k: sorted(v[0]) for k, v in rc.TRANSITIONS.items()},
         "positions_closed_by_controls": False,
@@ -91,7 +134,9 @@ async def control_robot(
     uid = UUID(str(user.id))
     probe = None
     if action in {"resume", "start"}:
-        probe = await asyncio.to_thread(_readiness_probe, request)
+        # Resume/Start must re-verify readiness; if evidence cannot be read the
+        # probe sees no account and refuses (fail closed).
+        probe = await run_broker_read(_readiness_probe, request)
     try:
         return await asyncio.to_thread(
             rc.apply_action,

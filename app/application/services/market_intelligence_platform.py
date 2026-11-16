@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
 
 from app.application.services.ai_market_advisor import AiMarketAdvisor
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.news_intelligence import NewsIntelligenceService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.use_cases.mt5 import GetMT5StatusUseCase, ListMT5SymbolsUseCase
@@ -127,10 +127,10 @@ class MarketIntelligencePlatformService:
                     for o in self.portfolio_sync.list_orders()
                 ]
                 history_deals = len(
-                    await asyncio.to_thread(self.portfolio_sync.history_deals)
+                    await run_broker_read(self.portfolio_sync.history_deals)
                 )
                 history_orders = len(
-                    await asyncio.to_thread(self.portfolio_sync.history_orders)
+                    await run_broker_read(self.portfolio_sync.history_orders)
                 )
             except Exception:  # noqa: S110 - portfolio data is optional
                 pass
