@@ -410,3 +410,29 @@ def test_engine_blocks_new_entries_when_the_robot_is_paused(
     assert pipeline.outcome == "rejected"
     assert "ROBOT_PAUSED" in pipeline.message
     assert sent == []
+
+
+def test_engine_rejects_when_the_mt5_server_clock_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deal times are MT5 server wall clock; unknown offset = unknown day."""
+    from app.domain.institutional_trading import broker_clock
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from app.domain.institutional_trading.operations.live_prefs_tighten import (
+        UserLiveCaps,
+    )
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
+    broker_clock.reset_for_tests()
+    _allow_broker_submit()
+    try:
+        pipeline, sent = _engine_submit(
+            monkeypatch, UserLiveCaps(available=True, reason="no caps")
+        )
+    finally:
+        reset_live_trading_controller_for_tests()
+    assert pipeline.outcome == "rejected"
+    assert "OWNER_DAILY_PNL_UNAVAILABLE" in pipeline.message
+    assert sent == []

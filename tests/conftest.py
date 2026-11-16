@@ -51,6 +51,22 @@ def _reset_runtime_trading_policy() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _known_broker_clock() -> Iterator[None]:
+    """Test gateways report deal times in UTC: offset known and zero.
+
+    Production learns the MT5 server offset from live ticks; with no offset
+    the engine fails closed on daily P/L (covered by test_broker_clock).
+    """
+    from datetime import timedelta
+
+    from app.domain.institutional_trading import broker_clock
+
+    broker_clock.set_for_tests(timedelta(0))
+    yield
+    broker_clock.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
 def _reset_phase_a_plane() -> Iterator[None]:
     """Phase A halt is a process singleton — a kill in one test must not leak."""
     from app.domain.institutional_trading.phase_a.plane import (

@@ -978,6 +978,14 @@ class InstitutionalExecutionEngine:
                         daily_ctx = DailyLossContext(
                             trusted=False, source=f"daily_context_failed: {exc}"
                         )
+                    from app.domain.institutional_trading import broker_clock
+
+                    if daily_ctx.trusted and broker_clock.offset() is None:
+                        # Deal times are MT5 server wall clock; without the
+                        # observed offset the UTC day boundary is unknown.
+                        daily_ctx = DailyLossContext(
+                            trusted=False, source="mt5_server_clock_unknown"
+                        )
                 from app.domain.entities.risk_engine import contract_size_for_symbol
 
                 live_constraints = self.order_validation.constraints_for(intent.symbol)
