@@ -5,7 +5,7 @@
 | | SHA |
 |---|---|
 | Production backend (Railway deployment `7e649d4e`, SUCCESS) | `9b52ce67f1999d2543361ac5c9df60f9c10c3e7a` |
-| **Gateway target** | **`9b52ce67f1999d2543361ac5c9df60f9c10c3e7a`** (same as the backend) |
+| **Gateway target** | See the master tracker, "Gateway target" (the latest reviewed `main` with identical gateway code and the newest deploy script). |
 
 How the target was verified:
 - Loading `services.mt5_gateway.main` imports 153 `app.*` modules, including `owner_live_limits`, `runtime_policy` and `gold_only`.
@@ -41,11 +41,18 @@ The previously suggested `70328f76` holds the same gateway code, but use `9b52ce
 
 2. **Check that the account is flat in the MT5 terminal.** The Trade tab must show no open positions and no pending orders. If anything is open, stop and wait.
 
-3. **Deploy and restart.**
+3. **Deploy and restart.** The checkout on the PC still has the *old* deploy script, which runs `git pull` on `main` and checks `XAUUSD_I`. So run the reviewed script straight from git. The running gateway keeps its loaded code until the script restarts it.
 
    ```powershell
-   .\deploy\mt5_gateway\deploy_main_gateway.ps1 -TargetSha 9b52ce67f1999d2543361ac5c9df60f9c10c3e7a
+   cd $Root
+   git fetch origin
+   $Sha = "<Gateway target SHA from the master tracker>"
+   git show "${Sha}:deploy/mt5_gateway/deploy_main_gateway.ps1" |
+     Set-Content -Encoding ascii "$env:TEMP\qf_deploy_gateway.ps1"
+   & "$env:TEMP\qf_deploy_gateway.ps1" -TargetSha $Sha
    ```
+
+   Run it from `$Root`: the script uses the current folder as the repo root when it is not inside the repo.
 
    The script:
    - checks `/positions` and `/orders` before the checkout and again right before the restart, and refuses if anything is open;
