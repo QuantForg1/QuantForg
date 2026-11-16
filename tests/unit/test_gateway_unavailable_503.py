@@ -72,3 +72,12 @@ def test_history_reads_fail_closed_within_15s() -> None:
     t = client._timeout(path="/history/deals")
     assert t.read == 15.0
     assert client._timeout(path="/history/orders").read == 15.0
+
+
+def test_history_reads_are_not_retried() -> None:
+    from app.infrastructure.brokers.mt5.gateway_budget import request_attempts
+
+    assert request_attempts("GET", "/history/deals") == 1
+    assert request_attempts("GET", "/history/orders?days=30") == 1
+    assert request_attempts("GET", "/account") == 3
+    assert request_attempts("POST", "/trade/order_send") == 1
