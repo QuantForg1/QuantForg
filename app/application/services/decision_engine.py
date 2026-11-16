@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
 
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.mt5_market_data import MT5MarketDataService
 from app.application.services.news_intelligence import NewsIntelligenceService
 from app.application.services.portfolio_sync import PortfolioSyncService
@@ -109,7 +110,7 @@ class DecisionEngineService:
             bid = ask = None
             if tf_name == "H1":
                 try:
-                    tick = self.market_data.latest_tick(code)
+                    tick = await run_broker_read(self.market_data.latest_tick, code)
                     bid, ask = float(tick.bid), float(tick.ask)
                 except Exception:  # noqa: S110 - optional tick unavailable
                     pass

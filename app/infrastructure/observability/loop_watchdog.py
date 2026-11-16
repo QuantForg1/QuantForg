@@ -22,11 +22,16 @@ logger = get_logger(__name__)
 _started = False
 
 
-def _stack_of(thread_id: int, limit: int = 18) -> list[str]:
+def _stack_of(thread_id: int, limit: int = 24) -> list[str]:
+    """Application frames only (the caller matters, not httpx internals)."""
     frame = sys._current_frames().get(thread_id)
     if frame is None:
         return []
-    frames = traceback.extract_stack(frame)[-limit:]
+    frames = [
+        f
+        for f in traceback.extract_stack(frame)
+        if "/site-packages/" not in f.filename and "/lib/python" not in f.filename
+    ][-limit:]
     return [f"{f.filename.split('/app/', 1)[-1]}:{f.lineno} {f.name}" for f in frames]
 
 

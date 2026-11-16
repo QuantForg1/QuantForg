@@ -8087,7 +8087,9 @@ class InstitutionalIteRuntime:
                     logger.exception("pvm_scheduler_stage_failed")
 
                 try:
-                    self._protect_open_positions(reason="pre_scan_manage")
+                    await self._offload_blocking_io(
+                        self._protect_open_positions, reason="pre_scan_manage"
+                    )
                 except Exception:
                     logger.exception("pre_scan_position_protect_failed")
 
@@ -8652,7 +8654,9 @@ class InstitutionalIteRuntime:
                     symbols_timed_out=timeout_diag.get("symbols_timed_out"),
                 )
                 try:
-                    self._manage_open_positions_after_timeout()
+                    await self._offload_blocking_io(
+                        self._manage_open_positions_after_timeout
+                    )
                     timeout_diag["position_management_after_timeout"] = True
                 except Exception:
                     logger.exception("cycle_timeout_position_manage_failed")
@@ -8695,7 +8699,9 @@ class InstitutionalIteRuntime:
             except Exception as exc:
                 logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
                 try:
-                    self._protect_open_positions(reason="cycle_exception_manage")
+                    await self._offload_blocking_io(
+                        self._protect_open_positions, reason="cycle_exception_manage"
+                    )
                 except Exception:
                     logger.exception("cycle_exception_position_manage_failed")
                 with self._lock:
