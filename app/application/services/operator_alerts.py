@@ -447,6 +447,7 @@ class OperatorWatch:
     _gateway: _Down = field(default_factory=_Down)
     _mt5: _Down = field(default_factory=_Down)
     _heartbeat: _Down = field(default_factory=_Down)
+    _heartbeat_logged_at: float = -1e9
     _close_only_alerted: bool = False
     _stops_checked_at: float = -1e9
     _summary_marks: dict[str, str] = field(default_factory=dict)
@@ -470,10 +471,14 @@ class OperatorWatch:
 
     def tick(self) -> None:
         """One synchronous pass (run in a worker thread). Never raises."""
+        started = time.monotonic()
         try:
             self._tick()
         except Exception as exc:
             logger.warning("operator_watch_tick_failed", error=type(exc).__name__)
+        took = time.monotonic() - started
+        if took > 60.0:
+            logger.warning("operator_watch_tick_slow", seconds=round(took, 1))
 
     # -- internals ---------------------------------------------------------------
 
@@ -534,6 +539,15 @@ class OperatorWatch:
         heartbeat was frozen for 8+ hours and history hung; nothing alerted.
         """
         age = gateway_heartbeat_age_seconds(self.adapter, now_utc=utc)
+        if now - self._heartbeat_logged_at >= 300.0:
+            self._heartbeat_logged_at = now
+            logger.info(
+                "gateway_heartbeat_checked",
+                age_s=None if age is None else int(age),
+                stale=bool(age is not None and age > HEARTBEAT_STALE_AFTER_S),
+                down_since=self._heartbeat.since,
+                alerted=self._heartbeat.alerted,
+            )
         if age is None:
             return
         self._track(
