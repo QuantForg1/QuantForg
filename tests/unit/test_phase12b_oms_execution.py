@@ -49,6 +49,35 @@ def _worker(*, ready: bool = True) -> WorkerRuntime:
     )
 
 
+THURSDAY_10_UTC = datetime(2026, 10, 22, 10, 0, tzinfo=UTC)
+CAPS = SimpleNamespace(available=True, planned_risk_pct=None, daily_loss_pct=None)
+
+
+def _snapshot(trade_mode: str) -> dict[str, object]:
+    return {
+        "captured_at": THURSDAY_10_UTC.isoformat(),
+        "trade_mode": trade_mode,
+        "balance": "1000",
+        "equity": "1000",
+        "bid": "4000.00",
+        "ask": "4000.20",
+        "contract_size": "100",
+        "open_positions": 0,
+        "commission_source": "verified_account_tariff",
+        "commission_usd": "0",
+        "deals_today": [],
+    }
+
+
+COMPLIANT_BUY = {
+    "symbol": "XAUUSD",
+    "side": "BUY",
+    "volume": "0.01",
+    "stop_loss": "3995.00",
+    "take_profit": "4010.00",
+}
+
+
 def test_demo_authorize_allows_order_send_when_ready() -> None:
     w = _worker(ready=True)
     settings = SimpleNamespace(
@@ -59,18 +88,15 @@ def test_demo_authorize_allows_order_send_when_ready() -> None:
     auth = authorize_worker_execution(
         worker=w,
         intent_id=uuid4(),
-        job_payload={
-            "symbol": "XAUUSD",
-            "side": "BUY",
-            "volume": "0.01",
-            "stop_loss": "3990",
-            "account_environment": "demo",
-        },
+        job_payload={**COMPLIANT_BUY, "account_environment": "demo"},
         job_user_id=w.user_id,
         job_broker_account_id=w.broker_account_id,
         job_idempotency_key="k1",
         account_environment="demo",
         settings=settings,
+        account_snapshot=_snapshot("demo"),
+        now=THURSDAY_10_UTC,
+        user_caps=CAPS,
     )
     assert auth.ok is True
     assert auth.order_send_allowed is True
@@ -88,17 +114,15 @@ def test_live_path_authorize_fail_closed_for_order_send() -> None:
     auth = authorize_worker_execution(
         worker=w,
         intent_id=uuid4(),
-        job_payload={
-            "symbol": "XAUUSD",
-            "side": "BUY",
-            "volume": "0.01",
-            "stop_loss": "3990",
-        },
+        job_payload=dict(COMPLIANT_BUY),
         job_user_id=w.user_id,
         job_broker_account_id=w.broker_account_id,
         job_idempotency_key="k2",
         account_environment="live",
         settings=settings,
+        account_snapshot=_snapshot("real"),
+        now=THURSDAY_10_UTC,
+        user_caps=CAPS,
     )
     assert auth.ok is True
     assert auth.live_path_authorized is True

@@ -362,6 +362,7 @@ async def dispatch_execute_authorize(
         job_broker_account_id=job.broker_account_id,
         job_idempotency_key=job.idempotency_key,
         account_environment=body.account_environment,
+        account_snapshot=body.account_snapshot,
     )
     if auth.order_send_allowed:
         try:

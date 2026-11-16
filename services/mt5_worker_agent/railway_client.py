@@ -323,7 +323,8 @@ class RailwayWorkerClient:
         *,
         worker_id: str,
         intent_id: str,
-        account_environment: str = "demo",
+        account_environment: str | None = None,
+        account_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self._request(
             "POST",
@@ -332,6 +333,7 @@ class RailwayWorkerClient:
                 "worker_id": worker_id,
                 "intent_id": intent_id,
                 "account_environment": account_environment,
+                "account_snapshot": account_snapshot,
             },
         )
 
