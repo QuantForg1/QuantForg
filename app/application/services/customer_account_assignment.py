@@ -29,9 +29,17 @@ def allowed_environments() -> tuple[str, ...]:
 
 
 def next_unassigned_account(
-    *, taken_account_ids: set[str], fetch: Any | None = None
+    *,
+    taken_account_ids: set[str],
+    fetch: Any | None = None,
+    taken_user_ids: set[str] | None = None,
 ) -> tuple[UUID, UUID] | None:
-    """(user_id, broker_account_id) of the oldest eligible unbound account."""
+    """(user_id, broker_account_id) of the oldest eligible unbound account.
+
+    One active worker per user (the provisioner enforces it): an account whose
+    owner already has a worker waits until that worker is released, instead
+    of being handed to a slot that would alias the existing worker.
+    """
     envs = allowed_environments()
     if not envs:
         return None
@@ -64,9 +72,11 @@ def next_unassigned_account(
     except Exception:
         logger.exception("auto_assign_query_failed")
         return None
+    busy_users = taken_user_ids or set()
     for r in rows:
-        if str(r["id"]) not in taken_account_ids:
-            return UUID(str(r["user_id"])), UUID(str(r["id"]))
+        if str(r["id"]) in taken_account_ids or str(r["user_id"]) in busy_users:
+            continue
+        return UUID(str(r["user_id"])), UUID(str(r["id"]))
     return None
 
 
@@ -75,7 +85,9 @@ def queue_depth(*, taken_account_ids: set[str], fetch: Any | None = None) -> int
     count = 0
     seen = set(taken_account_ids)
     while True:
-        nxt = next_unassigned_account(taken_account_ids=seen, fetch=fetch)
+        nxt = next_unassigned_account(
+            taken_account_ids=seen, fetch=fetch, taken_user_ids=set()
+        )
         if nxt is None:
             return count
         seen.add(str(nxt[1]))
