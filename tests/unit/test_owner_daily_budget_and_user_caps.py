@@ -381,3 +381,32 @@ def test_engine_applies_the_owner_saved_planned_risk(
     assert pipeline.outcome == "rejected"
     assert "OWNER_SL_RISK" in pipeline.message
     assert sent == []
+
+
+def test_engine_blocks_new_entries_when_the_robot_is_paused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.application.services import robot_control_service as rc
+    from app.domain.institutional_trading.live_trading_control import (
+        reset_live_trading_controller_for_tests,
+    )
+    from app.domain.institutional_trading.operations.live_prefs_tighten import (
+        UserLiveCaps,
+    )
+    from tests.unit.test_institutional_execution_engine import _allow_broker_submit
+
+    monkeypatch.setattr(
+        rc,
+        "entry_block",
+        lambda **_: "ROBOT_PAUSED: new entries are blocked for this account",
+    )
+    _allow_broker_submit()
+    try:
+        pipeline, sent = _engine_submit(
+            monkeypatch, UserLiveCaps(available=True, reason="paused")
+        )
+    finally:
+        reset_live_trading_controller_for_tests()
+    assert pipeline.outcome == "rejected"
+    assert "ROBOT_PAUSED" in pipeline.message
+    assert sent == []

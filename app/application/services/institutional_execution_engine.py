@@ -1148,7 +1148,14 @@ class InstitutionalExecutionEngine:
                         live_constraints.stops_level
                     )
                     user_caps = _live_prefs.load_user_live_caps(user_id)
-                    if not installed.ok:
+                    from app.application.services.robot_control_service import (
+                        entry_block as _robot_entry_block,
+                    )
+
+                    robot_block = _robot_entry_block(user_id=user_id, login=login)
+                    if robot_block:
+                        risk_reject = [robot_block]
+                    elif not installed.ok:
                         risk_reject = [
                             "CONFIG_UNAVAILABLE: runtime trading policy "
                             "could not be read"

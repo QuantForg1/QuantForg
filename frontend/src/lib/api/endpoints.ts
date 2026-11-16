@@ -553,6 +553,16 @@ export const tradingSessionApi = {
     }),
 };
 
+/** Robot Control Center — account-scoped robot state (backend is the source of truth). */
+export const robotControlApi = {
+  accounts: () => apiFetch<Record<string, unknown>>("/robot-control/accounts"),
+  act: (brokerAccountId: string, action: string, reason = "") =>
+    apiFetch<Record<string, unknown>>(
+      `/robot-control/accounts/${encodeURIComponent(brokerAccountId)}/${encodeURIComponent(action)}`,
+      { method: "POST", body: { reason } },
+    ),
+};
+
 /** SaaS billing — Crypto Payment LIVE invoices (server-side processor). */
 export const billingApi = {
   plans: () => apiFetch<Record<string, unknown>>("/billing/plans", { auth: false }),
