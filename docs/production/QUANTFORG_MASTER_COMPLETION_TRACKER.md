@@ -144,6 +144,13 @@ Known inputs:
   - #324: mobile drawer fixes.
 - Open: #326 (15 s history timeout).
 - Incident during this session: the #322 deploy hit the pre-existing startup freeze. A precautionary rollback was triggered, then superseded by #325. After the fix, health stayed ≤ 9 s during the next restart and 3–12 ms afterwards.
+- **Event-loop stalls (main cause of slow and timed-out pages):**
+  - #328 removed 31 sync gateway calls from async handlers.
+  - #329 added a stall watchdog that logs the blocking stack from Production.
+  - #330 and #331 fixed what the watchdog found: tick reads, ITE position protection, Weltrade health/bind, owner bootstrap.
+  - Evidence after #330: `/health/live` 2–16 ms, apart from the Weltrade stalls that #331 fixes.
+  - The AST guard test (`test_no_sync_broker_io_in_async.py`) prevents regressions.
+- #326: history reads time out at 15 s.
 - Not verifiable by Claude: authenticated UI on mobile and desktop. The built-in browser is not signed in (owner action A12).
 
 ## Session 4 (16 Nov, 18:45–19:10 UTC): full evidence audit
