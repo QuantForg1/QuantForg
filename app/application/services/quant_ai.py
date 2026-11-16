@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID
@@ -137,7 +138,8 @@ class QuantAIService:
                 positions = []
 
             try:
-                for d in self.portfolio_sync.history_deals()[:300]:
+                raw_deals = await asyncio.to_thread(self.portfolio_sync.history_deals)
+                for d in raw_deals[:300]:
                     deals.append(
                         {
                             "ticket": d.ticket,
@@ -395,7 +397,8 @@ class QuantAIService:
         deals: list[dict[str, Any]] = []
         if status.connected:
             try:
-                for d in self.portfolio_sync.history_deals()[:500]:
+                raw_deals = await asyncio.to_thread(self.portfolio_sync.history_deals)
+                for d in raw_deals[:500]:
                     deals.append(
                         {
                             "symbol": d.symbol,

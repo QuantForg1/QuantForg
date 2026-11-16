@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, cast
@@ -125,8 +126,12 @@ class MarketIntelligencePlatformService:
                     }
                     for o in self.portfolio_sync.list_orders()
                 ]
-                history_deals = len(self.portfolio_sync.history_deals())
-                history_orders = len(self.portfolio_sync.history_orders())
+                history_deals = len(
+                    await asyncio.to_thread(self.portfolio_sync.history_deals)
+                )
+                history_orders = len(
+                    await asyncio.to_thread(self.portfolio_sync.history_orders)
+                )
             except Exception:  # noqa: S110 - portfolio data is optional
                 pass
 

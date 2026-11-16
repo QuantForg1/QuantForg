@@ -593,6 +593,10 @@ class GatewayMT5Client:
     ) -> dict[str, Any]:
         mutation = is_mutation_path(method, path)
         calc = is_calc_path(path)
+        if not mutation:
+            from app.infrastructure.brokers.mt5 import gateway_circuit
+
+            gateway_circuit.check(path)
         lane = current_gateway_lane()
         sem = self._lane_semaphore(mutation=mutation, path=path)
         acquired = True
@@ -610,9 +614,21 @@ class GatewayMT5Client:
         try:
             with contextlib.suppress(Exception):
                 gateway_metrics.begin_inflight(mutation=mutation, calc=calc)
-            data = self._request_http(
-                method, path, json_body=json_body, params=params, auth=auth
-            )
+            try:
+                data = self._request_http(
+                    method, path, json_body=json_body, params=params, auth=auth
+                )
+            except RuntimeError as exc:
+                if not mutation:
+                    from app.infrastructure.brokers.mt5 import gateway_circuit
+
+                    if gateway_circuit.is_transport_failure(exc):
+                        gateway_circuit.record_failure(path)
+                raise
+            if not mutation:
+                from app.infrastructure.brokers.mt5 import gateway_circuit
+
+                gateway_circuit.record_success(path)
             if path.startswith("/quotes/") and isinstance(data, dict):
                 # Learn the MT5 trade-server clock offset from fresh ticks.
                 with contextlib.suppress(Exception):

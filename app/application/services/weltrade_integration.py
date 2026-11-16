@@ -379,7 +379,17 @@ class WeltradeIntegrationService:
         history: list[dict[str, Any]] = []
         if mt5_connected:
             try:
-                snap = self.adapter.account_info()
+                # Broker reads run off the event loop: a hung gateway endpoint
+                # must never stall every other API request.
+                def _read_book() -> tuple[Any, list[Any], list[Any], list[Any]]:
+                    return (
+                        self.adapter.account_info(),
+                        self.adapter.list_positions(),
+                        self.adapter.list_orders(),
+                        self.adapter.history_deals(),
+                    )
+
+                snap, raw_pos, raw_ord, raw_hist = await asyncio.to_thread(_read_book)
                 account = {
                     "login": snap.login,
                     "balance": str(snap.balance),
@@ -393,9 +403,9 @@ class WeltradeIntegrationService:
                     "server": snap.server,
                     "name": snap.name,
                 }
-                positions = [p.to_dict() for p in self.adapter.list_positions()]
-                orders = [o.to_dict() for o in self.adapter.list_orders()]
-                history = [d.to_dict() for d in self.adapter.history_deals()]
+                positions = [p.to_dict() for p in raw_pos]
+                orders = [o.to_dict() for o in raw_ord]
+                history = [d.to_dict() for d in raw_hist]
                 self._last_sync_at = datetime.now(UTC).isoformat()
             except Exception as exc:
                 account = {"error": str(exc)}
