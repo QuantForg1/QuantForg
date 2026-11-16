@@ -14,6 +14,7 @@ from app.application.dto.strategy_runtime import (
     StrategySignalDTO,
     StrategySignalListDTO,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.strategy_runtime import (
     StrategyEvaluateInput,
@@ -179,8 +180,8 @@ class EvaluateStrategyUseCase:
         ):
             try:
                 return (
-                    self.portfolio_sync.account_snapshot(),
-                    self.portfolio_sync.list_positions(),
+                    (await run_broker_read(self.portfolio_sync.account_snapshot)),
+                    (await run_broker_read(self.portfolio_sync.list_positions)),
                 )
             except (OSError, RuntimeError, ValueError):
                 pass

@@ -9,6 +9,7 @@ from uuid import UUID
 
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.risk_engine import RiskCheckCommand, RiskCheckDTO
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.risk_engine import RiskCheckInput, RiskEngine
@@ -242,8 +243,8 @@ class CheckRiskUseCase:
             and adapter.is_live_session(session_ref)
         ):
             try:
-                account = self.portfolio_sync.account_snapshot()
-                positions = self.portfolio_sync.list_positions()
+                account = await run_broker_read(self.portfolio_sync.account_snapshot)
+                positions = await run_broker_read(self.portfolio_sync.list_positions)
                 return account, positions
             except (OSError, RuntimeError, ValueError):
                 return None

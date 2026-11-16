@@ -13,6 +13,7 @@ from app.application.services.backtest_engine import (
     BacktestEngine,
     BacktestRunInput,
 )
+from app.application.services.blocking_io_offload import run_broker_read
 from app.application.services.mt5_market_data import MT5MarketDataService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.walkforward_engine import (
@@ -329,8 +330,8 @@ class QuantStudioService:
                 **_security_flags(),
             }
         try:
-            snap = self.portfolio_sync.account_snapshot()
-            positions = self.portfolio_sync.list_positions()
+            snap = await run_broker_read(self.portfolio_sync.account_snapshot)
+            positions = await run_broker_read(self.portfolio_sync.list_positions)
         except Exception as exc:
             return {
                 "status": "unavailable",
@@ -411,7 +412,7 @@ class QuantStudioService:
         positions: list[dict[str, Any]] = []
         if st.connected:
             try:
-                for p in self.portfolio_sync.list_positions():
+                for p in await run_broker_read(self.portfolio_sync.list_positions):
                     positions.append(
                         {
                             "ticket": p.ticket,

@@ -6,6 +6,7 @@ Implements ``BrokerAdapterPort`` plus MT5-specific APIs.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -395,7 +396,7 @@ class MT5Adapter:
         if not self.initialize(path=path):
             msg = "MT5 initialize failed"
             raise RuntimeError(msg)
-        return self.login(login_req)
+        return await asyncio.to_thread(self.login, login_req)
 
     async def disconnect(self, *, session_ref: str) -> None:
         self._sessions.pop(session_ref, None)
@@ -440,7 +441,7 @@ class MT5Adapter:
 
     async def get_account_info(self, *, session_ref: str) -> BrokerAccountInfo:
         self._require_session(session_ref)
-        info = self._client.account_info()
+        info = await asyncio.to_thread(self._client.account_info)
         return BrokerAccountInfo(
             external_account_id=str(info.login),
             currency=info.currency,
@@ -453,7 +454,7 @@ class MT5Adapter:
 
     async def get_balance(self, *, session_ref: str) -> BrokerBalanceInfo:
         self._require_session(session_ref)
-        snap = self._client.account_snapshot()
+        snap = await asyncio.to_thread(self._client.account_snapshot)
         return BrokerBalanceInfo(
             currency=snap.currency,
             balance=snap.balance,
@@ -464,11 +465,11 @@ class MT5Adapter:
 
     async def get_equity(self, *, session_ref: str) -> Decimal:
         self._require_session(session_ref)
-        return self._client.account_snapshot().equity
+        return (await asyncio.to_thread(self._client.account_snapshot)).equity
 
     async def get_symbols(self, *, session_ref: str) -> list[BrokerSymbolInfo]:
         self._require_session(session_ref)
-        return self._client.symbols()
+        return await asyncio.to_thread(self._client.symbols)
 
     async def get_positions(self, *, session_ref: str) -> list[BrokerPositionInfo]:
         self._require_session(session_ref)
@@ -482,7 +483,7 @@ class MT5Adapter:
                 profit=p.profit,
                 raw={"comment": p.comment, "magic": str(p.magic)},
             )
-            for p in self._client.list_positions()
+            for p in (await asyncio.to_thread(self._client.list_positions))
         ]
 
     async def get_orders(self, *, session_ref: str) -> list[BrokerOrderInfo]:
@@ -498,7 +499,7 @@ class MT5Adapter:
                 status="pending",
                 raw={"comment": o.comment, "magic": str(o.magic)},
             )
-            for o in self._client.list_orders()
+            for o in (await asyncio.to_thread(self._client.list_orders))
         ]
 
     def _require_session(self, session_ref: str) -> None:

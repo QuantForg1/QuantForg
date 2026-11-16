@@ -366,13 +366,13 @@ class WeltradeIntegrationService:
         gateway_payload: dict[str, Any] = {}
         if gw is not None:
             try:
-                gateway_payload = gw.gateway_health()
+                gateway_payload = await run_broker_read(gw.gateway_health)
                 gateway_online = gateway_payload.get("status") == "ok"
             except Exception as exc:
                 gateway_payload = {"status": "error", "detail": str(exc)}
                 logger.warning("weltrade_dashboard_gateway_error", error=str(exc))
 
-        health = self.adapter.health()
+        health = await run_broker_read(self.adapter.health)
         mt5_connected = bool(health.connected)
         account: dict[str, Any] | None = None
         positions: list[dict[str, Any]] = []
@@ -525,7 +525,7 @@ class WeltradeIntegrationService:
         live_login = 0
         live_server = ""
         try:
-            info = self.adapter.account_info()
+            info = await run_broker_read(self.adapter.account_info)
             live_login = int(getattr(info, "login", 0) or 0)
             live_server = str(getattr(info, "server", "") or "").strip()
         except Exception:
@@ -564,7 +564,7 @@ class WeltradeIntegrationService:
         version = ""
         latency: float | None = None
         with contextlib.suppress(Exception):
-            snap = self.adapter.health()
+            snap = await run_broker_read(self.adapter.health)
             build = snap.terminal_build
             version = snap.version or ""
             latency = snap.latency_ms
@@ -867,7 +867,7 @@ class WeltradeIntegrationService:
         live_server = ""
         info = None
         try:
-            info = self.adapter.account_info()
+            info = await run_broker_read(self.adapter.account_info)
             live_login = int(getattr(info, "login", 0) or 0)
             live_server = str(getattr(info, "server", "") or "").strip()
         except Exception:
@@ -1030,7 +1030,7 @@ class WeltradeIntegrationService:
         live_login = 0
         live_server = ""
         try:
-            info = self.adapter.account_info()
+            info = await run_broker_read(self.adapter.account_info)
             live_login = int(getattr(info, "login", 0) or 0)
             live_server = str(getattr(info, "server", "") or "").strip()
         except Exception:
@@ -1159,7 +1159,7 @@ class WeltradeIntegrationService:
 
         info = None
         with contextlib.suppress(Exception):
-            info = self.adapter.account_info()
+            info = await run_broker_read(self.adapter.account_info)
         mode = str(getattr(info, "trade_mode", "") or "") if info is not None else ""
         server = str(getattr(info, "server", "") or "") if info is not None else ""
         login_value = getattr(info, "login", None) if info is not None else None
@@ -1363,7 +1363,7 @@ class WeltradeIntegrationService:
             )
 
         try:
-            health = gw.gateway_health()
+            health = await run_broker_read(gw.gateway_health)
             ok = health.get("status") == "ok"
             if not ok:
                 raise RuntimeError(
@@ -1487,7 +1487,7 @@ class WeltradeIntegrationService:
             live_server = ""
             info = None
             try:
-                info = self.adapter.account_info()
+                info = await run_broker_read(self.adapter.account_info)
                 live_login = int(getattr(info, "login", 0) or 0)
                 live_server = str(getattr(info, "server", "") or "").strip()
             except Exception:
@@ -1618,7 +1618,7 @@ class WeltradeIntegrationService:
             self._auth_failed = False
             authenticated_with_password = True
             with contextlib.suppress(Exception):
-                authed = self.adapter.account_info()
+                authed = await run_broker_read(self.adapter.account_info)
                 verified_mode = str(getattr(authed, "trade_mode", "") or "")
                 verified_currency = str(getattr(authed, "currency", "") or "")
                 verified_equity = str(getattr(authed, "equity", "") or "")
@@ -1869,7 +1869,7 @@ class WeltradeIntegrationService:
         live_login = 0
         try:
             self._ensure_process_gateway_handle()
-            info = self.adapter.account_info()
+            info = await asyncio.to_thread(self.adapter.account_info)
             live_login = int(getattr(info, "login", 0) or 0)
         except Exception:
             live_login = int(getattr(self.adapter.client, "_login", 0) or 0)
@@ -1944,7 +1944,7 @@ class WeltradeIntegrationService:
                 )
                 return None
             try:
-                health = gw.gateway_health()
+                health = await asyncio.to_thread(gw.gateway_health)
                 if _gateway_mt5_already_connected(health):
                     self.adapter.attach(path=profile.terminal_path or "")
                     logger.info(
@@ -2060,7 +2060,7 @@ class WeltradeIntegrationService:
                     failures += 1
                     continue
                 try:
-                    health = gw.gateway_health()
+                    health = await asyncio.to_thread(gw.gateway_health)
                     if _gateway_mt5_already_connected(health):
                         if failures:
                             logger.info(

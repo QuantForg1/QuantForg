@@ -513,7 +513,7 @@ class ControlTradingRobotUseCase:
         if action_norm == "start":
             live_login = 0
             try:
-                info = self.adapter.account_info()
+                info = await run_broker_read(self.adapter.account_info)
                 live_login = int(getattr(info, "login", 0) or 0)
             except Exception:
                 live_login = 0
