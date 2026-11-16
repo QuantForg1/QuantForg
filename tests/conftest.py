@@ -67,6 +67,15 @@ def _known_broker_clock() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _reset_gateway_circuit() -> Iterator[None]:
+    from app.infrastructure.brokers.mt5 import gateway_circuit
+
+    gateway_circuit.reset_for_tests()
+    yield
+    gateway_circuit.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
 def _reset_phase_a_plane() -> Iterator[None]:
     """Phase A halt is a process singleton — a kill in one test must not leak."""
     from app.domain.institutional_trading.phase_a.plane import (
