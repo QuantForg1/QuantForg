@@ -18,8 +18,9 @@ Statuses:
 | Fact | Value |
 |---|---|
 | Backend SHA (Railway `7e649d4e`, SUCCESS) | `9b52ce67` |
-| Gateway heartbeat | last `2026-11-16T10:18:37Z` (stalled more than 8 h); `/history/deals` times out |
-| LIVE state (DB) | ENABLED (owner decision, unchanged); no open positions |
+| Gateway heartbeat | **live**: `2026-11-16T19:34:46Z` seen uncached via the browser; Railway sees age 3 s. Earlier "stalled since 10:18" readings came from a cached fetch and were wrong. MT5 reports `trade_allowed=true`, real account, login 12439799. |
+| Gateway history | `/history/deals` still times out (Railway logs, 60–180 s); circuit breaker contains it |
+| LIVE state | Runtime reports Live Trading Control **PAUSED**; DAILY STOP active (−$8.39, 25%) until 00:00 UTC; 0 open positions. Nothing was changed by this audit. |
 | Users / broker accounts | 41 users; 4 broker accounts, all LIVE; **0 DEMO accounts** |
 | Workers / hosts | **0 / 0** |
 | Supabase plan | **Pro**: daily backups, last 7 days |
@@ -30,7 +31,8 @@ Statuses:
 | Requirement | Status | Evidence / blocker |
 |---|---|---|
 | Gateway runs the reviewed SHA `a150730e…` | BLOCKED (owner A1) | Gateway code identical to backend `9b52ce67` (153 imported `app.*` modules unchanged). Procedure: `GATEWAY_RECOVERY_2026-11-16.md` |
-| Fresh heartbeat / history / UTC offset / daily loss / gateway 9% guard | BLOCKED (A1) | Post-restart checklist in the recovery doc |
+| Heartbeat | PASS | Fresh heartbeat (19:34 UTC) |
+| History / UTC offset / daily loss from deals / gateway 9% guard | BLOCKED (A1) | `/history/deals` hangs; deployed SHA not exposed by `/health`. Post-restart checklist in the recovery doc |
 | Worker auth | CODE PASS | Bearer `WORKER_SERVICE_TOKEN`, `hmac.compare_digest`. Railway has the variable (name verified). |
 | Registration / heartbeat / stale detection | CODE PASS | Idempotent per host+slot; stale after 45 s (`scan_stale`) |
 | Capacity | CODE PASS | `allocate_slot` raises a conflict at `max_terminals`; supervisor soft cap is 2 portables |
@@ -103,7 +105,11 @@ Simulated now (CI): steps 1, 2, 3 (logic), 6, 8, 9, 12 and 13 are covered by `te
 | Credential handling | CODE PASS | AES-GCM vault, owner-checked read, per-worker sealed envelope, password never logged or reported |
 | Backups | PASS (platform) | Supabase Pro daily backups, 7-day retention (Supabase docs) |
 | Restore test | BLOCKED (owner A8) | A restore must target a **new** project ("Restore to a new project"), never Production. Owner approval needed for the cost. |
-| Monitoring / alerts | PARTIAL | Telegram operator alerts and network-incident records exist; no external uptime monitor on `gateway.quantforg.com/health` yet (OPEN) |
+| Alert persistence | PASS (fixed) | `ite_ops_alerts` had 0 rows ever (`id` had no default; every insert 400). Migration `20261116185523` applied; alerts now recorded (ROBOT RESTARTED, EQUITY ALERT, DAILY STOP, REPEATED ERROR seen) |
+| Alert delivery (Telegram) | BLOCKED (owner A11) | `telegram_configured=False`: `TELEGRAM_OPERATOR_CHAT_ID` is not set on Railway. It is deliberately separate from the public signals chat |
+| Stale-heartbeat alert | DEPLOYED | #318, #320 (alerts when the heartbeat is older than 5 min) |
+| Gateway outage responses | DEPLOYED | #319: History/Portfolio/Orders/Positions returned 500 for hours on 16 Nov; they now return 503 `gateway_unavailable` |
+| External uptime monitor | OPEN | None on `gateway.quantforg.com/health` |
 | Leaked password protection | BLOCKED (owner A6) | Pro plan is already active, so only the toggle is needed |
 | Branch protection | BLOCKED (owner: GitHub Pro) | CODEOWNERS is ready (#312) |
 
@@ -133,7 +139,7 @@ LIVE customer trading additionally needs a separate owner authorization, because
 
 | ID | Action | Unblocks |
 |---|---|---|
-| A1 | Restart the Windows gateway with `a150730e…` (recovery doc) | History, Portfolio, daily P/L, gateway guard, robot entries |
+| A1 | Deploy `a150730e…` to the Windows gateway with the recovery script. The gateway is alive; the restart is needed for `/history/deals` and the reviewed SHA | History, Portfolio, daily P/L from deals, gateway guard |
 | A5 | Start the Production worker supervisor (`WORKER_SUPERVISOR_PRODUCTION.md`) | All worker rows |
 | A7 | Three different users connect DEMO accounts | DEMO acceptance |
 | A4 | Record a verified commission per DEMO account (`POST /api/v1/robot-control/admin/accounts/{id}/verified-commission`) | DEMO entries |
@@ -141,3 +147,4 @@ LIVE customer trading additionally needs a separate owner authorization, because
 | A8 | Approve a restore drill into a new Supabase project | DR evidence |
 | A9 | GitHub Pro, then run the branch-protection command | Governance |
 | A10 | NOWPayments production approval + business verification | Real payments |
+| A11 | Set Railway `TELEGRAM_OPERATOR_CHAT_ID` to your **private** chat id (not the signals channel) | Operator alerts reach your phone |
