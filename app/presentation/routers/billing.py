@@ -227,7 +227,11 @@ async def billing_reconcile_trials(
             "BILLING_CRON_SECRET is not configured",
             code="CRON_NOT_CONFIGURED",
         )
-    if (x_quantforg_cron_secret or "") != expected:
+    import hmac
+
+    if not hmac.compare_digest(
+        (x_quantforg_cron_secret or "").encode(), expected.encode()
+    ):
         raise ValidationError("Invalid cron secret", code="CRON_FORBIDDEN")
     return await svc.reconcile_expired_trials()
 

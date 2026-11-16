@@ -5,12 +5,13 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.application.services.institutional_research_platform import (
     InstitutionalResearchPlatform,
 )
+from app.domain.enums.user import UserRole
 from app.domain.institutional_trading.research.models import (
     ResearchBar,
     WalkForwardMode,
@@ -18,8 +19,15 @@ from app.domain.institutional_trading.research.models import (
 from app.domain.institutional_trading.research.simulation_engine import (
     RuleSignalProvider,
 )
+from app.presentation.dependencies.auth import require_roles
 
-router = APIRouter(prefix="/ite/research", tags=["ite-research"])
+# Research simulation can persist runs and exposes operator analytics, so
+# every route needs an owner/admin session (it was reachable anonymously).
+router = APIRouter(
+    prefix="/ite/research",
+    tags=["ite-research"],
+    dependencies=[Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))],
+)
 
 _platform = InstitutionalResearchPlatform()
 
