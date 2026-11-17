@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.application.dto.execution import (
     ExecutionCancelCommand,
@@ -48,6 +48,33 @@ from app.presentation.schemas.execution import (
 )
 
 router = APIRouter(prefix="/execution", tags=["execution"])
+
+
+def _shared_terminal_execution_operator_only(user: CurrentUser) -> None:
+    """Order submit / cancel / manage run on the shared platform terminal.
+
+    17 Nov 2026 audit: that terminal is the owner's session. A customer whose
+    own login happened to be on it (incident 16 Nov) could send real orders
+    through it, outside their assigned worker and the robot pipeline. Customer
+    accounts trade only through their dedicated worker terminal and the robot.
+    """
+    role = getattr(user, "role", "") or ""
+    role = getattr(role, "value", role)
+    if str(role).strip().lower() not in {"owner", "admin"}:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "SHARED_TERMINAL_OWNER_ONLY",
+                "message": (
+                    "Manual orders are not available on your plan. Your broker "
+                    "account is traded by the QuantForg robot on its own "
+                    "terminal; use Robot Control Center to pause or resume it."
+                ),
+            },
+        )
+
+
+_SHARED_TERMINAL_GUARD = [Depends(_shared_terminal_execution_operator_only)]
 
 
 def _audit_item(audit: Any) -> ExecutionAuditItem:
@@ -164,7 +191,11 @@ async def execution_check(
     )
 
 
-@router.post("/submit", response_model=ExecutionSubmitResponse)
+@router.post(
+    "/submit",
+    response_model=ExecutionSubmitResponse,
+    dependencies=_SHARED_TERMINAL_GUARD,
+)
 async def execution_submit(
     body: ExecutionSubmitRequest,
     request: Request,
@@ -227,7 +258,11 @@ async def execution_submit(
     )
 
 
-@router.post("/cancel", response_model=ExecutionCancelResponse)
+@router.post(
+    "/cancel",
+    response_model=ExecutionCancelResponse,
+    dependencies=_SHARED_TERMINAL_GUARD,
+)
 async def execution_cancel(
     body: ExecutionCancelRequest,
     request: Request,
@@ -258,7 +293,11 @@ async def execution_cancel(
     )
 
 
-@router.post("/manage", response_model=ExecutionManageResponse)
+@router.post(
+    "/manage",
+    response_model=ExecutionManageResponse,
+    dependencies=_SHARED_TERMINAL_GUARD,
+)
 async def execution_manage(
     body: ExecutionManageRequest,
     request: Request,

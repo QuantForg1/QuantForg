@@ -17,6 +17,8 @@ from app.domain.institutional_trading.operations.control_plane import (
 from app.domain.institutional_trading.operations.models import OperatorIdentity
 from app.presentation.dependencies.auth import CurrentUser, require_roles
 
+_OPERATOR = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
+
 router = APIRouter(tags=["symbol-management", "signals"])
 
 OperatorUser = Annotated[
@@ -200,7 +202,7 @@ async def get_signals(
     )
 
 
-@router.post("/signals/research/refresh")
+@router.post("/signals/research/refresh", dependencies=_OPERATOR)
 async def signals_research_refresh(user: CurrentUser) -> dict[str, Any]:
     """Run one research analysis cycle in a worker thread. Never OMS."""
     _ = user

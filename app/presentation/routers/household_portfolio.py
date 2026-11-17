@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -28,6 +28,63 @@ from app.presentation.dependencies.broker import BrokerSvc
 from app.presentation.dependencies.portfolio import PortfolioDep
 
 router = APIRouter(prefix="/portfolio/household", tags=["portfolio-household"])
+
+
+def _is_operator(user: Any) -> bool:
+    role = getattr(user, "role", "") or ""
+    role = getattr(role, "value", role)
+    return str(role).strip().lower() in {"owner", "admin"}
+
+
+def _owned_account_ids(user_id: UUID) -> set[str]:
+    """Broker account ids registered to this user (fails closed: empty set)."""
+    try:
+        from app.infrastructure.persistence import direct_postgres as dp
+
+        if not dp.direct_postgres_available():
+            return set()
+        rows = dp.fetch(
+            "SELECT id FROM public.broker_accounts WHERE user_id = $1::uuid",
+            str(user_id),
+        )
+        return {str(r["id"]) for r in rows}
+    except Exception:
+        return set()
+
+
+async def _authorized_stop_scope_id(
+    body: EmergencyStopBody, user: Any, *, disarm: bool
+) -> str:
+    """Customers may only act on their own user or broker accounts.
+
+    Broker-wide stops are operator-only, and a customer can never disarm a
+    stop that someone else (e.g. the owner) armed.
+    """
+    if body.scope == "user" and not _is_operator(user):
+        scope_id = str(user.id)
+    else:
+        scope_id = body.scope_id
+    if _is_operator(user):
+        return scope_id
+    if body.scope == "broker":
+        raise HTTPException(status_code=403, detail="emergency_stop_scope_forbidden")
+    if body.scope == "account":
+        import asyncio
+
+        owned = await asyncio.to_thread(_owned_account_ids, user.id)
+        if scope_id not in owned:
+            raise HTTPException(
+                status_code=403, detail="emergency_stop_scope_forbidden"
+            )
+    if disarm:
+        armed_by = get_emergency_stop_store().armed_by(
+            scope=body.scope, scope_id=scope_id
+        )
+        if armed_by not in (None, str(user.id)):
+            raise HTTPException(
+                status_code=403, detail="emergency_stop_armed_by_operator"
+            )
+    return scope_id
 
 
 class HouseholdRiskCheckBody(BaseModel):
@@ -218,15 +275,26 @@ async def export_household_report_csv(
 @router.get("/emergency-stops")
 async def get_emergency_stops(user: CurrentUser) -> dict[str, Any]:
     snap = get_emergency_stop_store().snapshot()
-    # Tenant filter: only show this user's stop + global broker stops
+    if _is_operator(user):
+        return {
+            "user_armed": str(user.id) in snap["users"],
+            "accounts": list(snap["accounts"]),
+            "brokers": snap["brokers"],
+            "audit_tail": snap["audit_tail"],
+        }
+    # Tenant filter: this user's own stop and accounts; broker stops as a flag.
+    import asyncio
+
+    owned = await asyncio.to_thread(_owned_account_ids, user.id)
+    mine = {str(user.id)} | owned
     return {
         "user_armed": str(user.id) in snap["users"],
-        "accounts": list(snap["accounts"]),
+        "accounts": [a for a in snap["accounts"] if a in owned],
         "brokers": snap["brokers"],
         "audit_tail": [
-            e
+            {k: v for k, v in e.items() if k != "actor_user_id"}
             for e in snap["audit_tail"]
-            if e.get("scope") != "user" or e.get("scope_id") == str(user.id)
+            if e.get("scope") in ("user", "account") and e.get("scope_id") in mine
         ],
     }
 
@@ -238,9 +306,7 @@ async def arm_emergency_stop(
 ) -> dict[str, Any]:
     if not body.confirmed:
         return {"ok": False, "error": "confirmation_required"}
-    scope_id = body.scope_id
-    if body.scope == "user":
-        scope_id = str(user.id)
+    scope_id = await _authorized_stop_scope_id(body, user, disarm=False)
     ev = get_emergency_stop_store().arm(
         scope=body.scope,
         scope_id=scope_id,
@@ -265,9 +331,7 @@ async def disarm_emergency_stop(
 ) -> dict[str, Any]:
     if not body.confirmed:
         return {"ok": False, "error": "confirmation_required"}
-    scope_id = body.scope_id
-    if body.scope == "user":
-        scope_id = str(user.id)
+    scope_id = await _authorized_stop_scope_id(body, user, disarm=True)
     ev = get_emergency_stop_store().disarm(
         scope=body.scope,
         scope_id=scope_id,

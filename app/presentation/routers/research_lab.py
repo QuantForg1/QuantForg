@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from app.presentation.dependencies.auth import CurrentUser
+from app.domain.enums.user import UserRole
+from app.presentation.dependencies.auth import CurrentUser, require_roles
 from app.presentation.dependencies.research_lab import ResearchLabSvc
+
+_OPERATOR = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
 
 router = APIRouter(prefix="/research-lab", tags=["research-lab"])
 
@@ -65,7 +68,7 @@ async def strategy_library(
     return lab.strategy_library()
 
 
-@router.post("/validate")
+@router.post("/validate", dependencies=_OPERATOR)
 async def validate_strategy(
     body: ValidateRequest,
     user: CurrentUser,
@@ -110,7 +113,7 @@ async def get_parameters(
     return lab.get_parameters(user_id=user.id)
 
 
-@router.post("/parameters")
+@router.post("/parameters", dependencies=_OPERATOR)
 async def parameter_lab(
     body: ParameterLabRequest,
     user: CurrentUser,
@@ -136,7 +139,7 @@ async def get_promotion_criteria(
     return lab.promotion_criteria()
 
 
-@router.post("/promotion/criteria")
+@router.post("/promotion/criteria", dependencies=_OPERATOR)
 async def set_promotion_criteria(
     body: PromotionCriteriaRequest,
     user: CurrentUser,
@@ -147,7 +150,7 @@ async def set_promotion_criteria(
     return lab.promotion_criteria(updates=updates or None)
 
 
-@router.post("/promotion/evaluate")
+@router.post("/promotion/evaluate", dependencies=_OPERATOR)
 async def evaluate_promotion(
     body: PromoteRequest,
     user: CurrentUser,
