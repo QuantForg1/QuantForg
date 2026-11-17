@@ -569,7 +569,7 @@ class WeltradeIntegrationService:
             version = snap.version or ""
             latency = snap.latency_ms
         with contextlib.suppress(Exception):
-            terminal = self.adapter.terminal_info()
+            terminal = await run_broker_read(self.adapter.terminal_info)
             build = build or terminal.build
 
         connection = MT5Connection.create(
