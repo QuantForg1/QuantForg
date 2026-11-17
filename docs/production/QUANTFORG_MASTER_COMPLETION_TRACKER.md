@@ -325,18 +325,33 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 
 | Area | Item | Status | Evidence / next |
 |---|---|---|---|
-| Deploy | Railway tip | **PRODUCTION VERIFIED** | `/qf-api/health` → `ea40f74c` (#359) |
-| Deploy | Vercel both projects on tip | **DEPLOYED** (commit statuses SUCCESS) + **runtime markers PRODUCTION VERIFIED** for #352/#358 on www `/broker` JS | Tip statuses: `Vercel – frontend` + `Vercel – quant-forg` SUCCESS on `ea40f74c`. www chunk contains “Checking your broker connection” (#358) and balance/equity fallback markers (#352). |
-| Broker lifecycle | Customer Disconnect / Reconnect | **IN PROGRESS → PR** | Customers previously got 403 on `/weltrade/disconnect|reconnect` (shared-terminal guard). Now: vault revoke / re-queue only; never calls gateway. Multi-broker `public_selection` fixed (was Weltrade-only). |
+| Deploy | Railway tip | **PRODUCTION VERIFIED** | Was `/qf-api/health` → `ea40f74c` (#359); superseded by Session 12 tip `127e7b37` |
+| Deploy | Vercel both projects on tip | **DEPLOYED** (commit statuses SUCCESS) + **runtime markers PRODUCTION VERIFIED** for #352/#358 on www `/broker` JS | Tip statuses SUCCESS on `ea40f74c`; runtime markers re-confirmed Session 12 on live www |
+| Broker lifecycle | Customer Disconnect / Reconnect | **IMPLEMENTED_NOT_VERIFIED** (#360 `127e7b37`) | Vault revoke / re-queue only; never calls gateway. Multi-broker `public_selection` fixed. DEMO E2E still A14 |
 | Gold First | #356 gate | **IMPLEMENTED_NOT_VERIFIED** | Unchanged; Prod mapping probe still depends on gateway MT5 reads |
 | Gateway recovery prep | `a150730e` | **READY (not executed)** | Prerequisites improved: login 12439799 Weltrade-Real, heartbeat fresh, trade_allowed true. Still need flat book confirm + owner restart authorization. Robot stays PAUSED. |
 | Capacity | Concurrent terminals | **MISSING** | No invented numbers; wait for authorized DEMO sessions (A14) + supervisor (A5) |
 | CI / GitHub billing | Actions minutes / branch protection | **BLOCKED_EXTERNAL** | Safe options (no charge without approval): (1) keep local required checks, (2) wait for monthly free-minute reset, (3) self-hosted runner on owner hardware, (4) GitHub Team/Pro — **A9 DECLINED**, do not enable. Never make the repo public for free protection. |
 
+## Session 12 (17 Nov ~09:45–10:20 UTC)
+
+| Area | Item | Status | Evidence / next |
+|---|---|---|---|
+| Deploy | Railway tip | **PRODUCTION VERIFIED** | `www.quantforg.com/qf-api/health` → `127e7b37` (#360) |
+| Deploy | Vercel both projects | **PRODUCTION VERIFIED** (commit statuses) on `127e7b37` | `Vercel – frontend` + `Vercel – quant-forg` SUCCESS on `127e7b37`. Prior tip `ea40f74c` also SUCCESS |
+| Deploy | www runtime markers #352/#358 | **PRODUCTION VERIFIED** | Live `/broker` chunk `page-dc06f6ac9e37d7fd.js` contains “Checking your broker connection” (#358); balance/equity fragments present (#352). Queued-terminal banner not yet on tip (this PR) |
+| Broker UX | Customer queued banner + no mount-restore | **IMPLEMENTED → PR** | Operator-only `restoreProfile` / passwordless claim; durable `pending_terminal` banner `broker-queued-for-terminal`. Contracts in `broker-accounts-experience.test.ts` |
+| Gateway recovery prep | `a150730e` | **READY (not executed)** | 09:50 UTC uncached `/health`: login **12439799** Weltrade-Real, heartbeat fresh (~seconds), `trade_allowed=true`. Restart still **not** authorized |
+| Gold First | Broker discovery hints | **IMPLEMENTED_NOT_VERIFIED** | `BROKER_GOLD_DISCOVERY_HINTS` + normalize/order helpers; `/mt5/gold-mapping` probes hints. Fixtures ≠ validated. No unvalidated instrument enabled |
+| Monitoring | API + gateway health (read-only) | **PRODUCTION VERIFIED** (read-only) | Railway tip `127e7b37`; gateway Weltrade 12439799 preserved; Robot remains PAUSED (no control writes) |
+| Onboarding / support | DEMO E2E + support playbooks | **IMPLEMENTED_NOT_VERIFIED** / **OWNER_ACTION_REQUIRED** | Checklist in infra report §4; needs A14 test customer + A5 supervisor. Support path: Broker queued banner + RCC status; no LIVE changes |
+| Capacity | Concurrent terminals | **MISSING** | Wait for A14 DEMO + A5; do not invent numbers |
+| CI / GitHub billing | Actions jobs not started | **BLOCKED_EXTERNAL** | Annotation: *“recent account payments have failed or your spending limit needs to be increased.”* Safe options (no charge without approval): (1) keep local pytest/tsc gates, (2) owner fixes payment method / spending limit in GitHub Billing (may enable billed minutes — **needs approval**), (3) wait for free-minute reset if applicable after payment is healthy, (4) self-hosted runner on owner hardware, (5) GitHub Team/Pro for branch protection — **A9 DECLINED**. Never make the repo public |
+
 ## Handoff (next exact actions)
 
 1. **Gateway recovery (A1 / GW):** owner authorizes separately. Prerequisites now: heartbeat fresh + login 12439799 confirmed. Still confirm Trade tab FLAT, then run `GATEWAY_RECOVERY_a150730e.md`. Do not auto-resume LIVE.
 2. After recovery: `/history/deals` 200; `broker_clock` +2 h; daily-loss trusted; `OWNER_*` rejects in cycle logs.
-3. Merge + deploy this session’s customer Disconnect/Reconnect PR; Production-verify with a non-operator test customer (A14).
+3. Merge + deploy Session 12 queued-UX PR; Production-verify runtime marker “Queued for a QuantForg trading terminal”; customer E2E still needs A14.
 4. W2 UI state machine: CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY from worker evidence (needs A5).
 5. A5 supervisor + A14 DEMO accounts before any capacity measurement.

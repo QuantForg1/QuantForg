@@ -14,6 +14,9 @@ from typing import Any
 import pytest
 
 from app.domain.trading.gold_instrument_mapping import (
+    discovery_hint_codes,
+    normalize_broker_key,
+    order_specs_for_discovery,
     resolve_gold_mapping,
     validate_gold_spec,
 )
@@ -155,6 +158,27 @@ def test_geometry_skipped_for_non_usd_account() -> None:
     eur = dict(WELTRADE_LIVE, tick_value="0.092")
     assert validate_gold_spec(eur, account_currency="EUR").ok
     assert not validate_gold_spec(eur, account_currency="USD").ok
+
+
+def test_discovery_hints_are_not_validation() -> None:
+    assert normalize_broker_key("Weltrade-Real") == "weltrade"
+    assert normalize_broker_key("Exness-MT5Trial11") == "exness"
+    hints = discovery_hint_codes("Weltrade Ltd")
+    assert hints[0] == "XAUUSD"
+    assert "XAUUSD_i" in hints
+    # Hints alone never produce VALIDATED.
+    m = resolve_gold_mapping([], broker="weltrade")
+    assert m.status == "MISSING" and not m.tradable
+
+
+def test_order_specs_prefers_broker_hints_without_enabling() -> None:
+    late = dict(WELTRADE_LIVE, code="GOLD")
+    early = dict(WELTRADE_LIVE, code="XAUUSD")
+    ordered = order_specs_for_discovery([late, early], broker="weltrade")
+    assert [s["code"] for s in ordered] == ["XAUUSD", "GOLD"]
+    # Two valid specs remain AMBIGUOUS — hints do not auto-pick.
+    amb = resolve_gold_mapping([late, early], broker="weltrade", account_currency="USD")
+    assert amb.status == "AMBIGUOUS" and amb.broker_symbol is None
 
 
 # --- execution gate (ITE market context) -----------------------------------

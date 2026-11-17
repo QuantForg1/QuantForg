@@ -43,13 +43,17 @@ closed (`GOLD_MAPPING_INVALID`).
 | Broker | Actual Gold symbol | Evidence | Status |
 |---|---|---|---|
 | Weltrade (Real) | `XAUUSD` | Live `/mt5/symbols/XAUUSD` 17 Nov: "Gold Ounce vs US Dollar (Spot)", `currency_base=USD` (!), `currency_profit=USD`, contract 100, digits 3, tick 0.001 → 0.1, vol 0.01/0.01 | COMPLETE_VERIFIED (metadata); gate on live cycle IMPLEMENTED_NOT_VERIFIED |
-| XM | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
-| Exness | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
-| HFM | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
-| IC Markets | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
-| Pepperstone | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
-| FP Markets | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
-| JustMarkets | not yet observed | Fixture only | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| XM | not yet observed | Discovery hints: `GOLD`, `XAUUSD`, … (not validated) | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| Exness | not yet observed | Discovery hints: `XAUUSDm`, `XAUUSD`, … (not validated) | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| HFM | not yet observed | Discovery hints only | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| IC Markets | not yet observed | Discovery hints only | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| Pepperstone | not yet observed | Discovery hints only | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| FP Markets | not yet observed | Discovery hints only | OWNER_ACTION_REQUIRED (A14 DEMO) |
+| JustMarkets | not yet observed | Discovery hints: `XAUUSD.m`, … (not validated) | OWNER_ACTION_REQUIRED (A14 DEMO) |
+
+Discovery hints (`BROKER_GOLD_DISCOVERY_HINTS`) expand catalogue probes and
+sort candidate order. They **never** mark a symbol VALIDATED; execution still
+fails closed on MISSING / AMBIGUOUS / INVALID until live metadata passes.
 
 Note: the code previously assumed Weltrade gold was `XAUUSD_i`
 (`CANONICAL_GOLD_BROKER_DISPLAY`). The live Real server lists `XAUUSD`. The
@@ -143,7 +147,7 @@ Runbook: `GATEWAY_RECOVERY_a150730e.md`. Findings this session (read-only):
 | API event loop stalled 91.8 s on gateway `/positions` (startup recovery + exposure) | Fix #357 deployed; verify `event_loop_blocked` absent |
 | Gateway `/positions` and `/history/*` hang while `/health` is fine | OWNER_ACTION_REQUIRED (gateway recovery authorization) |
 | Vercel Production frozen on #346: Hobby daily deployment limit | #355 (main-only) merged; Production frontend redeploys on the next allowed main build |
-| GitHub Actions minutes exhausted | BLOCKED_EXTERNAL; local checks per PR (owner-approved) |
+| GitHub Actions jobs not started | BLOCKED_EXTERNAL: *“recent account payments have failed or your spending limit needs to be increased”* (run 44058485920). Safe options without unauthorized charges: local required checks; owner-approved payment/spending-limit fix; free-minute reset after billing healthy; self-hosted runner; A9 Pro declined; never publicize the repo |
 
 ## 8. Owner-only actions (current)
 

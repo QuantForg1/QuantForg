@@ -50,6 +50,13 @@ assert.equal(workspace.includes("Claim ownership"), false);
 assert.equal(workspace.includes("CustomerMultiAccountPanel"), false);
 assert.equal(workspace.includes("Multi-account status"), false);
 assert.match(workspace, /Connect MT5 Account/);
+// Customers must not restore the shared platform terminal on mount.
+assert.match(workspace, /isOperator && !connected/);
+assert.match(workspace, /restoreProfile\(\)/);
+assert.match(workspace, /Queued for a QuantForg trading terminal/);
+assert.match(workspace, /broker-queued-for-terminal/);
+// Passwordless claim/restore remains operator-only.
+assert.match(workspace, /Passwordless claim \/ shared-terminal restore is owner-only/);
 
 const xm = MT5_BROKER_OPTIONS.find((b) => b.slug === "xm");
 const pepper = MT5_BROKER_OPTIONS.find((b) => b.slug === "pepperstone");
