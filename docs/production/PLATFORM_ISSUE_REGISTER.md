@@ -16,6 +16,8 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 
 | C6 | Customer could switch the shared platform terminal (owner LIVE session logged out) | Incident 16 Nov 23:46 UTC | **FIXED #340/#341**; owner restore pending (A13) |
 
+| C8 | Signed-in users could write ~60 tables directly via Supabase REST (anon key + their JWT): own `licenses`, `broker_accounts`/`mt5_connections` (register any MT5 login), `users`, `audit_logs`, `user_risk_settings`, billing rows | RLS audit 17 Nov 01:15 UTC: policies `*_insert_own`/`*_update_own` + table grants to `authenticated` | **FIXED** migrations `20261117011925`, `20261117012014`: all INSERT/UPDATE/DELETE/TRUNCATE revoked from `authenticated`/`anon` on every public table and in default privileges; SELECT stays under RLS. Frontend uses no supabase-js; backend writes with service role / direct Postgres. API verified 200s after the change |
+
 ## High
 
 | ID | Issue | Evidence | Status |
