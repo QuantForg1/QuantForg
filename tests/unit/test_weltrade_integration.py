@@ -475,7 +475,8 @@ class TestWeltradeConnectHTTP:
                 id=uuid4(),
                 email="test@example.com",
                 display_name="Tester",
-                role="trader",
+                # The shared platform terminal is owner/admin only (17 Nov).
+                role="owner",
                 status="active",
                 auth_user_id=uuid4(),
             )

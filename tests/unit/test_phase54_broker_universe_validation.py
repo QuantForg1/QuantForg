@@ -122,7 +122,8 @@ def _http_client(svc: WeltradeIntegrationService) -> TestClient:
             id=uuid4(),
             email="phase54@example.com",
             display_name="Phase54",
-            role="trader",
+            # The shared platform terminal is owner/admin only (17 Nov 2026).
+            role="owner",
             status="active",
             auth_user_id=uuid4(),
         )
