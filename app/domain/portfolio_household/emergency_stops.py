@@ -101,6 +101,17 @@ class EmergencyStopStore:
                 )
         return None
 
+    def armed_by(self, *, scope: str, scope_id: str | UUID) -> str | None:
+        """Actor of the arming event for a currently armed stop (None if not armed)."""
+        sid = str(scope_id)
+        with self._lock:
+            if sid not in self._bucket(scope):
+                return None
+            for ev in reversed(self._audit):
+                if ev.scope == scope and ev.scope_id == sid and ev.armed:
+                    return ev.actor_user_id or ""
+        return ""
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {

@@ -7,16 +7,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.application.dto.strategy_runtime import (
     ListStrategySignalsCommand,
     StrategyEvaluateCommand,
 )
 from app.application.services.strategy_engine import StrategyAllocation
+from app.domain.enums.user import UserRole
 from app.domain.interfaces.strategy_engine import OhlcBar, StrategyRiskLimits
 from app.domain.market_data.timeframe import Timeframe
-from app.presentation.dependencies.auth import CurrentUser, get_client_meta
+from app.presentation.dependencies.auth import (
+    CurrentUser,
+    get_client_meta,
+    require_roles,
+)
 from app.presentation.dependencies.strategy import (
     EvaluateStrategyDep,
     ListStrategySignalsDep,
@@ -32,6 +37,8 @@ from app.presentation.schemas.strategy import (
     StrategySignalListResponse,
     StrategySignalResponse,
 )
+
+_OPERATOR = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
 
 router = APIRouter(prefix="/strategy", tags=["strategy-runtime"])
 
@@ -269,7 +276,7 @@ async def strategy_portfolio(
     return engine.portfolio_summary()
 
 
-@router.put("/portfolio/allocations")
+@router.put("/portfolio/allocations", dependencies=_OPERATOR)
 async def strategy_set_allocations(
     body: StrategyAllocationPutRequest,
     user: CurrentUser,

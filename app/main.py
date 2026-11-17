@@ -101,6 +101,7 @@ _OPERATOR_ONLY_ROUTER_MODULES: frozenset[str] = frozenset(
         "quantforg_strategy_factory",
         "quantforg_strategy_marketplace",
         "quantitative_research_control",
+        "research_validation_platform",
         "real_market_intelligence_platform",
         "reliability_engineering_suite",
         "replay_evidence_lab",

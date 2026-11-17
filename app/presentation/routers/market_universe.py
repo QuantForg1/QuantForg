@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.application.services.market_universe_service import (
@@ -12,7 +12,10 @@ from app.application.services.market_universe_service import (
     find_instrument,
     resolve_runtime_mt5_adapter,
 )
-from app.presentation.dependencies.auth import CurrentUser
+from app.domain.enums.user import UserRole
+from app.presentation.dependencies.auth import CurrentUser, require_roles
+
+_OPERATOR = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
 
 router = APIRouter(
     prefix="/market-universe",
@@ -272,7 +275,7 @@ async def market_universe_instrument(symbol: str, user: CurrentUser) -> dict[str
     )
 
 
-@router.post("/refresh")
+@router.post("/refresh", dependencies=_OPERATOR)
 async def market_universe_refresh(user: CurrentUser) -> dict[str, Any]:
     """Re-read broker catalogue if an adapter is available. Never places orders."""
     _ = user
