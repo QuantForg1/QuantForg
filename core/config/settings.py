@@ -299,6 +299,20 @@ class Settings(BaseSettings):
             ),
         ),
     ] = 7
+    billing_live_checkout_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Open real-money checkout to customers. Keep false until the "
+                "payment provider has approved the account and business "
+                "verification is complete (owner instruction, 17 Nov 2026)."
+            ),
+            validation_alias=AliasChoices(
+                "BILLING_LIVE_CHECKOUT_ENABLED",
+                "billing_live_checkout_enabled",
+            ),
+        ),
+    ] = False
     billing_cron_secret: Annotated[
         SecretStr | None,
         Field(

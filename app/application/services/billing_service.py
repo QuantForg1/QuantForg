@@ -77,11 +77,17 @@ def _configured(settings: Settings) -> bool:
     return bool(key.strip() and secret.strip())
 
 
+def live_checkout_open(settings: Settings) -> bool:
+    return bool(getattr(settings, "billing_live_checkout_enabled", False))
+
+
 def billing_provider_status(settings: Settings) -> dict[str, Any]:
     """Customer-safe payment method status. Provider brand stays internal."""
     configured = _configured(settings)
+    checkout_open = configured and live_checkout_open(settings)
     return {
         "configured": configured,
+        "checkout_open": checkout_open,
         "payment_method": "crypto",
         "payment_method_label": "Crypto Payment",
         "mode": "live" if configured else None,
@@ -93,10 +99,14 @@ def billing_provider_status(settings: Settings) -> dict[str, Any]:
         "note": (
             "Crypto Payment is available. Paid access activates only after "
             "QuantForg verifies a completed payment — never from a browser redirect alone."
-            if configured
+            if checkout_open
             else (
-                "Crypto Payment is not configured on the API yet. "
-                "Checkout will remain unavailable until production credentials are set."
+                "Paid plans open soon. You can start the free trial now."
+                if configured
+                else (
+                    "Crypto Payment is not configured on the API yet. "
+                    "Checkout will remain unavailable until production credentials are set."
+                )
             )
         ),
         # Internal processor id for operators/logs — UI must not render this label.

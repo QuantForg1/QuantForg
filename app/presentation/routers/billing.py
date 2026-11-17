@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.application.dto.auth import AuthUserDTO
@@ -118,6 +118,20 @@ async def billing_checkout(
     user: CurrentUser,
     svc: BillingSvc,
 ) -> dict[str, Any]:
+    from app.application.services.billing_service import live_checkout_open
+
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    if not live_checkout_open(svc.settings) and role not in {"owner", "admin"}:
+        # Real-money checkout stays closed until provider approval and
+        # business verification (owner instruction). Trials, existing
+        # licenses and IPN callbacks for already-issued invoices still work.
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "PAYMENTS_NOT_OPEN",
+                "message": "Paid plans open soon. You can start the free trial now.",
+            },
+        )
     return await svc.create_checkout(
         user_id=user.id,
         plan_id=body.plan_id,
