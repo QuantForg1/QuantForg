@@ -109,6 +109,50 @@ def refresh_execution_gateway_reads(mt5_adapter: Any | None) -> None:
         fn()
 
 
+# Gold First: execution symbols must validate as spot gold in USD from live
+# MT5 metadata, not from their name. Cached briefly per symbol so the cycle
+# does not add a gateway call every few seconds.
+_GOLD_GATE_TTL_S = 300.0
+_GOLD_GATE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+async def _gold_metadata_gate(mt5_adapter: Any, broker_symbol: str) -> dict[str, Any]:
+    import time as _time
+
+    from app.domain.trading.gold_instrument_mapping import validate_gold_spec
+    from app.domain.trading.gold_only import gold_only_enabled
+
+    if not gold_only_enabled():
+        return {"ok": None, "skipped": "gold_only_disabled"}
+    key = str(broker_symbol or "").upper()
+    hit = _GOLD_GATE_CACHE.get(key)
+    if hit is not None and _time.monotonic() - hit[0] < _GOLD_GATE_TTL_S:
+        return hit[1]
+    try:
+        spec = await _offload_sync(mt5_adapter.symbol_info, broker_symbol)
+    except Exception as exc:
+        # Unreadable metadata is not proof of anything: fail closed, no cache.
+        return {
+            "ok": False,
+            "reasons": [f"symbol_info_unavailable:{type(exc).__name__}"],
+        }
+    currency = None
+    try:
+        account = await _offload_sync(mt5_adapter.account_info)
+        currency = str(getattr(account, "currency", "") or "") or None
+    except Exception:
+        currency = None
+    check = validate_gold_spec(spec, account_currency=currency, require_quote=False)
+    result = {
+        "ok": check.ok,
+        "symbol": check.code,
+        "reasons": list(check.reasons),
+        "geometry_checked": check.evidence.get("geometry_checked"),
+    }
+    _GOLD_GATE_CACHE[key] = (_time.monotonic(), result)
+    return result
+
+
 async def _offload_sync(
     fn: Any,
     /,
@@ -757,6 +801,18 @@ async def build_ite_cycle_market_context(
         )
     canonical_symbol = symbol_candidates[0]
     diag["canonical_broker_symbol"] = canonical_symbol
+    if not research_mode:
+        gold_gate = await _gold_metadata_gate(mt5_adapter, canonical_symbol)
+        diag["gold_mapping"] = gold_gate
+        if gold_gate.get("ok") is False:
+            return _fail(
+                "GOLD_MAPPING_INVALID: "
+                f"{canonical_symbol} failed MT5 metadata validation "
+                f"({','.join(gold_gate.get('reasons') or [])})",
+                logical_symbol=logical_symbol,
+                canonical_broker_symbol=canonical_symbol,
+                next_action="FAIL_CLOSED",
+            )
     diag["requested_symbol"] = logical_symbol
     diag["context_purpose"] = str(purpose or "execution")
     bars_by_tf: dict[Timeframe, list[Candle]] = {}
