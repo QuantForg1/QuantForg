@@ -25,6 +25,18 @@ Supersedes `GATEWAY_RECOVERY_2026-11-16.md` (that file had a stale target and a 
 3. **Live Trading Control is PAUSED**, and Claude does not change it.
 4. **The account is flat.** The MT5 Trade tab shows no positions and no pending orders.
 
+### Verified read-only 17 Nov 2026 ~09:40 UTC (no restart performed)
+
+| Check | Result |
+|---|---|
+| Uncached `/health` | `connected=true`, heartbeat age ~5 s |
+| Login / server | **12439799** / **Weltrade-Real** |
+| `trade_allowed` | `true` |
+| Restart authorized | **No** — waiting for separate owner authorization |
+| Robot / LIVE | Remain PAUSED; automatic resume disabled in code |
+
+Remaining before any restart: confirm Trade tab is FLAT (or use `-ConfirmFlatInTerminal`), confirm the running checkout path (step 1), and receive explicit restart authorization.
+
 ## Procedure (PowerShell as Administrator on the Windows PC)
 
 ```powershell
