@@ -14,6 +14,8 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 
 | C5 | 97 routers had session-only auth: any user could change platform-wide state | Code audit 17 Nov | **FIXED #333** (63 routers owner/admin; per-endpoint gates; test `test_operator_api_rbac.py`) |
 
+| C6 | Customer could switch the shared platform terminal (owner LIVE session logged out) | Incident 16 Nov 23:46 UTC | **FIXED #340/#341**; owner restore pending (A13) |
+
 ## High
 
 | ID | Issue | Evidence | Status |
@@ -37,7 +39,7 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 | M5 | No external uptime monitor on the gateway | OPEN |
 | M6 | Owner cannot see the gateway's deployed SHA (`/health` has none) | OPEN: add the commit to gateway `/health` in the next gateway release |
 
-| M7 | API region (SFO) far from Supabase (eu-central-1), gateway and users | **OWNER decision**: move Railway region to EU |
+| M7 | API region (SFO) far from Supabase (eu-central-1), gateway and users | **FIXED**: moved to europe-west4 (latency −35–75 %) |
 | M8 | Customer pages contain technical copy (e.g. Book: "nulls when data unavailable · no fabricated zeros"); Dashboard waits on slow session reads | OPEN |
 
 ## Low / cosmetic

@@ -133,6 +133,22 @@ Known inputs:
 | Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
 | Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
 
+## Session 7 (17 Nov, 23:30–00:30 UTC): region move, incident, customer onboarding
+
+- **Region:** API moved from SFO to **europe-west4** (owner approved). Measured from Cairo (median of 3):
+
+  | Call | Before | After |
+  |---|---|---|
+  | `/auth/me` | 427 ms | 283 ms |
+  | `/risk/preferences/effective` | 865 ms | 328 ms |
+  | `/robot-control/accounts` | 1451 ms | 620 ms |
+  | `/trading/session` | 1305 ms | 738 ms |
+  | `/health/live` | 1686 ms | 613 ms |
+
+  Gateway calls dropped from 380–450 ms to about 290 ms.
+- **Incident (critical, no financial impact):** a customer's Broker page restore-profile switched the shared platform terminal from the owner's Weltrade LIVE account to the customer's XM account. Details in `INCIDENT_2026-11-16_SHARED_TERMINAL.md`. Fixed by **#340** (owner/admin only) and **#341** (customer accounts are saved for worker terminals).
+- **Owner action A13:** restore the platform terminal to Weltrade 12439799 from Broker as the owner.
+
 ## Session 6 (16–17 Nov, 22:30–23:30 UTC): routes, authorization, latency evidence
 
 - **Critical security fix (#333).** 97 routers checked for a session but no role, so any registered user could change platform-wide state (scalping emergency-stop clear, AI supervisor mode, autonomous-trading modes, broker certification). Now:
