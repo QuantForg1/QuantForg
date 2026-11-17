@@ -30,6 +30,9 @@ from app.presentation.schemas.mt5 import (
     MT5SymbolsPageResponse,
     MT5TickResponse,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/mt5", tags=["mt5"])
 
@@ -158,9 +161,11 @@ async def mt5_gold_mapping(user: CurrentUser, mt5: MT5Svc) -> dict[str, object]:
             user_id=user.id, q=q, offset=0, limit=50, include_quotes=False
         )
         for item in page.items:
-            if is_gold_candidate(item.code, getattr(item, "description", "")):
-                if item.code not in codes:
-                    codes.append(item.code)
+            if (
+                is_gold_candidate(item.code, getattr(item, "description", ""))
+                and item.code not in codes
+            ):
+                codes.append(item.code)
     # Broker spelling hints expand discovery only — never VALIDATED by name.
     for hint in discovery_hint_codes(broker_label):
         if hint not in codes:
@@ -169,7 +174,13 @@ async def mt5_gold_mapping(user: CurrentUser, mt5: MT5Svc) -> dict[str, object]:
     for code in codes[:12]:
         try:
             dto = await mt5.get_symbol.execute(user_id=user.id, symbol=code)
-        except Exception:
+        except Exception as exc:
+            # Hint spellings that do not exist on this broker land here.
+            logger.debug(
+                "gold_mapping_symbol_skipped",
+                symbol=code,
+                error_type=type(exc).__name__,
+            )
             continue
         row = dto_to_dict(dto)
         if is_gold_candidate(
