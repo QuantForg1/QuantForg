@@ -133,6 +133,27 @@ Known inputs:
 | Windows gateway `order_guard` | 9% per trade + book cap, **after A1** | n/a | n/a | n/a | n/a |
 | Closes / SL-TP management | risk-reducing; not blocked | n/a | n/a | not blocked (by design) | n/a |
 
+## Session 8 (17 Nov, 00:35–01:05 UTC): shared-terminal audit
+
+- **Second incident finding (DB):**
+  - The owner's own `mt5_connections` row had been re-pointed to the customer's XM login 450397410 by privileged auto-adoption.
+  - Startup then bound the owner's execution identity to it. LTC was PAUSED, so nothing traded.
+- **#343:**
+  - Automatic adoption, session-guard heal and owner rehydration bind only a login that is in the same user's `broker_accounts`, and fail closed.
+  - One MT5 account can be registered by one user only.
+  - **Verified in Production 00:52 UTC:** `broker_ownership_rehydrate_refused`, `mt5_session_heal_refused`.
+- **#344:**
+  - Worker auto-assignment never selects owner/admin accounts (query validated read-only on Production).
+  - Exact runbook `GATEWAY_RECOVERY_a150730e.md`: none of the 169 modules the gateway imports changed since that SHA.
+  - Supervisor startup verification checklist; DEMO acceptance steps 0, 0b and 14 added.
+  - Dependency check for 112 legacy routes: 109 have no test references, 3 are test-pinned.
+- **Audit of shared-terminal mutation paths:**
+  - **Owner/admin only:** gateway `/session/connect|attach|disconnect` via `weltrade connect/attach/claim/disconnect/reconnect/restore-profile`, `/mt5/connect|disconnect`, `/broker-connections/validate`, `/broker-connectivity/invoke`.
+  - **Attach without re-login:** ITE recovery and `_ensure_process_gateway_handle` use attach(path="") only, which re-attaches the existing session and never logs in another account.
+  - **Startup auto-restore:** binds only the owner's registered login.
+- **Pending owner action A13:** the gateway still reports login 450397410 (00:53 UTC). After you restore, Claude verifies login 12439799 and a fresh heartbeat before the gateway recovery (A1).
+- **Remaining customer-journey gap:** acceptance with a real customer account needs a test customer login. Creating accounts requires your permission.
+
 ## Session 7 (17 Nov, 23:30–00:30 UTC): region move, incident, customer onboarding
 
 - **Region:** API moved from SFO to **europe-west4** (owner approved). Measured from Cairo (median of 3):
