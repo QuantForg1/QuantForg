@@ -11,6 +11,13 @@ Supersedes `GATEWAY_RECOVERY_2026-11-16.md` (that file had a stale target and a 
 | Script | `deploy/mt5_gateway/deploy_main_gateway.ps1` at that SHA. It requires `-TargetSha`, refuses a dirty tree, checks `/positions` and `/orders` before checkout and before restart, checks out detached, restarts via `supervise_gateway.ps1 -Once`, verifies `/health`, `/account`, `/quotes`, `/candles`, and writes `deploy_main_gateway_verify.json` with `previous_commit`. |
 | Running checkout | The gateway's token comes from `C:\QuantForg-Workspace\QuantForg-wt-POLICY\.env` (gateway `/health` `token_fingerprint.source`), so that worktree is most likely `$Root`. Confirm with step 1. |
 
+## Findings 17 Nov 2026 (read-only, before any restart)
+
+- The token worktree `QuantForg-wt-POLICY` is on local branch `fix/live-blockers` at `8774b418`. **That commit is not on GitHub.** If it is the running checkout (confirm with step 1), the gateway currently runs unreviewed local code. The deploy script records it as `previous_commit`; it stays in the local repo, so the rollback command below still works.
+- Since ~05:44 UTC, gateway `/positions` (up to 59 s), `/account` (15 s) and `/history/deals` (37 s) are very slow, while `/health` answers in milliseconds with a fresh heartbeat. Same failure family as the `/history` hang this recovery targets.
+- LIVE is locked: owner pause persisted (`owner_paused=true`, 02:11:39 UTC) and automatic resume is disabled in code (#350). The recovery changes neither; LIVE stays PAUSED after the restart.
+- After the restart the API's startup recovery no longer blocks on a slow `/positions` (#357).
+
 ## Preconditions (Claude verifies these read-only before you start)
 
 1. **The platform terminal is on your account.** You restore Weltrade-Real **12439799** via Broker → Connect/Restore (owner action A13). Claude then confirms from Railway logs that gateway `/account` reports `login 12439799, server Weltrade-Real`.

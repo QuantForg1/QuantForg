@@ -306,6 +306,21 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 | CI | GitHub Actions | BLOCKED_EXTERNAL | Account billing: jobs not started; checks run locally per PR (owner approved 17 Nov) |
 | Billing | Live checkout | BLOCKED_EXTERNAL | A10 NOWPayments verification; checkout closed |
 
+## Session 10 (17 Nov 05:30–06:10 UTC)
+
+| Area | Item | Status | Evidence / next |
+|---|---|---|---|
+| Deploy | Vercel Production (both projects) | COMPLETE_VERIFIED | Hobby daily limit hit ("rate limited — retry in 24 hours"); #355 limits builds to `main`. 05:50 UTC: `quant-forg` dpl_AaVxx3HKC8ceT5ptQHzSnQj6WFP4 and `frontend` dpl_HWhQR9PVh38RY2i3QGPShBi5M9Ur both READY on `8ec65fdd` (#356); www.quantforg.com aliased to it |
+| Deploy | Railway | COMPLETE_VERIFIED | `24f5926f` (#357) deployment df49e9e4 SUCCESS; hydrated `live_trading_state=PAUSED` 05:52:20 |
+| LIVE safety | Owner pause persists across restarts | COMPLETE_VERIFIED | PAUSED after deploys at 05:44 and 05:52 |
+| Gold First | Metadata-validated mapping + execution gate (#356) | IMPLEMENTED_NOT_VERIFIED | Weltrade-Real live spec: `XAUUSD`, base USD, 100 oz, tick 0.001→0.1. `GET /mt5/gold-mapping` Prod check timed out on the slow gateway |
+| Reliability | API event-loop stall 91.8 s on gateway `/positions` | IMPLEMENTED_NOT_VERIFIED | #357; no `event_loop_blocked` since 05:52 |
+| Gateway | `/positions` 59 s, `/account` 15 s, `/history/deals` 37 s; `/health` fine | OWNER_ACTION_REQUIRED | Gateway recovery `a150730e` (runbook updated) |
+| Broker page | Unknown session shown as disconnected (Connect form) | IMPLEMENTED_NOT_VERIFIED | This PR: "checking" / "can't check right now" + Retry |
+| Capacity | Concurrent customer terminals | MISSING | `worker_hosts`=0, `execution_workers`=0: supervisor never started (A5). Plan in `QUANTFORG_GLOBAL_BROKER_INFRASTRUCTURE_REPORT.md` |
+| Broker lifecycle | DEMO acceptance checklist (8 brokers) | IMPLEMENTED_NOT_VERIFIED | Checklist written; needs A14 + A5 |
+| CI | GitHub Actions free minutes exhausted | BLOCKED_EXTERNAL | 598 CI runs in Nov; options in report §7 / final message |
+
 ## Handoff (next exact actions)
 
 1. **After A1**, verify in order: gateway heartbeat fresh and `/health` OK; the gateway's deployed commit (`deploy_main_gateway_verify.json`); `/account` login 12439799 on Weltrade-Real; `/history/deals` 200; `broker_clock` offset learned (+2 h); the daily-loss context trusted; and owner rejects (`OWNER_*`) in the cycle logs.
