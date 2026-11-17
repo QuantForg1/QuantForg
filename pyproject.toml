@@ -186,6 +186,7 @@ markers = [
     "integration: Tests requiring external services",
     "slow: Long-running tests",
     "trading_core: Production trading-core regression (must pass before merge)",
+    "real_login_registration: use the real broker_accounts registration check",
 ]
 filterwarnings = [
     "error",

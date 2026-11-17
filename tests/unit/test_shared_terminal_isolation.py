@@ -103,6 +103,10 @@ def test_register_validates_and_never_touches_the_terminal() -> None:
             saved.append(kw)
             return True
 
+    from app.application.services import broker_ownership_restore as bor
+
+    bor_orig = bor.login_registered_to_another_user
+    bor.login_registered_to_another_user = lambda *_a, **_k: False  # type: ignore[assignment]
     svc = object.__new__(WeltradeIntegrationService)
     svc._secret_store = lambda: _Store()  # type: ignore[method-assign]
     out = asyncio.run(
@@ -116,6 +120,19 @@ def test_register_validates_and_never_touches_the_terminal() -> None:
         )
     )
     assert out["state"] == "QUEUED_FOR_TERMINAL"
+    bor.login_registered_to_another_user = lambda *_a, **_k: True  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="already registered"):
+        asyncio.run(
+            svc.register_customer_account(
+                user_id=uuid4(),
+                login=12439799,
+                password="x",
+                server="Weltrade-Real",
+                account_type="live",
+                broker_slug="weltrade",
+            )
+        )
+    bor.login_registered_to_another_user = bor_orig  # type: ignore[assignment]
     assert saved[0]["pending_terminal"] is True and saved[0]["broker_slug"] == "xm"
     with pytest.raises(ValueError):
         asyncio.run(
