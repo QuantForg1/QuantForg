@@ -79,6 +79,8 @@ Prerequisites, all owner actions:
 
 | # | Step | Pass condition | Evidence |
 |---|---|---|---|
+| 0 | U1 connects in Broker Accounts | Response `QUEUED_FOR_TERMINAL`; **the platform terminal stays on Weltrade 12439799** (gateway `/account` unchanged); `customer_account_registered` log | Railway logs, gateway `/account` |
+| 0b | U2 registers U1's login | Refused: "already registered" | API response |
 | 1 | U1, U2 connect | Each gets a different slot; worker `user_id`/`broker_account_id` match | `/mt5-workers/ops`, supervisor log `slot_rebound` |
 | 2 | U3 connects | Queued (no third terminal), queue depth 1 | assignment queue |
 | 3 | Login | Slot logs in with the vault credentials; READY only if MT5 `trade_allowed=true` | `slot_provision ready=True trade_allowed=True` |
@@ -92,6 +94,7 @@ Prerequisites, all owner actions:
 | 11 | Kill U2's terminal | Heartbeat stale at 45 s → DEGRADED; supervisor relaunches; same account re-bound | ops summary |
 | 12 | U1 disconnects | Slot retired; U3 assigned | `slot_rebound` |
 | 13 | Isolation | U2's JWT cannot see U1's accounts/controls (RLS); worker B cannot open A's envelope | already PASS in Production RLS + #311 |
+| 14 | Shared terminal | Every customer call to `/weltrade/attach|claim|disconnect|reconnect|restore-profile`, `/mt5/connect|disconnect` and `/broker-connections/validate` returns 403 | CI `test_shared_terminal_isolation.py`; repeat once with a real customer JWT |
 
 Simulated now (CI): steps 1, 2, 3 (logic), 6, 8, 9, 12 and 13 are covered by `test_multi_user_isolation_e2e.py`, `test_customer_account_assignment.py`, `test_worker_slot_provisioning.py`, `test_robot_control_service.py`, `test_multi_account_owner_guard.py` and `test_entitlements.py`. Steps 4, 5, 7, 10 and 11 need real terminals.
 
