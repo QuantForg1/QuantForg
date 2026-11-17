@@ -226,3 +226,37 @@ async def test_portfolio_survives_history_outage(
     assert portfolio.account.balance and portfolio.account.equity
     assert portfolio.position_count == 2
     assert portfolio.history_orders == [] and portfolio.history_deals == []
+
+
+@pytest.mark.asyncio
+async def test_portfolio_does_not_wait_for_hung_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hanging history read costs at most the budget, not its own timeout."""
+    import threading
+    import time
+
+    from app.application.services import portfolio_sync
+
+    monkeypatch.setattr(portfolio_sync, "HISTORY_BUDGET_S", 0.3)
+    mt5_factory, portfolio_factory, adapter, sync, audit = _wire()
+    user_id = uuid4()
+    await _connect(mt5_factory, adapter, audit, user_id)
+    release = threading.Event()
+
+    def _hang(*_a: object, **_k: object) -> list[object]:
+        release.wait(5)
+        return []
+
+    monkeypatch.setattr(adapter, "history_orders", _hang)
+    started = time.monotonic()
+    portfolio = await GetPortfolioUseCase(
+        mt5_uow_factory=mt5_factory,
+        portfolio_uow_factory=portfolio_factory,
+        sync_service=sync,
+    ).execute(user_id=user_id)
+    elapsed = time.monotonic() - started
+    release.set()
+    assert portfolio.history_available is False
+    assert portfolio.account.balance
+    assert elapsed < 2.0, elapsed
