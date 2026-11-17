@@ -24,6 +24,7 @@ from app.domain.events.portfolio import (
     PositionOpenedDetected,
 )
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
+from app.infrastructure.brokers.mt5.gateway_circuit import GatewayUnavailableError
 
 
 @dataclass
@@ -68,6 +69,26 @@ class PortfolioSyncService:
     ) -> list[MT5HistoryOrder]:
         return self.adapter.history_orders(date_from=date_from, date_to=date_to)
 
+    def history_best_effort(
+        self,
+        *,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> tuple[list[MT5HistoryOrder], list[MT5Deal], bool]:
+        """History orders + deals, or empty lists when the gateway history
+        endpoint is unavailable (circuit open / timeout).
+
+        Account balance, equity and open positions must not depend on trade
+        history: 17 Nov 2026 the gateway /history/* hang made /portfolio 503
+        and the Broker page showed no balance or equity.
+        """
+        try:
+            orders = self.history_orders(date_from=date_from, date_to=date_to)
+            deals = self.history_deals(date_from=date_from, date_to=date_to)
+        except GatewayUnavailableError:
+            return [], [], False
+        return list(orders), list(deals), True
+
     def history_deals(
         self,
         *,
@@ -94,8 +115,9 @@ class PortfolioSyncService:
         """
         pending = self.list_orders()
         account = self.account_snapshot()
-        hist_orders = self.history_orders(date_from=date_from, date_to=date_to)
-        hist_deals = self.history_deals(date_from=date_from, date_to=date_to)
+        hist_orders, hist_deals, _history_ok = self.history_best_effort(
+            date_from=date_from, date_to=date_to
+        )
         # Authoritative open book: bypass cycle/TTL position pin after deals.
         refresh = getattr(self.adapter, "force_refresh_positions", None)
         positions = refresh() if callable(refresh) else self.list_positions()

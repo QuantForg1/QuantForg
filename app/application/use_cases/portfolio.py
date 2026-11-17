@@ -50,8 +50,9 @@ class GetPortfolioUseCase:
             # first, then force-refresh open book so a close that lands during
             # the read cannot leave OPEN + entry_out in one API response.
             pending = self.sync_service.list_orders()
-            hist_orders = self.sync_service.history_orders()
-            hist_deals = self.sync_service.history_deals()
+            hist_orders, hist_deals, history_ok = (
+                self.sync_service.history_best_effort()
+            )
             adapter = self.sync_service.adapter
             refresh = getattr(adapter, "force_refresh_positions", None)
             positions = (
@@ -63,11 +64,17 @@ class GetPortfolioUseCase:
                 hist_orders,
                 hist_deals,
                 self.sync_service.account_snapshot(),
+                history_ok,
             )
 
-        positions_raw, pending_raw, hist_orders_raw, hist_deals_raw, account_raw = (
-            await run_broker_read(_fresh_snapshot)
-        )
+        (
+            positions_raw,
+            pending_raw,
+            hist_orders_raw,
+            hist_deals_raw,
+            account_raw,
+            history_ok,
+        ) = await run_broker_read(_fresh_snapshot)
         positions = [PositionDTO.from_entity(p) for p in positions_raw]
         pending = [PendingOrderDTO.from_entity(o) for o in pending_raw]
         hist_orders = [HistoryOrderDTO.from_entity(o) for o in hist_orders_raw]
@@ -82,6 +89,7 @@ class GetPortfolioUseCase:
             synced_at=record.synced_at,
             position_count=len(positions),
             pending_order_count=len(pending),
+            history_available=bool(history_ok),
         )
 
 
