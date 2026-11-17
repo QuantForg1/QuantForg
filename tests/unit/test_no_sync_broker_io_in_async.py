@@ -31,6 +31,7 @@ SYNC_GATEWAY_CALLS = {
     "note_scheduler_stalled",
     "attach",
     "_read_exposure",
+    "terminal_info",
 }
 RECEIVERS = (
     "self.validation_service",

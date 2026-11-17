@@ -82,7 +82,12 @@ class ConnectMT5UseCase:
         )
         connection.mark_initializing()
         try:
-            if not self.adapter.initialize(path=command.path):
+            # Gateway calls run off the event loop (a slow terminal must not
+            # freeze every other request while the owner connects).
+            initialized = await run_broker_read(
+                self.adapter.initialize, path=command.path
+            )
+            if not initialized:
                 raise RuntimeError("MT5 initialize failed")
             connection.mark_logging_in()
             login_req = MT5LoginRequest(
@@ -91,10 +96,19 @@ class ConnectMT5UseCase:
                 server=command.server.strip(),
                 path=command.path,
             )
-            session_ref = self.adapter.login(login_req)
-            terminal = self.adapter.terminal_info()
-            version = self.adapter.version()
-            latency = self.adapter.ping()
+
+            def _login_and_probe() -> tuple[Any, Any, Any, Any]:
+                ref = self.adapter.login(login_req)
+                return (
+                    ref,
+                    self.adapter.terminal_info(),
+                    self.adapter.version(),
+                    self.adapter.ping(),
+                )
+
+            session_ref, terminal, version, latency = await run_broker_read(
+                _login_and_probe
+            )
             connection.mark_connected(
                 session_ref=session_ref,
                 terminal_build=terminal.build,
