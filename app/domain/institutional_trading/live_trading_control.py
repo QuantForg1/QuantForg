@@ -1526,6 +1526,39 @@ class LiveTradingController:
             )
             return self.state
 
+    def adopt_owner_pause(
+        self, operator: OperatorIdentity, *, reason: str
+    ) -> LiveTradingState:
+        """Turn a restart / safety PAUSE into the owner's own durable PAUSE.
+
+        Owner Pause previously required ENABLED, so a robot paused by restart
+        recovery could not be locked PAUSED without DISABLE. After this the
+        persisted state is PAUSED (owner) and nothing resumes it automatically.
+        """
+        require_operator(operator)
+        with self._lock:
+            if self.state != "PAUSED":
+                raise LiveTradingTransitionError(
+                    f"owner_pause_adopt_requires_paused_current={self.state}"
+                )
+            if self.owner_paused:
+                return self.state
+            prior = self.safety_pause_reason or (
+                "restart_recovery" if self.recovered_from_enabled else "safety"
+            )
+            self.owner_paused = True
+            self.recovered_from_enabled = False
+            self.paused_for_safety = False
+            self.safety_pause_reason = ""
+            self._record_locked(
+                operator=operator,
+                action="owner_pause_adopted",
+                before="PAUSED",
+                after="PAUSED",
+                reason=f"{reason or 'owner pause'} (was {prior})",
+            )
+            return self.state
+
     def resume_after_safe_recovery(
         self, *, reason: str = "resume_after_safe_recovery"
     ) -> LiveTradingState:

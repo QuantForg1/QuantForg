@@ -1163,6 +1163,11 @@ def enable_live_trading(
 
 def pause_live_trading(operator: OperatorIdentity, *, reason: str) -> dict[str, Any]:
     ctrl = get_live_trading_controller()
+    if ctrl.snapshot_state() == "PAUSED":
+        # Restart / safety pause -> owner pause (durable, never auto-resumed).
+        ctrl.adopt_owner_pause(operator, reason=reason or "pause")
+        _persist_or_block(ctrl)
+        return build_live_trading_status()
     if ctrl.snapshot_state() != "ENABLED":
         raise LiveTradingTransitionError(
             f"pause_requires_enabled_current={ctrl.snapshot_state()}"
