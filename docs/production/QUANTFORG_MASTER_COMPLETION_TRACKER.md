@@ -151,7 +151,8 @@ Known inputs:
   - **Owner/admin only:** gateway `/session/connect|attach|disconnect` via `weltrade connect/attach/claim/disconnect/reconnect/restore-profile`, `/mt5/connect|disconnect`, `/broker-connections/validate`, `/broker-connectivity/invoke`.
   - **Attach without re-login:** ITE recovery and `_ensure_process_gateway_handle` use attach(path="") only, which re-attaches the existing session and never logs in another account.
   - **Startup auto-restore:** binds only the owner's registered login.
-- **Pending owner action A13:** the gateway still reports login 450397410 (00:53 UTC). After you restore, Claude verifies login 12439799 and a fresh heartbeat before the gateway recovery (A1).
+- **#346 (business):** NOWPayments was configured in **live** mode with no gate, so real crypto invoices were possible before provider approval. Customer checkout now returns 503 `PAYMENTS_NOT_OPEN` until Railway `BILLING_LIVE_CHECKOUT_ENABLED=true` (owner action A10). Verified in Production: `checkout_open=false`.
+- **Pending owner action A13:** the gateway still reports login 450397410 (uncached `/health`, 01:14 UTC, heartbeat fresh). After you restore, Claude verifies login 12439799 and a fresh heartbeat before the gateway recovery (A1).
 - **Remaining customer-journey gap:** acceptance with a real customer account needs a test customer login. Creating accounts requires your permission.
 
 ## Session 7 (17 Nov, 23:30–00:30 UTC): region move, incident, customer onboarding
