@@ -1212,7 +1212,7 @@ class WeltradeIntegrationService:
                 "requires_confirmation": False,
                 "readable": True,
             }
-        snap = self._read_exposure()
+        snap = await run_broker_read(self._read_exposure)
         snap["readable"] = True
         return snap
 
@@ -1590,7 +1590,7 @@ class WeltradeIntegrationService:
                 live_login = int(getattr(self.adapter.client, "_login", 0) or 0)
             if live_login > 1 and live_login != int(login):
                 if password:
-                    exposure = self._read_exposure()
+                    exposure = await run_broker_read(self._read_exposure)
                     if exposure["requires_confirmation"] and not confirm_leave_exposure:
                         raise RuntimeError(
                             "OPEN_EXPOSURE: This account has "

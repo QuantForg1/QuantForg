@@ -411,7 +411,12 @@ class Container:
                                 # magic desk present on the broker book (not gold-only).
                                 live_rows: list[Any] = []
                                 try:
-                                    live_rows = list(adapter.list_positions() or [])
+                                    # Off the event loop: a hung gateway
+                                    # /positions froze the API for 92 s (17 Nov).
+                                    live_rows = list(
+                                        await asyncio.to_thread(adapter.list_positions)
+                                        or []
+                                    )
                                 except Exception:
                                     live_rows = []
                                 recover_syms: list[str] = []
