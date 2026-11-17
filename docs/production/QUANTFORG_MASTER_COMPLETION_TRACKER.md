@@ -280,7 +280,7 @@ Known inputs:
 | 16 Nov 11:5x | Migration: pin `search_path` on `forbid_self_service_role_change` | n/a | Applied (security advisor 0011) |
 | 17 Nov 01:18 | Migration: re-pin `search_path` on `forbid_self_service_role_change` | `20261117011830` | Applied (advisor 0011 again) |
 | 17 Nov 01:19–01:20 | Migrations: revoke all client table writes (C8) | `20261117011925`, `20261117012014` | Applied; `authenticated` keeps SELECT under RLS only; service role unchanged; Production API 200s afterwards |
-| 17 Nov 01:36 | Migration: revoke all client table access (C9) | `20261117013609` | Applied; REST returns 42501 for anon+JWT on every table incl. `platform_risk_policy` |
+| 17 Nov 01:36 | Migration: revoke all client table access (C9) | `20261117013324` | Applied; REST returns 42501 for anon+JWT on every table incl. `platform_risk_policy` |
 | 17 Nov 02:05 | #350 LIVE never auto-resumes (`LIVE_AUTO_RESUME_ENABLED=false`) | `288af8f7` / Railway `a63195eb` | Prod log 02:06:59 `live_trading_auto_resume_disabled` + ROBOT STAYS PAUSED alert |
 | 17 Nov 02:09 | #351 owner Pause adopts restart/safety pause; #349 customer write boundaries (C10, C11) | `c9f937a0`, `28a8e787` / Railway `81278432` | SUCCESS |
 | 17 Nov 02:11:39 | Owner Pause (owner session, owner-authorized "do what's best") | audit `owner_pause_adopted` | Durable `live_trading_state=PAUSED`, `owner_paused=true` (DB 02:11:40); `orders_may_submit=false` |

@@ -25,7 +25,7 @@ and that number is still **unmeasured**. No capacity is claimed beyond that.
 
 | PR | Change | Status |
 |---|---|---|
-| #348, migration `20261117013609` | No client table access on Supabase | COMPLETE_VERIFIED (REST 42501) |
+| #348, migration `20261117013324` | No client table access on Supabase | COMPLETE_VERIFIED (REST 42501) |
 | #349 | Customers cannot use shared-terminal execution; emergency stops scoped; platform writes operator-only | IMPLEMENTED_NOT_VERIFIED (needs A14 customer session) |
 | #352, #353 | Balance/Equity no longer depend on gateway history; history 4 s budget | COMPLETE_VERIFIED (Broker page 12.3 / 12.3) |
 | #356 | Gold First metadata-validated mapping + execution gate + `GET /mt5/gold-mapping` | IMPLEMENTED_NOT_VERIFIED (Prod endpoint check blocked by §7 stall) |
