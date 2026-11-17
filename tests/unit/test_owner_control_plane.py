@@ -855,3 +855,14 @@ def test_postgres_status_rowcount_uses_the_last_token():
     assert _status_rowcount("UPDATE 1") == 1
     assert _status_rowcount("UPDATE 0") == 0
     assert _status_rowcount("") == 0
+
+
+def test_role_guard_function_pins_search_path() -> None:
+    """Startup re-creates the role guard; it must keep a fixed search_path.
+
+    Supabase advisor 0011 (function_search_path_mutable) reappeared after every
+    deploy because CREATE OR REPLACE without SET clears the migration's pin.
+    """
+    from app.application.services import runtime_policy_store
+
+    assert "SET search_path = public, pg_temp" in runtime_policy_store._ROLE_FUNCTION

@@ -48,6 +48,7 @@ _ROLE_FUNCTION = """
 CREATE OR REPLACE FUNCTION public.forbid_self_service_role_change()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = public, pg_temp
 AS $fn$
 DECLARE
   jwt_role text;
