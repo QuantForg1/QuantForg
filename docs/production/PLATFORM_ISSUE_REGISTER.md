@@ -18,6 +18,12 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 
 | C8 | Signed-in users could write ~60 tables directly via Supabase REST (anon key + their JWT): own `licenses`, `broker_accounts`/`mt5_connections` (register any MT5 login), `users`, `audit_logs`, `user_risk_settings`, billing rows | RLS audit 17 Nov 01:15 UTC: policies `*_insert_own`/`*_update_own` + table grants to `authenticated` | **FIXED** migrations `20261117011925`, `20261117012014`: all INSERT/UPDATE/DELETE/TRUNCATE revoked from `authenticated`/`anon` on every public table and in default privileges; SELECT stays under RLS. Frontend uses no supabase-js; backend writes with service role / direct Postgres. API verified 200s after the change |
 
+| C9 | Owner risk policy (and all public tables) readable via Supabase REST | RLS audit 17 Nov | **FIXED** migration `20261117013609` |
+| C10 | Any user could submit/cancel/manage orders on the shared owner terminal | API write-path audit 17 Nov | **FIXED #349** |
+| C11 | Customer could arm/disarm broker-wide or owner-armed emergency stops | API write-path audit 17 Nov | **FIXED #349** |
+| C12 | LIVE robot auto-resumed after restart once inside session (would have resumed 07:00 UTC 17 Nov) | Prod log `live_trading_safe_recovery_blocked failures=[outside_session]` | **FIXED #350/#351**; owner pause applied 02:11:39 |
+| H-BAL | Broker page balance/equity "—": `/portfolio` 503 on gateway history circuit | Prod 02:12 | **FIXED #352/#353** (1–2 s, verified) |
+
 ## High
 
 | ID | Issue | Evidence | Status |

@@ -280,6 +280,31 @@ Known inputs:
 | 16 Nov 11:5x | Migration: pin `search_path` on `forbid_self_service_role_change` | n/a | Applied (security advisor 0011) |
 | 17 Nov 01:18 | Migration: re-pin `search_path` on `forbid_self_service_role_change` | `20261117011830` | Applied (advisor 0011 again) |
 | 17 Nov 01:19–01:20 | Migrations: revoke all client table writes (C8) | `20261117011925`, `20261117012014` | Applied; `authenticated` keeps SELECT under RLS only; service role unchanged; Production API 200s afterwards |
+| 17 Nov 01:36 | Migration: revoke all client table access (C9) | `20261117013609` | Applied; REST returns 42501 for anon+JWT on every table incl. `platform_risk_policy` |
+| 17 Nov 02:05 | #350 LIVE never auto-resumes (`LIVE_AUTO_RESUME_ENABLED=false`) | `288af8f7` / Railway `a63195eb` | Prod log 02:06:59 `live_trading_auto_resume_disabled` + ROBOT STAYS PAUSED alert |
+| 17 Nov 02:09 | #351 owner Pause adopts restart/safety pause; #349 customer write boundaries (C10, C11) | `c9f937a0`, `28a8e787` / Railway `81278432` | SUCCESS |
+| 17 Nov 02:11:39 | Owner Pause (owner session, owner-authorized "do what's best") | audit `owner_pause_adopted` | Durable `live_trading_state=PAUSED`, `owner_paused=true` (DB 02:11:40); `orders_may_submit=false` |
+| 17 Nov 02:18 | #352 portfolio history best-effort; frontend `/mt5/account` fallback | `7976372c` / Railway `6a8d928b` | `/portfolio` 200 but 86 s (history hang) |
+| 17 Nov 02:25 | #353 history 4 s budget, single in-flight | `5dfc094d` / Railway `69b44453` | `/portfolio` 200 in 1.0–2.1 s, balance/equity 12.3 USD; Broker page shows both |
+
+## Session 9 (17 Nov 01:15–02:30 UTC) — status per readiness checklist
+
+Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EXTERNAL · OWNER_ACTION_REQUIRED · DEFERRED · FAILED
+
+| Area | Item | Status | Evidence / next |
+|---|---|---|---|
+| LIVE safety | Robot PAUSED by owner, durable | COMPLETE_VERIFIED | DB `owner_paused=true`, 02:11:40 |
+| LIVE safety | No auto-resume (session open, restart, worker/gateway recovery) | COMPLETE_VERIFIED | #350 + Prod log 02:06:59; owner pause survives restart (test `test_owner_pause_adopts_a_restart_pause`) |
+| LIVE safety | Weltrade 12439799 restored on gateway | COMPLETE_VERIFIED | `/health` 01:43:36: login 12439799, Weltrade-Real, heartbeat 8.5 s |
+| Security | Client table access (Supabase REST) | COMPLETE_VERIFIED | 113 tables: 0 client read/write, RLS on all; REST 42501 |
+| Security | Shared terminal execution owner-only | IMPLEMENTED_NOT_VERIFIED | #349 + tests; Prod authenticated customer check needs A14 test customer |
+| Security | Emergency stops scoped; platform-wide writes operator-only | IMPLEMENTED_NOT_VERIFIED | #349 + 18 tests; Prod customer check needs A14 |
+| Broker page | Balance / Equity | COMPLETE_VERIFIED | Broker page 02:28 shows 12.3 / 12.3 |
+| Broker lifecycle | Connect / Reconnect / Disconnect / Change account, 8 brokers | IMPLEMENTED_NOT_VERIFIED | Needs DEMO credentials per broker (A14) |
+| Capacity | Concurrent connected accounts | MISSING | Host is the owner's Windows PC; requires DEMO load test (A14) |
+| Gateway | /history hang (C3) | OWNER_ACTION_REQUIRED | Gateway recovery at `a150730e` — separate authorization |
+| CI | GitHub Actions | BLOCKED_EXTERNAL | Account billing: jobs not started; checks run locally per PR (owner approved 17 Nov) |
+| Billing | Live checkout | BLOCKED_EXTERNAL | A10 NOWPayments verification; checkout closed |
 
 ## Handoff (next exact actions)
 
