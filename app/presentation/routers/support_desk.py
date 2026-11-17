@@ -139,6 +139,23 @@ async def ai_chat(
     )
 
 
+@router.get("/guides")
+async def help_guides(_user: CurrentUser) -> dict[str, Any]:
+    from app.domain.customer_operations.support_center import HELP_GUIDES
+
+    return {
+        "items": [
+            {
+                **g,
+                "steps": list(g.get("steps", ())),
+                "notes": list(g.get("notes", ())),
+            }
+            for g in HELP_GUIDES
+        ],
+        "fabricated": False,
+    }
+
+
 @router.get("/faq")
 async def faq_catalog(_user: CurrentUser) -> dict[str, Any]:
     from app.domain.customer_operations.support_center import PLATFORM_HELP_FAQ

@@ -8,6 +8,8 @@ from typing import Any
 from app.domain.customer_operations.cop_audit import record_cop_audit
 from app.domain.customer_operations.cop_persistence import (
     JsonDocumentStore,
+    PostgresDocumentStore,
+    durable_document_store,
     new_id,
     redact,
     utc_iso,
@@ -55,8 +57,10 @@ PLATFORM_HELP_FAQ: tuple[tuple[str, str], ...] = (
     ),
     (
         "Which brokers are supported?",
-        "Production connectivity is MetaTrader 5 (e.g. Weltrade). You connect the "
-        "account you own. Other broker brands are not listed as live integrations.",
+        "QuantForg connects MetaTrader 5 accounts. The Broker page lists the "
+        "brokers you can choose: Weltrade, XM, Exness, HFM, IC Markets, "
+        "Pepperstone, FP Markets and JustMarkets. You connect only an account "
+        "you own, and each account can belong to one QuantForg user only.",
     ),
     (
         "What happens after I connect a broker?",
@@ -70,27 +74,165 @@ PLATFORM_HELP_FAQ: tuple[tuple[str, str], ...] = (
     ),
     (
         "Where is platform status?",
-        "Use the Support page system status card or /ops for dependency health. "
-        "Live trading remains gated by EXECUTION_ENABLED.",
+        "The system status card on this Support page shows whether QuantForg is "
+        "up. If something looks wrong with your account, open a ticket.",
     ),
+    (
+        "Why does my broker account say queued?",
+        "Your account is saved securely and is waiting for its own dedicated "
+        "trading terminal. Until a terminal is assigned and has verified your "
+        "login, the robot does not trade on your account. You do not need to "
+        "connect again.",
+    ),
+    (
+        "The Broker page says it can't check my connection. What should I do?",
+        "That means the trading terminal did not answer in time. It does not "
+        "mean your account was disconnected. Press Retry after a minute. If it "
+        "continues for more than 15 minutes, open a support ticket.",
+    ),
+    (
+        "Does the robot trade Forex pairs?",
+        "No. The robot trades gold (XAUUSD) only. Your broker's gold symbol is "
+        "checked from the broker's own contract details before any order.",
+    ),
+    (
+        "Should I start with a demo account?",
+        "Yes. Connect a demo account first, watch how the robot behaves, and "
+        "only then consider a live account. Trading involves risk of loss.",
+    ),
+)
+
+# Help Center guides. Customer-facing: plain language, no owner-only policy
+# values, nothing that promises trading before it is verified.
+HELP_GUIDES: tuple[dict[str, Any], ...] = (
+    {
+        "id": "get-started",
+        "title": "Create your account",
+        "summary": "Sign up, confirm your email and sign in.",
+        "steps": (
+            "Open quantforg.com and choose Sign up.",
+            "Enter your email and a strong password you do not use anywhere else.",
+            "Open the confirmation email and follow the link.",
+            "Sign in. You land on your dashboard.",
+        ),
+    },
+    {
+        "id": "demo-account",
+        "title": "Get a demo account from your broker",
+        "summary": "Practise with virtual money before using a live account.",
+        "steps": (
+            "On your broker's website, open a MetaTrader 5 demo account.",
+            "Write down the login number, the password and the exact server name "
+            "the broker gives you.",
+            "Keep the password private. QuantForg staff will never ask for it.",
+        ),
+    },
+    {
+        "id": "connect-broker",
+        "title": "Connect your broker account",
+        "summary": "Link the MetaTrader 5 account you own.",
+        "steps": (
+            "Go to Broker Accounts.",
+            "Choose your broker, then pick the exact server from the list.",
+            "Enter your MT5 login and the trading (master) password.",
+            "Press Connect. The password is stored encrypted and is never shown "
+            "again.",
+            "Your account appears as queued until its own trading terminal has "
+            "verified the login. Only then can the robot use it.",
+        ),
+        "notes": (
+            "An investor (read-only) password cannot place trades.",
+            "One MT5 account can belong to one QuantForg user only.",
+        ),
+    },
+    {
+        "id": "manage-connection",
+        "title": "Reconnect, disconnect or change account",
+        "summary": "Keep your connection healthy and switch accounts safely.",
+        "steps": (
+            "Reconnect: use it if the page shows the account as disconnected. "
+            "It reuses your saved login.",
+            "Disconnect: stops the robot from using the account. Your trade "
+            "history stays. Open positions are not closed for you; manage them "
+            "in MetaTrader.",
+            "Change account: enter the new login. Your current account stays "
+            "connected until the new one is verified.",
+        ),
+    },
+    {
+        "id": "gold-robot",
+        "title": "Set up the gold robot",
+        "summary": "How the robot trades and what you control.",
+        "steps": (
+            "The robot trades gold (XAUUSD) only, during main market hours on "
+            "weekdays.",
+            "Open Robot Control Center to see whether the robot is enabled for "
+            "your account and why it is or is not trading.",
+            "Use Pause to stop new trades at any time. Pause does not close "
+            "open positions.",
+        ),
+    },
+    {
+        "id": "risk",
+        "title": "How risk is controlled",
+        "summary": "Limits that protect your account.",
+        "steps": (
+            "Every order passes platform risk checks: position size, daily loss "
+            "limit, spread, signal quality and trading hours.",
+            "You can set your own limits in Risk Center. Your settings can make "
+            "trading stricter, never looser, than the platform limits.",
+            "If a check fails, no order is sent. The reason appears in Robot "
+            "Control Center.",
+            "Trading involves risk. Losses can happen even when every check passes.",
+        ),
+    },
+    {
+        "id": "troubleshooting",
+        "title": "Troubleshooting",
+        "summary": "Common problems and what to do.",
+        "steps": (
+            "Wrong password or server: reconnect with the exact server name from "
+            "your broker.",
+            "Account queued for a long time: open a ticket; we will check the "
+            "terminal assignment.",
+            "Can't check connection: wait a minute and press Retry; your account "
+            "is not disconnected.",
+            "Robot not trading: check Robot Control Center for the reason "
+            "(outside trading hours, spread too wide, paused, or no valid signal).",
+        ),
+    },
+    {
+        "id": "support",
+        "title": "Get help",
+        "summary": "How to reach the support team.",
+        "steps": (
+            "Ask the help assistant on this page for quick answers.",
+            "Open a ticket for anything about your account. Include what you "
+            "saw and when.",
+            "Choose Request human agent to talk to a person. We will never ask "
+            "for your password.",
+        ),
+    },
 )
 
 _ACTION_REFUSAL = re.compile(
     r"\b("
-    r"execute|place\s+order|buy\s+now|sell\s+now|open\s+position|close\s+position|"
+    r"execute|place\s+(?:an?\s+)?(?:\w+\s+)?(?:order|trade)|"
+    r"(?:buy|sell)\s+(?:order|now)|open\s+(?:a\s+)?(?:\w+\s+)?position|"
+    r"close\s+(?:my\s+|the\s+|a\s+)?(?:\w+\s+)?positions?|"
     r"change\s+risk|override\s+risk|disable\s+risk|force\s+trade|"
     r"enable\s+live|turn\s+on\s+auto|modify\s+settings|reset\s+password"
     r")\b",
     re.I,
 )
 
-_TICKETS: JsonDocumentStore | None = None
+_TICKETS: JsonDocumentStore | PostgresDocumentStore | None = None
 
 
-def get_support_ticket_store() -> JsonDocumentStore:
+def get_support_ticket_store() -> JsonDocumentStore | PostgresDocumentStore:
     global _TICKETS
     if _TICKETS is None:
-        _TICKETS = JsonDocumentStore("cop_support_tickets.json", "tickets")
+        _TICKETS = durable_document_store("cop_support_tickets.json", "tickets")
     return _TICKETS
 
 

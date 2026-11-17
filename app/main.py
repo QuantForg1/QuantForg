@@ -527,6 +527,38 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.exception("force_first_trade_startup_log_failed")
     try:
+        # Safety flags as evidence on every boot (values only; no secrets).
+        import os as _os
+
+        from app.domain.multi_account.feature_gates import (
+            multi_account_dispatch_allowed,
+            multi_account_live_submit_allowed,
+        )
+
+        logger.warning(
+            "safety_flags",
+            live_auto_resume_enabled=bool(
+                getattr(settings, "live_auto_resume_enabled", False)
+            ),
+            multi_account_dispatch_enabled=multi_account_dispatch_allowed(settings),
+            multi_account_live_submit_enabled=multi_account_live_submit_allowed(
+                settings
+            ),
+            qf_allow_worker_on_live_terminal=(
+                _os.environ.get("QF_ALLOW_WORKER_ON_LIVE_TERMINAL") or ""
+            )
+            .strip()
+            .lower()
+            in {"1", "true", "yes"},
+            billing_live_checkout_enabled=bool(
+                getattr(settings, "billing_live_checkout_enabled", False)
+            ),
+            gold_only_mode=bool(getattr(settings, "gold_only_mode", False)),
+            execution_enabled=bool(getattr(settings, "execution_enabled", False)),
+        )
+    except Exception:
+        logger.exception("safety_flags_log_failed")
+    try:
         from app.domain.institutional_trading.risk_lock_override import (
             log_risk_lock_override_startup,
         )

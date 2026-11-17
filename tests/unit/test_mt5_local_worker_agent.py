@@ -59,7 +59,65 @@ def test_allow_isolated_slot_terminal(
     slot.write_bytes(b"slot")
     monkeypatch.setenv("QF_LIVE_MT5_TERMINAL_PATH", str(live))
     monkeypatch.setenv("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "false")
+    monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(tmp_path / "slots"))
     assert assert_worker_terminal_path(slot) == slot.resolve()
+
+
+def test_refuse_installed_terminal_not_at_default_live_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Owner's broker-branded install is refused even if the LIVE path
+    setting still points at the stock MetaTrader location."""
+    owner = tmp_path / "Program Files" / "Weltrade MT5" / "terminal64.exe"
+    owner.parent.mkdir(parents=True)
+    owner.write_bytes(b"owner")
+    monkeypatch.delenv("QF_LIVE_MT5_TERMINAL_PATH", raising=False)
+    monkeypatch.setenv("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "false")
+    monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(tmp_path / "slots"))
+    with pytest.raises(ValueError, match="Program Files"):
+        assert_worker_terminal_path(owner)
+
+
+def test_refuse_terminal_outside_slot_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    other = tmp_path / "elsewhere" / "terminal64.exe"
+    other.parent.mkdir(parents=True)
+    other.write_bytes(b"x")
+    monkeypatch.setenv("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "false")
+    monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(tmp_path / "slots"))
+    with pytest.raises(ValueError, match="outside the slot root"):
+        assert_worker_terminal_path(other)
+
+
+def test_slot_link_into_program_files_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "Program Files" / "MT5" / "terminal64.exe"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"installed")
+    slot = tmp_path / "slots" / "demo-a"
+    slot.mkdir(parents=True)
+    (slot / "terminal64.exe").symlink_to(target)
+    monkeypatch.setenv("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "false")
+    monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(tmp_path / "slots"))
+    with pytest.raises(ValueError, match="Program Files"):
+        assert_worker_terminal_path(slot / "terminal64.exe")
+
+
+def test_linked_slot_directory_inside_root_allowed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Production uses a linked slot (mt5_worker_slots_production/demo-a)."""
+    real = tmp_path / "portable" / "demo-a"
+    real.mkdir(parents=True)
+    (real / "terminal64.exe").write_bytes(b"portable")
+    root = tmp_path / "slots_production"
+    root.mkdir()
+    (root / "demo-a").symlink_to(real, target_is_directory=True)
+    monkeypatch.setenv("QF_ALLOW_WORKER_ON_LIVE_TERMINAL", "false")
+    monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(root))
+    assert assert_worker_terminal_path(root / "demo-a" / "terminal64.exe")
 
 
 def test_railway_requires_https_and_token(monkeypatch: pytest.MonkeyPatch) -> None:

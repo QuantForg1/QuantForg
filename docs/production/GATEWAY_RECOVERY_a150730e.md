@@ -13,7 +13,9 @@ Supersedes `GATEWAY_RECOVERY_2026-11-16.md` (that file had a stale target and a 
 
 ## Findings 17 Nov 2026 (read-only, before any restart)
 
-- The token worktree `QuantForg-wt-POLICY` is on local branch `fix/live-blockers` at `8774b418`. **That commit is not on GitHub.** If it is the running checkout (confirm with step 1), the gateway currently runs unreviewed local code. The deploy script records it as `previous_commit`; it stays in the local repo, so the rollback command below still works.
+- The token worktree `QuantForg-wt-POLICY` is on local branch `fix/live-blockers` at `8774b418`. **Reconciled 17 Nov:** `8774b418` is the head commit of **PR #127** ("Show broker close-only and keep catalogue XAUUSD executable"), reviewed and squash-merged on 30 Oct as `d266a975`. It is reviewed code; the hash is not on `main` only because GitHub squashed it. GitHub keeps it at `refs/pull/127/head`.
+- Gateway code changes `8774b418` → `a150730e`: `services/mt5_gateway/order_guard.py` (per-trade risk cap now checked before the aggregate book cap — same two rules, order only; from #295 owner baseline) and `deploy/mt5_gateway/deploy_main_gateway.ps1` (the reviewed deploy script). Shared `app/`/`core/` modules the gateway can import changed more widely over 18 days; the earlier runtime import check covered the 169 modules the gateway actually loads.
+- `a150730e` → current `main`: no change in `services/mt5_gateway` or `deploy/mt5_gateway`. **Target stays `a150730e`** (reviewed).
 - Since ~05:44 UTC, gateway `/positions` (up to 59 s), `/account` (15 s) and `/history/deals` (37 s) are very slow, while `/health` answers in milliseconds with a fresh heartbeat. Same failure family as the `/history` hang this recovery targets.
 - LIVE is locked: owner pause persisted (`owner_paused=true`, 02:11:39 UTC) and automatic resume is disabled in code (#350). The recovery changes neither; LIVE stays PAUSED after the restart.
 - After the restart the API's startup recovery no longer blocks on a slow `/positions` (#357).

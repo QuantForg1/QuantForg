@@ -59,6 +59,59 @@ function FaqAccordion({
   );
 }
 
+type HelpGuide = {
+  id: string;
+  title: string;
+  summary: string;
+  steps: string[];
+  notes: string[];
+};
+
+function GuideAccordion({ items }: { items: HelpGuide[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
+      {items.map((guide) => {
+        const expanded = open === guide.id;
+        return (
+          <div key={guide.id} id={`guide-${guide.id}`}>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+              aria-expanded={expanded}
+              onClick={() => setOpen(expanded ? null : guide.id)}
+            >
+              <span>
+                <span className="block text-sm font-medium text-[var(--fg)]">{guide.title}</span>
+                <span className="block text-xs text-[var(--fg-muted)]">{guide.summary}</span>
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-[var(--fg-muted)] transition-transform ${expanded ? "rotate-180" : ""}`}
+              />
+            </button>
+            {expanded ? (
+              <div className="px-4 pb-4">
+                <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[var(--fg-muted)]">
+                  {guide.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+                {guide.notes.length ? (
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-[var(--fg-subtle)]">
+                    {guide.notes.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SupportPage() {
   const qc = useQueryClient();
   const [section, setSection] = useState<Section>("overview");
@@ -79,6 +132,11 @@ export default function SupportPage() {
   const version = useQuery({
     queryKey: ["version"],
     queryFn: platformApi.version,
+  });
+  const guides = useQuery({
+    queryKey: ["support-desk", "guides"],
+    queryFn: supportDeskApi.guides,
+    staleTime: 10 * 60_000,
   });
   const faq = useQuery({
     queryKey: ["support-desk", "faq"],
@@ -144,6 +202,21 @@ export default function SupportPage() {
         return { question: str(r.question), answer: str(r.answer) };
       }),
     [faq.data],
+  );
+
+  const guideItems = useMemo<HelpGuide[]>(
+    () =>
+      asList(guides.data?.items).map((row) => {
+        const r = asRecord(row);
+        return {
+          id: str(r.id),
+          title: str(r.title),
+          summary: str(r.summary),
+          steps: asList(r.steps).map((x) => str(x)),
+          notes: asList(r.notes).map((x) => str(x)),
+        };
+      }),
+    [guides.data],
   );
 
   const tickets = asList(ticketsQ.data?.tickets).map(asRecord);
@@ -287,6 +360,22 @@ export default function SupportPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2" data-testid="help-guides">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Guides</p>
+                  {guides.isLoading ? (
+                    <DeskSkeleton rows={2} />
+                  ) : guideItems.length ? (
+                    <GuideAccordion items={guideItems} />
+                  ) : null}
+                  <p className="text-xs text-[var(--fg-muted)]">
+                    New here? Follow the{" "}
+                    <Link className="text-[var(--accent)] underline-offset-2 hover:underline" href="/get-started">
+                      Get started
+                    </Link>{" "}
+                    checklist.
+                  </p>
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Questions</p>
                 {faq.isLoading ? (
                   <DeskSkeleton rows={2} />
                 ) : (
