@@ -50,6 +50,7 @@ import { useTradingSession } from "@/providers/trading-session-provider";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { cn } from "@/lib/utils";
+import { isBrokerSessionUnknown } from "@/lib/broker/session-status";
 import {
   MT5_BROKER_OPTIONS,
   type Mt5BrokerOption,
@@ -116,7 +117,9 @@ function BrokerSelect({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const selected = options.find((b) => b.slug === value) ?? (value ? brokerBySlug(value) : undefined);
+  const selected =
+    options.find((b) => b.slug === value) ??
+    (value ? brokerBySlug(value) : undefined);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -184,18 +187,29 @@ function BrokerSelect({
           className={cn(
             "h-14",
             open && "border-[var(--accent)] ring-1 ring-[var(--ring)]",
-            selected && "border-[color-mix(in_srgb,var(--accent)_36%,var(--border))]",
+            selected &&
+              "border-[color-mix(in_srgb,var(--accent)_36%,var(--border))]",
           )}
         >
           {selected ? (
-            <BrokerLogo src={selected.logoSrc} name={selected.name} size={32} rounded="md" />
+            <BrokerLogo
+              src={selected.logoSrc}
+              name={selected.name}
+              size={32}
+              rounded="md"
+            />
           ) : (
-            <Building2 className="h-5 w-5 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+            <Building2
+              className="h-5 w-5 shrink-0 text-[var(--fg-subtle)]"
+              aria-hidden
+            />
           )}
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-[15px]",
-              selected ? "font-medium text-[var(--fg)]" : "text-[var(--fg-subtle)]",
+              selected
+                ? "font-medium text-[var(--fg)]"
+                : "text-[var(--fg-subtle)]",
             )}
           >
             {selected ? selected.name : "Select a broker"}
@@ -220,7 +234,10 @@ function BrokerSelect({
         >
           <div className="border-b border-[var(--border)] p-2">
             <label className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2.5">
-              <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
+              <Search
+                className="h-3.5 w-3.5 text-[var(--fg-subtle)]"
+                aria-hidden
+              />
               <input
                 autoFocus
                 value={query}
@@ -252,12 +269,20 @@ function BrokerSelect({
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => pick(broker)}
                   >
-                    <BrokerLogo src={broker.logoSrc} name={broker.name} size={36} rounded="md" />
+                    <BrokerLogo
+                      src={broker.logoSrc}
+                      name={broker.name}
+                      size={36}
+                      rounded="md"
+                    />
                     <span className="min-w-0 flex-1 truncate font-medium text-[var(--fg)]">
                       {broker.name}
                     </span>
                     {active ? (
-                      <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                      <Check
+                        className="h-4 w-4 shrink-0 text-[var(--accent)]"
+                        aria-hidden
+                      />
                     ) : (
                       <span className="w-4" aria-hidden />
                     )}
@@ -353,9 +378,7 @@ function ServerSelect({
   const maxHeight = 320;
   const virt = useVirtualWindow(filtered.length, rowHeight, maxHeight);
   const useVirt = filtered.length > 60;
-  const visibleRows = useVirt
-    ? filtered.slice(virt.start, virt.end)
-    : filtered;
+  const visibleRows = useVirt ? filtered.slice(virt.start, virt.end) : filtered;
 
   const placeholder = loading
     ? "Loading servers…"
@@ -375,11 +398,21 @@ function ServerSelect({
         onKeyDown={onTriggerKeyDown}
         className="w-full text-left disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <FieldShell className={cn(open && "border-[var(--accent)] ring-1 ring-[var(--ring)]")}>
+        <FieldShell
+          className={cn(
+            open && "border-[var(--accent)] ring-1 ring-[var(--ring)]",
+          )}
+        >
           {loading ? (
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--accent)]" aria-hidden />
+            <Loader2
+              className="h-4 w-4 shrink-0 animate-spin text-[var(--accent)]"
+              aria-hidden
+            />
           ) : (
-            <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+            <Server
+              className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]"
+              aria-hidden
+            />
           )}
           <span
             className={cn(
@@ -409,7 +442,10 @@ function ServerSelect({
         >
           <div className="border-b border-[var(--border)] p-2">
             <label className="flex h-10 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg)]/50 px-2.5">
-              <Search className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
+              <Search
+                className="h-3.5 w-3.5 text-[var(--fg-subtle)]"
+                aria-hidden
+              />
               <input
                 autoFocus
                 value={query}
@@ -436,7 +472,9 @@ function ServerSelect({
                   : "No matching servers. Paste the exact portal name below."}
               </li>
             ) : null}
-            {useVirt ? <li aria-hidden style={{ height: virt.offsetY }} /> : null}
+            {useVirt ? (
+              <li aria-hidden style={{ height: virt.offsetY }} />
+            ) : null}
             {visibleRows.map((row, i) => {
               const index = useVirt ? virt.start + i : i;
               const active = row.name === value;
@@ -458,7 +496,10 @@ function ServerSelect({
                       {row.name}
                     </span>
                     {active ? (
-                      <Check className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                      <Check
+                        className="h-4 w-4 shrink-0 text-[var(--accent)]"
+                        aria-hidden
+                      />
                     ) : null}
                   </button>
                 </li>
@@ -467,7 +508,14 @@ function ServerSelect({
             {useVirt ? (
               <li
                 aria-hidden
-                style={{ height: Math.max(0, virt.totalHeight - virt.offsetY - visibleRows.length * rowHeight) }}
+                style={{
+                  height: Math.max(
+                    0,
+                    virt.totalHeight -
+                      virt.offsetY -
+                      visibleRows.length * rowHeight,
+                  ),
+                }}
               />
             ) : null}
           </ul>
@@ -555,7 +603,9 @@ export function BrokerConfigWorkspace() {
     health.mt5_connected || health.mt5_attached || mt5.connected,
   );
 
-  const [brokerSlug, setBrokerSlug] = useState<Mt5BrokerSlug | null>("weltrade");
+  const [brokerSlug, setBrokerSlug] = useState<Mt5BrokerSlug | null>(
+    "weltrade",
+  );
   const [accountType, setAccountType] = useState<AccountType>("live");
   const [server, setServer] = useState("Weltrade-Real");
   const [manualServer, setManualServer] = useState("");
@@ -680,15 +730,18 @@ export function BrokerConfigWorkspace() {
       if (env === "demo" || env === "live") setAccountType(env);
     }
     if (session.connected) setPassword("");
-  }, [mt5.login, mt5.server, session.login, session.server, session.connected, login]);
+  }, [
+    mt5.login,
+    mt5.server,
+    session.login,
+    session.server,
+    session.connected,
+    login,
+  ]);
 
   const refresh = async () => {
     await session.invalidateAll();
-    await Promise.all([
-      healthQ.refetch(),
-      mt5Q.refetch(),
-      exposureQ.refetch(),
-    ]);
+    await Promise.all([healthQ.refetch(), mt5Q.refetch(), exposureQ.refetch()]);
   };
 
   const refreshOwnedCatalogue = async () => {
@@ -794,7 +847,9 @@ export function BrokerConfigWorkspace() {
     },
     onError: (e) =>
       toast.error(
-        e instanceof ApiError ? traderFacingErrorMessage(e) : "Disconnect failed",
+        e instanceof ApiError
+          ? traderFacingErrorMessage(e)
+          : "Disconnect failed",
       ),
   });
 
@@ -863,9 +918,7 @@ export function BrokerConfigWorkspace() {
   });
 
   const requestBusy =
-    connectMut.isPending ||
-    disconnectMut.isPending ||
-    saveMut.isPending;
+    connectMut.isPending || disconnectMut.isPending || saveMut.isPending;
 
   const onConnect = () => {
     if (!selectedBroker) {
@@ -974,10 +1027,20 @@ export function BrokerConfigWorkspace() {
     tradingSnap.ux_state,
     connected ? "CONNECTED" : "NO_BROKER",
   );
+  // Unknown is not disconnected: while the session status is loading or the
+  // request failed (e.g. the trading terminal is slow), never show the
+  // Connect form as if the account were gone (17 Nov 2026).
+  const sessionUnknown = isBrokerSessionUnknown({
+    hasData: tradingSessionQ.data !== undefined,
+    isLoading: tradingSessionQ.isLoading,
+    isError: tradingSessionQ.isError,
+    changingAccount,
+  });
   const showConnectForm =
-    !(connected || accountLinked) ||
-    uxState === "SESSION_MISMATCH" ||
-    changingAccount;
+    !sessionUnknown &&
+    (!(connected || accountLinked) ||
+      uxState === "SESSION_MISMATCH" ||
+      changingAccount);
   const exposure = asRecord(exposureQ.data);
   const exposureOpen = Number(exposure.open_positions ?? 0);
   const exposurePending = Number(exposure.pending_orders ?? 0);
@@ -1014,7 +1077,9 @@ export function BrokerConfigWorkspace() {
         await refresh();
       } catch (e) {
         toast.error(
-          e instanceof ApiError ? traderFacingErrorMessage(e) : "Connection failed",
+          e instanceof ApiError
+            ? traderFacingErrorMessage(e)
+            : "Connection failed",
         );
       } finally {
         setProgress(null);
@@ -1040,7 +1105,9 @@ export function BrokerConfigWorkspace() {
   const layers = resolveBrokerConnectionLayers(tradingSnap);
   const tradingEnabled = layers.tradingPermitted;
   const connectionActive =
-    layers.authenticated && layers.synced && (gatewayOnline || gatewayMt5Attached);
+    layers.authenticated &&
+    layers.synced &&
+    (gatewayOnline || gatewayMt5Attached);
   const dataSyncLabel = layers.synced
     ? "Synchronized"
     : layers.authenticated
@@ -1089,9 +1156,11 @@ export function BrokerConfigWorkspace() {
     }
   };
 
-  const serversLoading = Boolean(brokerSlug) && (serversQ.isLoading || serversQ.isFetching);
-  const ownershipAttachOnly =
-    Boolean(gatewayMt5Attached && !connected && !login.trim() && !password);
+  const serversLoading =
+    Boolean(brokerSlug) && (serversQ.isLoading || serversQ.isFetching);
+  const ownershipAttachOnly = Boolean(
+    gatewayMt5Attached && !connected && !login.trim() && !password,
+  );
   const connectBlocked =
     busy ||
     serversLoading ||
@@ -1119,7 +1188,42 @@ export function BrokerConfigWorkspace() {
           </p>
         </header>
 
-        {(connected || accountLinked) && !showConnectForm ? (
+        {sessionUnknown ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="broker-session-unknown"
+            className="mb-4 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-5 text-center sm:px-5"
+          >
+            {tradingSessionQ.isError ? (
+              <>
+                <p className="text-sm font-semibold text-[var(--fg)]">
+                  We can&apos;t check your broker connection right now
+                </p>
+                <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                  The trading terminal is not responding. This does not mean
+                  your account is disconnected. Try again in a moment.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => void tradingSessionQ.refetch()}
+                  disabled={tradingSessionQ.isFetching}
+                >
+                  {tradingSessionQ.isFetching ? "Checking…" : "Retry"}
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm text-[var(--fg-muted)]">
+                Checking your broker connection…
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {sessionUnknown ? null : (connected || accountLinked) &&
+          !showConnectForm ? (
           <div className="space-y-4">
             <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-4 sm:px-5">
               <span
@@ -1133,7 +1237,9 @@ export function BrokerConfigWorkspace() {
                 <span
                   className={cn(
                     "h-1.5 w-1.5 rounded-full",
-                    statusBadgeOk ? "bg-[var(--success)]" : "bg-[var(--fg-subtle)]",
+                    statusBadgeOk
+                      ? "bg-[var(--success)]"
+                      : "bg-[var(--fg-subtle)]",
                   )}
                   aria-hidden
                 />
@@ -1151,8 +1257,12 @@ export function BrokerConfigWorkspace() {
                   <CheckCircle2 className="h-5 w-5" aria-hidden />
                 </span>
                 <div>
-                  <p className="text-base font-semibold text-[var(--fg)]">{statusHeadline}</p>
-                  <p className="mt-0.5 text-sm text-[var(--fg-muted)]">{statusSubline}</p>
+                  <p className="text-base font-semibold text-[var(--fg)]">
+                    {statusHeadline}
+                  </p>
+                  <p className="mt-0.5 text-sm text-[var(--fg-muted)]">
+                    {statusSubline}
+                  </p>
                   {blockedReasons.length > 0 ? (
                     <p className="mt-1.5 text-xs text-[var(--fg-muted)]">
                       {blockedReasons.join(" · ")}
@@ -1176,43 +1286,81 @@ export function BrokerConfigWorkspace() {
                         rounded="full"
                       />
                     ) : (
-                      <Building2 className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />
+                      <Building2
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
                     ),
                   },
                   {
                     label: "Server",
                     value: connectionView.server || "—",
-                    icon: <Server className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <Server
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "MT5 Login",
                     value: loginDisplay,
-                    icon: <UserRound className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <UserRound
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "Account Balance",
                     value: balanceDisplay,
-                    icon: <Wallet className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <Wallet
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "Equity",
                     value: equityDisplay,
-                    icon: <Coins className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <Coins
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "Account Type",
                     value: isLiveAccount ? "Real / Live" : "Demo",
-                    icon: <Layers className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <Layers
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "Currency",
                     value: currencyDisplay,
-                    icon: <Coins className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <Coins
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "Last sync",
                     value: lastSyncDisplay,
-                    icon: <RefreshCw className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <RefreshCw
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                   {
                     label: "Ownership",
@@ -1221,7 +1369,12 @@ export function BrokerConfigWorkspace() {
                       : accountLinked
                         ? "Linked · verify auth"
                         : "Not connected",
-                    icon: <ShieldCheck className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />,
+                    icon: (
+                      <ShieldCheck
+                        className="h-4 w-4 text-[var(--fg-subtle)]"
+                        aria-hidden
+                      />
+                    ),
                   },
                 ] as const
               ).map((cell) => (
@@ -1234,7 +1387,9 @@ export function BrokerConfigWorkspace() {
                   </p>
                   <div className="mt-2 flex min-w-0 items-center gap-2.5">
                     {cell.icon}
-                    <span className="truncate text-sm font-medium text-[var(--fg)]">{cell.value}</span>
+                    <span className="truncate text-sm font-medium text-[var(--fg)]">
+                      {cell.value}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -1275,14 +1430,21 @@ export function BrokerConfigWorkspace() {
                   </p>
                   <div className="mt-2 flex items-center gap-2 text-sm font-medium">
                     {row.ok ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--success)]" aria-hidden />
+                      <CheckCircle2
+                        className="h-4 w-4 shrink-0 text-[var(--success)]"
+                        aria-hidden
+                      />
                     ) : (
                       <span
                         className="inline-block h-2 w-2 shrink-0 rounded-full bg-[var(--fg-subtle)]"
                         aria-hidden
                       />
                     )}
-                    <span className={row.ok ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"}>
+                    <span
+                      className={
+                        row.ok ? "text-[var(--fg)]" : "text-[var(--fg-muted)]"
+                      }
+                    >
                       {row.value}
                     </span>
                   </div>
@@ -1337,16 +1499,21 @@ export function BrokerConfigWorkspace() {
 
             {serversQ.isError ? (
               <p className="text-xs text-[var(--danger)]">
-                Server catalogue unavailable. Paste the exact portal server name below.
+                Server catalogue unavailable. Paste the exact portal server name
+                below.
               </p>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-[11px] font-medium text-[var(--fg-subtle)]">Broker</label>
+                <label className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                  Broker
+                </label>
                 <BrokerSelect
                   value={brokerSlug}
-                  options={brokerOptions.length ? brokerOptions : MT5_BROKER_OPTIONS}
+                  options={
+                    brokerOptions.length ? brokerOptions : MT5_BROKER_OPTIONS
+                  }
                   disabled={busy}
                   onChange={onBrokerPicked}
                 />
@@ -1364,7 +1531,10 @@ export function BrokerConfigWorkspace() {
                   onChange={onServerPicked}
                 />
                 <FieldShell>
-                  <Server className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <Server
+                    className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]"
+                    aria-hidden
+                  />
                   <input
                     id="bw-manual-server"
                     disabled={busy}
@@ -1379,11 +1549,17 @@ export function BrokerConfigWorkspace() {
                 </FieldShell>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="bw-login" className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                <label
+                  htmlFor="bw-login"
+                  className="text-[11px] font-medium text-[var(--fg-subtle)]"
+                >
                   MT5 Login
                 </label>
                 <FieldShell>
-                  <UserRound className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                  <UserRound
+                    className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]"
+                    aria-hidden
+                  />
                   <input
                     id="bw-login"
                     inputMode="numeric"
@@ -1405,7 +1581,10 @@ export function BrokerConfigWorkspace() {
                 </label>
                 {showPasswordField ? (
                   <FieldShell>
-                    <Lock className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]" aria-hidden />
+                    <Lock
+                      className="h-4 w-4 shrink-0 text-[var(--fg-subtle)]"
+                      aria-hidden
+                    />
                     <input
                       key={passwordFieldKey}
                       id="bw-password"
@@ -1421,7 +1600,9 @@ export function BrokerConfigWorkspace() {
                     <button
                       type="button"
                       className="text-[var(--fg-subtle)] hover:text-[var(--fg)]"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
                       onClick={() => setShowPassword((v) => !v)}
                     >
                       {showPassword ? (
@@ -1441,7 +1622,10 @@ export function BrokerConfigWorkspace() {
 
             {isOperator ? (
               <div className="space-y-1.5">
-                <label htmlFor="bw-path" className="text-[11px] font-medium text-[var(--fg-subtle)]">
+                <label
+                  htmlFor="bw-path"
+                  className="text-[11px] font-medium text-[var(--fg-subtle)]"
+                >
                   Terminal Path
                 </label>
                 <FieldShell>
@@ -1477,9 +1661,9 @@ export function BrokerConfigWorkspace() {
                   onChange={(e) => setConfirmLeave(e.target.checked)}
                 />
                 <span>
-                  I understand open positions and pending orders stay on the current account.
-                  They are not closed or moved. This terminal will trade only the account it
-                  verifies next.
+                  I understand open positions and pending orders stay on the
+                  current account. They are not closed or moved. This terminal
+                  will trade only the account it verifies next.
                 </span>
               </label>
             ) : null}
@@ -1487,10 +1671,14 @@ export function BrokerConfigWorkspace() {
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 className="qf-btn-hot h-12 w-full border-0 text-[15px] font-semibold text-[var(--brand-navy)]"
-                disabled={connectBlocked && !(gatewayMt5Attached && !login && !password)}
+                disabled={
+                  connectBlocked && !(gatewayMt5Attached && !login && !password)
+                }
                 onClick={onConnect}
               >
-                {connectMut.isPending || saveMut.isPending || claimMut.isPending ? (
+                {connectMut.isPending ||
+                saveMut.isPending ||
+                claimMut.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Link2 className="h-4 w-4" />
