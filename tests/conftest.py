@@ -76,6 +76,19 @@ def _reset_gateway_circuit() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _registered_login_default(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unit tests have no broker_accounts table: model the login as the
+    user's own registered account unless a test opts out."""
+    if request.node.get_closest_marker("real_login_registration"):
+        return
+    from app.application.services import broker_ownership_restore as bor
+
+    monkeypatch.setattr(bor, "login_registered_to_user", lambda *_a, **_k: True)
+
+
+@pytest.fixture(autouse=True)
 def _clear_auth_user_cache() -> Iterator[None]:
     from app.presentation.dependencies.auth import clear_user_cache
 

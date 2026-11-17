@@ -877,6 +877,20 @@ class WeltradeIntegrationService:
         if live_login <= 1 or not live_server:
             diag["reason"] = "unresolved_live_identity"
             return diag
+        from app.application.services.broker_ownership_restore import (
+            login_registered_to_user,
+        )
+
+        if not await asyncio.to_thread(login_registered_to_user, user_id, live_login):
+            # Never adopt (or clear another user's claim on) a login that is
+            # not one of this operator's own broker accounts (17 Nov incident).
+            diag["reason"] = "login_not_registered_to_user"
+            logger.warning(
+                "weltrade_adopt_refused",
+                reason="login_not_registered_to_user",
+                user_id=str(user_id),
+            )
+            return diag
         foreign = await self._active_foreign_owner_of_login(
             login=live_login, user_id=user_id
         )

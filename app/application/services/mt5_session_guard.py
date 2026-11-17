@@ -277,6 +277,20 @@ async def _heal_gateway_session(
         )
         return None
 
+    from app.application.services.broker_ownership_restore import (
+        login_registered_to_user,
+    )
+
+    if not await asyncio.to_thread(login_registered_to_user, user_id, resolved_login):
+        # A stored claim alone is not ownership: the login must be one of this
+        # user's own broker accounts (17 Nov shared-terminal incident).
+        logger.warning(
+            "mt5_session_heal_refused",
+            reason="login_not_registered_to_user",
+            user_id=str(user_id),
+        )
+        return None
+
     _heal_count += 1
 
     build: int | None = None

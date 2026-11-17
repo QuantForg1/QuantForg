@@ -20,6 +20,49 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def login_registered_to_user(
+    user_id: UUID, login: int, *, fetch: Any | None = None
+) -> bool:
+    """True only if ``login`` is one of this user's own broker accounts.
+
+    17 Nov 2026 incident: the owner's automatic gateway adoption re-pointed
+    the owner's connection at a customer's account that a customer had logged
+    the shared terminal into. Automatic adoption/rehydration may only bind a
+    login the user registered themselves. Fails closed when unreadable.
+    """
+    login_i = int(login or 0)
+    if login_i <= 1:
+        return False
+    if fetch is None:
+        try:
+            from app.infrastructure.persistence.direct_postgres import (
+                direct_postgres_available,
+                fetch as _fetch,
+            )
+        except Exception:
+            return False
+        if not direct_postgres_available():
+            return False
+        fetch = _fetch
+    try:
+        rows = fetch(
+            """
+            SELECT 1
+              FROM public.broker_accounts
+             WHERE user_id = $1::uuid
+               AND external_account_id = $2
+               AND lower(coalesce(status, '')) NOT IN ('revoked', 'deleted')
+             LIMIT 1
+            """,
+            str(user_id),
+            str(login_i),
+        )
+    except Exception:
+        logger.warning("login_registration_check_failed")
+        return False
+    return bool(rows)
+
+
 def rehydrate_designated_owner_binding(live_login: int) -> dict[str, Any]:
     """Bind the live login when the designated owner's claim matches it."""
     login_i = int(live_login or 0)
@@ -63,6 +106,12 @@ def rehydrate_designated_owner_binding(live_login: int) -> dict[str, Any]:
         user_id = UUID(str(rows[0].get("user_id") or ""))
     except (TypeError, ValueError):
         return {"bound": False, "reason": "claim_user_invalid"}
+    if not login_registered_to_user(user_id, login_i):
+        logger.warning(
+            "broker_ownership_rehydrate_refused",
+            reason="login_not_registered_to_owner",
+        )
+        return {"bound": False, "reason": "login_not_registered_to_owner"}
     bind_execution_account(user_id=user_id, login=login_i)
     _sync_runtime_user(user_id)
     logger.info("broker_ownership_restored", reason="designated_owner_claim")
