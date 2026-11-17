@@ -337,14 +337,15 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 
 | Area | Item | Status | Evidence / next |
 |---|---|---|---|
-| Deploy | Railway tip | **PRODUCTION VERIFIED** | `www.quantforg.com/qf-api/health` → `13c42019` (#361 merge). Prior tip `127e7b37` (#360) also verified |
-| Deploy | Vercel both projects | **PARTIAL** | `Vercel – quant-forg` SUCCESS on `13c42019`; `Vercel – frontend` still deploying. Prior tip `127e7b37` both SUCCESS |
-| Deploy | www runtime markers #352/#358 | **PRODUCTION VERIFIED** | Live `/broker` chunk contains “Checking your broker connection” (#358); balance/equity fragments (#352). Queued banner marker pending frontend Vercel for #361 |
-| Broker UX | Customer queued banner + no mount-restore | **IMPLEMENTED_NOT_VERIFIED** (#361) | Merged `13c42019`. Operator-only restore/passwordless claim; durable queued banner. Runtime PRODUCTION VERIFIED after frontend Vercel aliases |
-| Gateway recovery prep | `a150730e` | **READY (not executed)** | 09:55 UTC uncached `/health`: login **12439799** Weltrade-Real, heartbeat fresh, `trade_allowed=true`. Restart still **not** authorized |
+| Deploy | Railway tip | **PRODUCTION VERIFIED** | `www.quantforg.com/qf-api/health` → `fc924bd9` (#362). Ancestors include #361 `13c42019` and #360 `127e7b37` |
+| Deploy | Vercel on #361 `13c42019` | **PRODUCTION VERIFIED** | Both `Vercel – frontend` + `Vercel – quant-forg` SUCCESS. Prior `127e7b37` / `ea40f74c` also SUCCESS |
+| Deploy | Vercel tip after #362/#363 | **PARTIAL** | `fc924bd9`: frontend SUCCESS, quant-forg still deploying; `40b021aa` (#363 docs): quant-forg SUCCESS, frontend pending |
+| Deploy | www runtime markers #352/#358/#361 | **PRODUCTION VERIFIED** | Live `/broker` chunk `page-4be0695b6d603957.js`: “Checking your broker connection” (#358); “Queued for a QuantForg trading terminal” + `broker-queued-for-terminal` (#361); balance/equity fragments (#352) |
+| Broker UX | Customer queued banner + no mount-restore | **PRODUCTION VERIFIED** (runtime) / DEMO E2E still **OWNER_ACTION_REQUIRED** | #361 merged; operator-only restore/passwordless claim; queued banner live on www. Customer vault E2E still A14 |
+| Gateway recovery prep | `a150730e` | **READY (not executed)** | 10:05 UTC uncached `/health`: login **12439799** Weltrade-Real, heartbeat fresh, `trade_allowed=true`. Restart still **not** authorized |
 | Gold First | Broker discovery hints | **IMPLEMENTED_NOT_VERIFIED** (#361) | `BROKER_GOLD_DISCOVERY_HINTS` + normalize/order helpers; `/mt5/gold-mapping` probes hints. Fixtures ≠ validated. No unvalidated instrument enabled |
-| Monitoring | API + gateway health (read-only) | **PRODUCTION VERIFIED** (read-only) | Railway tip `13c42019`; gateway Weltrade 12439799 preserved; Robot remains PAUSED (no control writes) |
-| Onboarding / support | Playbook + DEMO E2E | **IMPLEMENTED_NOT_VERIFIED** / **OWNER_ACTION_REQUIRED** | `CUSTOMER_ONBOARDING_SUPPORT_READINESS.md` + infra §4; needs A14 + A5 |
+| Monitoring | API + gateway health (read-only) | **PRODUCTION VERIFIED** (read-only) | Railway tip `fc924bd9`; gateway Weltrade 12439799 preserved; Robot remains PAUSED (no control writes) |
+| Onboarding / support | Playbook + DEMO E2E | **IMPLEMENTED_NOT_VERIFIED** / **OWNER_ACTION_REQUIRED** | `CUSTOMER_ONBOARDING_SUPPORT_READINESS.md` + #362 Help Center / durable tickets + infra §4; needs A14 + A5 |
 | Capacity | Concurrent terminals | **MISSING** | Wait for A14 DEMO + A5; do not invent numbers |
 | CI / GitHub billing | Actions jobs not started | **BLOCKED_EXTERNAL** | Annotation: *“recent account payments have failed or your spending limit needs to be increased.”* Safe options (no charge without approval): (1) keep local pytest/tsc gates, (2) owner fixes payment method / spending limit in GitHub Billing (may enable billed minutes — **needs approval**), (3) wait for free-minute reset if applicable after payment is healthy, (4) self-hosted runner on owner hardware, (5) GitHub Team/Pro for branch protection — **A9 DECLINED**. Never make the repo public |
 
@@ -368,6 +369,6 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 
 1. **Gateway recovery (A1 / GW):** owner authorizes separately. Prerequisites now: heartbeat fresh + login 12439799 confirmed. Still confirm Trade tab FLAT, then run `GATEWAY_RECOVERY_a150730e.md`. Do not auto-resume LIVE.
 2. After recovery: `/history/deals` 200; `broker_clock` +2 h; daily-loss trusted; `OWNER_*` rejects in cycle logs.
-3. Finish Vercel `frontend` Production alias for #361 `13c42019`; Production-verify runtime marker “Queued for a QuantForg trading terminal”; customer E2E still needs A14.
+3. Finish remaining tip Vercel deploys for `fc924bd9` / `40b021aa` (frontend already SUCCESS on `fc924bd9`; quant-forg pending). #361 queued-banner runtime already PRODUCTION VERIFIED on www. Customer E2E still needs A14.
 4. W2 UI state machine: CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY from worker evidence (needs A5).
 5. A5 supervisor + A14 DEMO accounts before any capacity measurement.
