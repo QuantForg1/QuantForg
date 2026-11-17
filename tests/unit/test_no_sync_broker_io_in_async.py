@@ -30,6 +30,7 @@ SYNC_GATEWAY_CALLS = {
     "validate_order",
     "note_scheduler_stalled",
     "attach",
+    "_read_exposure",
 }
 RECEIVERS = (
     "self.validation_service",
@@ -40,6 +41,8 @@ RECEIVERS = (
     "self.portfolio_sync",
     "gw",
     "self.mt5_adapter",
+    "adapter",
+    "mt5_adapter",
 )
 
 
@@ -79,7 +82,10 @@ class _Finder(ast.NodeVisitor):
 
 def test_no_direct_sync_gateway_calls_in_async_functions() -> None:
     hits: list[str] = []
-    for path in pathlib.Path("app").rglob("*.py"):
+    for path in [
+        *pathlib.Path("app").rglob("*.py"),
+        *pathlib.Path("core").rglob("*.py"),
+    ]:
         finder = _Finder(path)
         finder.visit(ast.parse(path.read_text(encoding="utf-8")))
         hits.extend(finder.hits)
