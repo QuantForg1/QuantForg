@@ -1398,6 +1398,15 @@ def apply_fail_closed_from_probes(
 _RECOVERY_GUARD = threading.local()
 
 
+def _auto_resume_allowed() -> bool:
+    try:
+        from core.config.settings import get_settings
+
+        return bool(getattr(get_settings(), "live_auto_resume_enabled", False))
+    except Exception:
+        return False
+
+
 def resume_live_trading_after_safe_recovery() -> LiveTradingState:
     """Re-ENABLE after restart or safety pause when activation probes pass.
 
@@ -1408,6 +1417,24 @@ def resume_live_trading_after_safe_recovery() -> LiveTradingState:
     if ctrl.snapshot_state() != "PAUSED" or ctrl.owner_paused:
         return ctrl.snapshot_state()
     if not (ctrl.recovered_from_enabled or ctrl.paused_for_safety):
+        return ctrl.snapshot_state()
+    if not _auto_resume_allowed():
+        # 17 Nov 2026 owner instruction: PAUSED is never reversed by session
+        # open, restart, worker or gateway recovery. Owner resumes explicitly.
+        if _LAST_RESUME_BLOCKERS.get("last") != ("auto_resume_disabled",):
+            _LAST_RESUME_BLOCKERS["last"] = ("auto_resume_disabled",)
+            logger.warning(
+                "live_trading_auto_resume_disabled",
+                pause_reason=ctrl.safety_pause_reason or "restart_recovery",
+            )
+            _notify_operator(
+                "ROBOT STAYS PAUSED",
+                "LIVE trading was paused ("
+                + (ctrl.safety_pause_reason or "restart_recovery")
+                + "). Automatic resume is disabled; resume it yourself in Live "
+                "Trading Control when ready.",
+                key="resumeblock:auto_resume_disabled",
+            )
         return ctrl.snapshot_state()
     # The probe builds the auto-trading status, whose safety evaluation calls
     # back into this function; without the guard that recursed until

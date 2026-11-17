@@ -19,6 +19,14 @@ from app.domain.institutional_trading.live_trading_control import (
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
+@pytest.fixture(autouse=True)
+def _auto_resume_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests cover the opt-in auto-resume path (off in Production)."""
+    from app.application.services import live_trading_control_service as _svc
+
+    monkeypatch.setattr(_svc, "_auto_resume_allowed", lambda: True)
+
+
 def test_reentrant_recovery_probes_once(monkeypatch: pytest.MonkeyPatch) -> None:
     ctrl = reset_live_trading_controller_for_tests()
     assert ctrl.hydrate({"live_trading_state": "ENABLED"}, persist_recovery=False) == (
