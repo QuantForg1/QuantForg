@@ -1202,6 +1202,77 @@ class WeltradeIntegrationService:
         snap["readable"] = True
         return snap
 
+    async def register_customer_account(
+        self,
+        *,
+        user_id: UUID,
+        login: int,
+        password: str,
+        server: str,
+        account_type: str,
+        broker_slug: str,
+    ) -> dict[str, Any]:
+        """Save a customer's MT5 account for a dedicated worker terminal.
+
+        Never logs the shared platform terminal in or out. The password is
+        encrypted at rest (AES-GCM) and only a worker assigned to this exact
+        account can unseal it.
+        """
+        from app.domain.broker_connectivity.mt5_ecosystem import (
+            match_broker_for_server,
+        )
+
+        env = (account_type or "").strip().lower()
+        if env not in {"demo", "live"}:
+            raise ValueError("account_type must be demo or live")
+        if int(login) <= 1:
+            raise ValueError("login must be a positive integer")
+        server_name = (server or "").strip()
+        if not server_name or server_name.lower() in {"auto", "auto detect"}:
+            raise ValueError(
+                "Exact MT5 server is required. Copy it from your broker portal."
+            )
+        if not password:
+            raise ValueError("Enter the MT5 master (trading) password.")
+        matched = match_broker_for_server(server_name)
+        slug = (broker_slug or "").strip().lower().replace("_", "-")
+        if matched is None or (slug and matched.slug != slug):
+            raise ValueError(
+                f"Server '{server_name}' does not belong to the selected broker."
+            )
+        store = self._secret_store()
+        if store is None:
+            raise RuntimeError("Credential storage is unavailable")
+        ok = await store.save_selection(
+            user_id=user_id,
+            login=int(login),
+            server=server_name,
+            environment=env,
+            password=password,
+            broker_slug=matched.slug,
+            broker_name=matched.name,
+            pending_terminal=True,
+        )
+        if not ok:
+            raise RuntimeError("Could not save the broker account")
+        logger.info(
+            "customer_account_registered",
+            user_id=str(user_id),
+            broker=matched.slug,
+            environment=env,
+        )
+        return {
+            "ok": True,
+            "state": "QUEUED_FOR_TERMINAL",
+            "broker": matched.slug,
+            "environment": env.upper(),
+            "message": (
+                "Saved. Your account is assigned to a QuantForg trading "
+                "terminal automatically; its status appears in the Robot "
+                "Control Center."
+            ),
+        }
+
     async def connect(
         self,
         *,

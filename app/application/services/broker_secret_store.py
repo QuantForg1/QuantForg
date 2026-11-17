@@ -56,8 +56,15 @@ class BrokerSecretStore:
         account_mode: str = "",
         trade_allowed: bool | None = None,
         password: str = "",
+        broker_slug: str = WELTRADE_SLUG,
+        broker_name: str = "",
+        pending_terminal: bool = False,
     ) -> bool:
-        """Upsert the verified account. Encrypt ``password`` only when present."""
+        """Upsert the verified account. Encrypt ``password`` only when present.
+
+        ``pending_terminal``: saved for a dedicated worker terminal; the shared
+        platform terminal is never touched (customer accounts).
+        """
         if self._uow_factory is None or int(login) <= 1 or not str(server).strip():
             return False
         crypto = self._crypto()
@@ -80,11 +87,16 @@ class BrokerSecretStore:
             "trade_allowed": (
                 "" if trade_allowed is None else "true" if trade_allowed else "false"
             ),
-            "last_verified": verified,
+            "last_verified": "" if pending_terminal else verified,
         }
+        if pending_terminal:
+            meta["assignment"] = "pending_terminal"
+            meta["submitted_at"] = verified
         try:
             async with self._uow_factory() as uow:
-                broker = await self._ensure_broker(uow)
+                broker = await self._ensure_broker(
+                    uow, slug=broker_slug, name=broker_name
+                )
                 account = await self._upsert_account(
                     uow,
                     broker_id=broker.id,
@@ -196,14 +208,30 @@ class BrokerSecretStore:
             logger.exception("broker_secret_public_load_failed")
             return None
 
-    async def _ensure_broker(self, uow: Any) -> Broker:
-        slug = EntitySlug(value=WELTRADE_SLUG)
-        existing = await uow.brokers.get_by_slug(slug)
+    async def _ensure_broker(
+        self, uow: Any, *, slug: str = WELTRADE_SLUG, name: str = ""
+    ) -> Broker:
+        key = (slug or WELTRADE_SLUG).strip().lower()
+        entity_slug = EntitySlug(value=key)
+        existing = await uow.brokers.get_by_slug(entity_slug)
         if existing is not None:
             return cast("Broker", existing)
+        if key != WELTRADE_SLUG:
+            broker = Broker.register(
+                name=name or key.replace("-", " ").title(),
+                slug=entity_slug,
+                broker_type=BrokerType.RETAIL,
+                platform_code=BrokerPlatform.MT5,
+                country_code="SC",
+                website="",
+                description=f"{name or key} MT5",
+            )
+            broker.activate()
+            await uow.brokers.add(broker)
+            return broker
         broker = Broker.register(
             name="Weltrade",
-            slug=slug,
+            slug=entity_slug,
             broker_type=BrokerType.RETAIL,
             platform_code=BrokerPlatform.MT5,
             country_code="SC",

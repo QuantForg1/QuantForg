@@ -24,6 +24,11 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/weltrade", tags=["weltrade"])
 
 
+def _is_platform_operator(user: Any) -> bool:
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    return role in {"owner", "admin"}
+
+
 def _shared_terminal_operator_only(user: CurrentUser) -> None:
     """The platform terminal is one MT5 session shared by the platform.
 
@@ -32,8 +37,7 @@ def _shared_terminal_operator_only(user: CurrentUser) -> None:
     the owner/admin may change that session; customer accounts are served by
     dedicated worker terminals.
     """
-    role = str(getattr(user, "role", "") or "").strip().lower()
-    if role not in {"owner", "admin"}:
+    if not _is_platform_operator(user):
         raise HTTPException(
             status_code=403,
             detail={
@@ -69,11 +73,28 @@ async def weltrade_dashboard(user: CurrentUser, svc: WeltradeSvc) -> dict[str, A
     )
 
 
-@router.post("/connect", dependencies=_SHARED_TERMINAL_GUARD)
+@router.post("/connect")
 async def weltrade_connect(
     body: WeltradeConnectRequest, user: CurrentUser, svc: WeltradeSvc
 ) -> dict[str, Any]:
     _ = body.remember_on_gateway  # documented UX only — gateway always RAM-only
+    if not _is_platform_operator(user):
+        # Customers never touch the shared platform terminal: save the
+        # account for a dedicated worker terminal instead.
+        try:
+            return await svc.register_customer_account(
+                user_id=user.id,
+                login=body.login,
+                password=body.password or "",
+                server=body.server,
+                account_type=body.account_type,
+                broker_slug=body.broker_slug,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_BROKER_ACCOUNT", "message": str(exc)},
+            ) from exc
     try:
         return await svc.connect(
             user_id=user.id,
