@@ -42,6 +42,30 @@ GOLD_PRICE_MAX = Decimal("20000")
 _GEOMETRY_TOLERANCE = Decimal("0.02")
 _UNTRADABLE_MODES = {"disabled", "closeonly", "close_only", "0", "3"}
 
+# Discovery hints only — never treat these as VALIDATED without live metadata.
+# Order is probe priority for catalogue lookup. Fixtures / common published
+# spellings; each broker still needs A14 DEMO observation before §3 COMPLETE.
+BROKER_GOLD_DISCOVERY_HINTS: dict[str, tuple[str, ...]] = {
+    "weltrade": ("XAUUSD", "XAUUSD_i", "GOLD"),
+    "xm": ("GOLD", "XAUUSD", "GOLD.", "XAUUSDm"),
+    "exness": ("XAUUSDm", "XAUUSD", "GOLD"),
+    "hfm": ("XAUUSD", "GOLD", "XAUUSD."),
+    "icmarkets": ("XAUUSD", "XAUUSD.a", "GOLD"),
+    "pepperstone": ("XAUUSD", "XAUUSD.a", "GOLD"),
+    "fpmarkets": ("XAUUSD", "XAUUSD.", "GOLD"),
+    "justmarkets": ("XAUUSD.m", "XAUUSD", "GOLD"),
+}
+
+_GENERIC_GOLD_HINTS: tuple[str, ...] = (
+    "XAUUSD",
+    "GOLD",
+    "XAUUSDm",
+    "XAUUSD_i",
+    "XAUUSD.m",
+    "XAUUSD.a",
+    "XAUUSD.",
+)
+
 
 def _dec(value: Any) -> Decimal | None:
     if value is None or value == "":
@@ -63,6 +87,60 @@ def is_gold_candidate(code: str, description: str = "") -> bool:
     """Cheap pre-filter for which catalogue rows to inspect. Not validation."""
     text = f"{code} {description}".upper()
     return "XAU" in text or "GOLD" in text
+
+
+def normalize_broker_key(broker: str | None) -> str:
+    """Map MT5 company / server text to a discovery-hint key (hints only)."""
+    text = (broker or "").strip().lower()
+    if not text:
+        return ""
+    aliases = (
+        ("weltrade", ("weltrade",)),
+        ("xm", ("xm ", "xm-", "xmglobal", "xm trading", "xm.com")),
+        ("exness", ("exness",)),
+        ("hfm", ("hfm", "hotforex", "hf markets")),
+        ("icmarkets", ("ic markets", "icmarkets", "raw trading")),
+        ("pepperstone", ("pepperstone",)),
+        ("fpmarkets", ("fp markets", "fpmarkets")),
+        ("justmarkets", ("justmarkets", "just markets")),
+    )
+    for key, needles in aliases:
+        if any(n in text for n in needles) or text == key or text.startswith(key):
+            return key
+    # server names often look like Weltrade-Real / Exness-MT5Trial…
+    compact = text.replace(" ", "").replace("_", "").replace("-", "")
+    for key, _ in aliases:
+        if compact.startswith(key):
+            return key
+    return compact
+
+
+def discovery_hint_codes(broker: str | None = None) -> tuple[str, ...]:
+    """Ordered catalogue probe codes. Never implies VALIDATED."""
+    key = normalize_broker_key(broker)
+    specific = BROKER_GOLD_DISCOVERY_HINTS.get(key, ())
+    merged: list[str] = []
+    for code in (*specific, *_GENERIC_GOLD_HINTS):
+        if code not in merged:
+            merged.append(code)
+    return tuple(merged)
+
+
+def order_specs_for_discovery(
+    specs: list[Any], *, broker: str | None = None
+) -> list[Any]:
+    """Stable-sort specs so broker hint codes are inspected first.
+
+    Does not drop non-hint candidates and does not validate anything.
+    """
+    hints = {c.upper(): i for i, c in enumerate(discovery_hint_codes(broker))}
+
+    def _key(spec: Any) -> tuple[int, str]:
+        code = str(_get(spec, "code") or "").strip()
+        rank = hints.get(code.upper(), 10_000)
+        return (rank, code.upper())
+
+    return sorted(specs, key=_key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,8 +308,9 @@ def resolve_gold_mapping(
     now: datetime | None = None,
 ) -> GoldInstrumentMapping:
     """Map canonical XAUUSD to exactly one validated broker symbol."""
+    ordered = order_specs_for_discovery(specs, broker=broker)
     checks = tuple(
-        validate_gold_spec(s, account_currency=account_currency) for s in specs
+        validate_gold_spec(s, account_currency=account_currency) for s in ordered
     )
     valid = [c for c in checks if c.ok]
     stamp = (now or datetime.now(UTC)).isoformat()

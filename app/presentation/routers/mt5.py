@@ -144,30 +144,45 @@ async def mt5_gold_mapping(user: CurrentUser, mt5: MT5Svc) -> dict[str, object]:
     as such and execution fails closed on them.
     """
     from app.domain.trading.gold_instrument_mapping import (
+        discovery_hint_codes,
         is_gold_candidate,
         resolve_gold_mapping,
     )
 
     account = await mt5.get_account.execute(user_id=user.id)
-    seen: dict[str, object] = {}
+    acct = dto_to_dict(account)
+    broker_label = str(acct.get("company") or acct.get("server") or "")
+    codes: list[str] = []
     for q in ("XAU", "GOLD"):
         page = await mt5.list_symbols.execute(
             user_id=user.id, q=q, offset=0, limit=50, include_quotes=False
         )
         for item in page.items:
             if is_gold_candidate(item.code, getattr(item, "description", "")):
-                seen.setdefault(item.code, item)
+                if item.code not in codes:
+                    codes.append(item.code)
+    # Broker spelling hints expand discovery only — never VALIDATED by name.
+    for hint in discovery_hint_codes(broker_label):
+        if hint not in codes:
+            codes.append(hint)
     specs = []
-    for code in list(seen)[:10]:
-        dto = await mt5.get_symbol.execute(user_id=user.id, symbol=code)
-        specs.append(dto_to_dict(dto))
-    acct = dto_to_dict(account)
+    for code in codes[:12]:
+        try:
+            dto = await mt5.get_symbol.execute(user_id=user.id, symbol=code)
+        except Exception:
+            continue
+        row = dto_to_dict(dto)
+        if is_gold_candidate(
+            str(row.get("code") or code), str(row.get("description") or "")
+        ):
+            specs.append(row)
     mapping = resolve_gold_mapping(
         specs,
-        broker=str(acct.get("company") or ""),
+        broker=broker_label,
         server=str(acct.get("server") or "") or None,
         login=acct.get("login"),
         account_currency=str(acct.get("currency") or "") or None,
+        discovery_source="mt5_symbol_info+broker_hints",
     )
     return mapping.as_dict()
 

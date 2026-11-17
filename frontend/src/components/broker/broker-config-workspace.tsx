@@ -534,6 +534,8 @@ export function BrokerConfigWorkspace() {
   const session = useTradingSession();
   const { user } = useAuth();
   const isOperator = canAccessIteOps(user);
+  /** Customer accounts waiting for a dedicated worker terminal (never the shared gateway). */
+  const [queuedForTerminal, setQueuedForTerminal] = useState(false);
 
   const tradingSessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -763,7 +765,6 @@ export function BrokerConfigWorkspace() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      if (connected) return;
       try {
         const meta = await weltradeApi.runtimeProfile();
         const profileRow = asRecord(meta.profile);
@@ -780,8 +781,16 @@ export function BrokerConfigWorkspace() {
         if (!cancelled && profileRow.terminal_path) {
           setTerminalPath(String(profileRow.terminal_path));
         }
-        await weltradeApi.restoreProfile();
-        if (!cancelled) await refresh();
+        const assignment = str(profileRow.assignment, "");
+        if (!cancelled) {
+          setQueuedForTerminal(assignment === "pending_terminal");
+        }
+        // Only the owner/admin may restore the shared platform terminal session.
+        // Customers keep vault selection only; workers assign a dedicated terminal.
+        if (isOperator && !connected) {
+          await weltradeApi.restoreProfile();
+          if (!cancelled) await refresh();
+        }
       } catch {
         /* no profile or restore unavailable — user can connect manually */
       }
@@ -790,7 +799,7 @@ export function BrokerConfigWorkspace() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot restore on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot hydrate on mount
   }, []);
 
   const connectMut = useMutation({
@@ -803,11 +812,13 @@ export function BrokerConfigWorkspace() {
       clearPasswordField();
       if (str(asRecord(data).state, "") === "QUEUED_FOR_TERMINAL") {
         // Customer accounts run on a dedicated QuantForg terminal.
+        setQueuedForTerminal(true);
         toast.success(str(asRecord(data).message, "Account saved"));
         setChangingAccount(false);
         setProgress(null);
         return;
       }
+      setQueuedForTerminal(false);
       setProgress("Synchronizing…");
       const body = asRecord(asRecord(data).dashboard);
       if (Object.keys(body).length > 0) {
@@ -846,6 +857,7 @@ export function BrokerConfigWorkspace() {
           ? "Broker account disconnected from QuantForg"
           : "Disconnected",
       );
+      setQueuedForTerminal(false);
       setChangingAccount(false);
       await refresh();
       await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
@@ -890,12 +902,13 @@ export function BrokerConfigWorkspace() {
     onSuccess: async (data) => {
       clearPasswordField();
       if (str(asRecord(data).state, "") === "QUEUED_FOR_TERMINAL") {
-        // Customer accounts run on a dedicated QuantForg terminal.
+        setQueuedForTerminal(true);
         toast.success(str(asRecord(data).message, "Account saved"));
         setChangingAccount(false);
         setProgress(null);
         return;
       }
+      setQueuedForTerminal(false);
       setProgress("Synchronizing…");
       await refresh();
       await refreshOwnedCatalogue();
@@ -949,6 +962,11 @@ export function BrokerConfigWorkspace() {
     // from MT5 account metadata). No customer-facing LIVE/DEMO toggle.
     const loginNum = Number(login);
     if ((!Number.isFinite(loginNum) || loginNum <= 0) && !password) {
+      // Passwordless claim / shared-terminal restore is owner-only.
+      if (!isOperator) {
+        toast.error("Enter your MT5 login and master password to connect.");
+        return;
+      }
       void (async () => {
         setProgress("Verifying ownership…");
         try {
@@ -1080,6 +1098,7 @@ export function BrokerConfigWorkspace() {
         const data = await weltradeApi.reconnect();
         const state = str(asRecord(data).state, "");
         if (state === "QUEUED_FOR_TERMINAL") {
+          setQueuedForTerminal(true);
           toast.success(
             str(
               asRecord(data).message,
@@ -1087,6 +1106,7 @@ export function BrokerConfigWorkspace() {
             ),
           );
         } else {
+          setQueuedForTerminal(false);
           toast.success("Broker reconnected");
         }
         await refresh();
@@ -1209,6 +1229,24 @@ export function BrokerConfigWorkspace() {
             One active MetaTrader 5 account per user.
           </p>
         </header>
+
+        {queuedForTerminal && !layers.authenticated ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="broker-queued-for-terminal"
+            className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-soft)_55%,transparent)] px-4 py-4 text-center sm:px-5"
+          >
+            <p className="text-sm font-semibold text-[var(--fg)]">
+              Queued for a QuantForg trading terminal
+            </p>
+            <p className="mt-1 text-sm text-[var(--fg-muted)]">
+              Your MT5 account is saved securely. It is assigned to a dedicated
+              terminal automatically — this is not the platform terminal. Status
+              updates in Robot Control Center when a worker is available.
+            </p>
+          </div>
+        ) : null}
 
         {sessionUnknown ? (
           <div
