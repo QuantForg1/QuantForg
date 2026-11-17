@@ -1119,6 +1119,7 @@ export const auditGovernanceApi = {
 /** Client Support Desk — authenticated user tickets + FAQ chat. */
 export const supportDeskApi = {
   faq: () => apiFetch<Record<string, unknown>>("/support-desk/faq"),
+  guides: () => apiFetch<Record<string, unknown>>("/support-desk/guides"),
   tickets: () => apiFetch<Record<string, unknown>>("/support-desk/tickets"),
   ticket: (id: string) =>
     apiFetch<Record<string, unknown>>(`/support-desk/tickets/${encodeURIComponent(id)}`),

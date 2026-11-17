@@ -348,6 +348,22 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 | Capacity | Concurrent terminals | **MISSING** | Wait for A14 DEMO + A5; do not invent numbers |
 | CI / GitHub billing | Actions jobs not started | **BLOCKED_EXTERNAL** | Annotation: *“recent account payments have failed or your spending limit needs to be increased.”* Safe options (no charge without approval): (1) keep local pytest/tsc gates, (2) owner fixes payment method / spending limit in GitHub Billing (may enable billed minutes — **needs approval**), (3) wait for free-minute reset if applicable after payment is healthy, (4) self-hosted runner on owner hardware, (5) GitHub Team/Pro for branch protection — **A9 DECLINED**. Never make the repo public |
 
+## Session 12b — cloud Claude session (17 Nov 09:40–10:30 UTC, in parallel with sessions 11–12)
+
+| Area | Item | Status | Evidence / next |
+|---|---|---|---|
+| Deploy | Both Vercel projects + Railway on the same SHA | COMPLETE_VERIFIED | 09:40 UTC: `quant-forg` dpl_DUHnDbjbkj4Uco9RgPQaEm4BxqYM, `frontend` dpl_DkPT57fcbffmesLyfV5cYp16JnfT, Railway a6a8b1a8 — all `ea40f74c` (#359). Frontend project advanced past `8ec65fdd` |
+| LIVE safety | Owner pause durable | COMPLETE_VERIFIED | DB 09:40:19 UTC: `live_trading_state=PAUSED`, `owner_paused=true` |
+| LIVE safety | `FORCE_FIRST_TRADE` | COMPLETE_VERIFIED | Startup log `FORCE_FIRST_TRADE = FALSE`; `is_force_first_trade_armed` permanently returns False |
+| LIVE safety | Safety flags visible on every boot | IMPLEMENTED_NOT_VERIFIED | New `safety_flags` startup log (dispatch, live submit, worker-on-live, auto-resume, checkout, gold-only, execution) — Railway shows variable names only |
+| Gateway | `8774b418` reconciled | COMPLETE_VERIFIED | = head of reviewed PR #127 (squash `d266a975`). Diff to `a150730e`: `order_guard.py` check order only + reviewed deploy script. Target stays `a150730e` |
+| Workers | Supervisor history | COMPLETE_VERIFIED | `mt5_worker_control_plane`: lab 9–15 Nov; demo-a `prod-windows-1` XM DEMO 169740464 verified 15 Nov 10:45; not running now |
+| Workers | Owner LIVE terminal isolation | IMPLEMENTED_NOT_VERIFIED | Slots must be inside `QF_MT5_SLOT_ROOT` and never under Program Files (also via links) — closes the broker-branded-install gap |
+| Workers | Start procedure + rollback | OWNER_ACTION_REQUIRED | `WORKER_SUPERVISOR_STARTUP_SAFETY_REVIEW.md`; headroom unmeasured (PC offline to this session) |
+| Support | Tickets lost on every deploy (no Railway volume) | IMPLEMENTED_NOT_VERIFIED | Postgres store `public.cop_documents` (migration `20261117094554`, RLS on, no client grants); SQL verified in a rolled-back transaction |
+| Support | Help Center guides + FAQ fixes | IMPLEMENTED_NOT_VERIFIED | 8 guides; FAQ no longer points customers to `/ops`; brokers list; queued / can't-check answers |
+| Support | AI help answered a trade request after FAQ growth | IMPLEMENTED_NOT_VERIFIED | Refusal pattern widened (place a buy order, close my positions, …); 6 tests |
+
 ## Handoff (next exact actions)
 
 1. **Gateway recovery (A1 / GW):** owner authorizes separately. Prerequisites now: heartbeat fresh + login 12439799 confirmed. Still confirm Trade tab FLAT, then run `GATEWAY_RECOVERY_a150730e.md`. Do not auto-resume LIVE.

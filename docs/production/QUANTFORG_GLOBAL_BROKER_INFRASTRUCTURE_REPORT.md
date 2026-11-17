@@ -9,15 +9,15 @@ without Production evidence.
 
 | Component | Where | State (evidence) |
 |---|---|---|
-| Owner terminal + MT5 gateway | Owner's Windows PC `desktop-o3qdvth`, `gateway.quantforg.com` via Cloudflare | Weltrade-Real **12439799**, heartbeat fresh (`/health` 17 Nov 05:46:23 UTC, age 7.6 s). Runs from worktree `QuantForg-wt-POLICY`, local branch `fix/live-blockers` @ `8774b418` — **this commit is not on GitHub** (see §8). |
-| Customer worker supervisor (portable MT5 slots) | Same PC, `C:\QuantForg-Workspace\mt5_worker_slots*` | **Never started in Production**: `worker_hosts` = 0 rows, `execution_workers` = 0 rows (DB 17 Nov). Designed soft cap `QF_MT5_MAX_CONCURRENT_PORTABLES=2`. Owner action A5. |
+| Owner terminal + MT5 gateway | Owner's Windows PC `desktop-o3qdvth`, `gateway.quantforg.com` via Cloudflare | Weltrade-Real **12439799**, heartbeat fresh (`/health` 17 Nov 05:46:23 UTC, age 7.6 s). Runs from worktree `QuantForg-wt-POLICY`, local branch `fix/live-blockers` @ `8774b418` = head of reviewed PR #127 (squash-merged 30 Oct as `d266a975`). |
+| Customer worker supervisor (portable MT5 slots) | Same PC, `C:\QuantForg-Workspace\mt5_worker_slots*` | **Not running now.** State is in `mt5_worker_control_plane` (corrected 17 Nov; `worker_hosts`/`execution_workers` are unused). It ran in lab mode 9–15 Nov; last good slot: demo-a on `prod-windows-1`, XM DEMO 169740464, verified 15 Nov 10:45 UTC, heartbeat stale since. Designed soft cap 2. Start needs owner action A5 — see `WORKER_SUPERVISOR_STARTUP_SAFETY_REVIEW.md`. |
 | API | Railway `europe-west4` | Healthy; shared-terminal operations owner/admin only (#340, #349). |
 | Database | Supabase eu-central-1 | No client (anon/JWT) table access; RLS on all 113 public tables (#348, C9). |
 | Customer broker registration | `register_customer_account` → `QUEUED_FOR_TERMINAL` | Credentials sealed server-side; customers never touch the owner terminal (#341, #343). |
 
 **Plain answer to "how many customers can be connected at the same time":**
 today **0 customers can run on their own terminal**, because the worker
-supervisor has not been started. Customers can register accounts (queued).
+supervisor is not running (it last ran in lab mode on 15 Nov). Customers can register accounts (queued).
 After A5 the designed limit is 2 concurrent customer terminals on this PC,
 and that number is still **unmeasured**. No capacity is claimed beyond that.
 
@@ -128,11 +128,12 @@ Do not raise `QF_MT5_MAX_CONCURRENT_PORTABLES` until this has been run.
 Runbook: `GATEWAY_RECOVERY_a150730e.md`. Findings this session (read-only):
 
 - The token source is `C:\QuantForg-Workspace\QuantForg-wt-POLICY\.env`; that
-  worktree is on local branch `fix/live-blockers` @ `8774b418`, which **is not
-  on GitHub**. If this is the running code, the gateway runs unreviewed code
-  today. The deploy script records it as `previous_commit` and the commit stays
-  in the local repo, so rollback remains possible. Step 1 of the runbook
-  (process command line) confirms which checkout is live.
+  worktree is on local branch `fix/live-blockers` @ `8774b418`. Reconciled:
+  that is the head of reviewed PR #127 (squash-merged 30 Oct as `d266a975`,
+  kept by GitHub at `refs/pull/127/head`). Gateway code differences to
+  `a150730e` are limited to `order_guard.py` (check order) and the reviewed
+  deploy script. Step 1 of the runbook (process command line) confirms which
+  checkout is live; rollback target = `8774b418`.
 - New symptom (17 Nov 05:44–05:46 UTC): gateway `/positions` calls time out
   while `/health` is fine — same family as the `/history` hang the recovery
   targets.

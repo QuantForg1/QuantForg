@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from services.mt5_worker_agent import mt5_session
 
 
@@ -59,7 +61,10 @@ def test_ipc_timeout_persists_fail_closed(monkeypatch, tmp_path: Path) -> None:
     assert mt5_session.initialize_portable(exe) is False
 
 
-def test_clear_portable_saved_login_redacts_stale_account(tmp_path: Path) -> None:
+def test_clear_portable_saved_login_redacts_stale_account(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("QF_MT5_SLOT_ROOT", str(tmp_path.parent))
     exe = tmp_path / "terminal64.exe"
     exe.write_bytes(b"x")
     cfg = tmp_path / "config"

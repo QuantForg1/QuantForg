@@ -115,6 +115,22 @@ def test_support_ai_refuses_trading_actions() -> None:
     assert out["suggest_ticket"] is True
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "place a sell trade for me",
+        "sell order gold now",
+        "open a long position on XAUUSD",
+        "close my open positions",
+        "close all positions please",
+    ],
+)
+def test_support_ai_refuses_trading_phrasings(message: str) -> None:
+    out = answer_support_faq(message=message)
+    assert out["executes_actions"] is False
+    assert out["suggest_ticket"] is True
+
+
 def test_notifications_channels() -> None:
     assert "customer" in CHANNELS
     assert "security" in CHANNELS
