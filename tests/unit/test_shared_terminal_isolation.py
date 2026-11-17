@@ -17,11 +17,11 @@ from app.presentation.dependencies.auth import get_current_user
 
 pytestmark = [pytest.mark.unit]
 
+# Shared-platform-terminal mutations only. Customer disconnect/reconnect are
+# vault lifecycle paths and must never call the gateway (covered below).
 MUTATIONS = [
     "/api/v1/weltrade/attach",
     "/api/v1/weltrade/claim",
-    "/api/v1/weltrade/disconnect",
-    "/api/v1/weltrade/reconnect",
     "/api/v1/weltrade/restore-profile",
     "/api/v1/mt5/connect",
     "/api/v1/mt5/disconnect",
@@ -51,6 +51,52 @@ def test_customer_cannot_change_the_shared_terminal(path: str) -> None:
 def test_owner_passes_the_guard(path: str) -> None:
     r = _client("owner").post(path, json={})
     assert r.status_code != 403 or "SHARED_TERMINAL_OWNER_ONLY" not in r.text
+
+
+def test_customer_disconnect_and_reconnect_never_touch_the_shared_terminal() -> None:
+    from app.presentation.dependencies.weltrade import get_weltrade_service
+    from app.presentation.routers import weltrade
+
+    calls: dict[str, int] = {
+        "disconnect": 0,
+        "reconnect": 0,
+        "customer_disconnect": 0,
+        "customer_reconnect": 0,
+    }
+
+    class _Svc:
+        async def disconnect(self, **_: object) -> dict[str, object]:
+            calls["disconnect"] += 1
+            return {"ok": True}
+
+        async def reconnect(self, **_: object) -> dict[str, object]:
+            calls["reconnect"] += 1
+            return {"ok": True}
+
+        async def disconnect_customer_account(self, **_: object) -> dict[str, object]:
+            calls["customer_disconnect"] += 1
+            return {"ok": True, "state": "DISCONNECTED"}
+
+        async def reconnect_customer_account(self, **_: object) -> dict[str, object]:
+            calls["customer_reconnect"] += 1
+            return {"ok": True, "state": "QUEUED_FOR_TERMINAL"}
+
+    app = FastAPI()
+    app.include_router(weltrade.router, prefix="/api/v1")
+    user = SimpleNamespace(id=uuid4(), role="trader", email="x@example.invalid")
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_weltrade_service] = lambda: _Svc()
+    client = TestClient(app)
+    d = client.post("/api/v1/weltrade/disconnect", json={})
+    r = client.post("/api/v1/weltrade/reconnect", json={})
+    assert d.status_code == 200 and d.json()["state"] == "DISCONNECTED"
+    assert r.status_code == 200 and r.json()["state"] == "QUEUED_FOR_TERMINAL"
+    assert calls == {
+        "disconnect": 0,
+        "reconnect": 0,
+        "customer_disconnect": 1,
+        "customer_reconnect": 1,
+    }
 
 
 def test_customer_connect_saves_for_a_worker_terminal_only() -> None:

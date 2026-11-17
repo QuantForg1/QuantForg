@@ -149,13 +149,38 @@ async def weltrade_exposure(user: CurrentUser, svc: WeltradeSvc) -> dict[str, An
         raise_trader_broker_failure(exc)
 
 
-@router.post("/disconnect", dependencies=_SHARED_TERMINAL_GUARD)
+@router.post("/disconnect")
 async def weltrade_disconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
+    """Owner: drop the shared platform session. Customer: revoke saved account only."""
+    if not _is_platform_operator(user):
+        try:
+            return await svc.disconnect_customer_account(user_id=user.id)
+        except Exception as exc:
+            logger.warning(
+                "weltrade_customer_disconnect_failed",
+                error_type=type(exc).__name__,
+            )
+            raise_trader_broker_failure(exc)
     return await svc.disconnect(user_id=user.id)
 
 
-@router.post("/reconnect", dependencies=_SHARED_TERMINAL_GUARD)
+@router.post("/reconnect")
 async def weltrade_reconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
+    """Owner: reconnect shared terminal. Customer: re-queue worker assignment."""
+    if not _is_platform_operator(user):
+        try:
+            return await svc.reconnect_customer_account(user_id=user.id)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "CUSTOMER_RECONNECT_FAILED", "message": str(exc)},
+            ) from exc
+        except Exception as exc:
+            logger.warning(
+                "weltrade_customer_reconnect_failed",
+                error_type=type(exc).__name__,
+            )
+            raise_trader_broker_failure(exc)
     try:
         return await svc.reconnect(user_id=user.id)
     except Exception as exc:

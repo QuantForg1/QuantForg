@@ -9,21 +9,21 @@ Statuses:
 - **PASS**: verified, but not a deployment.
 - **MERGED**, **PR OPEN**, **IN PROGRESS**, **BLOCKED** (with owner action), **NOT STARTED**.
 
-- Last update: 2026-11-16 ~18:45 UTC
-- Production backend SHA: `9b52ce67` (Railway deployment `7e649d4e`, SUCCESS)
-- Production frontend SHA: Vercel `frontend` deploys `main`; `/terminal` → `/dashboard` redirect verified live
+- Last update: 2026-11-17 ~09:45 UTC
+- Production backend SHA: `ea40f74c` (#359) — Railway health SUCCESS
+- Production frontend: both Vercel projects report SUCCESS on tip `ea40f74c`; www broker JS contains #352 + #358 markers (PRODUCTION VERIFIED). Formal alias SHA still confirmed via runtime markers, not Vercel dashboard token.
 
 ## Ground truth as of this update (measured, not assumed)
 
 | Fact | Value | Source |
 |---|---|---|
-| Real-money account connected | 1 (Weltrade-Real, owner) | gateway `/account` |
-| Broker accounts in DB | 4 (2 active, 2 revoked), 2 users | `broker_accounts` |
-| Multi-account workers / hosts | **0 / 0**. The worker code can now log customers in from the vault (#299), but no Production supervisor runs on the host yet (owner action A5). | `execution_workers`, `worker_hosts` |
-| LIVE enablement | ENABLED by the owner 15 Nov 23:45 UTC. The owner chose to keep it running on 16 Nov. Not changed by any release. | `ite_ops_runtime_state.live_trading_audit` |
-| LIVE trades 16 Nov (old 20/48/0.20 code) | 20 entries, balance ~$20.69 → $12.30 | `live_trade_journal` |
-| Gateway heartbeat | **Still stalled at 18:05 UTC** (last heartbeat 10:18:37 UTC). `/history/deals` times out. The owner is restarting it (A1). | gateway `/health` |
-| Repository visibility | **PRIVATE** (owner, verified). Branch protection needs GitHub Pro/Team. | GitHub API |
+| Real-money account connected | 1 (Weltrade-Real **12439799**, owner) | gateway `/health` uncached 09:40 UTC |
+| Multi-account workers / hosts | **0 / 0** — supervisor never started (A5) | `execution_workers`, `worker_hosts` |
+| LIVE / Robot | Owner pause persisted; automatic resume disabled (#350/#351). Not changed this session. | tracker + code |
+| Gateway heartbeat | **Fresh** (~5 s age), `connected=true`, `trade_allowed=true`, login **12439799** Weltrade-Real | gateway `/health` 09:40 UTC |
+| Gateway recovery | Runbook ready at `a150730e`; **not restarted** (awaits separate owner authorization) | `GATEWAY_RECOVERY_a150730e.md` |
+| Repository visibility | **PRIVATE**. Branch protection needs GitHub Pro/Team (A9 DECLINED). | GitHub API 403 |
+| CI | GitHub Actions jobs fail to start (billing / free minutes). Local pytest per PR (owner-approved). | Actions check-runs on `ea40f74c` |
 
 **Answer to "can many users just enter MT5 login and have the robot trade?": not yet.** No multi-account worker or terminal is provisioned. The only working execution path is the owner's single Weltrade account through the existing gateway. This is workstream **W2**.
 
@@ -300,7 +300,7 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 | Security | Shared terminal execution owner-only | IMPLEMENTED_NOT_VERIFIED | #349 + tests; Prod authenticated customer check needs A14 test customer |
 | Security | Emergency stops scoped; platform-wide writes operator-only | IMPLEMENTED_NOT_VERIFIED | #349 + 18 tests; Prod customer check needs A14 |
 | Broker page | Balance / Equity | COMPLETE_VERIFIED | Broker page 02:28 shows 12.3 / 12.3 |
-| Broker lifecycle | Connect / Reconnect / Disconnect / Change account, 8 brokers | IMPLEMENTED_NOT_VERIFIED | Needs DEMO credentials per broker (A14) |
+| Broker lifecycle | Connect / Reconnect / Disconnect / Change account, 8 brokers | IMPLEMENTED_NOT_VERIFIED | Customer vault Connect exists; customer Disconnect/Reconnect vault lifecycle in this PR (no shared terminal). DEMO E2E still A14 |
 | Capacity | Concurrent connected accounts | MISSING | Host is the owner's Windows PC; requires DEMO load test (A14) |
 | Gateway | /history hang (C3) | OWNER_ACTION_REQUIRED | Gateway recovery at `a150730e` — separate authorization |
 | CI | GitHub Actions | BLOCKED_EXTERNAL | Account billing: jobs not started; checks run locally per PR (owner approved 17 Nov) |
@@ -321,10 +321,22 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 | Broker lifecycle | DEMO acceptance checklist (8 brokers) | IMPLEMENTED_NOT_VERIFIED | Checklist written; needs A14 + A5 |
 | CI | GitHub Actions free minutes exhausted | BLOCKED_EXTERNAL | 598 CI runs in Nov; options in report §7 / final message |
 
+## Session 11 (17 Nov ~09:30–09:50 UTC)
+
+| Area | Item | Status | Evidence / next |
+|---|---|---|---|
+| Deploy | Railway tip | **PRODUCTION VERIFIED** | `/qf-api/health` → `ea40f74c` (#359) |
+| Deploy | Vercel both projects on tip | **DEPLOYED** (commit statuses SUCCESS) + **runtime markers PRODUCTION VERIFIED** for #352/#358 on www `/broker` JS | Tip statuses: `Vercel – frontend` + `Vercel – quant-forg` SUCCESS on `ea40f74c`. www chunk contains “Checking your broker connection” (#358) and balance/equity fallback markers (#352). |
+| Broker lifecycle | Customer Disconnect / Reconnect | **IN PROGRESS → PR** | Customers previously got 403 on `/weltrade/disconnect|reconnect` (shared-terminal guard). Now: vault revoke / re-queue only; never calls gateway. Multi-broker `public_selection` fixed (was Weltrade-only). |
+| Gold First | #356 gate | **IMPLEMENTED_NOT_VERIFIED** | Unchanged; Prod mapping probe still depends on gateway MT5 reads |
+| Gateway recovery prep | `a150730e` | **READY (not executed)** | Prerequisites improved: login 12439799 Weltrade-Real, heartbeat fresh, trade_allowed true. Still need flat book confirm + owner restart authorization. Robot stays PAUSED. |
+| Capacity | Concurrent terminals | **MISSING** | No invented numbers; wait for authorized DEMO sessions (A14) + supervisor (A5) |
+| CI / GitHub billing | Actions minutes / branch protection | **BLOCKED_EXTERNAL** | Safe options (no charge without approval): (1) keep local required checks, (2) wait for monthly free-minute reset, (3) self-hosted runner on owner hardware, (4) GitHub Team/Pro — **A9 DECLINED**, do not enable. Never make the repo public for free protection. |
+
 ## Handoff (next exact actions)
 
-1. **After A1**, verify in order: gateway heartbeat fresh and `/health` OK; the gateway's deployed commit (`deploy_main_gateway_verify.json`); `/account` login 12439799 on Weltrade-Real; `/history/deals` 200; `broker_clock` offset learned (+2 h); the daily-loss context trusted; and owner rejects (`OWNER_*`) in the cycle logs.
-2. Earlier note: A1, the gateway restart, unblocks history, the daily-P/L check and robot entries. The ITE has been held PAUSED since restart, waiting for gateway probes. The heartbeat has been stalled since 10:18 UTC.
-2. After A1: watch the logs for `OWNER_*` rejects and confirm `runtime_policy` v17 in the cycle; verify the MT5 server-time day boundary on real deals.
-3. W2: connection state machine in the Broker Accounts UI (CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY), using worker evidence.
-4. Security: RLS audit done 17 Nov (C8 fixed: no client writes on any public table). Advisor: no ERROR-level findings; 11 RLS-no-policy tables are intentional deny-all; 3 SECURITY DEFINER helpers are intended (used by RLS); A6 (leaked-password protection) is pending.
+1. **Gateway recovery (A1 / GW):** owner authorizes separately. Prerequisites now: heartbeat fresh + login 12439799 confirmed. Still confirm Trade tab FLAT, then run `GATEWAY_RECOVERY_a150730e.md`. Do not auto-resume LIVE.
+2. After recovery: `/history/deals` 200; `broker_clock` +2 h; daily-loss trusted; `OWNER_*` rejects in cycle logs.
+3. Merge + deploy this session’s customer Disconnect/Reconnect PR; Production-verify with a non-operator test customer (A14).
+4. W2 UI state machine: CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY from worker evidence (needs A5).
+5. A5 supervisor + A14 DEMO accounts before any capacity measurement.

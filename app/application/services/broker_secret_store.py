@@ -130,9 +130,9 @@ class BrokerSecretStore:
         row = await self._selected_account(user_id)
         if row is None:
             return None
-        account, has_secret = row
+        account, has_secret, broker_slug = row
         return {
-            "broker": WELTRADE_SLUG,
+            "broker": broker_slug or WELTRADE_SLUG,
             "server": account.server,
             "login": int(account.external_account_id),
             "environment": account.environment.value,
@@ -141,8 +141,124 @@ class BrokerSecretStore:
             "trade_allowed": str(account.metadata.get("trade_allowed") or ""),
             "last_verified": account.metadata.get("last_verified") or None,
             "has_encrypted_password": has_secret,
+            "assignment": str(account.metadata.get("assignment") or ""),
             "selected": True,
         }
+
+    async def clear_selection(self, *, user_id: UUID) -> bool:
+        """Deselect and revoke the user's selected broker account(s).
+
+        Never touches the shared platform MT5 session. Idempotent when nothing
+        is selected. Credentials are revoked so workers cannot re-login.
+        """
+        if self._uow_factory is None:
+            return False
+        cleared = 0
+        try:
+            async with self._uow_factory() as uow:
+                accounts = list(await uow.accounts.list_for_user(user_id))
+                selected = [
+                    a
+                    for a in accounts
+                    if a.status != BrokerAccountStatus.REVOKED
+                    and str(a.metadata.get("selected") or "") == "true"
+                ]
+                targets = selected or [
+                    a for a in accounts if a.status == BrokerAccountStatus.ACTIVE
+                ]
+                for account in targets:
+                    meta = dict(account.metadata)
+                    meta["selected"] = "false"
+                    meta.pop("assignment", None)
+                    account.update_fields(metadata=meta)
+                    account.revoke()
+                    await uow.accounts.update(account)
+                    cred = await uow.credentials.get_by_account_and_type(
+                        account.id, BrokerCredentialType.PASSWORD
+                    )
+                    if cred is not None and cred.status != CredentialStatus.REVOKED:
+                        cred.status = CredentialStatus.REVOKED
+                        await uow.credentials.update(cred)
+                    cleared += 1
+                await uow.commit()
+        except Exception:
+            logger.exception("broker_secret_clear_failed")
+            return False
+        logger.info(
+            "broker_secret_cleared",
+            user_id=str(user_id),
+            cleared=cleared,
+        )
+        return True
+
+    async def requeue_selection(self, *, user_id: UUID) -> dict[str, Any] | None:
+        """Mark the selected account as pending worker assignment again.
+
+        Requires an encrypted password already on file. Does not call the
+        shared platform terminal. Idempotent when already pending.
+        """
+        if self._uow_factory is None:
+            return None
+        try:
+            async with self._uow_factory() as uow:
+                selected: BrokerAccount | None = None
+                broker_slug = WELTRADE_SLUG
+                for account in await uow.accounts.list_for_user(user_id):
+                    if account.status in {
+                        BrokerAccountStatus.REVOKED,
+                        BrokerAccountStatus.INACTIVE,
+                    }:
+                        continue
+                    if str(account.metadata.get("selected") or "") != "true":
+                        continue
+                    selected = account
+                    broker = await uow.brokers.get_by_id(account.broker_id)
+                    if broker is not None:
+                        broker_slug = str(
+                            getattr(broker.slug, "value", broker.slug) or ""
+                        )
+                    break
+                if selected is None:
+                    return None
+                cred = await uow.credentials.get_by_account_and_type(
+                    selected.id, BrokerCredentialType.PASSWORD
+                )
+                if (
+                    cred is None
+                    or cred.status == CredentialStatus.REVOKED
+                    or not cred.encrypted_payload
+                ):
+                    return {
+                        "ok": False,
+                        "code": "PASSWORD_REQUIRED",
+                        "message": (
+                            "Enter your MT5 master password to reconnect this account."
+                        ),
+                    }
+                meta = dict(selected.metadata)
+                meta["assignment"] = "pending_terminal"
+                meta["submitted_at"] = datetime.now(UTC).isoformat()
+                meta["selected"] = "true"
+                selected.update_fields(metadata=meta)
+                if selected.status != BrokerAccountStatus.ACTIVE:
+                    selected.activate()
+                await uow.accounts.update(selected)
+                await uow.commit()
+                return {
+                    "ok": True,
+                    "state": "QUEUED_FOR_TERMINAL",
+                    "broker": broker_slug,
+                    "environment": selected.environment.value.upper(),
+                    "login": int(selected.external_account_id),
+                    "server": selected.server,
+                    "message": (
+                        "Requeued. Your account is assigned to a QuantForg "
+                        "trading terminal automatically."
+                    ),
+                }
+        except Exception:
+            logger.exception("broker_secret_requeue_failed")
+            return None
 
     async def load_password(self, *, user_id: UUID) -> tuple[int, str, str, str] | None:
         """Return ``(login, server, environment, password)`` for restore.
@@ -182,28 +298,48 @@ class BrokerSecretStore:
 
     async def _selected_account(
         self, user_id: UUID
-    ) -> tuple[BrokerAccount, bool] | None:
+    ) -> tuple[BrokerAccount, bool, str] | None:
+        """Return the user's selected account across any registered broker."""
         if self._uow_factory is None:
             return None
         try:
             async with self._uow_factory() as uow:
-                broker = await uow.brokers.get_by_slug(EntitySlug(value=WELTRADE_SLUG))
-                if broker is None:
-                    return None
-                account = await self._find_selected(
-                    uow, user_id=user_id, broker_id=broker.id
-                )
-                if account is None:
+                chosen: BrokerAccount | None = None
+                broker_slug = WELTRADE_SLUG
+                for account in await uow.accounts.list_for_user(user_id):
+                    if account.status in {
+                        BrokerAccountStatus.REVOKED,
+                        BrokerAccountStatus.INACTIVE,
+                    }:
+                        continue
+                    if str(account.metadata.get("selected") or "") == "true":
+                        chosen = account
+                        broker = await uow.brokers.get_by_id(account.broker_id)
+                        if broker is not None:
+                            broker_slug = str(
+                                getattr(broker.slug, "value", broker.slug)
+                                or WELTRADE_SLUG
+                            )
+                        break
+                    if chosen is None:
+                        chosen = account
+                        broker = await uow.brokers.get_by_id(account.broker_id)
+                        if broker is not None:
+                            broker_slug = str(
+                                getattr(broker.slug, "value", broker.slug)
+                                or WELTRADE_SLUG
+                            )
+                if chosen is None:
                     return None
                 cred = await uow.credentials.get_by_account_and_type(
-                    account.id, BrokerCredentialType.PASSWORD
+                    chosen.id, BrokerCredentialType.PASSWORD
                 )
                 has_secret = (
                     cred is not None
                     and cred.status != CredentialStatus.REVOKED
                     and bool(cred.encrypted_payload)
                 )
-                return account, has_secret
+                return chosen, has_secret, broker_slug
         except Exception:
             logger.exception("broker_secret_public_load_failed")
             return None

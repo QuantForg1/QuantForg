@@ -1298,6 +1298,40 @@ class WeltradeIntegrationService:
             ),
         }
 
+    async def disconnect_customer_account(self, *, user_id: UUID) -> dict[str, Any]:
+        """Revoke the customer's saved broker account. Never touches the gateway."""
+        store = self._secret_store()
+        if store is None:
+            raise RuntimeError("Credential storage is unavailable")
+        ok = await store.clear_selection(user_id=user_id)
+        if not ok:
+            raise RuntimeError("Could not disconnect the broker account")
+        logger.info("customer_account_disconnected", user_id=str(user_id))
+        return {
+            "ok": True,
+            "state": "DISCONNECTED",
+            "message": "Broker account disconnected from QuantForg.",
+        }
+
+    async def reconnect_customer_account(self, *, user_id: UUID) -> dict[str, Any]:
+        """Re-queue the customer's saved account for a worker terminal.
+
+        Never logs the shared platform terminal in. If no encrypted password
+        remains on file, the client must submit Connect with a password.
+        """
+        store = self._secret_store()
+        if store is None:
+            raise RuntimeError("Credential storage is unavailable")
+        result = await store.requeue_selection(user_id=user_id)
+        if result is None:
+            raise ValueError(
+                "No broker account is saved. Connect an MT5 account first."
+            )
+        if result.get("ok") is False:
+            raise ValueError(str(result.get("message") or "Reconnect failed"))
+        logger.info("customer_account_requeued", user_id=str(user_id))
+        return result
+
     async def connect(
         self,
         *,

@@ -839,8 +839,13 @@ export function BrokerConfigWorkspace() {
 
   const disconnectMut = useMutation({
     mutationFn: weltradeApi.disconnect,
-    onSuccess: async () => {
-      toast.success("Disconnected");
+    onSuccess: async (data) => {
+      const state = str(asRecord(data).state, "");
+      toast.success(
+        state === "DISCONNECTED"
+          ? "Broker account disconnected from QuantForg"
+          : "Disconnected",
+      );
       setChangingAccount(false);
       await refresh();
       await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
@@ -1072,10 +1077,27 @@ export function BrokerConfigWorkspace() {
     void (async () => {
       setProgress("Reconnecting…");
       try {
-        await weltradeApi.reconnect();
-        toast.success("Broker reconnected");
+        const data = await weltradeApi.reconnect();
+        const state = str(asRecord(data).state, "");
+        if (state === "QUEUED_FOR_TERMINAL") {
+          toast.success(
+            str(
+              asRecord(data).message,
+              "Account requeued for a QuantForg trading terminal",
+            ),
+          );
+        } else {
+          toast.success("Broker reconnected");
+        }
         await refresh();
       } catch (e) {
+        // Customers without a stored password must use Change account.
+        if (
+          e instanceof ApiError &&
+          /password|Connect an MT5|reconnect/i.test(e.message)
+        ) {
+          setChangingAccount(true);
+        }
         toast.error(
           e instanceof ApiError
             ? traderFacingErrorMessage(e)
