@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextvars
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
@@ -25,6 +28,13 @@ from app.domain.events.portfolio import (
 )
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from app.infrastructure.brokers.mt5.gateway_circuit import GatewayUnavailableError
+
+# Gateway history reads can hang until their own timeout (17 Nov 2026: 15 s
+# each, /portfolio took 86 s). Portfolio callers wait at most this long for
+# history and never queue behind a hung read: one in flight at a time.
+HISTORY_BUDGET_S = 4.0
+_HISTORY_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="history-be")
+_HISTORY_SLOT = threading.BoundedSemaphore(1)
 
 
 @dataclass
@@ -82,12 +92,28 @@ class PortfolioSyncService:
         history: 17 Nov 2026 the gateway /history/* hang made /portfolio 503
         and the Broker page showed no balance or equity.
         """
+        if not _HISTORY_SLOT.acquire(blocking=False):
+            return [], [], False  # a history read is already in flight
+
+        def _read() -> tuple[list[MT5HistoryOrder], list[MT5Deal]]:
+            try:
+                orders = self.history_orders(date_from=date_from, date_to=date_to)
+                deals = self.history_deals(date_from=date_from, date_to=date_to)
+                return list(orders), list(deals)
+            finally:
+                _HISTORY_SLOT.release()
+
+        ctx = contextvars.copy_context()
         try:
-            orders = self.history_orders(date_from=date_from, date_to=date_to)
-            deals = self.history_deals(date_from=date_from, date_to=date_to)
-        except GatewayUnavailableError:
+            future = _HISTORY_POOL.submit(ctx.run, _read)
+        except Exception:
+            _HISTORY_SLOT.release()
             return [], [], False
-        return list(orders), list(deals), True
+        try:
+            orders, deals = future.result(timeout=HISTORY_BUDGET_S)
+        except (FutureTimeout, GatewayUnavailableError, TimeoutError):
+            return [], [], False
+        return orders, deals, True
 
     def history_deals(
         self,
