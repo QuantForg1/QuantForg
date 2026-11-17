@@ -748,6 +748,13 @@ export function BrokerConfigWorkspace() {
     },
     onSuccess: async (data) => {
       clearPasswordField();
+      if (str(asRecord(data).state, "") === "QUEUED_FOR_TERMINAL") {
+        // Customer accounts run on a dedicated QuantForg terminal.
+        toast.success(str(asRecord(data).message, "Account saved"));
+        setChangingAccount(false);
+        setProgress(null);
+        return;
+      }
       setProgress("Synchronizing…");
       const body = asRecord(asRecord(data).dashboard);
       if (Object.keys(body).length > 0) {
@@ -820,8 +827,15 @@ export function BrokerConfigWorkspace() {
     onMutate: () => {
       setProgress("Validating → Authenticating…");
     },
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       clearPasswordField();
+      if (str(asRecord(data).state, "") === "QUEUED_FOR_TERMINAL") {
+        // Customer accounts run on a dedicated QuantForg terminal.
+        toast.success(str(asRecord(data).message, "Account saved"));
+        setChangingAccount(false);
+        setProgress(null);
+        return;
+      }
       setProgress("Synchronizing…");
       await refresh();
       await refreshOwnedCatalogue();
