@@ -4,10 +4,15 @@ This runs each customer's own MT5 account in an isolated portable terminal on th
 
 ## How a customer gets a robot (no developer involved)
 
-1. The customer connects MT5 in Broker Accounts (broker, exact server, login, master password). The password is stored AES-GCM encrypted in `broker_credentials`.
+1. The customer connects MT5 in Broker Accounts (broker, exact server, login, master password).
+   - Since #341 this **only registers** the account; the shared platform terminal is never touched.
+   - The server must match the broker.
+   - An account already registered by another user is refused.
+   - The password is stored AES-GCM encrypted in `broker_credentials`.
 2. The backend gives the oldest waiting account a free slot. Each account gets its own slot and worker; nothing is shared.
    - `QF_AUTO_ASSIGN_ENVIRONMENTS` (Railway) controls which environments are assigned. The default is `demo`.
    - When every slot is busy, the account waits in the queue.
+   - Owner and admin accounts are never assigned to a worker; they run on the platform terminal.
 3. The supervisor claims a sealed envelope bound to that worker and unwraps it in memory. It then logs in on the slot's own terminal and reports redacted evidence.
 4. READY follows MT5 `trade_allowed`:
    - An investor (read-only) login authenticates but stays **TRADING_PERMISSION_DISABLED**.
@@ -56,3 +61,13 @@ The soft cap is 2 concurrent portable terminals (`QF_MT5_MAX_CONCURRENT_PORTABLE
 - Pausing user A blocks only A's entries.
 - A third account while 2 slots are busy is queued, and no session is shared.
 - Kill a slot terminal: the heartbeat degrades, then the slot recovers.
+
+## Startup verification (Claude, read-only, after the owner starts it)
+
+| # | Evidence | Pass |
+|---|---|---|
+| 1 | `worker_hosts` / `mt5_workers` rows | 1 host, 2 slots registered, heartbeats under 45 s old |
+| 2 | Railway `POST /mt5-workers/heartbeat` 200 | every ~15 s per slot |
+| 3 | Robot Control Center (customer) | account shows "Assigned · online" only once its slot reports it |
+| 4 | Owner account | never appears on a worker (assignment query excludes owner/admin) |
+| 5 | Platform terminal | still Weltrade-Real 12439799; supervisor logs never mention it |

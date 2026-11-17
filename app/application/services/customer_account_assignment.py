@@ -64,6 +64,12 @@ def next_unassigned_account(
                       WHERE c.broker_account_id = a.id
                         AND lower(c.credential_type) = 'password'
                         AND coalesce(lower(c.status), 'active') = 'active')
+               -- The owner/admin account runs on the shared platform
+               -- terminal; a worker must never log into it.
+               AND NOT EXISTS (
+                     SELECT 1 FROM public.users u
+                      WHERE u.id = a.user_id
+                        AND lower(u.role::text) IN ('owner', 'admin'))
              ORDER BY a.created_at
              LIMIT 200
             """,

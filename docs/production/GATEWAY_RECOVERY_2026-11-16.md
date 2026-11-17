@@ -1,3 +1,5 @@
+> **Superseded** by `GATEWAY_RECOVERY_a150730e.md` (17 Nov 2026).
+
 # Windows MT5 gateway: recovery and update (16 Nov 2026)
 
 ## Which commit the gateway must run
