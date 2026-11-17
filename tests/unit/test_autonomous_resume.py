@@ -296,3 +296,37 @@ def test_default_settings_never_auto_resume(
     assert world.kinds().count("ROBOT STAYS PAUSED") == 1
     assert ctrl2.transition(_owner(), "ENABLED", confirmed=True, reason="owner")
     assert ctrl2.research_can_execute() is True
+
+
+def test_owner_pause_adopts_a_restart_pause(world: World) -> None:
+    ctrl = _enabled()
+    ctrl2 = _restart(ctrl.persist_payload())
+    assert ctrl2.snapshot_state() == "PAUSED" and not ctrl2.owner_paused
+    status = svc.pause_live_trading(_owner(), reason="lock paused")
+    assert isinstance(status, dict)
+    assert ctrl2.owner_paused is True
+    payload = ctrl2.persist_payload()
+    assert payload["live_trading_state"] == "PAUSED"
+    assert payload["live_trading_owner_paused"] is True
+    assert ctrl2.audit[-1].action == "owner_pause_adopted"
+    # Survives restarts even with auto-resume opted in and every check passing.
+    world.facts = dict(OK_FACTS)
+    ctrl3 = _restart(payload)
+    assert ctrl3.owner_paused is True
+    assert svc.resume_live_trading_after_safe_recovery() == "PAUSED"
+    # Idempotent second press.
+    svc.pause_live_trading(_owner(), reason="again")
+    assert ctrl3.owner_paused is True
+
+
+def test_customer_cannot_adopt_owner_pause(world: World) -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        LiveTradingAuthError,
+    )
+
+    ctrl = _restart(_enabled().persist_payload())
+    trader = OperatorIdentity(
+        user_id=uuid4(), role="trader", display_name="t", ip=None, user_agent=None
+    )
+    with pytest.raises(LiveTradingAuthError):
+        ctrl.adopt_owner_pause(trader, reason="x")
