@@ -1330,7 +1330,7 @@ class WeltradeIntegrationService:
         if result.get("ok") is False:
             raise ValueError(str(result.get("message") or "Reconnect failed"))
         logger.info("customer_account_requeued", user_id=str(user_id))
-        return result
+        return dict(result)
 
     async def connect(
         self,
