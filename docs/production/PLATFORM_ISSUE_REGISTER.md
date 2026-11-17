@@ -27,6 +27,9 @@ Opened 16 Nov 2026 (session 5). Evidence comes from Production logs, Railway dep
 | H5 | No Production worker supervisor, so no customer can trade | 0 workers, 0 hosts | **OWNER A5** |
 | H6 | No DEMO acceptance evidence | 0 DEMO accounts | **OWNER A7, A4** |
 
+| H7 | Live crypto checkout open before provider approval | **FIXED #346** (closed by default; owner opens with `BILLING_LIVE_CHECKOUT_ENABLED`) |
+| C7 | Owner execution identity re-pointed to a customer login by auto-adoption | **FIXED #343** (registered-login rule; verified in Production logs) |
+
 ## Medium
 
 | ID | Issue | Status |
