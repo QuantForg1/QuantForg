@@ -134,6 +134,44 @@ async def mt5_symbols(
     )
 
 
+@router.get("/gold-mapping")
+async def mt5_gold_mapping(user: CurrentUser, mt5: MT5Svc) -> dict[str, object]:
+    """Gold First: canonical XAUUSD -> this user's broker symbol (read-only).
+
+    Uses the caller's own live MT5 session only (the use cases enforce
+    ownership). The symbol is mapped only after its live MT5 metadata
+    validates as spot gold in USD; MISSING / AMBIGUOUS / INVALID are reported
+    as such and execution fails closed on them.
+    """
+    from app.domain.trading.gold_instrument_mapping import (
+        is_gold_candidate,
+        resolve_gold_mapping,
+    )
+
+    account = await mt5.get_account.execute(user_id=user.id)
+    seen: dict[str, object] = {}
+    for q in ("XAU", "GOLD"):
+        page = await mt5.list_symbols.execute(
+            user_id=user.id, q=q, offset=0, limit=50, include_quotes=False
+        )
+        for item in page.items:
+            if is_gold_candidate(item.code, getattr(item, "description", "")):
+                seen.setdefault(item.code, item)
+    specs = []
+    for code in list(seen)[:10]:
+        dto = await mt5.get_symbol.execute(user_id=user.id, symbol=code)
+        specs.append(dto_to_dict(dto))
+    acct = dto_to_dict(account)
+    mapping = resolve_gold_mapping(
+        specs,
+        broker=str(acct.get("company") or ""),
+        server=str(acct.get("server") or "") or None,
+        login=acct.get("login"),
+        account_currency=str(acct.get("currency") or "") or None,
+    )
+    return mapping.as_dict()
+
+
 @router.get("/symbols/{symbol}", response_model=MT5SymbolResponse)
 async def mt5_symbol_info(
     symbol: str,
