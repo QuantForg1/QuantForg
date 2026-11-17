@@ -62,3 +62,18 @@ def test_rehydrate_refuses_owner_claim_on_unregistered_login(
     out = bor.rehydrate_designated_owner_binding(450397410)
     assert out == {"bound": False, "reason": "login_not_registered_to_owner"}
     assert bound == []
+
+
+def test_another_users_account_is_detected_and_fails_closed() -> None:
+    uid = uuid4()
+    assert bor.login_registered_to_another_user(
+        uid, 12439799, "Weltrade-Real", fetch=_fetch_rows([{"x": 1}])
+    )
+    assert not bor.login_registered_to_another_user(
+        uid, 12439799, "Weltrade-Real", fetch=_fetch_rows([])
+    )
+
+    def broken(*_a: Any) -> Any:
+        raise RuntimeError("db down")
+
+    assert bor.login_registered_to_another_user(uid, 1, "x", fetch=broken)

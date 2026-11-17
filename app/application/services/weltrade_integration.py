@@ -1254,6 +1254,17 @@ class WeltradeIntegrationService:
             raise ValueError(
                 f"Server '{server_name}' does not belong to the selected broker."
             )
+        from app.application.services.broker_ownership_restore import (
+            login_registered_to_another_user,
+        )
+
+        if await asyncio.to_thread(
+            login_registered_to_another_user, user_id, int(login), server_name
+        ):
+            raise ValueError(
+                "This MT5 account is already registered on QuantForg. "
+                "Contact support if it is yours."
+            )
         store = self._secret_store()
         if store is None:
             raise RuntimeError("Credential storage is unavailable")

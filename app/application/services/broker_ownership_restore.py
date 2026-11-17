@@ -130,3 +130,42 @@ def _sync_runtime_user(user_id: UUID) -> None:
     if runtime is None:
         return
     runtime.user_id = user_id
+
+
+def login_registered_to_another_user(
+    user_id: UUID, login: int, server: str, *, fetch: Any | None = None
+) -> bool:
+    """True when another user already registered this exact MT5 account.
+
+    Fails closed (True) when the registry cannot be read.
+    """
+    if fetch is None:
+        try:
+            from app.infrastructure.persistence.direct_postgres import (
+                direct_postgres_available,
+                fetch as _fetch,
+            )
+        except Exception:
+            return True
+        if not direct_postgres_available():
+            return True
+        fetch = _fetch
+    try:
+        rows = fetch(
+            """
+            SELECT 1
+              FROM public.broker_accounts
+             WHERE external_account_id = $1
+               AND lower(coalesce(server, '')) = lower($2)
+               AND user_id <> $3::uuid
+               AND lower(coalesce(status, '')) NOT IN ('revoked', 'deleted')
+             LIMIT 1
+            """,
+            str(int(login)),
+            str(server or "").strip(),
+            str(user_id),
+        )
+    except Exception:
+        logger.warning("login_uniqueness_check_failed")
+        return True
+    return bool(rows)
