@@ -278,6 +278,8 @@ Known inputs:
 | 16 Nov 11:4x | Migration `robot_account_controls` | n/a | Applied (additive; down file in repo) |
 | 16 Nov 11:45 | #300 Robot Control Center | `c54e7f51` | Railway `ef57bdc8` SUCCESS; router registered |
 | 16 Nov 11:5x | Migration: pin `search_path` on `forbid_self_service_role_change` | n/a | Applied (security advisor 0011) |
+| 17 Nov 01:18 | Migration: re-pin `search_path` on `forbid_self_service_role_change` | `20261117011830` | Applied (advisor 0011 again) |
+| 17 Nov 01:19–01:20 | Migrations: revoke all client table writes (C8) | `20261117011925`, `20261117012014` | Applied; `authenticated` keeps SELECT under RLS only; service role unchanged; Production API 200s afterwards |
 
 ## Handoff (next exact actions)
 
@@ -285,4 +287,4 @@ Known inputs:
 2. Earlier note: A1, the gateway restart, unblocks history, the daily-P/L check and robot entries. The ITE has been held PAUSED since restart, waiting for gateway probes. The heartbeat has been stalled since 10:18 UTC.
 2. After A1: watch the logs for `OWNER_*` rejects and confirm `runtime_policy` v17 in the cycle; verify the MT5 server-time day boundary on real deals.
 3. W2: connection state machine in the Broker Accounts UI (CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY), using worker evidence.
-4. Security: RLS/IDOR audit of user-scoped APIs. Advisor: no ERROR-level findings; 1 WARN fixed; 3 SECURITY DEFINER helpers are intended (used by RLS); A6 is pending.
+4. Security: RLS audit done 17 Nov (C8 fixed: no client writes on any public table). Advisor: no ERROR-level findings; 11 RLS-no-policy tables are intentional deny-all; 3 SECURITY DEFINER helpers are intended (used by RLS); A6 (leaked-password protection) is pending.
