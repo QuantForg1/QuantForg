@@ -544,6 +544,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             multi_account_live_submit_enabled=multi_account_live_submit_allowed(
                 settings
             ),
+            multi_account_oms_live_order_send_enabled=bool(
+                getattr(settings, "multi_account_oms_live_order_send_enabled", False)
+            ),
             qf_allow_worker_on_live_terminal=(
                 _os.environ.get("QF_ALLOW_WORKER_ON_LIVE_TERMINAL") or ""
             )

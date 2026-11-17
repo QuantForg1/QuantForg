@@ -39,15 +39,40 @@ No, as long as these hold. Each must be checked right before start:
 
 | Gate | Default | How to verify before start |
 |---|---|---|
-| `MULTI_ACCOUNT_DISPATCH_ENABLED` | false | Railway startup log line `safety_flags` (added in this PR) |
+| `MULTI_ACCOUNT_DISPATCH_ENABLED` | false (code default) | Railway startup log line `safety_flags` |
 | `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED` | false (also requires dispatch) | `safety_flags` |
+| `MULTI_ACCOUNT_OMS_LIVE_ORDER_SEND_ENABLED` | false — the actual LIVE send lock | `safety_flags` |
 | `QF_ALLOW_WORKER_ON_LIVE_TERMINAL` | false | `safety_flags` and the start script |
 | `LIVE_AUTO_RESUME_ENABLED` | false | `safety_flags` |
 | Owner pause | `owner_paused=true` | `ite_ops_runtime_state` |
 | Per-customer Robot Control: not entitled / not enabled | off until the customer enables it | `robot_account_controls` |
 
-Railway returns variable names only to this assistant, so the values above
-are confirmed from the `safety_flags` log line after the next deploy.
+**Actual Production values** (`safety_flags`, deployment 6a208f72,
+17 Nov 10:02:44 UTC):
+
+| Flag | Value |
+|---|---|
+| `MULTI_ACCOUNT_DISPATCH_ENABLED` | **true** |
+| `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED` | **true** |
+| `QF_ALLOW_WORKER_ON_LIVE_TERMINAL` | false |
+| `LIVE_AUTO_RESUME_ENABLED` | false |
+| `BILLING_LIVE_CHECKOUT_ENABLED` | false |
+| `GOLD_ONLY_MODE` | true |
+
+What this means:
+
+- **Customer LIVE orders stay blocked** by a third gate,
+  `MULTI_ACCOUNT_OMS_LIVE_ORDER_SEND_ENABLED` (default off; not among the
+  Railway variables). Without it every LIVE customer send fails closed
+  (`live_order_send_fail_closed`). It is logged in `safety_flags` from the
+  next deploy.
+- **Customer DEMO orders would run automatically** once a DEMO worker is
+  running *and* the robot produces signals. While the owner pause holds, the
+  cycle stops before any signal, so nothing is dispatched.
+- **Owner decision before starting the supervisor:** keep dispatch on (DEMO
+  acceptance needs it) or set `MULTI_ACCOUNT_DISPATCH_ENABLED=false` and
+  `MULTI_ACCOUNT_LIVE_SUBMIT_ENABLED=false` until acceptance starts. Changing
+  them restarts the API; it does not change the owner pause.
 
 ## 4. Resource headroom
 
