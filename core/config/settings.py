@@ -313,6 +313,20 @@ class Settings(BaseSettings):
             ),
         ),
     ] = False
+    live_auto_resume_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Allow LIVE trading to re-ENABLE itself after a restart or safety "
+                "pause once probes pass. Keep false: the robot stays PAUSED until "
+                "the owner resumes it explicitly (owner instruction, 17 Nov 2026)."
+            ),
+            validation_alias=AliasChoices(
+                "LIVE_AUTO_RESUME_ENABLED",
+                "live_auto_resume_enabled",
+            ),
+        ),
+    ] = False
     billing_cron_secret: Annotated[
         SecretStr | None,
         Field(

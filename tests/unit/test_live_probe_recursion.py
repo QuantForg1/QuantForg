@@ -39,6 +39,14 @@ PRO_LOGIN = 50001234
 OTHER_LOGIN = 50009999
 
 
+@pytest.fixture(autouse=True)
+def _auto_resume_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests cover the opt-in auto-resume path (off in Production)."""
+    from app.application.services import live_trading_control_service as _svc
+
+    monkeypatch.setattr(_svc, "_auto_resume_allowed", lambda: True)
+
+
 def _facts(*, up: bool) -> AutoTradeLiveFacts:
     return AutoTradeLiveFacts(
         gateway_connected=up,

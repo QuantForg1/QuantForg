@@ -50,6 +50,14 @@ from app.domain.market_universe.shadow_wall import (
 from app.presentation.dependencies.auth import require_roles
 
 
+@pytest.fixture(autouse=True)
+def _auto_resume_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests cover the opt-in auto-resume path (off in Production)."""
+    from app.application.services import live_trading_control_service as _svc
+
+    monkeypatch.setattr(_svc, "_auto_resume_allowed", lambda: True)
+
+
 def _op(role: str = "owner") -> OperatorIdentity:
     return OperatorIdentity(
         user_id=uuid4(),

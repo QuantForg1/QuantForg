@@ -44,6 +44,17 @@ DOWN_FACTS = {
 }
 
 
+_REAL_AUTO_RESUME_ALLOWED = svc._auto_resume_allowed
+
+
+@pytest.fixture(autouse=True)
+def _auto_resume_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests cover the opt-in auto-resume path (off in Production)."""
+    from app.application.services import live_trading_control_service as _svc
+
+    monkeypatch.setattr(_svc, "_auto_resume_allowed", lambda: True)
+
+
 class World:
     """Patchable live facts: probes, daily stop, positions, clock, alerts."""
 
@@ -260,3 +271,28 @@ def test_without_an_allowlist_ownership_is_the_approval(
     _restart(_enabled().persist_payload())
     world.facts = {**OK_FACTS, "account_login": 555}
     assert svc.resume_live_trading_after_safe_recovery() == "ENABLED"
+
+
+# 17 Nov 2026 owner instruction: in Production auto-resume is OFF. A restart
+# or safety pause leaves the robot PAUSED even when every check passes inside
+# the session; only the owner can re-enable.
+@pytest.mark.parametrize("paused_before_restart", [False, True])
+def test_default_settings_never_auto_resume(
+    world: World, monkeypatch: pytest.MonkeyPatch, paused_before_restart: bool
+) -> None:
+    monkeypatch.setattr(svc, "_auto_resume_allowed", _REAL_AUTO_RESUME_ALLOWED)
+    from core.config.settings import get_settings
+
+    assert get_settings().live_auto_resume_enabled is False
+    ctrl = _enabled()
+    if paused_before_restart:
+        ctrl.safety_pause(reason="gateway_offline")
+    ctrl2 = _restart(ctrl.persist_payload())
+    world.facts = dict(OK_FACTS)
+    for _ in range(3):
+        assert svc.resume_live_trading_after_safe_recovery() == "PAUSED"
+    assert ctrl2.research_can_execute() is False
+    assert "ROBOT AUTO-RESUMED" not in world.kinds()
+    assert world.kinds().count("ROBOT STAYS PAUSED") == 1
+    assert ctrl2.transition(_owner(), "ENABLED", confirmed=True, reason="owner")
+    assert ctrl2.research_can_execute() is True
