@@ -10,7 +10,12 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { mt5Api, platformApi, portfolioApi, weltradeApi } from "@/lib/api/endpoints";
+import {
+  mt5Api,
+  platformApi,
+  portfolioApi,
+  weltradeApi,
+} from "@/lib/api/endpoints";
 import { SNAPSHOT_QUERY_KEYS } from "@/lib/api/current-snapshot";
 import { asList, asRecord, str } from "@/lib/desk";
 import { useBrokerStatusStream, useBookStream } from "@/hooks/realtime";
@@ -118,8 +123,8 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
     healthQ.isSuccess && Object.keys(healthPreview).length > 0;
   const healthAttached = Boolean(
     healthPreview.weltrade_connected ||
-      healthPreview.mt5_connected ||
-      healthPreview.mt5_attached,
+    healthPreview.mt5_connected ||
+    healthPreview.mt5_attached,
   );
   // Ownership-aware only: gateway health attach must not invent a user session.
   // /mt5/status goes through ensure_live_mt5_session_for_user.
@@ -138,6 +143,18 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
     retry: 1,
     enabled: bookEnabled,
   });
+  // Balance / equity must not depend on trade history: when the gateway
+  // history endpoint is down /portfolio can fail, and the Broker page showed
+  // no balance (17 Nov 2026). /mt5/account is a single light account read.
+  const accountQ = useQuery({
+    queryKey: ["mt5", "account"],
+    queryFn: mt5Api.account,
+    staleTime: 8_000,
+    refetchInterval: 15_000,
+    retry: 1,
+    enabled: bookEnabled,
+  });
+
   const positionsQ = useQuery({
     queryKey: SNAPSHOT_QUERY_KEYS.positions,
     queryFn: () => portfolioApi.positions(),
@@ -162,7 +179,13 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
 
   const status = asRecord(statusQ.data);
   const portfolio = asRecord(portfolioQ.data);
-  const account = asRecord(portfolio.account);
+  const account = useMemo(() => {
+    const fromPortfolio = asRecord(portfolio.account);
+    if (fromPortfolio.balance != null && fromPortfolio.balance !== "") {
+      return fromPortfolio;
+    }
+    return { ...fromPortfolio, ...asRecord(accountQ.data) };
+  }, [portfolio.account, accountQ.data]);
   const health = healthPreview;
 
   const connected = connectedFlag;
@@ -177,7 +200,9 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   // and must not collapse API/auth outages into Disconnected.
   const gatewayOnline = mergePlaneOk(
     componentsView?.gateway.ok ?? null,
-    healthUsable ? Boolean(health.gateway_online || health.gateway_reachable) : null,
+    healthUsable
+      ? Boolean(health.gateway_online || health.gateway_reachable)
+      : null,
   );
   const brokerConnected = mergePlaneOk(
     componentsView?.mt5.ok ?? null,
@@ -202,7 +227,10 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
         : "Gateway Online"
       : healthUsable
         ? gatewayStatusLabel(health)
-        : planeConnectionLabel(gatewayOnline, Boolean(componentsView?.gateway.stale));
+        : planeConnectionLabel(
+            gatewayOnline,
+            Boolean(componentsView?.gateway.stale),
+          );
 
   // After health reports an attached gateway session, refresh MT5 status so
   // ticks/symbols see the healed process-local handle.
@@ -283,9 +311,18 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       profit: str(account.profit, "—"),
       leverage: str(account.leverage, "—"),
       currency: str(account.currency, ""),
-      loginStatus: str(status.login_status || health.login_status, "logged_out"),
-      latencyMs: str(status.latency_ms ?? health.latency_ms ?? health.latency, "—"),
-      heartbeatAt: str(status.last_heartbeat_at || health.last_heartbeat_at, ""),
+      loginStatus: str(
+        status.login_status || health.login_status,
+        "logged_out",
+      ),
+      latencyMs: str(
+        status.latency_ms ?? health.latency_ms ?? health.latency,
+        "—",
+      ),
+      heartbeatAt: str(
+        status.last_heartbeat_at || health.last_heartbeat_at,
+        "",
+      ),
       gatewayLabel,
       gatewayDetail,
       gatewayUrl: str(health.gateway_url, ""),

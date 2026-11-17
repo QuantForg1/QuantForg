@@ -197,3 +197,32 @@ async def test_history_reads_orders_and_deals_concurrently() -> None:
         ).execute(user_id=uuid4())
     assert dto.orders == [] and dto.deals == []
     assert time.monotonic() - started < 2
+
+
+@pytest.mark.asyncio
+async def test_portfolio_survives_history_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """17 Nov 2026: gateway /history/* circuit open made /portfolio 503, so the
+    Broker page showed no balance or equity. History is best-effort now."""
+    from app.infrastructure.brokers.mt5.gateway_circuit import (
+        GatewayUnavailableError,
+    )
+
+    mt5_factory, portfolio_factory, adapter, sync, audit = _wire()
+    user_id = uuid4()
+    await _connect(mt5_factory, adapter, audit, user_id)
+
+    def _down(*_a: object, **_k: object) -> list[object]:
+        raise GatewayUnavailableError("Gateway circuit open for /history")
+
+    monkeypatch.setattr(adapter, "history_orders", _down)
+    portfolio = await GetPortfolioUseCase(
+        mt5_uow_factory=mt5_factory,
+        portfolio_uow_factory=portfolio_factory,
+        sync_service=sync,
+    ).execute(user_id=user_id)
+    assert portfolio.history_available is False
+    assert portfolio.account.balance and portfolio.account.equity
+    assert portfolio.position_count == 2
+    assert portfolio.history_orders == [] and portfolio.history_deals == []

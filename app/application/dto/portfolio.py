@@ -187,6 +187,7 @@ class PortfolioDTO:
     synced_at: datetime
     position_count: int
     pending_order_count: int
+    history_available: bool = True
 
 
 @dataclass(frozen=True, slots=True)

@@ -73,6 +73,7 @@ async def get_portfolio(
         synced_at=dto.synced_at,
         position_count=dto.position_count,
         pending_order_count=dto.pending_order_count,
+        history_available=dto.history_available,
     )
 
 

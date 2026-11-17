@@ -91,6 +91,7 @@ class PortfolioResponse(BaseModel):
     synced_at: datetime
     position_count: int
     pending_order_count: int
+    history_available: bool = True
 
 
 class HistoryResponse(BaseModel):
