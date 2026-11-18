@@ -92,7 +92,7 @@ def test_v6_version_and_risk_locks() -> None:
     assert cfg.absolute_max_hold_minutes >= cfg.typical_hold_max_minutes
     assert cfg.require_pa_confluence is True
     assert cfg.structure_trail_enabled is True
-    assert cfg.news_fail_closed_without_feed is False
+    assert cfg.news_fail_closed_without_feed is True
 
 
 @pytest.mark.unit

@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.domain.institutional_trading.news_protection import NewsEvent
+from app.domain.institutional_trading.news_protection import (
+    NewsEvent,
+    NewsFeedUnavailable,
+)
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -78,10 +81,19 @@ class EconomicCalendarNewsAdapter:
         minutes_after: int,
     ) -> Sequence[NewsEvent]:
         try:
-            rows = list(self.feed.list_events(limit=80, as_of=as_of) or [])
-        except Exception:
-            logger.exception("economic_calendar_adapter_fetch_failed")
-            return ()
+            try:
+                rows = list(
+                    self.feed.list_events(limit=80, as_of=as_of, strict=True) or []
+                )
+            except TypeError:
+                # Feeds without ``strict`` (tests, older adapters).
+                rows = list(self.feed.list_events(limit=80, as_of=as_of) or [])
+        except Exception as exc:
+            # Never "no events": the protection decides fail-open or closed.
+            logger.warning(
+                "economic_calendar_adapter_fetch_failed", error=type(exc).__name__
+            )
+            raise NewsFeedUnavailable(str(exc) or type(exc).__name__) from exc
         start = as_of - timedelta(minutes=max(0, int(minutes_before)))
         end = as_of + timedelta(minutes=max(0, int(minutes_after)))
         out: list[NewsEvent] = []

@@ -1071,6 +1071,11 @@ class InstitutionalExecutionEngine:
                         tick_value=live_tick_value,
                         slippage=slip_price,
                         commission=known_fee,
+                        # stop_dist is |fill price - SL| unless a market
+                        # order had no live tick and fell back to the signal.
+                        stop_measured_from_fill=(
+                            intent.order_type is not OrderType.MARKET or live_entry > 0
+                        ),
                     ),
                     account=account,
                     positions=positions,

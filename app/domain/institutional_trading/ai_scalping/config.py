@@ -340,8 +340,9 @@ class AiScalpingConfig:
     news_medium_risk_mult: Decimal = Decimal("0.50")
     news_blackout_minutes_before: int = 30
     news_blackout_minutes_after: int = 30
-    # Default False preserves availability when calendar feed is absent
-    news_fail_closed_without_feed: bool = False
+    # Fail closed (owner decision 2026-11-18): no reachable calendar feed, or
+    # no good copy within 24h, pauses new entries. Open trades stay managed.
+    news_fail_closed_without_feed: bool = True
 
     target_pipeline_latency_ms: int = 200
     learning_enabled: bool = True

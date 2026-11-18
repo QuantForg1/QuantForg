@@ -3984,7 +3984,6 @@ class InstitutionalIteRuntime:
             budget = get_dynamic_risk_budget().budget_for_state(st)
             from dataclasses import replace as _pi_replace
 
-            from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
             from app.domain.institutional_trading.owner_live_limits import (
                 daily_loss_cap_pct,
             )
@@ -4000,7 +3999,8 @@ class InstitutionalIteRuntime:
             _owner_daily_pct = daily_loss_cap_pct(
                 daily_pnl=Decimal(str(account.daily_pnl or 0)),
                 base_now=Decimal(str(account.equity or 0)),
-                pct=MAX_DAILY_LOSS_PCT,
+                # None = the installed user profile's daily stop.
+                pct=None,
             )
             _owner_weekly_pct = float(weekly_loss_limit_pct())
             prot = evaluate_capital_protection(

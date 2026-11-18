@@ -414,7 +414,13 @@ async def test_ite_cycle_verified_deposit_sets_audit_baseline(
     assert ctx.diagnostics.get("daily_pnl_trusted") is True
     assert ctx.diagnostics.get("new_capital_detected") is True
     assert ctx.diagnostics.get("deposit_verification") == "verified"
-    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "30.0"
+    from app.domain.institutional_trading.runtime_policy import (
+        active_daily_loss_pct,
+    )
+
+    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == str(
+        active_daily_loss_pct()
+    )
     baseline = ctx.diagnostics.get("capital_baseline")
     assert isinstance(baseline, dict)
     assert baseline.get("broker_deal_ticket") == 2

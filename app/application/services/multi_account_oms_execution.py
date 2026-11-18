@@ -245,8 +245,18 @@ def authorize_worker_execution(
         if env == "demo":
             order_send_allowed = True
         elif env == "live":
-            if live_path_authorized and multi_account_oms_live_order_send_allowed(
-                settings
+            from app.application.services.platform_live_switch import (
+                platform_live_switch,
+            )
+
+            # Env flags and the platform DB switch must all be open.
+            switch = platform_live_switch()
+            if not switch.enabled:
+                ordered.append(switch.reason or "platform_live_disabled")
+            if (
+                switch.enabled
+                and live_path_authorized
+                and multi_account_oms_live_order_send_allowed(settings)
             ):
                 order_send_allowed = True
             else:
@@ -254,7 +264,13 @@ def authorize_worker_execution(
 
     # LIVE fail-closed may leave live_order_send_fail_closed in reasons while
     # auth_ok stays true for path checks excluding the send lock.
-    auth_ok = len([r for r in ordered if r not in {"live_order_send_fail_closed"}]) == 0
+    send_lock_reasons = {
+        "live_order_send_fail_closed",
+        "platform_live_disabled",
+        "platform_live_switch_unavailable",
+        "platform_live_policy_missing",
+    }
+    auth_ok = len([r for r in ordered if r not in send_lock_reasons]) == 0
 
     vol_s = str(volume) if volume is not None else ""
     return ExecutionAuthorization(
