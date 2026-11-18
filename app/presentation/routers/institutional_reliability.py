@@ -115,6 +115,22 @@ def edge_ledger(
     return build_edge_ledger_report(days=days, symbol_prefix=symbol_prefix)
 
 
+@router.get("/shadow-signals")
+def shadow_signals(
+    _user: OperatorUser,
+    days: int = Query(default=7, ge=1, le=60),
+    symbol: str = Query(default="XAUUSD", min_length=1, max_length=12),
+) -> dict[str, Any]:
+    """HYPOTHETICAL replay of recorded signals (accepted and rejected).
+
+    Evaluates signals whose 30 min window has closed and stores each once in
+    ``shadow_signal_outcomes``, then reports breakdowns. Never touches LIVE.
+    """
+    from app.application.services.shadow_signals import build_shadow_signal_report
+
+    return build_shadow_signal_report(days=days, symbol=symbol)
+
+
 @router.get("/portfolio-intelligence")
 def portfolio_intelligence_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """v9 Institutional Portfolio Intelligence — allocation, risk budget, queue, stress."""  # noqa: E501
