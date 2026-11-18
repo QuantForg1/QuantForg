@@ -1049,6 +1049,19 @@ class Settings(BaseSettings):
             ),
         ),
     ] = ""
+    economic_calendar_countries: Annotated[
+        str,
+        Field(
+            description=(
+                "Comma-separated calendar country codes that can trigger a news "
+                "blackout (e.g. 'USD'). Empty = every country in the feed."
+            ),
+            validation_alias=AliasChoices(
+                "ECONOMIC_CALENDAR_COUNTRIES",
+                "economic_calendar_countries",
+            ),
+        ),
+    ] = ""
 
     # Official intelligence provider credentials (empty = disabled / unconfigured)
     finnhub_api_key: Annotated[
