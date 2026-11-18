@@ -75,14 +75,6 @@ function moneyOrDash(
   return Number.isFinite(n) ? formatCurrency(n, code) : "—";
 }
 
-function marketSessionName(at = new Date()): string {
-  const hour = at.getUTCHours();
-  if (hour >= 7 && hour < 16) return "London";
-  if (hour >= 16 && hour < 21) return "New York";
-  if (hour >= 0 && hour < 7) return "Tokyo";
-  return "Sydney";
-}
-
 function statusTone(
   value: string,
 ): "success" | "warning" | "danger" | "neutral" {
@@ -359,23 +351,12 @@ export default function DashboardPage() {
     (publicTickStatus === "" || publicTickStatus === "live");
   const liveMarketPrice = Number.isFinite(tickMid)
     ? priceDisplay(tickMid, XAUUSD_SPECS.digits)
-    : topSignal
-      ? priceDisplay(
-          topSignal.mid ?? topSignal.price ?? topSignal.current_price,
-          XAUUSD_SPECS.digits,
-        )
-      : "—";
-  const sessionLabel = marketSessionName();
-  const lastUpdateLabel =
-    lastUpdatedCopy(research.asOf) ||
-    (tickQ.dataUpdatedAt
-      ? formatRelativeTime(new Date(tickQ.dataUpdatedAt))
-      : "—");
+    : "—";
 
   return (
     <div className="qf-page-stack min-w-0 space-y-4 sm:space-y-5">
       <PageHeader
-        eyebrow="Overview"
+        eyebrow="Institutional AI Trading Command Center"
         title={greeting}
         description={
           showMetrics
@@ -456,6 +437,11 @@ export default function DashboardPage() {
         brokerConnected={showMetrics}
         marketLive={marketLive}
         marketFeedStatus={publicTickStatus || (marketLive ? "live" : "unavailable")}
+        tickUpdatedAt={tickQ.dataUpdatedAt || undefined}
+        tickTime={str(tick.time || tick.timestamp || tickEnvelope.as_of || "")}
+        tickLoading={tickQ.isLoading}
+        tickError={tickQ.isError}
+        signalDirection={biasDir === "BUY" || biasDir === "SELL" ? biasDir : "WAIT"}
         marketBias={
           biasDir === "BUY"
             ? "Bullish"
@@ -480,14 +466,7 @@ export default function DashboardPage() {
             ? presentLevel(topSignal.resistance ?? topSignal.key_resistance)
             : "—"
         }
-        regime={
-          topSignal
-            ? presentField(topSignal.regime ?? topSignal.market_regime)
-            : "—"
-        }
         confidencePct={confPct}
-        sessionName={sessionLabel}
-        lastUpdate={lastUpdateLabel}
         topSignal={topSignal}
         lastPrice={Number.isFinite(tickMid) ? tickMid : undefined}
       />

@@ -98,15 +98,15 @@ export function SubscriptionPanel() {
   return (
     <div className="space-y-6">
       <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
-        <h3 className="text-base font-semibold">Subscription dashboard</h3>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">
+        <h3 className="text-base font-semibold">Current plan</h3>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--fg-muted)]">
           {configured
-            ? `${paymentLabel} is available. This screen reflects server-verified subscription and license state only.`
+            ? `Status is read from the billing service. Checkout and invoices use the existing ${paymentLabel} flow.`
             : `${paymentLabel} is not configured on the API yet. Checkout will fail until production credentials are set.`}
         </p>
 
         {trialActive ? (
-          <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--accent)]/30 bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] p-4">
+          <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--accent)]/40 bg-[var(--surface-2)] p-4">
             <p className="text-sm font-semibold text-[var(--accent)]">
               Your {TRIAL_DAYS}-day Starter trial is active.
             </p>
@@ -290,7 +290,7 @@ export function SubscriptionPanel() {
           </p>
         ) : null}
         <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <li className="rounded-[var(--radius-sm)] border border-[var(--accent)]/40 bg-[color-mix(in_srgb,var(--accent)_6%,transparent)] p-4">
+            <li className="rounded-[var(--radius-sm)] border border-[var(--accent)]/40 bg-[var(--surface)] p-4">
             <p className="font-medium">Free Trial</p>
             <p className="mt-1 text-sm text-[var(--accent)]">
               $0

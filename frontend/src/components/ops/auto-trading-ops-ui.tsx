@@ -52,7 +52,7 @@ export function MetricCard({
         large && "py-[var(--space-3)]",
       )}
     >
-      <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+      <p className="qf-caption font-medium uppercase tracking-[0.08em]">
         {label}
       </p>
       <p

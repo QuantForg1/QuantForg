@@ -191,7 +191,9 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     if (!el) return;
 
     const chart = createChart(el, {
-      autoSize: true,
+      autoSize: false,
+      width: Math.max(el.clientWidth, 1),
+      height: Math.max(el.clientHeight, 1),
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "rgba(226, 232, 240, 0.72)",
@@ -264,10 +266,17 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       volumeRef.current = volume;
     }
 
-    if (el.clientWidth > 0 && el.clientHeight > 0) {
-      chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
-      chart.timeScale().fitContent();
-    }
+    const fit = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 0 && h > 0) {
+        chart.applyOptions({ width: w, height: h });
+      }
+    };
+    fit();
+    chart.timeScale().fitContent();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
 
     chart.subscribeCrosshairMove((param) => {
       if (!param.time || !mainRef.current) {
@@ -280,6 +289,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     });
 
     return () => {
+      observer.disconnect();
       chart.remove();
       chartRef.current = null;
       mainRef.current = null;
@@ -292,7 +302,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
       aria-label={`${displayTradingSymbol(symbol)} chart workspace`}
     >
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--border)]/70 px-2">
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-2 border-b border-[var(--border)]/70 px-2 py-1">
         {!hideSymbolLabel ? (
           <>
             <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">

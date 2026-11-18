@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
 import { authApi, platformApi, supportDeskApi } from "@/lib/api/endpoints";
@@ -88,6 +89,44 @@ function isStrongPassword(pw: string): boolean {
   return true;
 }
 
+type PendingConfirm = {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  danger?: boolean;
+  action: () => void;
+};
+
+function formatWhen(raw: string): string {
+  if (!raw || raw === "—") return "—";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw.slice(0, 19).replace("T", " ");
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
+function maskIdentifier(value: string): string {
+  if (value.length <= 10) return value;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+function labelize(value: string): string {
+  const cleaned = value.replaceAll("_", " ").trim();
+  if (!cleaned) return "Preference";
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+async function copyText(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied`);
+  } catch {
+    toast.error("Copy is unavailable in this browser");
+  }
+}
+
 export default function SettingsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -149,6 +188,7 @@ export default function SettingsPage() {
   const deskPrefsHydratedRef = useRef(false);
   const [newPassword, setNewPassword] = useState("");
   const [deletionNote, setDeletionNote] = useState("");
+  const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
 
   useEffect(() => {
     if (!settingsQ.data) return;
@@ -312,6 +352,41 @@ export default function SettingsPage() {
 
   const passwordOk = useMemo(() => isStrongPassword(newPassword), [newPassword]);
 
+  const profileDirty = useMemo(() => {
+    if (!profileQ.data) return false;
+    const p = asRecord(profileQ.data);
+    return (
+      str(p.full_name, "") !== profileForm.full_name ||
+      str(p.username, "") !== profileForm.username ||
+      str(p.timezone, "") !== profileForm.timezone
+    );
+  }, [profileQ.data, profileForm]);
+
+  const settingsDirty = useMemo(() => {
+    if (!settingsQ.data) return false;
+    const s = asRecord(settingsQ.data);
+    return (
+      Boolean(s.notifications_enabled) !== settingsForm.notifications_enabled ||
+      Boolean(s.email_marketing) !== settingsForm.email_marketing ||
+      Boolean(s.email_security) !== settingsForm.email_security ||
+      Boolean(s.email_product) !== settingsForm.email_product ||
+      Boolean(s.security_login_alerts) !== settingsForm.security_login_alerts ||
+      Boolean(s.security_require_reauth) !== settingsForm.security_require_reauth ||
+      Number(s.session_timeout_minutes ?? 60) !== settingsForm.session_timeout_minutes
+    );
+  }, [settingsQ.data, settingsForm]);
+
+  const deskDirty = useMemo(() => {
+    if (!settingsQ.data) return false;
+    const saved = deskPrefsFromSettings(asRecord(settingsQ.data));
+    return (
+      saved.timeFormat !== deskPrefs.timeFormat ||
+      saved.dateFormat !== deskPrefs.dateFormat ||
+      saved.defaultSymbol !== deskPrefs.defaultSymbol ||
+      saved.defaultTimeframe !== deskPrefs.defaultTimeframe
+    );
+  }, [settingsQ.data, deskPrefs]);
+
   const headerSaveVisible =
     tab === "Security" || tab === "Notifications" || tab === "Preferences";
 
@@ -342,56 +417,101 @@ export default function SettingsPage() {
 
   const pageLoading = settingsQ.isLoading;
   const pageError = settingsQ.isError;
+  const unsaved =
+    tab === "Account"
+      ? profileDirty
+      : tab === "Preferences"
+        ? profileDirty || deskDirty
+        : headerSaveVisible
+          ? settingsDirty
+          : false;
+  const savePending =
+    tab === "Preferences"
+      ? saveProfile.isPending || saveDeskPrefs.isPending
+      : tab === "Account"
+        ? saveProfile.isPending
+        : saveSettings.isPending;
+
+  function selectTab(next: (typeof TABS)[number]) {
+    setTab(next);
+  }
 
   return (
-    <div>
-      <PageHeader
-        eyebrow="Account"
-        title="Settings"
-        description="Profile, subscription status, security, notifications, and desk preferences. Billing actions open the existing checkout and invoice flows — plan prices are not changed here."
-        actions={
-          tab === "Account" ? (
-            <Button size="sm" disabled={saveProfile.isPending} onClick={() => saveProfile.mutate()}>
-              Save profile
-            </Button>
-          ) : headerSaveVisible ? (
+    <div className="mx-auto w-full min-w-0 max-w-5xl">
+      <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+            Account
+          </p>
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--fg)] sm:text-2xl">
+            Settings
+          </h1>
+          <p className="mt-1 max-w-xl text-sm text-[var(--fg-muted)]">
+            Profile, security, notifications, and desk preferences.
+          </p>
+        </div>
+        {tab === "Account" || headerSaveVisible ? (
+          <div className="flex items-center gap-3">
+            {unsaved ? (
+              <span className="text-xs text-[var(--fg-subtle)]">Unsaved changes</span>
+            ) : null}
             <Button
               size="sm"
-              disabled={
-                tab === "Preferences"
-                  ? saveProfile.isPending || saveDeskPrefs.isPending
-                  : saveSettings.isPending
-              }
-              onClick={onHeaderSave}
+              disabled={savePending || !unsaved}
+              onClick={() => {
+                if (tab === "Account") saveProfile.mutate();
+                else onHeaderSave();
+              }}
             >
-              Save changes
+              {savePending ? "Saving…" : tab === "Account" ? "Save profile" : "Save changes"}
             </Button>
-          ) : null
-        }
-      />
+          </div>
+        ) : null}
+      </header>
 
-      <div
-        className="mb-[var(--space-4)] -mx-1 flex h-9 gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-1 scrollbar-none sm:h-auto sm:flex-wrap sm:overflow-visible"
-        role="tablist"
-        aria-label="Settings sections"
-      >
-        {TABS.map((t) => (
-          <Button
-            key={t}
-            size="sm"
-            role="tab"
-            aria-selected={tab === t}
-            variant="ghost"
-            className={
-              tab === t
-                ? "h-9 shrink-0 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)] hover:text-[var(--accent-fg)] sm:h-8"
-                : "h-9 shrink-0 text-[var(--fg-muted)] sm:h-8"
-            }
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </Button>
-        ))}
+      <div className="mb-5 min-w-0 overflow-x-auto border-b border-[var(--border)] scrollbar-none">
+        <div
+          className="flex min-w-max gap-1"
+          role="tablist"
+          aria-label="Settings sections"
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+            e.preventDefault();
+            const index = TABS.indexOf(tab);
+            const next =
+              e.key === "ArrowRight"
+                ? TABS[(index + 1) % TABS.length]
+                : TABS[(index - 1 + TABS.length) % TABS.length];
+            selectTab(next);
+            document.getElementById(`settings-tab-${next}`)?.focus();
+          }}
+        >
+          {TABS.map((t) => (
+            <button
+              key={t}
+              id={`settings-tab-${t}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              aria-controls="settings-panel"
+              tabIndex={tab === t ? 0 : -1}
+              className={cn(
+                "relative h-11 shrink-0 px-3 text-sm font-medium transition-colors duration-[var(--duration-fast)]",
+                tab === t ? "text-[var(--fg)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
+              )}
+              onClick={() => selectTab(t)}
+            >
+              {t}
+              <span
+                className={cn(
+                  "absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[var(--accent)] transition-opacity duration-[var(--duration-fast)]",
+                  tab === t ? "opacity-100" : "opacity-0",
+                )}
+                aria-hidden
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       {pageLoading ? (
@@ -399,19 +519,21 @@ export default function SettingsPage() {
       ) : pageError ? (
         <DeskError message="Unable to load settings." onRetry={() => settingsQ.refetch()} />
       ) : (
-        <PageMotion>
+        <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
+        <PageMotion key={tab}>
           {tab === "Account" ? (
             <div className="grid gap-4 xl:grid-cols-2">
               <Card className="qf-card-interactive">
                 <CardHeader>
                   <CardTitle>Profile</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
+                <CardContent className="grid gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label htmlFor="full-name">Display name</Label>
                       <Input
                         id="full-name"
+                        autoComplete="name"
                         value={profileForm.full_name}
                         onChange={(e) =>
                           setProfileForm((f) => ({ ...f, full_name: e.target.value }))
@@ -422,6 +544,7 @@ export default function SettingsPage() {
                       <Label htmlFor="username">Username</Label>
                       <Input
                         id="username"
+                        autoComplete="username"
                         value={profileForm.username}
                         onChange={(e) =>
                           setProfileForm((f) => ({ ...f, username: e.target.value }))
@@ -429,24 +552,36 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                      Email
-                    </p>
-                    <p className="text-sm text-[var(--fg)]">{user?.email || "Unavailable"}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                      User ID
-                    </p>
-                    <p className="font-mono text-xs text-[var(--fg-muted)]">
-                      {user?.id || "Unavailable"}
-                    </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <p className="qf-label">Email</p>
+                      <p className="text-sm text-[var(--fg)]">{user?.email || "Unavailable"}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="qf-label">User ID</p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate font-mono text-sm text-[var(--fg-muted)]">
+                          {user?.id ? maskIdentifier(user.id) : "Unavailable"}
+                        </p>
+                        {user?.id ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Copy user ID"
+                            onClick={() => void copyText(user.id, "User ID")}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="qf-card-interactive">
                 <CardHeader>
                   <CardTitle>Recent activity</CardTitle>
                 </CardHeader>
@@ -456,13 +591,29 @@ export default function SettingsPage() {
                   ) : activity.length === 0 ? (
                     <p className="text-sm text-[var(--fg-muted)]">No recent activity recorded.</p>
                   ) : (
-                    <DeskTable
-                      columns={["Event", "When"]}
-                      rows={activity.slice(0, 12).map((row) => [
-                        str(row.action || row.event || row.kind, "Activity"),
-                        str(row.created_at || row.timestamp, "—").slice(0, 19),
-                      ])}
-                    />
+                    <ul className="divide-y divide-[var(--border)]">
+                      {activity.slice(0, 12).map((row, index) => {
+                        const status = str(row.status || row.result, "");
+                        return (
+                          <li
+                            key={`${str(row.created_at || row.timestamp, "event")}-${index}`}
+                            className="flex items-start justify-between gap-3 py-2.5"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm text-[var(--fg)]">
+                                {labelize(str(row.action || row.event || row.kind, "Activity"))}
+                              </p>
+                              <p className="text-xs text-[var(--fg-subtle)]">
+                                {formatWhen(str(row.created_at || row.timestamp, "—"))}
+                              </p>
+                            </div>
+                            {status ? (
+                              <Badge tone="neutral">{labelize(status)}</Badge>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </CardContent>
               </Card>
@@ -475,11 +626,12 @@ export default function SettingsPage() {
             <div className="grid gap-4 lg:grid-cols-2">
               <Card className="qf-card-interactive">
                 <CardHeader>
-                  <CardTitle>Security controls</CardTitle>
+                  <CardTitle>Account protection</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent>
                   <Toggle
                     label="Login alerts"
+                    description="Record a security email preference for new sign-ins."
                     checked={settingsForm.security_login_alerts}
                     onChange={(v) =>
                       setSettingsForm((f) => ({ ...f, security_login_alerts: v }))
@@ -487,12 +639,13 @@ export default function SettingsPage() {
                   />
                   <Toggle
                     label="Require re-authentication"
+                    description="Ask for the password again before sensitive account changes."
                     checked={settingsForm.security_require_reauth}
                     onChange={(v) =>
                       setSettingsForm((f) => ({ ...f, security_require_reauth: v }))
                     }
                   />
-                  <div className="space-y-1.5 pt-1">
+                  <div className="space-y-1.5 pt-3">
                     <Label htmlFor="session-timeout">Session timeout (minutes)</Label>
                     <Input
                       id="session-timeout"
@@ -506,11 +659,12 @@ export default function SettingsPage() {
                         }))
                       }
                     />
+                    <p className="text-xs text-[var(--fg-subtle)]">
+                      Idle platform sessions end after this many minutes. Minimum 5.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
-
-              <MfaSecurityPanel />
 
               <Card className="qf-card-interactive">
                 <CardHeader>
@@ -528,17 +682,27 @@ export default function SettingsPage() {
                     />
                   </div>
                   <p className="text-xs text-[var(--fg-subtle)]">
-                    At least 10 characters with uppercase, lowercase, digit, and symbol.
+                    At least 10 characters with uppercase, lowercase, a digit, and a symbol.
+                    The current password is never shown.
                   </p>
                   <Button
                     variant="secondary"
                     disabled={changePw.isPending || !passwordOk}
-                    onClick={() => changePw.mutate()}
+                    onClick={() =>
+                      setConfirm({
+                        title: "Update password?",
+                        body: "This replaces the password on your account. You will use the new password the next time you sign in.",
+                        confirmLabel: "Update password",
+                        action: () => changePw.mutate(),
+                      })
+                    }
                   >
-                    Update password
+                    {changePw.isPending ? "Updating…" : "Update password"}
                   </Button>
                 </CardContent>
               </Card>
+
+              <MfaSecurityPanel />
 
               <Card className="lg:col-span-2">
                 <CardHeader>
@@ -557,13 +721,23 @@ export default function SettingsPage() {
                         <Badge key="a" tone={s.is_active ? "success" : "neutral"}>
                           {s.is_active ? "Active" : "Ended"}
                         </Badge>,
-                        str(s.last_active_at).slice(0, 19),
+                        formatWhen(str(s.last_active_at, "—")),
                         <Button
                           key="r"
                           size="sm"
                           variant="ghost"
                           disabled={revoke.isPending}
-                          onClick={() => revoke.mutate(str(s.id))}
+                          onClick={() => {
+                            const sessionId = str(s.id);
+                            const ip = str(s.ip_address, "this address");
+                            setConfirm({
+                              title: "Revoke session?",
+                              body: `The session from ${ip} will be signed out. This does not change your password.`,
+                              confirmLabel: "Revoke session",
+                              danger: true,
+                              action: () => revoke.mutate(sessionId),
+                            });
+                          }}
                         >
                           Revoke
                         </Button>,
@@ -586,8 +760,9 @@ export default function SettingsPage() {
                     <DeskTable
                       columns={["Device", "Last seen", "Status"]}
                       rows={devices.map((d) => [
-                        str(d.label || d.device_name || d.user_agent, "Device"),
-                        str(d.last_seen_at || d.last_active_at, "—").slice(0, 19),
+                        str(d.label || d.device_name, "") ||
+                          str(d.user_agent, "Device").slice(0, 64),
+                        formatWhen(str(d.last_seen_at || d.last_active_at, "—")),
                         <Badge key="s" tone={d.trusted === false ? "warning" : "neutral"}>
                           {d.trusted === false ? "Unverified" : "Known"}
                         </Badge>,
@@ -600,42 +775,55 @@ export default function SettingsPage() {
           ) : null}
 
           {tab === "Notifications" ? (
-            <Card className="qf-card-interactive">
-              <CardHeader>
-                <CardTitle>Notifications</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Toggle
-                  label="In-app notifications"
-                  checked={settingsForm.notifications_enabled}
-                  onChange={(v) => setSettingsForm((f) => ({ ...f, notifications_enabled: v }))}
-                />
-                <Toggle
-                  label="Security emails"
-                  checked={settingsForm.email_security}
-                  onChange={(v) => setSettingsForm((f) => ({ ...f, email_security: v }))}
-                />
-                <Toggle
-                  label="Product emails"
-                  checked={settingsForm.email_product}
-                  onChange={(v) => setSettingsForm((f) => ({ ...f, email_product: v }))}
-                />
-                <Toggle
-                  label="Marketing emails"
-                  checked={settingsForm.email_marketing}
-                  onChange={(v) => setSettingsForm((f) => ({ ...f, email_marketing: v }))}
-                />
-
-                <div className="border-t border-[var(--border)] pt-4">
-                  <p className="mb-3 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
-                    Category preferences
+            <div className="grid gap-4">
+              <Card className="qf-card-interactive">
+                <CardHeader>
+                  <CardTitle>Delivery</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Toggle
+                    label="In-app notifications"
+                    description="Show account alerts inside QuantForg."
+                    checked={settingsForm.notifications_enabled}
+                    onChange={(v) => setSettingsForm((f) => ({ ...f, notifications_enabled: v }))}
+                  />
+                  <Toggle
+                    label="Security emails"
+                    description="Email for sign-in and account protection events."
+                    checked={settingsForm.email_security}
+                    onChange={(v) => setSettingsForm((f) => ({ ...f, email_security: v }))}
+                  />
+                  <Toggle
+                    label="Product emails"
+                    description="Email for product and account updates."
+                    checked={settingsForm.email_product}
+                    onChange={(v) => setSettingsForm((f) => ({ ...f, email_product: v }))}
+                  />
+                  <Toggle
+                    label="Marketing emails"
+                    description="Optional product news."
+                    checked={settingsForm.email_marketing}
+                    onChange={(v) => setSettingsForm((f) => ({ ...f, email_marketing: v }))}
+                  />
+                  <p className="pt-3 text-xs text-[var(--fg-subtle)]">
+                    Delivery choices are stored when you save changes.
                   </p>
+                </CardContent>
+              </Card>
+
+              <Card className="qf-card-interactive">
+                <CardHeader>
+                  <CardTitle>Category channels</CardTitle>
+                </CardHeader>
+                <CardContent>
                   {prefsQ.isLoading ? (
-                    <DeskSkeleton rows={2} />
+                    <DeskSkeleton rows={3} />
                   ) : prefs.length === 0 ? (
-                    <p className="text-sm text-[var(--fg-muted)]">No category preferences yet.</p>
+                    <p className="text-sm text-[var(--fg-muted)]">
+                      No category preferences are stored for this account yet.
+                    </p>
                   ) : (
-                    <ul className="space-y-2">
+                    <ul>
                       {prefs.map((p) => {
                         const category = str(p.category);
                         const inApp = Boolean(p.in_app);
@@ -643,10 +831,17 @@ export default function SettingsPage() {
                         return (
                           <li
                             key={category}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
+                            className="flex flex-col gap-3 border-b border-[var(--border)] py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
                           >
-                            <span className="text-sm font-medium text-[var(--fg)]">{category}</span>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-[var(--fg)]">
+                                {labelize(category)}
+                              </p>
+                              <p className="text-xs text-[var(--fg-subtle)]">
+                                Saved immediately for this category.
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 gap-2">
                               <CategoryToggle
                                 label="In-app"
                                 checked={inApp}
@@ -669,9 +864,9 @@ export default function SettingsPage() {
                       })}
                     </ul>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           ) : null}
 
           {tab === "Preferences" ? (
@@ -781,11 +976,15 @@ export default function SettingsPage() {
             <div className="grid gap-4 lg:grid-cols-2">
               <Card className="qf-card-interactive">
                 <CardHeader>
-                  <CardTitle>Broker</CardTitle>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle>Broker</CardTitle>
+                    <Badge tone="neutral">Open Broker desk</Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-sm text-[var(--fg-muted)]">
-                    MT5 credentials and live trading authorization are managed on the Broker desk.
+                    Live gateway, MT5, and market-data status is shown on the Broker desk.
+                    This page does not connect or change a broker.
                   </p>
                   <Button variant="secondary" asChild>
                     <Link href="/broker">Open Broker desk</Link>
@@ -793,58 +992,96 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="qf-card-interactive">
                 <CardHeader>
-                  <CardTitle>Session summary</CardTitle>
+                  <CardTitle>This account</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm text-[var(--fg-muted)]">
-                  <p>
-                    <span className="text-[var(--fg)]">{sessions.length}</span> active platform
-                    session{sessions.length === 1 ? "" : "s"}
-                  </p>
-                  <p>
-                    <span className="text-[var(--fg)]">{devices.length}</span> known device
-                    {devices.length === 1 ? "" : "s"}
-                  </p>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] pb-3">
+                    <span className="text-[var(--fg-muted)]">Platform sessions</span>
+                    <span className="font-medium text-[var(--fg)]">
+                      {sessionsQ.isLoading ? "Loading" : sessionsQ.isError ? "Unavailable" : sessions.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[var(--fg-muted)]">Known devices</span>
+                    <span className="font-medium text-[var(--fg)]">
+                      {devicesQ.isLoading ? "Loading" : devicesQ.isError ? "Unavailable" : devices.length}
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           ) : null}
 
           {tab === "Danger Zone" ? (
-            <Card className="border-[var(--danger)]/40">
+            <Card className="border-[var(--danger)]/50">
               <CardHeader>
                 <CardTitle className="text-[var(--danger)]">Danger Zone</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-[var(--fg-muted)]">
-                  Irreversible or high-impact account actions. Use with care.
-                </p>
-                <div className="flex flex-wrap gap-2">
+              <CardContent className="divide-y divide-[var(--border)]">
+                <div className="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--fg)]">Sign out</p>
+                    <p className="text-sm text-[var(--fg-muted)]">
+                      Ends this browser session and returns you to sign-in.
+                    </p>
+                  </div>
                   <Button
-                    variant="danger"
-                    onClick={async () => {
-                      try {
-                        await authApi.logout();
-                      } catch {
-                        /* still clear local session */
-                      }
-                      clearSession();
-                      window.location.href = "/login";
-                    }}
+                    variant="secondary"
+                    onClick={() =>
+                      setConfirm({
+                        title: "Sign out of this browser?",
+                        body: "Your local session is cleared. Other devices stay signed in until you revoke them.",
+                        confirmLabel: "Sign out",
+                        danger: true,
+                        action: () => {
+                          void (async () => {
+                            try {
+                              await authApi.logout();
+                            } catch {
+                              /* still clear local session */
+                            }
+                            clearSession();
+                            window.location.href = "/login";
+                          })();
+                        },
+                      })
+                    }
                   >
                     Sign out
                   </Button>
+                </div>
+                <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--fg)]">Revoke all sessions</p>
+                    <p className="text-sm text-[var(--fg-muted)]">
+                      Signs out every listed platform session, including this one.
+                    </p>
+                  </div>
                   <Button
-                    variant="secondary"
+                    variant="danger"
                     disabled={sessionsQ.isLoading || sessions.length === 0}
-                    onClick={() => void revokeAllSessions()}
+                    onClick={() =>
+                      setConfirm({
+                        title: "Revoke every session?",
+                        body: "Each listed session is revoked. You may need to sign in again on this device.",
+                        confirmLabel: "Revoke all sessions",
+                        danger: true,
+                        action: () => void revokeAllSessions(),
+                      })
+                    }
                   >
                     Revoke all sessions
                   </Button>
                 </div>
-                <div className="space-y-2 border-t border-[var(--border)] pt-4">
-                  <p className="text-sm font-medium text-[var(--fg)]">Request account deletion</p>
+                <div className="space-y-3 py-4 last:pb-0">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--fg)]">Request account deletion</p>
+                    <p className="text-sm text-[var(--fg-muted)]">
+                      Sends a support ticket. The account is not deleted from this screen.
+                    </p>
+                  </div>
                   <Label htmlFor="deletion-note">Reason (optional)</Label>
                   <Input
                     id="deletion-note"
@@ -855,41 +1092,86 @@ export default function SettingsPage() {
                   <Button
                     variant="danger"
                     disabled={requestDeletion.isPending}
-                    onClick={() => requestDeletion.mutate()}
+                    onClick={() =>
+                      setConfirm({
+                        title: "Submit a deletion request?",
+                        body: "Support receives a ticket. Your account, positions, and billing stay unchanged until support processes it.",
+                        confirmLabel: "Submit request",
+                        danger: true,
+                        action: () => requestDeletion.mutate(),
+                      })
+                    }
                   >
-                    Submit deletion request
+                    {requestDeletion.isPending ? "Submitting…" : "Submit deletion request"}
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ) : null}
         </PageMotion>
+        </div>
       )}
+      <Dialog open={confirm !== null} onOpenChange={(open) => { if (!open) setConfirm(null); }}>
+        <DialogContent className="w-[min(92vw,28rem)]">
+          <DialogTitle>{confirm?.title}</DialogTitle>
+          <DialogDescription className="mt-2">{confirm?.body}</DialogDescription>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirm?.danger ? "danger" : "default"}
+              onClick={() => {
+                const action = confirm?.action;
+                setConfirm(null);
+                action?.();
+              }}
+            >
+              {confirm?.confirmLabel ?? "Confirm"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function Toggle({
   label,
+  description,
   checked,
   onChange,
 }: {
   label: string;
+  description?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-left transition hover:border-[var(--border-strong)]"
-    >
-      <span className="text-sm text-[var(--fg)]">{label}</span>
-      <Badge tone={checked ? "success" : "neutral"}>{checked ? "On" : "Off"}</Badge>
-    </button>
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-[var(--fg)]">{label}</p>
+        {description ? <p className="text-xs text-[var(--fg-subtle)]">{description}</p> : null}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-[var(--duration-fast)]",
+          checked ? "bg-[var(--accent)]" : "bg-[var(--surface-3)]",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-[var(--duration-fast)]",
+            checked && "translate-x-5",
+          )}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -907,15 +1189,27 @@ function CategoryToggle({
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={`${label} ${checked ? "on" : "off"}`}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "rounded-md border border-[var(--border)] px-2 py-1 text-xs",
-        checked ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--fg-muted)]",
+        "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium",
+        checked
+          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+          : "border-[var(--border)] text-[var(--fg-muted)]",
         disabled && "opacity-60",
       )}
     >
-      {label}: {checked ? "On" : "Off"}
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full",
+          checked ? "bg-[var(--accent)]" : "bg-[var(--fg-subtle)]",
+        )}
+        aria-hidden
+      />
+      {label}
     </button>
   );
 }

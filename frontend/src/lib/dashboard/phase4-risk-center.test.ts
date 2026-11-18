@@ -30,8 +30,10 @@ assert.doesNotMatch(dash, /OWNER_RISK_POLICY_DISPLAY/);
 
 assert.match(riskCenter, /My Risk Preferences/);
 assert.match(riskCenter, /Risk Protection Status/);
-assert.match(riskCenter, /Risk History/);
+assert.doesNotMatch(riskCenter, /Risk History/);
+assert.doesNotMatch(riskCenter, /No persisted risk events/);
 assert.match(riskCenter, /riskApi\.preferences/);
+assert.match(endpoints, /preferenceHistory/);
 assert.doesNotMatch(riskCenter, /OwnerPolicySummary/);
 assert.doesNotMatch(riskCenter, /Owner policy \(read-only\)/);
 

@@ -37,10 +37,17 @@ function isTypingTarget(el: EventTarget | null) {
   );
 }
 
-export function WorkspaceShell() {
+export function WorkspaceShell({
+  captureHotkeys = true,
+}: {
+  /** Buy/Sell letter keys stay off when this terminal sits above another desk. */
+  captureHotkeys?: boolean;
+}) {
   const [layout, setLayout] = useState<WorkspaceLayoutState>(DEFAULT_LAYOUT);
   const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [hydrated, setHydrated] = useState(false);
+  const [narrow, setNarrow] = useState(true);
+  const frameRef = useRef<HTMLDivElement>(null);
   const ticketRef = useRef<OrderTicketHandle | null>(null);
 
   useEffect(() => {
@@ -69,22 +76,14 @@ export function WorkspaceShell() {
     }
   }, [symbol, hydrated]);
 
-  // Narrow viewports: collapse side rails so the chart remains usable.
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1023px)");
-    const apply = () => {
-      if (mq.matches) {
-        setLayout((prev) => ({
-          ...prev,
-          leftCollapsed: true,
-          rightCollapsed: true,
-          bottomCollapsed: prev.bottomCollapsed,
-        }));
-      }
-    };
+    const el = frameRef.current;
+    if (!el) return;
+    const apply = () => setNarrow(el.clientWidth < 1100);
     apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   const realtime = useExecutionStream(symbol);
@@ -154,6 +153,7 @@ export function WorkspaceShell() {
   const bottomSplit = useResizeSplit(onBottomDelta);
 
   useEffect(() => {
+    if (!captureHotkeys) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         ticketRef.current?.cancelDialog();
@@ -174,15 +174,16 @@ export function WorkspaceShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [layout.chartFullscreen, patchLayout]);
+  }, [captureHotkeys, layout.chartFullscreen, patchLayout]);
 
-  const showLeft = !layout.leftCollapsed && !layout.chartFullscreen;
-  const showRight = !layout.rightCollapsed && !layout.chartFullscreen;
-  const showBottom = !layout.bottomCollapsed && !layout.chartFullscreen;
+  const showLeft = (narrow || !layout.leftCollapsed) && !layout.chartFullscreen;
+  const showRight = (narrow || !layout.rightCollapsed) && !layout.chartFullscreen;
+  const showBottom = (narrow || !layout.bottomCollapsed) && !layout.chartFullscreen;
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
+      ref={frameRef}
+      className="flex h-auto min-h-0 flex-col bg-[var(--bg)] lg:h-full"
       role="application"
       aria-label="Institutional trading terminal"
     >
@@ -191,11 +192,12 @@ export function WorkspaceShell() {
           <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)] sm:text-sm">
             Trading Terminal
           </h1>
-          <div className="flex items-center gap-1">
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-1">
             <Button
               size="sm"
               variant="ghost"
               className="h-7 w-7 px-0"
+              data-compact
               aria-label={layout.leftCollapsed ? "Expand left panel" : "Collapse left panel"}
               onClick={() => patchLayout({ leftCollapsed: !layout.leftCollapsed })}
             >
@@ -209,6 +211,7 @@ export function WorkspaceShell() {
               size="sm"
               variant="ghost"
               className="h-7 w-7 px-0"
+              data-compact
               aria-label={layout.rightCollapsed ? "Expand right panel" : "Collapse right panel"}
               onClick={() => patchLayout({ rightCollapsed: !layout.rightCollapsed })}
             >
@@ -222,6 +225,7 @@ export function WorkspaceShell() {
               size="sm"
               variant="secondary"
               className="h-7 text-xs"
+              data-compact
               onClick={() => patchLayout({ bottomCollapsed: !layout.bottomCollapsed })}
             >
               {layout.bottomCollapsed ? "Show book" : "Hide book"}
@@ -239,10 +243,13 @@ export function WorkspaceShell() {
         />
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className={narrow ? "flex min-h-0 flex-col" : "flex min-h-0 flex-1"}>
         {showLeft ? (
           <>
-            <div style={{ width: layout.leftWidth }} className="min-h-0 shrink-0">
+            <div
+              style={narrow ? undefined : { width: layout.leftWidth }}
+              className={narrow ? "h-72 w-full shrink-0 border-b border-[var(--border)]" : "min-h-0 shrink-0"}
+            >
               <WorkspaceLeftRail
                 connected={connected}
                 selected={symbol}
@@ -252,17 +259,19 @@ export function WorkspaceShell() {
                 latencyMs={session.latencyMs}
               />
             </div>
-            <SplitHandle
-              orientation="vertical"
-              label="Resize left panel"
-              onStartDrag={leftSplit.start("x")}
-              onStep={onLeftDelta}
-            />
+            {narrow ? null : (
+              <SplitHandle
+                orientation="vertical"
+                label="Resize left panel"
+                onStartDrag={leftSplit.start("x")}
+                onStep={onLeftDelta}
+              />
+            )}
           </>
         ) : null}
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1">
+        <div className={narrow ? "flex min-h-[520px] min-w-0 flex-col" : "flex min-h-0 min-w-0 flex-1 flex-col"}>
+          <div className={narrow ? "h-[360px] shrink-0" : "min-h-0 flex-1"}>
             <WorkspaceChart
               symbol={symbol}
               connected={connected}
@@ -280,13 +289,18 @@ export function WorkspaceShell() {
 
           {showBottom ? (
             <>
-              <SplitHandle
-                orientation="horizontal"
-                label="Resize bottom panel"
-                onStartDrag={bottomSplit.start("y")}
-                onStep={onBottomDelta}
-              />
-              <div style={{ height: layout.bottomHeight }} className="min-h-0 shrink-0">
+              {narrow ? null : (
+                <SplitHandle
+                  orientation="horizontal"
+                  label="Resize bottom panel"
+                  onStartDrag={bottomSplit.start("y")}
+                  onStep={onBottomDelta}
+                />
+              )}
+              <div
+                style={narrow ? undefined : { height: layout.bottomHeight }}
+                className={narrow ? "h-80 shrink-0 border-t border-[var(--border)]" : "min-h-0 shrink-0"}
+              >
                 <WorkspaceBottomPanel
                   tab={layout.bottomTab}
                   onTabChange={(bottomTab) => patchLayout({ bottomTab })}
@@ -298,13 +312,18 @@ export function WorkspaceShell() {
 
         {showRight ? (
           <>
-            <SplitHandle
-              orientation="vertical"
-              label="Resize right panel"
-              onStartDrag={rightSplit.start("x")}
-              onStep={(d) => onRightDelta(-d)}
-            />
-            <div style={{ width: layout.rightWidth }} className="min-h-0 shrink-0">
+            {narrow ? null : (
+              <SplitHandle
+                orientation="vertical"
+                label="Resize right panel"
+                onStartDrag={rightSplit.start("x")}
+                onStep={(d) => onRightDelta(-d)}
+              />
+            )}
+            <div
+              style={narrow ? undefined : { width: layout.rightWidth }}
+              className={narrow ? "w-full shrink-0 border-t border-[var(--border)]" : "min-h-0 shrink-0"}
+            >
               <WorkspaceRightRail
                 symbol={symbol}
                 onSymbolChange={setSymbol}

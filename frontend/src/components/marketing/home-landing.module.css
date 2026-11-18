@@ -1275,6 +1275,50 @@
 }
 
 @media (max-width: 719px) {
+  .wrap {
+    width: min(1280px, calc(100% - 1.5rem));
+  }
+
+  .header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .headerBar {
+    min-height: 60px;
+    padding-inline: 12px;
+  }
+
+  .hero {
+    margin-top: -60px;
+    padding: 72px 0 8px;
+  }
+
+  .heroPicture {
+    height: clamp(188px, 52vw, 280px);
+    margin-top: 8px;
+  }
+
+  .headline {
+    max-width: none;
+    font-size: clamp(1.7rem, 8vw, 2.15rem);
+    line-height: 1.12;
+    letter-spacing: -0.03em;
+  }
+
+  .lead {
+    margin-top: 14px;
+    font-size: 0.975rem;
+    line-height: 1.6;
+  }
+
+  .ctaRow {
+    margin-top: 20px;
+  }
+
+  .section {
+    padding: 36px 0;
+  }
+
   .brokerGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1292,14 +1336,6 @@
   .headerActions .buttonGhost,
   .headerActions .buttonPrimary {
     display: none;
-  }
-
-  .section {
-    padding: 44px 0;
-  }
-
-  .headline {
-    max-width: none;
   }
 
   .ctaRow .buttonPrimary,

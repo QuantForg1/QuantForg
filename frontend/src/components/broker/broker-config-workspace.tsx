@@ -1209,12 +1209,12 @@ export function BrokerConfigWorkspace() {
     (!ownershipAttachOnly && (!effectiveServer || !login));
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col items-center px-1 py-2 sm:px-0 sm:py-4">
+    <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col px-1 py-2 sm:px-0 sm:py-4">
       <article
         className={cn(
-          "w-full overflow-visible rounded-[1.35rem] border border-[color-mix(in_srgb,var(--accent)_18%,rgba(255,255,255,0.12))]",
-          "bg-[color-mix(in_srgb,#071528_72%,transparent)] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_80px_rgba(0,0,0,0.45)]",
-          "backdrop-blur-[18px] px-5 py-7 sm:px-8 sm:py-9",
+          "w-full overflow-visible rounded-[var(--radius-os)] border border-[var(--border)]",
+          "bg-[var(--surface)] shadow-[var(--shadow-card)]",
+          "px-4 py-6 sm:px-8 sm:py-8",
         )}
       >
         <header className="mb-7 flex flex-col items-center text-center">
@@ -1225,10 +1225,73 @@ export function BrokerConfigWorkspace() {
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-[var(--fg)] sm:text-[1.85rem]">
             Connect MT5 Account
           </h1>
-          <p className="mt-2 max-w-sm text-sm text-[var(--fg-muted)]">
-            One active MetaTrader 5 account per user.
+          <p className="mt-2 max-w-lg text-sm text-[var(--fg-muted)]">
+            One active MetaTrader 5 account per user. Connection figures below
+            come from the session and gateway health checks.
           </p>
         </header>
+
+        <section
+          aria-label="Connection health"
+          className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4"
+        >
+          {(
+            [
+              [
+                "Gateway",
+                healthQ.isError
+                  ? "Unavailable"
+                  : healthQ.isLoading
+                    ? "Checking"
+                    : gatewayOnline
+                      ? "Connected"
+                      : "Disconnected",
+              ],
+              [
+                "MT5",
+                mt5Q.isError
+                  ? "Unavailable"
+                  : mt5Q.isLoading
+                    ? "Checking"
+                    : gatewayMt5Attached
+                      ? "Connected"
+                      : "Disconnected",
+              ],
+              [
+                "Market data",
+                tradingSessionQ.isError
+                  ? "Unavailable"
+                  : tradingSessionQ.isLoading
+                    ? "Checking"
+                    : layersEarly.marketData
+                      ? "Live"
+                      : "Unavailable",
+              ],
+              [
+                "Execution",
+                tradingSessionQ.isError
+                  ? "Unavailable"
+                  : tradingSessionQ.isLoading
+                    ? "Checking"
+                    : layersEarly.dispatchReady
+                      ? "Ready"
+                      : "Blocked",
+              ],
+            ] as const
+          ).map(([label, value]) => (
+            <article
+              key={label}
+              className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)] px-3 py-3 text-left"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                {label}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-[var(--fg)]">
+                {value}
+              </p>
+            </article>
+          ))}
+        </section>
 
         {queuedForTerminal && !layers.authenticated ? (
           <div

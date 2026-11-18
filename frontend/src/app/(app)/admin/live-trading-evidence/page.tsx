@@ -10,6 +10,7 @@ export default function LiveTradingEvidenceAdminPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Trading"
         title="Live Trading Evidence"
         description="Trade evidence repository, investigation console, rejected opportunities, evidence dashboard, and production readiness — real production evidence only. Never forces trades or changes AI/strategy."
         actions={

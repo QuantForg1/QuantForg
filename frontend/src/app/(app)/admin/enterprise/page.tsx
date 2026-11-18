@@ -10,6 +10,7 @@ export default function EnterpriseAdminPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Settings"
         title="Enterprise Platform"
         description="Organizations, RBAC, API keys, audit, security, compliance, and executive reporting — additive SaaS controls. Never modifies trading, AI, OMS, MT5, COP, auth, or pricing."
         actions={

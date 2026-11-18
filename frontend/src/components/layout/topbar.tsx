@@ -139,8 +139,8 @@ export function Topbar({
   return (
     <header
       className={cn(
-        "z-30 flex min-w-0 items-center gap-2 overflow-x-clip border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_92%,transparent)] px-3 backdrop-blur-md sm:gap-3 sm:px-4",
-        compact ? "h-12" : "h-16",
+        "z-30 flex min-h-14 min-w-0 items-center gap-2 overflow-x-clip border-b border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 sm:gap-3 sm:px-4 lg:py-0",
+        compact ? "lg:h-12" : "lg:h-16",
       )}
     >
       <div className="shrink-0 lg:hidden">

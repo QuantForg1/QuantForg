@@ -72,6 +72,18 @@ export function SheetContent({
   );
 }
 
+export function DialogDescription({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>) {
+  return (
+    <DialogPrimitive.Description
+      className={cn("text-sm leading-relaxed text-[var(--fg-muted)]", className)}
+      {...props}
+    />
+  );
+}
+
 export function DialogTitle({
   className,
   ...props

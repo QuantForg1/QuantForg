@@ -5,11 +5,9 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Activity,
   Bot,
   CircleAlert,
   Cpu,
-  History,
   LineChart,
   Pause,
   Play,
@@ -119,8 +117,6 @@ export default function RobotControlCenterPage() {
 
   const data = asRecord(accountsQ.data);
   const accounts = asList(data.accounts).map(asRecord);
-  const events = asList(data.events).map(asRecord);
-  const activity = asList(data.activity).map(asRecord);
   const allowed = asRecord(data.actions);
   const strategy = asRecord(data.strategy);
   const evidence = str(data.broker_evidence, "");
@@ -141,19 +137,73 @@ export default function RobotControlCenterPage() {
     onError: (err) => toast.error(errorText(err)),
   });
 
-  const accountName = (id: string) => {
-    const a = accounts.find((x) => str(x.broker_account_id, "") === id);
-    return a ? `${str(a.broker, "Broker")} ${str(a.login_masked, "")}` : "";
-  };
-
   return (
     <div>
       <PageHeader
-        eyebrow="Robot"
+        eyebrow="Robot intelligence"
         title="Robot Control Center"
-        description="Your robot, per broker account. Controls never close open positions; every action is checked and recorded on the server."
+        description="Status, strategy, connection, and recent events come from the server for each broker account. Controls never close open positions. The engine does not send a separate market narrative or confidence score."
       />
       <PageMotion className="space-y-4">
+        <section
+          aria-label="Robot operating summary"
+          className="grid grid-cols-2 items-stretch gap-2 xl:grid-cols-4"
+        >
+          {(
+            [
+              [
+                "Operating state",
+                accountsQ.isLoading
+                  ? "Checking"
+                  : accountsQ.isError
+                    ? "Unavailable"
+                    : accounts.length === 0
+                      ? "No account"
+                      : str(asRecord(accounts[0].status).label, "Status not confirmed"),
+              ],
+              [
+                "Broker link",
+                accountsQ.isLoading
+                  ? "Checking"
+                  : accountsQ.isError
+                    ? "Unavailable"
+                    : accounts.length === 0
+                      ? "Disconnected"
+                      : connectionStateLabel(
+                          str(asRecord(accounts[0].connection).state, ""),
+                        ),
+              ],
+              [
+                "Strategy",
+                accountsQ.isLoading
+                  ? "Checking"
+                  : str(strategy.name, "Unavailable"),
+              ],
+              [
+                "Broker data",
+                accountsQ.isLoading
+                  ? "Checking"
+                  : evidence === "complete"
+                    ? "Available"
+                    : evidence === "unavailable"
+                      ? "Unavailable"
+                      : "Unknown",
+              ],
+            ] as const
+          ).map(([label, value]) => (
+            <article
+              key={label}
+              className="flex h-full min-h-[4.75rem] min-w-0 flex-col justify-between rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 shadow-[var(--shadow-card)]"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                {label}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-[var(--fg)]">
+                {value}
+              </p>
+            </article>
+          ))}
+        </section>
         {evidence === "unavailable" ? (
           <div
             role="status"
@@ -168,8 +218,8 @@ export default function RobotControlCenterPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="space-y-4 lg:col-span-2">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.9fr)]">
+          <div className="space-y-4">
             <Card>
               <CardHeader>
                 <SectionTitle icon={Bot}>Your robot</SectionTitle>
@@ -230,7 +280,7 @@ export default function RobotControlCenterPage() {
                               {str(status.label, "Status not confirmed")}
                             </Badge>
                           </div>
-                          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-3">
                             <div>
                               <p className="text-[var(--fg-muted)]">Broker connection</p>
                               <Badge
@@ -251,13 +301,29 @@ export default function RobotControlCenterPage() {
                               <p className="text-[var(--fg-muted)]">Trading terminal</p>
                               <p className="mt-1 font-medium">
                                 {str(conn.source, "") === "gateway"
-                                  ? "Platform terminal"
+                                  ? "Platform gateway"
                                   : worker.assigned
                                     ? worker.connected
-                                      ? "Assigned · online"
-                                      : "Assigned · offline"
+                                      ? "MT5 worker online"
+                                      : "MT5 worker offline"
                                     : "Waiting for a terminal"}
                               </p>
+                            </div>
+                            <div>
+                              <p className="text-[var(--fg-muted)]">Heartbeat</p>
+                              <p className="mt-1 font-medium">
+                                {str(worker.heartbeat_at, "")
+                                  ? formatRelativeTime(str(worker.heartbeat_at, ""))
+                                  : "Not supplied"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[var(--fg-muted)]">Market condition</p>
+                              <p className="mt-1 font-medium">Not supplied</p>
+                            </div>
+                            <div>
+                              <p className="text-[var(--fg-muted)]">Decision text</p>
+                              <p className="mt-1 font-medium">Not supplied</p>
                             </div>
                           </div>
                           {str(conn.detail, "") ? (
@@ -312,95 +378,6 @@ export default function RobotControlCenterPage() {
             </Card>
 
             <PositionsCard />
-
-            <Card>
-              <CardHeader>
-                <SectionTitle icon={Activity}>Recent execution activity</SectionTitle>
-              </CardHeader>
-              <CardContent>
-                {accountsQ.isLoading ? (
-                  <Skeleton className="h-16 w-full" />
-                ) : activity.length === 0 ? (
-                  <p className="text-xs text-[var(--fg-muted)]">
-                    No robot orders yet. Each attempt, including ones blocked by
-                    risk checks, appears here.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-[var(--border)] text-xs">
-                    {activity.map((e, i) => (
-                      <li
-                        key={i}
-                        className="flex flex-wrap items-center justify-between gap-2 py-2"
-                      >
-                        <span className="font-medium">
-                          {[str(e.side, ""), str(e.symbol, ""), str(e.volume, "")]
-                            .filter(Boolean)
-                            .join(" ") || "Order"}
-                          <span className="ml-2 text-[var(--fg-muted)]">
-                            {accountName(str(e.broker_account_id, ""))}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <Badge
-                            tone={
-                              str(e.outcome, "") === "Executed"
-                                ? "success"
-                                : str(e.outcome, "").startsWith("Blocked")
-                                  ? "warning"
-                                  : "neutral"
-                            }
-                          >
-                            {str(e.outcome, "Recorded")}
-                          </Badge>
-                          <span className="tabular text-[var(--fg-muted)]">
-                            {formatRelativeTime(str(e.at, ""))}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <SectionTitle icon={History}>Control history</SectionTitle>
-              </CardHeader>
-              <CardContent>
-                {events.length === 0 ? (
-                  <p className="text-xs text-[var(--fg-muted)]">
-                    No control actions yet.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-[var(--border)] text-xs">
-                    {events.map((e, i) => (
-                      <li key={i} className="flex flex-wrap gap-x-3 gap-y-1 py-2">
-                        <span className="tabular text-[var(--fg-muted)]">
-                          {formatRelativeTime(str(e.at, ""))}
-                        </span>
-                        <span className="font-medium">
-                          {robotActionLabel(str(e.action, "") as RobotAction) ||
-                            str(e.action, "")}
-                        </span>
-                        <span className="text-[var(--fg-muted)]">
-                          {robotStateLabel(str(e.state_before, ""))} →{" "}
-                          {robotStateLabel(str(e.state_after, ""))}
-                        </span>
-                        <span className="text-[var(--fg-muted)]">
-                          {accountName(str(e.broker_account_id, ""))}
-                        </span>
-                        {str(e.reason, "") ? (
-                          <span className="w-full text-[var(--fg-muted)] sm:w-auto">
-                            “{str(e.reason, "")}”
-                          </span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           <div className="space-y-4">

@@ -82,6 +82,11 @@ function AdminMobileNav() {
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -93,9 +98,17 @@ function AdminMobileNav() {
       }
     };
     window.addEventListener("keydown", onKey);
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    body.style.overflow = "hidden";
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onMq = () => mq.matches && setOpen(false);
+    mq.addEventListener("change", onMq);
     return () => {
       window.clearTimeout(t);
       window.removeEventListener("keydown", onKey);
+      mq.removeEventListener("change", onMq);
+      body.style.overflow = prevOverflow;
     };
   }, [open]);
 
@@ -122,7 +135,7 @@ function AdminMobileNav() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-xl"
+            className="absolute inset-y-0 left-0 flex w-[min(18.5rem,86vw)] max-w-[20rem] flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] pt-[env(safe-area-inset-top)] shadow-[var(--shadow-elevated)]"
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
               <p
@@ -161,7 +174,7 @@ function AdminTopbar() {
       .toUpperCase() || "AD";
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_72%,transparent)] px-3 backdrop-blur-xl sm:px-4">
+    <header className="sticky top-0 z-20 flex h-auto min-h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 sm:px-4">
       <AdminMobileNav />
       <div className="min-w-0 flex-1 lg:pl-1">
         <p className="truncate text-sm font-semibold text-[var(--fg)]">
@@ -211,7 +224,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="relative flex min-h-screen text-[var(--fg)]">
       <aside
         style={{ width: ADMIN_SIDEBAR_WIDTH }}
-        className="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_62%,transparent)] shadow-[4px_0_24px_rgba(2,12,28,0.18)] backdrop-blur-xl lg:flex"
+        className="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] lg:flex"
         aria-label="Admin Portal sidebar"
       >
         <div className="shrink-0 border-b border-[var(--border)] px-4 py-4">
@@ -249,11 +262,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <main
             id="main-content"
             data-desk="admin"
-            className="flex min-h-0 flex-1 flex-col overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto px-4 py-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8"
             tabIndex={-1}
           >
             <ErrorBoundary>
-              <div className="mx-auto w-full max-w-[1600px] qf-motion-desk">
+              <div className="qf-admin-desk mx-auto w-full min-w-0 max-w-[1600px] qf-motion-desk">
                 {children}
               </div>
             </ErrorBoundary>

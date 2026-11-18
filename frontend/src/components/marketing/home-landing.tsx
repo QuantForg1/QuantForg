@@ -348,7 +348,7 @@ export function HomeLanding() {
           </picture>
           <div className={`${styles.wrap} ${styles.heroGrid}`}>
             <div className={styles.heroCopy}>
-              <p className={styles.kicker}>Institutional trading technology</p>
+              <p className={styles.kicker}>Institutional AI Trading Command Center</p>
               <h1 className={styles.headline}>
                 <span className={styles.headlineLine}>Trade With Intelligence.</span>
                 <span className={`${styles.headlineLine} ${styles.headlineAccent}`}>

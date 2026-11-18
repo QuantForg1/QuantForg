@@ -73,12 +73,6 @@ export default function RiskCenterPage() {
     retry: false,
     staleTime: 15_000,
   });
-  const historyQ = useQuery({
-    queryKey: ["risk-preference-history"],
-    queryFn: () => riskApi.preferenceHistory(40),
-    retry: false,
-    staleTime: 30_000,
-  });
   const tradingSessionQ = useQuery({
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
@@ -129,8 +123,6 @@ export default function RiskCenterPage() {
   const bounds = asRecord(prefs.bounds);
   const effective = asRecord(prefs.effective);
   const protections = asList(prefs.protections).map(asRecord);
-  const historyPayload = asRecord(historyQ.data);
-  const historyItems = asList(historyPayload.items).map(asRecord);
 
   useEffect(() => {
     if (!prefsQ.isSuccess) return;
@@ -221,6 +213,63 @@ export default function RiskCenterPage() {
       />
 
       <PageMotion className="space-y-4">
+        <section
+          aria-label="Account protection"
+          className="grid grid-cols-2 items-stretch gap-2 xl:grid-cols-4"
+        >
+          {(
+            [
+              [
+                "Protection",
+                tradingSessionQ.isLoading
+                  ? "Checking"
+                  : tradingSessionQ.isError
+                    ? "Unavailable"
+                    : riskLocked
+                      ? "Locked"
+                      : "Clear",
+              ],
+              [
+                "Emergency stop",
+                tradingSessionQ.isLoading
+                  ? "Checking"
+                  : tradingSessionQ.isError
+                    ? "Unavailable"
+                    : emergencyStop
+                      ? "Armed"
+                      : "Clear",
+              ],
+              [
+                "Order path",
+                tradingSessionQ.isLoading
+                  ? "Checking"
+                  : tradingSessionQ.isError
+                    ? "Unavailable"
+                    : ordersMaySubmit
+                      ? "May submit"
+                      : "Blocked",
+              ],
+              [
+                "Authorization",
+                tradingSessionQ.isLoading
+                  ? "Checking"
+                  : liveAuthorization || "Unavailable",
+              ],
+            ] as const
+          ).map(([label, value]) => (
+            <article
+              key={label}
+              className="flex h-full min-h-[4.5rem] min-w-0 flex-col justify-between rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 shadow-[var(--shadow-card)]"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                {label}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-[var(--fg)]">
+                {value}
+              </p>
+            </article>
+          ))}
+        </section>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">AI risk alerts (advisory)</CardTitle>
@@ -426,7 +475,8 @@ export default function RiskCenterPage() {
           <CardHeader>
             <CardTitle>Risk Protection Status</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
             {(protections.length
               ? protections
               : [
@@ -439,7 +489,7 @@ export default function RiskCenterPage() {
             ).map((row) => (
               <div
                 key={str(row.id, str(row.title))}
-                className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/35 px-3 py-2.5"
+                className="flex h-full min-h-[5.5rem] flex-col justify-between rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium text-[var(--fg)]">
@@ -452,50 +502,11 @@ export default function RiskCenterPage() {
                 </p>
               </div>
             ))}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Risk History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {historyQ.isLoading ? (
-              <p className="text-sm text-[var(--fg-muted)]">Loading history…</p>
-            ) : historyPayload.available === false ? (
-              <p className="text-sm text-[var(--fg-muted)]">
-                Risk history is unavailable right now. No events were invented.
-              </p>
-            ) : historyItems.length === 0 ? (
-              <p className="text-sm text-[var(--fg-muted)]">
-                No persisted risk events for this account yet.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {historyItems.map((item, idx) => (
-                  <li
-                    key={`${str(item.occurred_at)}-${idx}`}
-                    className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">{str(item.action, "Event")}</span>
-                      <span className="text-xs text-[var(--fg-subtle)]">
-                        {item.occurred_at
-                          ? formatRelativeTime(String(item.occurred_at))
-                          : "—"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                      {str(item.message, str(item.outcome, "—"))}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="max-w-xl">
           <CardHeader>
             <CardTitle>Advisory risk check</CardTitle>
           </CardHeader>
@@ -525,6 +536,7 @@ export default function RiskCenterPage() {
                 }
               })}
             >
+              <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="risk-center-symbol">Symbol</Label>
                 <Input id="risk-center-symbol" {...checkForm.register("symbol")} />
@@ -533,14 +545,15 @@ export default function RiskCenterPage() {
                 <Label htmlFor="risk-center-side">Side</Label>
                 <select
                   id="risk-center-side"
-                  className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                  className="flex h-11 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-base text-[var(--fg)] sm:h-10 sm:text-sm"
                   {...checkForm.register("side")}
                 >
                   <option value="buy">Buy</option>
                   <option value="sell">Sell</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="risk-center-volume">Volume</Label>
                   <Input id="risk-center-volume" {...checkForm.register("volume")} />
@@ -550,7 +563,7 @@ export default function RiskCenterPage() {
                   <Input id="risk-center-risk" {...checkForm.register("risk_pct")} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="risk-center-entry">Entry</Label>
                   <Input

@@ -10,6 +10,7 @@ export default function AdminMultiAccountOpsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Trading"
         title="Multi-Account Operations"
         description="Read-only dispatch queue and worker telemetry. RC4 charcoal · observe-only · never enqueues jobs or enables LIVE multi-account submit."
         actions={

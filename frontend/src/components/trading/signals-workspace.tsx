@@ -312,6 +312,7 @@ export function SignalsWorkspace() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
+        eyebrow="Research"
         title="Trading Signals"
         description="High-probability opportunities from live research. Figures reflect the API only—empty states stay empty when data is unavailable."
         actions={

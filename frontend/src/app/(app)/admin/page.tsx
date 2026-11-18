@@ -513,7 +513,7 @@ export default function AdminPortalPage() {
                 <li key={`${section.title}-${item.href}-${item.label}`}>
                   <Link
                     href={item.href}
-                    className="flex min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+                    className="flex min-h-11 min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)] px-4 py-3.5 transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)] hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                   >
                     <span className="text-sm font-medium text-[var(--fg)]">
                       {item.label}

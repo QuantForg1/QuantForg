@@ -116,8 +116,9 @@ export default function AnalyticsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Quantitative desk"
         title="Analytics"
-        description="Performance analytics only — win rate, expectancy, profit factor, volatility, and symbol distribution from live and paper fills."
+        description="Performance analytics only — win rate, expectancy, profit factor, volatility, and symbol distribution from live and paper fills. Blank charts mean no fills were returned."
         actions={
           <Button asChild size="sm" variant="secondary">
             <Link href="/journal/analytics">Journal analytics</Link>
@@ -193,7 +194,7 @@ export default function AnalyticsPage() {
                 <CardTitle>PnL Distribution</CardTitle>
                 <Badge tone="accent">Trades</Badge>
               </CardHeader>
-              <CardContent>
+              <CardContent className="qf-chart-frame">
                 <LazyBarChart data={analytics.buckets} />
               </CardContent>
             </Card>
@@ -201,7 +202,7 @@ export default function AnalyticsPage() {
               <CardHeader>
                 <CardTitle>Trade Duration</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="qf-chart-frame">
                 <LazyBarChart data={analytics.durationBuckets} />
               </CardContent>
             </Card>
@@ -209,7 +210,7 @@ export default function AnalyticsPage() {
               <CardHeader>
                 <CardTitle>Market Exposure</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="qf-chart-frame">
                 <LazyBarChart data={analytics.exposure} />
               </CardContent>
             </Card>

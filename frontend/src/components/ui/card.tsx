@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-/** Institutional glass panel — luminous navy surface matching desk references. */
+/** Solid institutional panel. Surfaces, radius, and shadow come from the shared tokens. */
 export function Card({
   className,
   ...props
@@ -9,7 +9,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px] transition-[border-color,box-shadow,background-color] duration-[var(--duration-os)] ease-[var(--ease-os)]",
+        "min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] transition-[border-color,box-shadow,background-color] duration-[var(--duration-os)] ease-[var(--ease-os)]",
         className,
       )}
       {...props}

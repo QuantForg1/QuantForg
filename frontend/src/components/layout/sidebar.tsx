@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, Fragment, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronsLeft, ChevronsRight, LifeBuoy, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -258,7 +258,7 @@ export function Sidebar() {
   return (
     <aside
       style={{ width }}
-      className="fixed inset-y-0 left-0 z-30 hidden border-r border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_62%,transparent)] shadow-[4px_0_24px_rgba(2,12,28,0.18)] backdrop-blur-xl transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
+      className="fixed inset-y-0 left-0 z-30 hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
       aria-label="Workspace rail"
     >
       <div
@@ -348,6 +348,19 @@ export function MobileNav() {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const toggle = () => setOpen((v) => !v);
+    window.addEventListener("qf-nav-toggle", toggle);
+    return () => window.removeEventListener("qf-nav-toggle", toggle);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -392,10 +405,10 @@ export function MobileNav() {
         {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
       </Button>
       {open ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-[45] lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-[color-mix(in_srgb,var(--bg)_50%,#000)]"
+            className="absolute inset-0 bg-[color-mix(in_srgb,var(--bg)_35%,#000)]"
             aria-label="Dismiss menu"
             onClick={() => setOpen(false)}
           />
@@ -404,8 +417,12 @@ export function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute inset-y-0 left-0 flex h-[100dvh] w-[min(18rem,86vw)] flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="absolute left-0 top-0 flex max-w-[20rem] flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
+            style={{
+              width: "min(18.5rem, 86vw)",
+              paddingTop: "env(safe-area-inset-top)",
+              height: "calc(100dvh - var(--shell-mobile-tab-height) - env(safe-area-inset-bottom))",
+            }}
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pr-2">
               <div id={titleId}>
@@ -424,9 +441,19 @@ export function MobileNav() {
             <Suspense fallback={<div className="flex-1" aria-hidden />}>
               <NavBody onNavigate={() => setOpen(false)} />
             </Suspense>
-            <p className="shrink-0 border-t border-[var(--border)] px-3 py-2 text-[10px] leading-snug text-[var(--fg-subtle)]">
-              Full desks · Overview through Settings
-            </p>
+            <div className="shrink-0 border-t border-[var(--border)] p-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start"
+                onClick={() => {
+                  setOpen(false);
+                  void logout().finally(() => router.replace("/login"));
+                }}
+              >
+                Sign out
+              </Button>
+            </div>
           </aside>
         </div>
       ) : null}

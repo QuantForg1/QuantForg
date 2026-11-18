@@ -255,6 +255,7 @@ export default function StrategyPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Research"
         title="Trading Strategies"
         description={`Institutional modules for ${displayTradingSymbol(symbol)} (${tradingInstrumentDescription(symbol)}). Parameters stay advisory until Risk Center and OMS gates pass — Evaluate never bypasses live safeguards.`}
         actions={
@@ -374,7 +375,7 @@ export default function StrategyPage() {
                 description="The strategy catalogue returned no rows."
               />
             ) : (
-              <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+              <ul className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {catalog.map((c) =>
                   strategyCardFromRecord(c, strategyKey, onSelectStrategy),
                 )}

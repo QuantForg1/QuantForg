@@ -9,6 +9,8 @@ type StrategyCardProps = {
   strategyKey: string;
   name: string;
   category: string;
+  description?: string;
+  available?: boolean;
   selected: boolean;
   onSelect: () => void;
   icon?: LucideIcon;
@@ -18,20 +20,23 @@ export function StrategyCard({
   strategyKey,
   name,
   category,
+  description = "",
+  available = true,
   selected,
   onSelect,
   icon,
 }: StrategyCardProps) {
   const iconType = icon ?? strategyIconForKey(strategyKey);
   return (
-    <li>
+    <li className="h-full">
       <button
         type="button"
-        className={`flex h-full w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition ${
+        disabled={!available}
+        className={`flex h-full min-h-[10.5rem] w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition duration-[var(--duration-fast)] ${
           selected
             ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_42%,transparent)]"
-            : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] hover:border-[var(--accent)]/35"
-        }`}
+            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
+        } disabled:cursor-not-allowed disabled:opacity-70`}
         onClick={onSelect}
         aria-pressed={selected}
       >
@@ -44,12 +49,15 @@ export function StrategyCard({
         >
           {createElement(iconType, { className: "h-4 w-4", "aria-hidden": true })}
         </span>
-        <span className="text-sm font-semibold text-[var(--fg)]">{name}</span>
-        <span className="mt-1 text-xs text-[var(--fg-subtle)]">
+        <span className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-[var(--fg)]">{name}</span>
+        <span className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
           {category || strategyKey}
         </span>
+        <span className="mt-1 line-clamp-2 min-h-[2rem] text-xs text-[var(--fg-muted)]">
+          {description}
+        </span>
         <span
-          className={`mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium ${
+          className={`mt-auto inline-flex items-center gap-1.5 pt-3 text-[11px] font-medium ${
             selected ? "text-[var(--accent)]" : "text-[var(--fg-subtle)]"
           }`}
         >
@@ -59,7 +67,7 @@ export function StrategyCard({
             }`}
             aria-hidden
           />
-          {selected ? "Selected" : "Available"}
+          {selected ? "Selected" : available ? "Available" : "Not selectable"}
         </span>
       </button>
     </li>
@@ -72,14 +80,20 @@ export function strategyCardFromRecord(
   onSelectKey: (key: string, defaultParams: Record<string, unknown>) => void,
 ) {
   const key = str(c.key);
+  const available = c.enabled !== false && c.available !== false && c.selectable !== false;
   return (
     <StrategyCard
       key={key}
       strategyKey={key}
       name={str(c.name)}
       category={str(c.category) || key}
+      description={str(c.description)}
+      available={available}
       selected={selectedKey === key}
-      onSelect={() => onSelectKey(key, asRecord(c.default_params))}
+      onSelect={() => {
+        if (!available) return;
+        onSelectKey(key, asRecord(c.default_params));
+      }}
     />
   );
 }

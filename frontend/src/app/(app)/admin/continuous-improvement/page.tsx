@@ -10,6 +10,7 @@ export default function ContinuousImprovementAdminPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Settings"
         title="Continuous Improvement"
         description="Live validation, trading effectiveness, learning review, release confidence, scorecard, and trends — production evidence only. Never modifies trading, AI, OMS, MT5, auth, or pricing."
         actions={

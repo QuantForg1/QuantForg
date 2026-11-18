@@ -283,3 +283,4 @@ mt5_worker_slots/
 
 # Gateway deploy verification output (written on the Windows host)
 docs/production/reports/oat_v71/deploy_main_gateway_verify.json
+.vercel

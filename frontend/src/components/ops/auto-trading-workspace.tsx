@@ -1360,7 +1360,7 @@ export function AutoTradingWorkspace() {
   const tradesTodayTarget = num(opportunityTarget.trades_today, executedToday);
   const targetTradesDay = num(opportunityTarget.target_trades_per_day, 3);
   return (
-    <div className="space-y-3">
+    <div className="qf-trading-desk min-w-0 space-y-3">
       {surface.surface === "DEGRADED" ? (
         <section
           role="status"
@@ -1406,8 +1406,8 @@ export function AutoTradingWorkspace() {
         </section>
       ) : null}
       {/* Header */}
-      <section className="border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-2.5 backdrop-blur-[2px]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-3 shadow-[var(--shadow-card)]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
               Trading Operations Center

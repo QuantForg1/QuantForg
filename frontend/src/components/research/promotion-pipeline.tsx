@@ -25,7 +25,7 @@ export const PromotionPipeline = memo(function PromotionPipeline({
   return (
     <nav
       className={cn(
-        "flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5",
+        "flex min-w-0 w-full max-w-full shrink-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-1.5",
         className,
       )}
       aria-label="Research promotion pipeline"

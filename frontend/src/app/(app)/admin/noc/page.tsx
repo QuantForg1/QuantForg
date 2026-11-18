@@ -10,6 +10,7 @@ export default function AdminNocPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Trading"
         title="Trading Command Center"
         description="QuantForg institutional NOC — Bloomberg-style live telemetry. RC4 charcoal · observe-only · never mutates trading, AI, risk, OMS, gateway, or MT5."
         actions={

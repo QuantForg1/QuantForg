@@ -63,11 +63,11 @@ export function AuthShell({
       </header>
       <main
         id="main-content"
-        className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 px-4 pb-8 sm:px-8 lg:grid-cols-[1fr_minmax(0,440px)]"
+        className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 items-center gap-8 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:grid-cols-[1fr_minmax(0,440px)] lg:gap-10"
         tabIndex={-1}
       >
-        <section className="max-w-xl">
-          <h2 className="font-[family-name:var(--font-display)] text-4xl leading-[1.05] tracking-tight sm:text-5xl">
+        <section className="order-2 max-w-xl lg:order-1">
+          <h2 className="font-[family-name:var(--font-display)] text-[1.7rem] leading-[1.12] tracking-tight sm:text-4xl lg:text-5xl">
             Trade Smarter with{" "}
             <span className="text-[var(--accent-hover)]">Institutional Intelligence.</span>
           </h2>
@@ -75,7 +75,7 @@ export function AuthShell({
             Connect your broker, let QuantForg analyze markets, manage risk, and execute
             trades under your approved settings.
           </p>
-          <ul className="mt-8 space-y-4">
+          <ul className="mt-8 hidden space-y-4 lg:block">
             {POINTS.map((point) => {
               const Icon = point.icon;
               return (
@@ -94,7 +94,7 @@ export function AuthShell({
             })}
           </ul>
         </section>
-        <section className="qf-auth-card qf-glass-card rounded-[1.25rem] border border-white/15 p-6 shadow-[var(--shadow-elevated)] sm:p-8">
+        <section className="qf-auth-card qf-glass-card order-1 rounded-[1.25rem] border border-white/15 p-5 shadow-[var(--shadow-elevated)] sm:p-8 lg:order-2">
           <div className="mb-6 flex flex-col items-center text-center">
             <BrandLogo size={42} wordmark={false} />
             <h1 className="mt-5 text-3xl font-semibold tracking-tight">{title}</h1>

@@ -26,11 +26,11 @@ const OverviewTradePanel = dynamic(
 );
 import {
   TRADING_SYMBOL,
-  displayTradingSymbol,
   displayTradingSymbolCode,
   tradingInstrumentDescription,
 } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
+import { OverviewMarketIntelligence } from "@/components/trading/overview-market-intelligence";
 
 function KpiCard({
   label,
@@ -50,7 +50,7 @@ function KpiCard({
   return (
     <article
       title={title}
-      className="flex min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-2.5 shadow-[var(--shadow-card)] backdrop-blur-[8px]"
+      className="flex min-h-0 min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)]"
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
@@ -82,11 +82,6 @@ function KpiCard({
   );
 }
 
-function unavailable(value: string): string {
-  if (!value || value === "—" || value === "Not available") return "Unavailable";
-  return value;
-}
-
 /**
  * Reference Overview composition: KPI strip, live chart + AI panel, and Trade ticket.
  * Order entry reuses ExecutionOrderTicket — never a parallel engine.
@@ -105,15 +100,17 @@ export function OverviewReferenceDesk({
   brokerConnected,
   marketLive,
   marketFeedStatus,
+  tickUpdatedAt,
+  tickTime,
+  tickLoading,
+  tickError,
   marketBias,
   marketBiasDetail,
   currentPrice,
   support,
   resistance,
-  regime,
   confidencePct,
-  sessionName,
-  lastUpdate,
+  signalDirection = "WAIT",
   topSignal,
   lastPrice,
 }: {
@@ -133,15 +130,17 @@ export function OverviewReferenceDesk({
   marketLive: boolean;
   /** Platform feed status — live | delayed | closed | unavailable */
   marketFeedStatus?: string;
+  tickUpdatedAt?: number;
+  tickTime?: string;
+  tickLoading?: boolean;
+  tickError?: boolean;
   marketBias: string;
   marketBiasDetail: string;
   currentPrice: string;
   support: string;
   resistance: string;
-  regime: string;
   confidencePct: number | null;
-  sessionName: string;
-  lastUpdate: string;
+  signalDirection?: "BUY" | "SELL" | "WAIT";
   topSignal: Record<string, unknown> | null;
   lastPrice?: number;
 }) {
@@ -155,13 +154,6 @@ export function OverviewReferenceDesk({
   const [intelTab, setIntelTab] = useState<"overview" | "signal" | "analysis" | "news">(
     "overview",
   );
-  const biasTone =
-    /bull/i.test(marketBias) || marketBias === "BUY"
-      ? "success"
-      : /bear/i.test(marketBias) || marketBias === "SELL"
-        ? "danger"
-        : "neutral";
-
   return (
     <div className="space-y-4">
       <section
@@ -215,7 +207,7 @@ export function OverviewReferenceDesk({
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.85fr)] xl:items-stretch">
-        <section className="flex h-[min(520px,70vh)] min-h-[420px] flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)]">
+        <section className="flex h-[min(68vh,520px)] min-h-[300px] flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)] sm:min-h-[420px]">
           <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -234,7 +226,7 @@ export function OverviewReferenceDesk({
                 {tradingInstrumentDescription(TRADING_SYMBOL)}
               </p>
             </div>
-            <p className="font-mono text-2xl font-semibold tabular tracking-tight text-[var(--fg)] sm:text-3xl">
+            <p className="font-mono text-xl font-semibold tabular tracking-tight text-[var(--fg)] sm:text-3xl">
               {currentPrice === "—" || currentPrice.startsWith("$")
                 ? currentPrice
                 : currentPrice === "Not available" || currentPrice === "Unavailable"
@@ -261,7 +253,7 @@ export function OverviewReferenceDesk({
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px] xl:h-[min(520px,70vh)] xl:min-h-[420px]">
+        <section className="flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] xl:h-[min(520px,70vh)] xl:min-h-[420px]">
           <div
             className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-[var(--border)] px-2 pt-2"
             role="tablist"
@@ -294,86 +286,26 @@ export function OverviewReferenceDesk({
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
             {intelTab === "overview" ? (
-              <>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-                    Market Bias
-                  </p>
-                  <div
-                    className={cn(
-                      "mt-2 rounded-xl border px-3 py-2.5",
-                      biasTone === "success" &&
-                        "border-[var(--border)] bg-[color-mix(in_srgb,var(--success-soft)_55%,var(--bg))]",
-                      biasTone === "danger" &&
-                        "border-[var(--border)] bg-[color-mix(in_srgb,var(--danger-soft)_45%,var(--bg))]",
-                      biasTone === "neutral" && "border-[var(--border)] bg-[var(--bg)]/40",
-                    )}
-                  >
-                    <p className="text-sm font-semibold text-[var(--fg)]">{marketBias}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-[var(--fg-muted)]">
-                      {marketBiasDetail}
-                    </p>
-                  </div>
-                </div>
-                <dl className="space-y-2.5 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-[var(--fg-muted)]">Current Price</dt>
-                    <dd className="font-mono tabular font-medium">
-                      {unavailable(currentPrice)}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-[var(--fg-muted)]">Key Support</dt>
-                    <dd className="font-mono tabular font-medium">{unavailable(support)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-[var(--fg-muted)]">Key Resistance</dt>
-                    <dd className="font-mono tabular font-medium">
-                      {unavailable(resistance)}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-[var(--fg-muted)]">Market Regime</dt>
-                    <dd className="font-medium">{unavailable(regime)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-[var(--fg-muted)]">Session</dt>
-                    <dd className="font-medium">{sessionName}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-[var(--fg-muted)]">Last Update</dt>
-                    <dd className="font-medium">{unavailable(lastUpdate)}</dd>
-                  </div>
-                </dl>
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-                      Confidence
-                    </p>
-                    <p className="font-mono text-sm tabular">
-                      {confidencePct == null ? "Unavailable" : `${confidencePct}%`}
-                    </p>
-                  </div>
-                  {confidencePct != null ? (
-                    <div
-                      className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg)]/70"
-                      aria-hidden
-                    >
-                      <div
-                        className="h-full rounded-full bg-[var(--accent)]"
-                        style={{ width: `${confidencePct}%` }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </>
+              <OverviewMarketIntelligence
+                timeframe={timeframe}
+                lastPrice={lastPrice}
+                marketFeedStatus={marketFeedStatus}
+                tickUpdatedAt={tickUpdatedAt}
+                tickTime={tickTime}
+                tickLoading={tickLoading}
+                tickError={tickError}
+                support={support}
+                resistance={resistance}
+                confidencePct={confidencePct}
+                signalDirection={signalDirection}
+              />
             ) : null}
             {intelTab === "signal" ? (
               topSignal ? (
-                <p className="text-xs text-[var(--fg-muted)]">
-                  Active research row for {displayTradingSymbol(TRADING_SYMBOL)}. Open Signals
-                  for the full desk.
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-[var(--fg)]">{marketBias}</p>
+                  <p className="text-xs leading-relaxed text-[var(--fg-muted)]">{marketBiasDetail}</p>
+                </div>
               ) : (
                 <p className="flex items-start gap-2 text-xs text-[var(--fg-muted)]">
                   <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -383,12 +315,12 @@ export function OverviewReferenceDesk({
             ) : null}
             {intelTab === "analysis" ? (
               <p className="text-xs text-[var(--fg-muted)]">
-                Analysis detail uses the live research bias and levels shown on Overview.
+                Support, resistance, regime, and momentum on Overview are calculated from closed {timeframe} candles. They are not used for orders.
               </p>
             ) : null}
             {intelTab === "news" ? (
               <p className="text-xs text-[var(--fg-muted)]">
-                News feed is not wired on this desk. Market bias uses live research only.
+                No news feed is connected on this desk.
               </p>
             ) : null}
           </div>

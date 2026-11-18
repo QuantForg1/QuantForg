@@ -26,7 +26,7 @@ const page = readFileSync(
 const rcc = nav.indexOf('href: "/robot-control-center"');
 const risk = nav.indexOf('href: "/risk-center"');
 assert.ok(rcc > 0 && risk > rcc, "Robot Control Center precedes Risk Center");
-assert.match(nav, /"\/robot-control-center",\n\s+"\/risk-center",/);
+assert.match(nav, /"\/robot-control-center",\r?\n\s+"\/risk-center",/);
 
 // State shown comes from the backend response, not from the click.
 assert.match(page, /robotControlApi\.act/);

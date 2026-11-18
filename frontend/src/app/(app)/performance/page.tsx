@@ -147,7 +147,7 @@ export default function PerformancePage() {
                 <CardTitle>Monthly PnL</CardTitle>
                 <Badge tone="accent">Deals</Badge>
               </CardHeader>
-              <CardContent>
+              <CardContent className="qf-chart-frame">
                 <LazyBarChart data={monthly} />
               </CardContent>
             </Card>
@@ -155,7 +155,7 @@ export default function PerformancePage() {
               <CardHeader>
                 <CardTitle>Cumulative Equity</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="qf-chart-frame">
                 <LazyEquityChart data={curve} emptyLabel="No equity series yet" />
               </CardContent>
             </Card>

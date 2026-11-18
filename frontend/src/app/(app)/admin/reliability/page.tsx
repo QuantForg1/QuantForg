@@ -10,6 +10,7 @@ export default function ReliabilityAdminPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Risk"
         title="Production Reliability"
         description="Observability, SLA/SLO, incidents, backup/DR, health, ops reports, security ops, and performance — additive operational excellence. Never modifies trading, AI, OMS, MT5, auth, or pricing."
         actions={

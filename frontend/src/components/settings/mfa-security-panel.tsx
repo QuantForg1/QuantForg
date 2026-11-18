@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,8 @@ export function MfaSecurityPanel() {
   const [verifyCode, setVerifyCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [disableId, setDisableId] = useState<string | null>(null);
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   const factors = statusQ.data?.factors ?? [];
   const verified = factors.filter(isVerifiedTotp);
@@ -163,13 +166,13 @@ export function MfaSecurityPanel() {
                         variant="secondary"
                         size="sm"
                         disabled={busy || !id}
-                        onClick={() => void disable(id)}
+                        onClick={() => setDisableId(id)}
                       >
                         Disable factor
                       </Button>
                     );
                   })}
-                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => void regenerate()}>
+                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmRegen(true)}>
                     Regenerate recovery codes
                   </Button>
                 </div>
@@ -279,6 +282,53 @@ export function MfaSecurityPanel() {
             ) : null}
           </>
         )}
+        <Dialog open={disableId !== null} onOpenChange={(open) => { if (!open) setDisableId(null); }}>
+          <DialogContent className="w-[min(92vw,28rem)]">
+            <DialogTitle>Disable two-factor authentication?</DialogTitle>
+            <DialogDescription className="mt-2">
+              This authenticator factor stops protecting the account. Sign-in will no longer ask for a code from it.
+            </DialogDescription>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDisableId(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={busy}
+                onClick={() => {
+                  const id = disableId;
+                  setDisableId(null);
+                  if (id) void disable(id);
+                }}
+              >
+                Disable factor
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={confirmRegen} onOpenChange={setConfirmRegen}>
+          <DialogContent className="w-[min(92vw,28rem)]">
+            <DialogTitle>Replace recovery codes?</DialogTitle>
+            <DialogDescription className="mt-2">
+              New codes are shown once. Previously saved recovery codes stop working.
+            </DialogDescription>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmRegen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmRegen(false);
+                  void regenerate();
+                }}
+              >
+                Generate new codes
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

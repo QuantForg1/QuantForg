@@ -10,6 +10,7 @@ export default function CustomerOpsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Users · Support · Notifications"
         title="Customer Operations Platform"
         description="Institutional COP — fleet, licenses, brokers, support, audit, notifications. Additive ops only — never modifies trading, AI, OMS, MT5, or Risk."
         actions={

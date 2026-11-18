@@ -84,6 +84,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     OS_FULLBLEED_PATHS.some(
       (p) => pathname === p || pathname.startsWith(`${p}/`),
     );
+  /** Trading terminal needs the content column; the ops desk below still scrolls. */
+  const wideDesk = pathname === "/auto-trading";
   const compactChrome = isFullBleed;
 
   useEffect(() => {
@@ -223,7 +225,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             "flex min-h-0 flex-1 flex-col",
             isFullBleed
               ? "overflow-hidden p-0"
-              : "overflow-x-clip overflow-y-auto p-3 sm:p-6 lg:p-8",
+              : wideDesk
+                ? "overflow-x-clip overflow-y-auto px-3 py-3 lg:px-4 lg:py-3"
+                : "overflow-x-clip overflow-y-auto px-4 py-4 sm:p-6 lg:p-8",
             "pb-[calc(var(--shell-mobile-content-pad-bottom)+1rem)] lg:pb-8",
           )}
           tabIndex={-1}
@@ -234,7 +238,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className={cn(
                 isFullBleed
                   ? "min-h-0 w-full max-w-none flex-1 qf-motion-desk"
-                  : "mx-auto w-full max-w-[1600px] qf-motion-desk",
+                  : wideDesk
+                    ? "mx-auto w-full max-w-none qf-motion-desk"
+                    : "mx-auto w-full max-w-[1600px] qf-motion-desk",
               )}
             >
               {children}

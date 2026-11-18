@@ -2,18 +2,18 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
-import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
-import { intelligenceApi } from "@/lib/api/endpoints";
+import { intelligenceApi, mt5Api } from "@/lib/api/endpoints";
 import { SessionStrip } from "@/components/broker/session-strip";
+import { OverviewMarketIntelligence } from "@/components/trading/overview-market-intelligence";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
-import { Newspaper, Radio } from "lucide-react";
 
 export default function MarketIntelligencePage() {
   const session = useTradingSession();
@@ -31,6 +31,19 @@ export default function MarketIntelligencePage() {
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+  const tickQ = useQuery({
+    queryKey: ["research-tick", TRADING_SYMBOL],
+    queryFn: async () => {
+      try {
+        return await mt5Api.publicTick(TRADING_SYMBOL);
+      } catch {
+        return mt5Api.researchTick(TRADING_SYMBOL);
+      }
+    },
+    retry: 1,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+  });
 
   if (dash.isLoading) return <DeskSkeleton variant="page" />;
   if (dash.isError) {
@@ -47,108 +60,114 @@ export default function MarketIntelligencePage() {
 
   const data = asRecord(dash.data);
   const broker = asRecord(data.broker);
-  const account = asRecord(data.account);
   const context = {
     ...asRecord(data.market_context),
     ...asRecord(contextQ.data),
   };
   const market = asRecord(data.market);
   const analysis = asRecord(data.analysis);
-  const providers = asRecord(data.providers);
   const positions = asList(data.positions).map(asRecord);
   const pending = asList(data.pending_orders).map(asRecord);
   const news = asList(data.news).map(asRecord);
   const events = asList(data.economic_events).map(asRecord);
   const spreads = asList(market.spread_movers).map(asRecord);
-  const history = asRecord(data.history);
+  const tickEnvelope = asRecord(tickQ.data);
+  const tick = asRecord(tickEnvelope.tick ?? tickQ.data);
+  const bid = num(tick.bid);
+  const ask = num(tick.ask);
+  const tickMid =
+    Number.isFinite(bid) && Number.isFinite(ask)
+      ? (bid + ask) / 2
+      : Number.isFinite(bid)
+        ? bid
+        : Number.isFinite(ask)
+          ? ask
+          : NaN;
+  const analysisGroups = (
+    [
+      ["Market conditions", asList(analysis.market_conditions)],
+      ["Risk factors", asList(analysis.risk_factors)],
+      ["News impact", asList(analysis.news_impact)],
+      ["Portfolio exposure", asList(analysis.portfolio_exposure)],
+    ] as const
+  ).filter(([, lines]) => lines.length > 0);
 
   return (
-    <div>
+    <div className="mx-auto w-full min-w-0 max-w-6xl">
       <PageHeader
+        eyebrow="Markets"
         title="Market Intelligence"
-        description="Real broker sync and market context. News only from configured licensed feeds — never invented."
+        description="XAUUSD structure from the live feed, plus broker context that the intelligence service actually returns."
         actions={
           <Button asChild size="sm" variant="secondary">
-            <a href="/ai-trading-intelligence">Phase 4 AI desks</a>
+            <a href="/ai-trading-intelligence">Research desks</a>
           </Button>
         }
       />
       <SessionStrip className="mb-4" />
       <PageMotion>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-          <StatCard
-            label="Broker"
-            value={session.connected || broker.connected ? "connected" : "disconnected"}
-            hint={session.server !== "—" ? session.server : str(broker.server || broker.status)}
-          />
-          <StatCard
-            label="Balance"
-            value={session.balance !== "—" ? session.balance : str(account.balance, "—")}
-            hint={session.currency || str(account.currency, "")}
-          />
-          <StatCard
-            label="Equity"
-            value={session.equity !== "—" ? session.equity : str(account.equity, "—")}
-          />
-          <StatCard
-            label="Margin"
-            value={session.margin !== "—" ? session.margin : str(account.margin, "—")}
-            hint={`Free ${session.freeMargin !== "—" ? session.freeMargin : str(account.free_margin, "—")}`}
-          />
-          <StatCard label="Session" value={str(context.session, "—")} hint={str(context.market_state)} />
-          <StatCard label="Volatility" value={str(context.volatility_level, "—")} hint={str(context.liquidity_level)} />
-          <StatCard
-            label="Latency"
-            value={
-              Number.isFinite(num(broker.latency_ms))
-                ? `${formatNumber(num(broker.latency_ms), 0)} ms`
-                : "—"
-            }
-          />
-          <StatCard
-            label="History"
-            value={`${str(history.deals_count, "0")} deals`}
-            hint={`${str(history.orders_count, "0")} orders`}
-          />
-        </div>
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          <Card>
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <Card className="qf-card-interactive">
+            <CardHeader>
+              <CardTitle>Market overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OverviewMarketIntelligence
+                timeframe="M15"
+                lastPrice={Number.isFinite(tickMid) ? tickMid : undefined}
+                marketFeedStatus={str(tickEnvelope.status || (Number.isFinite(tickMid) ? "live" : "unavailable"))}
+                tickUpdatedAt={tickQ.dataUpdatedAt || undefined}
+                tickTime={str(tick.time || tick.timestamp || tickEnvelope.as_of || "")}
+                tickLoading={tickQ.isLoading}
+                tickError={tickQ.isError}
+                support=""
+                resistance=""
+                confidencePct={null}
+                signalDirection="WAIT"
+              />
+            </CardContent>
+          </Card>
+          <Card className="qf-card-interactive">
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Market status</CardTitle>
-              <Badge tone={broker.connected ? "success" : "warning"}>
-                {str(broker.login_status, broker.connected ? "live" : "offline")}
+              <CardTitle>Feed health</CardTitle>
+              <Badge tone={broker.connected || session.connected ? "success" : "warning"}>
+                {broker.connected || session.connected ? "Connected" : "Disconnected"}
               </Badge>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-[var(--fg-muted)]">
-              <p>
-                Day type · <span className="text-[var(--fg)]">{str(context.day_type, "—")}</span>
-              </p>
-              <p>
-                Local · <span className="text-[var(--fg)]">{str(context.local_time).slice(0, 19)}</span>
-              </p>
-              <p>
-                Quotes sampled ·{" "}
-                <span className="text-[var(--fg)]">{str(market.quotes_sampled, "0")}</span>
-              </p>
+            <CardContent className="grid grid-cols-2 gap-3">
+              {[
+                ["Desk session", str(context.session, "")],
+                ["Volatility", str(context.volatility_level, "")],
+                ["Liquidity", str(context.liquidity_level, "")],
+                [
+                  "Latency",
+                  Number.isFinite(num(broker.latency_ms))
+                    ? `${formatNumber(num(broker.latency_ms), 0)} ms`
+                    : "",
+                ],
+              ]
+                .filter(([, value]) => value && value !== "—")
+                .map(([label, value]) => (
+                  <div key={label} className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                      {label}
+                    </p>
+                    <p className="mt-1 truncate text-sm font-semibold text-[var(--fg)]">{value}</p>
+                  </div>
+                ))}
               {str(broker.last_error) ? (
-                <p className="text-[var(--danger)]">{str(broker.last_error)}</p>
+                <p className="col-span-2 text-sm text-[var(--danger)]">{str(broker.last_error)}</p>
               ) : null}
             </CardContent>
           </Card>
-
+        </div>
+        {spreads.length > 0 ? (
+        <div className="grid gap-4 xl:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Spread movers</CardTitle>
             </CardHeader>
             <CardContent>
-              {spreads.length === 0 ? (
-                <DeskEmpty
-                  icon={Radio}
-                  title="No live spreads"
-                  description="Connect MT5 to sample symbol bid/ask from the terminal."
-                />
-              ) : (
                 <DeskTable
                   columns={["Symbol", "Bid", "Ask", "Spread"]}
                   rows={spreads.map((r) => [
@@ -158,20 +177,19 @@ export default function MarketIntelligencePage() {
                     str(r.spread),
                   ])}
                 />
-              )}
             </CardContent>
           </Card>
         </div>
+        ) : null}
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        {positions.length > 0 || pending.length > 0 ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {positions.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>Positions · {positions.length}</CardTitle>
             </CardHeader>
             <CardContent>
-              {positions.length === 0 ? (
-                <p className="text-sm text-[var(--fg-muted)]">No open positions in sync.</p>
-              ) : (
                 <DeskTable
                   columns={["Ticket", "Symbol", "Side", "Volume", "PnL"]}
                   rows={positions.slice(0, 12).map((p) => [
@@ -182,17 +200,15 @@ export default function MarketIntelligencePage() {
                     str(p.profit),
                   ])}
                 />
-              )}
             </CardContent>
           </Card>
+          ) : null}
+          {pending.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle>Pending orders · {pending.length}</CardTitle>
             </CardHeader>
             <CardContent>
-              {pending.length === 0 ? (
-                <p className="text-sm text-[var(--fg-muted)]">No pending orders in sync.</p>
-              ) : (
                 <DeskTable
                   columns={["Ticket", "Symbol", "Type", "Volume", "Price"]}
                   rows={pending.slice(0, 12).map((o) => [
@@ -203,27 +219,20 @@ export default function MarketIntelligencePage() {
                     str(o.price),
                   ])}
                 />
-              )}
             </CardContent>
           </Card>
+          ) : null}
         </div>
+        ) : null}
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        {events.length > 0 || news.length > 0 ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {events.length > 0 ? (
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle>Economic calendar</CardTitle>
-              <Badge tone={providers.calendar_configured ? "success" : "neutral"}>
-                {providers.calendar_configured ? "feed configured" : "not configured"}
-              </Badge>
             </CardHeader>
             <CardContent>
-              {events.length === 0 ? (
-                <DeskEmpty
-                  icon={Newspaper}
-                  title="No calendar events"
-                  description="Set ECONOMIC_CALENDAR_FEED_URL to a licensed JSON feed. QuantForg will not invent events."
-                />
-              ) : (
                 <DeskTable
                   columns={["When", "Event", "Country", "Impact"]}
                   rows={events.map((e) => [
@@ -233,24 +242,15 @@ export default function MarketIntelligencePage() {
                     str(e.impact),
                   ])}
                 />
-              )}
             </CardContent>
           </Card>
+          ) : null}
+          {news.length > 0 ? (
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle>Financial news</CardTitle>
-              <Badge tone={providers.news_configured ? "success" : "neutral"}>
-                {providers.news_configured ? "feed configured" : "not configured"}
-              </Badge>
             </CardHeader>
             <CardContent>
-              {news.length === 0 ? (
-                <DeskEmpty
-                  icon={Newspaper}
-                  title="No news items"
-                  description="Set NEWS_INTELLIGENCE_FEED_URL to a licensed JSON feed. QuantForg will not invent headlines."
-                />
-              ) : (
                 <DeskTable
                   columns={["Title", "Source", "Published"]}
                   rows={news.map((n) => [
@@ -259,39 +259,36 @@ export default function MarketIntelligencePage() {
                     str(n.published_at).slice(0, 16),
                   ])}
                 />
-              )}
             </CardContent>
           </Card>
+          ) : null}
         </div>
+        ) : null}
 
-        <Card className="mt-4">
+        {analysisGroups.length > 0 ? (
+        <Card>
           <CardHeader>
-            <CardTitle>AI analysis (advisor)</CardTitle>
+            <CardTitle>Research notes</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            {(
-              [
-                ["Market conditions", asList(analysis.market_conditions)],
-                ["Risk factors", asList(analysis.risk_factors)],
-                ["News impact", asList(analysis.news_impact)],
-                ["Portfolio exposure", asList(analysis.portfolio_exposure)],
-              ] as const
-            ).map(([title, lines]) => (
+            {analysisGroups.map(([title, lines]) => (
               <div key={title}>
                 <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">{title}</h3>
                 <ul className="space-y-1.5 text-sm text-[var(--fg-muted)]">
                   {lines.map((line, i) => (
-                    <li key={i}>• {String(line)}</li>
+                    <li key={i}>{String(line)}</li>
                   ))}
                 </ul>
               </div>
             ))}
-            <p className="md:col-span-2 text-xs text-[var(--fg-subtle)]">
-              {str(analysis.disclaimer)} Autonomous trading:{" "}
-              {analysis.autonomous_trading ? "enabled" : "disabled"}.
-            </p>
+            {str(analysis.disclaimer) ? (
+              <p className="md:col-span-2 text-xs text-[var(--fg-subtle)]">
+                {str(analysis.disclaimer)}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
+        ) : null}
       </PageMotion>
     </div>
   );

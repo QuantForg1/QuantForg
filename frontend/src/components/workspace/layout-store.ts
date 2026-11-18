@@ -39,9 +39,9 @@ export const WORKSPACE_WATCHLIST_KEY = "qf.workspace.watchlists";
 
 export const DEFAULT_LAYOUT: WorkspaceLayoutState = {
   preset: "default",
-  leftWidth: 300,
-  rightWidth: 360,
-  bottomHeight: 240,
+  leftWidth: 248,
+  rightWidth: 300,
+  bottomHeight: 200,
   leftCollapsed: false,
   rightCollapsed: false,
   bottomCollapsed: false,
@@ -55,9 +55,9 @@ export const DEFAULT_LAYOUT: WorkspaceLayoutState = {
 export const PRESET_LAYOUTS: Record<WorkspacePresetId, Partial<WorkspaceLayoutState>> = {
   default: {
     preset: "default",
-    leftWidth: 280,
-    rightWidth: 340,
-    bottomHeight: 220,
+    leftWidth: 248,
+    rightWidth: 300,
+    bottomHeight: 200,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
@@ -90,7 +90,23 @@ export function loadWorkspaceLayout(): WorkspaceLayoutState {
   try {
     const raw = localStorage.getItem(WORKSPACE_LAYOUT_KEY);
     if (!raw) return DEFAULT_LAYOUT;
-    return { ...DEFAULT_LAYOUT, ...(JSON.parse(raw) as Partial<WorkspaceLayoutState>) };
+    const stored = {
+      ...DEFAULT_LAYOUT,
+      ...(JSON.parse(raw) as Partial<WorkspaceLayoutState>),
+    };
+    // Sessions that never resized still have the previous factory sizes.
+    if (
+      stored.preset === "default" &&
+      stored.leftWidth === 300 &&
+      stored.rightWidth === 360
+    ) {
+      stored.leftWidth = DEFAULT_LAYOUT.leftWidth;
+      stored.rightWidth = DEFAULT_LAYOUT.rightWidth;
+    }
+    if (stored.preset === "default" && stored.bottomHeight === 240) {
+      stored.bottomHeight = DEFAULT_LAYOUT.bottomHeight;
+    }
+    return stored;
   } catch {
     return DEFAULT_LAYOUT;
   }
