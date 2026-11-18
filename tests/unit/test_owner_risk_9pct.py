@@ -427,12 +427,14 @@ def test_stop_is_max_of_atr_and_structure() -> None:
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=None
     ) == Decimal("1.20")
-    assert ol.owner_stop_distance(
+    # never narrower than 1.00 x ATR
+    narrow = ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=Decimal("1.0")
-    ) == Decimal("1.20")  # never narrower than 1.00 x ATR
-    assert ol.owner_stop_distance(
-        atr=Decimal("1.2"), structure_distance=Decimal("3.6")
-    ) == Decimal("3.6")  # beyond structure when it is further away
+    )
+    assert narrow == Decimal("1.20")
+    # beyond structure when it is further away
+    wide = ol.owner_stop_distance(atr=Decimal("1.2"), structure_distance=Decimal("3.6"))
+    assert wide == Decimal("3.6")
     assert ol.owner_stop_distance(atr=None, structure_distance=Decimal("3.0")) is None
 
 

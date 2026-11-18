@@ -44,7 +44,7 @@ assert.doesNotMatch(dash, /RobotActivityPanel/);
 assert.doesNotMatch(dash, /RecentActivityPanel/);
 assert.doesNotMatch(dash, /NotificationsStrip/);
 const riskCenterPage = readFileSync(join(root, "app/(app)/risk-center/page.tsx"), "utf8");
-assert.match(riskCenterPage, /My Risk Preferences/);
+assert.match(riskCenterPage, /PersonalRiskProfile/);
 assert.equal(dash.includes("ExecutionOrderTicket"), false);
 assert.ok(visiblePrimaryRail(true).every((item) => item.href !== "/markets"));
 

@@ -28,7 +28,7 @@ assert.doesNotMatch(dash, /NotificationsStrip/);
 assert.doesNotMatch(dash, /RecentActivityPanel/);
 assert.doesNotMatch(dash, /OWNER_RISK_POLICY_DISPLAY/);
 
-assert.match(riskCenter, /My Risk Preferences/);
+assert.match(riskCenter, /<PersonalRiskProfile \/>/);
 assert.match(riskCenter, /Risk Protection Status/);
 assert.match(riskCenter, /Risk History/);
 assert.match(riskCenter, /riskApi\.preferences/);
@@ -43,5 +43,8 @@ assert.doesNotMatch(riskIntel, /Within owner risk ceilings/);
 assert.match(ownerSummary, /\/admin\/control\/overview/);
 assert.match(endpoints, /\/risk\/preferences/);
 assert.match(endpoints, /updatePreferences/);
+assert.match(endpoints, /\/risk\/profile/);
+assert.match(endpoints, /updateProfile/);
+assert.match(endpoints, /resetProfile/);
 
 console.log("phase4 risk center contract ok");
