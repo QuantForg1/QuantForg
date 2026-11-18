@@ -1387,13 +1387,18 @@ async def build_ite_cycle_market_context(
         from app.domain.institutional_trading.operations.daily_loss_lock import (
             sync_utc_daily_loss_lock,
         )
+        from app.domain.institutional_trading.runtime_policy import (
+            active_daily_loss_pct,
+        )
 
+        _user_daily_pct = active_daily_loss_pct()
         lock = sync_utc_daily_loss_lock(
             get_control_plane(),
             daily_pnl=daily_pnl,
             equity=equity,
             balance=Decimal(str(diag.get("balance") or 0)),
-            max_daily_loss_pct=Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct)),
+            # The submitting user's profile daily stop (installed this cycle).
+            max_daily_loss_pct=_user_daily_pct,
             trusted=bool(daily_pnl_trusted),
             floating_pnl=Decimal(str(diag.get("floating_pnl") or 0)),
         )
@@ -1404,7 +1409,7 @@ async def build_ite_cycle_market_context(
             diag["deposit_verification"] = "required"
         elif daily_pnl_trusted:
             diag["deposit_verification"] = "not_applicable"
-        diag["max_daily_loss_limit_pct"] = str(DEFAULT_ITE_CONFIG.max_daily_loss_pct)
+        diag["max_daily_loss_limit_pct"] = str(_user_daily_pct)
     except Exception as exc:
         logger.warning("ite_cycle_daily_loss_lock_sync_failed", error=str(exc))
 

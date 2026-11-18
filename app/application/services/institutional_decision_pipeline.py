@@ -47,8 +47,14 @@ def oms_risk_config_from_ite(cfg: ITEConfig | None = None) -> RiskEngineConfig:
     Other OMS RiskEngine defaults (max open positions, weekly/monthly, spread)
     stay unchanged so this does not remap max_open_trades onto OMS.
     """
-    ite = cfg if cfg is not None else DEFAULT_ITE_CONFIG
-    return RiskEngineConfig(max_daily_loss_pct=ite.max_daily_loss_pct)
+    if cfg is not None:
+        return RiskEngineConfig(max_daily_loss_pct=cfg.max_daily_loss_pct)
+    from app.domain.institutional_trading.runtime_policy import (
+        active_daily_loss_pct,
+    )
+
+    # Default path: the installed user profile's daily stop.
+    return RiskEngineConfig(max_daily_loss_pct=active_daily_loss_pct())
 
 
 def oms_risk_engine_from_ite(cfg: ITEConfig | None = None) -> RiskEngine:

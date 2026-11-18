@@ -59,6 +59,7 @@ from app.domain.institutional_trading.phase_a.execution_reject import (
     classify_downstream_execution_reject,
     should_count_execution_reject,
 )
+from app.domain.institutional_trading.runtime_policy import active_daily_loss_pct
 from app.domain.trading.gold_only import (
     CANONICAL_GOLD_BROKER_DISPLAY,
     DISABLED_AUTONOMOUS_SYMBOL,
@@ -131,7 +132,8 @@ def test_1_configured_daily_loss_pct_is_owner_25() -> None:
     assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("30.0")
     assert RiskEngineConfig().max_daily_loss_pct == Decimal("30.0")
     assert RiskEngineConfig().max_daily_loss_pct == MAX_DAILY_LOSS_PCT
-    assert oms_risk_config_from_ite().max_daily_loss_pct == MAX_DAILY_LOSS_PCT
+    # Default OMS path follows the installed user profile daily stop.
+    assert oms_risk_config_from_ite().max_daily_loss_pct == active_daily_loss_pct()
     assert (
         risk_config_from_ite(DEFAULT_ITE_CONFIG).max_daily_loss_pct
         == MAX_DAILY_LOSS_PCT
@@ -230,13 +232,13 @@ def test_6_oms_uses_authoritative_owner_pct() -> None:
     cfg = oms_risk_config_from_ite(DEFAULT_ITE_CONFIG)
     assert cfg.max_daily_loss_pct == Decimal("30.0")
     engine = oms_risk_engine_from_ite()
-    assert engine.config.max_daily_loss_pct == MAX_DAILY_LOSS_PCT
+    assert engine.config.max_daily_loss_pct == active_daily_loss_pct()
     factory = InstitutionalExecutionEngine.__dataclass_fields__[
         "risk_engine"
     ].default_factory
     assert factory is not None
     oms_engine = factory()
-    assert oms_engine.config.max_daily_loss_pct == MAX_DAILY_LOSS_PCT
+    assert oms_engine.config.max_daily_loss_pct == active_daily_loss_pct()
 
 
 def test_7_no_independent_5_percent_daily_loss_default() -> None:
@@ -483,3 +485,16 @@ def test_20_suite_does_not_send_orders() -> None:
     )
     assert getattr(result, "order_ticket", None) is None
     assert "ticket" not in result.to_dict()
+
+
+def test_8_oms_and_ite_lock_follow_a_user_daily_above_30() -> None:
+    from app.domain.institutional_trading import runtime_policy as rp
+
+    doc = dict(rp.active_policy() or {})
+    doc["daily_loss_pct"] = "45"
+    token = rp.use_runtime_policy(doc)
+    try:
+        assert active_daily_loss_pct() == Decimal("45")
+        assert oms_risk_config_from_ite().max_daily_loss_pct == Decimal("45")
+    finally:
+        rp.reset_runtime_policy(token)

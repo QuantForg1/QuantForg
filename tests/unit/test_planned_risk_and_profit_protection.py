@@ -697,6 +697,31 @@ class TestPmeProfitProtection:
         )
         assert partial_close_volume(pos, cfg) == Decimal("0")
 
+    @pytest.mark.parametrize(
+        ("volume", "expected"),
+        [("0.02", "0.01"), ("0.03", "0.02"), ("0.10", "0.05"), ("0.50", "0.25")],
+    )
+    def test_partial_takes_half_above_min_lot_and_keeps_a_runner(
+        self, volume: str, expected: str
+    ) -> None:
+        # Per-user max lot is now up to 0.50: the 50% partial is real there.
+        from app.domain.institutional_trading.management.config import (
+            PositionManagementConfig,
+        )
+        from app.domain.institutional_trading.management.r_math import (
+            partial_close_volume,
+        )
+
+        pos = self._managed()
+        pos.remaining_volume = Decimal(volume)
+        cfg = PositionManagementConfig(
+            min_volume=Decimal("0.01"),
+            volume_step=Decimal("0.01"),
+        )
+        got = partial_close_volume(pos, cfg)
+        assert got == Decimal(expected)
+        assert pos.remaining_volume - got >= Decimal("0.01")
+
     def test_failed_pme_action_does_not_claim_success(self) -> None:
         oms = RecordingOmsManagePort(fail_as="failed")
         oms.fail_next = True
