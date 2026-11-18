@@ -179,6 +179,92 @@ def _kpis_from_closed(trades: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+_SHADOW_NUMERIC_KEYS = (
+    "bid",
+    "ask",
+    "spread",
+    "gate_atr",
+    "stop_atr",
+    "atr_pct",
+    "ltf_buy_score",
+    "ltf_sell_score",
+    "directional_edge",
+    "opportunity_score",
+)
+
+
+def _first(score: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = score.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _num(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def shadow_intent(score: dict[str, Any]) -> dict[str, Any]:
+    """What the scanner would have traded, kept even when the row is a WAIT.
+
+    Rejected rows are stored with direction WAIT, which made it impossible to
+    ask later whether the rejected signal would have won. This keeps the side
+    the scores pointed to, the quote and the volatility used for stops, so a
+    shadow evaluator can replay the outcome. Observation only: nothing here is
+    read by the decision or execution path.
+    """
+    sniper_raw = score.get("sniper_entry")
+    sniper = sniper_raw if isinstance(sniper_raw, dict) else {}
+    out: dict[str, Any] = {}
+    for key in _SHADOW_NUMERIC_KEYS:
+        value = _num(score.get(key))
+        if value is not None:
+            out[key] = value
+    buy = _num(_first(score, "buy_score", "bullish_score"))
+    sell = _num(_first(score, "sell_score", "bearish_score"))
+    if buy is not None:
+        out["buy_score"] = buy
+    if sell is not None:
+        out["sell_score"] = sell
+    zone = _num(sniper.get("zone_bound"))
+    if zone is not None:
+        out["zone_bound"] = zone
+    reason = sniper.get("primary_reason") or score.get("reject_reason")
+    if reason:
+        out["sniper_reason"] = str(reason)[:200]
+    side = None
+    source = None
+    for key, origin in (
+        ("direction", "direction"),
+        ("signal_action", "signal_action"),
+    ):
+        candidate = str(score.get(key) or "").strip().upper()
+        if candidate in {"BUY", "SELL"}:
+            side, source = candidate, origin
+            break
+    if side is None:
+        action = str(sniper.get("action") or "").strip().upper()
+        if action in {"BUY", "SELL"}:
+            side, source = action, "sniper_action"
+    if side is None:
+        ltf_buy = out.get("ltf_buy_score")
+        ltf_sell = out.get("ltf_sell_score")
+        pair = (ltf_buy, ltf_sell) if ltf_buy is not None else (buy, sell)
+        if pair[0] is not None and pair[1] is not None and pair[0] != pair[1]:
+            side = "BUY" if pair[0] > pair[1] else "SELL"
+            source = "ltf_scores" if ltf_buy is not None else "scores"
+    if side is not None:
+        out["intended_direction"] = side
+        out["intended_source"] = source
+    return out
+
+
 def _score_to_history_row(score: dict[str, Any], *, scan_as_of: str) -> dict[str, Any]:
     projected = _row_from_score(score)
     _factors_value = score.get("factors")
@@ -216,9 +302,19 @@ def _score_to_history_row(score: dict[str, Any], *, scan_as_of: str) -> dict[str
                 "opportunity_score",
             )
             if k in score
-        },
+        }
+        | _shadow_block(score),
         "source": "live_multi_asset_scan",
     }
+
+
+def _shadow_block(score: dict[str, Any]) -> dict[str, Any]:
+    try:
+        intent = shadow_intent(score)
+    except Exception:
+        logger.warning("signal_history_shadow_intent_failed")
+        return {}
+    return {"shadow": intent} if intent else {}
 
 
 def _upsert_history_direct(rows: list[dict[str, Any]]) -> int:
