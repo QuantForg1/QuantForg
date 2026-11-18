@@ -77,8 +77,18 @@ class RiskCheckInput:
     slippage: Decimal | None = None
     # Account-currency commission. None is unknown and is not treated as zero.
     commission: Decimal | None = None
+    # True when ``stop_loss_distance`` is |fill price - SL| (ask for BUY, bid
+    # for SELL, or the pending price). A long stop fills at the bid and a short
+    # stop at the ask, so that distance already is the full loss: the spread
+    # is not added again to planned risk. Slippage and commission still are.
+    stop_measured_from_fill: bool = False
     session_allowed: bool | None = None
     session_name: str = ""
+
+
+def _risk_spread(check: RiskCheckInput) -> Decimal | None:
+    """Spread to add to planned risk; zero when the stop is fill-measured."""
+    return Decimal("0") if check.stop_measured_from_fill else check.spread
 
 
 @dataclass
@@ -597,7 +607,7 @@ class RiskEngine:
         planned_usd = (
             planned_risk_usd(
                 stop_distance=size.stop_distance,
-                spread=check.spread,
+                spread=_risk_spread(check),
                 contract_size=contract_size,
                 volume=lots_for_risk,
                 slippage=check.slippage,
@@ -1779,7 +1789,7 @@ class RiskEngine:
             else:
                 owner_risk = planned_risk_usd(
                     stop_distance=stop_for_actual,
-                    spread=check.spread,
+                    spread=_risk_spread(check),
                     contract_size=money_per_price,
                     volume=approved,
                     slippage=check.slippage,
@@ -1792,7 +1802,7 @@ class RiskEngine:
                             cap=owner_cap,
                             equity=account.equity,
                             stop_distance=stop_for_actual,
-                            spread=check.spread,
+                            spread=_risk_spread(check) or Decimal("0"),
                             volume=approved,
                             contract_size=money_per_price,
                             slippage=check.slippage or Decimal("0"),

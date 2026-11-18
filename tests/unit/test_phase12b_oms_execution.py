@@ -397,3 +397,68 @@ def test_ack_is_not_fill() -> None:
     acked = q.acknowledge(intent_id=claimed.intent_id, worker_id=worker_id)
     assert acked.state is not AccountExecutionState.FILLED
     assert acked.payload.get("order_ticket") is None
+
+
+def _live_auth(env_send: bool, switch) -> object:
+    from app.application.services import platform_live_switch as pls
+
+    pls.TEST_OVERRIDE = switch
+    try:
+        w = _worker(ready=True)
+        settings = SimpleNamespace(
+            multi_account_dispatch_enabled=True,
+            multi_account_live_submit_enabled=True,
+            multi_account_oms_live_order_send_enabled=env_send,
+        )
+        return authorize_worker_execution(
+            worker=w,
+            intent_id=uuid4(),
+            job_payload=dict(COMPLIANT_BUY),
+            job_user_id=w.user_id,
+            job_broker_account_id=w.broker_account_id,
+            job_idempotency_key="k-switch",
+            account_environment="live",
+            settings=settings,
+            account_snapshot=_snapshot("real"),
+            now=THURSDAY_10_UTC,
+            user_caps=CAPS,
+        )
+    finally:
+        pls.reset_for_tests()
+
+
+@pytest.mark.parametrize(
+    ("env_send", "enabled", "reason", "allowed"),
+    [
+        (True, False, "platform_live_disabled", False),  # env on, DB off
+        (True, False, "platform_live_switch_unavailable", False),  # DB unreadable
+        (False, True, None, False),  # DB on, env off
+        (True, True, None, True),  # both on
+    ],
+)
+def test_customer_live_send_needs_env_and_platform_switch(
+    env_send: bool, enabled: bool, reason: str | None, allowed: bool
+) -> None:
+    from app.application.services.platform_live_switch import PlatformLiveSwitch
+
+    auth = _live_auth(env_send, PlatformLiveSwitch(enabled, reason))
+    assert auth.order_send_allowed is allowed
+    if not allowed:
+        assert "live_order_send_fail_closed" in auth.reasons
+    if reason:
+        assert reason in auth.reasons
+
+
+def test_platform_emergency_stop_blocks_customer_live() -> None:
+    from app.application.services.platform_live_switch import PlatformLiveSwitch
+
+    auth = _live_auth(True, PlatformLiveSwitch(False, "platform_emergency_stop"))
+    assert auth.order_send_allowed is False
+    assert auth.ok is False
+    assert "platform_emergency_stop" in auth.reasons
+
+
+def test_platform_switch_closed_without_database_in_tests() -> None:
+    from app.application.services.platform_live_switch import platform_live_switch
+
+    assert platform_live_switch().enabled is False

@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 # aggressive polling. The trading cycle runs every few seconds, so rows are
 # cached per URL and the last good copy is kept when a refresh fails.
 _CALENDAR_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+# A last good copy older than this no longer counts as a working feed.
+CALENDAR_MAX_STALE_SECONDS = 24 * 3600.0
+
+
+class CalendarFeedUnavailable(RuntimeError):
+    """The calendar could not be fetched and no recent good copy exists."""
+
+
 _CALENDAR_CACHE_LOCK = threading.Lock()
 _TIME_KEYS = ("scheduled_at", "datetime", "time", "date")
 
@@ -52,7 +60,7 @@ def _parse_when(raw: str) -> datetime | None:
 
 
 def _cached_calendar_rows(
-    url: str, *, timeout_seconds: float, ttl_seconds: float
+    url: str, *, timeout_seconds: float, ttl_seconds: float, strict: bool = False
 ) -> list[dict[str, Any]]:
     now = time.monotonic()
     with _CALENDAR_CACHE_LOCK:
@@ -69,6 +77,13 @@ def _cached_calendar_rows(
             "economic_calendar_fetch_failed",
             extra={"error": str(exc), "stale_rows": len(hit[1]) if hit else 0},
         )
+        if hit is not None and now - hit[0] < CALENDAR_MAX_STALE_SECONDS:
+            return hit[1]
+        if strict:
+            raise CalendarFeedUnavailable(
+                "economic calendar unavailable and no good copy within "
+                f"{int(CALENDAR_MAX_STALE_SECONDS // 3600)}h"
+            ) from exc
         return hit[1] if hit is not None else []
     with _CALENDAR_CACHE_LOCK:
         _CALENDAR_CACHE[url] = (now, rows)
@@ -166,13 +181,19 @@ class ConfiguredHttpEconomicCalendar:
         *,
         limit: int = 20,
         as_of: datetime | None = None,
+        strict: bool = False,
     ) -> list[EconomicEvent]:
+        """``strict`` raises :class:`CalendarFeedUnavailable` instead of
+        returning an empty list when the feed is down (trading gate)."""
         if not self.url.strip():
+            if strict:
+                raise CalendarFeedUnavailable("economic calendar URL not set")
             return []
         rows = _cached_calendar_rows(
             self.url.strip(),
             timeout_seconds=self.timeout_seconds,
             ttl_seconds=self.cache_ttl_seconds,
+            strict=strict,
         )
         if as_of is not None:
             # A weekly feed holds 100+ rows; keep the ones nearest ``as_of`` so

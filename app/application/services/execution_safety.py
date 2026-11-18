@@ -331,9 +331,13 @@ class ExecutionSafetyService:
             )
         if fee < 0:
             return "OWNER_COMMISSION_INVALID: commission cannot be negative"
+        # stop_distance is |request price - SL| and the request price is the
+        # fill side (ask for BUY, bid for SELL, or the pending price). A stop
+        # fills on the opposite side at the SL price, so that distance is the
+        # whole loss: the spread is not added a second time.
         risk = planned_risk_usd(
             stop_distance=stop_distance,
-            spread=calculated.spread,
+            spread=Decimal("0"),
             contract_size=cons.contract_size,
             volume=intent.volume.value,
             slippage=slippage,
@@ -347,7 +351,7 @@ class ExecutionSafetyService:
             cap=cap,
             equity=equity,
             stop_distance=stop_distance,
-            spread=calculated.spread,
+            spread=Decimal("0"),
             volume=intent.volume.value,
             contract_size=cons.contract_size,
             slippage=slippage,
