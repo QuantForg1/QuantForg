@@ -103,6 +103,18 @@ def performance_lab_dashboard(
     )
 
 
+@router.get("/edge-ledger")
+def edge_ledger(
+    _user: OperatorUser,
+    days: int | None = Query(default=None, ge=1, le=3650),
+    symbol_prefix: str = Query(default="XAU", min_length=1, max_length=12),
+) -> dict[str, Any]:
+    """Closed LIVE trades by side / session / hour / weekday with evidence verdicts."""
+    from app.application.services.edge_ledger import build_edge_ledger_report
+
+    return build_edge_ledger_report(days=days, symbol_prefix=symbol_prefix)
+
+
 @router.get("/portfolio-intelligence")
 def portfolio_intelligence_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """v9 Institutional Portfolio Intelligence — allocation, risk budget, queue, stress."""  # noqa: E501
