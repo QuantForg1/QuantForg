@@ -66,6 +66,9 @@ class EconomicCalendarNewsAdapter:
     """Wraps ``ConfiguredHttpEconomicCalendar`` (or any list_events feed)."""
 
     feed: Any
+    # Upper-case calendar country codes allowed to trigger a blackout.
+    # Empty = every country (previous behaviour).
+    countries: frozenset[str] = frozenset()
 
     def events_near(
         self,
@@ -87,6 +90,10 @@ class EconomicCalendarNewsAdapter:
             scheduled = _parse_when(str(getattr(row, "scheduled_at", "") or ""))
             if scheduled is None or not (start <= scheduled <= end):
                 continue
+            if self.countries:
+                country = str(getattr(row, "country", "") or "").strip().upper()
+                if country not in self.countries:
+                    continue
             event_id = str(getattr(row, "id", "") or title)
             out.append(
                 NewsEvent(
@@ -107,12 +114,18 @@ def build_configured_news_calendar() -> EconomicCalendarNewsAdapter | None:
         )
         from core.config.settings import get_settings
 
-        url = str(
-            getattr(get_settings(), "economic_calendar_feed_url", "") or ""
-        ).strip()
+        settings = get_settings()
+        url = str(getattr(settings, "economic_calendar_feed_url", "") or "").strip()
         if not url:
             return None
-        return EconomicCalendarNewsAdapter(feed=ConfiguredHttpEconomicCalendar(url=url))
+        raw_countries = str(getattr(settings, "economic_calendar_countries", "") or "")
+        countries = frozenset(
+            c.strip().upper() for c in raw_countries.split(",") if c.strip()
+        )
+        return EconomicCalendarNewsAdapter(
+            feed=ConfiguredHttpEconomicCalendar(url=url),
+            countries=countries,
+        )
     except Exception:
         logger.exception("build_configured_news_calendar_failed")
         return None

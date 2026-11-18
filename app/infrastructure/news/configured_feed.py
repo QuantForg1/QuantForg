@@ -8,8 +8,10 @@ you configure — QuantForg does not ship a vendor SDK here.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -17,6 +19,60 @@ import httpx
 from app.domain.interfaces.news import EconomicEvent, NewsItem
 
 logger = logging.getLogger(__name__)
+
+# Calendar feeds change a few times a day and public providers rate-limit
+# aggressive polling. The trading cycle runs every few seconds, so rows are
+# cached per URL and the last good copy is kept when a refresh fails.
+_CALENDAR_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_CALENDAR_CACHE_LOCK = threading.Lock()
+_TIME_KEYS = ("scheduled_at", "datetime", "time", "date")
+
+
+def _row_when(row: dict[str, Any]) -> str:
+    for key in _TIME_KEYS:
+        value = row.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
+def _parse_when(raw: str) -> datetime | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _cached_calendar_rows(
+    url: str, *, timeout_seconds: float, ttl_seconds: float
+) -> list[dict[str, Any]]:
+    now = time.monotonic()
+    with _CALENDAR_CACHE_LOCK:
+        hit = _CALENDAR_CACHE.get(url)
+    if hit is not None and now - hit[0] < ttl_seconds:
+        return hit[1]
+    try:
+        with httpx.Client(timeout=timeout_seconds) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            rows = _as_list(response.json())
+    except Exception as exc:
+        logger.warning(
+            "economic_calendar_fetch_failed",
+            extra={"error": str(exc), "stale_rows": len(hit[1]) if hit else 0},
+        )
+        return hit[1] if hit is not None else []
+    with _CALENDAR_CACHE_LOCK:
+        _CALENDAR_CACHE[url] = (now, rows)
+    return rows
 
 
 def _as_list(payload: Any) -> list[dict[str, Any]]:
@@ -103,6 +159,7 @@ class ConfiguredHttpEconomicCalendar:
 
     url: str
     timeout_seconds: float = 8.0
+    cache_ttl_seconds: float = 900.0
 
     def list_events(
         self,
@@ -110,17 +167,25 @@ class ConfiguredHttpEconomicCalendar:
         limit: int = 20,
         as_of: datetime | None = None,
     ) -> list[EconomicEvent]:
-        _ = as_of
         if not self.url.strip():
             return []
-        try:
-            with httpx.Client(timeout=self.timeout_seconds) as client:
-                response = client.get(self.url.strip())
-                response.raise_for_status()
-                rows = _as_list(response.json())
-        except Exception as exc:
-            logger.warning("economic_calendar_fetch_failed", extra={"error": str(exc)})
-            return []
+        rows = _cached_calendar_rows(
+            self.url.strip(),
+            timeout_seconds=self.timeout_seconds,
+            ttl_seconds=self.cache_ttl_seconds,
+        )
+        if as_of is not None:
+            # A weekly feed holds 100+ rows; keep the ones nearest ``as_of`` so
+            # ``limit`` never drops the event that matters now.
+            anchor = as_of if as_of.tzinfo else as_of.replace(tzinfo=UTC)
+
+            def _distance(row: dict[str, Any]) -> float:
+                when = _parse_when(_row_when(row))
+                if when is None:
+                    return float("inf")
+                return abs((when - anchor).total_seconds())
+
+            rows = sorted(rows, key=_distance)
 
         events: list[EconomicEvent] = []
         for row in rows[: max(1, limit)]:
@@ -137,12 +202,7 @@ class ConfiguredHttpEconomicCalendar:
                     impact=str(row.get("impact") or row.get("importance") or "unknown")[
                         :32
                     ],
-                    scheduled_at=str(
-                        row.get("scheduled_at")
-                        or row.get("datetime")
-                        or row.get("time")
-                        or ""
-                    )[:64],
+                    scheduled_at=_row_when(row)[:64],
                     actual=str(row.get("actual") or "")[:64],
                     forecast=str(row.get("forecast") or "")[:64],
                     previous=str(row.get("previous") or "")[:64],
