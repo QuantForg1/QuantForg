@@ -10,6 +10,9 @@ management do not use this store.
 from __future__ import annotations
 
 import os
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -30,6 +33,14 @@ _LOADED = False
 _TRUSTED = True
 _FORCED_DOWN = False
 _LIVE_LOGIN: int | None = None
+# Why protection is untrusted. Transient broker read failures at startup are
+# retried in the background; anything else stays fail-closed until restart.
+_UNTRUSTED_REASON: str | None = None
+_TRANSIENT_REASONS = frozenset({"positions_unavailable", "broker_history_unavailable"})
+RETRY_MIN_INTERVAL_SECONDS = 120.0
+_RETRY_LOCK = threading.Lock()
+_RETRY_IN_FLIGHT = False
+_LAST_RETRY_MONO: float | None = None
 
 _CREATE = """
 CREATE TABLE IF NOT EXISTS public.sell_cascade_anchor (
@@ -126,7 +137,8 @@ class SellCascadeAnchor:
 
 
 def reset_sell_cascade_store_for_tests() -> None:
-    global _LOADED, _TRUSTED, _FORCED_DOWN, _LIVE_LOGIN
+    global _LOADED, _TRUSTED, _FORCED_DOWN, _LIVE_LOGIN, _UNTRUSTED_REASON
+    global _RETRY_IN_FLIGHT, _LAST_RETRY_MONO
     with _LOCK:
         _CACHE.clear()
         _DURABLE.clear()
@@ -135,6 +147,10 @@ def reset_sell_cascade_store_for_tests() -> None:
         _TRUSTED = True
         _FORCED_DOWN = False
         _LIVE_LOGIN = None
+        _UNTRUSTED_REASON = None
+    with _RETRY_LOCK:
+        _RETRY_IN_FLIGHT = False
+        _LAST_RETRY_MONO = None
 
 
 def force_sell_cascade_store_unavailable_for_tests(down: bool) -> None:
@@ -207,7 +223,7 @@ def _cache_put(anchor: SellCascadeAnchor) -> None:
 
 def load_active_anchors() -> tuple[list[SellCascadeAnchor], bool]:
     """Return ``(active, trusted)``. Untrusted blocks new SELL entries."""
-    global _LOADED, _TRUSTED
+    global _LOADED, _TRUSTED, _UNTRUSTED_REASON
     with _LOCK:
         if _FORCED_DOWN:
             _TRUSTED = False
@@ -249,6 +265,7 @@ def load_active_anchors() -> tuple[list[SellCascadeAnchor], bool]:
             _cache_put(anchor)
         _LOADED = True
         _TRUSTED = True
+        _UNTRUSTED_REASON = None
     logger.warning(
         "sell_cascade_anchors_restored",
         count=len(anchors),
@@ -561,10 +578,67 @@ def evaluate_durable_sell_cascade(
 
 def _mark_untrusted(reason: str) -> None:
     """Block new SELL entries until protection state is trustworthy again."""
-    global _TRUSTED
+    global _TRUSTED, _UNTRUSTED_REASON
     with _LOCK:
         _TRUSTED = False
+        _UNTRUSTED_REASON = reason
     logger.warning("sell_cascade_store_untrusted", reason=reason)
+
+
+def _spawn_daemon(fn: Callable[[], None]) -> None:
+    threading.Thread(target=fn, name="sell-cascade-recovery", daemon=True).start()
+
+
+def maybe_retry_sell_cascade_recovery(
+    adapter: Any | None,
+    *,
+    now_mono: float | None = None,
+    spawn: Callable[[Callable[[], None]], None] | None = None,
+) -> bool:
+    """Re-run startup recovery after a transient broker read failure.
+
+    Startup recovery marks SELL protection untrusted when the gateway cannot
+    list positions or history (e.g. the MT5 terminal was restarting). Nothing
+    re-ran it, so every SELL stayed blocked until the next deploy. This retries
+    in a background thread (history reads can take minutes) at most once per
+    ``RETRY_MIN_INTERVAL_SECONDS``. SELL stays blocked until the retry proves
+    the broker book; BUY is unaffected. Returns True when a retry was started.
+    """
+    global _RETRY_IN_FLIGHT, _LAST_RETRY_MONO
+    if adapter is None:
+        return False
+    with _LOCK:
+        if _TRUSTED or _FORCED_DOWN or _UNTRUSTED_REASON not in _TRANSIENT_REASONS:
+            return False
+    now = time.monotonic() if now_mono is None else now_mono
+    with _RETRY_LOCK:
+        if _RETRY_IN_FLIGHT:
+            return False
+        if (
+            _LAST_RETRY_MONO is not None
+            and now - _LAST_RETRY_MONO < RETRY_MIN_INTERVAL_SECONDS
+        ):
+            return False
+        _RETRY_IN_FLIGHT = True
+        _LAST_RETRY_MONO = now
+
+    def _run() -> None:
+        global _RETRY_IN_FLIGHT
+        try:
+            summary = recover_sell_cascade_on_startup(adapter)
+            logger.warning(
+                "sell_cascade_recovery_retry", trusted=bool(summary.get("trusted"))
+            )
+        except Exception as exc:
+            logger.warning(
+                "sell_cascade_recovery_retry_failed", error_type=type(exc).__name__
+            )
+        finally:
+            with _RETRY_LOCK:
+                _RETRY_IN_FLIGHT = False
+
+    (spawn or _spawn_daemon)(_run)
+    return True
 
 
 def recover_sell_cascade_on_startup(adapter: Any | None = None) -> dict[str, Any]:
