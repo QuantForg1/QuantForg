@@ -20,13 +20,13 @@ const ResearchShell = dynamic(
 export default function ResearchPage() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-1.5">
-        <p className="text-center text-[11px] font-medium text-[var(--fg-muted)]">
-          Research is not a trade authorization · market charts use the platform feed · personal MT5 is for account trades only
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
+        <p className="min-w-0 text-xs leading-relaxed text-[var(--fg-muted)]">
+          Institutional research workspace. Results come from the research service. Nothing here authorizes a trade.
         </p>
         <Link
           href="/signals"
-          className="text-[11px] font-medium text-[var(--fg-muted)] hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+          className="inline-flex h-9 shrink-0 items-center rounded-[var(--radius-sm)] px-3 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         >
           Signals
         </Link>

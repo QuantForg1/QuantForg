@@ -147,7 +147,7 @@ export default function RobotControlCenterPage() {
       <PageMotion className="space-y-4">
         <section
           aria-label="Robot operating summary"
-          className="grid grid-cols-2 items-stretch gap-2 xl:grid-cols-4"
+          className="grid grid-cols-2 items-stretch gap-2 md:grid-cols-4"
         >
           {(
             [
@@ -218,7 +218,7 @@ export default function RobotControlCenterPage() {
           </div>
         ) : null}
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.9fr)]">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.85fr)]">
           <div className="space-y-4">
             <Card>
               <CardHeader>

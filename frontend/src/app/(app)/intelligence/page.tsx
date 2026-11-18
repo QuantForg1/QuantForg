@@ -105,7 +105,7 @@ export default function MarketIntelligencePage() {
         }
       />
       <SessionStrip className="mb-4" />
-      <PageMotion>
+      <PageMotion className="space-y-4">
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <Card className="qf-card-interactive">
             <CardHeader>
@@ -162,7 +162,7 @@ export default function MarketIntelligencePage() {
           </Card>
         </div>
         {spreads.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div>
           <Card>
             <CardHeader>
               <CardTitle>Spread movers</CardTitle>
@@ -183,7 +183,7 @@ export default function MarketIntelligencePage() {
         ) : null}
 
         {positions.length > 0 || pending.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className={positions.length > 0 && pending.length > 0 ? "grid gap-4 xl:grid-cols-2" : undefined}>
           {positions.length > 0 ? (
           <Card>
             <CardHeader>
@@ -226,7 +226,7 @@ export default function MarketIntelligencePage() {
         ) : null}
 
         {events.length > 0 || news.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className={events.length > 0 && news.length > 0 ? "grid items-start gap-4 xl:grid-cols-2" : undefined}>
           {events.length > 0 ? (
           <Card>
             <CardHeader>

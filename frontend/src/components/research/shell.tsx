@@ -301,7 +301,7 @@ export function ResearchShell() {
           meta={
             <>
               <Input
-                className="h-7 w-24 font-mono text-[11px]"
+                className="h-9 w-28 font-mono text-xs"
                 value={layout.symbol}
                 onChange={(e) =>
                   patch({ symbol: e.target.value.toUpperCase().slice(0, 16) })
@@ -309,7 +309,7 @@ export function ResearchShell() {
                 aria-label="Focus symbol"
               />
               <select
-                className="h-7 max-w-[10rem] truncate rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[11px]"
+                className="h-9 max-w-[12rem] truncate rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs"
                 value={strategyKey}
                 onChange={(e) => patch({ strategyKey: e.target.value })}
                 aria-label="Strategy"
@@ -341,7 +341,7 @@ export function ResearchShell() {
             <>
               <Button
                 size="sm"
-                className="h-7 text-[11px]"
+                className="h-9 text-xs"
                 disabled={!strategyKey || validateMut.isPending}
                 onClick={() => validateMut.mutate()}
               >
@@ -350,7 +350,7 @@ export function ResearchShell() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 w-7 px-0"
+                className="h-9 w-9 px-0"
                 aria-label="Refresh research"
                 onClick={refreshAll}
               >
@@ -364,7 +364,7 @@ export function ResearchShell() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 w-7 px-0"
+                className="h-9 w-9 px-0"
                 aria-label="Keyboard shortcuts"
                 onClick={() => setHelpOpen(true)}
               >

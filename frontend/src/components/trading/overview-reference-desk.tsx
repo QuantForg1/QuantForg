@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Coins,
   Gauge,
-  Layers,
   LineChart,
   Wallet,
 } from "lucide-react";
@@ -31,6 +31,13 @@ import {
 } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 import { OverviewMarketIntelligence } from "@/components/trading/overview-market-intelligence";
+import { intelligenceApi } from "@/lib/api/endpoints";
+import { asList, asRecord, str } from "@/lib/desk";
+import {
+  presentField,
+  presentLevel,
+  signalBoardDirection,
+} from "@/lib/trading/trader-ux";
 
 function KpiCard({
   label,
@@ -50,7 +57,7 @@ function KpiCard({
   return (
     <article
       title={title}
-      className="flex min-h-0 min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)]"
+      className="flex h-full min-h-[4.75rem] min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)]"
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
@@ -87,13 +94,153 @@ function KpiCard({
  * Order entry reuses ExecutionOrderTicket — never a parallel engine.
  * All figures are caller-supplied live session / research values — never samples.
  */
+function usable(value: string) {
+  const text = value.trim();
+  return (
+    text.length > 0 &&
+    text !== "—" &&
+    text !== "Not available" &&
+    text !== "Unavailable" &&
+    text !== "Price unavailable"
+  );
+}
+
+function directionLabel(row: Record<string, unknown>) {
+  const board = signalBoardDirection(row);
+  if (board === "BUY") return "Bullish";
+  if (board === "SELL") return "Bearish";
+  if (board === "NEUTRAL" || board === "WAIT") return "Neutral";
+  return board;
+}
+
+function prefersGold(row: Record<string, unknown>) {
+  const blob = `${str(row.title)} ${str(row.event)} ${str(row.currency)} ${str(row.country)} ${str(row.symbol)}`.toUpperCase();
+  return /XAU|GOLD|USD/.test(blob);
+}
+
+function NewsPanel({
+  newsQ,
+  calendarQ,
+}: {
+  newsQ: { isLoading: boolean; isError: boolean; data: unknown };
+  calendarQ: { isLoading: boolean; isError: boolean; data: unknown };
+}) {
+  if (newsQ.isLoading || calendarQ.isLoading) {
+    return <p className="text-xs text-[var(--fg-muted)]">Loading the connected news and calendar feeds.</p>;
+  }
+  if (newsQ.isError && calendarQ.isError) {
+    return (
+      <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
+        The news and economic-calendar feeds could not be loaded. No headlines are shown in their place.
+      </p>
+    );
+  }
+  const events = asList(calendarQ.isError ? [] : calendarQ.data)
+    .map(asRecord)
+    .sort((a, b) => Number(prefersGold(b)) - Number(prefersGold(a)));
+  const headlines = asList(newsQ.isError ? [] : newsQ.data)
+    .map(asRecord)
+    .sort((a, b) => Number(prefersGold(b)) - Number(prefersGold(a)));
+  if (events.length === 0 && headlines.length === 0) {
+    return (
+      <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
+        No Gold or market headlines are available from the connected news and calendar feeds.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      {events.length > 0 ? (
+        <ul className="space-y-2">
+          {events.slice(0, 8).map((event, index) => {
+            const href = str(event.url || event.link, "");
+            const title = str(event.title || event.event, "Untitled event");
+            return (
+              <li key={`${title}-${index}`} className="min-w-0 border-b border-[var(--border)] pb-2 last:border-0">
+                <p className="text-sm font-medium text-[var(--fg)]">
+                  {href ? (
+                    <a href={href} target="_blank" rel="noreferrer" className="hover:text-[var(--accent)]">
+                      {title}
+                    </a>
+                  ) : (
+                    title
+                  )}
+                </p>
+                <p className="mt-1 text-[11px] text-[var(--fg-subtle)]">
+                  {[str(event.scheduled_at || event.time, ""), str(event.currency || event.country, ""), str(event.impact, "")]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {headlines.length > 0 ? (
+        <ul className="space-y-2">
+          {headlines.slice(0, 8).map((item, index) => {
+            const href = str(item.url || item.link, "");
+            const title = str(item.title || item.headline, "Untitled");
+            return (
+              <li key={`${title}-${index}`} className="min-w-0">
+                <p className="text-sm font-medium text-[var(--fg)]">
+                  {href ? (
+                    <a href={href} target="_blank" rel="noreferrer" className="hover:text-[var(--accent)]">
+                      {title}
+                    </a>
+                  ) : (
+                    title
+                  )}
+                </p>
+                <p className="mt-1 text-[11px] text-[var(--fg-subtle)]">
+                  {[str(item.published_at || item.time, ""), str(item.source, "")]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function SignalFacts({ row }: { row: Record<string, unknown> }) {
+  const confidence = row.ai_confidence ?? row.confidence ?? row.opportunity_score;
+  const confidenceText =
+    typeof confidence === "number" && Number.isFinite(confidence)
+      ? `${confidence <= 1 ? Math.round(confidence * 100) : Math.round(confidence)}%`
+      : "";
+  const facts = [
+    ["Direction", directionLabel(row)],
+    ["Status", presentField(row.status ?? row.signal_status ?? row.state)],
+    ["Time", presentField(row.created_at ?? row.timestamp ?? row.as_of ?? row.time)],
+    ["Timeframe", presentField(row.timeframe ?? row.tf)],
+    ["Entry", presentLevel(row.entry ?? row.entry_price ?? row.entry_candidate, "Entry")],
+    ["Stop loss", presentLevel(row.stop_loss ?? row.SL_candidate, "SL")],
+    ["Take profit", presentLevel(row.take_profit ?? row.TP_candidate, "TP")],
+    ["Confidence", confidenceText],
+  ].filter(([, value]) => usable(value));
+  return (
+    <dl className="grid grid-cols-2 gap-3">
+      {facts.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+            {label}
+          </dt>
+          <dd className="mt-1 truncate text-sm font-semibold text-[var(--fg)]">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function OverviewReferenceDesk({
   equity,
   balance,
   todayPnl,
   todayPnlTone,
-  openPositions,
-  pendingOrders,
   dailyRiskLabel,
   dailyRiskHint,
   metricsUpdatedAt,
@@ -118,8 +265,6 @@ export function OverviewReferenceDesk({
   balance: string;
   todayPnl: string;
   todayPnlTone?: "success" | "danger" | "neutral";
-  openPositions: string;
-  pendingOrders: string;
   /** @deprecated Prefer dailyRiskLabel — Account Risk card removed per overview reference. */
   accountRiskLabel?: string;
   accountRiskHint?: string;
@@ -154,11 +299,25 @@ export function OverviewReferenceDesk({
   const [intelTab, setIntelTab] = useState<"overview" | "signal" | "analysis" | "news">(
     "overview",
   );
+  const newsQ = useQuery({
+    queryKey: ["desk-intelligence-news"],
+    queryFn: () => intelligenceApi.news(12),
+    enabled: intelTab === "news",
+    retry: false,
+    staleTime: 60_000,
+  });
+  const calendarQ = useQuery({
+    queryKey: ["desk-intelligence-calendar"],
+    queryFn: () => intelligenceApi.calendar(12),
+    enabled: intelTab === "news",
+    retry: false,
+    staleTime: 60_000,
+  });
   return (
     <div className="space-y-4">
       <section
         aria-label="Account metrics"
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5"
+        className="grid grid-cols-2 items-stretch gap-2 xl:grid-cols-4"
       >
         <KpiCard
           label="Account Equity"
@@ -185,17 +344,6 @@ export function OverviewReferenceDesk({
           }
           title="Today's combined realized and floating profit or loss."
           icon={<LineChart className="h-3.5 w-3.5" />}
-        />
-        <KpiCard
-          label="Open Positions"
-          value={openPositions}
-          hint={
-            pendingOrders === "—"
-              ? "Pending unavailable"
-              : `${pendingOrders} pending orders`
-          }
-          title="Open positions on your authorized account."
-          icon={<Layers className="h-3.5 w-3.5" />}
         />
         <KpiCard
           label="Daily Risk"
@@ -302,26 +450,50 @@ export function OverviewReferenceDesk({
             ) : null}
             {intelTab === "signal" ? (
               topSignal ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-[var(--fg)]">{marketBias}</p>
-                  <p className="text-xs leading-relaxed text-[var(--fg-muted)]">{marketBiasDetail}</p>
+                <div className="space-y-3">
+                  <SignalFacts row={topSignal} />
+                  {usable(marketBiasDetail) ? (
+                    <p className="text-xs leading-relaxed text-[var(--fg-muted)]">{marketBiasDetail}</p>
+                  ) : null}
+                  <p className="text-[11px] text-[var(--fg-subtle)]">
+                    Research signal only. It does not place or modify an order.
+                  </p>
                 </div>
               ) : (
-                <p className="flex items-start gap-2 text-xs text-[var(--fg-muted)]">
+                <p className="flex items-start gap-2 text-xs leading-relaxed text-[var(--fg-muted)]">
                   <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                  No live gold signal is available right now.
+                  No live Gold signal is currently available from the signal service.
                 </p>
               )
             ) : null}
             {intelTab === "analysis" ? (
-              <p className="text-xs text-[var(--fg-muted)]">
-                Support, resistance, regime, and momentum on Overview are calculated from closed {timeframe} candles. They are not used for orders.
-              </p>
+              <div className="space-y-3">
+                <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
+                  Advisory read of closed {timeframe} candles and the current tick. This explanation is not an executable signal and is not sent to the order path.
+                </p>
+                {usable(marketBias) ? (
+                  <p className="text-sm font-semibold text-[var(--fg)]">{marketBias}</p>
+                ) : null}
+                {usable(marketBiasDetail) ? (
+                  <p className="text-xs leading-relaxed text-[var(--fg-muted)]">{marketBiasDetail}</p>
+                ) : null}
+                <OverviewMarketIntelligence
+                  timeframe={timeframe}
+                  lastPrice={lastPrice}
+                  marketFeedStatus={marketFeedStatus}
+                  tickUpdatedAt={tickUpdatedAt}
+                  tickTime={tickTime}
+                  tickLoading={tickLoading}
+                  tickError={tickError}
+                  support={support}
+                  resistance={resistance}
+                  confidencePct={confidencePct}
+                  signalDirection={signalDirection}
+                />
+              </div>
             ) : null}
             {intelTab === "news" ? (
-              <p className="text-xs text-[var(--fg-muted)]">
-                No news feed is connected on this desk.
-              </p>
+              <NewsPanel newsQ={newsQ} calendarQ={calendarQ} />
             ) : null}
           </div>
         </section>

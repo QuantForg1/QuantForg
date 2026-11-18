@@ -390,16 +390,6 @@ export default function DashboardPage() {
             : "—"
         }
         todayPnlTone={todayPnlTone}
-        openPositions={
-          noBroker || sessionMismatch || positionsUnavailable
-            ? "—"
-            : String(positions.length)
-        }
-        pendingOrders={
-          noBroker || sessionMismatch
-            ? "—"
-            : String(num(session.pending_orders) || 0)
-        }
         accountRiskLabel={
           riskPct == null
             ? "—"
