@@ -43,8 +43,7 @@ _PROTECTION_COPY = (
         "id": "risk_validation",
         "title": "Pre-trade risk validation",
         "detail": (
-            "Orders are checked against your effective risk limits "
-            "before submission."
+            "Orders are checked against your effective risk limits before submission."
         ),
     },
     {

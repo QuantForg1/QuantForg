@@ -8,10 +8,14 @@ from uuid import uuid4
 
 import pytest
 
-from app.application.services import runtime_policy_store as rps
-from app.application.services import user_risk_profile_store as store
-from app.domain.institutional_trading import owner_live_limits as ol
-from app.domain.institutional_trading import runtime_policy as rp
+from app.application.services import (
+    runtime_policy_store as rps,
+    user_risk_profile_store as store,
+)
+from app.domain.institutional_trading import (
+    owner_live_limits as ol,
+    runtime_policy as rp,
+)
 from app.domain.institutional_trading.live_trading_control import (
     LiveTradingRiskConfig,
 )

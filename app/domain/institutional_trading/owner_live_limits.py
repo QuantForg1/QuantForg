@@ -1220,9 +1220,7 @@ def evaluate_owner_entry(
             if month < 0 and eq > 0:
                 loss = -month
                 base = eq + loss
-                cap_usd = (base * month_cap / _PCT).quantize(
-                    _CENT, rounding=ROUND_DOWN
-                )
+                cap_usd = (base * month_cap / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
                 if loss > cap_usd:
                     violations.append(
                         f"OWNER_MONTHLY_LOSS: monthly loss {loss} > {cap_usd} "

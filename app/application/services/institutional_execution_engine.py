@@ -124,7 +124,6 @@ class PipelineResult:
         }
 
 
-
 def parse_order_intent(
     *,
     symbol: str,

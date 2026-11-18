@@ -291,8 +291,7 @@ def validate_profile_changes(
         )
         if aggregate < planned:
             errors["aggregate_open_risk_pct"] = (
-                "Aggregate open risk must be at least the risk per trade "
-                f"({planned}%)"
+                f"Aggregate open risk must be at least the risk per trade ({planned}%)"
             )
     return ProfileValidation(ok=not errors, values=merged, errors=errors)
 
