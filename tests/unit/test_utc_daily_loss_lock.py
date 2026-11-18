@@ -48,6 +48,9 @@ from app.domain.institutional_trading.operations.gold_execution_readiness import
 
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
+# Former shared baseline daily stop; the lock mechanism is tested with it.
+LEGACY_DAILY_CAP = Decimal("25.0")
+
 
 def test_utc_session_day_is_iso_date() -> None:
     assert utc_session_day(datetime(2026, 8, 27, 23, 59, tzinfo=UTC)) == "2026-08-27"
@@ -61,8 +64,10 @@ def test_utc_loss_pct_matches_risk_engine_balance_base() -> None:
         balance=Decimal("165.13"),
     )
     assert pct == Decimal("15.21")
-    cap = DEFAULT_ITE_CONFIG.max_daily_loss_pct
-    assert cap == MAX_DAILY_LOSS_PCT == Decimal("25.0")
+    assert (
+        DEFAULT_ITE_CONFIG.max_daily_loss_pct == MAX_DAILY_LOSS_PCT == Decimal("30.0")
+    )
+    cap = LEGACY_DAILY_CAP
     # Loss $25.11 on start-of-day $190.24 is under the 25% cap ($47.56).
     assert not utc_daily_loss_exceeded(
         daily_pnl=Decimal("-25.11"),
@@ -86,8 +91,8 @@ def test_utc_loss_pct_matches_risk_engine_balance_base() -> None:
 
 
 def test_daily_loss_boundary_owner_stop_25_percent() -> None:
-    """Block only when loss > owner stop (25% of a $100 start of day = $25)."""
-    cap = MAX_DAILY_LOSS_PCT
+    """Block only when loss > the stop (25% of a $100 start of day = $25)."""
+    cap = LEGACY_DAILY_CAP
     for loss, blocked in (("24.99", False), ("25.00", False), ("25.01", True)):
         balance = Decimal("100") - Decimal(loss)
         assert (
@@ -102,14 +107,14 @@ def test_daily_loss_boundary_owner_stop_25_percent() -> None:
 
 
 def test_authoritative_cap_rejects_above_owner_ceiling() -> None:
-    """Owner limits: daily-loss pct is configurable only within (0, 25]."""
+    """System bound: daily-loss pct is configurable only within (0, 50]."""
     assert coerce_max_daily_loss_pct(Decimal("3.0")) == Decimal("3.0")
-    assert coerce_max_daily_loss_pct(Decimal("25.0")) == Decimal("25.0")
-    with pytest.raises(ValueError, match=r"\(0, 25.0\]"):
-        coerce_max_daily_loss_pct(Decimal("25.01"))
-    with pytest.raises(ValueError, match=r"\(0, 25.0\]"):
-        coerce_max_daily_loss_pct(Decimal("48.0"))
-    with pytest.raises(ValueError, match=r"\(0, 25.0\]"):
+    assert coerce_max_daily_loss_pct(Decimal("50.0")) == Decimal("50.0")
+    with pytest.raises(ValueError, match=r"\(0, 50.0\]"):
+        coerce_max_daily_loss_pct(Decimal("50.01"))
+    with pytest.raises(ValueError, match=r"\(0, 50.0\]"):
+        coerce_max_daily_loss_pct(Decimal("80.0"))
+    with pytest.raises(ValueError, match=r"\(0, 50.0\]"):
         coerce_max_daily_loss_pct(Decimal("0"))
 
 
@@ -128,7 +133,7 @@ def test_lock_arms_when_utc_day_exceeds_and_clears_when_under() -> None:
         daily_pnl=Decimal("-25.01"),
         equity=Decimal("74.99"),
         balance=Decimal("74.99"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=True,
     )
     assert plane.daily_loss_exceeded is True
@@ -140,7 +145,7 @@ def test_lock_arms_when_utc_day_exceeds_and_clears_when_under() -> None:
         daily_pnl=Decimal("0"),
         equity=Decimal("80.99"),
         balance=Decimal("80.99"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=True,
         now=datetime(2026, 8, 28, 0, 1, tzinfo=UTC),
     )
@@ -161,7 +166,7 @@ def test_untrusted_deals_fail_closed_do_not_clear() -> None:
         daily_pnl=Decimal("0"),
         equity=Decimal("165.13"),
         balance=Decimal("165.13"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=False,
     )
     assert out["daily_loss_exceeded"] is True
@@ -183,7 +188,7 @@ def test_untrusted_deals_do_not_arm_durable_latch() -> None:
         daily_pnl=Decimal("-99"),
         equity=Decimal("165.13"),
         balance=Decimal("165.13"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=False,
     )
     assert out["daily_loss_exceeded"] is False
@@ -206,7 +211,7 @@ def test_trusted_broker_loss_over_cap_still_blocks() -> None:
         daily_pnl=Decimal("-149.53"),
         equity=Decimal("161.98"),
         balance=Decimal("161.98"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=True,
     )
     assert out["daily_loss_exceeded"] is True
@@ -239,7 +244,7 @@ def test_restart_untrusted_zero_does_not_fabricate_daily_loss() -> None:
         daily_pnl=Decimal("0"),
         equity=Decimal("161.98"),
         balance=Decimal("161.98"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=False,
     )
     assert out["daily_pnl"] is None
@@ -255,7 +260,7 @@ def test_cap_unchanged() -> None:
     assert AiScalpingConfig().allow_martingale is False
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 
-    assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("25.0")
+    assert DEFAULT_ITE_CONFIG.max_daily_loss_pct == Decimal("30.0")
     resets = utc_daily_loss_resets_at(datetime(2026, 8, 27, 14, 0, tzinfo=UTC))
     assert resets.startswith("2026-08-28T00:00:00")
 
@@ -541,7 +546,7 @@ def test_cleared_lock_rearms_auto_without_restart(
         daily_pnl=Decimal("0"),
         equity=Decimal("165.13"),
         balance=Decimal("165.13"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=True,
         now=datetime(2026, 8, 28, 0, 1, tzinfo=UTC),
     )
@@ -678,7 +683,7 @@ def test_daily_loss_is_global_blocker_mt5_autotrading_is_safety() -> None:
         daily_pnl=Decimal("-92.31"),
         equity=Decimal("100"),
         balance=Decimal("100"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=True,
         floating_pnl=Decimal("0"),
     )
@@ -875,7 +880,7 @@ def test_live_15_21_percent_does_not_lock_under_25_pct_stop() -> None:
         daily_pnl=Decimal("-25.11"),
         equity=Decimal("165.13"),
         balance=Decimal("165.13"),
-        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        max_daily_loss_pct=LEGACY_DAILY_CAP,
         trusted=True,
     )
     assert out["daily_loss_pct"] == "15.21"
@@ -899,10 +904,10 @@ def test_operator_cannot_set_daily_loss_above_hard_cap() -> None:
         role="owner",
         display_name="Daily Loss Cap Tester",
     )
-    with pytest.raises(ValueError, match=r"\(0, 25.0\]"):
+    with pytest.raises(ValueError, match=r"\(0, 50.0\]"):
         plane.update_auto_trade_controls(
             op,
-            max_daily_loss_pct=Decimal("25.01"),
+            max_daily_loss_pct=Decimal("50.01"),
             reason="reject above hard ceiling",
         )
     policy = plane.update_auto_trade_controls(

@@ -365,7 +365,11 @@ def live_strategy_max_open(ite_config: Any | None) -> int:
         )
 
         return align_live_scalp_cap(value, trading_mode="scalping")
-    return max(1, value)
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    return max(1, min(value, active_max_open_positions()))
 
 
 def capacity_available(*, current_count: int, configured_max: int) -> bool:

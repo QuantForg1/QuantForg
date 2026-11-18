@@ -63,9 +63,17 @@ def _codes(reasons: list[str]) -> set[str]:
 
 
 def test_reported_window_is_the_owner_desk() -> None:
-    assert f"{ol.OWNER_SESSION_START_UTC:%H:%M}" == "07:00"
-    assert f"{ol.OWNER_SESSION_END_UTC:%H:%M}" == "17:00"
+    from app.domain.institutional_trading.runtime_policy import (
+        active_trading_window,
+    )
+
+    # Default for a new profile is 24/5; the installed (former) profile is
+    # Mon-Fri 07:00-17:00 UTC.
+    assert f"{ol.OWNER_SESSION_START_UTC:%H:%M}" == "00:00"
     assert frozenset({0, 1, 2, 3, 4}) == ol.OWNER_SESSION_WEEKDAYS
+    days, start, end = active_trading_window()
+    assert (f"{start:%H:%M}", f"{end:%H:%M}") == ("07:00", "17:00")
+    assert frozenset({0, 1, 2, 3, 4}) == days
 
 
 @pytest.mark.parametrize("moment", _INSIDE)
@@ -107,8 +115,13 @@ def test_risk_limits_still_reject_inside_the_window(moment: datetime) -> None:
 
 
 def test_daily_loss_cap_blocks_above_25_percent() -> None:
-    assert D("25.0") == ol.OWNER_DAILY_LOSS_PCT
-    assert D("9.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
+    from app.domain.institutional_trading.runtime_policy import (
+        active_daily_loss_pct,
+        active_max_planned_risk_pct,
+    )
+
+    assert D("25.0") == active_daily_loss_pct()
+    assert D("9.0") == active_max_planned_risk_pct()
     assert ol.daily_loss_exceeded(daily_pnl=D("-12.51"), base_now=D("37.49")) is True
     assert ol.daily_loss_exceeded(daily_pnl=D("-12.50"), base_now=D("37.50")) is False
 

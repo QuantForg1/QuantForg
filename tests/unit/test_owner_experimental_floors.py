@@ -51,23 +51,23 @@ def test_owner_defaults_match_the_owner_baseline() -> None:
     assert ol.OWNER_EXPERIMENTAL_REWARD_RISK == ()
     assert ol.OWNER_MIN_TRADE_QUALITY == 75
     assert Decimal("1.00") == ol.OWNER_SL_ATR_MULTIPLIER
-    assert Decimal("0.01") == ol.OWNER_MAX_LOT
-    assert Decimal("9.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
-    assert Decimal("9.0") == ol.OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
-    assert Decimal("25.0") == ol.OWNER_DAILY_LOSS_PCT
-    assert Decimal("0.45") == ol.OWNER_MAX_SPREAD
-    assert ol.OWNER_MAX_OPEN_POSITIONS == 1
+    assert Decimal("0.50") == ol.OWNER_MAX_LOT
+    assert Decimal("15.0") == ol.OWNER_MAX_PLANNED_RISK_PCT
+    assert Decimal("20.0") == ol.OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
+    assert Decimal("30.0") == ol.OWNER_DAILY_LOSS_PCT
+    assert Decimal("1.00") == ol.OWNER_MAX_SPREAD
+    assert ol.OWNER_MAX_OPEN_POSITIONS == 5
     baseline = approved_baseline()
     assert baseline["min_reward_risk"] == "1.50"
     assert baseline["min_trade_quality"] == 75
     assert baseline["preferred_reward_risk"] == "1.50"
     assert baseline["stop_atr_multiplier"] == "1.00"
-    assert baseline["max_planned_risk_pct"] == "9.0"
-    assert baseline["max_aggregate_open_risk_pct"] == "9.0"
-    assert baseline["daily_loss_pct"] == "25.0"
-    assert baseline["max_spread"] == "0.45"
-    assert baseline["max_concurrent_positions"] == 1
-    assert baseline["session_utc"] == "07:00-17:00 Mon-Fri"
+    assert baseline["max_planned_risk_pct"] == "15.0"
+    assert baseline["max_aggregate_open_risk_pct"] == "20.0"
+    assert baseline["daily_loss_pct"] == "30.0"
+    assert baseline["max_spread"] == "1.00"
+    assert baseline["max_concurrent_positions"] == 5
+    assert baseline["session_utc"] == "24/5 Mon-Fri UTC"
     commission = baseline["commission"]
     assert commission["amount_usd"] == "0.00"
     assert commission["status"] == "VERIFIED_BY_OWNER_SUPPORT"
@@ -106,8 +106,9 @@ def test_admin_can_only_tighten_and_cannot_save_a_lower_experiment() -> None:
         assert saved.ok is False, raw
     assert validate_policy_changes(base, {"min_trade_quality": 75}).ok
     assert validate_policy_changes(base, {"min_trade_quality": 100}).ok
-    assert validate_policy_changes(base, {"min_trade_quality": 74}).ok is False
-    assert validate_policy_changes(base, {"min_trade_quality": 70}).ok is False
+    # Profile quality floor is 70 (system bound); below it is rejected.
+    assert validate_policy_changes(base, {"min_trade_quality": 70}).ok
+    assert validate_policy_changes(base, {"min_trade_quality": 69}).ok is False
     for raw in ("1.00", "1.25", "1.50"):
         assert validate_policy_changes(base, {"stop_atr_multiplier": raw}).ok
     for raw in ("0.75", "0.90"):
@@ -117,17 +118,17 @@ def test_admin_can_only_tighten_and_cannot_save_a_lower_experiment() -> None:
     other = validate_policy_changes(base, {"stop_atr_multiplier": "1.10"})
     assert other.ok is False
     assert validate_policy_changes(base, {"kill_switch_bypass": True}).ok is False
-    assert validate_policy_changes(base, {"max_lot": "0.02"}).ok is False
+    assert validate_policy_changes(base, {"max_lot": "0.51"}).ok is False
     assert validate_policy_changes(base, {"max_planned_risk_pct": "5"}).ok
     assert validate_policy_changes(base, {"max_planned_risk_pct": "9"}).ok
-    assert validate_policy_changes(base, {"max_planned_risk_pct": "9.01"}).ok is False
+    assert validate_policy_changes(base, {"max_planned_risk_pct": "15.01"}).ok is False
     assert validate_policy_changes(base, {"max_planned_risk_pct": "20"}).ok is False
     assert validate_policy_changes(base, {"daily_loss_pct": "19"}).ok
     assert validate_policy_changes(base, {"daily_loss_pct": "25"}).ok
-    assert validate_policy_changes(base, {"daily_loss_pct": "25.01"}).ok is False
+    assert validate_policy_changes(base, {"daily_loss_pct": "30.01"}).ok is False
     assert validate_policy_changes(base, {"daily_loss_pct": "48"}).ok is False
     assert validate_policy_changes(base, {"max_spread": "0.45"}).ok
-    assert validate_policy_changes(base, {"max_spread": "0.46"}).ok is False
+    assert validate_policy_changes(base, {"max_spread": "1.01"}).ok is False
 
 
 def test_illegal_saved_values_fail_closed_to_the_published_default() -> None:

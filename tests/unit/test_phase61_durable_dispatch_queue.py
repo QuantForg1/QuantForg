@@ -285,7 +285,7 @@ def test_risk_ceiling_blocks_enqueue_delivery() -> None:
         proposal=RiskSettingProposal(
             planned_risk_pct=Decimal("5"),
             aggregate_open_risk_pct=Decimal("9"),
-            max_lot=Decimal("1.00"),  # exceeds 0.01 Owner ceiling
+            max_lot=Decimal("9.00"),  # above the 5.00 system lot bound
             daily_loss_pct=Decimal("25"),
             max_concurrent_positions=1,
         ),

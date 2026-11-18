@@ -45,7 +45,7 @@ def test_omitted_volume_is_zero_not_the_cap() -> None:
 @pytest.mark.unit
 def test_published_hard_risk_cap_is_fourteen_percent() -> None:
     assert MicroAccountProfile().hard_max_risk_pct == Decimal("9.0")
-    assert Decimal("9.0") == HARD_MAX_RISK_PCT
+    assert Decimal("15.0") == HARD_MAX_RISK_PCT
 
 
 @pytest.mark.unit

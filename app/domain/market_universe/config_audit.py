@@ -11,6 +11,7 @@ from typing import Any
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_DAILY_LOSS_PCT,
     OWNER_MAX_OPEN_POSITIONS,
+    SYSTEM_MAX_OPEN_POSITIONS,
 )
 from app.domain.market_universe.constants import (
     ALLOW_LIVE_PROMOTION,
@@ -226,12 +227,13 @@ def build_configuration_audit() -> dict[str, Any]:
             asset_class="ALL (live gold book)",
             live_or_research="LIVE_EFFECTIVE",
             precedence="SCALPING_V1",
+            # Static strategy ceiling; each user's own profile cap binds live.
             status=(
                 "LIVE_EFFECTIVE"
-                if int(max_open) == int(OWNER_MAX_OPEN_POSITIONS)
+                if 1 <= int(max_open) <= int(SYSTEM_MAX_OPEN_POSITIONS)
                 else "CONFLICTING"
             ),
-            note="Research must not change this.",
+            note="Research must not change this. Per-user profile cap binds.",
         ),
         _row(
             setting="MAX_DAILY_LOSS_PCT",

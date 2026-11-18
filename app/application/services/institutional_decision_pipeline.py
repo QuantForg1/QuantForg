@@ -34,6 +34,7 @@ from app.domain.institutional_trading.executable_direction import (
     resolve_executable_direction,
 )
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
+from app.domain.institutional_trading.runtime_policy import active_max_open_positions
 from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
 from core.logging import get_logger
 
@@ -107,7 +108,7 @@ def risk_config_from_ite(
         ),
         max_daily_loss_pct=cfg.max_daily_loss_pct,
         max_weekly_loss_pct=cfg.max_weekly_drawdown_pct,
-        max_open_positions=cfg.max_open_trades,
+        max_open_positions=min(int(cfg.max_open_trades), active_max_open_positions()),
         max_consecutive_losses=cfg.max_consecutive_losses,
         max_spread=cfg.max_spread_reject,
         min_lot=resolved_min,
@@ -1375,7 +1376,7 @@ class InstitutionalDecisionPipeline:
                     profits = (account.floating_pnl,)
                 add = may_add_scalping_trade(
                     open_positions=account.open_positions,
-                    max_open=cfg.max_open_trades,
+                    max_open=min(int(cfg.max_open_trades), active_max_open_positions()),
                     new_confidence=confluence.confidence,
                     best_open_confidence=account.best_open_confidence,
                     new_direction=confluence.direction.value,

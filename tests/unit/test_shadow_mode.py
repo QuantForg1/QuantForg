@@ -91,13 +91,13 @@ def test_planned_risk_cap_uses_shadow_equity() -> None:
     t = _sell(book)
     book.update(bars=[_bar(1, "4002.5", "3999.0")])  # SL: -2.00
     assert t.outcome == "SL"
-    # Shadow equity 30.88 -> 9% floors to $2.77: $2.78 is refused, $2.77 is allowed.
+    # Shadow equity 30.88 -> 15% floors to $4.63: $4.64 is refused, $4.63 is allowed.
     reason = book.entry_block_reason(
-        equity=D("32.88"), now=T0, planned_risk_usd=D("2.78")
+        equity=D("32.88"), now=T0, planned_risk_usd=D("4.64")
     )
     assert reason and reason.startswith("SHADOW_SL_RISK")
     assert (
-        book.entry_block_reason(equity=D("32.88"), now=T0, planned_risk_usd=D("2.77"))
+        book.entry_block_reason(equity=D("32.88"), now=T0, planned_risk_usd=D("4.63"))
         is None
     )
 

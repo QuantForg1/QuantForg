@@ -737,7 +737,6 @@ class OperatorWatch:
 
     def _violations(self, pos: Any, entry: JournalEntry, *, equity: Decimal) -> None:
         from app.domain.institutional_trading.owner_live_limits import (
-            OWNER_MAX_LOT,
             max_planned_risk_usd,
         )
         from app.domain.institutional_trading.runtime_policy import (
@@ -748,8 +747,11 @@ class OperatorWatch:
         problems: list[str] = []
         if not is_gold_symbol(str(pos.symbol)):
             problems.append(f"non-Gold symbol {pos.symbol}")
-        if _dec(pos.volume) > OWNER_MAX_LOT:
-            problems.append(f"volume {pos.volume} > {OWNER_MAX_LOT}")
+        from app.domain.institutional_trading.runtime_policy import active_max_lot
+
+        lot_cap = active_max_lot()
+        if _dec(pos.volume) > lot_cap:
+            problems.append(f"volume {pos.volume} > {lot_cap}")
         if _dec(pos.stop_loss) <= 0:
             problems.append("missing stop loss")
         if _dec(pos.take_profit) <= 0:

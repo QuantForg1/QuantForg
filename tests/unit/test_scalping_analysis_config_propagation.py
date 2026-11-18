@@ -731,8 +731,8 @@ def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
         {
             "max_drawdown_pct": "10",
             "max_planned_risk_pct": "50",
-            "max_aggregate_open_risk_pct": "50",
-            "max_lot": "1.00",
+            "max_aggregate_open_risk_pct": "60",
+            "max_lot": "9.00",
             "min_trade_quality": 10,
             "min_reward_risk": "1.50",
         }
@@ -743,8 +743,8 @@ def test_loss_drawdown_lot_and_aggregate_caps_cannot_be_loosened() -> None:
             peak_equity=Decimal("100"),
         )
         assert any(r.startswith("OWNER_DRAWDOWN") for r in reasons)
-        assert max_planned_risk_usd(Decimal("100")) == Decimal("9.00")
-        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("9.00")
+        assert max_planned_risk_usd(Decimal("100")) == Decimal("15.00")
+        assert max_aggregate_risk_usd(Decimal("100")) == Decimal("20.00")
     finally:
         reset_runtime_policy(token)
     halt = DurableHaltController()

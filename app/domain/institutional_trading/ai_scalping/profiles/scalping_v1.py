@@ -120,7 +120,12 @@ _LEGACY_SCALP_CAPS = frozenset({1, 2, 3, 5})
 
 
 def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> int:
-    """Align the plane cap to the live profile. Never exceeds the owner limit."""
+    """Align the plane cap to the live profile and the active user cap."""
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    user_cap = active_max_open_positions()
     profile = int(SCALPING_V1.max_open_trades)
     try:
         n = int(current)
@@ -128,7 +133,7 @@ def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> in
         n = 1
     mode = str(trading_mode or "scalping").strip().lower()
     if mode != "scalping":
-        return max(1, min(n, SYSTEM_MAX_OPEN_POSITIONS))
+        return max(1, min(n, user_cap))
     if n in _LEGACY_SCALP_CAPS:
-        return min(profile, SYSTEM_MAX_OPEN_POSITIONS)
-    return max(1, min(n, profile, SYSTEM_MAX_OPEN_POSITIONS))
+        return min(profile, user_cap)
+    return max(1, min(n, profile, user_cap))

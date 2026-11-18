@@ -445,11 +445,11 @@ class TestAutoTradeOpsControls:
 
         with pytest.raises(ValueError, match="max_open_trades"):
             plane.update_auto_trade_controls(
-                op, max_open_positions=6, reason="above owner limit"
+                op, max_open_positions=11, reason="above the system bound"
             )
         with pytest.raises(ValueError, match="risk_per_trade_pct"):
             plane.update_auto_trade_controls(
-                op, risk_per_trade_pct=Decimal("20.01"), reason="above owner ceiling"
+                op, risk_per_trade_pct=Decimal("25.01"), reason="above the system bound"
             )
         policy = plane.update_auto_trade_controls(
             op,

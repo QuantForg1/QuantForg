@@ -485,8 +485,10 @@ def test_risk_ceiling_cannot_bypass() -> None:
         allow_grid_averaging=True,
         allow_revenge_sizing=True,
     )
-    assert cfg.risk_per_trade_pct == HARD_CEILING_RISK_PER_TRADE_PCT
-    assert cfg.max_daily_loss_pct == HARD_CEILING_DAILY_LOSS_PCT
+    # The installed profile's values (former baseline here), never above
+    # the system ceilings.
+    assert cfg.risk_per_trade_pct == Decimal("9.0") <= HARD_CEILING_RISK_PER_TRADE_PCT
+    assert cfg.max_daily_loss_pct == Decimal("25.0") <= HARD_CEILING_DAILY_LOSS_PCT
     assert cfg.max_open_positions == 1  # owner maximum
     assert cfg.allow_martingale is False
     assert cfg.allow_grid_averaging is False

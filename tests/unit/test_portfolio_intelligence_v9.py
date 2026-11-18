@@ -102,9 +102,9 @@ def test_capital_protection_weekly_halt_off_does_not_block() -> None:
 
 @pytest.mark.unit
 def test_capital_protection_scales_near_limit() -> None:
-    # Approach band starts at 75% of the 25% halt, which is 18.75% of equity.
+    # Approach band starts at 75% of the 30% halt, which is 22.5% of equity.
     state = build_portfolio_state(
-        equity=100_000, daily_pnl=-20_000, current_drawdown_pct=0
+        equity=100_000, daily_pnl=-24_000, current_drawdown_pct=0
     )
     prot = evaluate_capital_protection(state)
     assert prot.allow_new_exposure is True

@@ -531,8 +531,8 @@ def test_book_cap_is_separate_from_the_per_trade_cap():
     equity = Decimal("100")
     token = use_runtime_policy(approved_baseline())
     try:
-        assert max_planned_risk_usd(equity) == Decimal("9.00")
-        assert max_aggregate_risk_usd(equity) == Decimal("9.00")
+        assert max_planned_risk_usd(equity) == Decimal("15.00")
+        assert max_aggregate_risk_usd(equity) == Decimal("20.00")
     finally:
         reset_runtime_policy(token)
     tighter = use_runtime_policy(
@@ -567,16 +567,18 @@ def test_saved_position_cap_is_one_and_rejects_higher():
 
     baseline = use_runtime_policy(approved_baseline())
     try:
-        assert active_max_open_positions() == 1
+        assert active_max_open_positions() == 5
     finally:
         reset_runtime_policy(baseline)
-    illegal = use_runtime_policy({**approved_baseline(), "max_concurrent_positions": 2})
+    illegal = use_runtime_policy(
+        {**approved_baseline(), "max_concurrent_positions": 11}
+    )
     try:
-        assert active_max_open_positions() == 1
+        assert active_max_open_positions() == 5
     finally:
         reset_runtime_policy(illegal)
     rejected = validate_policy_changes(
-        approved_baseline(), {"max_concurrent_positions": 2}
+        approved_baseline(), {"max_concurrent_positions": 6}
     )
     assert rejected.ok is False
 

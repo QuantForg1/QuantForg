@@ -160,10 +160,11 @@ COMMISSION_CURRENCY = "USD"
 COMMISSION_CONFIGURATION_VERSION = "1"
 
 # Compatibility names used by other layers (values at the reference capital).
-OWNER_SL_RISK_PCT = OWNER_MAX_PLANNED_RISK_PCT
+# Ceiling for static per-trade percent configs (the profile bound).
+OWNER_SL_RISK_PCT = SYSTEM_MAX_PLANNED_RISK_PCT
 # No minimum planned-risk floor: the stop comes from ATR/structure, not a $ band.
 OWNER_MIN_SL_RISK_USD = Decimal("0")
-OWNER_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_PCT
+OWNER_DAILY_LOSS_CEILING_PCT = SYSTEM_MAX_DAILY_LOSS_PCT
 
 
 def _active_planned_risk_pct() -> Decimal:

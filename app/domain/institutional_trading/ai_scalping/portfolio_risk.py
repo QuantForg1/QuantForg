@@ -125,7 +125,6 @@ def aggregate_portfolio_risk(
     max_dd = daily_loss_cap_pct(
         daily_pnl=daily_pnl,
         base_now=equity,
-        pct=Decimal(str(ite.max_daily_loss_pct)),
     )
     max_exp = Decimal(str(cfg.max_daily_exposure_pct))
 

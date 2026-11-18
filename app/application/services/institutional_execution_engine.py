@@ -1012,6 +1012,7 @@ class InstitutionalExecutionEngine:
                     live_prefs_tighten as _live_prefs,
                 )
                 from app.domain.institutional_trading.runtime_policy import (
+                    active_daily_loss_pct,
                     active_max_lot,
                     active_max_open_positions,
                     active_max_planned_risk_pct,
@@ -1030,6 +1031,7 @@ class InstitutionalExecutionEngine:
                     fixed_lot=min(live_constraints.max_volume, active_max_lot()),
                     max_open_positions=active_max_open_positions(),
                     max_risk_per_trade_pct=active_max_planned_risk_pct(),
+                    max_daily_loss_pct=active_daily_loss_pct(),
                     contract_size=live_cs,
                 )
                 # Customer Risk Center prefs may only tighten ceilings.

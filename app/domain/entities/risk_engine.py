@@ -32,11 +32,32 @@ from app.domain.institutional_trading.owner_live_limits import (
 )
 
 
+def _active_max_lot() -> Decimal:
+    try:
+        from app.domain.institutional_trading.runtime_policy import active_max_lot
+
+        return active_max_lot()
+    except Exception:
+        return OWNER_MAX_LOT
+
+
+def _active_max_open_positions() -> int:
+    try:
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_open_positions,
+        )
+
+        return active_max_open_positions()
+    except Exception:
+        return OWNER_MAX_OPEN_POSITIONS
+
+
 @dataclass(frozen=True, slots=True)
 class RiskEngineConfig:
     """Runtime limits for a risk check (defaults + optional profile overrides)."""
 
-    max_lot: Decimal = OWNER_MAX_LOT
+    # Active (per-user) profile caps at construction; defaults otherwise.
+    max_lot: Decimal = field(default_factory=_active_max_lot)
     min_lot: Decimal = Decimal("0.01")
     lot_step: Decimal = Decimal("0.01")
     max_risk_per_trade_pct: Decimal = Decimal("1")  # % of equity
@@ -57,9 +78,9 @@ class RiskEngineConfig:
     max_asset_class_exposure_pct: Decimal = Decimal("50")
     max_total_exposure_pct: Decimal = Decimal("80")
     max_correlated_exposure_pct: Decimal = Decimal("40")
-    max_open_positions: int = OWNER_MAX_OPEN_POSITIONS
+    max_open_positions: int = field(default_factory=_active_max_open_positions)
     default_sizing: PositionSizingMethod = PositionSizingMethod.PERCENTAGE_RISK
-    fixed_lot: Decimal = OWNER_MAX_LOT
+    fixed_lot: Decimal = field(default_factory=_active_max_lot)
     fixed_dollar_risk: Decimal = Decimal("100")
     atr_multiplier: Decimal = Decimal("1.5")
     # XAUUSD MT5 contract (100 oz). Never use FX 100000 defaults on this desk.

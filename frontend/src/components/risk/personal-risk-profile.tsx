@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -129,13 +129,10 @@ export function PersonalRiskProfile() {
     setDraft({ ...asRecord(asRecord(profileQ.data).effective) });
   }, [profileQ.isSuccess, profileQ.dataUpdatedAt, profileQ.data]);
 
-  const changes = useMemo(() => {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(draft)) {
-      if (!sameValue(draft[key], effective[key])) out[key] = draft[key];
-    }
-    return out;
-  }, [draft, effective]);
+  const changes: Record<string, unknown> = {};
+  for (const key of Object.keys(draft)) {
+    if (!sameValue(draft[key], effective[key])) changes[key] = draft[key];
+  }
   const dirty = Object.keys(changes).length > 0;
 
   const onDone = async (message: string) => {

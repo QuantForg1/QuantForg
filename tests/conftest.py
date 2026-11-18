@@ -59,9 +59,9 @@ def _reset_runtime_trading_policy() -> Iterator[None]:
 
 # The former shared owner baseline (policy v17, 2026-11-16), as a profile.
 LEGACY_TEST_RISK_PROFILE: dict[str, Any] = {
-    "max_planned_risk_pct": "9",
-    "max_aggregate_open_risk_pct": "9",
-    "daily_loss_pct": "25",
+    "max_planned_risk_pct": "9.0",
+    "max_aggregate_open_risk_pct": "9.0",
+    "daily_loss_pct": "25.0",
     "weekly_loss_pct": "0",
     "monthly_loss_pct": "0",
     "max_drawdown_pct": "0",
@@ -79,9 +79,9 @@ LEGACY_TEST_RISK_PROFILE: dict[str, Any] = {
 
 # The same former baseline in risk-profile field names.
 LEGACY_TEST_PROFILE_SETTINGS: dict[str, Any] = {
-    "planned_risk_pct": "9",
-    "aggregate_open_risk_pct": "9",
-    "daily_loss_pct": "25",
+    "planned_risk_pct": "9.0",
+    "aggregate_open_risk_pct": "9.0",
+    "daily_loss_pct": "25.0",
     "max_spread": "0.45",
     "max_lot": "0.01",
     "max_open_positions": 1,

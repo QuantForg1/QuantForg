@@ -196,7 +196,7 @@ async def staging_eligibility_probe(
         proposal = RiskSettingProposal(
             planned_risk_pct=Decimal("10"),
             aggregate_open_risk_pct=Decimal("30"),
-            max_lot=Decimal("1.00"),  # exceeds Owner 0.01 ceiling
+            max_lot=Decimal("9.00"),  # exceeds the 5.00 system lot bound
             daily_loss_pct=Decimal("48"),
             max_concurrent_positions=1,
         )

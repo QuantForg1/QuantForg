@@ -67,16 +67,16 @@ def test_default_proposal_copies_hard_ceilings() -> None:
     proposal = default_user_risk_proposal()
     effective = resolve_effective_risk(proposal)
     assert effective.ok is True
-    assert effective.planned_risk_pct == Decimal("9.0")
-    assert effective.max_lot == Decimal("0.01")
-    assert effective.max_concurrent_positions == 1
-    assert effective.daily_loss_pct == Decimal("25.0")
-    assert effective.aggregate_open_risk_pct == Decimal("9.0")
+    assert effective.planned_risk_pct == Decimal("15.0")
+    assert effective.max_lot == Decimal("0.50")
+    assert effective.max_concurrent_positions == 5
+    assert effective.daily_loss_pct == Decimal("30.0")
+    assert effective.aggregate_open_risk_pct == Decimal("20.0")
 
 
 def test_user_cannot_exceed_hard_ceiling() -> None:
     proposal = RiskSettingProposal(
-        planned_risk_pct=Decimal("10"),
+        planned_risk_pct=Decimal("30"),
         aggregate_open_risk_pct=Decimal("9"),
         max_lot=Decimal("0.01"),
         daily_loss_pct=Decimal("25"),

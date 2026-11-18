@@ -46,6 +46,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     SYSTEM_MAX_PERIOD_LOSS_PCT,
     SYSTEM_MAX_PLANNED_RISK_PCT,
     SYSTEM_MAX_SPREAD,
+    SYSTEM_MIN_REWARD_RISK_FLOOR,
 )
 
 _POLICY: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -535,8 +536,10 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
         except Exception:
             errors.append("experimental min_reward_risk is not a number")
         else:
+            # Experimental floors below the active floor are retired: every
+            # profile floor is at least the system floor (1.00).
             authorized = authorized_min_reward_risk(rr)
-            if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
+            if authorized is None or authorized >= SYSTEM_MIN_REWARD_RISK_FLOOR:
                 errors.append("experimental min_reward_risk must be 0.10 or 0.15")
     if "min_trade_quality" in raw:
         authorized_quality = authorized_min_trade_quality(raw.get("min_trade_quality"))
