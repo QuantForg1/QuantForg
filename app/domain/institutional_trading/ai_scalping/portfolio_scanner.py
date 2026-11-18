@@ -131,6 +131,15 @@ class PortfolioScanResult:
         }
 
 
+def _active_open_cap() -> int:
+    """Concurrent-position cap of the active (per-user) profile."""
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    return active_max_open_positions()
+
+
 def _as_decimal(value: Any, default: str = "0") -> Decimal:
     if value is None:
         return Decimal(default)
@@ -373,7 +382,7 @@ def scan_multi_asset_portfolio(
         max_open = int(
             max_open_positions
             if max_open_positions is not None
-            else cfg.max_open_trades
+            else min(int(cfg.max_open_trades), _active_open_cap())
         )
         # Institutional ITE daily-loss ceiling — never invent a looser default
         from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG

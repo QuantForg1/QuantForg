@@ -34,7 +34,6 @@ from app.domain.institutional_trading.operations.daily_loss_lock import (
     utc_daily_loss_exceeded,
 )
 from app.domain.institutional_trading.owner_live_limits import (
-    OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_SL_RISK_USD,
     OWNER_RISK_REFERENCE_USD,
@@ -92,10 +91,10 @@ def _entry(**overrides: object) -> list[str]:
 
 
 def test_owner_constants_replace_80_percent_caps() -> None:
-    assert D("25.0") == MAX_DAILY_LOSS_PCT
-    assert D("25.0") == MAX_DAILY_LOSS_CEILING_PCT
+    assert D("30.0") == MAX_DAILY_LOSS_PCT
+    assert D("50.0") == MAX_DAILY_LOSS_CEILING_PCT
     # Static values follow the reference capital; live checks use equity.
-    reference_trade = (OWNER_RISK_REFERENCE_USD * D("9") / D("100")).quantize(
+    reference_trade = (OWNER_RISK_REFERENCE_USD * D("15") / D("100")).quantize(
         D("0.01"), rounding=ROUND_DOWN
     )
     assert reference_trade == MAX_PLANNED_SL_RISK_USD
@@ -109,15 +108,16 @@ def test_default_configs_respect_owner_limits() -> None:
     assert DEFAULT_ITE_CONFIG.max_daily_loss_pct <= MAX_DAILY_LOSS_CEILING_PCT
     assert DEFAULT_ITE_CONFIG.risk_per_trade_pct <= D("9.0")
     assert DEFAULT_ITE_CONFIG.max_open_trades == OWNER_MAX_OPEN_POSITIONS
-    assert SCALPING_V1.max_open_trades == OWNER_MAX_OPEN_POSITIONS
+    assert SCALPING_V1.max_open_trades == 10  # static ceiling
     assert SCALPING_V1.max_entries_per_cycle == 1
-    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == OWNER_MAX_OPEN_POSITIONS
+    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == 10
     assert DEFAULT_AI_SCALPING_CONFIG.max_entries_per_cycle == 1
-    assert AiScalpingConfig().max_open_trades == OWNER_MAX_OPEN_POSITIONS
-    assert scalping_ite_config().max_open_trades == OWNER_MAX_OPEN_POSITIONS
+    assert AiScalpingConfig().max_open_trades == 10
+    assert scalping_ite_config().max_open_trades == 10
     cfg = RiskEngineConfig()
-    assert cfg.max_lot == OWNER_MAX_LOT
-    assert cfg.max_open_positions == OWNER_MAX_OPEN_POSITIONS
+    # Built under the installed (former-baseline) profile.
+    assert cfg.max_lot == D("0.01")
+    assert cfg.max_open_positions == 1
     assert cfg.max_consecutive_losses == 0  # no loss-streak pause (2026-10-23)
     assert cfg.cooldown_minutes_after_loss_streak == 24 * 60
 
@@ -125,10 +125,10 @@ def test_default_configs_respect_owner_limits() -> None:
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("max_daily_loss_pct", D("25.01")),
+        ("max_daily_loss_pct", D("50.01")),
         ("max_daily_loss_pct", D("80.0")),
-        ("risk_per_trade_pct", D("9.01")),
-        ("max_open_trades", 6),
+        ("risk_per_trade_pct", D("25.01")),
+        ("max_open_trades", 11),
     ],
 )
 def test_ite_config_rejects_values_above_owner_ceilings(
@@ -156,12 +156,12 @@ def test_ite_config_rejects_planned_risk_above_the_reference_cap() -> None:
 def test_live_scalp_cap_never_exceeds_owner_maximum() -> None:
     for current in (1, 3, 5, 10, 50):
         assert align_live_scalp_cap(current, trading_mode="scalping") == (
-            OWNER_MAX_OPEN_POSITIONS
+            1  # the installed profile's cap
         )
     assert align_live_scalp_cap(1, trading_mode="alpha") == 1
     assert align_live_scalp_cap(3, trading_mode="alpha") == 1
-    assert align_live_scalp_cap(10, trading_mode="alpha") == OWNER_MAX_OPEN_POSITIONS
-    assert align_live_scalp_cap(50, trading_mode="alpha") == OWNER_MAX_OPEN_POSITIONS
+    assert align_live_scalp_cap(10, trading_mode="alpha") == 1
+    assert align_live_scalp_cap(50, trading_mode="alpha") == 1
 
 
 # --- Daily stop: 25% of the UTC day's starting equity ---
@@ -193,9 +193,9 @@ def test_twenty_five_percent_boundary_on_larger_account() -> None:
 
 def test_utc_lock_uses_owner_daily_stop() -> None:
     assert utc_daily_loss_exceeded(
-        daily_pnl=D("-12.72"),
-        balance=D("38.12"),
-        equity=D("38.12"),
+        daily_pnl=D("-15.26"),
+        balance=D("35.58"),
+        equity=D("35.58"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
     )
     assert not utc_daily_loss_exceeded(
@@ -208,7 +208,7 @@ def test_utc_lock_uses_owner_daily_stop() -> None:
 
 def test_risk_engine_drawdown_blocks_above_owner_daily_stop() -> None:
     engine = RiskEngine()
-    _s, reasons, _w = engine.evaluate_drawdown(_account("38.12"), daily_pnl=D("-12.72"))
+    _s, reasons, _w = engine.evaluate_drawdown(_account("35.58"), daily_pnl=D("-15.26"))
     assert any("owner daily stop" in r for r in reasons)
     _s, reasons_ok, _w = engine.evaluate_drawdown(
         _account("49.24"), daily_pnl=D("-1.60")

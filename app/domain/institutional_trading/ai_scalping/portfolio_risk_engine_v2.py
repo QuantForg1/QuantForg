@@ -182,6 +182,15 @@ class PortfolioAllocationDecision:
         return payload
 
 
+def _active_open_cap() -> int:
+    """Concurrent-position cap of the active (per-user) profile."""
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    return active_max_open_positions()
+
+
 def _d(value: Any, default: Decimal = Decimal("0")) -> Decimal:
     try:
         if value is None:
@@ -420,8 +429,7 @@ def _stop_distance_ok(
     min_dist = point * Decimal(max(stops, freeze, 0))
     if min_dist > 0 and stop_distance < min_dist:
         return (
-            f"Stop distance {stop_distance} below broker min "
-            f"{min_dist} (stops/freeze)"
+            f"Stop distance {stop_distance} below broker min {min_dist} (stops/freeze)"
         )
     return None
 
@@ -652,7 +660,7 @@ def _evaluate_portfolio_allocation_unlocked(
     ite_max_dd = Decimal(str(ite.max_daily_loss_pct))
     blocked_lim, why_lim = check_portfolio_sizing_limits(
         open_positions=book.open_positions,
-        max_open_positions=int(cfg.max_open_trades),
+        max_open_positions=min(int(cfg.max_open_trades), _active_open_cap()),
         daily_loss_pct=book.daily_loss_pct,
         max_daily_loss_pct=ite_max_dd,
         exposure_pct=projected_port,
@@ -734,7 +742,7 @@ def _evaluate_portfolio_allocation_unlocked(
 
     pyramid = may_add_scalping_trade(
         open_positions=book.open_positions,
-        max_open=int(cfg.max_open_trades),
+        max_open=min(int(cfg.max_open_trades), _active_open_cap()),
         new_confidence=new_confidence or (confidence or 0),
         best_open_confidence=best_open_confidence if sym_count > 0 else None,
         new_direction=new_direction,

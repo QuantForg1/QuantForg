@@ -15,7 +15,6 @@ from app.application.services.user_risk_preferences_service import (
 )
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import ValidationError
-from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
 from app.domain.multi_account.effective_risk import (
     RiskSettingProposal,
     resolve_effective_risk,
@@ -27,7 +26,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 def test_preference_bounds_expose_ceilings_not_owner_document() -> None:
     bounds = preference_bounds()
     assert "planned_risk_pct" in bounds
-    assert Decimal(str(bounds["max_lot"]["max"])) == OWNER_MAX_LOT
+    assert Decimal(str(bounds["max_lot"]["max"])) == Decimal("5.00")  # system bound
     assert "owner_policy" not in bounds
     assert "document" not in bounds
 
@@ -46,7 +45,7 @@ def test_user_cannot_exceed_owner_max_lot() -> None:
         RiskSettingProposal(
             planned_risk_pct=Decimal("1"),
             aggregate_open_risk_pct=Decimal("5"),
-            max_lot=Decimal("0.05"),
+            max_lot=Decimal("9.00"),
             daily_loss_pct=Decimal("10"),
             max_concurrent_positions=1,
         )
@@ -66,10 +65,12 @@ def test_assert_own_user_blocks_foreign_ids() -> None:
 def test_update_rejects_when_storage_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "app.application.services.user_risk_preferences_service.direct_postgres_available",
-        lambda: False,
-    )
+    from app.application.services import user_risk_profile_store as store
+
+    def _down(*_a, **_k):
+        raise store.ProfileStoreError("profile_storage_unavailable")
+
+    monkeypatch.setattr(store, "save_profile", _down)
     with pytest.raises(ValidationError) as exc:
         update_user_risk_preferences(
             uuid4(),
@@ -91,20 +92,15 @@ def test_update_rejects_over_ceiling_before_write(
         called["execute"] += 1
         raise AssertionError("execute must not run for invalid prefs")
 
-    monkeypatch.setattr(
-        "app.application.services.user_risk_preferences_service.direct_postgres_available",
-        lambda: True,
-    )
-    monkeypatch.setattr(
-        "app.application.services.user_risk_preferences_service.execute",
-        _boom,
-    )
+    from app.application.services import user_risk_profile_store as store
+
+    monkeypatch.setattr(store, "save_profile", _boom)
     with pytest.raises(ValidationError) as exc:
         update_user_risk_preferences(
             uuid4(),
             planned_risk_pct=Decimal("1"),
             aggregate_open_risk_pct=Decimal("5"),
-            max_lot=Decimal("1"),
+            max_lot=Decimal("9"),  # above the 5.00 system lot bound
             daily_loss_pct=Decimal("10"),
             max_concurrent_positions=1,
         )

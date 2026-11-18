@@ -32,8 +32,6 @@ from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.execution_engine.pipeline import STAGE_TO_LIFECYCLE, PipelineStage
 from app.domain.execution_engine.reasons import humanize_reason, humanize_reasons
 from app.domain.institutional_trading.owner_live_limits import (
-    OWNER_MAX_LOT,
-    OWNER_MAX_OPEN_POSITIONS,
     evaluate_owner_entry,
     max_aggregate_risk_usd,
     max_planned_risk_usd,
@@ -872,6 +870,7 @@ class InstitutionalExecutionEngine:
             ]
             | None
         ) = None
+        monthly_for_owner: Decimal | None = None
         try:
             account = self.gateway.adapter.account_snapshot()
             from app.domain.institutional_trading.owner_live_limits import (
@@ -1006,24 +1005,33 @@ class InstitutionalExecutionEngine:
                         live_cs = info_cs
                 except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
                     pass
+                from app.application.services.runtime_policy_store import (
+                    install_cycle_policy as _install_user_policy,
+                )
                 from app.domain.institutional_trading.operations import (
                     live_prefs_tighten as _live_prefs,
                 )
                 from app.domain.institutional_trading.runtime_policy import (
+                    active_daily_loss_pct,
+                    active_max_lot,
                     active_max_open_positions,
+                    active_max_planned_risk_pct,
                 )
 
+                # Every limit below comes from the submitting user's own
+                # effective profile (never another user's, never the shared
+                # owner document). Unreadable profile -> CONFIG_UNAVAILABLE.
+                _install_user_policy(user_id)
                 live_cfg = replace(
                     self.risk_engine.config,
                     min_lot=live_constraints.min_volume,
                     lot_step=live_constraints.volume_step,
-                    # Owner limit: never size above 0.01 lot.
-                    max_lot=min(live_constraints.max_volume, OWNER_MAX_LOT),
-                    max_open_positions=min(
-                        self.risk_engine.config.max_open_positions,
-                        active_max_open_positions(),
-                        OWNER_MAX_OPEN_POSITIONS,
-                    ),
+                    # Profile max lot, never above the broker maximum.
+                    max_lot=min(live_constraints.max_volume, active_max_lot()),
+                    fixed_lot=min(live_constraints.max_volume, active_max_lot()),
+                    max_open_positions=active_max_open_positions(),
+                    max_risk_per_trade_pct=active_max_planned_risk_pct(),
+                    max_daily_loss_pct=active_daily_loss_pct(),
                     contract_size=live_cs,
                 )
                 # Customer Risk Center prefs may only tighten ceilings.
@@ -1151,7 +1159,8 @@ class InstitutionalExecutionEngine:
                         install_cycle_policy,
                     )
 
-                    installed = install_cycle_policy()
+                    # Final guard uses the submitting user's own profile.
+                    installed = install_cycle_policy(user_id)
                     owner_min_stop = live_constraints.point * Decimal(
                         live_constraints.stops_level
                     )
@@ -1181,6 +1190,10 @@ class InstitutionalExecutionEngine:
                             None
                             if (not weekly_known or weekly_raw is None)
                             else Decimal(str(weekly_raw))
+                        )
+                        monthly_raw = getattr(account, "monthly_pnl", None)
+                        monthly_for_owner = (
+                            None if monthly_raw is None else Decimal(str(monthly_raw))
                         )
                         peak_raw = getattr(account, "peak_equity", None)
                         peak_known = bool(getattr(account, "peak_equity_known", False))
@@ -1220,6 +1233,7 @@ class InstitutionalExecutionEngine:
                             daily=daily_ctx,
                             user_planned_risk_pct=user_caps.planned_risk_pct,
                             user_daily_loss_pct=user_caps.daily_loss_pct,
+                            monthly_pnl=monthly_for_owner,
                         )
                         owner_presend_ctx = (
                             account.equity,
@@ -1778,6 +1792,7 @@ class InstitutionalExecutionEngine:
                     daily=p_daily,
                     user_planned_risk_pct=p_user_risk,
                     user_daily_loss_pct=p_user_daily,
+                    monthly_pnl=monthly_for_owner,
                 )
             except (
                 OSError,

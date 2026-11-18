@@ -147,4 +147,4 @@ def test_robot_health_monitor_evidence_statuses(tmp_path: Path) -> None:
     assert mon["risk_policy_defaults"]["minimum_net_reward_risk"] == "1.50"
     assert mon["risk_policy_defaults"]["minimum_trade_quality"] == 75
     assert mon["risk_policy_defaults"]["preferred_reward_risk"] == "1.50"
-    assert mon["risk_policy_defaults"]["max_concurrent_positions"] == 1
+    assert mon["risk_policy_defaults"]["max_concurrent_positions"] == 5

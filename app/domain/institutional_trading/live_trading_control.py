@@ -62,13 +62,15 @@ MappingLike = dict[str, Any]
 # Micro-account hard ceiling — configuration cannot exceed these.
 # ITE MAX_DAILY_LOSS_PCT (3%, $5 floor, 10% ceiling) is the global engine cap;
 # this overlay is strictly tighter for real-money live authorization.
-HARD_CEILING_RISK_PER_TRADE_PCT = _ol.OWNER_MAX_PLANNED_RISK_PCT
-HARD_CEILING_DAILY_LOSS_PCT = _ol.OWNER_DAILY_LOSS_PCT
-HARD_CEILING_MAX_POSITIONS = _ol.OWNER_MAX_OPEN_POSITIONS
+# Since 2026-11-18 the ceilings are the SYSTEM bounds; the per-trade values
+# used at evaluation come from the submitting user's own profile.
+HARD_CEILING_RISK_PER_TRADE_PCT = _ol.SYSTEM_MAX_PLANNED_RISK_PCT
+HARD_CEILING_DAILY_LOSS_PCT = _ol.SYSTEM_MAX_DAILY_LOSS_PCT
+HARD_CEILING_MAX_POSITIONS = _ol.SYSTEM_MAX_OPEN_POSITIONS
 HARD_CEILING_CONSECUTIVE_LOSSES = 3
 HARD_CEILING_MARGIN_UTIL_PCT = Decimal("40.00")
-HARD_CEILING_TOTAL_EXPOSURE_PCT = Decimal("50.00")
-HARD_CEILING_MAX_SPREAD = _ol.OWNER_MAX_SPREAD
+HARD_CEILING_TOTAL_EXPOSURE_PCT = _ol.SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT
+HARD_CEILING_MAX_SPREAD = _ol.SYSTEM_MAX_SPREAD
 HARD_CEILING_MAX_SLIPPAGE = Decimal("1.00")
 HARD_CEILING_QUOTE_AGE_S = Decimal("5.00")
 
@@ -359,7 +361,7 @@ class LiveTradingRiskConfig:
             "min_reward_risk",
             max(
                 _dec(self.min_reward_risk, str(DEFAULT_MIN_RR)),
-                _ol.OWNER_MIN_REWARD_RISK,
+                _ol.SYSTEM_MIN_REWARD_RISK_FLOOR,
             ),
         )
         object.__setattr__(
@@ -431,6 +433,42 @@ class LiveTradingRiskConfig:
 
     def min_rr_or_default(self) -> Decimal:
         return self.min_reward_risk
+
+    def with_active_profile(self) -> LiveTradingRiskConfig:
+        """Replace the per-user risk values with the installed user profile.
+
+        Operator-only safeguards (slippage, quote age, margin utilisation,
+        duplicate TTL, kill behaviour) stay. With no installed profile the
+        stored values apply unchanged.
+        """
+        from dataclasses import replace
+
+        from app.domain.institutional_trading.runtime_policy import (
+            active_daily_loss_pct,
+            active_max_aggregate_open_risk_pct,
+            active_max_open_positions,
+            active_max_planned_risk_pct,
+            active_max_spread,
+            active_min_reward_risk,
+            active_min_trade_quality,
+            active_policy,
+        )
+
+        doc = active_policy()
+        if not isinstance(doc, dict) or doc.get("unavailable"):
+            return self
+        if "risk_profile_version" not in doc:
+            return self
+        return replace(
+            self,
+            risk_per_trade_pct=active_max_planned_risk_pct(),
+            max_daily_loss_pct=active_daily_loss_pct(),
+            max_open_positions=active_max_open_positions(),
+            max_total_exposure_pct=active_max_aggregate_open_risk_pct(),
+            max_spread=active_max_spread(),
+            min_reward_risk=active_min_reward_risk(),
+            min_score=Decimal(active_min_trade_quality()),
+        )
 
     @classmethod
     def from_dict(cls, data: MappingLike | None) -> LiveTradingRiskConfig:
@@ -658,10 +696,10 @@ def size_from_broker_specs(
         min_planned_risk if min_planned_risk is not None else MIN_PLANNED_RISK_USD
     )
     vol_max = spec.volume_max if spec.volume_max is not None else Decimal("100")
-    # Owner limit: never size an entry above 0.01 lot.
-    from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
+    # Profile max lot of the active user, never above the broker maximum.
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
 
-    vol_max = min(vol_max, OWNER_MAX_LOT)
+    vol_max = min(vol_max, active_max_lot())
 
     raw = Decimal("0")
     loss_per_lot = stop_distance * spec.contract_size
@@ -1719,7 +1757,9 @@ class LiveTradingController:
             decision = evaluate_live_order(
                 req,
                 state=self.state,
-                cfg=self.risk,
+                # Per-user values from the installed profile; operator
+                # safeguards from the stored config.
+                cfg=self.risk.with_active_profile(),
                 recent_signal_ids=set(self.recent_signal_ids),
                 recent_order_keys=set(self.recent_order_keys),
                 last_loss_volume=self.last_loss_volume,

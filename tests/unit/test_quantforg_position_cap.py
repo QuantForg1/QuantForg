@@ -354,13 +354,13 @@ def test_backtest_and_live_both_use_one_open_trade() -> None:
         ).max_open_trades
         == 1
     )
-    assert DEFAULT_ITE_CONFIG.max_open_trades == 1
+    assert DEFAULT_ITE_CONFIG.max_open_trades == 5
     from app.domain.institutional_trading.ai_scalping.config import (
         DEFAULT_AI_SCALPING_CONFIG,
     )
 
     assert live_strategy_max_open(ITEConfig()) == 1
-    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == 1
+    assert DEFAULT_AI_SCALPING_CONFIG.max_open_trades == 10
 
 
 @pytest.mark.unit

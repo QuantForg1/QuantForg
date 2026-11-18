@@ -19,6 +19,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_RISK_REFERENCE_USD,
     OWNER_SL_RISK_PCT,
     OWNER_WEEKLY_LOSS_PCT,
+    SYSTEM_MAX_OPEN_POSITIONS,
     max_aggregate_risk_usd,
 )
 from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
@@ -140,9 +141,9 @@ class ITEConfig:
             raise ValueError(
                 f"max_planned_sl_risk_usd must be <= {OWNER_MAX_SL_RISK_USD}"
             )
-        if not 1 <= self.max_open_trades <= OWNER_MAX_OPEN_POSITIONS:
+        if not 1 <= self.max_open_trades <= SYSTEM_MAX_OPEN_POSITIONS:
             raise ValueError(
-                f"max_open_trades must be in [1, {OWNER_MAX_OPEN_POSITIONS}]"
+                f"max_open_trades must be in [1, {SYSTEM_MAX_OPEN_POSITIONS}]"
             )
 
     def timeframe_roles(self) -> dict[Timeframe, str]:

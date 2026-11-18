@@ -15,8 +15,8 @@ from app.domain.institutional_trading.config import (
 )
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_ENTRIES_PER_CYCLE,
-    OWNER_MAX_OPEN_POSITIONS,
     OWNER_SL_ATR_MULTIPLIER,
+    SYSTEM_MAX_OPEN_POSITIONS,
 )
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
@@ -224,7 +224,8 @@ class AiScalpingConfig:
 
     # Multi-trade - prefer quality, not stacking losers
     # Owner limit 2026-10-20: one open position.
-    max_open_trades: int = OWNER_MAX_OPEN_POSITIONS
+    # Static ceiling; the active profile's cap is applied at runtime.
+    max_open_trades: int = SYSTEM_MAX_OPEN_POSITIONS
     require_probability_improvement: bool = True
     min_confidence_delta_for_add: int = 5
 
@@ -592,7 +593,7 @@ def scalping_ite_config(
         target_risk_per_trade_usd=cfg.target_risk_per_trade_usd,
         max_planned_sl_risk_usd=cfg.max_planned_sl_risk_usd,
         max_total_planned_risk_usd=cfg.max_total_planned_risk_usd,
-        max_open_trades=min(cfg.max_open_trades, OWNER_MAX_OPEN_POSITIONS),
+        max_open_trades=min(cfg.max_open_trades, SYSTEM_MAX_OPEN_POSITIONS),
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=cfg.partial_at_r,
         partial_close_pct=cfg.partial_close_pct,

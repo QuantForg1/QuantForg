@@ -14,11 +14,11 @@ from uuid import UUID
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import ValidationError
 from app.domain.institutional_trading.owner_live_limits import (
-    OWNER_DAILY_LOSS_PCT,
-    OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
-    OWNER_MAX_LOT,
-    OWNER_MAX_OPEN_POSITIONS,
-    OWNER_MAX_PLANNED_RISK_PCT,
+    SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT,
+    SYSTEM_MAX_DAILY_LOSS_PCT,
+    SYSTEM_MAX_LOT,
+    SYSTEM_MAX_OPEN_POSITIONS,
+    SYSTEM_MAX_PLANNED_RISK_PCT,
 )
 from app.domain.multi_account.effective_risk import (
     RiskSettingProposal,
@@ -27,7 +27,6 @@ from app.domain.multi_account.effective_risk import (
 )
 from app.infrastructure.persistence.direct_postgres import (
     direct_postgres_available,
-    execute,
     fetch,
 )
 
@@ -44,8 +43,7 @@ _PROTECTION_COPY = (
         "id": "risk_validation",
         "title": "Pre-trade risk validation",
         "detail": (
-            "Orders are checked against your effective risk limits "
-            "before submission."
+            "Orders are checked against your effective risk limits before submission."
         ),
     },
     {
@@ -96,14 +94,14 @@ def preference_bounds() -> dict[str, Any]:
     return {
         "planned_risk_pct": {
             "min": "0.1",
-            "max": str(OWNER_MAX_PLANNED_RISK_PCT),
+            "max": str(SYSTEM_MAX_PLANNED_RISK_PCT),
             "unit": "percent",
             "label": "Preferred risk per trade",
             "help": "Share of equity you are willing to risk on a single trade.",
         },
         "aggregate_open_risk_pct": {
             "min": "0.1",
-            "max": str(OWNER_MAX_AGGREGATE_OPEN_RISK_PCT),
+            "max": str(SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT),
             "unit": "percent",
             "label": "Aggregate open risk",
             "help": (
@@ -113,21 +111,21 @@ def preference_bounds() -> dict[str, Any]:
         },
         "max_lot": {
             "min": "0.01",
-            "max": str(OWNER_MAX_LOT),
+            "max": str(SYSTEM_MAX_LOT),
             "unit": "lots",
             "label": "Personal maximum lot",
             "help": "The platform lot limit also applies.",
         },
         "daily_loss_pct": {
             "min": "0.1",
-            "max": str(OWNER_DAILY_LOSS_PCT),
+            "max": str(SYSTEM_MAX_DAILY_LOSS_PCT),
             "unit": "percent",
             "label": "Personal daily loss threshold",
             "help": "Loss for the day at which your robot stops opening trades.",
         },
         "max_concurrent_positions": {
             "min": 1,
-            "max": OWNER_MAX_OPEN_POSITIONS,
+            "max": SYSTEM_MAX_OPEN_POSITIONS,
             "unit": "count",
             "label": "Personal maximum concurrent positions",
             "help": "The platform position limit also applies.",
@@ -238,56 +236,32 @@ def update_user_risk_preferences(
             },
         )
 
-    if not direct_postgres_available():
+    from app.application.services import user_risk_profile_store as store
+
+    try:
+        store.save_profile(
+            user_id,
+            {
+                "planned_risk_pct": effective.planned_risk_pct,
+                "aggregate_open_risk_pct": effective.aggregate_open_risk_pct,
+                "max_lot": effective.max_lot,
+                "daily_loss_pct": effective.daily_loss_pct,
+                "max_open_positions": effective.max_concurrent_positions,
+            },
+            actor_id=user_id,
+            reason="risk_center_edit",
+        )
+    except store.ProfileValidationError as exc:
+        raise ValidationError(
+            "Preference update rejected",
+            code="risk_preference_rejected",
+            details={"rejected_fields": sorted(exc.errors), "errors": exc.errors},
+        ) from exc
+    except store.ProfileStoreError as exc:
         raise ValidationError(
             "Preference storage is temporarily unavailable",
             code="risk_preference_storage_unavailable",
-        )
-
-    existing = _load_active_row(user_id)
-    if existing:
-        execute(
-            """
-            UPDATE public.user_risk_settings
-               SET planned_risk_pct = $2,
-                   aggregate_open_risk_pct = $3,
-                   max_lot = $4,
-                   daily_loss_pct = $5,
-                   max_concurrent_positions = $6,
-                   source = 'user_edit',
-                   updated_at = timezone('utc', now())
-             WHERE id = $1::uuid
-            """,
-            str(existing["id"]),
-            str(effective.planned_risk_pct),
-            str(effective.aggregate_open_risk_pct),
-            str(effective.max_lot),
-            str(effective.daily_loss_pct),
-            int(effective.max_concurrent_positions),
-        )
-    else:
-        execute(
-            """
-            INSERT INTO public.user_risk_settings (
-              user_id,
-              planned_risk_pct,
-              aggregate_open_risk_pct,
-              max_lot,
-              daily_loss_pct,
-              max_concurrent_positions,
-              is_active,
-              source
-            ) VALUES (
-              $1::uuid, $2, $3, $4, $5, $6, true, 'user_edit'
-            )
-            """,
-            str(user_id),
-            str(effective.planned_risk_pct),
-            str(effective.aggregate_open_risk_pct),
-            str(effective.max_lot),
-            str(effective.daily_loss_pct),
-            int(effective.max_concurrent_positions),
-        )
+        ) from exc
 
     return get_user_risk_preferences(user_id)
 
@@ -338,16 +312,36 @@ def assert_own_user(actor_id: UUID, target_user_id: UUID | None) -> None:
 
 
 def _load_active_row(user_id: UUID) -> dict[str, Any] | None:
-    if not direct_postgres_available():
-        return None
-    rows = fetch(
-        """
-        SELECT id, user_id, planned_risk_pct, aggregate_open_risk_pct, max_lot,
-               daily_loss_pct, max_concurrent_positions, source, updated_at
-          FROM public.user_risk_settings
-         WHERE user_id = $1::uuid AND is_active = true
-         LIMIT 1
-        """,
-        str(user_id),
+    """The user's own effective profile as a legacy row (None = all defaults).
+
+    Reads ``user_risk_profiles`` (never the retired shared/legacy rows).
+    Raises when the profile cannot be read so callers fail closed.
+    """
+    from app.application.services.user_risk_profile_store import (
+        effective_profile,
+        load_settings,
     )
-    return rows[0] if rows else None
+
+    profile = effective_profile(user_id)
+    keys = (
+        "planned_risk_pct",
+        "aggregate_open_risk_pct",
+        "max_lot",
+        "daily_loss_pct",
+        "max_open_positions",
+    )
+    if all(profile.sources.get(k) == "DEFAULT" for k in keys):
+        return None
+    _settings, _version, updated = load_settings(user_id)
+    v = profile.values
+    return {
+        "id": str(user_id),
+        "user_id": str(user_id),
+        "planned_risk_pct": v["planned_risk_pct"],
+        "aggregate_open_risk_pct": v["aggregate_open_risk_pct"],
+        "max_lot": v["max_lot"],
+        "daily_loss_pct": v["daily_loss_pct"],
+        "max_concurrent_positions": v["max_open_positions"],
+        "source": "user_edit",
+        "updated_at": updated,
+    }

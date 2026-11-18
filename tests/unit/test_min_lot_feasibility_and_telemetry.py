@@ -64,9 +64,9 @@ def test_max_allowed_stop_formula_current_account() -> None:
         min_lot=_MIN_LOT,
         contract_size=_CS,
     )
-    # 201.77 * 0.09 / (0.01 * 100) = 18.1593 (micro percent = owner 9% cap)
-    assert max_stop == Decimal("18.1593")
-    assert Decimal("9.0") == _HARD
+    # 201.77 * 0.15 / (0.01 * 100) = 30.2655 (default 15% risk per trade)
+    assert max_stop == Decimal("30.2655")
+    assert Decimal("15.0") == _HARD
 
 
 def test_stop_above_threshold_is_min_lot_infeasible() -> None:

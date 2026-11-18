@@ -141,7 +141,7 @@ class TestPositionSizingUsdTarget:
         assert TARGET_PLANNED_RISK_USD == TARGET_RISK_PER_TRADE_USD
         assert TARGET_PLANNED_RISK_USD > MIN_PLANNED_RISK_USD
         assert Decimal("0") == MIN_PLANNED_RISK_USD
-        assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
+        assert Decimal("7.50") == MAX_PLANNED_SL_RISK_USD
         assert Decimal("1.50") == PREFERRED_REWARD_RISK
 
     def test_tight_gold_stop_is_not_upsized_past_owner_max_lot(self) -> None:
@@ -328,7 +328,7 @@ class TestAggregatePlannedRisk:
             positions=[open_leg],
         )
         assert second.decision is RiskDecision.REJECT
-        assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+        assert Decimal("10.00") == MAX_TOTAL_PLANNED_RISK_USD
 
     def test_daily_loss_protection_still_rejects(
         self, monkeypatch: pytest.MonkeyPatch

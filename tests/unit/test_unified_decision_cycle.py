@@ -868,7 +868,7 @@ def test_no_hidden_soft_gates_kill_probability_candidate() -> None:
 
 
 def test_scalping_profile_cap_is_the_owner_maximum() -> None:
-    assert SCALPING_V1.max_open_trades == 1
+    assert SCALPING_V1.max_open_trades == 10
     assert SCALPING_V1.max_entries_per_cycle == 1
     for current in (1, 2, 5, 8, 10):
         assert align_live_scalp_cap(current, trading_mode="scalping") == 1

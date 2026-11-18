@@ -3516,14 +3516,23 @@ class InstitutionalIteRuntime:
         if market_context_diagnostics is None:
             market_context_diagnostics = {}
         try:
+            from app.application.services.account_execution_gate import (
+                submit_identity as _submit_identity,
+            )
             from app.application.services.runtime_policy_store import (
                 install_cycle_policy,
             )
 
-            installed_policy = install_cycle_policy()
+            # Effective policy of the user this process trades for (own
+            # profile, defaults for unset fields) - never a shared profile.
+            installed_policy = install_cycle_policy(_submit_identity(self.user_id)[0])
             market_context_diagnostics["runtime_policy_version"] = (
                 installed_policy.version
             )
+            if installed_policy.document:
+                market_context_diagnostics["risk_profile_version"] = (
+                    installed_policy.document.get("risk_profile_version")
+                )
             market_context_diagnostics["runtime_policy_source"] = (
                 installed_policy.source
             )

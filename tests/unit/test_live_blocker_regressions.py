@@ -67,14 +67,14 @@ ATR = Decimal("2.00")
 
 
 def test_owner_policy_floors_stay_at_the_authorized_values() -> None:
-    assert Decimal("9.0") == OWNER_MAX_PLANNED_RISK_PCT
-    assert Decimal("9.0") == OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
-    assert Decimal("25.0") == OWNER_DAILY_LOSS_PCT
+    assert Decimal("15.0") == OWNER_MAX_PLANNED_RISK_PCT
+    assert Decimal("20.0") == OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
+    assert Decimal("30.0") == OWNER_DAILY_LOSS_PCT
     assert Decimal("1.50") == OWNER_MIN_REWARD_RISK
     assert OWNER_MIN_TRADE_QUALITY == 75
-    assert Decimal("0.01") == OWNER_MAX_LOT
-    assert Decimal("0.45") == OWNER_MAX_SPREAD
-    assert OWNER_MAX_OPEN_POSITIONS == 1
+    assert Decimal("0.50") == OWNER_MAX_LOT
+    assert Decimal("1.00") == OWNER_MAX_SPREAD
+    assert OWNER_MAX_OPEN_POSITIONS == 5
     assert Decimal("1.00") == OWNER_SL_ATR_MULTIPLIER
     assert GOLD_SYMBOL == "XAUUSD"
 

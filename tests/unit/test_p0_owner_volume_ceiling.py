@@ -26,7 +26,6 @@ from app.domain.institutional_trading.operations.min_lot_feasibility import (
     normalize_lots_against_broker,
 )
 from app.domain.institutional_trading.owner_live_limits import (
-    OWNER_MAX_LOT,
     evaluate_owner_entry,
     max_planned_risk_usd,
     owner_authorized_max_lot,
@@ -43,6 +42,9 @@ _MIN = D("0.01")
 _LIVE_EQUITY = D("32.00")  # 9% cap $2.88
 _LIVE_STOP = D("1.2671428600")
 _LIVE_SPREAD = D("0.424")
+
+# Max lot of the installed (former-baseline) profile under test.
+OWNER_MAX_LOT = D("0.01")
 
 
 def _account(equity: Decimal) -> AccountSnapshot:

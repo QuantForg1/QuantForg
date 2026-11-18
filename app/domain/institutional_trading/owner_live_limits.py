@@ -62,39 +62,55 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-OWNER_MAX_LOT = Decimal("0.01")
+# ---------------------------------------------------------------------------
+# Per-user risk profiles (owner decision 2026-11-18).
+#
+# The shared owner policy is no longer the trading profile. Every user has an
+# own profile (``user_risk_profiles``); a field the user never set uses the
+# DEFAULT below. The ``OWNER_*`` names keep their historical meaning for static
+# configs and are the DEFAULT profile values. ``SYSTEM_*`` are the
+# non-overridable platform bounds that no profile may exceed (validation and
+# runtime clamps). Broker specifications stay authoritative on top of both.
+# ---------------------------------------------------------------------------
+OWNER_MAX_LOT = Decimal("0.50")
+SYSTEM_MAX_LOT = Decimal("5.00")
 # Starting reference capital (configurable). Live equity is the risk reference;
 # this value is the documented starting point and the $-figures shown at rest.
 OWNER_RISK_REFERENCE_USD = _env_decimal("OWNER_RISK_REFERENCE_USD", "50")
-OWNER_MAX_PLANNED_RISK_PCT = Decimal("9.0")
-# Shared book cap. It is not the per-trade cap and it is not multiplied by
-# the position count. With one open position it equals the per-trade cap.
-OWNER_MAX_AGGREGATE_OPEN_RISK_PCT = Decimal("9.0")
-# Authoritative daily stop: 25% of the UTC day's starting equity (owner
-# baseline 2026-11-16). Enforced twice: as a halt once realised loss is
-# above the cap, and as a pre-trade budget (loss so far + floating loss +
-# the new entry's planned risk must fit inside the cap).
-OWNER_DAILY_LOSS_PCT = Decimal("25.0")
-# Weekly / monthly loss limits removed (0 = disabled, as for drawdown). Weekly
-# and monthly P/L are still computed for reporting (summaries, journal).
+OWNER_MAX_PLANNED_RISK_PCT = Decimal("15.0")
+SYSTEM_MAX_PLANNED_RISK_PCT = Decimal("25.0")
+# Shared book cap for one user: combined remaining risk of that user's open
+# positions and pending orders. Never multiplied by the position count.
+OWNER_MAX_AGGREGATE_OPEN_RISK_PCT = Decimal("20.0")
+SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT = Decimal("50.0")
+# Daily stop: percent of the UTC day's starting equity. Enforced twice: as a
+# halt once loss is above the cap, and as a pre-trade budget (loss so far +
+# floating loss + the new entry's planned risk must fit inside the cap).
+OWNER_DAILY_LOSS_PCT = Decimal("30.0")
+SYSTEM_MAX_DAILY_LOSS_PCT = Decimal("50.0")
+# Weekly / monthly / drawdown halts default OFF (0). A user may turn them on.
 OWNER_WEEKLY_LOSS_PCT = Decimal("0")
 OWNER_MONTHLY_LOSS_PCT = Decimal("0")
-# Owner baseline 2026-11-16: net reward:risk after spread, slippage and a known
-# commission must be at least 1.50. A saved policy may only be stricter.
+OWNER_MAX_DRAWDOWN_PCT = Decimal("0")
+SYSTEM_MAX_PERIOD_LOSS_PCT = Decimal("100")
+# Default net reward:risk after spread, slippage and a known commission.
 OWNER_MIN_REWARD_RISK = Decimal("1.50")
-# Soft geometry target. Never below the hard floor.
+# A user may not go below this net floor.
+SYSTEM_MIN_REWARD_RISK_FLOOR = Decimal("1.00")
+# Soft geometry target. Never below the active floor.
 OWNER_PREFERRED_REWARD_RISK = Decimal("1.50")
 # No experimental floor below OWNER_MIN_REWARD_RISK may be saved or promoted.
 OWNER_EXPERIMENTAL_REWARD_RISK: tuple[Decimal, ...] = ()
 OWNER_MIN_REWARD_RISK_FLOOR = OWNER_MIN_REWARD_RISK
-# Owner baseline 2026-11-16: hard spread ceiling 0.45. A saved policy may be
-# tighter. No environment value can raise it.
-OWNER_MAX_SPREAD = Decimal("0.45")
-# Owner baseline 2026-11-16: new entries only Monday-Friday, 07:00 inclusive
-# to 17:00 exclusive UTC. Broker sessions, holidays and maintenance remain an
-# additional gate. Closes and SL/TP management are never blocked by this.
-OWNER_SESSION_START_UTC = time(7, 0)
-OWNER_SESSION_END_UTC = time(17, 0)
+# Default spread ceiling (USD per oz). A user may tighten it, or widen it up to
+# the system bound.
+OWNER_MAX_SPREAD = Decimal("1.00")
+SYSTEM_MAX_SPREAD = Decimal("2.00")
+# Default schedule 24/5: new entries Monday-Friday, all day (UTC). Broker
+# sessions, weekend closure, holidays and maintenance remain an additional
+# gate. Closes and SL/TP management are never blocked by this.
+OWNER_SESSION_START_UTC = time(0, 0)
+OWNER_SESSION_END_UTC = time(23, 59, 59, 999999)
 OWNER_SESSION_WEEKDAYS = frozenset({0, 1, 2, 3, 4})
 # Owner 2026-10-30 experiment: 1.00 x ATR. Structure + spread still wins when
 # wider. The stop is never shrunk to fit 0.01 lot.
@@ -120,17 +136,17 @@ OWNER_SL_ATR_TIMEFRAME = (
 )
 if OWNER_SL_ATR_TIMEFRAME not in {"M1", "M5"}:
     OWNER_SL_ATR_TIMEFRAME = "M1"
-OWNER_MAX_OPEN_POSITIONS = 1
+OWNER_MAX_OPEN_POSITIONS = 5
+SYSTEM_MAX_OPEN_POSITIONS = 10
 OWNER_MAX_ENTRIES_PER_CYCLE = 1
 # Consecutive-loss pause removed (owner 2026-10-23): 0 = disabled.
 OWNER_MAX_CONSECUTIVE_LOSSES = 0
 # Unused while the pause is disabled; kept for the shared config shape.
 OWNER_LOSS_STREAK_COOLDOWN_MINUTES = 24 * 60
-# Hard floor on the AI trade quality of a robot entry (owner baseline 75).
-# Unset policy stays 75. A saved integer from 75 to 100 is used. Below 75
-# fails closed to 75. No environment variable can lower the unset default.
+# AI trade-quality floor of a robot entry. Default 75. A profile may save an
+# integer from SYSTEM floor 70 to 100; anything else fails closed to 75.
 OWNER_MIN_TRADE_QUALITY = 75
-OWNER_MIN_TRADE_QUALITY_FLOOR = 75
+OWNER_MIN_TRADE_QUALITY_FLOOR = 70
 
 # Owner-confirmed Weltrade tariff. This is not a broker deal record.
 # Spread, swap, and slippage stay separate costs. A missing or altered
@@ -144,10 +160,11 @@ COMMISSION_CURRENCY = "USD"
 COMMISSION_CONFIGURATION_VERSION = "1"
 
 # Compatibility names used by other layers (values at the reference capital).
-OWNER_SL_RISK_PCT = OWNER_MAX_PLANNED_RISK_PCT
+# Ceiling for static per-trade percent configs (the profile bound).
+OWNER_SL_RISK_PCT = SYSTEM_MAX_PLANNED_RISK_PCT
 # No minimum planned-risk floor: the stop comes from ATR/structure, not a $ band.
 OWNER_MIN_SL_RISK_USD = Decimal("0")
-OWNER_DAILY_LOSS_CEILING_PCT = OWNER_DAILY_LOSS_PCT
+OWNER_DAILY_LOSS_CEILING_PCT = SYSTEM_MAX_DAILY_LOSS_PCT
 
 
 def _active_planned_risk_pct() -> Decimal:
@@ -566,7 +583,7 @@ def daily_loss_cap_usd(
 
         eff = active_daily_loss_pct()
     else:
-        eff = min(Decimal(str(pct)), OWNER_DAILY_LOSS_PCT)
+        eff = min(Decimal(str(pct)), SYSTEM_MAX_DAILY_LOSS_PCT)
     return (sod * eff / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
 
 
@@ -615,19 +632,29 @@ def daily_loss_cap_pct(
 
 
 def in_owner_session(now: datetime | None = None) -> bool:
-    """True Monday-Friday from 07:00 (inclusive) to 17:00 (exclusive) UTC.
+    """True inside the active profile's entry window (default 24/5 UTC).
 
-    Owner baseline 2026-11-16. Broker symbol sessions, weekend closures,
-    holidays and maintenance are still enforced separately by broker session
-    truth. This gate only applies to NEW entries.
+    The window comes from the installed per-user profile (trading days and
+    UTC hours). Broker symbol sessions, weekend closures, holidays and
+    maintenance are still enforced separately by broker session truth. This
+    gate only applies to NEW entries.
     """
+    from app.domain.institutional_trading.runtime_policy import (
+        active_trading_window,
+    )
+
+    days, start, end = active_trading_window()
     clock = now or _now()
     if clock.tzinfo is None:
         clock = clock.replace(tzinfo=UTC)
     utc = clock.astimezone(UTC)
-    if utc.weekday() not in OWNER_SESSION_WEEKDAYS:
+    if utc.weekday() not in days:
         return False
-    return OWNER_SESSION_START_UTC <= utc.time() < OWNER_SESSION_END_UTC
+    current = utc.time()
+    if start <= end:
+        return start <= current <= end if end == time.max else start <= current < end
+    # Overnight window (e.g. 22:00-06:00).
+    return current >= start or current < end
 
 
 def next_utc_day_start(now: datetime | None = None) -> datetime:
@@ -680,13 +707,15 @@ def _quantize_cent(value: Decimal) -> Decimal:
 def authorized_min_reward_risk(value: Decimal) -> Decimal | None:
     """Return an enforceable net floor, or None when the saved value is illegal.
 
-    Any value at least ``OWNER_MIN_REWARD_RISK`` is allowed. Nothing below.
+    Any value from ``SYSTEM_MIN_REWARD_RISK_FLOOR`` up to 10 is allowed.
     """
     try:
         rr = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return None
-    if rr >= OWNER_MIN_REWARD_RISK:
+    if not rr.is_finite():
+        return None
+    if SYSTEM_MIN_REWARD_RISK_FLOOR <= rr <= Decimal("10"):
         return rr
     normalized = _quantize_cent(rr)
     if normalized in OWNER_EXPERIMENTAL_REWARD_RISK and rr == normalized:
@@ -803,8 +832,7 @@ def gross_distance_rr_block(
     stop = Decimal(str(stop_distance or 0))
     if floor >= Decimal("1") and (stop <= 0 or tp <= stop):
         return (
-            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-            f"planned TP {tp} <= planned SL {stop}"
+            f"TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned TP {tp} <= planned SL {stop}"
         )
     if stop <= 0 or tp <= 0 or (tp / stop) < floor:
         return (
@@ -824,8 +852,7 @@ def estimated_rr_block(estimated_rr: Decimal | None) -> str | None:
     rr = Decimal(str(estimated_rr))
     if floor >= Decimal("1") and rr <= Decimal("1"):
         return (
-            "TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: "
-            f"planned RR {rr} does not exceed 1.0"
+            f"TP_PROFIT_NOT_GREATER_THAN_SL_LOSS: planned RR {rr} does not exceed 1.0"
         )
     if rr < floor:
         return f"OWNER_MIN_RR: estimated reward:risk {rr} < {floor}"
@@ -978,6 +1005,7 @@ def evaluate_owner_entry(
     daily: DailyLossContext | None = None,
     user_planned_risk_pct: Decimal | None = None,
     user_daily_loss_pct: Decimal | None = None,
+    monthly_pnl: Decimal | None = None,
 ) -> list[str]:
     """Return owner-limit violations for a NEW entry (empty list = allowed).
 
@@ -1177,6 +1205,28 @@ def evaluate_owner_entry(
                         f"OWNER_WEEKLY_LOSS: weekly loss {loss} > {cap_usd} "
                         f"({week_cap}% of week-start equity)"
                     )
+    from app.domain.institutional_trading.runtime_policy import (
+        monthly_loss_limit_pct,
+    )
+
+    month_cap = monthly_loss_limit_pct()
+    if month_cap > 0:
+        if monthly_pnl is None:
+            violations.append(
+                "MONTHLY_PNL_UNAVAILABLE: monthly loss limit is configured "
+                "but monthly P/L could not be read"
+            )
+        else:
+            month = Decimal(str(monthly_pnl))
+            if month < 0 and eq > 0:
+                loss = -month
+                base = eq + loss
+                cap_usd = (base * month_cap / _PCT).quantize(_CENT, rounding=ROUND_DOWN)
+                if loss > cap_usd:
+                    violations.append(
+                        f"OWNER_MONTHLY_LOSS: monthly loss {loss} > {cap_usd} "
+                        f"({month_cap}% of month-start equity)"
+                    )
     dd_cap = drawdown_limit_pct()
     if dd_cap > 0:
         if not peak_known or peak_equity is None:
@@ -1230,6 +1280,7 @@ def presend_owner_violations(
     daily: DailyLossContext | None = None,
     user_planned_risk_pct: Decimal | None = None,
     user_daily_loss_pct: Decimal | None = None,
+    monthly_pnl: Decimal | None = None,
 ) -> list[str]:
     """Final owner check on the exact tick the market request was built from.
 
@@ -1265,6 +1316,7 @@ def presend_owner_violations(
         daily=daily,
         user_planned_risk_pct=user_planned_risk_pct,
         user_daily_loss_pct=user_daily_loss_pct,
+        monthly_pnl=monthly_pnl,
     )
     drift = stop_shrink_violation(
         side=side,

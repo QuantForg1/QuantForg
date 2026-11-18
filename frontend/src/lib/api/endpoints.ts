@@ -868,6 +868,24 @@ export const brokersApi = {
 export const riskApi = {
   check: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/risk/check", { method: "POST", body }),
+  profile: () => apiFetch<Record<string, unknown>>("/risk/profile"),
+  updateProfile: (body: {
+    changes: Record<string, unknown>;
+    expected_version?: number;
+  }) =>
+    apiFetch<Record<string, unknown>>("/risk/profile", {
+      method: "PUT",
+      body,
+    }),
+  resetProfile: (expected_version?: number) =>
+    apiFetch<Record<string, unknown>>("/risk/profile/reset", {
+      method: "POST",
+      body: { expected_version },
+    }),
+  profileEvents: (limit = 30) =>
+    apiFetch<Record<string, unknown>>(
+      `/risk/profile/events?limit=${encodeURIComponent(String(limit))}`,
+    ),
   preferences: () =>
     apiFetch<Record<string, unknown>>("/risk/preferences"),
   updatePreferences: (body: Record<string, unknown>) =>

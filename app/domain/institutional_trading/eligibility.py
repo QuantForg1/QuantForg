@@ -40,8 +40,14 @@ class PositionEligibilityEngine:
         cfg = self.config
         checks: dict[str, bool] = {}
         rejects: list[str] = []
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_open_positions,
+        )
 
-        if cfg.max_open_trades <= 1:
+        # The active user's own cap binds the static strategy cap.
+        max_open = min(int(cfg.max_open_trades), active_max_open_positions())
+
+        if max_open <= 1:
             checks["already_in_trade"] = not account.already_in_trade
             if account.already_in_trade:
                 rejects.append("Already in trade")
@@ -49,11 +55,9 @@ class PositionEligibilityEngine:
             # Multi-trade mode — max_open_trades is authoritative
             checks["already_in_trade"] = True
 
-        checks["max_open_trades"] = account.open_positions < cfg.max_open_trades
+        checks["max_open_trades"] = account.open_positions < max_open
         if not checks["max_open_trades"]:
-            rejects.append(
-                f"Open positions {account.open_positions} at max {cfg.max_open_trades}"
-            )
+            rejects.append(f"Open positions {account.open_positions} at max {max_open}")
 
         checks["risk_available"] = risk_allowed
         if not risk_allowed:

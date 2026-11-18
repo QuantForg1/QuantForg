@@ -427,16 +427,14 @@ def test_stop_is_max_of_atr_and_structure() -> None:
     assert ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=None
     ) == Decimal("1.20")
-    assert ol.owner_stop_distance(
+    # never narrower than 1.00 x ATR
+    narrow = ol.owner_stop_distance(
         atr=Decimal("1.2"), structure_distance=Decimal("1.0")
-    ) == Decimal(
-        "1.20"
-    )  # never narrower than 1.00 x ATR
-    assert ol.owner_stop_distance(
-        atr=Decimal("1.2"), structure_distance=Decimal("3.6")
-    ) == Decimal(
-        "3.6"
-    )  # beyond structure when it is further away
+    )
+    assert narrow == Decimal("1.20")
+    # beyond structure when it is further away
+    wide = ol.owner_stop_distance(atr=Decimal("1.2"), structure_distance=Decimal("3.6"))
+    assert wide == Decimal("3.6")
     assert ol.owner_stop_distance(atr=None, structure_distance=Decimal("3.0")) is None
 
 
@@ -539,7 +537,9 @@ def test_losing_streak_never_pauses_entries() -> None:
 def test_no_martingale_volume_after_losses() -> None:
     # Volume never rises after a loss: the owner guard caps every entry at 0.01.
     assert "OWNER_MAX_LOT" in _codes(_entry(volume=Decimal("0.02")))
-    assert Decimal("0.01") == ol.OWNER_MAX_LOT
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
+
+    assert Decimal("0.01") == active_max_lot()  # installed former-baseline profile
 
 
 # --- Persisted Live Trading Control profile follows the owner limits ----------
@@ -561,15 +561,19 @@ def test_stale_persisted_ltc_profile_shows_and_enforces_owner_limits() -> None:
         "risk_per_trade_pct": "0.50",
         "max_consecutive_losses": 2,
     }
-    cfg = LiveTradingRiskConfig.from_dict(stale)
-    assert cfg.risk_per_trade_pct == ol.OWNER_MAX_PLANNED_RISK_PCT == Decimal("9.0")
-    assert cfg.max_daily_loss_pct == ol.OWNER_DAILY_LOSS_PCT == Decimal("25.0")
+    # Since 2026-11-18 the per-user values come from the installed profile
+    # (here the former baseline), whatever the stale stored values say.
+    cfg = LiveTradingRiskConfig.from_dict(stale).with_active_profile()
+    assert cfg.risk_per_trade_pct == Decimal("9.0")
+    assert cfg.max_daily_loss_pct == Decimal("25.0")
     assert cfg.max_consecutive_losses == 0  # no loss-streak pause
     assert cfg.min_reward_risk == Decimal("1.50")
     assert cfg.max_spread == Decimal("0.45")
     assert cfg.max_open_positions == 1
-    # Operator-only settings that are not owner limits are kept.
-    assert cfg.min_score == Decimal("70")
+    # Signal quality is a per-user profile value (75 in this profile); the
+    # operator-only slippage setting is kept.
+    assert cfg.min_score == Decimal("75")
+    assert cfg.max_slippage == Decimal("0.50")
     shown = cfg.to_dict()
     assert shown["max_daily_loss_pct"] == "25.0"
     assert shown["risk_per_trade_pct"] == "9.0"

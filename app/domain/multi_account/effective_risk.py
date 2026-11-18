@@ -1,8 +1,8 @@
 """Strictest-of-three effective risk resolution.
 
-User may propose only the five editable knobs. Admin supplies allowed
-ranges and platform defaults. Global hard ceilings come from
-``owner_live_limits`` and can never be exceeded.
+User may propose the editable knobs. Admin supplies allowed ranges.
+Global hard ceilings are the ``SYSTEM_*`` bounds of ``owner_live_limits``
+and can never be exceeded. Defaults are the approved ``OWNER_*`` profile.
 
 Missing or invalid inputs fail closed (block new entries) — never
 substitute a more permissive default for LIVE eligibility.
@@ -21,6 +21,11 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_PLANNED_RISK_PCT,
+    SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT,
+    SYSTEM_MAX_DAILY_LOSS_PCT,
+    SYSTEM_MAX_LOT,
+    SYSTEM_MAX_OPEN_POSITIONS,
+    SYSTEM_MAX_PLANNED_RISK_PCT,
 )
 
 USER_EDITABLE_RISK_KEYS = frozenset(
@@ -163,7 +168,7 @@ def resolve_effective_risk(
     planned, planned_err = _clip_pct(
         user=proposal.planned_risk_pct,
         admin_max=_dec(admin.get("planned_risk_pct")),
-        hard_ceiling=OWNER_MAX_PLANNED_RISK_PCT,
+        hard_ceiling=SYSTEM_MAX_PLANNED_RISK_PCT,
     )
     if planned_err:
         rejected.append(f"planned_risk_pct:{planned_err}")
@@ -171,7 +176,7 @@ def resolve_effective_risk(
     aggregate, aggregate_err = _clip_pct(
         user=proposal.aggregate_open_risk_pct,
         admin_max=_dec(admin.get("aggregate_open_risk_pct")),
-        hard_ceiling=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
+        hard_ceiling=SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT,
     )
     if aggregate_err:
         rejected.append(f"aggregate_open_risk_pct:{aggregate_err}")
@@ -179,7 +184,7 @@ def resolve_effective_risk(
     max_lot, lot_err = _clip_lot(
         user=proposal.max_lot,
         admin_max=_dec(admin.get("max_lot")),
-        hard_ceiling=OWNER_MAX_LOT,
+        hard_ceiling=SYSTEM_MAX_LOT,
     )
     if lot_err:
         rejected.append(f"max_lot:{lot_err}")
@@ -187,7 +192,7 @@ def resolve_effective_risk(
     daily, daily_err = _clip_pct(
         user=proposal.daily_loss_pct,
         admin_max=_dec(admin.get("daily_loss_pct")),
-        hard_ceiling=OWNER_DAILY_LOSS_PCT,
+        hard_ceiling=SYSTEM_MAX_DAILY_LOSS_PCT,
     )
     if daily_err:
         rejected.append(f"daily_loss_pct:{daily_err}")
@@ -204,7 +209,7 @@ def resolve_effective_risk(
     concurrent, concurrent_err = _clip_positions(
         user=concurrent_raw,
         admin_max=admin_concurrent_i,
-        hard_ceiling=OWNER_MAX_OPEN_POSITIONS,
+        hard_ceiling=SYSTEM_MAX_OPEN_POSITIONS,
     )
     if concurrent_err:
         rejected.append(f"max_concurrent_positions:{concurrent_err}")

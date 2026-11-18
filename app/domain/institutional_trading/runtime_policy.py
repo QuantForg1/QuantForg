@@ -1,23 +1,31 @@
 """Authoritative runtime trading policy.
 
-Hard caps are the approved owner limits. A saved document may be stricter.
-It cannot loosen them, disable gold-only, drop protective stops, bypass the
-kill switch, or widen the owner Monday-Friday 07:00-17:00 UTC entry window.
+Since 2026-11-18 the document installed for a cycle is the *effective policy
+of one user*: the system document (``trading_runtime_config``: gold-only,
+protective stop, commission tariff, kill-switch locks and other platform
+safeguards) overlaid with that user's own risk profile
+(``user_risk_profiles``; unset fields use the approved defaults). The shared
+document's trading-profile keys are never used for a user's trade evaluation.
 
-Weekly loss percent defaults to 0 (off). A nonzero weekly halt is stored
-only when an owner save sets it. There is no hidden weekly default.
+Every value is clamped to the non-overridable ``SYSTEM_*`` bounds. A document
+cannot disable gold-only, drop protective stops, bypass the kill switch, or
+enable martingale / grid. With no document installed the approved defaults
+apply. Weekly, monthly and drawdown halts are 0 (off) unless a profile sets
+them.
 """
 
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+from datetime import time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_DAILY_LOSS_PCT,
     OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
+    OWNER_MAX_DRAWDOWN_PCT,
     OWNER_MAX_LOT,
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_PLANNED_RISK_PCT,
@@ -25,8 +33,20 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MIN_REWARD_RISK,
     OWNER_MIN_TRADE_QUALITY,
     OWNER_MIN_TRADE_QUALITY_FLOOR,
+    OWNER_MONTHLY_LOSS_PCT,
+    OWNER_SESSION_END_UTC,
+    OWNER_SESSION_START_UTC,
+    OWNER_SESSION_WEEKDAYS,
     OWNER_SL_ATR_MULTIPLIER,
     OWNER_WEEKLY_LOSS_PCT,
+    SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT,
+    SYSTEM_MAX_DAILY_LOSS_PCT,
+    SYSTEM_MAX_LOT,
+    SYSTEM_MAX_OPEN_POSITIONS,
+    SYSTEM_MAX_PERIOD_LOSS_PCT,
+    SYSTEM_MAX_PLANNED_RISK_PCT,
+    SYSTEM_MAX_SPREAD,
+    SYSTEM_MIN_REWARD_RISK_FLOOR,
 )
 
 _POLICY: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -56,6 +76,28 @@ LOCKED_TRUE = (
     "unified_decision_enabled",
 )
 
+# Keys owned by a user's risk profile. The shared system document's values for
+# these keys are ignored when an effective per-user policy is built.
+PROFILE_POLICY_KEYS = frozenset(
+    {
+        "max_planned_risk_pct",
+        "max_aggregate_open_risk_pct",
+        "daily_loss_pct",
+        "weekly_loss_pct",
+        "monthly_loss_pct",
+        "max_drawdown_pct",
+        "min_reward_risk",
+        "preferred_reward_risk",
+        "max_spread",
+        "max_lot",
+        "max_concurrent_positions",
+        "min_trade_quality",
+        "trading_days",
+        "trading_hours_utc",
+        "session_utc",
+    }
+)
+
 
 def use_runtime_policy(document: dict[str, Any] | None) -> Token[dict[str, Any] | None]:
     return _POLICY.set(document)
@@ -83,30 +125,39 @@ def _active_decimal(key: str, fallback: Decimal) -> Decimal:
     if not isinstance(doc, dict) or doc.get("unavailable"):
         return fallback
     raw = doc.get(key)
-    if raw is None:
+    if raw is None or raw == "":
         return fallback
-    return _dec(raw)
+    try:
+        value = _dec(raw)
+    except (InvalidOperation, ValueError):
+        return fallback
+    return value if value.is_finite() else fallback
+
+
+def _bounded(value: Decimal, *, default: Decimal, ceiling: Decimal) -> Decimal:
+    """Positive value up to the system ceiling; anything else -> default."""
+    if value <= 0 or value > ceiling:
+        return default
+    return value
 
 
 def active_max_planned_risk_pct() -> Decimal:
     value = _active_decimal("max_planned_risk_pct", OWNER_MAX_PLANNED_RISK_PCT)
-    if value <= 0 or value > OWNER_MAX_PLANNED_RISK_PCT:
-        return OWNER_MAX_PLANNED_RISK_PCT
-    return value
+    return _bounded(
+        value, default=OWNER_MAX_PLANNED_RISK_PCT, ceiling=SYSTEM_MAX_PLANNED_RISK_PCT
+    )
 
 
 def active_daily_loss_pct() -> Decimal:
     value = _active_decimal("daily_loss_pct", OWNER_DAILY_LOSS_PCT)
-    if value <= 0 or value > OWNER_DAILY_LOSS_PCT:
-        return OWNER_DAILY_LOSS_PCT
-    return value
+    return _bounded(
+        value, default=OWNER_DAILY_LOSS_PCT, ceiling=SYSTEM_MAX_DAILY_LOSS_PCT
+    )
 
 
 def active_max_lot() -> Decimal:
     value = _active_decimal("max_lot", OWNER_MAX_LOT)
-    if value <= 0 or value > OWNER_MAX_LOT:
-        return OWNER_MAX_LOT
-    return value
+    return _bounded(value, default=OWNER_MAX_LOT, ceiling=SYSTEM_MAX_LOT)
 
 
 def active_min_lot() -> Decimal | None:
@@ -120,24 +171,27 @@ def active_min_lot() -> Decimal | None:
     try:
         value = _dec(raw)
     except Exception:
-        return OWNER_MAX_LOT
-    if value <= 0 or value > OWNER_MAX_LOT:
-        return OWNER_MAX_LOT
+        return None
+    if value <= 0 or value > active_max_lot():
+        return None
     return value
 
 
 def active_max_aggregate_open_risk_pct() -> Decimal:
-    """Saved book cap. It cannot exceed 30% and is not cut down to 20%."""
+    """Shared open-risk budget of one user's book. Never below per-trade risk."""
     value = _active_decimal(
         "max_aggregate_open_risk_pct", OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
     )
-    if value <= 0 or value > OWNER_MAX_AGGREGATE_OPEN_RISK_PCT:
-        return OWNER_MAX_AGGREGATE_OPEN_RISK_PCT
+    value = _bounded(
+        value,
+        default=OWNER_MAX_AGGREGATE_OPEN_RISK_PCT,
+        ceiling=SYSTEM_MAX_AGGREGATE_OPEN_RISK_PCT,
+    )
     return value
 
 
 def active_max_open_positions() -> int:
-    """Saved concurrent-position cap. It cannot exceed the owner maximum (1)."""
+    """Profile concurrent-position cap, 1 to the system maximum."""
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("unavailable"):
         return OWNER_MAX_OPEN_POSITIONS
@@ -148,7 +202,7 @@ def active_max_open_positions() -> int:
         value = int(raw)
     except (TypeError, ValueError):
         return OWNER_MAX_OPEN_POSITIONS
-    if value < 1 or value > OWNER_MAX_OPEN_POSITIONS:
+    if value < 1 or value > SYSTEM_MAX_OPEN_POSITIONS:
         return OWNER_MAX_OPEN_POSITIONS
     return value
 
@@ -165,19 +219,14 @@ def full_utc_day_required() -> bool:
 
 def active_max_spread() -> Decimal:
     value = _active_decimal("max_spread", OWNER_MAX_SPREAD)
-    if value <= 0 or value > OWNER_MAX_SPREAD:
-        return OWNER_MAX_SPREAD
-    return value
+    return _bounded(value, default=OWNER_MAX_SPREAD, ceiling=SYSTEM_MAX_SPREAD)
 
 
 def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
-    """Floor a document actually applies after estimated trading costs.
+    """Net reward:risk floor of a document after estimated trading costs.
 
-    Owner floor: the live minimum net reward:risk is ``OWNER_MIN_REWARD_RISK``.
-    Candidates 0.10 / 0.15 may still be stored under ``experimental``
-    for documentation, but ``experimental_promoted`` must never lower the
-    active enforcement floor below :data:`OWNER_MIN_REWARD_RISK`.
-    A stricter saved floor remains allowed.
+    Default ``OWNER_MIN_REWARD_RISK`` (1.50). A profile may save any value
+    from the system floor (1.00) to 10. Anything else fails to the default.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_reward_risk,
@@ -195,23 +244,19 @@ def enforced_min_reward_risk(document: dict[str, Any] | None) -> Decimal:
     authorized = authorized_min_reward_risk(value)
     if authorized is None:
         return OWNER_MIN_REWARD_RISK
-    # Never allow experimental promotion (or stale persisted candidates) to
-    # undercut the owner-approved net RR floor.
-    if authorized < OWNER_MIN_REWARD_RISK:
-        return OWNER_MIN_REWARD_RISK
     return authorized
 
 
 def active_min_reward_risk() -> Decimal:
-    """Active floor is never below the owner floor. See enforced_min_reward_risk."""
+    """Active net RR floor of the installed (per-user) document."""
     doc = _POLICY.get()
     return enforced_min_reward_risk(doc if isinstance(doc, dict) else None)
 
 
 def active_min_trade_quality() -> int:
-    """Unset policy stays 70. A saved integer from 70 to 100 is used.
+    """Unset policy stays 75. A saved integer from 70 to 100 is used.
 
-    Below 70 or a non-integer fails closed to 70.
+    Anything else fails closed to 75.
     """
     from app.domain.institutional_trading.owner_live_limits import (
         authorized_min_trade_quality,
@@ -243,32 +288,100 @@ def active_stop_atr_multiplier() -> Decimal:
     return value.quantize(Decimal("0.01"))
 
 
-def weekly_loss_limit_pct() -> Decimal:
-    """0 means the weekly halt is off. Never invents a nonzero default."""
+def _period_limit(key: str, default: Decimal) -> Decimal:
+    """0 means off. A positive value up to the system bound is enforced."""
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("unavailable"):
-        return OWNER_WEEKLY_LOSS_PCT
-    raw = doc.get("weekly_loss_pct")
-    if raw is None:
+        return default
+    raw = doc.get(key)
+    if raw is None or raw == "":
         return Decimal("0")
-    value = _dec(raw)
-    if value <= 0:
+    try:
+        value = _dec(raw)
+    except (InvalidOperation, ValueError):
         return Decimal("0")
-    return min(value, OWNER_DAILY_LOSS_PCT)
+    if not value.is_finite() or value <= 0:
+        return Decimal("0")
+    return min(value, SYSTEM_MAX_PERIOD_LOSS_PCT)
+
+
+def weekly_loss_limit_pct() -> Decimal:
+    """0 means the weekly halt is off. Never invents a nonzero default."""
+    return _period_limit("weekly_loss_pct", OWNER_WEEKLY_LOSS_PCT)
+
+
+def monthly_loss_limit_pct() -> Decimal:
+    """0 means the monthly halt is off. Never invents a nonzero default."""
+    return _period_limit("monthly_loss_pct", OWNER_MONTHLY_LOSS_PCT)
 
 
 def drawdown_limit_pct() -> Decimal:
-    """0 means the overall drawdown halt is off until an owner save."""
+    """0 means the overall drawdown halt is off until a profile sets it."""
+    return _period_limit("max_drawdown_pct", OWNER_MAX_DRAWDOWN_PCT)
+
+
+_DEFAULT_WINDOW = (
+    frozenset(OWNER_SESSION_WEEKDAYS),
+    OWNER_SESSION_START_UTC,
+    OWNER_SESSION_END_UTC,
+)
+
+
+def parse_trading_hours(raw: object) -> tuple[time, time] | None:
+    """``"HH:MM-HH:MM"`` (UTC) or ``"24h"``. ``24:00`` means end of day."""
+    text = str(raw or "").strip().lower()
+    if text in {"24h", "24/5", "all", "00:00-24:00"}:
+        return OWNER_SESSION_START_UTC, OWNER_SESSION_END_UTC
+    parts = text.split("-")
+    if len(parts) != 2:
+        return None
+    out: list[time] = []
+    for part in parts:
+        try:
+            hh_s, mm_s = part.strip().split(":")
+            hh, mm = int(hh_s), int(mm_s)
+        except ValueError:
+            return None
+        if hh == 24 and mm == 0:
+            out.append(time.max)
+            continue
+        if not (0 <= hh <= 23 and 0 <= mm <= 59):
+            return None
+        out.append(time(hh, mm))
+    if out[0] == out[1]:
+        return None
+    return out[0], out[1]
+
+
+def parse_trading_days(raw: object) -> frozenset[int] | None:
+    """Weekday numbers (Monday = 0). Non-empty subset of 0..6."""
+    if not isinstance(raw, list | tuple) or not raw:
+        return None
+    days: set[int] = set()
+    for item in raw:
+        if isinstance(item, bool):
+            return None
+        try:
+            day = int(item)
+        except (TypeError, ValueError):
+            return None
+        if day < 0 or day > 6:
+            return None
+        days.add(day)
+    return frozenset(days)
+
+
+def active_trading_window() -> tuple[frozenset[int], time, time]:
+    """(weekdays, start, end) of the installed profile; default 24/5 UTC."""
     doc = _POLICY.get()
     if not isinstance(doc, dict) or doc.get("unavailable"):
-        return Decimal("0")
-    raw = doc.get("max_drawdown_pct")
-    if raw is None:
-        return Decimal("0")
-    value = _dec(raw)
-    if value <= 0:
-        return Decimal("0")
-    return min(value, active_daily_loss_pct(), OWNER_DAILY_LOSS_PCT)
+        return _DEFAULT_WINDOW
+    days = parse_trading_days(doc.get("trading_days"))
+    hours = parse_trading_hours(doc.get("trading_hours_utc"))
+    if days is None and hours is None:
+        return _DEFAULT_WINDOW
+    start, end = hours or (OWNER_SESSION_START_UTC, OWNER_SESSION_END_UTC)
+    return (days or _DEFAULT_WINDOW[0]), start, end
 
 
 def m1_overlay_mode(key: str) -> str | None:
@@ -285,7 +398,7 @@ def m1_overlay_mode(key: str) -> str | None:
 
 
 def approved_baseline() -> dict[str, Any]:
-    """Approved live policy. Weekly halt is explicitly off."""
+    """Approved system document. Trading-profile keys hold the user defaults."""
     from app.domain.institutional_trading.owner_live_limits import (
         owner_commission_configuration,
     )
@@ -307,7 +420,7 @@ def approved_baseline() -> dict[str, Any]:
         "max_aggregate_open_risk_pct": format(OWNER_MAX_AGGREGATE_OPEN_RISK_PCT, "f"),
         "max_concurrent_positions": OWNER_MAX_OPEN_POSITIONS,
         "min_lot": None,
-        "max_lot": "0.01",
+        "max_lot": format(OWNER_MAX_LOT, "f"),
         "max_spread": format(OWNER_MAX_SPREAD, "f"),
         "min_reward_risk": str(OWNER_MIN_REWARD_RISK),
         "preferred_reward_risk": str(OWNER_MIN_REWARD_RISK),
@@ -327,7 +440,7 @@ def approved_baseline() -> dict[str, Any]:
         # persists false via Admin policy + Railway env (does not force-close).
         "m1_live_submit": None,
         "experimental_promoted": False,
-        "session_utc": "07:00-17:00 Mon-Fri",
+        "session_utc": "24/5 Mon-Fri UTC",
     }
 
 
@@ -423,8 +536,10 @@ def _clean_experimental(raw: object) -> tuple[dict[str, Any] | None, list[str]]:
         except Exception:
             errors.append("experimental min_reward_risk is not a number")
         else:
+            # Experimental floors below the active floor are retired: every
+            # profile floor is at least the system floor (1.00).
             authorized = authorized_min_reward_risk(rr)
-            if authorized is None or authorized >= OWNER_MIN_REWARD_RISK:
+            if authorized is None or authorized >= SYSTEM_MIN_REWARD_RISK_FLOOR:
                 errors.append("experimental min_reward_risk must be 0.10 or 0.15")
     if "min_trade_quality" in raw:
         authorized_quality = authorized_min_trade_quality(raw.get("min_trade_quality"))
@@ -566,8 +681,7 @@ def validate_policy_changes(
         else:
             if authorized_min_trade_quality(quality) is None:
                 errors.append(
-                    "min_trade_quality must be "
-                    f"{OWNER_MIN_TRADE_QUALITY_FLOOR} to 100"
+                    f"min_trade_quality must be {OWNER_MIN_TRADE_QUALITY_FLOOR} to 100"
                 )
     if "stop_atr_multiplier" in changes:
         try:
@@ -591,8 +705,7 @@ def validate_policy_changes(
             positions = 0
         if positions < 1 or positions > OWNER_MAX_OPEN_POSITIONS:
             errors.append(
-                "max_concurrent_positions must be from 1 to "
-                f"{OWNER_MAX_OPEN_POSITIONS}"
+                f"max_concurrent_positions must be from 1 to {OWNER_MAX_OPEN_POSITIONS}"
             )
     if "min_lot" in changes and changes["min_lot"] is not None:
         try:

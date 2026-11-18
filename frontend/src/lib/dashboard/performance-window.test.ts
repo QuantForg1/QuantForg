@@ -48,7 +48,7 @@ assert.doesNotMatch(dash, /NotificationsStrip/);
 assert.match(dash, /netDealPnl/);
 assert.match(dash, /startOfUtcDayMs/);
 const riskCenter = readFileSync(join(root, "app/(app)/risk-center/page.tsx"), "utf8");
-assert.match(riskCenter, /RiskIntelligencePanel|Account Risk Overview|My Risk Preferences/);
+assert.match(riskCenter, /RiskIntelligencePanel|Account Risk Overview|PersonalRiskProfile/);
 assert.match(desk, /todayPnlTone/);
 assert.match(desk, /metricsUpdatedAt/);
 

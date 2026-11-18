@@ -484,6 +484,6 @@ def test_tick_path_matches_contract_fallback_for_fx_step_up() -> None:
 
 def test_constants_remain_single_source() -> None:
     assert Decimal("0") == MIN_PLANNED_RISK_USD
-    assert Decimal("4.50") == TARGET_PLANNED_RISK_USD
-    assert Decimal("4.50") == MAX_PLANNED_SL_RISK_USD
-    assert Decimal("4.50") == MAX_TOTAL_PLANNED_RISK_USD
+    assert Decimal("7.50") == TARGET_PLANNED_RISK_USD
+    assert Decimal("7.50") == MAX_PLANNED_SL_RISK_USD
+    assert Decimal("10.00") == MAX_TOTAL_PLANNED_RISK_USD

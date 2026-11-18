@@ -20,8 +20,8 @@ from app.domain.institutional_trading.ai_scalping.config import (
 from app.domain.institutional_trading.config import PREFERRED_REWARD_RISK
 from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_ENTRIES_PER_CYCLE,
-    OWNER_MAX_OPEN_POSITIONS,
     OWNER_MIN_REWARD_RISK,
+    SYSTEM_MAX_OPEN_POSITIONS,
 )
 
 PROFILE_ID = "SCALPING_V1"
@@ -79,7 +79,8 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         cooldown_base_seconds=45,
         cooldown_max_seconds=180,
         # Owner limits 2026-10-20: one open position, one entry per cycle.
-        max_open_trades=OWNER_MAX_OPEN_POSITIONS,
+        # Static ceiling; the active profile's cap is applied at runtime.
+        max_open_trades=SYSTEM_MAX_OPEN_POSITIONS,
         max_entries_per_cycle=OWNER_MAX_ENTRIES_PER_CYCLE,
         require_probability_improvement=False,
         min_confidence_delta_for_add=0,
@@ -119,7 +120,12 @@ _LEGACY_SCALP_CAPS = frozenset({1, 2, 3, 5})
 
 
 def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> int:
-    """Align the plane cap to the live profile. Never exceeds the owner limit."""
+    """Align the plane cap to the live profile and the active user cap."""
+    from app.domain.institutional_trading.runtime_policy import (
+        active_max_open_positions,
+    )
+
+    user_cap = active_max_open_positions()
     profile = int(SCALPING_V1.max_open_trades)
     try:
         n = int(current)
@@ -127,7 +133,7 @@ def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> in
         n = 1
     mode = str(trading_mode or "scalping").strip().lower()
     if mode != "scalping":
-        return max(1, min(n, OWNER_MAX_OPEN_POSITIONS))
+        return max(1, min(n, user_cap))
     if n in _LEGACY_SCALP_CAPS:
-        return min(profile, OWNER_MAX_OPEN_POSITIONS)
-    return max(1, min(n, profile, OWNER_MAX_OPEN_POSITIONS))
+        return min(profile, user_cap)
+    return max(1, min(n, profile, user_cap))

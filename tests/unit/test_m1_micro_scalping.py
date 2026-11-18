@@ -128,7 +128,7 @@ def test_full_book_blocks_a_new_entry(monkeypatch: pytest.MonkeyPatch) -> None:
         bid=Decimal("2306.10"),
         ask=Decimal("2306.30"),
         higher_timeframe_bias="up",
-        open_positions=1,
+        open_positions=5,  # the default profile book holds 5
     )
     assert one_open.reason == "shared_book_position_open"
     decision = evaluate_m1(
