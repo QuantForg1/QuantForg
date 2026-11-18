@@ -84,7 +84,6 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
     session.connected,
     session.executionEnabled,
     hasQuote,
-    connected,
     realtime.online,
     realtime.latencyMs,
     realtime.connected,

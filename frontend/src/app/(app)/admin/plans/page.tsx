@@ -229,13 +229,13 @@ export default function AdminPlansPage() {
   const plansRoot = asRecord(plansQ.data);
   const allPlans = useMemo(
     () => asList(plansRoot.all_plans).map(asRecord),
-    [plansQ.data],
+    [plansRoot.all_plans],
   );
 
   const revenue = asRecord(revenueQ.data);
   const orders = useMemo(
     () => asList(revenue.orders).map(asRecord),
-    [revenueQ.data],
+    [revenue.orders],
   );
 
   const upsertMut = useMutation({

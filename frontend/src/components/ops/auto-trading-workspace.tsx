@@ -934,7 +934,6 @@ export function AutoTradingWorkspace() {
       ? {}
       : (diag.execution_optimizer ?? lastPipeline.optimizer_result ?? {}),
   );
-  const optimizerState = "NOT_RUN";
   const optimizerRemaining = str(optimizerSnap.remaining_wait_ms, "0");
   const optimizerLabel = "NOT_RUN";
   const lastPipelineOutcome = str(
@@ -1038,9 +1037,6 @@ export function AutoTradingWorkspace() {
     aiScore.momentum != null ? String(aiScore.momentum) : diag.momentum,
     "—",
   );
-  const learning = asRecord(aiScalping.learning);
-  const winRate =
-    learning.win_rate != null ? `${String(learning.win_rate)}%` : "—";
   const lastLatency =
     Number.isFinite(num(last.latency_ms))
       ? `${formatNumber(num(last.latency_ms), 0)} ms`

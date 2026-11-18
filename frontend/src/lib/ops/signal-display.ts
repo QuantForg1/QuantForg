@@ -377,16 +377,13 @@ export function closeOnlyEntryMessage(
   );
 }
 
-const BLOCKER_CATEGORIES = [
-  "RISK_REJECTED",
-  "EXECUTION_REJECT_BURST",
-  "SAFETY_BLOCKED",
-  "OMS_REJECTED",
-  "BROKER_REJECTED",
-  "MT5_REJECTED",
-] as const;
-
-export type ExecutionBlockerCategory = (typeof BLOCKER_CATEGORIES)[number];
+export type ExecutionBlockerCategory =
+  | "RISK_REJECTED"
+  | "EXECUTION_REJECT_BURST"
+  | "SAFETY_BLOCKED"
+  | "OMS_REJECTED"
+  | "BROKER_REJECTED"
+  | "MT5_REJECTED";
 
 export function classifyExecutionBlocker(
   code: string | null | undefined,

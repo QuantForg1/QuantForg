@@ -80,22 +80,38 @@ export function StrategySidePanels({
           <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
             {description || "Strategy stays advisory until risk and OMS gates pass."}
           </p>
-          <div className="grid gap-2 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
+          <div className="grid gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Symbol</Label>
-              <Input value={symbol} onChange={(e) => onSymbol(e.target.value.toUpperCase())} />
+              <Label htmlFor="strategy-symbol">Symbol</Label>
+              <Input
+                id="strategy-symbol"
+                value={symbol}
+                onChange={(e) => onSymbol(e.target.value.toUpperCase())}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Timeframe</Label>
-              <Input value={timeframe} onChange={(e) => onTimeframe(e.target.value)} />
+              <Label htmlFor="strategy-timeframe">Timeframe</Label>
+              <Input
+                id="strategy-timeframe"
+                value={timeframe}
+                onChange={(e) => onTimeframe(e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Max trades</Label>
-              <Input value={maxTrades} onChange={(e) => onMaxTrades(e.target.value)} />
+              <Label htmlFor="strategy-max-trades">Max trades</Label>
+              <Input
+                id="strategy-max-trades"
+                value={maxTrades}
+                onChange={(e) => onMaxTrades(e.target.value)}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Daily loss %</Label>
-              <Input value={dailyLoss} onChange={(e) => onDailyLoss(e.target.value)} />
+              <Label htmlFor="strategy-daily-loss">Daily loss %</Label>
+              <Input
+                id="strategy-daily-loss"
+                value={dailyLoss}
+                onChange={(e) => onDailyLoss(e.target.value)}
+              />
             </div>
           </div>
         </CardContent>

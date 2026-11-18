@@ -56,7 +56,8 @@ export function classifyCommunicationFault(error: {
 }
 
 /** Communication faults are never a strategy NO_TRADE. */
-export function isNoTradeFault(_fault: CommunicationFault): boolean {
+export function isNoTradeFault(fault: CommunicationFault): boolean {
+  void fault;
   return false;
 }
 

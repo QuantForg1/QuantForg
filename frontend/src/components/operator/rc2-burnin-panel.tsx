@@ -189,7 +189,10 @@ export function Rc2BurnInPanel() {
     session.orders,
   ]);
 
-  const latest = useMemo(() => latestBurnInSample(), [tick]);
+  const latest = useMemo(() => {
+    void tick;
+    return latestBurnInSample();
+  }, [tick]);
   const historyN = listBurnInSamples().length;
 
   const fmt = (v: number | null | undefined, digits = 2) =>

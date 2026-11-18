@@ -8,7 +8,6 @@ import { Clock, Pin, Star } from "lucide-react";
 import {
   appNav,
   commandCatalog,
-  isTraderFacingHref,
   visibleCommandItems,
   visiblePrimaryRail,
 } from "@/components/layout/nav-config";

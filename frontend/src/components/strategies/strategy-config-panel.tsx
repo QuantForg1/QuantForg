@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  buildStrategyRules,
   isFlatPrimitiveParams,
   mergedParamsFromJson,
   serializeParams,
@@ -49,9 +50,13 @@ type StrategyConfigPanelProps = {
   lastResult: Record<string, unknown> | null;
 };
 
-function numish(v: unknown) {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
+function InfoCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-[var(--fg)]">{value}</p>
+    </div>
+  );
 }
 
 export function StrategyConfigPanel({
@@ -86,6 +91,16 @@ export function StrategyConfigPanel({
   const merged = mergedParamsFromJson(paramsJson, defaultParams);
   const useFlatForm =
     strategyKey !== "custom_rules" && isFlatPrimitiveParams(merged);
+  const rules = buildStrategyRules(
+    "",
+    symbol,
+    timeframe,
+    maxTrades,
+    dailyLoss,
+    maxExposure,
+  );
+  const fieldClass =
+    "h-11 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-base text-[var(--fg)] sm:h-10 sm:text-sm";
 
   const patchParam = (key: string, raw: string) => {
     const next = { ...merged };
@@ -125,7 +140,7 @@ export function StrategyConfigPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         <div
-          className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-2"
+          className="-mx-1 flex gap-1 overflow-x-auto border-b border-[var(--border)] px-1"
           role="tablist"
           aria-label="Strategy configuration"
         >
@@ -136,10 +151,10 @@ export function StrategyConfigPanel({
               role="tab"
               aria-selected={configTab === id}
               onClick={() => onConfigTab(id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              className={`h-10 shrink-0 border-b-2 px-3 text-xs font-medium transition-colors ${
                 configTab === id
-                  ? "bg-[var(--cta-soft)] text-[var(--cta)]"
-                  : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+                  ? "border-[var(--accent)] text-[var(--fg)]"
+                  : "border-transparent text-[var(--fg-muted)] hover:text-[var(--fg)]"
               }`}
             >
               {label}
@@ -158,7 +173,7 @@ export function StrategyConfigPanel({
                   {typeof val === "boolean" ? (
                     <select
                       id={`param-${key}`}
-                      className="h-9 w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm"
+                      className={fieldClass}
                       value={String(val)}
                       onChange={(e) => patchParam(key, e.target.value)}
                     >
@@ -187,34 +202,48 @@ export function StrategyConfigPanel({
               aria-label="Strategy parameters JSON"
             />
           )
+        ) : configTab === "logic" ? (
+          <ol className="space-y-2 text-sm">
+            {rules.map((rule, i) => (
+              <li key={`${i}-${rule.slice(0, 24)}`} className="flex items-start gap-2">
+                <span className="mt-0.5 w-4 shrink-0 text-xs tabular text-[var(--fg-subtle)]">
+                  {i + 1}
+                </span>
+                <span className="text-[var(--fg-muted)]">{rule}</span>
+              </li>
+            ))}
+          </ol>
+        ) : configTab === "entry" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <InfoCell label="Last action" value={signalBlock ? str(signalBlock.action) : "No evaluate result yet"} />
+            <InfoCell
+              label="Confidence"
+              value={
+                signalBlock && Number.isFinite(Number(signalBlock.confidence))
+                  ? `${(Number(signalBlock.confidence) * 100).toFixed(0)}%`
+                  : "Not returned"
+              }
+            />
+            <p className="text-xs leading-relaxed text-[var(--fg-muted)] sm:col-span-2">
+              Entry and exit levels come from the latest evaluate on MT5 bars. Validate checks the current parameters without sending an order.
+            </p>
+          </div>
+        ) : configTab === "filters" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <InfoCell label="Symbol" value={symbol || "—"} />
+            <InfoCell label="Timeframe" value={timeframe || "—"} />
+            <p className="text-xs leading-relaxed text-[var(--fg-muted)] sm:col-span-2">
+              Symbol and timeframe are edited in Strategy Information. They stay advisory until the risk engine confirms.
+            </p>
+          </div>
         ) : (
-          <div className="min-h-[220px] rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/35 p-4 text-sm text-[var(--fg-muted)]">
-            {configTab === "logic" ? (
-              <p>
-                Logic follows the selected catalog plugin and any custom rules JSON.
-                Orders still require risk and OMS approval.
-              </p>
-            ) : null}
-            {configTab === "entry" ? (
-              <p>
-                Entry and exit levels come from live evaluate / MT5 bars — never sample
-                prices. Run Evaluate to refresh.
-              </p>
-            ) : null}
-            {configTab === "filters" ? (
-              <p>
-                Symbol {symbol} · timeframe {timeframe}. Filters stay advisory until the
-                risk engine confirms.
-              </p>
-            ) : null}
-            {configTab === "risk" ? (
-              <ul className="space-y-2">
-                <li>Max trades: {maxTrades}</li>
-                <li>Daily loss %: {dailyLoss}</li>
-                <li>Max exposure %: {maxExposure}</li>
-                <li>Live path requires EXECUTION_ENABLED and owned broker session.</li>
-              </ul>
-            ) : null}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <InfoCell label="Max trades" value={maxTrades || "—"} />
+            <InfoCell label="Daily loss" value={dailyLoss ? `${dailyLoss}%` : "—"} />
+            <InfoCell label="Max exposure" value={maxExposure ? `${maxExposure}%` : "—"} />
+            <p className="text-xs leading-relaxed text-[var(--fg-muted)] sm:col-span-3">
+              These limits are the current desk values. Live execution still requires the risk engine, OMS gates, and an owned broker session.
+            </p>
           </div>
         )}
 
@@ -235,9 +264,11 @@ export function StrategyConfigPanel({
           >
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="accent">{str(signalBlock.action)}</Badge>
-              <span className="text-xs text-[var(--fg-subtle)]">
-                conf {(numish(signalBlock.confidence) * 100).toFixed(0)}%
-              </span>
+              {Number.isFinite(Number(signalBlock.confidence)) ? (
+                <span className="text-xs text-[var(--fg-subtle)]">
+                  conf {(Number(signalBlock.confidence) * 100).toFixed(0)}%
+                </span>
+              ) : null}
             </div>
             <p className="mt-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
               Explainability

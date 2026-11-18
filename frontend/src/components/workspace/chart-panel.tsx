@@ -152,7 +152,6 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     ? "loading"
     : str(feedMeta.status || (candles.length ? "live" : "unavailable"));
   const feedBadge = publicFeedBadge(feedStatus);
-  const feedLive = candlesQ.isSuccess && candles.length > 0 && feedStatus === "live";
   const asOf = str(feedMeta.as_of || "");
 
   useEffect(() => {

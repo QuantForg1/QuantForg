@@ -270,8 +270,6 @@ export function PlatformStatusBoard() {
             ? null
             : null;
 
-    const gwStatus = componentStatus(statuses, "gateway");
-    const mt5Status = componentStatus(statuses, "mt5");
     const omsStatus = componentStatus(statuses, "oms");
     const aiStatus = componentStatus(statuses, "ai");
 
@@ -817,8 +815,6 @@ export function PlatformStatusBoard() {
     isAuthenticated,
     live,
     mt5,
-    mt5Q.isError,
-    mt5Q.isFetched,
     omsComponent,
     omsEvidence,
     positions,

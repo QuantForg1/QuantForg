@@ -70,7 +70,7 @@ export default function AdminUsersPage() {
   const fleetRoot = asRecord(fleetQ.data);
   const fleetRows = useMemo(
     () => asList(fleetRoot.customers).map(asRecord),
-    [fleetQ.data],
+    [fleetRoot.customers],
   );
 
   const filtered = useMemo(() => {

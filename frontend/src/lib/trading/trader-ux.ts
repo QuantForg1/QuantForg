@@ -1728,6 +1728,7 @@ export function presentLevel(
   value: unknown,
   _label: "Entry" | "SL" | "TP" = "Entry",
 ): string {
+  void _label;
   if (value == null || value === "" || value === "UNKNOWN" || value === "—") {
     return "Not available";
   }
