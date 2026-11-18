@@ -8030,6 +8030,16 @@ class InstitutionalIteRuntime:
             _pvm_vid = None
             _pvm_token = None
             try:
+                from app.domain.institutional_trading.ai_scalping.sell_cascade_anchor_store import (  # noqa: E501
+                    maybe_retry_sell_cascade_recovery,
+                )
+
+                # Cheap no-op unless startup recovery failed on a transient
+                # broker read; the retry itself runs in a background thread.
+                maybe_retry_sell_cascade_recovery(self.mt5_adapter)
+            except Exception:
+                logger.exception("sell_cascade_recovery_retry_schedule_failed")
+            try:
                 ensure_auto_trading_running(
                     self.plane,
                     settings=_gs(),
