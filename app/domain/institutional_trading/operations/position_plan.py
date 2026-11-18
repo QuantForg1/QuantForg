@@ -327,10 +327,10 @@ def build_position_plan(
     aggregate = _dec(aggregate_lots)
     floor = min_lot if min_lot > 0 else VOLUME_MIN
     ceiling = max_lot if max_lot > 0 else VOLUME_MAX
-    # Owner limit: no planned position may exceed 0.01 lot.
-    from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
+    # Profile max lot of the active user.
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
 
-    ceiling = min(ceiling, OWNER_MAX_LOT)
+    ceiling = min(ceiling, active_max_lot())
     implied_risk_n = risk_allowed_count_from_lots(
         aggregate_lots=aggregate,
         min_lot=floor,

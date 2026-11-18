@@ -46,6 +46,7 @@ from app.domain.institutional_trading.owner_live_limits import (
     OWNER_MAX_OPEN_POSITIONS,
     OWNER_MAX_PLANNED_RISK_PCT,
     OWNER_MAX_SPREAD,
+    SYSTEM_MAX_OPEN_POSITIONS,
 )
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -101,8 +102,8 @@ def _default_allowed_symbols(
 def _coerce_max_open_trades(value: int) -> int:
     """Owner limit: open positions in [1, OWNER_MAX_OPEN_POSITIONS]."""
     n = int(value)
-    if not 1 <= n <= OWNER_MAX_OPEN_POSITIONS:
-        raise ValueError(f"max_open_trades must be in [1, {OWNER_MAX_OPEN_POSITIONS}]")
+    if not 1 <= n <= SYSTEM_MAX_OPEN_POSITIONS:
+        raise ValueError(f"max_open_trades must be in [1, {SYSTEM_MAX_OPEN_POSITIONS}]")
     return n
 
 
@@ -1347,7 +1348,7 @@ def get_control_plane() -> OperationsControlPlane:
                     if mop >= 1:
                         # Persisted values above the owner limit are clamped, never
                         # raised — a stale ops_state must not crash boot.
-                        plane.max_open_trades = min(mop, OWNER_MAX_OPEN_POSITIONS)
+                        plane.max_open_trades = min(mop, SYSTEM_MAX_OPEN_POSITIONS)
                 except (TypeError, ValueError):
                     pass
             if str(plane.trading_mode or "").strip().lower() == "scalping":

@@ -32,6 +32,7 @@ _MEMORY_VERSION = 0
 _SCHEMA_READY = False
 _LAST_APPLIED: dict[str, Any] = {}
 _LOGGED_VERSION: dict[str, int | None] = {"version": None}
+_LOGGED_PROFILE: dict[str, tuple[str, Any]] = {}
 _AUDIT: list[dict[str, Any]] = []
 
 _CREATE_TABLE = """
@@ -355,13 +356,52 @@ def load_runtime_policy() -> StoredPolicy:
     return StoredPolicy(False, 0, None, "unavailable", error="config_store_unavailable")
 
 
-def install_cycle_policy() -> StoredPolicy:
-    """Install the current policy for this cycle. Failure replaces any prior one."""
+def effective_user_document(
+    system_document: dict[str, Any], user_id: Any | None
+) -> dict[str, Any]:
+    """System safeguards + this user's effective risk profile.
+
+    The shared document's trading-profile keys are dropped; the user's own
+    profile (defaults for unset fields) replaces them. ``user_id`` None (a
+    process with no bound user) gets the approved defaults, never another
+    user's profile. A profile read failure raises (callers fail closed).
+    """
+    from app.application.services.user_risk_profile_store import effective_profile
+    from app.domain.institutional_trading.risk_profile import resolve_profile
+    from app.domain.institutional_trading.runtime_policy import PROFILE_POLICY_KEYS
+
+    doc = {k: v for k, v in system_document.items() if k not in PROFILE_POLICY_KEYS}
+    profile = effective_profile(user_id) if user_id is not None else resolve_profile({})
+    doc.update(profile.to_policy_overlay())
+    doc["risk_profile_user"] = str(user_id) if user_id is not None else None
+    doc["risk_profile_version"] = profile.version
+    doc["risk_profile_sources"] = dict(profile.sources)
+    return doc
+
+
+def install_cycle_policy(user_id: Any | None = None) -> StoredPolicy:
+    """Install this cycle's effective policy for ``user_id``.
+
+    Failure (system document or the user's profile unreadable) installs an
+    ``unavailable`` document, which blocks new entries.
+    """
     loaded = load_runtime_policy()
     if not loaded.ok or loaded.document is None:
         use_runtime_policy({"unavailable": True})
         return loaded
-    use_runtime_policy(dict(loaded.document))
+    try:
+        document = effective_user_document(dict(loaded.document), user_id)
+    except Exception as exc:
+        logger.warning(
+            "risk_profile_install_failed",
+            user_id=str(user_id) if user_id is not None else None,
+            error_type=type(exc).__name__,
+        )
+        use_runtime_policy({"unavailable": True})
+        return StoredPolicy(
+            False, loaded.version, None, "unavailable", error="risk_profile_unavailable"
+        )
+    use_runtime_policy(document)
     if loaded.version > 0:
         _note_applied(loaded.version)
         _persist_worker_ack(loaded.version)
@@ -378,10 +418,27 @@ def install_cycle_policy() -> StoredPolicy:
             **commission_audit("XAUUSD", loaded.document),
         )
         _LOGGED_VERSION["version"] = loaded.version
+    profile_key = (str(user_id), document.get("risk_profile_version"))
+    if _LOGGED_PROFILE.get(str(user_id)) != profile_key:
+        logger.info(
+            "risk_profile_applied",
+            user_id=str(user_id) if user_id is not None else None,
+            profile_version=document.get("risk_profile_version"),
+            planned_risk_pct=document.get("max_planned_risk_pct"),
+            aggregate_open_risk_pct=document.get("max_aggregate_open_risk_pct"),
+            daily_loss_pct=document.get("daily_loss_pct"),
+            max_lot=document.get("max_lot"),
+            max_positions=document.get("max_concurrent_positions"),
+            max_spread=document.get("max_spread"),
+            min_reward_risk=document.get("min_reward_risk"),
+            min_trade_quality=document.get("min_trade_quality"),
+            trading_hours_utc=document.get("trading_hours_utc"),
+        )
+        _LOGGED_PROFILE[str(user_id)] = profile_key
     return StoredPolicy(
         True,
         loaded.version,
-        loaded.document,
+        document,
         loaded.source,
         status="applied" if loaded.version > 0 else "approved_baseline",
         applied_version=last_applied_version(),

@@ -273,10 +273,10 @@ def calculate_scalping_lots(
     )
     raw = risk_amount / per_lot if per_lot > 0 else Decimal("0")
 
-    # Owner limit: never size above 0.01 lot, whatever the broker allows.
-    from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
+    # Profile max lot of the active user, never above the broker maximum.
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
 
-    broker_max = min(cfg.broker_max_lot, OWNER_MAX_LOT)
+    broker_max = min(cfg.broker_max_lot, active_max_lot())
     norm = normalize_lots_against_broker(
         calculated_lot=raw,
         min_lot=broker_min,

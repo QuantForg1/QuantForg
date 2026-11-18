@@ -306,7 +306,14 @@ def resolve_target_risk_budget_usd(
     target_usd: Decimal,
     hard_max_risk_pct: Decimal | None = None,
 ) -> Decimal:
-    """USD SL-loss budget, never above the micro hard-max percent of equity."""
+    """USD SL-loss budget for this equity under the active profile.
+
+    The static default target (sized at the reference capital) means "the
+    profile's risk per trade": the budget is then ``equity x profile %``.
+    An explicit smaller target stays. Never above the profile percent.
+    """
+    from app.domain.institutional_trading.config import TARGET_PLANNED_RISK_USD
+
     profile = MicroAccountProfile()
     hard = (
         hard_max_risk_pct
@@ -315,8 +322,10 @@ def resolve_target_risk_budget_usd(
     )
     if equity <= 0 or target_usd <= 0:
         return Decimal("0")
-    hard_usd = (equity * hard / _PCT).quantize(_CENTS)
+    hard_usd = (equity * hard / _PCT).quantize(_CENTS, rounding=ROUND_DOWN)
     target = target_usd.quantize(_CENTS)
+    if target == TARGET_PLANNED_RISK_USD.quantize(_CENTS) and hard_usd > 0:
+        return hard_usd
     return min(target, hard_usd) if hard_usd > 0 else target
 
 

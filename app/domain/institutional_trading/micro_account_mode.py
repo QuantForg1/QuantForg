@@ -15,7 +15,7 @@ fakes lots, never overrides broker ``VOLUME_MIN``, and never forces execution.
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Any
@@ -52,6 +52,18 @@ DEFAULT_REFERENCE_ATR = Decimal("12.00")
 DRAWDOWN_HORIZON_PCT = Decimal("20")
 
 
+def _active_planned_risk_pct() -> Decimal:
+    """Risk per trade of the installed per-user profile (default otherwise)."""
+    try:
+        from app.domain.institutional_trading.runtime_policy import (
+            active_max_planned_risk_pct,
+        )
+
+        return active_max_planned_risk_pct()
+    except Exception:
+        return OWNER_MAX_PLANNED_RISK_PCT
+
+
 class MicroTradability(StrEnum):
     """Whether min_lot XAUUSD fits inside the micro risk ceiling."""
 
@@ -75,9 +87,9 @@ class MicroAccountProfile:
     # Recommended ceiling for "safely tradable" labelling.
     recommended_max_risk_pct: Decimal = Decimal("2.0")
     # Absolute ceiling - never exceed; never upsize past this to hit min_lot.
-    # Owner 14% planned-risk cap; owner_live_limits.max_planned_risk_usd is the
-    # binding per-trade limit.
-    hard_max_risk_pct: Decimal = OWNER_MAX_PLANNED_RISK_PCT
+    # The active (per-user) profile's risk per trade at construction time;
+    # owner_live_limits.max_planned_risk_usd stays the binding per-trade limit.
+    hard_max_risk_pct: Decimal = field(default_factory=_active_planned_risk_pct)
     drawdown_horizon_pct: Decimal = DRAWDOWN_HORIZON_PCT
     # Broker constraints - copied from XAUUSD specs; never overridden.
     broker_min_lot: Decimal = VOLUME_MIN
@@ -289,8 +301,7 @@ def evaluate_balance(
             "would cut dollar risk ~10x at the same stop."
         )
         recommendations.append(
-            "Lower-risk instrument - not supported on QuantForg "
-            "(XAUUSD-only platform)."
+            "Lower-risk instrument - not supported on QuantForg (XAUUSD-only platform)."
         )
         if equity == Decimal("50"):
             reasons.append(

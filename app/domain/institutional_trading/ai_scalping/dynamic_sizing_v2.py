@@ -393,10 +393,10 @@ def calculate_dynamic_lots_v2(
         if max_lot is not None and max_lot > 0
         else min(cfg.broker_max_lot, VOLUME_MAX)
     )
-    # Owner limit: never size above 0.01 lot, whatever the broker allows.
-    from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_LOT
+    # Profile max lot of the active user, never above the broker maximum.
+    from app.domain.institutional_trading.runtime_policy import active_max_lot
 
-    broker_max = min(broker_max, OWNER_MAX_LOT)
+    broker_max = min(broker_max, active_max_lot())
     if contract_size is not None and contract_size > 0:
         cs = contract_size
     elif contract_size is not None:
@@ -547,7 +547,7 @@ def calculate_dynamic_lots_v2(
     if portfolio_exposure_pct is not None and portfolio_exposure_pct >= max_daily:
         return _reject(
             "portfolio_exposure_cap",
-            (f"Portfolio exposure {portfolio_exposure_pct}% " f"at max {max_daily}%"),
+            (f"Portfolio exposure {portfolio_exposure_pct}% at max {max_daily}%"),
             risk=base_risk,
         )
 
@@ -559,7 +559,7 @@ def calculate_dynamic_lots_v2(
     if symbol_open_risk_pct is not None and symbol_open_risk_pct >= sym_cap > 0:
         return _reject(
             "symbol_exposure_cap",
-            (f"Symbol exposure {symbol_open_risk_pct}% " f"at max {sym_cap}%"),
+            (f"Symbol exposure {symbol_open_risk_pct}% at max {sym_cap}%"),
             risk=base_risk,
         )
 

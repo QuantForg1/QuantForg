@@ -16,7 +16,10 @@ from app.domain.institutional_trading.management.config import (
     PositionManagementConfig,
     live_reversal_exits_resolved,
 )
-from app.domain.institutional_trading.owner_live_limits import OWNER_MAX_OPEN_POSITIONS
+from app.domain.institutional_trading.owner_live_limits import (
+    OWNER_MAX_OPEN_POSITIONS,
+    SYSTEM_MAX_OPEN_POSITIONS,
+)
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -103,7 +106,7 @@ def apply_trading_mode_to_runtime(
             ite,
             trading_mode="alpha",
             config_version=f"{ite.config_version}+alpha",
-            max_open_trades=min(ite.max_open_trades, OWNER_MAX_OPEN_POSITIONS),
+            max_open_trades=min(ite.max_open_trades, SYSTEM_MAX_OPEN_POSITIONS),
         )
         pme = pme_config_for_scalping(scalp)
         set_alpha_enabled(True)
