@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { RiskIntelligencePanel } from "@/components/trading/dashboard-intelligence/risk-intelligence-panel";
 import { RiskRulesPanel } from "@/components/execution/risk-rules-panel";
+import { PersonalRiskProfile } from "@/components/risk/personal-risk-profile";
 import {
   aiTradingIntelligenceApi,
   householdPortfolioApi,
@@ -38,35 +39,9 @@ const checkSchema = z.object({
   risk_pct: z.string().optional(),
 });
 
-type PrefForm = {
-  planned_risk_pct: string;
-  aggregate_open_risk_pct: string;
-  max_lot: string;
-  daily_loss_pct: string;
-  max_concurrent_positions: string;
-};
-
-const PREF_KEYS: Array<keyof PrefForm> = [
-  "planned_risk_pct",
-  "aggregate_open_risk_pct",
-  "max_lot",
-  "daily_loss_pct",
-  "max_concurrent_positions",
-];
-
 export default function RiskCenterPage() {
   const session = useTradingSession();
-  const qc = useQueryClient();
   const [lastRisk, setLastRisk] = useState<Record<string, unknown> | null>(null);
-  const [formValues, setFormValues] = useState<PrefForm>({
-    planned_risk_pct: "",
-    aggregate_open_risk_pct: "",
-    max_lot: "",
-    daily_loss_pct: "",
-    max_concurrent_positions: "",
-  });
-  const [baseline, setBaseline] = useState<PrefForm | null>(null);
-
   const prefsQ = useQuery({
     queryKey: ["risk-preferences"],
     queryFn: () => riskApi.preferences(),
@@ -125,49 +100,10 @@ export default function RiskCenterPage() {
   const liveAuthorization = liveTradingLabel(tradingSnap);
 
   const prefs = asRecord(prefsQ.data);
-  const preferenceBody = asRecord(prefs.preferences);
-  const bounds = asRecord(prefs.bounds);
   const effective = asRecord(prefs.effective);
   const protections = asList(prefs.protections).map(asRecord);
   const historyPayload = asRecord(historyQ.data);
   const historyItems = asList(historyPayload.items).map(asRecord);
-
-  useEffect(() => {
-    if (!prefsQ.isSuccess) return;
-    const next: PrefForm = {
-      planned_risk_pct: str(preferenceBody.planned_risk_pct, ""),
-      aggregate_open_risk_pct: str(preferenceBody.aggregate_open_risk_pct, ""),
-      max_lot: str(preferenceBody.max_lot, ""),
-      daily_loss_pct: str(preferenceBody.daily_loss_pct, ""),
-      max_concurrent_positions: str(preferenceBody.max_concurrent_positions, ""),
-    };
-    setFormValues(next);
-    setBaseline(next);
-  }, [prefsQ.isSuccess, prefsQ.dataUpdatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const dirty =
-    baseline != null &&
-    PREF_KEYS.some((key) => formValues[key] !== baseline[key]);
-
-  const saveMut = useMutation({
-    mutationFn: () =>
-      riskApi.updatePreferences({
-        planned_risk_pct: formValues.planned_risk_pct,
-        aggregate_open_risk_pct: formValues.aggregate_open_risk_pct,
-        max_lot: formValues.max_lot,
-        daily_loss_pct: formValues.daily_loss_pct,
-        max_concurrent_positions: Number(formValues.max_concurrent_positions),
-      }),
-    onSuccess: async () => {
-      toast.success("Risk preferences saved");
-      await qc.invalidateQueries({ queryKey: ["risk-preferences"] });
-      await qc.invalidateQueries({ queryKey: ["risk-preference-history"] });
-    },
-    onError: (e) =>
-      toast.error(
-        e instanceof ApiError ? e.message : "Could not save risk preferences",
-      ),
-  });
 
   const checkForm = useForm<z.infer<typeof checkSchema>>({
     resolver: zodResolver(checkSchema),
@@ -196,12 +132,8 @@ export default function RiskCenterPage() {
       <PageHeader
         eyebrow="Risk"
         title="Risk Center"
-        description="Your preferences can only tighten risk. Platform protections and the mandatory stop-loss stay enforced on the server."
-        status={
-          <Badge tone={dirty ? "warning" : "success"}>
-            {dirty ? "Unsaved preference changes" : "Preferences saved"}
-          </Badge>
-        }
+        description="Your own risk profile drives every trade the robot takes for you. Platform protections and the mandatory stop-loss stay enforced on the server."
+        status={<Badge tone="success">Per-user risk profile</Badge>}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
@@ -252,8 +184,9 @@ export default function RiskCenterPage() {
                 Your preferences
               </p>
               <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                Values you save below are personal desk settings. They may be
-                stricter than the platform ceiling, never looser.
+                Your risk profile below is yours alone. Unchanged settings
+                use the platform defaults; the robot applies your values to
+                your next trades.
               </p>
             </div>
             <div>
@@ -336,91 +269,7 @@ export default function RiskCenterPage() {
           ))}
         </section>
 
-        <Card>
-          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>My Risk Preferences</CardTitle>
-              <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                Your personal limits. The server validates every change; the
-                platform&apos;s own protections always apply and the stricter
-                limit wins.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {prefs.updated_at ? (
-                <span className="text-xs text-[var(--fg-subtle)]">
-                  Updated {formatRelativeTime(String(prefs.updated_at))}
-                </span>
-              ) : null}
-              <Badge tone={dirty ? "warning" : "neutral"}>
-                {dirty ? "Unsaved changes" : "Saved"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {prefsQ.isError ? (
-              <p className="text-sm text-[var(--danger)]" role="alert">
-                Preferences could not be loaded. Retry later — defaults are not
-                invented here.
-              </p>
-            ) : prefsQ.isLoading ? (
-              <div className="space-y-3" aria-busy="true" aria-label="Loading preferences">
-                <div className="h-10 animate-pulse rounded-md bg-[var(--surface-2)]" />
-                <div className="h-10 animate-pulse rounded-md bg-[var(--surface-2)]" />
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="h-16 animate-pulse rounded-md bg-[var(--surface-2)]" />
-                  <div className="h-16 animate-pulse rounded-md bg-[var(--surface-2)]" />
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {PREF_KEYS.filter(
-                  (key) => asRecord(bounds[key]).configurable === true,
-                ).map((key) => {
-                  const bound = asRecord(bounds[key]);
-                  const label = str(bound.label, key);
-                  const help = str(bound.help, "");
-                  return (
-                    <div key={key} className="space-y-1.5">
-                      <Label htmlFor={`pref-${key}`}>{label}</Label>
-                      <Input
-                        id={`pref-${key}`}
-                        value={formValues[key]}
-                        onChange={(e) =>
-                          setFormValues((prev) => ({
-                            ...prev,
-                            [key]: e.target.value,
-                          }))
-                        }
-                        inputMode="decimal"
-                      />
-                      <p className="text-[11px] text-[var(--fg-subtle)]">
-                        {help}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                disabled={!dirty || saveMut.isPending || prefsQ.isLoading}
-                onClick={() => saveMut.mutate()}
-              >
-                {saveMut.isPending ? "Saving…" : "Save preferences"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={!dirty || saveMut.isPending}
-                onClick={() => baseline && setFormValues(baseline)}
-              >
-                Discard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <PersonalRiskProfile />
 
         <Card>
           <CardHeader>

@@ -30,7 +30,10 @@ pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
 @pytest.fixture(autouse=True)
-def _clean() -> object:
+def _clean(monkeypatch: pytest.MonkeyPatch) -> object:
+    # Real resolver (the suite-wide conftest maps unsaved users to the former
+    # baseline for legacy tests) and no installed document.
+    monkeypatch.setattr(store, "effective_profile", store.REAL_EFFECTIVE_PROFILE)
     store.reset_for_tests()
     token = rp.use_runtime_policy(None)
     yield

@@ -45,9 +45,72 @@ def _reset_runtime_trading_policy() -> Iterator[None]:
         use_runtime_policy,
     )
 
-    token = use_runtime_policy(None)
+    # Since 2026-11-18 every user has an own risk profile whose defaults are
+    # 15/20/30%, lot 0.50, 5 positions, spread 1.00, 24/5. The pre-existing
+    # suite was written against the former shared baseline; it keeps testing
+    # the same mechanisms under that explicit profile (installed here as a
+    # user profile, without a commission block so an unknown commission stays
+    # unknown). New-default behaviour is covered by test_user_risk_profiles,
+    # which installs its own profiles.
+    token = use_runtime_policy(dict(LEGACY_TEST_RISK_PROFILE))
     yield
     reset_runtime_policy(token)
+
+
+# The former shared owner baseline (policy v17, 2026-11-16), as a profile.
+LEGACY_TEST_RISK_PROFILE: dict[str, Any] = {
+    "max_planned_risk_pct": "9",
+    "max_aggregate_open_risk_pct": "9",
+    "daily_loss_pct": "25",
+    "weekly_loss_pct": "0",
+    "monthly_loss_pct": "0",
+    "max_drawdown_pct": "0",
+    "min_reward_risk": "1.50",
+    "preferred_reward_risk": "1.50",
+    "max_spread": "0.45",
+    "max_lot": "0.01",
+    "max_concurrent_positions": 1,
+    "min_trade_quality": 75,
+    "trading_days": [0, 1, 2, 3, 4],
+    "trading_hours_utc": "07:00-17:00",
+    "risk_profile_version": 0,
+    "risk_profile_user": None,
+}
+
+# The same former baseline in risk-profile field names.
+LEGACY_TEST_PROFILE_SETTINGS: dict[str, Any] = {
+    "planned_risk_pct": "9",
+    "aggregate_open_risk_pct": "9",
+    "daily_loss_pct": "25",
+    "max_spread": "0.45",
+    "max_lot": "0.01",
+    "max_open_positions": 1,
+    "trading_hours_utc": "07:00-17:00",
+}
+
+
+@pytest.fixture(autouse=True)
+def _legacy_profile_for_unsaved_users(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A user with no saved profile resolves to the former baseline in tests.
+
+    Production resolves such users to the approved defaults; the pre-existing
+    suite exercises engine paths (``install_cycle_policy``) under the former
+    baseline. ``test_user_risk_profiles`` restores the real resolver.
+    """
+    from app.application.services import user_risk_profile_store as store
+    from app.domain.institutional_trading.risk_profile import resolve_profile
+
+    original = store.effective_profile
+
+    def _effective(user_id: Any, *, use_cache: bool = True) -> Any:
+        settings, version, _updated = store.load_settings(user_id, use_cache=use_cache)
+        if not settings:
+            return resolve_profile(LEGACY_TEST_PROFILE_SETTINGS, version=version)
+        return original(user_id, use_cache=use_cache)
+
+    monkeypatch.setattr(store, "effective_profile", _effective)
+    monkeypatch.setattr(store, "REAL_EFFECTIVE_PROFILE", original, raising=False)
+    store.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)
