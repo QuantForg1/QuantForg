@@ -892,19 +892,41 @@ async def build_ite_cycle_market_context(
     last_bar_exc: Exception | None = None
     failed_required_tf: Timeframe | None = None
 
+    from app.application.services.candle_tail_cache import (
+        shared_rates_cache,
+        tail_cache_enabled,
+    )
+
+    rates_cache = shared_rates_cache() if tail_cache_enabled() else None
+
+    async def _fetch_rates(tf: Timeframe, n: int) -> list[Any]:
+        async with _tf_fetch_semaphore():
+            rates = await _io(
+                mt5_adapter.copy_rates_from_pos,
+                canonical_symbol,
+                tf,
+                0,
+                n,
+            )
+        return list(rates or [])
+
     async def _one_tf(
         tf: Timeframe, count: int
     ) -> tuple[Timeframe, list[Candle], BaseException | None]:
         try:
-            async with _tf_fetch_semaphore():
-                rates = await _io(
-                    mt5_adapter.copy_rates_from_pos,
-                    canonical_symbol,
-                    tf,
-                    0,
-                    count,
-                )
-            return tf, [_rate_to_candle(r) for r in (rates or [])], None
+            if rates_cache is None:
+                rates = await _fetch_rates(tf, count)
+            else:
+                # Closed bars never change: fetch only the tail and merge.
+                key = (id(mt5_adapter), canonical_symbol, tf.value)
+                want = rates_cache.plan(key, count)
+                fetched = await _fetch_rates(tf, want)
+                merged = rates_cache.merge(key, count, fetched, full=want >= count)
+                if merged is None:
+                    fetched = await _fetch_rates(tf, count)
+                    merged = rates_cache.merge(key, count, fetched, full=True)
+                rates = merged or []
+            return tf, [_rate_to_candle(r) for r in rates], None
         except Exception as exc:
             return tf, [], exc
 
