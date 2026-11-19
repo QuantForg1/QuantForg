@@ -138,6 +138,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("beta_access", "app.presentation.routers.beta_access"),
     ("auth", "app.presentation.routers.auth"),
     ("billing", "app.presentation.routers.billing"),
+    ("growth_intelligence", "app.presentation.routers.growth_intelligence"),
     ("contact", "app.presentation.routers.contact"),
     ("profile", "app.presentation.routers.profile"),
     ("settings", "app.presentation.routers.settings"),
@@ -241,6 +242,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("institutional_research", "app.presentation.routers.institutional_research"),
     ("institutional_ops", "app.presentation.routers.institutional_ops"),
     ("symbol_signals", "app.presentation.routers.symbol_signals"),
+    ("decision_evidence", "app.presentation.routers.decision_evidence"),
     ("institutional_reliability", "app.presentation.routers.institutional_reliability"),
     (
         "institutional_certification",

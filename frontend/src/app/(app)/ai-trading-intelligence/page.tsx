@@ -24,6 +24,9 @@ export default function AiTradingIntelligencePage() {
             <Button size="sm" variant="secondary" asChild>
               <Link href="/research">Research</Link>
             </Button>
+            <Button size="sm" variant="secondary" asChild>
+              <Link href="/decision-evidence">Decision evidence</Link>
+            </Button>
           </div>
         }
       />

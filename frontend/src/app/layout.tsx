@@ -48,7 +48,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "QuantForg — Institutional AI Trading Platform",
+    default: "QuantForg — AI Gold Trading Robot for MT5 & AI Trading Assistant",
     template: "%s · QuantForg",
   },
   description:
@@ -59,17 +59,15 @@ export const metadata: Metadata = {
   publisher: "QuantForg",
   keywords: [
     "QuantForg",
-    "institutional AI trading",
-    "MT5",
-    "Weltrade",
-    "XAUUSD",
-    "trading SaaS",
-    "risk management",
-    "automated trading software",
+    "gold trading robot",
+    "XAUUSD robot",
+    "gold EA MT5",
+    "AI trading assistant",
+    "chart screenshot analysis",
+    "automated gold trading",
+    "MT5 trading bot",
+    "XAUUSD trading strategies",
   ],
-  alternates: {
-    canonical: SITE_URL,
-  },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -89,7 +87,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "QuantForg",
-    title: "QuantForg — Institutional AI Trading Platform",
+    title: "QuantForg — AI Gold Trading Robot for MT5",
     description:
       "AI gold trading robot for MT5 plus QuantForg AI, an assistant that analyzes the live market and your chart screenshots. Risk limits on every trade. No profit guarantees.",
     images: [
@@ -97,13 +95,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "QuantForg — Institutional AI Trading Platform",
+        alt: "QuantForg — AI Gold Trading Robot for MT5",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuantForg — Institutional AI Trading Platform",
+    title: "QuantForg — AI Gold Trading Robot for MT5",
     description:
       "AI gold trading robot for MT5 and QuantForg AI market assistant with chart screenshot analysis. Software access only.",
     images: ["/og-image.png"],

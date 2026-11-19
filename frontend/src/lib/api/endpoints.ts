@@ -564,6 +564,29 @@ export const robotControlApi = {
 };
 
 /** SaaS billing — Crypto Payment LIVE invoices (server-side processor). */
+export const growthApi = {
+  status: () => apiFetch<Record<string, unknown>>("/growth/status"),
+};
+
+export const decisionEvidenceApi = {
+  report: (symbol?: string) => {
+    const search = new URLSearchParams();
+    if (symbol) search.set("symbol", symbol);
+    const qs = search.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/decision-evidence/report${qs ? `?${qs}` : ""}`,
+    );
+  },
+  history: (symbol?: string, limit = 20) => {
+    const search = new URLSearchParams();
+    if (symbol) search.set("symbol", symbol);
+    search.set("limit", String(limit));
+    return apiFetch<Record<string, unknown>>(
+      `/decision-evidence/history?${search.toString()}`,
+    );
+  },
+};
+
 export const billingApi = {
   plans: () => apiFetch<Record<string, unknown>>("/billing/plans", { auth: false }),
   provider: () =>

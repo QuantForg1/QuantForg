@@ -34,6 +34,7 @@ export const CUSTOMER_ROUTES: readonly string[] = [
   "/shortcuts",
   "/wallet",
   "/ai-trading-intelligence",
+  "/decision-evidence",
   "/ai-robot",
   "/trade-replay",
   "/analytics",

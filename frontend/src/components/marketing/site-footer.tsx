@@ -7,8 +7,9 @@ const COLUMNS = [
     links: [
       { href: "/#features", label: "Features" },
       { href: "/#platform", label: "Platform" },
+      { href: "/gold-trading-robot", label: "Gold Trading Robot" },
+      { href: "/ai-trading-assistant", label: "QuantForg AI Assistant" },
       { href: "/#how-it-works", label: "How It Works" },
-      { href: "/#strategies", label: "Strategies" },
       { href: "/pricing", label: "Pricing" },
     ],
   },
@@ -25,12 +26,11 @@ const COLUMNS = [
   {
     title: "Resources",
     links: [
+      { href: "/strategies", label: "Gold Trading Strategies" },
+      { href: "/live", label: "Live Gold Chart" },
       { href: "/contact", label: "Contact Sales" },
       { href: "mailto:support@quantforg.com", label: "Support" },
-      {
-        href: "mailto:support@quantforg.com?subject=QuantForg%20Documentation",
-        label: "Documentation",
-      },
+      { href: "/learn", label: "Product guides" },
     ],
   },
   {

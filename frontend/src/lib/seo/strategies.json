@@ -1,0 +1,716 @@
+[
+ {
+  "slug": "trend-following",
+  "key": "trend_following",
+  "name": "Trend Following",
+  "category": "trend",
+  "description": "Follow EMA slope direction using close prices only."
+ },
+ {
+  "slug": "ma-cross",
+  "key": "ma_cross",
+  "name": "Moving Average Cross",
+  "category": "trend",
+  "description": "SMA fast/slow crossover."
+ },
+ {
+  "slug": "rsi",
+  "key": "rsi",
+  "name": "RSI",
+  "category": "momentum",
+  "description": "RSI overbought/oversold thresholds."
+ },
+ {
+  "slug": "macd",
+  "key": "macd",
+  "name": "MACD",
+  "category": "momentum",
+  "description": "MACD line cross of signal line."
+ },
+ {
+  "slug": "bollinger",
+  "key": "bollinger",
+  "name": "Bollinger",
+  "category": "mean_reversion",
+  "description": "Mean reversion at Bollinger band extremes."
+ },
+ {
+  "slug": "breakout",
+  "key": "breakout",
+  "name": "Breakout",
+  "category": "breakout",
+  "description": "Close breaks N-bar high/low."
+ },
+ {
+  "slug": "momentum",
+  "key": "momentum",
+  "name": "Momentum",
+  "category": "momentum",
+  "description": "Rate-of-change momentum threshold."
+ },
+ {
+  "slug": "mean-reversion",
+  "key": "mean_reversion",
+  "name": "Mean Reversion",
+  "category": "mean_reversion",
+  "description": "Fade a stretch of more than NxATR away from the SMA once price turns back."
+ },
+ {
+  "slug": "donchian-breakout",
+  "key": "donchian_breakout",
+  "name": "Donchian Breakout",
+  "category": "breakout",
+  "description": "Close breaks the prior N-bar high or low. The current bar is excluded from the channel."
+ },
+ {
+  "slug": "stochastic",
+  "key": "stochastic",
+  "name": "Stochastic",
+  "category": "momentum",
+  "description": "Stochastic %K crosses %D from the oversold or overbought zone."
+ },
+ {
+  "slug": "cci",
+  "key": "cci",
+  "name": "CCI",
+  "category": "momentum",
+  "description": "Commodity Channel Index leaves the +/-100 zone back toward zero."
+ },
+ {
+  "slug": "williams-r",
+  "key": "williams_r",
+  "name": "Williams %R",
+  "category": "momentum",
+  "description": "Williams %R leaves oversold (-80) or overbought (-20)."
+ },
+ {
+  "slug": "adx-trend",
+  "key": "adx_trend",
+  "name": "ADX Trend",
+  "category": "trend",
+  "description": "Buy when +DI is above -DI and ADX is at least the threshold. Sell on the opposite."
+ },
+ {
+  "slug": "supertrend",
+  "key": "supertrend",
+  "name": "Supertrend",
+  "category": "trend",
+  "description": "ATR supertrend flips when close crosses the opposite band."
+ },
+ {
+  "slug": "keltner-channel",
+  "key": "keltner_channel",
+  "name": "Keltner Channel",
+  "category": "breakout",
+  "description": "Close outside an EMA channel widened by ATR."
+ },
+ {
+  "slug": "triple-ema",
+  "key": "triple_ema",
+  "name": "Triple EMA",
+  "category": "trend",
+  "description": "Fast, mid, and slow EMAs are stacked in one direction."
+ },
+ {
+  "slug": "hull-trend",
+  "key": "hull_trend",
+  "name": "Hull Trend",
+  "category": "trend",
+  "description": "Hull moving average slope and close on the same side."
+ },
+ {
+  "slug": "aroon",
+  "key": "aroon",
+  "name": "Aroon",
+  "category": "trend",
+  "description": "Aroon Up and Aroon Down show which extreme happened more recently."
+ },
+ {
+  "slug": "awesome-oscillator",
+  "key": "awesome_oscillator",
+  "name": "Awesome Oscillator",
+  "category": "momentum",
+  "description": "5-period median-price average crosses the 34-period average."
+ },
+ {
+  "slug": "engulfing",
+  "key": "engulfing",
+  "name": "Engulfing",
+  "category": "price_action",
+  "description": "The latest candle body fully engulfs the previous opposite candle."
+ },
+ {
+  "slug": "pin-bar",
+  "key": "pin_bar",
+  "name": "Pin Bar",
+  "category": "price_action",
+  "description": "A rejection wick at least twice the candle body, with the close in the rejection direction."
+ },
+ {
+  "slug": "inside-bar-breakout",
+  "key": "inside_bar_breakout",
+  "name": "Inside Bar Breakout",
+  "category": "breakout",
+  "description": "After an inside bar, close breaks the mother bar high or low."
+ },
+ {
+  "slug": "rsi-pullback",
+  "key": "rsi_pullback",
+  "name": "RSI Pullback",
+  "category": "trend",
+  "description": "RSI leaves 40 in the direction of the 50-period SMA."
+ },
+ {
+  "slug": "bollinger-squeeze",
+  "key": "bollinger_squeeze",
+  "name": "Bollinger Squeeze",
+  "category": "breakout",
+  "description": "Bandwidth was compressed, then close left the band."
+ },
+ {
+  "slug": "ichimoku",
+  "key": "ichimoku",
+  "name": "Ichimoku",
+  "category": "trend",
+  "description": "Close is above the unshifted cloud and Tenkan is above Kijun, or the bearish mirror. The cloud is not shifted forward."
+ },
+ {
+  "slug": "heikin-ashi-trend",
+  "key": "heikin_ashi_trend",
+  "name": "Heikin Ashi Trend",
+  "category": "trend",
+  "description": "The last three Heikin Ashi candles agree on direction."
+ },
+ {
+  "slug": "linear-regression",
+  "key": "linear_regression",
+  "name": "Linear Regression",
+  "category": "trend",
+  "description": "Ordinary least-squares slope of closes, with close on the same side of the mean."
+ },
+ {
+  "slug": "zscore-reversion",
+  "key": "zscore_reversion",
+  "name": "Z-Score Reversion",
+  "category": "mean_reversion",
+  "description": "Close z-score versus its SMA is beyond the threshold."
+ },
+ {
+  "slug": "nr7-breakout",
+  "key": "nr7_breakout",
+  "name": "NR7 Breakout",
+  "category": "breakout",
+  "description": "The previous bar was the narrowest of seven, and the latest close breaks it."
+ },
+ {
+  "slug": "three-bar-reversal",
+  "key": "three_bar_reversal",
+  "name": "Three Bar Reversal",
+  "category": "price_action",
+  "description": "Two pushes one way, then a close through the prior bar in the other direction."
+ },
+ {
+  "slug": "gap-fill",
+  "key": "gap_fill",
+  "name": "Gap Fill",
+  "category": "mean_reversion",
+  "description": "The open gaps away from the previous close and the latest close moves back toward it."
+ },
+ {
+  "slug": "alligator",
+  "key": "alligator",
+  "name": "Alligator",
+  "category": "trend",
+  "description": "Williams Alligator lips, teeth, and jaw are stacked. Averages use their published shifts."
+ },
+ {
+  "slug": "vwap-reversion",
+  "key": "vwap_reversion",
+  "name": "VWAP Reversion",
+  "category": "mean_reversion",
+  "description": "Close is stretched from volume-weighted average price. HOLD when volume is missing."
+ },
+ {
+  "slug": "obv-trend",
+  "key": "obv_trend",
+  "name": "OBV Trend",
+  "category": "volume",
+  "description": "On-balance volume and close slope agree. HOLD when volume is missing."
+ },
+ {
+  "slug": "liquidity-sweep",
+  "key": "liquidity_sweep",
+  "name": "Liquidity Sweep",
+  "category": "price_action",
+  "description": "The latest wick takes the prior swing high or low and the close returns inside it."
+ },
+ {
+  "slug": "fvg",
+  "key": "fvg",
+  "name": "Fair Value Gap",
+  "category": "price_action",
+  "description": "A three-candle price gap, with the latest close still on the gap side."
+ },
+ {
+  "slug": "order-block",
+  "key": "order_block",
+  "name": "Order Block",
+  "category": "price_action",
+  "description": "Price retests the last opposite candle before a directional close impulse."
+ },
+ {
+  "slug": "session-breakout",
+  "key": "session_breakout",
+  "name": "Session Breakout",
+  "category": "breakout",
+  "description": "Close breaks the high or low of bars in the configured UTC hour window. HOLD when bar time is missing."
+ },
+ {
+  "slug": "macd-zero-cross",
+  "key": "macd_zero_cross",
+  "name": "MACD Zero Cross",
+  "category": "trend",
+  "description": "MACD line crosses the zero line (12/26 EMA trend change)."
+ },
+ {
+  "slug": "macd-histogram-reversal",
+  "key": "macd_histogram_reversal",
+  "name": "MACD Histogram Reversal",
+  "category": "momentum",
+  "description": "Histogram turns up below zero / down above zero (momentum shift)."
+ },
+ {
+  "slug": "ppo-signal-cross",
+  "key": "ppo_signal_cross",
+  "name": "PPO Signal Cross",
+  "category": "momentum",
+  "description": "Percentage Price Oscillator crosses its signal line with trend filter."
+ },
+ {
+  "slug": "trix-signal-cross",
+  "key": "trix_signal_cross",
+  "name": "TRIX Signal Cross",
+  "category": "trend",
+  "description": "Triple-smoothed EMA rate of change crosses its signal line."
+ },
+ {
+  "slug": "kst-signal-cross",
+  "key": "kst_signal_cross",
+  "name": "Know Sure Thing",
+  "category": "momentum",
+  "description": "Pring's KST (weighted multi-period ROC) crosses its signal."
+ },
+ {
+  "slug": "roc-zero-cross",
+  "key": "roc_zero_cross",
+  "name": "Rate of Change",
+  "category": "momentum",
+  "description": "12-bar ROC crosses zero in the direction of the 50 EMA."
+ },
+ {
+  "slug": "chande-momentum",
+  "key": "chande_momentum",
+  "name": "Chande Momentum Oscillator",
+  "category": "mean_reversion",
+  "description": "CMO leaves oversold (-50) / overbought (+50) territory."
+ },
+ {
+  "slug": "ultimate-oscillator",
+  "key": "ultimate_oscillator",
+  "name": "Ultimate Oscillator",
+  "category": "mean_reversion",
+  "description": "Williams' 7/14/28 Ultimate Oscillator leaves 30/70 zones."
+ },
+ {
+  "slug": "stoch-rsi-cross",
+  "key": "stoch_rsi_cross",
+  "name": "Stochastic RSI",
+  "category": "mean_reversion",
+  "description": "StochRSI %K crosses %D inside the 20/80 extremes."
+ },
+ {
+  "slug": "connors-rsi2",
+  "key": "connors_rsi2",
+  "name": "Connors RSI(2)",
+  "category": "mean_reversion",
+  "description": "RSI(2) extreme against the 200 SMA trend (buy dips in uptrends)."
+ },
+ {
+  "slug": "rsi-divergence",
+  "key": "rsi_divergence",
+  "name": "RSI Divergence",
+  "category": "reversal",
+  "description": "Regular RSI(14) divergence at confirmed swing points."
+ },
+ {
+  "slug": "macd-divergence",
+  "key": "macd_divergence",
+  "name": "MACD Divergence",
+  "category": "reversal",
+  "description": "Regular MACD-line divergence at confirmed swing points."
+ },
+ {
+  "slug": "money-flow-index",
+  "key": "money_flow_index",
+  "name": "Money Flow Index",
+  "category": "mean_reversion",
+  "description": "Volume-weighted RSI (tick volume) leaves 20/80 extremes."
+ },
+ {
+  "slug": "chaikin-money-flow",
+  "key": "chaikin_money_flow",
+  "name": "Chaikin Money Flow",
+  "category": "volume",
+  "description": "CMF(20) crosses zero in the direction of the 50 EMA."
+ },
+ {
+  "slug": "elder-force-index",
+  "key": "elder_force_index",
+  "name": "Elder Force Index",
+  "category": "trend",
+  "description": "2-EMA Force Index dips below zero in an EMA13 uptrend (and mirror)."
+ },
+ {
+  "slug": "elder-impulse",
+  "key": "elder_impulse",
+  "name": "Elder Impulse System",
+  "category": "trend",
+  "description": "EMA13 slope and MACD histogram slope turn green/red together."
+ },
+ {
+  "slug": "elder-ray",
+  "key": "elder_ray",
+  "name": "Elder Ray",
+  "category": "trend",
+  "description": "Bear power turns up below zero in an uptrend (bull power mirror)."
+ },
+ {
+  "slug": "vortex-cross",
+  "key": "vortex_cross",
+  "name": "Vortex Indicator",
+  "category": "trend",
+  "description": "VI+ / VI- (14) crossover."
+ },
+ {
+  "slug": "parabolic-sar",
+  "key": "parabolic_sar",
+  "name": "Parabolic SAR",
+  "category": "trend",
+  "description": "Wilder's Parabolic SAR (0.02/0.2) flips direction."
+ },
+ {
+  "slug": "chandelier-exit",
+  "key": "chandelier_exit",
+  "name": "Chandelier Exit",
+  "category": "trend",
+  "description": "Close crosses the 22-bar / 3xATR chandelier stop (direction flip)."
+ },
+ {
+  "slug": "dmi-cross",
+  "key": "dmi_cross",
+  "name": "DMI Crossover",
+  "category": "trend",
+  "description": "+DI / -DI crossover confirmed by ADX above 20."
+ },
+ {
+  "slug": "kama-cross",
+  "key": "kama_cross",
+  "name": "Kaufman Adaptive MA",
+  "category": "trend",
+  "description": "Close crosses KAMA(10,2,30) while KAMA slopes the same way."
+ },
+ {
+  "slug": "dema-cross",
+  "key": "dema_cross",
+  "name": "DEMA Crossover",
+  "category": "trend",
+  "description": "Double-EMA 20 crosses double-EMA 50 (lower lag than plain EMA)."
+ },
+ {
+  "slug": "tema-turn",
+  "key": "tema_turn",
+  "name": "TEMA Turn",
+  "category": "trend",
+  "description": "Triple-EMA(30) slope turns with price on the same side."
+ },
+ {
+  "slug": "zlema-cross",
+  "key": "zlema_cross",
+  "name": "Zero-Lag EMA",
+  "category": "trend",
+  "description": "Close crosses ZLEMA(21) in the direction of the 100 EMA."
+ },
+ {
+  "slug": "mcginley-dynamic",
+  "key": "mcginley_dynamic",
+  "name": "McGinley Dynamic",
+  "category": "trend",
+  "description": "Close crosses the McGinley Dynamic(14) line."
+ },
+ {
+  "slug": "ema-ribbon",
+  "key": "ema_ribbon",
+  "name": "EMA Ribbon Alignment",
+  "category": "trend",
+  "description": "8/13/21/34/55 EMAs become fully stacked (fresh alignment bar)."
+ },
+ {
+  "slug": "golden-death-cross",
+  "key": "golden_death_cross",
+  "name": "Golden / Death Cross",
+  "category": "trend",
+  "description": "SMA50 crosses SMA200."
+ },
+ {
+  "slug": "ema-pullback",
+  "key": "ema_pullback",
+  "name": "EMA20 Pullback",
+  "category": "trend",
+  "description": "Price tags EMA20 in an EMA20>EMA50 trend and closes back with the trend."
+ },
+ {
+  "slug": "vwma-cross",
+  "key": "vwma_cross",
+  "name": "Volume-Weighted MA",
+  "category": "volume",
+  "description": "Close crosses VWMA(20) on above-average tick volume."
+ },
+ {
+  "slug": "atr-envelope-reversion",
+  "key": "atr_envelope_reversion",
+  "name": "ATR Envelope Reversion",
+  "category": "mean_reversion",
+  "description": "Close re-enters the SMA20 +/- 2.5xATR envelope after an excursion."
+ },
+ {
+  "slug": "atr-channel-breakout",
+  "key": "atr_channel_breakout",
+  "name": "ATR Channel Breakout",
+  "category": "breakout",
+  "description": "Close breaks SMA20 +/- 2xATR (volatility expansion)."
+ },
+ {
+  "slug": "turtle-55",
+  "key": "turtle_55",
+  "name": "Turtle System 2",
+  "category": "breakout",
+  "description": "Close breaks the prior 55-bar high / low (Turtle System 2 entry)."
+ },
+ {
+  "slug": "donchian-midline",
+  "key": "donchian_midline",
+  "name": "Donchian Midline",
+  "category": "trend",
+  "description": "Close crosses the 20-bar Donchian midline with the 50 EMA."
+ },
+ {
+  "slug": "percent-b-reversal",
+  "key": "percent_b_reversal",
+  "name": "Bollinger %B Reversal",
+  "category": "mean_reversion",
+  "description": "%B returns inside the bands after closing outside (with RSI confirm)."
+ },
+ {
+  "slug": "bollinger-band-walk",
+  "key": "bollinger_band_walk",
+  "name": "Bollinger Band Walk",
+  "category": "trend",
+  "description": "Second consecutive close outside the band in trend direction."
+ },
+ {
+  "slug": "ttm-squeeze",
+  "key": "ttm_squeeze",
+  "name": "TTM Squeeze",
+  "category": "breakout",
+  "description": "Bollinger Bands leave the Keltner Channel; trade momentum direction."
+ },
+ {
+  "slug": "linreg-channel-reversion",
+  "key": "linreg_channel_reversion",
+  "name": "Regression Channel Reversion",
+  "category": "mean_reversion",
+  "description": "Close returns inside a 50-bar +/-2 sigma linear-regression channel."
+ },
+ {
+  "slug": "relative-vigor-index",
+  "key": "relative_vigor_index",
+  "name": "Relative Vigor Index",
+  "category": "momentum",
+  "description": "RVI(10) crosses its signal line on the side of the 50 EMA."
+ },
+ {
+  "slug": "coppock-curve",
+  "key": "coppock_curve",
+  "name": "Coppock Curve",
+  "category": "momentum",
+  "description": "WMA10(ROC14+ROC11) turns up below zero / down above zero."
+ },
+ {
+  "slug": "fisher-transform",
+  "key": "fisher_transform",
+  "name": "Fisher Transform",
+  "category": "reversal",
+  "description": "Ehlers Fisher(10) crosses its trigger at the +/-1.5 extremes."
+ },
+ {
+  "slug": "schaff-trend-cycle",
+  "key": "schaff_trend_cycle",
+  "name": "Schaff Trend Cycle",
+  "category": "trend",
+  "description": "STC (MACD 23/50, cycle 10) leaves the 25/75 zones."
+ },
+ {
+  "slug": "mass-index-reversal",
+  "key": "mass_index_reversal",
+  "name": "Mass Index Reversal Bulge",
+  "category": "reversal",
+  "description": "Mass Index rises above 27 then falls below 26.5 - fade the prior trend."
+ },
+ {
+  "slug": "williams-vix-fix",
+  "key": "williams_vix_fix",
+  "name": "Williams VIX Fix",
+  "category": "reversal",
+  "description": "Synthetic VIX spike ends with a bullish bar (capitulation buy)."
+ },
+ {
+  "slug": "choppiness-breakout",
+  "key": "choppiness_breakout",
+  "name": "Choppiness Breakout",
+  "category": "breakout",
+  "description": "Choppiness Index drops below 50 after a choppy phase (>61.8)."
+ },
+ {
+  "slug": "london-opening-range",
+  "key": "london_opening_range",
+  "name": "London Opening Range Breakout",
+  "category": "session",
+  "description": "Break of the 07:00-08:00 UTC range between 08:00 and 12:00 UTC."
+ },
+ {
+  "slug": "asian-range-fade",
+  "key": "asian_range_fade",
+  "name": "Asian Range Fake-out Fade",
+  "category": "session",
+  "description": "London probes beyond the Asian range then closes back inside - fade it."
+ },
+ {
+  "slug": "ny-open-momentum",
+  "key": "ny_open_momentum",
+  "name": "New York Open Momentum",
+  "category": "session",
+  "description": "Strong 13:30 UTC bar in the direction of the 50 EMA."
+ },
+ {
+  "slug": "pivot-point-bounce",
+  "key": "pivot_point_bounce",
+  "name": "Daily Pivot Bounce",
+  "category": "levels",
+  "description": "Rejection candle at the classic daily S1 / R1 pivot."
+ },
+ {
+  "slug": "camarilla-breakout",
+  "key": "camarilla_breakout",
+  "name": "Camarilla H4/L4 Breakout",
+  "category": "levels",
+  "description": "Close breaks the Camarilla H4 / L4 level."
+ },
+ {
+  "slug": "fibonacci-pullback",
+  "key": "fibonacci_pullback",
+  "name": "Fibonacci 61.8% Pullback",
+  "category": "levels",
+  "description": "Rejection at the 61.8% retracement of the last 60-bar swing."
+ },
+ {
+  "slug": "double-top-bottom",
+  "key": "double_top_bottom",
+  "name": "Double Top / Bottom",
+  "category": "pattern",
+  "description": "Two equal swing extremes; close breaks the neckline."
+ },
+ {
+  "slug": "morning-evening-star",
+  "key": "morning_evening_star",
+  "name": "Morning / Evening Star",
+  "category": "pattern",
+  "description": "Three-candle star reversal at a 10-bar extreme."
+ },
+ {
+  "slug": "three-soldiers-crows",
+  "key": "three_soldiers_crows",
+  "name": "Three White Soldiers / Black Crows",
+  "category": "pattern",
+  "description": "Three strong same-colour candles after an opposite move."
+ },
+ {
+  "slug": "harami-reversal",
+  "key": "harami_reversal",
+  "name": "Harami Reversal",
+  "category": "pattern",
+  "description": "Inside-body candle of opposite colour at an RSI extreme."
+ },
+ {
+  "slug": "tweezer-reversal",
+  "key": "tweezer_reversal",
+  "name": "Tweezer Top / Bottom",
+  "category": "pattern",
+  "description": "Matching extremes on two opposite candles at a 15-bar extreme."
+ },
+ {
+  "slug": "marubozu-momentum",
+  "key": "marubozu_momentum",
+  "name": "Marubozu Momentum",
+  "category": "momentum",
+  "description": "Full-body candle (>1.2xATR, tiny wicks) with the 50 EMA trend."
+ },
+ {
+  "slug": "doji-band-reversal",
+  "key": "doji_band_reversal",
+  "name": "Doji at Band Reversal",
+  "category": "reversal",
+  "description": "Doji outside the Bollinger Band, confirmed by the next candle."
+ },
+ {
+  "slug": "outside-bar-reversal",
+  "key": "outside_bar_reversal",
+  "name": "Outside Bar Reversal",
+  "category": "pattern",
+  "description": "Engulfing range bar closing beyond the prior extreme after a 5-bar move."
+ },
+ {
+  "slug": "wide-range-bar",
+  "key": "wide_range_bar",
+  "name": "Wide Range Bar Continuation",
+  "category": "momentum",
+  "description": "Range > 2xATR closing in its top/bottom 20% with the 50 EMA."
+ },
+ {
+  "slug": "market-structure-bos",
+  "key": "market_structure_bos",
+  "name": "Market Structure Break",
+  "category": "structure",
+  "description": "Higher low then close above the last swing high (BOS) - and mirror."
+ },
+ {
+  "slug": "bollinger-rsi-reversion",
+  "key": "bollinger_rsi_reversion",
+  "name": "Bollinger + RSI Reversion",
+  "category": "mean_reversion",
+  "description": "Close outside the band with RSI extreme, then a confirming candle."
+ },
+ {
+  "slug": "htf-trend-pullback",
+  "key": "htf_trend_pullback",
+  "name": "Trend Pullback (RSI 40/60)",
+  "category": "trend",
+  "description": "EMA50>EMA200 trend; RSI dips under 40 and recovers (mirror for sells)."
+ },
+ {
+  "slug": "momentum-ignition",
+  "key": "momentum_ignition",
+  "name": "Momentum Ignition",
+  "category": "momentum",
+  "description": "Three expanding candles in one direction breaking a 20-bar extreme."
+ }
+]

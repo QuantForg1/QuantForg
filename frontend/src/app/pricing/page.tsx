@@ -186,6 +186,43 @@ export default function PricingPage() {
           </div>
         </section>
 
+        <section className="mx-auto max-w-6xl px-4 pb-4 sm:px-6" aria-labelledby="pricing-limits">
+          <h2 id="pricing-limits" className="text-center text-2xl font-semibold tracking-tight">
+            Read the limits before you subscribe
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm leading-relaxed text-[var(--fg-muted)]">
+            There is no free trial. A plan does not bypass a risk check, and a browser return from
+            checkout does not activate paid access.
+          </p>
+          <ul className="mx-auto mt-6 grid max-w-3xl gap-3 sm:grid-cols-2">
+            <li>
+              <Link href="/learn/analysis-versus-order" className="text-sm text-[var(--accent)] hover:underline">
+                Analysis is not an order
+              </Link>
+            </li>
+            <li>
+              <Link href="/learn/stops-and-daily-loss" className="text-sm text-[var(--accent)] hover:underline">
+                Stops and the daily-loss halt
+              </Link>
+            </li>
+            <li>
+              <Link href="/learn/decision-record" className="text-sm text-[var(--accent)] hover:underline">
+                The decision record
+              </Link>
+            </li>
+            <li>
+              <Link href="/learn/decision-lifecycle" className="text-sm text-[var(--accent)] hover:underline">
+                What a decision word means
+              </Link>
+            </li>
+            <li>
+              <Link href="/learn/simulation" className="text-sm text-[var(--accent)] hover:underline">
+                Simulation and broker results
+              </Link>
+            </li>
+          </ul>
+        </section>
+
         <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6" aria-labelledby="pricing-faq">
           <h2 id="pricing-faq" className="mb-6 text-center text-2xl font-semibold tracking-tight">
             Pricing FAQ

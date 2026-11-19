@@ -7,8 +7,9 @@ export const metadata: Metadata = {
     default: "Sign in",
   },
   description:
-    "Sign in to QuantForg — Institutional AI Trading Platform for MetaTrader 5 connectivity, market intelligence, and risk-aware execution.",
-  robots: { index: true, follow: true },
+    "Sign in to QuantForg, the AI gold trading robot for MetaTrader 5 with QuantForg AI market analysis.",
+  // Only /login and /register are indexable (they set their own canonical).
+  robots: { index: false, follow: true },
   openGraph: {
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "QuantForg" }],
   },
