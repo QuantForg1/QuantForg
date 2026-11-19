@@ -310,7 +310,7 @@ export function SignalsWorkspace() {
   const researchFailed = Boolean(signalsQ.isError);
 
   return (
-    <div className="min-w-0 space-y-5">
+    <div className="qf-desk min-w-0 space-y-5">
       <PageHeader
         eyebrow="Research"
         title="Trading Signals"

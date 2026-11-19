@@ -236,7 +236,7 @@ export default function SupportPage() {
   );
 
   return (
-    <div>
+    <div className="qf-desk">
       <PageHeader
         title="Support"
         description="System status, verified FAQ, tickets, and escalation — trading actions are not available here."

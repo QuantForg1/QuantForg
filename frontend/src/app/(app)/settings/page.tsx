@@ -437,7 +437,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-5xl">
+    <div className="qf-desk mx-auto w-full min-w-0 max-w-5xl">
       <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">

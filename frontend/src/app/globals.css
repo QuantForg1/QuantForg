@@ -1066,6 +1066,12 @@ body {
   min-width: 0;
 }
 
+.qf-desk {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 .qf-overview-enter {
   animation: qf-overview-rise 200ms var(--ease-os-out) both;
 }

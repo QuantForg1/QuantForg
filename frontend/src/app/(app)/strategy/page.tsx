@@ -86,6 +86,10 @@ export default function StrategyPage() {
       toast.error(e instanceof ApiError ? e.message : "Evaluate failed"),
   });
 
+  const engineRun = useMutation({
+    mutationFn: strategyApi.engineRun,
+  });
+
   const signals = asList(signalsQ.data).map(asRecord);
   const serverCatalog = useMemo(
     () => asList(asRecord(catalogQ.data).items).map(asRecord),
@@ -178,6 +182,7 @@ export default function StrategyPage() {
 
   const onSelectStrategy = (key: string) => {
     setStrategyKey(key);
+    engineRun.reset();
     if (window.matchMedia("(max-width: 1023px)").matches) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       document.getElementById("strategy-detail")?.scrollIntoView({
@@ -384,6 +389,30 @@ export default function StrategyPage() {
             market={displayTradingSymbol(symbol)}
             params={selectedPlugin ? asRecord(selectedPlugin.default_params) : {}}
             onServer={serverKeys.has(strategyKey)}
+            evaluation={{
+              pending: engineRun.isPending,
+              error: engineRun.isError
+                ? engineRun.error instanceof ApiError
+                  ? engineRun.error.message
+                  : "Evaluate failed"
+                : null,
+              result: engineRun.isSuccess ? asRecord(engineRun.data) : null,
+              onEvaluate: () => {
+                const plugin = catalog.find((item) => str(item.key) === strategyKey);
+                if (!serverKeys.has(strategyKey) || !plugin) return;
+                engineRun.mutate({
+                  strategy_key: strategyKey,
+                  symbol,
+                  timeframe: "H1",
+                  bars: [],
+                  use_mt5_bars: true,
+                  mt5_bar_count: 200,
+                  params: asRecord(plugin.default_params),
+                  session: "unknown",
+                  market_state: "unknown",
+                });
+              },
+            }}
           />
           </div>
           </div>

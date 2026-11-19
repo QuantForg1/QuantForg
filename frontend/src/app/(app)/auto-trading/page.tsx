@@ -9,7 +9,7 @@ import { WorkspaceShell } from "@/components/workspace/shell";
 
 export default function AutoTradingPage() {
   return (
-    <div>
+    <div className="qf-desk">
       <PageHeader
         title="Trading Operations Center"
         description="Live market, strategy bias, risk, and the execution pipeline. Existing safety controls stay in place."

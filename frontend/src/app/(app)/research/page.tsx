@@ -19,7 +19,7 @@ const ResearchShell = dynamic(
 /** Flagship Research OS — Idea → Promote workflow. Advisory only. */
 export default function ResearchPage() {
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
+    <div className="qf-desk flex h-full min-h-0 w-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
         <p className="min-w-0 text-xs leading-relaxed text-[var(--fg-muted)]">
           Institutional research workspace. Results come from the research service. Nothing here authorizes a trade.

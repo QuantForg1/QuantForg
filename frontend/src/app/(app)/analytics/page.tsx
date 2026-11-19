@@ -114,7 +114,7 @@ export default function AnalyticsPage() {
   const sharpe = metric(perf, "sharpe", "sharpe_ratio", "sharpeRatio");
 
   return (
-    <div>
+    <div className="qf-desk">
       <PageHeader
         eyebrow="Quantitative desk"
         title="Analytics"

@@ -15,6 +15,13 @@ const TABS: { id: DetailTab; label: string }[] = [
   { id: "backtest", label: "Backtest" },
 ];
 
+type StrategyEvaluation = {
+  pending: boolean;
+  error: string | null;
+  result: Record<string, unknown> | null;
+  onEvaluate: () => void;
+};
+
 type StrategyBriefPanelProps = {
   strategyKey: string;
   name: string;
@@ -23,7 +30,56 @@ type StrategyBriefPanelProps = {
   market: string;
   params: Record<string, unknown>;
   onServer: boolean;
+  evaluation?: StrategyEvaluation;
 };
+
+function EvaluationResult({ result }: { result: Record<string, unknown> | null }) {
+  if (!result) return null;
+  if (result.ok === false) {
+    const message = typeof result.error === "string" && result.error
+      ? result.error
+      : "The server could not evaluate this strategy.";
+    return (
+      <p role="status" className="text-sm leading-relaxed text-[var(--warning)]">
+        Unavailable. {message}
+      </p>
+    );
+  }
+  const signal = result.signal && typeof result.signal === "object"
+    ? (result.signal as Record<string, unknown>)
+    : null;
+  const action = typeof signal?.action === "string" ? signal.action : "";
+  if (!action) {
+    return (
+      <p role="status" className="text-sm leading-relaxed text-[var(--fg-muted)]">
+        The server returned no intention.
+      </p>
+    );
+  }
+  const confidence = typeof signal?.confidence === "number" && Number.isFinite(signal.confidence)
+    ? signal.confidence
+    : null;
+  const reasons = Array.isArray(signal?.reasons)
+    ? signal.reasons.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
+  return (
+    <div role="status" className="grid gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] p-3">
+      <p className="text-sm font-semibold text-[var(--fg)]">
+        Intention {action}
+        {confidence !== null ? ` · ${Math.round(confidence * 100)}% confidence` : ""}
+      </p>
+      {reasons.length > 0 ? (
+        <ul className="grid gap-1 text-sm leading-relaxed text-[var(--fg-muted)]">
+          {reasons.slice(0, 4).map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-[var(--fg-muted)]">The server did not return a reason.</p>
+      )}
+    </div>
+  );
+}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -42,6 +98,7 @@ export function StrategyBriefPanel({
   market,
   params,
   onServer,
+  evaluation,
 }: StrategyBriefPanelProps) {
   const [tab, setTab] = useState<DetailTab>("overview");
   useEffect(() => {
@@ -191,6 +248,24 @@ export function StrategyBriefPanel({
           ? "Evaluate returns an intention. It does not place an order, and the risk check can still turn that intention into hold."
           : "This strategy is in the engine. The connected server catalogue has not loaded it yet, so Evaluate on that server cannot run it."}
       </p>
+      {onServer && evaluation ? (
+        <div className="mt-4 grid gap-3">
+          <button
+            type="button"
+            className="min-h-11 rounded-[var(--radius-sm)] bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)] disabled:opacity-60"
+            disabled={evaluation.pending}
+            onClick={evaluation.onEvaluate}
+          >
+            {evaluation.pending ? "Evaluating…" : "Evaluate intention"}
+          </button>
+          {evaluation.error ? (
+            <p role="alert" className="text-sm leading-relaxed text-[var(--danger)]">
+              {evaluation.error}
+            </p>
+          ) : null}
+          <EvaluationResult result={evaluation.result} />
+        </div>
+      ) : null}
     </article>
   );
 }

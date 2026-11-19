@@ -1210,7 +1210,7 @@ export function BrokerConfigWorkspace() {
     (!ownershipAttachOnly && (!effectiveServer || !login));
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col px-1 py-2 sm:px-0 sm:py-4">
+    <div className="qf-desk mx-auto flex w-full min-w-0 max-w-5xl flex-col px-1 py-2 sm:px-0 sm:py-4">
       <article
         className={cn(
           "w-full overflow-visible rounded-[var(--radius-os)] border border-[var(--border)]",

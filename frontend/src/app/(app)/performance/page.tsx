@@ -99,7 +99,7 @@ export default function PerformancePage() {
   const errored = paper.isError && history.isError;
 
   return (
-    <div>
+    <div className="qf-desk">
       <PageHeader
         eyebrow="Analytics"
         title="Trading Performance"

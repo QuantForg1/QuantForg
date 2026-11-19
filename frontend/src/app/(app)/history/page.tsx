@@ -172,7 +172,7 @@ export default function HistoryPage() {
   ];
 
   return (
-    <div>
+    <div className="qf-desk">
       <PageHeader
         eyebrow="Trading"
         title="History"

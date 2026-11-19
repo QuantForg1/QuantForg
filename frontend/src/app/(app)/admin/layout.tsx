@@ -35,5 +35,5 @@ export default function AdminPortalLayout({
     return <DeskSkeleton variant="page" />;
   }
 
-  return children;
+  return <div className="qf-desk min-w-0">{children}</div>;
 }
