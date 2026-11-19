@@ -6,39 +6,47 @@ import { ChevronDown } from "lucide-react";
 const ITEMS = [
   {
     q: "How does QuantForg work?",
-    a: "You create a QuantForg account and connect an MT5 broker account you already own. QuantForg reads that session, evaluates market structure and strategy profiles, and can submit an order only after risk validation and only when execution is authorized. A research result is not an order. An order is not a trade until the broker confirms the fill.",
+    a: "Create a QuantForg account and connect the MetaTrader 5 account you already own. The QuantForg Robot analyzes the gold market (XAUUSD) and trades only when its conditions and your risk limits allow. QuantForg AI is your assistant: ask it about the market or send it a chart screenshot for analysis.",
+  },
+  {
+    q: "What is QuantForg AI?",
+    a: "QuantForg AI is the assistant built into QuantForg. It answers trading questions in your language, explains the live gold market (trend, momentum, key support and resistance), summarizes news and upcoming economic events, and reviews your risk settings. It explains and analyzes; it never places trades for you.",
+  },
+  {
+    q: "Can QuantForg AI analyze my chart screenshots?",
+    a: "Yes. Upload, paste or drag a chart screenshot into the assistant. QuantForg AI reads the market structure, levels and indicators that are visible on the chart, compares them with the live gold price, and gives you the bullish and bearish scenarios with what would invalidate each. If something on the chart is not readable, it says so instead of guessing.",
   },
   {
     q: "Does QuantForg hold customer funds?",
-    a: "No. Your capital stays at your broker. QuantForg does not open a brokerage account for you and does not custody customer funds.",
+    a: "No. Your capital stays at your broker. QuantForg does not open a brokerage account for you and never holds customer funds.",
   },
   {
     q: "How do I connect my MT5 account?",
-    a: "Create your QuantForg account, then open Broker Accounts and enter the MT5 login you own. Weltrade is the production connection. QuantForg uses the permissions that broker login already grants. Email verification stays on the existing account path. This is not a separate identity check.",
+    a: "Open Broker Accounts, choose your broker and server, and enter your MT5 login and password. QuantForg checks the account within seconds and shows Connected or Rejected. Your password is stored encrypted and never shown again.",
   },
   {
     q: "Which brokers are supported?",
-    a: "Supported MT5 brands (in order): Weltrade, XM, Exness, HFM, JustMarkets, IC Markets, Pepperstone, and FP Markets. Weltrade is the production-verified connection today. Listing a brand is not the same as a verified LIVE path — authentication evidence is recorded separately. MetaTrader 5 is the trading platform, not a broker.",
+    a: "MetaTrader 5 accounts at Weltrade, XM, Exness, HFM, JustMarkets, IC Markets, Pepperstone and FP Markets. MetaTrader 5 is the trading platform; the broker is the company that holds your account.",
   },
   {
     q: "How are risk controls applied?",
-    a: "Risk checks run before an order is submitted. Customer preferences — risk per trade, maximum lot, daily loss, and open positions — can be stricter than the platform ceiling and cannot loosen it. A failed check blocks the order. A subscription plan does not bypass those checks. The autonomous desk trades XAUUSD (gold).",
+    a: "Every trade has a stop loss. Your settings (risk per trade, maximum lot, daily loss limit and number of open positions) are checked before any order is sent. Your limits can be stricter than the platform limits but never looser, and a subscription never bypasses them.",
   },
   {
     q: "How is performance calculated?",
-    a: "Completed results come from broker deal history after a session is connected: entry, exit, commission, swap, and net profit when that history is returned. This page does not publish a sample win rate, profit, profit factor, drawdown, or average trade.",
+    a: "Results come from your broker's own trade history: entry, exit, commission, swap and net profit. QuantForg does not publish sample or simulated statistics.",
   },
   {
     q: "What happens if the connection fails?",
-    a: "The gateway reports the session as unavailable. QuantForg does not submit an order without that connection. Positions that are already open remain at the broker under the stops and permissions on that account.",
+    a: "QuantForg never opens a trade without a working connection to your account. Positions already open stay at your broker with their stop loss and take profit in place.",
   },
   {
     q: "Can I disconnect my broker?",
-    a: "Yes. Broker Accounts includes disconnect for the connected Weltrade session. Disconnecting stops QuantForg from using that login. It does not close the account at the broker.",
+    a: "Yes, at any time from Broker Accounts. Disconnecting stops QuantForg from using that account; it does not close the account at your broker.",
   },
   {
     q: "Are profits guaranteed?",
-    a: "No. QuantForg sells software access. Trading can lose capital. A subscription, a signal, or a connected account is not a promise of profit.",
+    a: "No. QuantForg sells software access. Trading can lose capital. A subscription, an AI analysis, a signal or a connected account is not a promise of profit.",
   },
 ] as const;
 

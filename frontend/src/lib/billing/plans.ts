@@ -54,6 +54,8 @@ export const UNPAID_ACCESS: readonly { feature: string; allowed: boolean }[] = [
   { feature: "Broker verification", allowed: true },
   { feature: "View balance, equity and margin", allowed: true },
   { feature: "View strategies and market research", allowed: true },
+  { feature: "QuantForg AI assistant & chart screenshot analysis", allowed: true },
+  { feature: "Trading signals", allowed: false },
   { feature: "Start the robot", allowed: false },
   { feature: "Open new trades / automated execution", allowed: false },
 ];
@@ -88,8 +90,15 @@ export const PLAN_COMPARISON_ROWS: readonly PlanComparisonRow[] = [
     premium: "1",
   },
   {
+    feature: "QuantForg AI assistant & chart screenshot analysis",
+    unpaid: "Included",
+    starter: "Included",
+    professional: "Included",
+    premium: "Included",
+  },
+  {
     feature: "Strategies & signals",
-    unpaid: "View",
+    unpaid: "Strategies only (signals locked)",
     starter: "Core",
     professional: "Expanded",
     premium: "Full eligible",

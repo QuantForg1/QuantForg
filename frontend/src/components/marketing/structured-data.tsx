@@ -14,7 +14,7 @@ export function PublicStructuredData() {
     image: `${SITE}/og-image.png`,
     email: "support@quantforg.com",
     description:
-      "Institutional AI Trading Platform for MetaTrader 5 connectivity, market intelligence, risk management, and automated execution under approved settings.",
+      "AI gold trading robot for MetaTrader 5 with QuantForg AI, a market assistant that analyzes live gold prices, news and chart screenshots, and risk limits on every trade.",
     sameAs: [] as string[],
   };
 
@@ -24,7 +24,7 @@ export function PublicStructuredData() {
     name: "QuantForg",
     url: SITE,
     description:
-      "Institutional AI Trading Platform — connect your broker, analyze markets, manage risk, and execute under approved settings.",
+      "QuantForg — AI gold trading robot and QuantForg AI market assistant for MetaTrader 5.",
     publisher: {
       "@type": "Organization",
       name: "QuantForg",
