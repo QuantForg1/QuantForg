@@ -28,7 +28,6 @@ import {
   minutesUntil,
   regimeLabels,
   relativeTime,
-  strategyFit,
 } from "@/lib/assistant/desk-format";
 import { cn } from "@/lib/utils";
 
@@ -461,30 +460,90 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 
 /* ------------------------------------------------------------- Strategy Lab */
 
+const GRADE_META: Record<string, { label: string; tone: "success" | "accent" | "neutral" | "warning" | "danger" }> = {
+  strong: { label: "Strong", tone: "success" },
+  positive: { label: "Positive", tone: "accent" },
+  neutral: { label: "Neutral", tone: "neutral" },
+  weak: { label: "Weak", tone: "danger" },
+  insufficient_data: { label: "Few trades", tone: "warning" },
+};
+
+type StrategyFilter = "all" | "top" | "signal" | "weak";
+
 export function StrategyDesk({ onAsk }: { onAsk: Ask }) {
   const desk = useMarketDesk();
-  const registryQ = useQuery({
-    queryKey: ["intelligence-strategies"],
-    queryFn: () => intelligenceApi.strategies(),
+  const [filter, setFilter] = useState<StrategyFilter>("all");
+  const [search, setSearch] = useState("");
+  const q = useQuery({
+    queryKey: ["intelligence-strategy-scorecard"],
+    queryFn: () => intelligenceApi.strategyScorecard(),
     retry: 2,
     staleTime: 60_000,
+    refetchInterval: (query) =>
+      str(asRecord(query.state.data).status) === "ready" ? 5 * 60_000 : 10_000,
   });
-  if (registryQ.isLoading) return <Loading label="Loading strategies" />;
-  if (registryQ.isError && !registryQ.data) return <DeskError message="Strategy Lab could not be loaded." onRetry={() => registryQ.refetch()} />;
+  if (q.isLoading) return <Loading label="Loading strategies" />;
+  if (!q.data) return <DeskError message="Strategy Lab could not be loaded." onRetry={() => q.refetch()} />;
 
+  const data = asRecord(q.data);
   const snap = asRecord(asRecord(desk.data).snapshot);
   const regimes = regimeLabels(asRecord(snap.bias), asRecord(snap.volatility_h1));
-  const strategies = asList(asRecord(registryQ.data).strategies)
-    .map(asRecord)
-    .map((s) => ({ s, fit: strategyFit(asList(s.best_regimes).map(String), regimes) }))
-    .sort((a, b) => b.fit - a.fit || str(a.s.name).localeCompare(str(b.s.name)));
+
+  if (str(data.status) !== "ready") {
+    return (
+      <Card className="mx-auto flex w-full max-w-3xl flex-col items-center gap-3 py-10 text-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--accent)]" />
+        <p className="text-sm font-semibold">Testing every strategy on real gold data</p>
+        <p className="max-w-md text-xs text-[var(--fg-muted)]">
+          Each of the 100+ strategies is replayed on recent XAUUSD candles with spread included. This takes about a
+          minute; results appear here automatically.
+        </p>
+      </Card>
+    );
+  }
+
+  const summary = asRecord(data.summary);
+  const grades = asRecord(summary.grades);
+  const cons = asRecord(data.consensus);
+  const rows = asList(data.strategies).map(asRecord);
+  const needle = search.trim().toLowerCase();
+  const shown = rows.filter((r) => {
+    if (needle && !`${str(r.name)} ${str(r.category)}`.toLowerCase().includes(needle)) return false;
+    if (filter === "top") return ["strong", "positive"].includes(str(r.grade));
+    if (filter === "signal") return ["BUY", "SELL"].includes(str(r.current_signal));
+    if (filter === "weak") return str(r.grade) === "weak";
+    return true;
+  });
+  const consDir = str(cons.direction, "WAIT");
+  const pf = (v: unknown) => (v == null ? "∞" : Number(v).toFixed(2));
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      <Card className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card>
+          <Label>Strategies tested</Label>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{num(summary.strategies)}</p>
+          <p className="text-xs text-[var(--fg-muted)]">
+            {num(grades.strong) || 0} strong · {num(grades.positive) || 0} positive · {num(grades.weak) || 0} weak
+          </p>
+        </Card>
+        <Card>
+          <Label>Proven strategies say</Label>
+          <p
+            className={cn(
+              "mt-1 text-2xl font-semibold",
+              consDir === "BUY" ? "text-[var(--success)]" : consDir === "SELL" ? "text-[var(--danger)]" : "",
+            )}
+          >
+            {consDir === "WAIT" ? "Wait" : consDir === "BUY" ? "Buy bias" : "Sell bias"}
+          </p>
+          <p className="text-xs text-[var(--fg-muted)]">
+            {asList(cons.voters).length} positive-record strategies signalling now
+          </p>
+        </Card>
+        <Card>
           <Label>Current gold regime</Label>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {regimes.length ? (
               regimes.map((r) => (
                 <Badge key={r} tone="accent">
@@ -492,58 +551,110 @@ export function StrategyDesk({ onAsk }: { onAsk: Ask }) {
                 </Badge>
               ))
             ) : (
-              <span className="text-sm text-[var(--fg-muted)]">Regime unavailable</span>
+              <span className="text-sm text-[var(--fg-muted)]">Unavailable</span>
             )}
           </div>
-        </div>
-        <p className="max-w-md text-xs leading-relaxed text-[var(--fg-subtle)]">
-          Strategies are ranked by how well their best conditions match the live market. Research only: the robot does
-          not switch strategies from this list.
-        </p>
-      </Card>
-      <div className="grid gap-3 md:grid-cols-2">
-        {strategies.map(({ s, fit }) => (
-          <Card key={str(s.key)} className="flex flex-col gap-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{str(s.name) || str(s.key)}</p>
-                <p className="text-xs capitalize text-[var(--fg-subtle)]">{str(s.family).replace(/_/g, " ")}</p>
-              </div>
-              {fit > 0 ? <Badge tone="success">Fits now</Badge> : <Badge tone="neutral">Not ideal now</Badge>}
-            </div>
-            <p className="text-sm leading-relaxed text-[var(--fg-muted)]">{str(s.description)}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {asList(s.best_regimes).map((r) => (
-                <span
-                  key={String(r)}
-                  className={cn(
-                    "rounded-full border px-2 py-0.5 text-[11px]",
-                    regimes.includes(String(r))
-                      ? "border-[var(--success)] text-[var(--success)]"
-                      : "border-[var(--border)] text-[var(--fg-subtle)]",
-                  )}
-                >
-                  {String(r)}
-                </span>
-              ))}
-            </div>
-            <div className="mt-auto flex items-center justify-between pt-1">
-              <span className="text-[11px] text-[var(--fg-subtle)]">
-                {s.engine_plugin ? "Backtestable engine plugin" : "Research archetype"}
-              </span>
-              <button
-                type="button"
-                className="text-xs font-medium text-[var(--accent)] hover:underline"
-                onClick={() =>
-                  onAsk(`Explain the ${str(s.name)} strategy for gold: how it works, entry and exit rules, and whether it suits the current XAUUSD market.`)
-                }
-              >
-                Ask AI about it →
-              </button>
-            </div>
-          </Card>
-        ))}
+        </Card>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {(
+          [
+            ["all", "All"],
+            ["top", "Best performers"],
+            ["signal", "Signalling now"],
+            ["weak", "Weak"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setFilter(id)}
+            className={cn(
+              "h-8 rounded-full px-3 text-xs font-semibold transition-colors",
+              filter === id
+                ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                : "border border-[var(--border)] text-[var(--fg-muted)] hover:text-[var(--fg)]",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search strategies"
+          aria-label="Search strategies"
+          className="h-8 min-w-0 flex-1 rounded-full border border-[var(--border)] bg-transparent px-3 text-xs outline-none focus:border-[var(--accent)] sm:max-w-56"
+        />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {shown.map((r) => {
+          const g = GRADE_META[str(r.grade)] ?? GRADE_META.neutral;
+          const sig = str(r.current_signal);
+          return (
+            <Card key={str(r.key)} className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    <span className="mr-1.5 text-[var(--fg-subtle)] tabular-nums">#{num(r.rank)}</span>
+                    {str(r.name)}
+                  </p>
+                  <p className="text-xs capitalize text-[var(--fg-subtle)]">{str(r.category).replace(/_/g, " ")}</p>
+                </div>
+                <div className="flex shrink-0 gap-1.5">
+                  {sig === "BUY" || sig === "SELL" ? (
+                    <Badge tone={sig === "BUY" ? "success" : "danger"}>{sig === "BUY" ? "Buy now" : "Sell now"}</Badge>
+                  ) : null}
+                  <Badge tone={g.tone}>{g.label}</Badge>
+                </div>
+              </div>
+              <p className="text-xs leading-relaxed text-[var(--fg-muted)]">{str(r.description)}</p>
+              <dl className="grid grid-cols-4 gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2 text-center">
+                {(
+                  [
+                    ["Trades", String(num(r.trades))],
+                    ["Win", `${num(r.win_rate)}%`],
+                    ["PF", pf(r.profit_factor)],
+                    ["Net", `${num(r.net_r) > 0 ? "+" : ""}${num(r.net_r)}R`],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div key={k} className="min-w-0">
+                    <dt className="truncate text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">{k}</dt>
+                    <dd
+                      className={cn(
+                        "text-sm font-semibold tabular-nums",
+                        k === "Net" && num(r.net_r) > 0 && "text-[var(--success)]",
+                        k === "Net" && num(r.net_r) < 0 && "text-[var(--danger)]",
+                      )}
+                    >
+                      {v}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="mt-auto flex items-center justify-end pt-1">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[var(--accent)] hover:underline"
+                  onClick={() =>
+                    onAsk(
+                      `Explain the ${str(r.name)} strategy for gold: how it works, its entry and exit rules, and whether it suits the current XAUUSD market.`,
+                    )
+                  }
+                >
+                  Ask AI about it →
+                </button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+      {shown.length === 0 ? <p className="text-center text-xs text-[var(--fg-muted)]">No strategies match.</p> : null}
+      <p className="text-center text-[11px] text-[var(--fg-subtle)]">
+        {str(data.disclaimer)} Research only: the robot does not switch strategies from this list.
+      </p>
     </div>
   );
 }

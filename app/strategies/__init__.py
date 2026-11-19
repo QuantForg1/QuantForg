@@ -1,4 +1,4 @@
-"""Deterministic strategy plugins — intentions only, no execution."""
+"""Deterministic strategy plugins - intentions only, no execution."""
 
 from __future__ import annotations
 
@@ -550,23 +550,28 @@ class MeanReversionStrategy:
     key: ClassVar[str] = "mean_reversion"
     name: ClassVar[str] = "Mean Reversion"
     category: ClassVar[str] = "mean_reversion"
-    description: ClassVar[str] = "Revert toward SMA when deviation exceeds threshold."
-    default_params: ClassVar[dict[str, Any]] = {"period": 20, "deviation_pct": 1.0}
+    description: ClassVar[str] = (
+        "Fade a stretch of more than NxATR away from the SMA once price turns back."
+    )
+    default_params: ClassVar[dict[str, Any]] = {"period": 20, "atr_mult": 2.0}
 
     def validate_params(self, params: dict[str, Any]) -> tuple[bool, tuple[str, ...]]:
         period = int(_param(params, "period", 20))
         if period < 2:
             return False, ("period must be >= 2",)
+        if float(_param(params, "atr_mult", 2.0)) <= 0:
+            return False, ("atr_mult must be > 0",)
         return True, ()
 
     def evaluate(self, snapshot: StrategySnapshot) -> StrategyIntention:
         period = int(_param(snapshot.params, "period", 20))
-        deviation = float(_param(snapshot.params, "deviation_pct", 1.0))
+        mult = float(_param(snapshot.params, "atr_mult", 2.0))
+        bars = snapshot.bars
         series = _closes(snapshot)
         line = sma(series, period)
         m = line[-1]
         c = series[-1]
-        if m is None or m == 0:
+        if m is None or len(bars) < 16:
             return _hold(
                 self.key,
                 snapshot,
@@ -575,22 +580,35 @@ class MeanReversionStrategy:
                 f"period={period}",
                 value=str(len(series)),
             )
-        pct = (c / m - 1.0) * 100.0
-        if pct <= -deviation:
-            action, reason = EngineSignalAction.BUY, "Close below SMA by threshold"
-            conf = 0.6
-        elif pct >= deviation:
-            action, reason = EngineSignalAction.SELL, "Close above SMA by threshold"
-            conf = 0.6
+        trs = [
+            max(b.high - b.low, abs(b.high - p.close), abs(b.low - p.close))
+            for p, b in zip(bars[-15:-1], bars[-14:], strict=True)
+        ]
+        atr = sum(trs) / len(trs)
+        dev = (c - m) / atr if atr > 0 else 0.0
+        prev = series[-2]
+        if dev <= -mult and c > prev:
+            action, reason = (
+                EngineSignalAction.BUY,
+                "Stretched below SMA and turning up",
+            )
+        elif dev >= mult and c < prev:
+            action, reason = (
+                EngineSignalAction.SELL,
+                "Stretched above SMA and turning down",
+            )
         else:
             return _hold(
                 self.key,
                 snapshot,
-                "Close near SMA",
-                "SMA",
-                f"deviation_pct=±{deviation}",
-                value=f"pct={pct:.3f}; sma={m:.5f}",
+                "No stretched reversal",
+                "SMA_ATR_DEV",
+                f"±{mult} ATR",
+                value=f"dev_atr={dev:.2f}; sma={m:.5f}",
             )
+        conf = min(0.75, 0.55 + (abs(dev) - mult) * 0.05)
+        pct = dev
+        deviation = mult
         return StrategyIntention(
             action=action,
             confidence=conf,
@@ -598,9 +616,9 @@ class MeanReversionStrategy:
                 SignalExplanation(
                     reason=reason,
                     indicator="SMA_DEV",
-                    threshold=f"period={period}; deviation_pct={deviation}",
+                    threshold=f"period={period}; atr_mult={deviation}",
                     market_context=_ctx(snapshot),
-                    value=f"pct={pct:.3f}; close={c:.5f}; sma={m:.5f}",
+                    value=f"dev_atr={pct:.2f}; close={c:.5f}; sma={m:.5f}",
                 ),
             ),
             strategy_key=self.key,
@@ -611,7 +629,7 @@ class MeanReversionStrategy:
 
 
 class CustomRulesStrategy:
-    """Evaluate a simple rule tree from params — no invented market facts."""
+    """Evaluate a simple rule tree from params - no invented market facts."""
 
     key: ClassVar[str] = "custom_rules"
     name: ClassVar[str] = "Custom Rules"
@@ -709,6 +727,7 @@ class CustomRulesStrategy:
 
 def default_strategy_plugins() -> list[StrategyPort]:
     from app.strategies.library import library_plugins
+    from app.strategies.library_ext import extended_plugins
 
     return [
         TrendFollowingStrategy(),
@@ -721,4 +740,5 @@ def default_strategy_plugins() -> list[StrategyPort]:
         MeanReversionStrategy(),
         CustomRulesStrategy(),
         *library_plugins(),
+        *extended_plugins(),
     ]

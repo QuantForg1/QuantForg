@@ -124,7 +124,7 @@ const DESK_NOTE: Record<DeskId, string> = {
     "Answers grounded in the live gold feed. Attach a chart screenshot for a full analysis. Advisory only — it never places trades.",
   insights: "Live XAUUSD trend, momentum and key levels on M15, H1 and H4. Refreshes every 20 seconds.",
   analysis: "Is now a reasonable moment to trade gold? Seven measured checks, plus your open positions.",
-  strategy: "Research strategies ranked by how well they fit the live gold regime.",
+  strategy: "100+ strategies tested on real gold data and ranked by their results.",
   news: "Economic calendar with countdowns and the latest headlines from the connected feeds.",
 };
 
