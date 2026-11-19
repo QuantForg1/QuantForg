@@ -297,3 +297,32 @@ def build_shadow_signal_report(
         "generated_at": datetime.now(UTC).isoformat(),
         **aggregate(rows),
     }
+
+
+SHADOW_EVAL_INTERVAL_S = 900.0
+SHADOW_EVAL_WINDOW_DAYS = 3
+
+
+async def shadow_evaluation_loop(
+    *,
+    symbol: str = "XAUUSD",
+    interval_s: float = SHADOW_EVAL_INTERVAL_S,
+    days: int = SHADOW_EVAL_WINDOW_DAYS,
+) -> None:
+    """Evaluate recorded signals on a schedule (HYPOTHETICAL, never trades).
+
+    Runs off the event loop. Each signal is stored once (signal_id key), so
+    a repeat pass only adds signals whose 30-minute window has since closed.
+    """
+    import asyncio
+
+    await asyncio.sleep(min(180.0, interval_s))
+    while True:
+        try:
+            inserted = await asyncio.to_thread(
+                evaluate_and_store, days=days, symbol=symbol
+            )
+            logger.info("shadow_evaluation_pass", inserted=inserted, symbol=symbol)
+        except Exception as exc:
+            logger.warning("shadow_evaluation_pass_failed", error=type(exc).__name__)
+        await asyncio.sleep(interval_s)
