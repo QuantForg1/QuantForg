@@ -468,10 +468,11 @@ def test_swing_levels_split_around_price():
 @pytest.mark.parametrize(
     ("when", "expected"),
     [
-        (datetime(2026, 11, 19, 13, 0, tzinfo=UTC), "London-New York overlap"),
+        (datetime(2026, 11, 19, 13, 0, tzinfo=UTC), "London / New York"),
         (datetime(2026, 11, 19, 8, 0, tzinfo=UTC), "London"),
-        (datetime(2026, 11, 19, 2, 0, tzinfo=UTC), "Asia"),
-        (datetime(2026, 11, 21, 12, 0, tzinfo=UTC), "closed (weekend)"),
+        (datetime(2026, 11, 19, 2, 0, tzinfo=UTC), "Asian"),
+        (datetime(2026, 11, 19, 21, 30, tzinfo=UTC), "Daily break"),
+        (datetime(2026, 11, 21, 12, 0, tzinfo=UTC), "Market closed"),
     ],
 )
 def test_trading_session(when, expected):

@@ -301,3 +301,12 @@ def _clear_candle_tail_cache():
     shared_rates_cache().clear()
     yield
     shared_rates_cache().clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_public_tick_cache():
+    from app.presentation.routers import public_market
+
+    public_market._TICK_CACHE.clear()
+    yield
+    public_market._TICK_CACHE.clear()

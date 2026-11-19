@@ -12,6 +12,7 @@ import { ConnectionStatus } from "@/components/trading/connection-status";
 import { cn, formatCurrency } from "@/lib/utils";
 import { platformApi } from "@/lib/api/endpoints";
 import { asList, num } from "@/lib/desk";
+import { tradingSessionLabel } from "@/lib/market/display-intelligence";
 import { useTradingSession } from "@/providers/trading-session-provider";
 
 function workspaceLabel(pathname: string): string {
@@ -19,18 +20,10 @@ function workspaceLabel(pathname: string): string {
   return desk?.label ?? "Workspace";
 }
 
-function sessionWindow(at: Date): string {
-  const hour = at.getUTCHours();
-  if (hour >= 7 && hour < 16) return "London";
-  if (hour >= 16 && hour < 21) return "New York";
-  if (hour >= 0 && hour < 7) return "Tokyo";
-  return "Sydney";
-}
-
 function MarketChrome() {
   const session = useTradingSession();
   const sessionAt = new Date();
-  const sessionName = sessionWindow(sessionAt);
+  const sessionName = tradingSessionLabel(sessionAt);
   const weekday = sessionAt.getUTCDay();
   const weekdaySession = weekday >= 1 && weekday <= 5;
 

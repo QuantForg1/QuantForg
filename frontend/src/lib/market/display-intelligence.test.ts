@@ -77,16 +77,16 @@ const burst = bars(40, (index) =>
 );
 assert.equal(classifyRegime(confirmedCandles(burst, "M15", now)), "High Volatility");
 
-assert.equal(
-  tradingSessionLabel(new Date("2026-01-15T08:30:00Z")),
-  "Asian / London",
-);
+assert.equal(tradingSessionLabel(new Date("2026-01-15T08:30:00Z")), "London");
 assert.equal(
   tradingSessionLabel(new Date("2026-01-15T13:00:00Z")),
   "London / New York",
 );
 assert.equal(tradingSessionLabel(new Date("2026-01-15T18:00:00Z")), "New York");
-assert.equal(tradingSessionLabel(new Date("2026-01-15T22:30:00Z")), "Off hours");
+assert.equal(tradingSessionLabel(new Date("2026-01-15T22:30:00Z")), "Asian");
+assert.equal(tradingSessionLabel(new Date("2026-01-15T21:30:00Z")), "Daily break");
+assert.equal(tradingSessionLabel(new Date("2026-01-15T13:00:00Z")), "London / New York");
+assert.equal(tradingSessionLabel(new Date("2026-01-17T12:00:00Z")), "Market closed");
 
 assert.equal(
   feedFreshness({

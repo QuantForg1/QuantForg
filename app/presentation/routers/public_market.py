@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -14,6 +15,9 @@ from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.mt5 import MT5CandleResponse, MT5TickResponse
 
 router = APIRouter(prefix="/public/market", tags=["public-market"])
+
+_TICK_TTL_S = 1.0
+_TICK_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _feed_service(
@@ -53,14 +57,23 @@ async def public_market_tick(
     symbol: str,
     feed: Annotated[PublicMarketFeedService, Depends(_feed_service)],
 ) -> dict[str, Any]:
-    """Public last quote — no auth, no personal broker session required."""
+    """Public last quote — no auth, no personal broker session required.
+
+    Shared 1 s cache per symbol: charts poll every ~2 s, so the gateway sees
+    at most one quote request per second however many viewers are open.
+    """
+    key = symbol.strip().upper()
+    now = time.monotonic()
+    hit = _TICK_CACHE.get(key)
+    if hit is not None and now - hit[0] < _TICK_TTL_S:
+        return dict(hit[1])
     bundle = await feed.tick(symbol=symbol)
     tick_payload = None
     if bundle.tick is not None:
         tick_payload = MT5TickResponse(**dto_to_dict(bundle.tick)).model_dump(
             mode="json"
         )
-    return {
+    payload = {
         "ok": True,
         "symbol": bundle.symbol,
         "status": bundle.status,
@@ -70,6 +83,9 @@ async def public_market_tick(
         "note": bundle.note,
         "tick": tick_payload,
     }
+    if tick_payload is not None:
+        _TICK_CACHE[key] = (now, payload)
+    return payload
 
 
 @router.get("/status")
