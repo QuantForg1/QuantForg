@@ -245,6 +245,7 @@ async def stream_output_text(
     max_output_tokens: int | None = None,
     reasoning_effort: str | None = None,
     reasoning_summary: bool = False,
+    web_search: bool = False,
     timeout_seconds: float = 90.0,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> Any:
@@ -258,14 +259,19 @@ async def stream_output_text(
     if not client.configured:
         raise OpenAIProviderError("missing_api_key", "OPENAI_API_KEY is not configured")
 
-    ladder: list[tuple[str | None, bool]] = []
+    # Most capable request first; each HTTP 400 drops one optional feature.
+    ladder: list[tuple[str | None, bool, bool]] = []
+    if web_search:
+        ladder.append(
+            (reasoning_effort, bool(reasoning_effort and reasoning_summary), True)
+        )
     if reasoning_effort and reasoning_summary:
-        ladder.append((reasoning_effort, True))
+        ladder.append((reasoning_effort, True, False))
     if reasoning_effort:
-        ladder.append((reasoning_effort, False))
-    ladder.append((None, False))
+        ladder.append((reasoning_effort, False, False))
+    ladder.append((None, False, False))
 
-    def _payload(effort: str | None, summary: bool) -> dict[str, Any]:
+    def _payload(effort: str | None, summary: bool, search: bool) -> dict[str, Any]:
         p: dict[str, Any] = {
             "model": client.model,
             "instructions": instructions,
@@ -279,6 +285,8 @@ async def stream_output_text(
             p["reasoning"] = {"effort": effort}
             if summary:
                 p["reasoning"]["summary"] = "auto"
+        if search:
+            p["tools"] = [{"type": "web_search"}]
         return p
 
     headers = {
@@ -291,10 +299,10 @@ async def stream_output_text(
     async with httpx.AsyncClient(
         timeout=timeout, transport=transport or client._transport
     ) as http:
-        for idx, (effort, summary) in enumerate(ladder):
+        for idx, (effort, summary, search) in enumerate(ladder):
             last = idx == len(ladder) - 1
             async with http.stream(
-                "POST", url, headers=headers, json=_payload(effort, summary)
+                "POST", url, headers=headers, json=_payload(effort, summary, search)
             ) as resp:
                 if resp.status_code == 400 and not last:
                     await resp.aread()
@@ -303,6 +311,7 @@ async def stream_output_text(
                         model=client.model,
                         effort=effort,
                         summary=summary,
+                        web_search=search,
                     )
                     continue
                 if resp.status_code == 401:
@@ -344,6 +353,10 @@ async def stream_output_text(
                     elif etype == "response.reasoning_summary_text.delta":
                         if isinstance(delta, str) and delta:
                             yield {"type": "thinking", "text": delta}
+                    elif etype == "response.web_search_call.searching":
+                        yield {"type": "search", "text": "searching"}
+                    elif etype == "response.web_search_call.completed":
+                        yield {"type": "search", "text": "done"}
                     elif etype == "response.reasoning_summary_part.done":
                         yield {"type": "thinking", "text": "\n\n"}
                     elif etype in {"response.failed", "error"}:

@@ -39,34 +39,34 @@ import styles from "./home-landing.module.css";
 
 const FEATURES: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }> = [
   {
-    title: "MT5 Connectivity",
-    body: "Connect the MetaTrader 5 account you already own. Weltrade is the production path. The gateway reads that login’s session.",
-    icon: Monitor,
-  },
-  {
-    title: "AI Market Intelligence",
-    body: "The gold desk scores structure, momentum, and context. A score is research. It is not an order.",
+    title: "QuantForg AI Assistant",
+    body: "Ask anything about gold and trading, in your own language. QuantForg AI explains the live market, trend, key support and resistance, and the news that can move price.",
     icon: Brain,
   },
   {
-    title: "Automated Risk Management",
-    body: "Risk checks run before an order is handed to the broker. A failed check blocks the send.",
-    icon: Shield,
+    title: "Chart Screenshot Analysis",
+    body: "Upload or paste a screenshot of any chart. QuantForg AI reads the structure, levels and indicators that are visible, compares it with the live price and lays out the bullish and bearish scenarios.",
+    icon: BarChart3,
   },
   {
-    title: "Trading Execution",
-    body: "Authorized orders go through the order path and MT5. An order is not a fill until the broker confirms it.",
+    title: "Automated Gold Trading",
+    body: "The QuantForg Robot watches XAUUSD on every trading day and only trades when its conditions and your risk limits allow. Quiet markets mean no trade, not a forced one.",
     icon: Send,
   },
   {
-    title: "Position Monitoring",
-    body: "Open positions and protective stops are read from the connected account and watched while the session is up.",
-    icon: Activity,
+    title: "Risk Protection",
+    body: "Every trade carries a stop loss. Your risk per trade, daily loss limit and position limits are checked before any order reaches your broker.",
+    icon: Shield,
   },
   {
-    title: "Performance Analytics",
-    body: "Results come from broker deal history after you connect. This page does not publish sample statistics.",
-    icon: BarChart3,
+    title: "Your MT5, Your Broker",
+    body: "Connect the MetaTrader 5 account you already own at a supported broker. Your money stays at your broker; QuantForg never holds funds.",
+    icon: Monitor,
+  },
+  {
+    title: "Live Monitoring & Real Results",
+    body: "See balance, equity, open positions and robot status live. Performance comes from your broker's own trade history, never from sample numbers.",
+    icon: Activity,
   },
 ];
 
@@ -74,21 +74,21 @@ const STEPS = [
   {
     n: "01",
     title: "Create Your Account",
-    body: "Sign up with your email and password. Email verification stays on the existing account path. QuantForg does not add a separate identity check here.",
+    body: "Sign up with your email and password and confirm your email. It takes about a minute.",
     href: "/register",
     label: "Create account",
   },
   {
     n: "02",
     title: "Connect Your Broker",
-    body: "After sign-in, Broker Accounts takes the Weltrade MT5 login you own. QuantForg uses the permissions that account already grants.",
+    body: "Open Broker Accounts, choose your broker and enter your MT5 login. QuantForg checks it within seconds and shows Connected or Rejected.",
     href: "/brokers",
     label: "Open Broker Accounts",
   },
   {
     n: "03",
     title: "Verify & Activate",
-    body: "Confirm the gateway session is connected and review risk status. Execution stays off until it is authorized. A connected login is not an automatic order.",
+    body: "Set your risk limits, choose a plan and start the robot. Nothing trades until you start it, and you can pause or stop it at any time.",
     href: "/#security",
     label: "Review the controls",
   },
@@ -110,21 +110,21 @@ const BROKERS: ReadonlyArray<{
 ];
 
 const WORKFLOW: ReadonlyArray<{ title: string; body: string }> = [
-  { title: "Market Scanning", body: "Reads the gold feed from the connected gateway." },
-  { title: "AI Analysis", body: "Scores structure, momentum, and context." },
-  { title: "Strategy Evaluation", body: "Runs the profiles already in the strategy registry." },
-  { title: "Risk Validation", body: "Blocks an order that fails the checks before send." },
-  { title: "Order Execution", body: "Submits only an authorized order through MT5." },
-  { title: "Trade Management", body: "Monitors open positions and protective stops." },
-  { title: "Trade Closure", body: "Closes or updates only through the broker connection." },
-  { title: "Performance Review", body: "Uses broker deal history. Nothing is invented here." },
+  { title: "Market Scanning", body: "Watches the live gold market on several timeframes." },
+  { title: "AI Analysis", body: "Reads trend, structure, momentum and market conditions." },
+  { title: "Strategy Evaluation", body: "Checks whether a high-quality setup is really there." },
+  { title: "Risk Validation", body: "Applies your risk limits; a failed check means no trade." },
+  { title: "Order Execution", body: "Places the trade on your MT5 account with a stop loss." },
+  { title: "Trade Management", body: "Watches open positions and protects profits." },
+  { title: "Trade Closure", body: "Closes at the target, the stop, or when conditions change." },
+  { title: "Performance Review", body: "Reports results straight from your broker's history." },
 ];
 
 const RULES = [
   "Analysis is not an order.",
   "A signal is not an executed trade.",
   "Risk validation happens before order submission.",
-  "Execution requires authorization and broker connectivity.",
+  "The robot trades only when you start it and your broker is connected.",
 ] as const;
 
 const EXECUTION_PROFILES: ReadonlyArray<{
@@ -135,32 +135,32 @@ const EXECUTION_PROFILES: ReadonlyArray<{
 }> = [
   {
     title: "Trend Following",
-    status: "Execution profile",
-    body: "Trend continuation scalping. It can be selected only after risk and execution gates.",
+    status: "Setup",
+    body: "Joins an established trend after a pullback, in the direction the market is already moving.",
     icon: MoveUpRight,
   },
   {
     title: "Breakout",
-    status: "Execution profile",
-    body: "Breakout scalping on volatility expansion. A setup is not a broker order.",
+    status: "Setup",
+    body: "Trades a decisive move out of a range when momentum confirms it.",
     icon: Zap,
   },
   {
     title: "Mean Reversion",
-    status: "Execution profile",
-    body: "Range mean-reversion scalping, used in range-like regimes.",
+    status: "Setup",
+    body: "In a ranging market, looks for price returning from an extreme toward fair value.",
     icon: RefreshCcw,
   },
   {
     title: "Momentum",
-    status: "Execution profile",
-    body: "Momentum scalping. Directional confirmation still waits on risk validation.",
+    status: "Setup",
+    body: "Follows strong, confirmed momentum while it lasts.",
     icon: Gauge,
   },
   {
     title: "SMC Scalping",
-    status: "Execution profile",
-    body: "The production SMC profile. Liquidity sweep, order block, and fair value gap sit inside it.",
+    status: "Setup",
+    body: "Smart-money price action: how institutions leave footprints in liquidity and structure.",
     icon: CandlestickChart,
   },
 ];
@@ -173,38 +173,38 @@ const ANALYSIS_FACTORS: ReadonlyArray<{
 }> = [
   {
     title: "Liquidity Sweep",
-    status: "Inside SMC",
-    body: "A weight inside SMC Scalping. Not a separate execution profile.",
+    status: "Market factor",
+    body: "Spots stop-hunts above highs or below lows before a reversal.",
     icon: Waves,
   },
   {
     title: "Order Block",
-    status: "Inside SMC",
-    body: "A structure factor in SMC scoring. It is not submitted as its own order.",
+    status: "Market factor",
+    body: "Zones where large orders previously moved price.",
     icon: Layers,
   },
   {
     title: "Fair Value Gap",
-    status: "Inside SMC",
-    body: "A gap factor in SMC scoring. Not its own strategy id.",
+    status: "Market factor",
+    body: "Price imbalances that the market often comes back to fill.",
     icon: Target,
   },
   {
     title: "RSI",
-    status: "Advisory vote",
-    body: "Momentum oscillator advisory. Cannot win order selection on its own.",
+    status: "Market factor",
+    body: "Measures momentum and overbought or oversold conditions.",
     icon: Activity,
   },
   {
     title: "MACD",
-    status: "Advisory vote",
-    body: "Trend-momentum advisory vote. Not an independent execution profile.",
+    status: "Market factor",
+    body: "Confirms trend strength and momentum shifts.",
     icon: LineChart,
   },
   {
     title: "Bollinger Bands",
-    status: "Advisory vote",
-    body: "Volatility factor advisory. Vote only — not an execution profile.",
+    status: "Market factor",
+    body: "Reads volatility so trades fit current market conditions.",
     icon: BarChart3,
   },
 ];
@@ -250,37 +250,37 @@ const RISK_ROWS = [
 const SECURITY: ReadonlyArray<{ title: string; body: string; icon: LucideIcon }> = [
   {
     title: "Encrypted credentials",
-    body: "MT5 worker credentials are sealed before delivery. Passwords are not printed back on screen.",
+    body: "Your MT5 password is encrypted and never shown again, to anyone.",
     icon: KeyRound,
   },
   {
     title: "Secure connections",
-    body: "The MT5 gateway talks to the server on the account you connect. A down gateway stays unavailable.",
+    body: "All traffic between you, QuantForg and your broker is encrypted.",
     icon: ShieldCheck,
   },
   {
     title: "Account isolation",
-    body: "A signed-in customer works on their own broker connection. One login does not reveal another customer’s credentials.",
+    body: "Every customer's account and broker connection is kept separate from every other customer's.",
     icon: Unplug,
   },
   {
     title: "Role-based access",
-    body: "Customer, admin, and owner routes are separated. Operator controls are not part of this page.",
+    body: "Customers and administrators have separate, permission-checked access.",
     icon: FileLock2,
   },
   {
     title: "Worker isolation",
-    body: "Authorized MT5 workers receive sealed credentials for the account they are assigned. That path is the implemented worker boundary.",
+    body: "Each connected account trades in its own isolated environment.",
     icon: Workflow,
   },
   {
     title: "Audit logging",
-    body: "Security-relevant actions are written to the audit log. This page does not expose those records.",
+    body: "Important account and admin actions are recorded so they can always be reviewed.",
     icon: Eye,
   },
   {
     title: "Monitoring and fail-safe",
-    body: "Live execution stays behind its enable switch. Risk can refuse an order, and an emergency stop can halt new auto-trading.",
+    body: "Continuous monitoring with automatic safety stops: if something looks wrong, the robot stops opening trades.",
     icon: Shield,
   },
 ];
@@ -293,27 +293,27 @@ const DIFFERENTIATORS: ReadonlyArray<{ title: string; body: string; icon: Lucide
   },
   {
     title: "Connect the account you have",
-    body: "You attach an existing MT5 login. Weltrade is the connection that is verified today.",
+    body: "Use your existing MT5 account at any supported broker. No new brokerage account needed.",
     icon: Monitor,
   },
   {
     title: "Analysis and execution are separate",
-    body: "Research, a signal, an approved order, and a broker fill are different states.",
+    body: "QuantForg AI explains and analyzes; only the robot trades, and only within your limits.",
     icon: Brain,
   },
   {
     title: "Risk validation before orders",
-    body: "The order is checked before submission. A failed check does not reach the broker.",
+    body: "Every order is checked against your risk limits first. A failed check means no trade.",
     icon: ShieldCheck,
   },
   {
     title: "Position monitoring",
-    body: "Open positions and protective stops are watched on the connected session.",
+    body: "Open positions and their stop losses are watched continuously.",
     icon: Activity,
   },
   {
     title: "Transparent activity",
-    body: "Trading activity is the broker session and its history, not a figure made for this page.",
+    body: "Your results come straight from your broker's history. No sample or simulated numbers.",
     icon: BarChart3,
   },
 ];
@@ -426,8 +426,8 @@ export function HomeLanding() {
                   <p className={styles.kicker}>Trading platform</p>
                   <h3>MetaTrader 5</h3>
                   <p>
-                    Orders, positions, and history travel through the MT5 gateway. MetaTrader 5 is
-                    not a broker.
+                    The robot trades on your MetaTrader 5 account. MetaTrader 5 is the trading
+                    platform; your broker holds the account.
                   </p>
                 </div>
               </article>
@@ -442,8 +442,8 @@ export function HomeLanding() {
                 <p className={styles.kicker}>Platform features</p>
                 <h2>What the platform actually does</h2>
                 <p className={styles.sectionLead}>
-                  Six parts of the same path: connect, analyze, check risk, execute only when
-                  authorized, watch the position, and read the broker’s history.
+                  An AI assistant that analyzes the market and your charts, and a gold trading robot
+                  that trades within the risk limits you set.
                 </p>
               </header>
             </Reveal>
@@ -534,15 +534,14 @@ export function HomeLanding() {
             <Reveal>
               <header className={styles.sectionHead}>
                 <p className={styles.kicker}>Strategy intelligence</p>
-                <h2>Profiles that exist in the registry</h2>
+                <h2>What the robot looks for</h2>
                 <p className={styles.sectionLead}>
-                  Five scalping profiles can be selected for an order, and only after the risk and
-                  execution gates. The other names are factors or advisory votes. Listing one here
-                  does not mean it is placing trades.
+                  The QuantForg Robot combines several proven ways of reading the gold market. It
+                  trades only when the setup is strong and your risk limits allow it.
                 </p>
               </header>
             </Reveal>
-            <p className={styles.groupLabel}>Execution profiles</p>
+            <p className={styles.groupLabel}>Trading setups</p>
             <ul className={`${styles.strategyGrid} ${styles.execGrid}`}>
               {EXECUTION_PROFILES.map((item) => (
                 <li key={item.title} className={styles.strategyCard}>
@@ -553,7 +552,7 @@ export function HomeLanding() {
                 </li>
               ))}
             </ul>
-            <p className={styles.groupLabel}>Factors and advisory votes</p>
+            <p className={styles.groupLabel}>What it reads in the market</p>
             <ul className={styles.strategyGrid}>
               {ANALYSIS_FACTORS.map((item) => (
                 <li key={item.title} className={styles.strategyCard}>
@@ -652,8 +651,8 @@ export function HomeLanding() {
                 <p className={styles.kicker}>Pricing</p>
                 <h2>Software access, monthly</h2>
                 <p className={styles.sectionLead}>
-                  Starter, Professional, and Premium are the production plans. A plan grants software
-                  access. It does not grant trading profits, and it does not bypass risk checks.
+                  Choose Starter, Professional or Premium. Every plan includes QuantForg AI and the
+                  robot. A plan is software access: it does not guarantee profits or bypass your risk limits.
                 </p>
               </header>
             </Reveal>

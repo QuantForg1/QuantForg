@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     template: "%s · QuantForg",
   },
   description:
-    "QuantForg connects traders to MetaTrader 5 broker accounts with market intelligence, strategy evaluation, risk management, and automated execution under approved settings. Software access only — trading outcomes are not guaranteed.",
+    "QuantForg is an AI gold trading robot for MetaTrader 5, with QuantForg AI: an assistant that explains the live gold market, key levels and news, and analyzes your chart screenshots. Risk limits on every trade; your capital stays at your broker. Trading outcomes are not guaranteed.",
   applicationName: "QuantForg",
   authors: [{ name: "QuantForg" }],
   creator: "QuantForg",
@@ -91,7 +91,7 @@ export const metadata: Metadata = {
     siteName: "QuantForg",
     title: "QuantForg — Institutional AI Trading Platform",
     description:
-      "Connect your MT5 broker, analyze markets, manage risk, and execute under approved settings. No profit guarantees.",
+      "AI gold trading robot for MT5 plus QuantForg AI, an assistant that analyzes the live market and your chart screenshots. Risk limits on every trade. No profit guarantees.",
     images: [
       {
         url: "/og-image.png",
@@ -105,7 +105,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "QuantForg — Institutional AI Trading Platform",
     description:
-      "Institutional AI trading software for MT5 workflows, market intelligence, and risk-aware execution. Software access only.",
+      "AI gold trading robot for MT5 and QuantForg AI market assistant with chart screenshot analysis. Software access only.",
     images: ["/og-image.png"],
   },
   robots: {

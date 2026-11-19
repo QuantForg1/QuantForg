@@ -497,7 +497,7 @@ export function IntelligenceHub() {
                                 : ""}
                             </span>
                           ) : null}
-                          {message.meta?.model ? <span>QuantForg AI · {message.meta.model}</span> : null}
+                          <span>QuantForg AI</span>
                           {!message.streaming && message.content ? (
                             <button
                               type="button"

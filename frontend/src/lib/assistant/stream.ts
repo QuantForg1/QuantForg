@@ -9,7 +9,7 @@ export type AssistantMeta = {
   source?: string;
   session?: string;
   bias?: string;
-  model?: string;
+  assistant?: string;
 };
 
 export type AssistantStage = {
@@ -43,7 +43,7 @@ export async function streamAssistant(
   body: { message: string; history: { role: "user" | "assistant"; content: string }[]; images: string[] },
   handlers: StreamHandlers,
   signal?: AbortSignal,
-): Promise<{ model: string }> {
+): Promise<void> {
   const token = getAccessToken();
   if (!token) throw new AssistantStreamError("Sign in required", "auth", true, 401);
   // Stream straight from the API origin when possible: a CDN rewrite proxy
@@ -92,7 +92,6 @@ export async function streamAssistant(
   const decoder = new TextDecoder();
   let buffer = "";
   let gotText = false;
-  let model = "";
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -105,7 +104,6 @@ export async function streamAssistant(
       if (!parsed) continue;
       const { event, data } = parsed;
       if (event === "meta") {
-        model = String(data.model ?? "");
         handlers.onMeta(data as AssistantMeta);
       } else if (event === "stage") {
         handlers.onStage?.(data as unknown as AssistantStage);
@@ -125,10 +123,10 @@ export async function streamAssistant(
           !gotText,
         );
       } else if (event === "done") {
-        return { model: String(data.model ?? model) };
+        return;
       }
     }
   }
   if (!gotText) throw new AssistantStreamError("The answer was interrupted.", "interrupted", true);
-  return { model };
+
 }

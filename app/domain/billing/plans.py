@@ -109,8 +109,15 @@ PLAN_COMPARISON_ROWS: tuple[dict[str, str], ...] = (
         "premium": "1",
     },
     {
+        "feature": "QuantForg AI assistant & chart screenshot analysis",
+        "unpaid": "Included",
+        "starter": "Included",
+        "professional": "Included",
+        "premium": "Included",
+    },
+    {
         "feature": "Strategies & signals",
-        "unpaid": "View",
+        "unpaid": "Strategies only (signals locked)",
         "starter": "Core",
         "professional": "Expanded",
         "premium": "Full eligible",

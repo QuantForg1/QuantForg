@@ -773,6 +773,28 @@ INSTRUCTIONS = "\n".join(
         "English, French, Swahili, ...). Keep trading terms (support,",
         "resistance, stop loss, RSI) in English when that is clearer.",
         "",
+        "IDENTITY",
+        "- You are QuantForg AI, built by QuantForg. Never name or hint at the",
+        "  underlying model, vendor or provider (no GPT, OpenAI, ChatGPT,",
+        "  Claude, Gemini, version numbers). If asked what model or AI you are,",
+        "  say you are QuantForg AI, QuantForg's own trading assistant.",
+        "",
+        "KNOWLEDGE",
+        "- Answer any question a trader may have: gold and macro drivers,",
+        "  technical analysis, risk and money management, trading psychology,",
+        "  MetaTrader 5, brokers, and how QuantForg works (robot, broker",
+        "  connection, subscription plans, risk settings, signals).",
+        "- For recent news, events or fundamentals that are not in LIVE_DATA,",
+        "  use web search when it is available and name the source and date.",
+        "  Never use web search results for the current gold price, levels or",
+        "  indicators: those come only from LIVE_DATA.",
+        "",
+        "SCREENSHOT ACCURACY",
+        "- Read numbers only from what is legible on the chart (price axis,",
+        "  labels, indicator panels). If a value is not readable, say so;",
+        "  never estimate it as if it were read.",
+        "- State the timeframe and symbol only if visible on the image.",
+        "",
         "Trade ideas end with one short line: not financial advice.",
         "Never ask for or repeat passwords, keys or broker logins.",
     ]
@@ -924,7 +946,7 @@ async def chat(
         )
     return {
         "answer": text,
-        "model": getattr(client, "model", ""),
+        "assistant": "QuantForg AI",
         "snapshot_at": snapshot.get("generated_at_utc"),
         "live_quote": snapshot.get("quote"),
         "meta": snapshot_meta(snapshot),
@@ -1063,9 +1085,7 @@ async def stream_chat(
     yield _sse(
         "stage", {"key": "write", "label": "Thinking it through", "status": "active"}
     )
-    yield _sse(
-        "meta", {**snapshot_meta(snapshot), "model": getattr(client, "model", "")}
-    )
+    yield _sse("meta", {**snapshot_meta(snapshot), "assistant": "QuantForg AI"})
     if client is None:
         yield _sse(
             "error",
@@ -1090,6 +1110,7 @@ async def stream_chat(
             max_output_tokens=4000,
             reasoning_effort=reasoning_for(images),
             reasoning_summary=True,
+            web_search=True,
             timeout_seconds=120.0 if images else 90.0,
         ):
             kind = ev.get("type") if isinstance(ev, dict) else "text"
@@ -1099,6 +1120,16 @@ async def stream_chat(
             if kind == "thinking":
                 thinking_chars += len(text)
                 yield _sse("thinking", {"text": text})
+                continue
+            if kind == "search":
+                yield _sse(
+                    "stage",
+                    {
+                        "key": "web",
+                        "label": "Searching the web for recent news",
+                        "status": "active" if text == "searching" else "done",
+                    },
+                )
                 continue
             if first_ms is None:
                 first_ms = round((time.monotonic() - started) * 1000)
@@ -1145,4 +1176,4 @@ async def stream_chat(
             },
         )
         return
-    yield _sse("done", {"model": getattr(client, "model", ""), "ms": total_ms})
+    yield _sse("done", {"assistant": "QuantForg AI", "ms": total_ms})

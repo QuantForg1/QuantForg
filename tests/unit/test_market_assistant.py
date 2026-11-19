@@ -669,3 +669,91 @@ def test_stream_chat_fetches_snapshot_inside_stream_and_reports_chart_stage():
     )
     assert any('"key": "chart"' in o for o in out)
     assert out[-1].startswith("event: done")
+
+
+def test_stream_never_exposes_the_underlying_model():
+    async def fake_stream(client, **kw):
+        assert kw["web_search"] is True
+        yield {"type": "text", "text": "ok"}
+
+    out = _collect(
+        ma.stream_chat(
+            client=SimpleNamespace(model="gpt-secret-model"),
+            history=[],
+            message="hi",
+            images=[],
+            snapshot={"generated_at_utc": "t"},
+            streamer=fake_stream,
+        )
+    )
+    joined = "".join(out)
+    assert "gpt-secret-model" not in joined
+    assert '"assistant": "QuantForg AI"' in joined
+
+
+def test_chat_response_never_exposes_the_underlying_model():
+    out = _chat(_Client())
+    assert "model" not in out
+    assert out["assistant"] == "QuantForg AI"
+    assert "test-model" not in str(out)
+
+
+def test_instructions_forbid_naming_the_vendor():
+    text = ma.INSTRUCTIONS
+    assert "You are QuantForg AI" in text
+    assert "Never name or hint at the" in text
+
+
+def test_web_search_requested_first_and_dropped_when_rejected():
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import stream_output_text
+
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _j
+
+        body = _j.loads(request.content)
+        sent.append(("tools" in body, body.get("reasoning")))
+        if "tools" in body:
+            return httpx.Response(400, json={"error": {"message": "tools unsupported"}})
+        return httpx.Response(
+            200,
+            content=_sse_body({"type": "response.output_text.delta", "delta": "ok"}),
+        )
+
+    out = _collect(
+        stream_output_text(
+            _stream_client(handler),
+            input_items="hi",
+            instructions="x",
+            reasoning_effort="low",
+            reasoning_summary=True,
+            web_search=True,
+        )
+    )
+    assert out == [{"type": "text", "text": "ok"}]
+    assert sent[0] == (True, {"effort": "low", "summary": "auto"})
+    assert sent[1] == (False, {"effort": "low", "summary": "auto"})
+
+
+def test_web_search_progress_becomes_a_stage():
+    async def fake_stream(client, **kw):
+        yield {"type": "search", "text": "searching"}
+        yield {"type": "search", "text": "done"}
+        yield {"type": "text", "text": "Answer"}
+
+    out = _collect(
+        ma.stream_chat(
+            client=SimpleNamespace(model="m"),
+            history=[],
+            message="news?",
+            images=[],
+            snapshot={},
+            streamer=fake_stream,
+        )
+    )
+    web = [o for o in out if '"key": "web"' in o]
+    assert len(web) == 2
+    assert '"status": "active"' in web[0] and '"status": "done"' in web[1]

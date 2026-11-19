@@ -2,7 +2,7 @@
  * Minimal, safe markdown → block model for assistant replies.
  * No HTML is ever injected: the renderer builds React nodes from these blocks.
  */
-export type Inline = { text: string; bold: boolean };
+export type Inline = { text: string; bold: boolean; href?: string };
 export type ListItem = { inline: Inline[]; children: Inline[][] };
 export type Block =
   | { kind: "heading"; level: 1 | 2 | 3; inline: Inline[] }
@@ -13,12 +13,17 @@ export type Block =
 
 export function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
-  const re = /\*\*([^*]+)\*\*|__([^_]+)__/g;
+  // **bold**, __bold__, [label](https://url) — only http(s) links are kept.
+  const re = /\*\*([^*]+)\*\*|__([^_]+)__|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push({ text: text.slice(last, m.index), bold: false });
-    out.push({ text: m[1] ?? m[2] ?? "", bold: true });
+    if (m[3] !== undefined) {
+      out.push({ text: m[3], bold: false, href: m[4] });
+    } else {
+      out.push({ text: m[1] ?? m[2] ?? "", bold: true });
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push({ text: text.slice(last), bold: false });

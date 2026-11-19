@@ -23,6 +23,9 @@ from core.config.settings import get_settings
 
 router = APIRouter(tags=["Health"])
 
+# Provider/model and internal worker details are operator-only: never public.
+_OPERATOR_ONLY = [Depends(require_roles(UserRole.OWNER, UserRole.ADMIN))]
+
 
 def _deployed_commit_sha() -> str:
     for key in ("RAILWAY_GIT_COMMIT_SHA", "GITHUB_SHA", "VERCEL_GIT_COMMIT_SHA"):
@@ -160,6 +163,7 @@ async def liveness() -> dict[str, str]:
         "exposure). Advisory only — never authorizes trades. Gemini is not used."
     ),
     status_code=status.HTTP_200_OK,
+    dependencies=_OPERATOR_ONLY,
 )
 async def openai_provider_health() -> dict[str, object]:
     from app.application.services.openai_advisor_service import (
@@ -193,6 +197,7 @@ async def openai_provider_health() -> dict[str, object]:
         "Never enables trading or sends orders."
     ),
     status_code=status.HTTP_200_OK,
+    dependencies=_OPERATOR_ONLY,
 )
 async def execution_worker_health() -> dict[str, object]:
     from app.application.services.execution_worker_status import (
