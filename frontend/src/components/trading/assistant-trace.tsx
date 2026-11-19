@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Loader2 } from "lucide-react";
 import { AssistantMarkdown } from "@/components/trading/assistant-message";
-import { revealStep } from "@/lib/assistant/stages";
+import { revealRate, revealTo } from "@/lib/assistant/stages";
 import type { AssistantStage } from "@/lib/assistant/stream";
 import { cn } from "@/lib/utils";
 
@@ -119,7 +119,7 @@ export function AnalysisTrace({
   );
 }
 
-/** Reveal `text` progressively at a steady pace; catches up when behind. */
+/** Reveal `text` at a steady, readable pace, word by word. */
 function useTypewriter(text: string, animate: boolean): string {
   const [shown, setShown] = useState(0);
   const target = useRef(text);
@@ -129,10 +129,21 @@ function useTypewriter(text: string, animate: boolean): string {
   useEffect(() => {
     if (!animate) return;
     let raf = 0;
-    const tick = () => {
+    let last = performance.now();
+    let budget = 0;
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
       setShown((n) => {
-        const remaining = target.current.length - n;
-        return remaining > 0 ? n + revealStep(remaining) : n;
+        const full = target.current;
+        const remaining = full.length - n;
+        if (remaining <= 0) return n;
+        budget += revealRate(remaining) * dt;
+        if (budget < 1) return n;
+        const next = revealTo(full, n, budget);
+        budget -= next - n;
+        if (budget < 0) budget = 0;
+        return next;
       });
       raf = window.requestAnimationFrame(tick);
     };

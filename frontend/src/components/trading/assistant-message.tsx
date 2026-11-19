@@ -7,7 +7,17 @@ function InlineText({ parts }: { parts: Inline[] }) {
   return (
     <>
       {parts.map((p, i) =>
-        p.bold ? (
+        p.href ? (
+          <a
+            key={i}
+            href={p.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--accent)] underline underline-offset-2 hover:brightness-125"
+          >
+            {p.text}
+          </a>
+        ) : p.bold ? (
           <strong key={i} className="font-semibold text-[var(--fg)]">
             {p.text}
           </strong>

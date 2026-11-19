@@ -32,4 +32,11 @@ if (nested[0].kind === "bullets") {
 const h3 = parseMarkdown("### Key levels");
 assert.equal(h3[0].kind === "heading" && h3[0].level, 3);
 
+// links: http(s) only, never javascript:
+const link = parseInline("See [Reuters](https://www.reuters.com/x) now");
+assert.equal(link[1].href, "https://www.reuters.com/x");
+assert.equal(link[1].text, "Reuters");
+const bad = parseInline("[x](javascript:alert(1))");
+assert.ok(bad.every((p) => !p.href));
+
 console.log("assistant markdown: ok");
