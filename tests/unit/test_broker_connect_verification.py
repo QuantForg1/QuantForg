@@ -138,3 +138,23 @@ def test_trial_start_is_discontinued() -> None:
             svc.start_trial(user_id=uuid4(), email="a@b.c", email_verified=True)
         )
     assert "no longer offered" in str(err.value)
+
+
+def test_removed_account_is_not_active() -> None:
+    from app.application.services.customer_account_assignment import (
+        account_still_active,
+    )
+
+    assert account_still_active(uuid4(), fetch=lambda *_a: []) is False
+    assert (
+        account_still_active(uuid4(), fetch=lambda *_a: [{"status": "revoked"}])
+        is False
+    )
+    assert (
+        account_still_active(uuid4(), fetch=lambda *_a: [{"status": "active"}]) is True
+    )
+
+    def boom(*_a: Any) -> list[dict[str, Any]]:
+        raise RuntimeError("db down")
+
+    assert account_still_active(uuid4(), fetch=boom) is True
