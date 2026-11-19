@@ -12,7 +12,7 @@ export const pricingBtnOutline = `${btn} h-10 px-4 border border-[var(--border)]
 export function PricingHeader({
   active = "pricing",
 }: {
-  active?: "home" | "pricing" | "purchase" | "contact" | "live" | "billing";
+  active?: "home" | "pricing" | "purchase" | "contact" | "live" | "billing" | "learn";
 }) {
   return <SiteHeader active={active} />;
 }

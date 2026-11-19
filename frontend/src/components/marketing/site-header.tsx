@@ -14,13 +14,14 @@ const LINKS = [
   { href: "/gold-trading-robot", label: "Gold Robot" },
   { href: "/ai-trading-assistant", label: "QuantForg AI" },
   { href: "/strategies", label: "Strategies" },
+  { href: "/learn", label: "Learn" },
   { href: "/pricing", label: "Pricing" },
 ] as const;
 
 export function SiteHeader({
   active,
 }: {
-  active?: "home" | "pricing" | "purchase" | "contact" | "live" | "billing";
+  active?: "home" | "pricing" | "purchase" | "contact" | "live" | "billing" | "learn";
 }) {
   const [open, setOpen] = useState(false);
   const auth = useAuthOptional();
@@ -29,16 +30,17 @@ export function SiteHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg-elevated)_55%,transparent)] backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <Link href="/" className="min-w-0" onClick={() => setOpen(false)}>
           <BrandLogo size={34} priority caption={false} />
         </Link>
-        <nav className="hidden items-center gap-5 text-sm text-[var(--fg-muted)] lg:flex" aria-label="Marketing">
+        <nav className="hidden min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--fg-muted)] lg:flex" aria-label="Marketing">
           {LINKS.map((item) => {
             const current =
               (item.href === "/" && active === "home") ||
               (item.href === "/pricing" && active === "pricing") ||
-              (item.href === "/live" && active === "live");
+              (item.href === "/live" && active === "live") ||
+              (item.href === "/learn" && active === "learn");
             return (
               <Link
                 key={item.href}

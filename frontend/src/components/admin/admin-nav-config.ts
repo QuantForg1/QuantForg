@@ -7,6 +7,7 @@ import {
   FileSearch,
   Headphones,
   LayoutDashboard,
+  LineChart,
   Radio,
   ScrollText,
   Settings2,
@@ -48,6 +49,17 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
         href: "/admin",
         hint: "Platform KPIs, health, recent admin activity",
         icon: LayoutDashboard,
+      },
+    ],
+  },
+  {
+    title: "Growth",
+    items: [
+      {
+        label: "Growth Intelligence",
+        href: "/admin/growth",
+        hint: "Read-only sources. Missing data stays unavailable",
+        icon: LineChart,
       },
     ],
   },

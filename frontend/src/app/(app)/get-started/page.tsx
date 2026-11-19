@@ -29,6 +29,12 @@ const STEPS = [
     checklist: "markets" as const,
   },
   {
+    title: "Read what a decision means",
+    detail:
+      "A BUY or SELL on the decision report is a recorded intention. ORDER_SENT is not a fill. NOT_REACHED is not a passed risk check. Fields the history row did not store stay unavailable.",
+    href: "/learn/decision-lifecycle",
+  },
+  {
     title: "View research signals",
     detail:
       "Signals are research intelligence. They stay available without MT5. They are not trade authorization.",

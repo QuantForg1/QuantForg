@@ -30,10 +30,7 @@ const COLUMNS = [
       { href: "/live", label: "Live Gold Chart" },
       { href: "/contact", label: "Contact Sales" },
       { href: "mailto:support@quantforg.com", label: "Support" },
-      {
-        href: "mailto:support@quantforg.com?subject=QuantForg%20Documentation",
-        label: "Documentation",
-      },
+      { href: "/learn", label: "Product guides" },
     ],
   },
   {

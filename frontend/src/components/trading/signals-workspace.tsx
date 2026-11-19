@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, RefreshCw } from "lucide-react";
 import { SignalsReferenceDesk } from "@/components/trading/signals-reference-desk";
@@ -147,6 +148,12 @@ export function SignalsWorkspace() {
             </button>
             Last Update: {clockLabel(updatedAt)}
           </p>
+          <Link
+            href="/decision-evidence"
+            className="inline-flex h-11 items-center text-sm font-medium text-[var(--accent)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+          >
+            Decision evidence
+          </Link>
           <div className="inline-flex items-center gap-2 text-sm text-[var(--fg)]">
             <span id="signal-auto-refresh-label">Auto Refresh</span>
             <button

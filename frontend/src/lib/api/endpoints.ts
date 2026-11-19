@@ -564,6 +564,20 @@ export const robotControlApi = {
 };
 
 /** SaaS billing — Crypto Payment LIVE invoices (server-side processor). */
+export const growthApi = {
+  status: () => apiFetch<Record<string, unknown>>("/growth/status"),
+  setEmergencyStop: (engaged: boolean) =>
+    apiFetch<Record<string, unknown>>("/growth/automation/emergency-stop", {
+      method: "POST",
+      body: { engaged },
+    }),
+  runJob: (jobId: string) =>
+    apiFetch<Record<string, unknown>>("/growth/automation/run", {
+      method: "POST",
+      body: { job_id: jobId },
+    }),
+};
+
 export const billingApi = {
   plans: () => apiFetch<Record<string, unknown>>("/billing/plans", { auth: false }),
   provider: () =>

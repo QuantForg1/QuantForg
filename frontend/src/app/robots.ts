@@ -13,6 +13,7 @@ export default function robots(): MetadataRoute.Robots {
           "/gold-trading-robot",
           "/ai-trading-assistant",
           "/strategies",
+          "/learn",
           "/pricing",
           "/live",
           "/contact",
@@ -24,6 +25,10 @@ export default function robots(): MetadataRoute.Robots {
         ],
         disallow: [
           "/dashboard",
+          "/decision-evidence",
+          "/signals",
+          "/intelligence",
+          "/ai-trading-intelligence",
           "/admin",
           "/settings",
           "/profile",
