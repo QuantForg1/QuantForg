@@ -68,10 +68,14 @@ class OpenAIResponsesClient:
     async def create_response(
         self,
         *,
-        input_text: str,
+        input_text: str | list[dict[str, Any]],
         instructions: str,
         text_format: dict[str, Any] | None = None,
+        timeout_seconds: float | None = None,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
+        """``input_text`` may be a plain string or Responses input items
+        (role/content lists with ``input_text`` / ``input_image`` parts)."""
         if not self._api_key:
             raise OpenAIProviderError(
                 "missing_api_key",
@@ -86,6 +90,8 @@ class OpenAIResponsesClient:
         }
         if text_format is not None:
             payload["text"] = {"format": text_format}
+        if max_output_tokens is not None:
+            payload["max_output_tokens"] = int(max_output_tokens)
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",
@@ -96,7 +102,7 @@ class OpenAIResponsesClient:
         attempts = self.max_retries + 1
 
         async with httpx.AsyncClient(
-            timeout=self.timeout_seconds,
+            timeout=max(1.0, float(timeout_seconds or self.timeout_seconds)),
             transport=self._transport,
         ) as client:
             for attempt in range(attempts):

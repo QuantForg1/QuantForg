@@ -3754,6 +3754,16 @@ export const intelligenceApi = {
     apiFetch<unknown[]>(`/intelligence/events?limit=${limit}`),
   providers: () => apiFetch<unknown[]>(`/intelligence/providers`),
   status: () => apiFetch<Record<string, unknown>>(`/intelligence/status`),
+  assistantChat: (body: {
+    message: string;
+    history: { role: "user" | "assistant"; content: string }[];
+    images: string[];
+  }) =>
+    apiFetch<Record<string, unknown>>("/intelligence/assistant/chat", {
+      method: "POST",
+      body,
+      timeoutMs: 120_000,
+    }),
 };
 
 export const platformApi = {

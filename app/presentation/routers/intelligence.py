@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+import asyncio
+from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
+from app.application.services.mt5_market_data import MT5MarketDataService
+from app.application.services.public_market_feed import PublicMarketFeedService
 from app.presentation.dependencies.auth import CurrentUser
 from app.presentation.dependencies.intelligence import (
     MarketIntelSvc,
     NewsIntelSvc,
     ProviderRegistrySvc,
 )
+from app.presentation.dependencies.mt5 import get_mt5_market_data
 from app.presentation.schemas.intelligence import (
     AnalysisResponse,
     EconomicEventResponse,
@@ -193,3 +198,92 @@ async def intelligence_status(
     """Aggregate provider layer status (failover / cache / rate-limit posture)."""
     _ = user
     return IntelligenceStatusResponse(**cast("dict[str, Any]", registry.status()))
+
+
+# --- QuantForg AI Assistant (grounded chat + chart screenshots) -------------
+
+
+class _AssistantTurn(BaseModel):
+    role: str = Field(default="user", max_length=16)
+    content: str = Field(default="", max_length=8000)
+
+
+class AssistantChatBody(BaseModel):
+    message: str = Field(default="", max_length=4000)
+    history: list[_AssistantTurn] = Field(default_factory=list, max_length=40)
+    images: list[str] = Field(default_factory=list, max_length=3)
+
+
+def _assistant_feed(
+    market_data: Annotated[MT5MarketDataService, Depends(get_mt5_market_data)],
+) -> PublicMarketFeedService:
+    return PublicMarketFeedService(market_data=market_data)
+
+
+def _risk_settings_for(user_id: Any) -> dict[str, Any] | None:
+    try:
+        from app.application.services.user_risk_preferences_service import (
+            get_user_risk_preferences,
+        )
+
+        prefs = get_user_risk_preferences(user_id)
+    except Exception:
+        return None
+    if not isinstance(prefs, dict):
+        return None
+    keep = (
+        "planned_risk_pct",
+        "daily_loss_pct",
+        "aggregate_open_risk_pct",
+        "max_lot",
+        "max_concurrent_positions",
+    )
+    nested = prefs.get("preferences")
+    src: dict[str, Any] = nested if isinstance(nested, dict) else prefs
+    out = {k: str(src.get(k)) for k in keep if src.get(k) is not None}
+    return out or None
+
+
+@router.post("/assistant/chat")
+async def assistant_chat(
+    body: AssistantChatBody,
+    user: CurrentUser,
+    news: NewsIntelSvc,
+    feed: Annotated[PublicMarketFeedService, Depends(_assistant_feed)],
+) -> dict[str, Any]:
+    """Grounded AI answer. Advisory only — never places or changes trades."""
+    from app.application.services import market_assistant as ma
+    from core.config.settings import get_settings
+
+    message = body.message.strip()
+    if not message and not body.images:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "empty_message",
+                "message": "Type a question or attach a chart.",
+            },
+        )
+    try:
+        ma.check_rate_limit(str(user.id))
+        images = [ma.validate_image(u) for u in body.images[: ma.MAX_IMAGES]]
+        history = ma.clean_history(
+            [ma.ChatTurn(t.role, t.content) for t in body.history]
+        )
+        snapshot = await ma.build_market_snapshot(
+            feed=feed,
+            news=news,
+            risk_settings=await asyncio.to_thread(_risk_settings_for, user.id),
+        )
+        return await ma.chat(
+            client=ma.assistant_client(get_settings()),
+            history=history,
+            message=message,
+            images=images,
+            snapshot=snapshot,
+        )
+    except ma.AssistantError as exc:
+        raise HTTPException(
+            status_code=exc.status,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
