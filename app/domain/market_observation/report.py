@@ -67,9 +67,7 @@ def build_market_observation(spec: ObservationInput) -> dict[str, Any]:
         momentum=momentum,
         volatility=volatility,
     )
-    suitability = _suitability(
-        symbol=symbol, fresh=fresh, news=news, regime=regime
-    )
+    suitability = _suitability(symbol=symbol, fresh=fresh, news=news, regime=regime)
     return {
         "schema_version": SCHEMA_VERSION,
         "places_orders": False,

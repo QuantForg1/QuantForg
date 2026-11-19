@@ -24,9 +24,7 @@ def explain_reasons(reasons: list[str] | tuple[str, ...] | None) -> dict[str, An
         if not rendered or rendered == original or rendered.lower() == original.lower():
             items.append(_item(original=original, sentence=None, status="unavailable"))
             continue
-        items.append(
-            _item(original=original, sentence=rendered, status="verified")
-        )
+        items.append(_item(original=original, sentence=rendered, status="verified"))
     return {
         "schema_version": SCHEMA_VERSION,
         "places_orders": False,
