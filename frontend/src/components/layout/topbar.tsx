@@ -138,6 +138,7 @@ export function Topbar({
 
   return (
     <header
+      data-desk-header={pathname === "/dashboard" ? "overview" : undefined}
       className={cn(
         "z-30 flex min-h-14 min-w-0 items-center gap-2 overflow-x-clip border-b border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 sm:gap-3 sm:px-4 lg:py-0",
         compact ? "lg:h-12" : "lg:h-16",

@@ -4,11 +4,10 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Copy, Play, Trash2, Sparkles } from "lucide-react";
+import { Activity, BarChart2, Binary, CandlestickChart, Layers, Shield, Sparkles, TrendingUp, Waves } from "lucide-react";
 import { strategyCardFromRecord } from "@/components/strategies/strategy-card";
-import { StrategyConfigPanel } from "@/components/strategies/strategy-config-panel";
-import { StrategySidePanels } from "@/components/strategies/strategy-side-panels";
-import { serializeParams } from "@/components/strategies/strategy-utils";
+import { ENGINE_CATALOG } from "@/components/strategies/engine-catalog";
+import { StrategyBriefPanel } from "@/components/strategies/strategy-brief-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,9 +19,7 @@ import { strategyApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 import {
-  AUTONOMOUS_QUICK_SYMBOLS,
   displayTradingSymbol,
-  tradingInstrumentDescription,
   TRADING_SYMBOL,
 } from "@/lib/trading/gold-only";
 
@@ -54,44 +51,17 @@ const defaultRules: RuleFlags = {
   has_fvgs: true,
 };
 
-const defaultCustomRules = JSON.stringify(
-  {
-    rules: [
-      {
-        when: { indicator: "rsi", op: "<=", value: 30 },
-        action: "BUY",
-        reason: "Custom RSI oversold rule",
-      },
-      {
-        when: { indicator: "rsi", op: ">=", value: 70 },
-        action: "SELL",
-        reason: "Custom RSI overbought rule",
-      },
-    ],
-    rsi_period: 14,
-    sma_period: 20,
-  },
-  null,
-  2,
-);
-
 export default function StrategyPage() {
   const qc = useQueryClient();
-  const [mode, setMode] = useState<Mode>("engine");
+  const [mode] = useState<Mode>("engine");
   const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [timeframe, setTimeframe] = useState("H1");
   const [structureBias, setStructureBias] = useState("up");
   const [rules, setRules] = useState<RuleFlags>(defaultRules);
   const [lastResult, setLastResult] = useState<Record<string, unknown> | null>(null);
   const [strategyKey, setStrategyKey] = useState("rsi");
-  const [paramsJson, setParamsJson] = useState("{}");
-  const [customRulesJson, setCustomRulesJson] = useState(defaultCustomRules);
-  const [maxTrades, setMaxTrades] = useState("5");
-  const [dailyLoss, setDailyLoss] = useState("3");
-  const [maxExposure] = useState("20");
-  const [configTab, setConfigTab] = useState<
-    "parameters" | "logic" | "entry" | "filters" | "risk"
-  >("parameters");
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogCategory, setCatalogCategory] = useState("all");
 
   const signalsQ = useQuery({
     queryKey: ["strategy-signals"],
@@ -102,12 +72,6 @@ export default function StrategyPage() {
   const catalogQ = useQuery({
     queryKey: ["strategy-catalog"],
     queryFn: strategyApi.catalog,
-    retry: false,
-  });
-
-  const portfolioQ = useQuery({
-    queryKey: ["strategy-portfolio"],
-    queryFn: strategyApi.portfolio,
     retry: false,
   });
 
@@ -122,30 +86,46 @@ export default function StrategyPage() {
       toast.error(e instanceof ApiError ? e.message : "Evaluate failed"),
   });
 
-  const engineRun = useMutation({
-    mutationFn: strategyApi.engineRun,
-    onSuccess: (data) => {
-      setLastResult(asRecord(data));
-      const sig = asRecord(asRecord(data).signal);
-      toast.success(`Signal: ${str(sig.action)}`);
-    },
-    onError: (e) =>
-      toast.error(e instanceof ApiError ? e.message : "Engine run failed"),
-  });
-
-  const engineValidate = useMutation({
-    mutationFn: strategyApi.engineValidate,
-    onSuccess: (data) => {
-      const r = asRecord(data);
-      if (r.valid) toast.success("Params valid");
-      else toast.error(`Invalid: ${asList(r.errors).join(", ")}`);
-    },
-    onError: (e) =>
-      toast.error(e instanceof ApiError ? e.message : "Validation failed"),
-  });
-
   const signals = asList(signalsQ.data).map(asRecord);
-  const catalog = asList(asRecord(catalogQ.data).items).map(asRecord);
+  const serverCatalog = useMemo(
+    () => asList(asRecord(catalogQ.data).items).map(asRecord),
+    [catalogQ.data],
+  );
+  const serverKeys = useMemo(
+    () => new Set(serverCatalog.map((item) => str(item.key)).filter(Boolean)),
+    [serverCatalog],
+  );
+  const catalog = useMemo(() => {
+    const byKey = new Map<string, Record<string, unknown>>();
+    for (const item of ENGINE_CATALOG) {
+      byKey.set(item.key, { ...item, on_server: false });
+    }
+    for (const item of serverCatalog) {
+      const key = str(item.key);
+      if (!key) continue;
+      byKey.set(key, { ...item, on_server: true });
+    }
+    return [...byKey.values()].sort((a, b) => str(a.name).localeCompare(str(b.name)));
+  }, [serverCatalog]);
+  const categories = useMemo(() => {
+    const names = new Set<string>();
+    for (const item of catalog) {
+      const category = str(item.category);
+      if (category) names.add(category);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [catalog]);
+  const visibleCatalog = useMemo(() => {
+    const query = catalogQuery.trim().toLowerCase();
+    return catalog.filter((item) => {
+      if (catalogCategory !== "all" && str(item.category) !== catalogCategory) return false;
+      if (!query) return true;
+      return [str(item.name), str(item.key), str(item.category), str(item.description)]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [catalog, catalogCategory, catalogQuery]);
 
   const templates = useMemo(
     () => [
@@ -181,18 +161,6 @@ export default function StrategyPage() {
 
   const selectedPlugin = catalog.find((c) => str(c.key) === strategyKey);
 
-  const buildParams = (): Record<string, unknown> => {
-    if (strategyKey === "custom_rules") {
-      return JSON.parse(customRulesJson) as Record<string, unknown>;
-    }
-    const raw = paramsJson.trim() || "{}";
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (selectedPlugin && Object.keys(parsed).length === 0) {
-      return asRecord(selectedPlugin.default_params);
-    }
-    return parsed;
-  };
-
   const runIct = () => {
     evaluate.mutate({
       request_id: `ui-${Date.now()}`,
@@ -205,161 +173,180 @@ export default function StrategyPage() {
     });
   };
 
-  const runEngine = () => {
-    let params: Record<string, unknown>;
-    try {
-      params = buildParams();
-    } catch {
-      toast.error("Invalid JSON in parameters / rules");
-      return;
-    }
-    engineRun.mutate({
-      strategy_key: strategyKey,
-      symbol,
-      timeframe,
-      bars: [],
-      use_mt5_bars: true,
-      mt5_bar_count: 200,
-      params,
-      session: "unknown",
-      market_state: "unknown",
-      limits: {
-        max_risk_pct: 1,
-        max_trades: Number(maxTrades) || 5,
-        daily_loss_pct: Number(dailyLoss) || 3,
-        max_exposure_pct: Number(maxExposure) || 20,
-        max_correlation: 0.8,
-      },
-    });
-  };
-
-  const validateEngine = () => {
-    let params: Record<string, unknown>;
-    try {
-      params = buildParams();
-    } catch {
-      toast.error("Invalid JSON in parameters / rules");
-      return;
-    }
-    engineValidate.mutate({ strategy_key: strategyKey, params });
-  };
-
   const toggle = (key: keyof RuleFlags) =>
     setRules((r) => ({ ...r, [key]: !r[key] }));
 
-  const onSelectStrategy = (key: string, defaultParams: Record<string, unknown>) => {
+  const onSelectStrategy = (key: string) => {
     setStrategyKey(key);
-    setParamsJson(serializeParams(defaultParams));
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      document.getElementById("strategy-detail")?.scrollIntoView({
+        block: "start",
+        behavior: reduce ? "auto" : "smooth",
+      });
+    }
   };
 
   return (
-    <div>
-      <PageHeader
-        eyebrow="Research"
-        title="Trading Strategies"
-        description={`Institutional modules for ${displayTradingSymbol(symbol)} (${tradingInstrumentDescription(symbol)}). Parameters stay advisory until Risk Center and OMS gates pass — Evaluate never bypasses live safeguards.`}
-        actions={
-          <>
-            <Button
-              size="sm"
-              onClick={mode === "engine" ? runEngine : runIct}
-              disabled={evaluate.isPending || engineRun.isPending}
-            >
-              <Play className="h-3.5 w-3.5" /> Evaluate
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                void (async () => {
-                  try {
-                    await navigator.clipboard.writeText(
-                      JSON.stringify(
-                        mode === "engine"
-                          ? { strategyKey, symbol, timeframe, paramsJson, customRulesJson }
-                          : { symbol, timeframe, structureBias, rules },
-                        null,
-                        2,
-                      ),
-                    );
-                    toast.success("Strategy snapshot copied");
-                  } catch {
-                    toast.error("Clipboard unavailable");
-                  }
-                })();
-              }}
-            >
-              <Copy className="h-3.5 w-3.5" /> Duplicate
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setRules(defaultRules);
-                setLastResult(null);
-                setParamsJson("{}");
-                setCustomRulesJson(defaultCustomRules);
-                toast.message("Builder reset");
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Delete
-            </Button>
-          </>
-        }
-      />
-
-      <div
-        className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-3 py-2"
-        role="toolbar"
-        aria-label="Strategy desk mode"
-      >
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-subtle)]">
-          Desk
+    <div className="qf-overview mx-auto flex w-full min-w-0 max-w-[90rem] flex-col gap-8">
+      <div className="flex shrink-0 items-start gap-3">
+        <span className="qf-overview-icon mt-1 hidden sm:flex" aria-hidden>
+          <Layers className="h-5 w-5" />
         </span>
-        <Button
-          size="sm"
-          variant={mode === "engine" ? "default" : "secondary"}
-          onClick={() => setMode("engine")}
-        >
-          TA Engine
-        </Button>
-        <Button
-          size="sm"
-          variant={mode === "ict" ? "default" : "secondary"}
-          onClick={() => setMode("ict")}
-        >
-          ICT Runtime
-        </Button>
-        <span className="mx-1 hidden h-5 w-px bg-[var(--border)] sm:inline-block" aria-hidden />
-        <Label htmlFor="strategy-asset" className="sr-only">
-          Asset
-        </Label>
-        <select
-          id="strategy-asset"
-          className="h-8 min-w-[11rem] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-sm text-[var(--fg)]"
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value)}
-        >
-          {AUTONOMOUS_QUICK_SYMBOLS.map((s) => (
-            <option key={s} value={s}>
-              {displayTradingSymbol(s)}
-            </option>
-          ))}
-        </select>
+        <div className="min-w-0 flex-1">
+      <PageHeader
+        title="Strategies"
+        description="The strategy catalogue. Select a card to read how it works."
+        actions={null}
+      />
+        </div>
       </div>
 
       {mode === "engine" ? (
-        <div className="space-y-4">
-          <section aria-labelledby="strategy-grid-heading">
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-              <h2 id="strategy-grid-heading" className="text-sm font-semibold">
-                Strategy Catalog
+        <div className="flex flex-col gap-8">
+          <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            {[
+              {
+                label: "Strategies",
+                hint: catalogQ.isLoading ? "Loading" : `${catalog.length} in the library`,
+                icon: Layers,
+              },
+              {
+                label: "Categories",
+                hint: catalogQ.isLoading ? "Loading" : `${categories.length} strategy types`,
+                icon: Sparkles,
+              },
+              {
+                label: "Showing",
+                hint: catalogQ.isLoading ? "Loading" : `${visibleCatalog.length} after filters`,
+                icon: Layers,
+              },
+              {
+                label: "Market",
+                hint: displayTradingSymbol(symbol),
+                icon: Sparkles,
+              },
+              {
+                label: "Signal",
+                hint: "Intention only",
+                icon: Shield,
+              },
+              {
+                label: "Risk gate",
+                hint: "Still applies",
+                icon: Shield,
+              },
+            ].map((tile) => {
+              const Icon = tile.icon;
+              return (
+              <li key={tile.label} className="qf-overview-card flex min-h-[6.5rem] flex-col justify-between p-4">
+                <span className="qf-overview-icon qf-overview-icon-sm" aria-hidden>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span>
+                  <span className="mt-3 block text-sm font-semibold text-[var(--fg)]">{tile.label}</span>
+                  <span className="mt-1 block truncate text-xs text-[var(--fg-muted)]">{tile.hint}</span>
+                </span>
+              </li>
+              );
+            })}
+          </ul>
+          {categories.length > 0 ? (
+            <div className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:hidden" role="toolbar" aria-label="Strategy categories">
+              <Button
+                type="button"
+                size="sm"
+                variant={catalogCategory === "all" ? "default" : "secondary"}
+                className="min-h-11 shrink-0"
+                onClick={() => setCatalogCategory("all")}
+              >
+                All strategies
+              </Button>
+              {categories.map((category) => (
+                <Button
+                  key={category}
+                  type="button"
+                  size="sm"
+                  variant={catalogCategory === category ? "default" : "secondary"}
+                  className="min-h-11 shrink-0 capitalize"
+                  onClick={() => setCatalogCategory(category)}
+                >
+                  {category.replaceAll("_", " ")}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <div className="grid items-start gap-6 lg:grid-cols-[12.5rem_minmax(16rem,1fr)_20rem]">
+          <nav
+            className="qf-overview-panel hidden min-h-0 flex-col gap-1 overflow-y-auto p-4 lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100dvh-6rem)]"
+            aria-label="Strategy categories"
+          >
+            <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+              Categories
+            </p>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                className={`flex min-h-11 items-center gap-2 rounded-[var(--radius-os)] px-3 text-left text-sm ${
+                  catalogCategory === "all"
+                    ? "bg-[var(--accent-soft)] text-[var(--fg)] ring-1 ring-[var(--accent)]"
+                    : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)]"
+                }`}
+                aria-pressed={catalogCategory === "all"}
+                onClick={() => setCatalogCategory("all")}
+              >
+                <Layers className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                All strategies
+              </button>
+              {categories.map((category) => {
+                const Icon =
+                  category === "trend"
+                    ? TrendingUp
+                    : category === "breakout"
+                      ? BarChart2
+                      : category === "momentum"
+                        ? Activity
+                        : category === "mean_reversion"
+                          ? Binary
+                          : category === "price_action"
+                            ? CandlestickChart
+                            : category === "volume"
+                              ? Waves
+                              : Sparkles;
+                return (
+                <button
+                  key={category}
+                  type="button"
+                  className={`flex min-h-11 items-center gap-2 rounded-[var(--radius-os)] px-3 text-left text-sm capitalize ${
+                    catalogCategory === category
+                      ? "bg-[var(--accent-soft)] text-[var(--fg)] ring-1 ring-[var(--accent)]"
+                      : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)]"
+                  }`}
+                  aria-pressed={catalogCategory === category}
+                  onClick={() => setCatalogCategory(category)}
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                  {category.replaceAll("_", " ")}
+                </button>
+                );
+              })}
+            </div>
+          </nav>
+          <section aria-labelledby="strategy-grid-heading" className="flex min-w-0 flex-col gap-4">
+            <div className="shrink-0">
+              <h2 id="strategy-grid-heading" className="sr-only">
+                Strategy catalogue
               </h2>
-              <p className="text-xs text-[var(--fg-muted)]">
-                {catalog.length > 0
-                  ? `${catalog.length} strategies loaded for ${symbol}`
-                  : "Strategies load from the live catalogue"}
-              </p>
+              <Label htmlFor="strategy-search" className="sr-only">
+                Search strategies
+              </Label>
+              <Input
+                id="strategy-search"
+                value={catalogQuery}
+                onChange={(event) => setCatalogQuery(event.target.value)}
+                placeholder="Search strategies"
+                className="h-11 w-full"
+              />
             </div>
             {catalogQ.isLoading ? (
               <DeskSkeleton rows={4} />
@@ -374,68 +361,31 @@ export default function StrategyPage() {
                 title="No strategies"
                 description="The strategy catalogue returned no rows."
               />
+            ) : visibleCatalog.length === 0 ? (
+              <DeskEmpty
+                icon={Sparkles}
+                title="No matching strategies"
+                description="Nothing in the catalogue matches this search or category."
+              />
             ) : (
-              <ul className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {catalog.map((c) =>
+              <ul className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2">
+                {visibleCatalog.map((c) =>
                   strategyCardFromRecord(c, strategyKey, onSelectStrategy),
                 )}
               </ul>
             )}
           </section>
-
-          <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-            <StrategyConfigPanel
-              title={
-                str(selectedPlugin?.name) ||
-                (strategyKey === "custom_rules" ? "Rule Tree" : "Parameters")
-              }
-              subtitle={
-                str(selectedPlugin?.description) ||
-                "Select a strategy. Price bars load from your broker when it is connected."
-              }
-              configTab={configTab}
-              onConfigTab={setConfigTab}
-              strategyKey={strategyKey}
-              paramsJson={paramsJson}
-              customRulesJson={customRulesJson}
-              onParamsJson={setParamsJson}
-              onCustomRulesJson={setCustomRulesJson}
-              defaultParams={
-                selectedPlugin ? asRecord(selectedPlugin.default_params) : undefined
-              }
-              symbol={symbol}
-              timeframe={timeframe}
-              maxTrades={maxTrades}
-              dailyLoss={dailyLoss}
-              maxExposure={maxExposure}
-              onReset={() => {
-                setParamsJson("{}");
-                setCustomRulesJson(defaultCustomRules);
-                toast.message("Parameters reset");
-              }}
-              onSave={runEngine}
-              savePending={engineRun.isPending}
-              onValidate={validateEngine}
-              onRun={runEngine}
-              runPending={engineRun.isPending}
-              lastResult={lastResult}
-            />
-            <StrategySidePanels
-              strategyKey={strategyKey}
-              category={str(selectedPlugin?.category)}
-              description={str(selectedPlugin?.description)}
-              symbol={symbol}
-              timeframe={timeframe}
-              maxTrades={maxTrades}
-              dailyLoss={dailyLoss}
-              maxExposure={maxExposure}
-              onSymbol={setSymbol}
-              onTimeframe={setTimeframe}
-              onMaxTrades={setMaxTrades}
-              onDailyLoss={setDailyLoss}
-              lastResult={lastResult}
-              portfolioData={portfolioQ.data}
-            />
+          <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)]">
+          <StrategyBriefPanel
+            strategyKey={strategyKey}
+            name={str(selectedPlugin?.name)}
+            category={str(selectedPlugin?.category)}
+            description={str(selectedPlugin?.description)}
+            market={displayTradingSymbol(symbol)}
+            params={selectedPlugin ? asRecord(selectedPlugin.default_params) : {}}
+            onServer={serverKeys.has(strategyKey)}
+          />
+          </div>
           </div>
         </div>
       ) : (

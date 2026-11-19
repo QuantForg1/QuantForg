@@ -450,9 +450,9 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/robot-control-center",
-    label: "Robot Control Center",
+    label: "Robot & Risk",
     icon: Bot,
-    hint: "Pause, resume, stop your robot per account",
+    hint: "Robot controls and your risk limits",
     match: ["/robot-control-center"],
     section: "Portfolio",
   },

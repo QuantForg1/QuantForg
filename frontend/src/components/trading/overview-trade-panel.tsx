@@ -48,9 +48,9 @@ export function OverviewTradePanel({ connected }: { connected: boolean }) {
   return (
     <section
       aria-label={`Trade ${displayTradingSymbol(TRADING_SYMBOL)}`}
-      className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] shadow-[var(--shadow-card)] backdrop-blur-[8px]"
+      className="qf-overview-panel overflow-hidden"
     >
-      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] px-4 py-3">
         <div className="flex items-start gap-3">
           <span
             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_60%,transparent)] text-[var(--accent)]"
@@ -63,7 +63,7 @@ export function OverviewTradePanel({ connected }: { connected: boolean }) {
               Trade {displayTradingSymbol(TRADING_SYMBOL)}
             </h2>
             <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
-              Execute trades with precision.
+              Orders still pass the existing confirmation and risk checks.
             </p>
           </div>
         </div>

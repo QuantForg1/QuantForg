@@ -4,7 +4,7 @@
  */
 
 import { isTradeDeal } from "./deal-stats";
-import { buildEquitySeries, sparkFromSeries, sumPnlInWindow } from "./derive";
+import { buildEquitySeries, sumPnlInWindow } from "./derive";
 import { num, str } from "../desk";
 import {
   netDealPnl,
@@ -36,9 +36,22 @@ export type PerformanceWindowStats = {
   averageLoss: number;
   averageRewardRisk: number;
   closedTrades: number;
+  wins: number;
+  losses: number;
   spark: number[];
+  sparkLabels: string[];
   insufficient: boolean;
 };
+
+function sampleSeries<T>(series: T[], points = 24): T[] {
+  if (!series.length) return [];
+  if (series.length <= points) return series.slice();
+  const step = (series.length - 1) / (points - 1);
+  return Array.from({ length: points }, (_, i) => {
+    const idx = Math.min(series.length - 1, Math.round(i * step));
+    return series[idx] as T;
+  });
+}
 
 export function computePerformanceWindow(
   deals: Record<string, unknown>[],
@@ -92,7 +105,7 @@ export function computePerformanceWindow(
     .filter((v): v is number => Number.isFinite(v));
 
   const equity = Number.isFinite(opts.equity) ? (opts.equity as number) : NaN;
-  const series =
+  const series: { t: string; equity: number }[] =
     Number.isFinite(equity) && inWindow.length
       ? buildEquitySeries(
           inWindow.map((d) => ({ ...d, profit: netDealPnl(d) })),
@@ -101,6 +114,7 @@ export function computePerformanceWindow(
       : [];
 
   const insufficient = closedTrades === 0 && floating === 0;
+  const sampled = sampleSeries(series);
 
   return {
     period: opts.period,
@@ -119,7 +133,10 @@ export function computePerformanceWindow(
       ? rrSamples.reduce((s, v) => s + v, 0) / rrSamples.length
       : NaN,
     closedTrades,
-    spark: sparkFromSeries(series),
+    wins: wins.length,
+    losses: losses.length,
+    spark: sampled.map((point) => point.equity),
+    sparkLabels: sampled.map((point) => point.t),
     insufficient,
   };
 }

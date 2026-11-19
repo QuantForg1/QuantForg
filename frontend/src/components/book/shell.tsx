@@ -5,13 +5,11 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Keyboard, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SessionBar } from "@/components/broker/session-bar";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { DeskShellHeader } from "@/components/desk/panel";
 import { DeskShortcutsDialog } from "@/components/desk/shortcuts-dialog";
 import { PortfolioHealth, exposureFromPositions } from "@/components/book/portfolio-health";
 import { PortfolioOverview } from "@/components/book/portfolio-overview";
-import { PortfolioIntelligenceLab } from "@/components/book/portfolio-intelligence-lab";
 import { RiskDna } from "@/components/book/risk-dna";
 import { ExposureMap } from "@/components/book/exposure-map";
 import { EquityTimeline } from "@/components/book/equity-timeline";
@@ -63,7 +61,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
  */
 export function BookShell() {
   const session = useTradingSession();
-  const realtime = useBookStream(session.connected);
+  useBookStream(session.connected);
   const [layout, setLayout] = useState<BookLayoutState>(DEFAULT_BOOK_LAYOUT);
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -196,14 +194,6 @@ export function BookShell() {
       <header className="shrink-0">
         <DeskShellHeader
           title="Book"
-          subtitle="Portfolio · risk · exposure"
-          meta={
-            realtime.transport ? (
-              <span className="qf-caption tabular text-[var(--fg-subtle)]">
-                {realtime.transport}
-              </span>
-            ) : null
-          }
           actions={
             <>
               <Button
@@ -220,9 +210,6 @@ export function BookShell() {
                   )}
                 />
               </Button>
-              <Button size="sm" variant="secondary" className="h-7 px-2 text-[11px]" asChild>
-                <Link href="/dashboard">Dashboard</Link>
-              </Button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -235,7 +222,6 @@ export function BookShell() {
             </>
           }
         />
-        <SessionBar />
         <PortfolioCounsel
           connected={session.connected}
           equity={equity}
@@ -272,7 +258,6 @@ export function BookShell() {
         ) : hardError ? (
           <div className="flex min-h-[220px] items-center justify-center p-4">
             <DeskError
-              message="Unable to load portfolio. Sync the session and retry."
               onRetry={() => void portfolioQ.refetch()}
             />
           </div>
@@ -285,7 +270,6 @@ export function BookShell() {
                 positions={positions}
                 deals={deals}
               />
-              <PortfolioIntelligenceLab />
             </div>
 
             {/* 2. Risk second */}

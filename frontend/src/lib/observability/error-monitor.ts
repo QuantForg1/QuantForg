@@ -134,11 +134,15 @@ export function captureError(
     void maybeShip(event);
 
     if (process.env.NODE_ENV !== "production") {
-      if (isNetwork) {
-        // One quiet warning — ConnectionBanner surfaces the operator-facing state.
-        console.warn("qf_api_unreachable", {
+      const quiet =
+        isNetwork || event.kind === "api" || event.kind === "mt5";
+      if (quiet) {
+        // Keep fetch failures out of the Next.js issue overlay. The desk
+        // already shows an empty or unavailable state for these calls.
+        console.warn(isNetwork ? "qf_api_unreachable" : "qf_monitored_error", {
           kind: event.kind,
           path: event.path,
+          message: event.message,
           api: process.env.NEXT_PUBLIC_API_BASE_URL || "(dev fallback)",
         });
       } else {

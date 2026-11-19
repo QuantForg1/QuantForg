@@ -1060,3 +1060,145 @@ body {
     min-height: 320px;
   }
 }
+
+/* Overview desk — scoped depth. Other desks keep the shared shell. */
+.qf-overview {
+  min-width: 0;
+}
+
+.qf-overview-enter {
+  animation: qf-overview-rise 200ms var(--ease-os-out) both;
+}
+
+.qf-overview-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: var(--radius-os);
+  background:
+    linear-gradient(165deg, color-mix(in srgb, white 9%, transparent), transparent 42%),
+    linear-gradient(180deg, var(--surface-elevated), var(--surface));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 16%, transparent),
+    0 14px 28px color-mix(in srgb, var(--bg) 62%, transparent),
+    var(--shadow-card);
+  transition:
+    transform 200ms var(--ease-os),
+    box-shadow 200ms var(--ease-os),
+    border-color 200ms var(--ease-os);
+}
+
+.qf-overview-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent) 10%, transparent),
+    transparent 46%
+  );
+}
+
+.qf-overview-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.qf-overview-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+    0 18px 34px color-mix(in srgb, var(--bg) 70%, transparent),
+    var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.qf-overview-panel {
+  position: relative;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: var(--radius-os);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 88px),
+    var(--surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    0 16px 36px color-mix(in srgb, var(--bg) 55%, transparent),
+    var(--shadow-card);
+}
+
+.qf-overview-wave {
+  position: absolute;
+  top: -0.75rem;
+  right: -1.5rem;
+  width: min(28rem, 58vw);
+  height: 7.5rem;
+  color: var(--accent);
+  pointer-events: none;
+  opacity: 0.42;
+}
+
+.qf-overview-icon {
+  display: flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 12%, transparent), transparent),
+    var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+}
+
+.qf-overview-icon-sm {
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 0.7rem;
+}
+
+header[data-desk-header="overview"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 94%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
+  border-bottom-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+
+@keyframes qf-overview-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .qf-overview-wave {
+    width: 11rem;
+    height: 4.5rem;
+    top: -0.35rem;
+    right: -1rem;
+    opacity: 0.28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qf-overview-enter,
+  .qf-overview-card,
+  .qf-overview-card:hover {
+    animation: none;
+    transform: none;
+    transition: none;
+  }
+
+  .qf-overview button:active {
+    transform: none;
+  }
+}

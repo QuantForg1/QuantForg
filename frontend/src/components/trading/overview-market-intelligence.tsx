@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Activity, Clock, Gauge, MoveDown, MoveUp } from "lucide-react";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { DeskSkeleton } from "@/components/desk/primitives";
@@ -44,6 +45,14 @@ function numericLevel(value: string): number | null {
 function formatPx(value: number): string {
   return value.toFixed(2);
 }
+
+const ROW_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  Support: MoveDown,
+  Resistance: MoveUp,
+  Regime: Activity,
+  Momentum: Gauge,
+  Session: Clock,
+};
 
 function formatStamp(raw: string, updatedAtMs?: number): string {
   const parsed = raw ? new Date(raw) : updatedAtMs ? new Date(updatedAtMs) : null;
@@ -179,16 +188,20 @@ export function OverviewMarketIntelligence({
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-            Gold market
-          </p>
-          {direction ? (
-            <p className={cn("mt-1 text-sm font-semibold", directionTone)}>{direction}</p>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+              Gold market
+            </p>
+            {direction ? (
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", directionTone, direction === "Bullish" ? "bg-[var(--success-soft)]" : direction === "Bearish" ? "bg-[var(--danger-soft)]" : "bg-[var(--surface-2)]")}>
+                {direction}
+              </span>
+            ) : null}
+          </div>
           {hasPrice ? (
             <p
               className={cn(
-                "mt-0.5 font-mono text-2xl font-semibold tabular tracking-tight text-[var(--fg)] transition-colors duration-200",
+                "mt-1 font-mono text-2xl font-semibold tabular tracking-tight text-[var(--fg)] transition-colors duration-200 sm:text-3xl",
                 flash === "up" && "text-[var(--success)]",
                 flash === "down" && "text-[var(--danger)]",
               )}
@@ -217,18 +230,24 @@ export function OverviewMarketIntelligence({
         </p>
       ) : null}
 
-      <dl className="divide-y divide-[var(--border)]">
-        {rows.map(([label, value, context]) => (
-          <div key={label} className="flex items-baseline justify-between gap-3 py-2">
-            <dt className="text-xs text-[var(--fg-muted)]">{label}</dt>
-            <dd className="min-w-0 text-right">
-              <span className="font-mono text-sm font-medium tabular text-[var(--fg)]">{value}</span>
-              <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
-                {context}
-              </span>
-            </dd>
-          </div>
-        ))}
+      <dl className="divide-y divide-[color-mix(in_srgb,var(--accent)_14%,var(--border))]">
+        {rows.map(([label, value, context]) => {
+          const Icon = ROW_ICONS[label] ?? Activity;
+          return (
+            <div key={label} className="flex items-center justify-between gap-3 py-2.5">
+              <dt className="flex min-w-0 items-center gap-2 text-xs text-[var(--fg-muted)]">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" aria-hidden />
+                <span>{label}</span>
+              </dt>
+              <dd className="min-w-0 text-right">
+                <span className="font-mono text-sm font-medium tabular text-[var(--fg)]">{value}</span>
+                <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                  {context}
+                </span>
+              </dd>
+            </div>
+          );
+        })}
       </dl>
 
       {confidencePct != null ? (

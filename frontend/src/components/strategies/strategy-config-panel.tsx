@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  buildStrategyRules,
   isFlatPrimitiveParams,
   mergedParamsFromJson,
   serializeParams,
@@ -91,14 +90,7 @@ export function StrategyConfigPanel({
   const merged = mergedParamsFromJson(paramsJson, defaultParams);
   const useFlatForm =
     strategyKey !== "custom_rules" && isFlatPrimitiveParams(merged);
-  const rules = buildStrategyRules(
-    "",
-    symbol,
-    timeframe,
-    maxTrades,
-    dailyLoss,
-    maxExposure,
-  );
+  const parameterRows = Object.entries(merged);
   const fieldClass =
     "h-11 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-base text-[var(--fg)] sm:h-10 sm:text-sm";
 
@@ -203,16 +195,20 @@ export function StrategyConfigPanel({
             />
           )
         ) : configTab === "logic" ? (
-          <ol className="space-y-2 text-sm">
-            {rules.map((rule, i) => (
-              <li key={`${i}-${rule.slice(0, 24)}`} className="flex items-start gap-2">
-                <span className="mt-0.5 w-4 shrink-0 text-xs tabular text-[var(--fg-subtle)]">
-                  {i + 1}
-                </span>
-                <span className="text-[var(--fg-muted)]">{rule}</span>
-              </li>
-            ))}
-          </ol>
+          parameterRows.length === 0 ? (
+            <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
+              The catalogue did not return parameters for this strategy.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-os)] border border-[var(--border)]">
+              {parameterRows.map(([key, value]) => (
+                <li key={key} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                  <span className="text-[var(--fg-muted)]">{key.replaceAll("_", " ")}</span>
+                  <span className="truncate font-medium tabular text-[var(--fg)]">{String(value)}</span>
+                </li>
+              ))}
+            </ul>
+          )
         ) : configTab === "entry" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <InfoCell label="Last action" value={signalBlock ? str(signalBlock.action) : "No evaluate result yet"} />

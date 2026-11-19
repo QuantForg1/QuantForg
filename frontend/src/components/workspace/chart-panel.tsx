@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
-import { formatNumber } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import {
   candleLoadErrorMessage,
   publicFeedBadge,
@@ -89,6 +89,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   onFullscreenChange,
   lastPrice,
   hideSymbolLabel = false,
+  comfortable = false,
 }: {
   symbol: string;
   /** Customer broker session — kept for callers; chart feed is independent. */
@@ -106,6 +107,8 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   lastPrice?: number;
   /** Parent owns the symbol title (Overview / Signals headers). */
   hideSymbolLabel?: boolean;
+  /** Larger, wrapping toolbar for the Overview chart only. */
+  comfortable?: boolean;
 }) {
   const session = useTradingSessionOptional();
   // Broker ownership remains available to callers; candles use the platform feed.
@@ -152,7 +155,18 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     ? "loading"
     : str(feedMeta.status || (candles.length ? "live" : "unavailable"));
   const feedBadge = publicFeedBadge(feedStatus);
-  const asOf = str(feedMeta.as_of || "");
+  const asOfRaw = str(feedMeta.as_of || "");
+  const asOf = (() => {
+    if (!asOfRaw) return "";
+    const parsed = new Date(asOfRaw);
+    if (Number.isNaN(parsed.getTime())) return asOfRaw;
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(parsed);
+  })();
 
   useEffect(() => {
     candlesCache.current = candles;
@@ -301,7 +315,13 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
       aria-label={`${displayTradingSymbol(symbol)} chart workspace`}
     >
-      <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-2 border-b border-[var(--border)]/70 px-2 py-1">
+      <div
+        className={cn(
+          "flex min-h-9 min-w-0 shrink-0 items-center gap-2 border-b border-[var(--border)]/70 px-2 py-1",
+          comfortable && "flex-col items-stretch gap-2 px-3 py-2",
+        )}
+      >
+        <div className={cn("flex min-w-0 items-center gap-2", !comfortable && "contents")}>
         {!hideSymbolLabel ? (
           <>
             <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">
@@ -312,18 +332,18 @@ export const WorkspaceChart = memo(function WorkspaceChart({
               data-state={feedBadge.tone === "ok" ? "ok" : feedBadge.tone === "danger" ? "danger" : "warn"}
               aria-label={feedBadge.label}
             />
-            <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--fg-muted)]">
+            <span className="shrink-0 rounded border border-[var(--border)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--fg-muted)]">
               {feedBadge.label}
             </span>
           </>
         ) : (
-          <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--fg-muted)]">
+          <span className="shrink-0 rounded border border-[var(--border)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--fg-muted)]">
             {feedBadge.label}
           </span>
         )}
         {ohlc ? (
           <p
-            className="hidden min-w-0 truncate tabular text-[10px] text-[var(--fg-muted)] lg:inline"
+            className="min-w-0 flex-1 truncate tabular text-[10px] text-[var(--fg-muted)]"
             aria-live="polite"
           >
             O {formatNumber(ohlc.open, 2)} · H {formatNumber(ohlc.high, 2)} · L{" "}
@@ -331,14 +351,20 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             {asOf ? ` · ${asOf}` : ""}
           </p>
         ) : null}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
-          <div className="flex gap-0.5" role="group" aria-label="Timeframe">
+        </div>
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-1",
+            comfortable ? "flex-wrap" : "ml-auto shrink-0",
+          )}
+        >
+          <div className="flex flex-wrap gap-0.5" role="group" aria-label="Timeframe">
             {TIMEFRAMES.map((tf) => (
               <Button
                 key={tf}
                 size="sm"
                 variant={timeframe === tf ? "secondary" : "ghost"}
-                className="h-6 min-w-[1.75rem] px-1.5 text-[10px]"
+                className={comfortable ? "h-8 min-w-8 px-2 text-[11px]" : "h-6 min-w-[1.75rem] px-1.5 text-[10px]"}
                 data-compact
                 onClick={() => onTimeframeChange(tf)}
                 aria-pressed={timeframe === tf}
@@ -347,7 +373,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
               </Button>
             ))}
           </div>
-          <div className="hidden gap-0.5 sm:flex" role="group" aria-label="Chart type">
+          <div className={cn("gap-0.5", comfortable ? "flex" : "hidden sm:flex")} role="group" aria-label="Chart type">
             {(
               [
                 ["candles", "C"],
@@ -359,7 +385,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
                 key={id}
                 size="sm"
                 variant={chartType === id ? "secondary" : "ghost"}
-                className="h-6 w-6 px-0 text-[10px]"
+                className={comfortable ? "h-8 w-8 px-0 text-[11px]" : "h-6 w-6 px-0 text-[10px]"}
                 data-compact
                 onClick={() => onChartTypeChange(id)}
                 aria-label={id}
@@ -372,7 +398,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           <Button
             size="sm"
             variant={showVolume ? "secondary" : "ghost"}
-            className="h-6 px-1.5 text-[10px]"
+            className={comfortable ? "h-8 px-2 text-[11px]" : "h-6 px-1.5 text-[10px]"}
             data-compact
             onClick={() => onShowVolumeChange(!showVolume)}
             aria-pressed={showVolume}
@@ -382,7 +408,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 px-0"
+            className={comfortable ? "h-8 w-8 px-0" : "h-6 w-6 px-0"}
             data-compact
             onClick={() => onFullscreenChange(!fullscreen)}
             aria-label={fullscreen ? "Exit fullscreen chart" : "Fullscreen chart"}
@@ -392,7 +418,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         </div>
       </div>
 
-      <div className="relative min-h-[280px] flex-1">
+      <div className={cn("relative min-h-[280px] flex-1", comfortable && "min-h-[180px] sm:min-h-[280px]")}>
         {candlesQ.isLoading ? (
           <div className="p-4">
             <DeskSkeleton rows={6} />
@@ -409,7 +435,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             )}
             <div
               ref={hostRef}
-              className="absolute inset-0 min-h-[280px]"
+              className={cn("absolute inset-0 min-h-[280px]", comfortable && "min-h-[180px] sm:min-h-[280px]")}
               role="img"
               aria-label={`${displayTradingSymbol(symbol)} price chart`}
             />

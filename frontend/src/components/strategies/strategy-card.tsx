@@ -3,7 +3,9 @@
 import { createElement } from "react";
 import type { LucideIcon } from "lucide-react";
 import { strategyIconForKey } from "@/components/strategies/strategy-icons";
-import { asRecord, str } from "@/lib/desk";
+import { Button } from "@/components/ui/button";
+import { str } from "@/lib/desk";
+import { cn } from "@/lib/utils";
 
 type StrategyCardProps = {
   strategyKey: string;
@@ -27,49 +29,39 @@ export function StrategyCard({
   icon,
 }: StrategyCardProps) {
   const iconType = icon ?? strategyIconForKey(strategyKey);
+  const title = name || strategyKey;
   return (
     <li className="h-full">
-      <button
-        type="button"
-        disabled={!available}
-        className={`flex h-full min-h-[10.5rem] w-full flex-col rounded-[var(--radius-os)] border px-3 py-3 text-left transition duration-[var(--duration-fast)] ${
-          selected
-            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_42%,transparent)]"
-            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
-        } disabled:cursor-not-allowed disabled:opacity-70`}
-        onClick={onSelect}
-        aria-pressed={selected}
+      <article
+        className={cn(
+          "qf-overview-card qf-overview-enter flex h-[18rem] flex-col gap-4 p-5",
+          selected && "ring-2 ring-[var(--accent)]",
+          !available && "opacity-70",
+        )}
       >
-        <span
-          className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-            selected
-              ? "bg-[var(--accent)] text-[var(--accent-fg)]"
-              : "bg-[var(--accent-soft)] text-[var(--accent)]"
-          }`}
+        <div className="flex items-start justify-between gap-3">
+          <span className="qf-overview-icon qf-overview-icon-sm" aria-hidden>
+            {createElement(iconType, { className: "h-4 w-4" })}
+          </span>
+          <span className="rounded-full border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
+            {(category || strategyKey).replaceAll("_", " ")}
+          </span>
+        </div>
+        <h3 className="line-clamp-2 min-h-[2.75rem] text-base font-semibold tracking-tight text-[var(--fg)]">{title}</h3>
+        <p className="line-clamp-3 min-h-[4.05rem] flex-1 text-sm leading-relaxed text-[var(--fg-muted)]">
+          {description || "No description was returned for this strategy."}
+        </p>
+        <Button
+          type="button"
+          variant={selected ? "default" : "secondary"}
+          className="mt-auto min-h-11 w-full"
+          disabled={!available}
+          aria-pressed={selected}
+          onClick={onSelect}
         >
-          {createElement(iconType, { className: "h-4 w-4", "aria-hidden": true })}
-        </span>
-        <span className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold text-[var(--fg)]">{name}</span>
-        <span className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
-          {category || strategyKey}
-        </span>
-        <span className="mt-1 line-clamp-2 min-h-[2rem] text-xs text-[var(--fg-muted)]">
-          {description}
-        </span>
-        <span
-          className={`mt-auto inline-flex items-center gap-1.5 pt-3 text-[11px] font-medium ${
-            selected ? "text-[var(--accent)]" : "text-[var(--fg-subtle)]"
-          }`}
-        >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              selected ? "bg-[var(--accent)]" : "bg-[var(--fg-subtle)]"
-            }`}
-            aria-hidden
-          />
-          {selected ? "Selected" : available ? "Available" : "Not selectable"}
-        </span>
-      </button>
+          View details
+        </Button>
+      </article>
     </li>
   );
 }
@@ -77,7 +69,7 @@ export function StrategyCard({
 export function strategyCardFromRecord(
   c: Record<string, unknown>,
   selectedKey: string,
-  onSelectKey: (key: string, defaultParams: Record<string, unknown>) => void,
+  onSelectKey: (key: string) => void,
 ) {
   const key = str(c.key);
   const available = c.enabled !== false && c.available !== false && c.selectable !== false;
@@ -92,7 +84,7 @@ export function strategyCardFromRecord(
       selected={selectedKey === key}
       onSelect={() => {
         if (!available) return;
-        onSelectKey(key, asRecord(c.default_params));
+        onSelectKey(key);
       }}
     />
   );

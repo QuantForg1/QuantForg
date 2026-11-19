@@ -114,12 +114,32 @@ STRATEGY_LIBRARY: list[dict[str, Any]] = [
 
 
 def list_strategy_library() -> list[dict[str, Any]]:
-    return [dict(s) for s in STRATEGY_LIBRARY]
+    rows = [dict(item) for item in STRATEGY_LIBRARY]
+    known = {str(item["key"]) for item in rows}
+    from app.strategies import default_strategy_plugins
+
+    for plugin in default_strategy_plugins():
+        if plugin.key in known:
+            for row in rows:
+                if row["key"] == plugin.key:
+                    row["engine_plugin"] = True
+            continue
+        rows.append(
+            {
+                "key": plugin.key,
+                "name": plugin.name,
+                "family": plugin.category,
+                "engine_plugin": True,
+                "best_regimes": [],
+                "description": plugin.description,
+            }
+        )
+    return rows
 
 
 def get_strategy(key: str) -> dict[str, Any] | None:
-    k = key.strip().lower()
-    for s in STRATEGY_LIBRARY:
-        if s["key"] == k:
-            return dict(s)
+    wanted = key.strip().lower()
+    for item in list_strategy_library():
+        if item["key"] == wanted:
+            return dict(item)
     return None

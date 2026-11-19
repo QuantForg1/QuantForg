@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { householdPortfolioApi } from "@/lib/api/endpoints";
@@ -96,17 +96,18 @@ export function HouseholdDesk() {
   const data = asRecord(householdQ.data);
   const totals = asRecord(data.totals);
   const accounts = asList(data.accounts).map(asRecord);
+  const activeAccounts = accounts.filter((a) => str(a.data_status) === "live");
 
-  const overviewNote = useMemo(() => {
-    if (householdQ.isLoading) return "Loading household…";
-    if (householdQ.isError) return "Household unavailable — registry or session error.";
-    if (!accounts.length) return "No registered broker accounts.";
+  let overviewNote: string | null = null;
+  if (householdQ.isLoading) overviewNote = "Loading household…";
+  else if (householdQ.isError) overviewNote = "Household unavailable — registry or session error.";
+  else if (!accounts.length) overviewNote = "No registered broker accounts.";
+  else {
     const excluded = str(totals.accounts_excluded);
     if (excluded && excluded !== "0") {
-      return `${excluded} account(s) excluded from totals (missing/stale/FX).`;
+      overviewNote = `${excluded} account(s) excluded from totals (missing/stale/FX).`;
     }
-    return null;
-  }, [householdQ.isError, householdQ.isLoading, accounts.length, totals.accounts_excluded]);
+  }
 
   return (
     <section
@@ -184,7 +185,14 @@ export function HouseholdDesk() {
                 </tr>
               </thead>
               <tbody>
-                {accounts.map((a) => (
+                {activeAccounts.length === 0 ? (
+                  <tr className="border-t border-[var(--border)]">
+                    <td colSpan={5} className="py-1.5 text-[var(--fg-muted)]">
+                      No active broker.
+                    </td>
+                  </tr>
+                ) : null}
+                {activeAccounts.map((a) => (
                   <tr
                     key={str(a.broker_account_id) || str(a.login)}
                     className="border-t border-[var(--border)]"

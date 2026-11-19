@@ -4,19 +4,16 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  Banknote,
   Coins,
-  Gauge,
   LineChart,
+  Shield,
   Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
 import dynamic from "next/dynamic";
-import { useAuth } from "@/providers/auth-provider";
-import { normalizePlatformRole } from "@/lib/auth/ite-ops-access";
-
-// Manual order entry is an owner/admin desk tool (customers trade through
-// their robot). Loaded on demand so customer sessions never fetch it.
+// Manual order entry reuses the existing ticket. Loaded on demand.
 const OverviewTradePanel = dynamic(
   () =>
     import("@/components/trading/overview-trade-panel").then(
@@ -42,49 +39,45 @@ import {
 function KpiCard({
   label,
   value,
-  hint,
   icon,
   tone,
-  title,
+  delay = 0,
 }: {
   label: string;
   value: string;
-  hint?: string;
   icon: ReactNode;
   tone?: "success" | "danger" | "neutral";
-  title?: string;
+  delay?: number;
 }) {
+  const tile =
+    tone === "success"
+      ? "border-[color-mix(in_srgb,var(--success)_40%,var(--border))] bg-[var(--success-soft)] text-[var(--success)]"
+      : tone === "danger"
+        ? "border-[color-mix(in_srgb,var(--danger)_40%,var(--border))] bg-[var(--danger-soft)] text-[var(--danger)]"
+        : "";
   return (
     <article
-      title={title}
-      className="flex h-full min-h-[4.75rem] min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)]"
+      className="qf-overview-card qf-overview-enter flex h-full min-h-[5.5rem] min-w-0 items-center gap-3 px-3.5 py-3.5 sm:px-4"
+      style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+      <span className={cn("qf-overview-icon", tile)} aria-hidden>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
           {label}
         </p>
-        <span
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent-soft)_55%,transparent)] text-[var(--accent)]"
-          aria-hidden
+        <p
+          className={cn(
+            "mt-1 truncate text-xl font-semibold tabular tracking-tight sm:text-2xl",
+            tone === "success" && "text-[var(--success)]",
+            tone === "danger" && "text-[var(--danger)]",
+            (!tone || tone === "neutral") && "text-[var(--fg)]",
+          )}
         >
-          {icon}
-        </span>
-      </div>
-      <p
-        className={cn(
-          "mt-1.5 truncate text-base font-semibold tabular tracking-tight sm:text-lg",
-          tone === "success" && "text-[var(--success)]",
-          tone === "danger" && "text-[var(--danger)]",
-          (!tone || tone === "neutral") && "text-[var(--fg)]",
-        )}
-      >
-        {value}
-      </p>
-      {hint ? (
-        <p className="mt-0.5 truncate text-[11px] leading-snug text-[var(--fg-muted)]">
-          {hint}
+          {value}
         </p>
-      ) : null}
+      </div>
     </article>
   );
 }
@@ -241,8 +234,8 @@ export function OverviewReferenceDesk({
   balance,
   todayPnl,
   todayPnlTone,
+  openPositions,
   dailyRiskLabel,
-  dailyRiskHint,
   metricsUpdatedAt,
   brokerConnected,
   marketLive,
@@ -265,6 +258,7 @@ export function OverviewReferenceDesk({
   balance: string;
   todayPnl: string;
   todayPnlTone?: "success" | "danger" | "neutral";
+  openPositions: string;
   /** @deprecated Prefer dailyRiskLabel — Account Risk card removed per overview reference. */
   accountRiskLabel?: string;
   accountRiskHint?: string;
@@ -289,9 +283,6 @@ export function OverviewReferenceDesk({
   topSignal: Record<string, unknown> | null;
   lastPrice?: number;
 }) {
-  const { user } = useAuth();
-  const role = normalizePlatformRole(user?.role);
-  const canUseManualTicket = role === "owner" || role === "admin";
   const [timeframe, setTimeframe] = useState("M15");
   const [chartType, setChartType] = useState<"candles" | "line" | "area">("candles");
   const [showVolume, setShowVolume] = useState(false);
@@ -315,49 +306,53 @@ export function OverviewReferenceDesk({
   });
   return (
     <div className="space-y-4">
-      <section
-        aria-label="Account metrics"
-        className="grid grid-cols-2 items-stretch gap-2 xl:grid-cols-4"
-      >
+      <section aria-label="Account metrics" className="min-w-0">
+        <p className="sr-only">
+          {metricsUpdatedAt
+            ? `Account figures updated ${metricsUpdatedAt}.`
+            : "Account figures from the broker session."}
+        </p>
+        <div className="grid grid-cols-2 items-stretch gap-2 sm:gap-3 xl:grid-cols-4">
         <KpiCard
           label="Account Equity"
           value={equity}
-          hint={metricsUpdatedAt ? `Updated ${metricsUpdatedAt}` : undefined}
-          title="Live account equity from your authorized broker session."
-          icon={<Wallet className="h-3.5 w-3.5" />}
+          delay={0}
+          icon={<Wallet className="h-4 w-4" />}
         />
         <KpiCard
           label="Available Balance"
           value={balance}
-          hint={metricsUpdatedAt ? `Updated ${metricsUpdatedAt}` : undefined}
-          title="Account balance available for margin from the broker session."
-          icon={<Coins className="h-3.5 w-3.5" />}
+          delay={40}
+          icon={<Banknote className="h-4 w-4" />}
         />
         <KpiCard
           label="Today's P&L"
           value={todayPnl}
           tone={todayPnlTone}
-          hint={
-            todayPnl === "—"
-              ? "Unavailable until session or deals load"
-              : "Realized today + floating where available"
-          }
-          title="Today's combined realized and floating profit or loss."
-          icon={<LineChart className="h-3.5 w-3.5" />}
+          delay={80}
+          icon={<LineChart className="h-4 w-4" />}
         />
         <KpiCard
           label="Daily Risk"
           value={dailyRiskLabel}
-          hint={dailyRiskHint}
-          title="Daily loss usage versus the owner daily-loss halt ceiling."
-          icon={<Gauge className="h-3.5 w-3.5" />}
+          delay={120}
+          icon={<Shield className="h-4 w-4" />}
         />
+        </div>
+        <p className="mt-2 text-xs text-[var(--fg-muted)]">
+          Open positions{" "}
+          <span className="font-semibold tabular text-[var(--fg)]">{openPositions}</span>
+        </p>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.85fr)] xl:items-stretch">
-        <section className="flex h-[min(68vh,520px)] min-h-[300px] flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-card)] sm:min-h-[420px]">
-          <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
-            <div className="min-w-0">
+      <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(280px,0.85fr)] lg:grid-rows-1">
+        <section className="qf-overview-panel qf-overview-enter flex min-h-[22rem] flex-col overflow-hidden lg:h-[34rem]" style={{ animationDelay: "80ms" }}>
+          <div className="flex shrink-0 flex-col gap-3 border-b border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="qf-overview-icon" aria-hidden>
+                <Coins className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-semibold tracking-tight sm:text-lg">
                   {displayTradingSymbolCode(TRADING_SYMBOL)}
@@ -373,8 +368,9 @@ export function OverviewReferenceDesk({
               <p className="mt-0.5 text-xs text-[var(--fg-muted)] sm:text-sm">
                 {tradingInstrumentDescription(TRADING_SYMBOL)}
               </p>
+              </div>
             </div>
-            <p className="font-mono text-xl font-semibold tabular tracking-tight text-[var(--fg)] sm:text-3xl">
+            <p className="max-w-full font-mono text-xl font-semibold tabular tracking-tight text-[var(--fg)] sm:text-right sm:text-3xl">
               {currentPrice === "—" || currentPrice.startsWith("$")
                 ? currentPrice
                 : currentPrice === "Not available" || currentPrice === "Unavailable"
@@ -382,7 +378,7 @@ export function OverviewReferenceDesk({
                   : `$${currentPrice}`}
             </p>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 px-1 pb-1">
             <WorkspaceChart
               symbol={TRADING_SYMBOL}
               connected={brokerConnected}
@@ -397,13 +393,14 @@ export function OverviewReferenceDesk({
               onFullscreenChange={setFullscreen}
               lastPrice={lastPrice}
               hideSymbolLabel
+              comfortable
             />
           </div>
         </section>
 
-        <section className="flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] xl:h-[min(520px,70vh)] xl:min-h-[420px]">
+        <section className="qf-overview-panel flex min-h-[22rem] min-w-0 flex-col overflow-hidden lg:h-[34rem]">
           <div
-            className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-[var(--border)] px-2 pt-2"
+            className="flex shrink-0 gap-1 overflow-x-auto border-b border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] px-2 py-2 sm:px-3"
             role="tablist"
             aria-label="Market insights"
           >
@@ -421,10 +418,10 @@ export function OverviewReferenceDesk({
                 role="tab"
                 aria-selected={intelTab === id}
                 className={cn(
-                  "shrink-0 rounded-t-lg px-3 py-2 text-xs font-semibold transition",
+                  "h-9 shrink-0 rounded-lg px-3 text-xs font-semibold transition-[color,background-color,box-shadow] duration-200",
                   intelTab === id
-                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
+                    ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-[var(--shadow-card)]"
+                    : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
                 )}
                 onClick={() => setIntelTab(id)}
               >
@@ -499,9 +496,7 @@ export function OverviewReferenceDesk({
         </section>
       </div>
 
-      {canUseManualTicket ? (
-        <OverviewTradePanel connected={brokerConnected} />
-      ) : null}
+      <OverviewTradePanel connected={brokerConnected} />
     </div>
   );
 }

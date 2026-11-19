@@ -3,16 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  buildStrategyRules,
-  extractBacktestPerformance,
-} from "@/components/strategies/strategy-utils";
+import { extractBacktestPerformance } from "@/components/strategies/strategy-utils";
 import { asRecord, str } from "@/lib/desk";
-
-function numish(v: unknown) {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
 
 type StrategySidePanelsProps = {
   strategyKey: string;
@@ -39,7 +31,6 @@ export function StrategySidePanels({
   timeframe,
   maxTrades,
   dailyLoss,
-  maxExposure,
   onSymbol,
   onTimeframe,
   onMaxTrades,
@@ -49,14 +40,12 @@ export function StrategySidePanels({
 }: StrategySidePanelsProps) {
   const signalBlock = lastResult ? asRecord(lastResult.signal) : null;
   const backtestFields = extractBacktestPerformance(lastResult, portfolioData);
-  const rules = buildStrategyRules(
-    description,
-    symbol,
-    timeframe,
-    maxTrades,
-    dailyLoss,
-    maxExposure,
-  );
+  const confidenceRaw = signalBlock?.confidence;
+  const confidenceNumber = typeof confidenceRaw === "number" ? confidenceRaw : Number(confidenceRaw);
+  const confidence =
+    confidenceRaw === undefined || confidenceRaw === null || confidenceRaw === "" || !Number.isFinite(confidenceNumber)
+      ? "—"
+      : `${(confidenceNumber * 100).toFixed(0)}%`;
 
   return (
     <div className="space-y-4">
@@ -137,9 +126,7 @@ export function StrategySidePanels({
                 <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
                   Confidence
                 </dt>
-                <dd className="mt-1 font-semibold tabular">
-                  {(numish(signalBlock.confidence) * 100).toFixed(0)}%
-                </dd>
+                <dd className="mt-1 font-semibold tabular">{confidence}</dd>
               </div>
               <div className="col-span-2">
                 <dt className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
@@ -176,24 +163,6 @@ export function StrategySidePanels({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Strategy Rules</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol className="space-y-2 text-sm">
-            {rules.map((rule, i) => (
-              <li key={`${i}-${rule.slice(0, 24)}`} className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--success)]" />
-                <span>
-                  <span className="text-[var(--fg-subtle)]">{i + 1}. </span>
-                  {rule}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
     </div>
   );
 }

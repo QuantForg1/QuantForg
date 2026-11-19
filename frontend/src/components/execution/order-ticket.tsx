@@ -774,8 +774,8 @@ export const ExecutionOrderTicket = forwardRef<
           </Button>
         </div>
 
-        <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_9.5rem]">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_11rem]">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <div className="space-y-1">
               <Label className="text-[11px]">Symbol</Label>
               {MULTI_SYMBOL_ENABLED ? (
@@ -998,15 +998,19 @@ export const ExecutionOrderTicket = forwardRef<
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
             <button
               type="button"
               disabled={!connected || busy || submitBlockReason != null}
-              title={submitBlockReason ?? undefined}
+              title={
+                submitBlockReason && submitBlockReason !== stopsError
+                  ? submitBlockReason
+                  : undefined
+              }
               onClick={() => openConfirm("buy")}
               aria-label="Buy"
               className={cn(
-                "flex min-h-[3.25rem] flex-1 flex-col items-center justify-center rounded-xl border px-3 py-2 text-sm font-bold tracking-wide transition active:scale-[0.98]",
+                "flex min-h-12 flex-1 flex-col items-center justify-center rounded-xl border px-3 py-2 text-sm font-bold tracking-wide transition-[filter,transform] duration-150 active:scale-[0.98]",
                 "border-[var(--buy)]/50 bg-[var(--buy)] text-white hover:brightness-110",
                 "disabled:opacity-40 disabled:active:scale-100",
               )}
@@ -1019,11 +1023,15 @@ export const ExecutionOrderTicket = forwardRef<
             <button
               type="button"
               disabled={!connected || busy || submitBlockReason != null}
-              title={submitBlockReason ?? undefined}
+              title={
+                submitBlockReason && submitBlockReason !== stopsError
+                  ? submitBlockReason
+                  : undefined
+              }
               onClick={() => openConfirm("sell")}
               aria-label="Sell"
               className={cn(
-                "flex min-h-[3.25rem] flex-1 flex-col items-center justify-center rounded-xl border px-3 py-2 text-sm font-bold tracking-wide transition active:scale-[0.98]",
+                "flex min-h-12 flex-1 flex-col items-center justify-center rounded-xl border px-3 py-2 text-sm font-bold tracking-wide transition-[filter,transform] duration-150 active:scale-[0.98]",
                 "border-[var(--sell)]/50 bg-[var(--sell)] text-white hover:brightness-110",
                 "disabled:opacity-40 disabled:active:scale-100",
               )}
@@ -1035,6 +1043,32 @@ export const ExecutionOrderTicket = forwardRef<
             </button>
           </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] px-3 py-3 sm:grid-cols-3 lg:grid-cols-6 sm:px-4">
+          <Est label="Margin" value={margin === "—" ? "—" : formatMaybeMoney(margin)} />
+          <Est
+            label="Contract size"
+            value={specsKnown ? formatNumber(contractSize, 0) : "—"}
+          />
+          <Est
+            label="Tick value"
+            value={Number.isFinite(liveTickValue) ? formatCurrency(liveTickValue) : "—"}
+          />
+          <Est
+            label="Risk amount"
+            value={ownerRisk.riskUsd != null ? formatCurrency(ownerRisk.riskUsd) : "—"}
+          />
+          <Est label="Est. result" value={estProfit === "—" ? "—" : formatMaybeMoney(estProfit)} />
+          <Est
+            label="Risk / reward"
+            value={riskReward != null ? `1 : ${formatNumber(riskReward, 2)}` : "—"}
+          />
+        </div>
+        {submitBlockReason && submitBlockReason !== stopsError ? (
+          <p className="px-3 pb-3 text-xs leading-relaxed text-[var(--danger)] sm:px-4" role="status">
+            {submitBlockReason}
+          </p>
+        ) : null}
 
         <ConfirmDialog
           open={confirmOpen}

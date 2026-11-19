@@ -708,6 +708,8 @@ class CustomRulesStrategy:
 
 
 def default_strategy_plugins() -> list[StrategyPort]:
+    from app.strategies.library import library_plugins
+
     return [
         TrendFollowingStrategy(),
         MovingAverageCrossStrategy(),
@@ -718,4 +720,5 @@ def default_strategy_plugins() -> list[StrategyPort]:
         MomentumStrategy(),
         MeanReversionStrategy(),
         CustomRulesStrategy(),
+        *library_plugins(),
     ]
