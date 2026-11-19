@@ -245,6 +245,20 @@ def _risk_settings_for(user_id: Any) -> dict[str, Any] | None:
     return out or None
 
 
+async def _ensure_assistant_access(user: Any) -> None:
+    from app.application.services import market_assistant as ma
+    from app.application.services.admin_management import feature_allowed
+
+    if str(getattr(user, "role", "")).lower() in {"owner", "admin"}:
+        return
+    if not await asyncio.to_thread(feature_allowed, user.id, "ai_assistant"):
+        raise ma.AssistantError(
+            "access_removed",
+            "AI Assistant access was removed for your account. Contact support.",
+            403,
+        )
+
+
 async def _assistant_prepare(
     body: AssistantChatBody, user: Any, news: Any, feed: Any
 ) -> tuple[Any, list[Any], str, list[str], dict[str, Any]]:
@@ -254,6 +268,7 @@ async def _assistant_prepare(
     message = body.message.strip()
     if not message and not body.images:
         raise ma.AssistantError("empty_message", "Type a question or attach a chart.")
+    await _ensure_assistant_access(user)
     ma.check_rate_limit(str(user.id))
     images = [ma.validate_image(u) for u in body.images[: ma.MAX_IMAGES]]
     history = ma.clean_history([ma.ChatTurn(t.role, t.content) for t in body.history])
@@ -313,6 +328,7 @@ async def assistant_stream(
             raise ma.AssistantError(
                 "empty_message", "Type a question or attach a chart."
             )
+        await _ensure_assistant_access(user)
         ma.check_rate_limit(str(user.id))
         images = [ma.validate_image(u) for u in body.images[: ma.MAX_IMAGES]]
     except ma.AssistantError as exc:

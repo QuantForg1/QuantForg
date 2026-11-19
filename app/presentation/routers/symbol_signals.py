@@ -42,6 +42,18 @@ async def require_signals_subscription(user: CurrentUser) -> AuthUserDTO:
         allowed = bool(ent.allowed)
     except Exception:
         allowed = False
+    if allowed:
+        from app.application.services.admin_management import feature_allowed
+
+        if not await asyncio.to_thread(feature_allowed, user.id, "signals"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "access_removed",
+                    "message": "Signals access was removed for your account. "
+                    "Contact support.",
+                },
+            )
     if not allowed:
         raise HTTPException(
             status_code=402,

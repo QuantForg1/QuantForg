@@ -5,6 +5,7 @@ Additive; does not replace /mt5 or gateway REST.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -79,6 +80,17 @@ async def weltrade_connect(
 ) -> dict[str, Any]:
     _ = body.remember_on_gateway  # documented UX only — gateway always RAM-only
     if not _is_platform_operator(user):
+        from app.application.services.admin_management import feature_allowed
+
+        if not await asyncio.to_thread(feature_allowed, user.id, "broker_connect"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "access_removed",
+                    "message": "Connecting brokers was disabled for your account. "
+                    "Contact support.",
+                },
+            )
         # Customers never touch the shared platform terminal: save the
         # account for a dedicated worker terminal instead.
         try:
