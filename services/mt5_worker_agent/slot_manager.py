@@ -103,7 +103,11 @@ def prepare_portable_slot(
     shutil.copytree(
         src,
         dest,
-        ignore=shutil.ignore_patterns("uninstall.exe", "*.log", "Logs", "Tester"),
+        # Bases/Config hold the source terminal's servers, accounts and
+        # history; a customer slot must start clean (no other user's data).
+        ignore=shutil.ignore_patterns(
+            "uninstall.exe", "*.log", "Logs", "Tester", "Bases", "Config"
+        ),
         dirs_exist_ok=False,
     )
     # Portable marker file (some builds honor this; we also pass /portable).

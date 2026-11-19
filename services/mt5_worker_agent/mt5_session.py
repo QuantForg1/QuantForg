@@ -184,6 +184,99 @@ def _initialize_with_ipc_retry(
     return ok, err
 
 
+_STARTUP_INI = "qf_startup.ini"
+
+
+def _startup_ini_path(path: Path) -> Path:
+    return path.parent / "config" / _STARTUP_INI
+
+
+def remove_startup_ini(terminal_exe: Path | str) -> None:
+    """Delete the one-shot login config (it holds the password)."""
+    ini = _startup_ini_path(Path(terminal_exe))
+    try:
+        if ini.exists():
+            ini.write_text("", encoding="utf-16")
+            ini.unlink()
+    except OSError:
+        logger.exception("startup_ini_remove_failed")
+
+
+def launch_logged_in(
+    path: Path,
+    *,
+    login: int,
+    password: str,
+    server: str,
+    settle_seconds: float = 90.0,
+) -> bool:
+    """Start the slot terminal already logged in, so no Login dialog blocks IPC.
+
+    A terminal without a saved account opens a modal Login window on start;
+    while it is open the Python API cannot attach (IPC send failed/timeout).
+    Starting with ``/config:`` credentials logs in directly. The config file
+    exists only until the terminal has read it.
+    """
+    import subprocess
+
+    ini = _startup_ini_path(path)
+    ini.parent.mkdir(parents=True, exist_ok=True)
+    ini.write_text(
+        "[Common]\n"
+        f"Login={int(login)}\n"
+        f"Password={password}\n"
+        f"Server={server.strip()}\n"
+        "KeepPrivate=1\n"
+        "NewsEnable=0\n"
+        "[Experts]\n"
+        "AllowLiveTrading=1\n"
+        "AllowDllImport=0\n"
+        "Enabled=1\n",
+        encoding="utf-16",
+    )
+    try:
+        subprocess.Popen(
+            [str(path), "/portable", f"/config:{ini}"],
+            close_fds=True,
+        )
+    except OSError:
+        logger.exception("slot_terminal_launch_failed path=%s", path)
+        remove_startup_ini(path)
+        return False
+    # The terminal reads the config at start; remove it as soon as it is up.
+    deadline = time.time() + max(5.0, settle_seconds)
+    time.sleep(5.0)
+    remove_startup_ini(path)
+    while time.time() < deadline:
+        time.sleep(2.0)
+        if _terminal_running(path):
+            return True
+    return _terminal_running(path)
+
+
+def _terminal_running(path: Path) -> bool:
+    import subprocess
+
+    target = str(path).lower()
+    try:
+        out = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_Process -Filter \"Name='terminal64.exe'\" | "
+                "Select-Object -ExpandProperty ExecutablePath",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return any(line.strip().lower() == target for line in out.splitlines())
+
+
 def shutdown() -> None:
     try:
         mt5 = _import_mt5()
@@ -238,6 +331,10 @@ def authenticate_and_verify(
     except Exception:
         logger.exception("clear_portable_saved_login_failed")
     mt5 = _import_mt5()
+    # Start (or restart) the slot terminal already logged in so its Login
+    # dialog never blocks the API, then attach without re-sending secrets.
+    if not _terminal_running(path):
+        launch_logged_in(path, login=int(login), password=password, server=server)
     init_ok, init_err = _initialize_with_ipc_retry(
         mt5,
         path,
