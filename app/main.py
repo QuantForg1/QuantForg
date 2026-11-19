@@ -609,10 +609,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     research_task: asyncio.Task[Any] | None = None
     operator_task: asyncio.Task[Any] | None = None
     billing_reconcile_task: asyncio.Task[Any] | None = None
+    shadow_eval_task: asyncio.Task[Any] | None = None
     boot_task: asyncio.Task[Any] | None = None
 
     async def _deferred_boot() -> None:
         nonlocal shadow_task, research_task, operator_task, billing_reconcile_task
+        nonlocal shadow_eval_task
         # Finish mounting non-core routers after listen (production path).
         pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
         if pending:
@@ -839,6 +841,22 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 )
             except Exception:
                 logger.exception("research_analysis_worker_start_failed")
+            # Shadow Signal Evaluator: hypothetical outcomes of every recorded
+            # signal (accepted and blocked). Read-only; never touches LIVE.
+            if not settings.is_testing:
+                try:
+                    from app.application.services.shadow_signals import (
+                        shadow_evaluation_loop,
+                    )
+
+                    shadow_eval_task = asyncio.create_task(
+                        shadow_evaluation_loop(), name="shadow-signal-evaluator"
+                    )
+                    logger.info(
+                        "shadow_evaluation_loop_started", authorizes_trade=False
+                    )
+                except Exception:
+                    logger.exception("shadow_evaluation_loop_start_failed")
             # SaaS trial/email reconciliation — uses BILLING_CRON_SECRET presence
             # as enable gate; never logs the secret.
             try:
@@ -953,6 +971,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             operator_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await operator_task
+        if shadow_eval_task is not None:
+            shadow_eval_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await shadow_eval_task
         if billing_reconcile_task is not None:
             billing_reconcile_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
