@@ -44,19 +44,30 @@ assert.doesNotMatch(dash, /RobotActivityPanel/);
 assert.doesNotMatch(dash, /RecentActivityPanel/);
 assert.doesNotMatch(dash, /NotificationsStrip/);
 const riskCenterPage = readFileSync(join(root, "app/(app)/risk-center/page.tsx"), "utf8");
-assert.match(riskCenterPage, /PersonalRiskProfile/);
+assert.match(riskCenterPage, /redirect\("\/robot-control-center"\)/);
 assert.equal(dash.includes("ExecutionOrderTicket"), false);
 assert.ok(visiblePrimaryRail(true).every((item) => item.href !== "/markets"));
 
-assert.match(signals, /Trading Signals/);
+assert.match(signals, /High-probability trading signal/);
+assert.match(signals, /Auto Refresh/);
+assert.match(signals, /SignalsReferenceDesk/);
 assert.equal(signals.includes("GLOBAL MARKET SIGNALS"), false);
-assert.match(signals, /SignalCard/);
+assert.equal(signals.includes("All signals"), false);
+assert.equal(signals.includes("SignalCard"), false);
+assert.doesNotMatch(signals, /orderApi|order_send|placeOrder/);
+const signalDesk = readFileSync(
+  join(root, "components/trading/signals-reference-desk.tsx"),
+  "utf8",
+);
+assert.match(signalDesk, /Trade Signal/);
+assert.match(signalDesk, /does not place an order/);
+assert.doesNotMatch(signalDesk, /orderApi|order_send|placeOrder/);
 assert.match(signalCard, /Stop loss/);
 assert.match(signalCard, /Take profit/);
 assert.match(signalCard, /signalExecutionStatusLabel/);
 assert.match(signalCard, /signalMt5Ticket/);
 assert.equal(signals.includes("Why this signal"), false);
-assert.match(signals, /useState<StatusFilterId>\("ALL"\)/);
+assert.match(signals, /useState\(true\)/);
 
 assert.match(broker, /Connect MT5 Account/);
 assert.match(broker, /Change account/);
@@ -87,5 +98,8 @@ assert.equal(
   "AI",
 );
 assert.ok(TRADER_DESK_ORDER.includes("/broker"));
+assert.equal(TRADER_DESK_ORDER.includes("/risk-center"), false);
+assert.equal(TRADER_DESK_ORDER.includes("/history"), false);
+assert.ok(rail.every((item) => item.href !== "/risk-center" && item.href !== "/history"));
 
 console.log("phase77-workspace: ok");

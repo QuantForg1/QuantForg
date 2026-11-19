@@ -33,7 +33,7 @@ const ACTIONS = [
   { href: "/trading-journal", label: "Journal", icon: NotebookPen },
   { href: "/daily-reports", label: "Reports", icon: FileText },
   { href: "/ai-coach", label: "AI Coach", icon: Brain },
-  { href: "/risk-center", label: "Risk", icon: Shield },
+  { href: "/robot-control-center", label: "Robot & Risk", icon: Shield },
 ] as const;
 
 function Card({

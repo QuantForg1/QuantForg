@@ -28,7 +28,7 @@ assert.doesNotMatch(ticket, /Break even tag/);
 assert.match(ticket, /Position Management Engine/);
 assert.match(ticket, /prefill/);
 assert.doesNotMatch(detail, /\/terminal/);
-assert.match(riskCenter, /ordersMaySubmit=\{ordersMaySubmit\}/);
+assert.match(riskCenter, /redirect\("\/robot-control-center"\)/);
 assert.doesNotMatch(riskCenter, /ordersMaySubmit=\{undefined\}/);
 
 console.log("phase2-execution-handoff: ok");

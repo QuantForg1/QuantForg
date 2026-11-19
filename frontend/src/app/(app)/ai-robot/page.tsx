@@ -22,7 +22,7 @@ export default function AiRobotPage() {
               <Link href="/auto-trading">Auto Trading</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/risk-center">Risk Center</Link>
+              <Link href="/robot-control-center">Robot &amp; Risk</Link>
             </Button>
           </div>
         }

@@ -111,7 +111,7 @@ export function RiskIntelligencePanel({
         </div>
         {showRiskCenterLink ? (
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/risk-center">Risk Center</Link>
+            <Link href="/robot-control-center">Robot &amp; Risk</Link>
           </Button>
         ) : null}
       </div>

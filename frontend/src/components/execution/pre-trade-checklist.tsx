@@ -53,7 +53,7 @@ function Row({ ok, label, detail }: { ok: boolean; label: string; detail: string
   );
 }
 
-/** Live pre-trade gate — compact on Terminal; detailed rules live on Risk Center. */
+/** Live pre-trade gate — compact on Terminal; detailed rules live on Robot & Risk. */
 export const PreTradeChecklist = memo(function PreTradeChecklist({
   inputs,
   className,
@@ -269,8 +269,8 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
         ) : compact ? (
           <p className="text-[10px] text-[var(--fg-subtle)]">
             Detailed rules on{" "}
-            <a href="/risk-center" className="text-[var(--accent)] hover:underline">
-              Risk Center
+            <a href="/robot-control-center" className="text-[var(--accent)] hover:underline">
+              Robot &amp; Risk
             </a>
           </p>
         ) : null}

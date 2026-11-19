@@ -85,11 +85,11 @@ export function buildStrategyRules(
   const desc = description.trim();
   if (desc) rules.push(desc);
   rules.push(
-    `Trade only ${symbol} (gold desk) — universe matches Risk Center policy.`,
+    `Trade only ${symbol} (gold desk) — universe matches Robot & Risk policy.`,
     `Evaluate on ${timeframe} bars from MT5 when connected; no synthetic prices.`,
     `Session limits: max ${maxTrades} concurrent intentions per evaluate cycle.`,
     `Daily loss ceiling ${dailyLoss}% and max exposure ${maxExposure}% flow through engine limits.`,
-    `Live execution requires Risk Center allowance, OMS gates, and owned broker session.`,
+    `Live execution requires Robot & Risk allowance, OMS gates, and owned broker session.`,
     `Parameters are advisory until validate + risk checks pass — never bypass safeguards.`,
   );
   return rules;

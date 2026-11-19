@@ -22,11 +22,12 @@ const page = readFileSync(
   "utf8",
 );
 
-// Immediately above Risk Center in the primary rail and desk order.
+// Risk Center left the rail. Robot & Risk is the trader risk desk.
 const rcc = nav.indexOf('href: "/robot-control-center"');
-const risk = nav.indexOf('href: "/risk-center"');
-assert.ok(rcc > 0 && risk > rcc, "Robot Control Center precedes Risk Center");
-assert.match(nav, /"\/robot-control-center",\r?\n\s+"\/risk-center",/);
+assert.ok(rcc > 0, "Robot & Risk stays on the rail");
+assert.equal(nav.includes('href: "/risk-center"'), false);
+assert.equal(nav.includes('label: "Risk Center"'), false);
+assert.match(nav, /"\/robot-control-center",\r?\n\s+"\/settings",/);
 
 // State shown comes from the backend response, not from the click.
 assert.match(page, /robotControlApi\.act/);

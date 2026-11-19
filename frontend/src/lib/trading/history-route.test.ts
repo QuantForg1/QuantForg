@@ -1,5 +1,5 @@
 /**
- * Trader History desk must be reachable at /history (not redirected to /executions).
+ * The trader History desk is retired. /history opens Book, never Executions.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,13 +17,12 @@ const navConfig = readFileSync(
   "utf8",
 );
 
-assert.match(historyPage, /title=\"History\"/);
-assert.match(navConfig, /href: \"\/history\"/);
-assert.match(navConfig, /label: \"History\"/);
-assert.equal(
-  /source:\s*\"\/history\"[\s\S]*?destination:\s*\"\/executions\"/.test(nextConfig),
-  false,
-  "/history must not redirect to /executions",
+assert.match(historyPage, /redirect\("\/book"\)/);
+assert.equal(navConfig.includes('href: "/history"'), false);
+assert.equal(navConfig.includes('label: "History"'), false);
+const historyRedirect = nextConfig.match(
+  /\{\s*source:\s*"\/history",\s*destination:\s*"([^"]+)"/,
 );
+assert.equal(historyRedirect?.[1], "/book");
 
 console.log("history-route: ok");

@@ -24,6 +24,7 @@ import { isAdminPath } from "@/components/admin/admin-nav-config";
 const OS_FULLBLEED_PATHS = [
   "/book",
   "/research",
+  "/strategy",
   "/ai-signals",
 ];
 
@@ -197,9 +198,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="relative flex min-h-screen text-[var(--fg)]">
+    <div className={cn("relative flex text-[var(--fg)]", pathname === "/strategy" ? "h-dvh overflow-hidden" : "min-h-screen")}>
       <Sidebar />
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-[var(--shell-sidebar-width,15rem)]">
+      <div className={cn("flex min-w-0 flex-1 flex-col lg:pl-[var(--shell-sidebar-width,3.5rem)]", pathname === "/strategy" ? "h-dvh overflow-hidden" : "min-h-screen")}>
         {bootError ? (
           <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-4 py-2 text-sm text-[var(--fg-muted)] backdrop-blur-md">
             <span>{bootError}</span>
@@ -228,7 +229,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               : wideDesk
                 ? "overflow-x-clip overflow-y-auto px-3 py-3 lg:px-4 lg:py-3"
                 : "overflow-x-clip overflow-y-auto px-4 py-4 sm:p-6 lg:p-8",
-            "pb-[calc(var(--shell-mobile-content-pad-bottom)+1rem)] lg:pb-8",
+            pathname === "/strategy"
+              ? "pb-0"
+              : "pb-[calc(var(--shell-mobile-content-pad-bottom)+1rem)] lg:pb-8",
           )}
           tabIndex={-1}
         >
@@ -237,7 +240,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={pathname}
               className={cn(
                 isFullBleed
-                  ? "min-h-0 w-full max-w-none flex-1 qf-motion-desk"
+                  ? cn(
+                      "min-h-0 w-full max-w-none flex-1 qf-motion-desk",
+                      pathname === "/strategy" && "flex h-full flex-col",
+                    )
                   : wideDesk
                     ? "mx-auto w-full max-w-none qf-motion-desk"
                     : "mx-auto w-full max-w-[1600px] qf-motion-desk",

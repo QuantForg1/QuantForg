@@ -286,7 +286,7 @@ export default function DashboardPage() {
                 : `${formatCurrency(
                     dailyLossAmount ?? 0,
                     accountCurrency === "—" ? "USD" : accountCurrency,
-                  )} daily loss vs equity — manage limits in Risk Center`
+                  )} daily loss vs equity — manage limits in Robot & Risk`
               : "Unavailable"
         }
         metricsUpdatedAt={metricsUpdatedAt}

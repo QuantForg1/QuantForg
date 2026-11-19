@@ -81,7 +81,7 @@ export function Phase6RiskDesk() {
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" asChild>
-          <Link href="/risk-center">Risk Center</Link>
+          <Link href="/robot-control-center">Robot &amp; Risk</Link>
         </Button>
         <Button size="sm" variant="secondary" asChild>
           <Link href="/institutional-risk-analytics">IRAP</Link>

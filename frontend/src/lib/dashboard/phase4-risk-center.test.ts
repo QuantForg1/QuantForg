@@ -28,11 +28,9 @@ assert.doesNotMatch(dash, /NotificationsStrip/);
 assert.doesNotMatch(dash, /RecentActivityPanel/);
 assert.doesNotMatch(dash, /OWNER_RISK_POLICY_DISPLAY/);
 
-assert.match(riskCenter, /<PersonalRiskProfile \/>/);
-assert.match(riskCenter, /Risk Protection Status/);
+assert.match(riskCenter, /redirect\("\/robot-control-center"\)/);
 assert.doesNotMatch(riskCenter, /Risk History/);
 assert.doesNotMatch(riskCenter, /No persisted risk events/);
-assert.match(riskCenter, /riskApi\.preferences/);
 assert.match(endpoints, /preferenceHistory/);
 assert.doesNotMatch(riskCenter, /OwnerPolicySummary/);
 assert.doesNotMatch(riskCenter, /Owner policy \(read-only\)/);

@@ -31,7 +31,7 @@ const ACTIONS = [
   { href: "/ai-coach", label: "AI Coach", icon: Brain },
   { href: "/daily-reports", label: "Daily Reports", icon: Gauge },
   { href: "/order-monitor", label: "Order Monitor", icon: ListOrdered },
-  { href: "/risk-center", label: "Risk", icon: Shield },
+  { href: "/robot-control-center", label: "Robot & Risk", icon: Shield },
 ] as const;
 
 /** Operator Home — institutional morning brief from LIVE planes. */

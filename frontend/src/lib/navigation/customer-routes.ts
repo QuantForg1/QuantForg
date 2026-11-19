@@ -12,12 +12,10 @@ export const CUSTOMER_ROUTES: readonly string[] = [
   "/intelligence",
   "/signals",
   "/book",
-  "/history",
   "/broker",
   "/research",
   "/strategy",
   "/robot-control-center",
-  "/risk-center",
   "/settings",
   // Linked from those desks / command palette
   "/positions",

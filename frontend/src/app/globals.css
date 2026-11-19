@@ -190,33 +190,7 @@ body {
   display: none;
 }
 
-/* Settings uses an opaque field so the mountain backdrop does not show through cards. */
-[data-desk="settings"] {
-  --bg: #0b1a30;
-  --bg-elevated: #12243c;
-  --surface: #152a44;
-  --surface-2: #1b3352;
-  --surface-3: #234064;
-  --surface-elevated: #1b3352;
-  background-color: #0b1a30;
-  background-image: radial-gradient(
-    ellipse 55% 32% at 100% -10%,
-    rgba(0, 212, 224, 0.07),
-    transparent 62%
-  );
-}
-
-.light [data-desk="settings"] {
-  --bg: #f4f8fc;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #eef4fb;
-  --surface-3: #e2ebf5;
-  --surface-elevated: #ffffff;
-  background-color: #f4f8fc;
-  background-image: none;
-}
-
+/* Shared site backdrop: mountain ambient on every desk, including Settings. */
 body {
   margin: 0;
   /* Keep display typography on the one loaded Plex Sans face. */
@@ -1119,6 +1093,11 @@ body {
     0 18px 34px color-mix(in srgb, var(--bg) 70%, transparent),
     var(--shadow-card-hover);
   transform: translateY(-2px);
+}
+
+.qf-sr-desk .qf-overview-card,
+.qf-sr-desk .qf-overview-card:hover {
+  transform: none;
 }
 
 .qf-overview-panel {

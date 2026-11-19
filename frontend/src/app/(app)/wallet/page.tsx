@@ -181,7 +181,7 @@ export default function WalletPage() {
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Balance History</CardTitle>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link href="/history">Full history</Link>
+                  <Link href="/book">Book</Link>
                 </Button>
               </CardHeader>
               <CardContent>

@@ -44,8 +44,8 @@ assert.match(desk, /Export CSV/);
 assert.match(nav, /"\/book"/);
 assert.match(nav, /label:\s*"Book"/);
 
-assert.match(riskCenter, /householdPortfolioApi/);
-assert.match(riskCenter, /householdRisk\.allowed/);
+assert.match(riskCenter, /redirect\("\/robot-control-center"\)/);
+assert.match(desk, /href="\/robot-control-center"/);
 
 console.log("phase3-household-contract: ok");
 

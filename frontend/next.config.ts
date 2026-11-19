@@ -49,19 +49,23 @@ const nextConfig: NextConfig = {
       { source: "/execution", destination: "/dashboard", permanent: true },  // /execution/diagnostics stays
       { source: "/paper", destination: "/dashboard", permanent: false },
       { source: "/execution-intel", destination: "/executions", permanent: false },
-      // /history serves the trader History desk (orders/deals). Do not alias to /executions.
+      // Closed-order History desk retired; Book remains the trader ledger.
+      { source: "/history", destination: "/book", permanent: false },
 
       // Portfolio OS — Book is canonical (Phase 3); /portfolio aliases Book
       { source: "/portfolio", destination: "/book", permanent: false },
       { source: "/wallet", destination: "/book", permanent: false },
-      { source: "/risk", destination: "/risk-center", permanent: false },
+      // Risk Center retired; robot desk owns the trader risk surface.
+      { source: "/risk", destination: "/robot-control-center", permanent: false },
+      { source: "/risk-center", destination: "/robot-control-center", permanent: false },
       { source: "/risk-lab", destination: "/allocation", permanent: false },
 
-      // Research cluster (lab tools stay under Research)
-      { source: "/quant-studio", destination: "/research", permanent: false },
-      { source: "/research-lab", destination: "/research", permanent: false },
-      { source: "/backtesting", destination: "/research", permanent: false },
-      { source: "/walkforward", destination: "/research", permanent: false },
+      // Strategies and Research are one desk. Legacy research URLs open it.
+      { source: "/research", destination: "/strategy", permanent: false },
+      { source: "/quant-studio", destination: "/strategy", permanent: false },
+      { source: "/research-lab", destination: "/strategy", permanent: false },
+      { source: "/backtesting", destination: "/strategy", permanent: false },
+      { source: "/walkforward", destination: "/strategy", permanent: false },
       { source: "/strategies", destination: "/strategy", permanent: false },
       // /strategy and /intelligence stay on their product desks (reference rail).
 

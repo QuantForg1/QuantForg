@@ -1,9 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
+import {
+  AtSign,
+  Bell,
+  Clock,
+  Coins,
+  Copy,
+  CreditCard,
+  Hash,
+  Link2,
+  Mail,
+  Monitor,
+  Pencil,
+  Settings as SettingsIcon,
+  Shield,
+  SlidersHorizontal,
+  UserRound,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +47,43 @@ const TABS = [
   "Notifications",
   "Preferences",
   "Connections",
-  "Danger Zone",
+] as const;
+
+const TAB_ICON = {
+  Account: UserRound,
+  Subscription: CreditCard,
+  Security: Shield,
+  Notifications: Bell,
+  Preferences: SlidersHorizontal,
+  Connections: Link2,
+} as const;
+
+const DISPLAY_PREFS_KEY = "qf.settings.display.v1";
+
+type DisplayPrefs = {
+  lot: string;
+  orderType: "market" | "limit";
+  slippage: string;
+  confirmBeforeOrder: boolean;
+  advancedMode: boolean;
+  numberFormat: "comma" | "dot";
+};
+
+const DEFAULT_DISPLAY_PREFS: DisplayPrefs = {
+  lot: "0.01",
+  orderType: "market",
+  slippage: "0.50",
+  confirmBeforeOrder: true,
+  advancedMode: false,
+  numberFormat: "comma",
+};
+
+const TIME_ZONES = [
+  "Africa/Kigali",
+  "Africa/Johannesburg",
+  "Europe/London",
+  "America/New_York",
+  "UTC",
 ] as const;
 
 const DESK_PREFS_KEY = "qf.desk.preferences.v1";
@@ -107,9 +160,26 @@ function formatWhen(raw: string): string {
   }).format(parsed);
 }
 
-function maskIdentifier(value: string): string {
-  if (value.length <= 10) return value;
-  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+function numericUserId(id: string | undefined): string {
+  if (!id) return "";
+  if (/^\d+$/.test(id)) return id;
+  const hex = id.replace(/[^0-9a-f]/gi, "");
+  if (hex.length >= 8) {
+    const n = Number.parseInt(hex.slice(-8), 16);
+    if (Number.isFinite(n) && n > 0) return String(n);
+  }
+  return id.replace(/\D/g, "");
+}
+
+function loadDisplayPrefs(): DisplayPrefs {
+  if (typeof window === "undefined") return DEFAULT_DISPLAY_PREFS;
+  try {
+    const raw = localStorage.getItem(DISPLAY_PREFS_KEY);
+    if (!raw) return DEFAULT_DISPLAY_PREFS;
+    return { ...DEFAULT_DISPLAY_PREFS, ...(JSON.parse(raw) as Partial<DisplayPrefs>) };
+  } catch {
+    return DEFAULT_DISPLAY_PREFS;
+  }
 }
 
 function labelize(value: string): string {
@@ -143,12 +213,6 @@ export default function SettingsPage() {
     retry: false,
     enabled: tab === "Account" || tab === "Preferences",
   });
-  const activityQ = useQuery({
-    queryKey: ["activity"],
-    queryFn: platformApi.activity,
-    retry: false,
-    enabled: tab === "Account",
-  });
   const prefsQ = useQuery({
     queryKey: ["notification-prefs"],
     queryFn: platformApi.notificationPreferences,
@@ -159,7 +223,7 @@ export default function SettingsPage() {
     queryKey: ["sessions"],
     queryFn: platformApi.sessions,
     retry: false,
-    enabled: tab === "Security" || tab === "Connections" || tab === "Danger Zone",
+    enabled: tab === "Security" || tab === "Connections",
   });
   const devicesQ = useQuery({
     queryKey: ["devices"],
@@ -185,6 +249,7 @@ export default function SettingsPage() {
   });
 
   const [deskPrefs, setDeskPrefs] = useState<DeskPreferencesV1>(DEFAULT_DESK_PREFS);
+  const [displayPrefs, setDisplayPrefs] = useState<DisplayPrefs>(DEFAULT_DISPLAY_PREFS);
   const deskPrefsHydratedRef = useRef(false);
   const [newPassword, setNewPassword] = useState("");
   const [deletionNote, setDeletionNote] = useState("");
@@ -203,6 +268,10 @@ export default function SettingsPage() {
       session_timeout_minutes: Number(s.session_timeout_minutes ?? 60),
     });
   }, [settingsQ.data]);
+
+  useEffect(() => {
+    setDisplayPrefs(loadDisplayPrefs());
+  }, []);
 
   useEffect(() => {
     if (!settingsQ.data || deskPrefsHydratedRef.current) return;
@@ -348,8 +417,6 @@ export default function SettingsPage() {
   const prefs = asList(prefsQ.data).map(asRecord);
   const sessions = asList(sessionsQ.data).map(asRecord);
   const devices = asList(devicesQ.data).map(asRecord);
-  const activity = asList(activityQ.data).map(asRecord);
-
   const passwordOk = useMemo(() => isStrongPassword(newPassword), [newPassword]);
 
   const profileDirty = useMemo(() => {
@@ -419,36 +486,82 @@ export default function SettingsPage() {
   const pageError = settingsQ.isError;
   const unsaved =
     tab === "Account"
-      ? profileDirty
+      ? profileDirty || deskDirty || settingsDirty
       : tab === "Preferences"
         ? profileDirty || deskDirty
         : headerSaveVisible
           ? settingsDirty
           : false;
   const savePending =
-    tab === "Preferences"
-      ? saveProfile.isPending || saveDeskPrefs.isPending
-      : tab === "Account"
-        ? saveProfile.isPending
-        : saveSettings.isPending;
+    tab === "Account" || tab === "Preferences"
+      ? saveProfile.isPending || saveDeskPrefs.isPending || saveSettings.isPending
+      : saveSettings.isPending;
+
+  function updateDisplay(next: Partial<DisplayPrefs>) {
+    setDisplayPrefs((current) => {
+      const saved = { ...current, ...next };
+      localStorage.setItem(DISPLAY_PREFS_KEY, JSON.stringify(saved));
+      return saved;
+    });
+  }
 
   function selectTab(next: (typeof TABS)[number]) {
     setTab(next);
   }
 
+  const shownUserId = numericUserId(user?.id);
+  const profileTitle = profileForm.full_name || user?.display_name || "Account";
+  const initials =
+    profileTitle
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "QF";
+  const verified = ["active", "verified", "enabled"].includes(
+    String(user?.status || "").toLowerCase(),
+  );
+  const zoneOptions =
+    profileForm.timezone &&
+    !(TIME_ZONES as readonly string[]).includes(profileForm.timezone)
+      ? [profileForm.timezone, ...TIME_ZONES]
+      : [...TIME_ZONES];
+  const today = new Date();
+  const dateChoices = [
+    {
+      value: "mdy",
+      label: new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(today),
+    },
+    {
+      value: "dmy",
+      label: new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(today),
+    },
+    { value: "ymd", label: today.toISOString().slice(0, 10) },
+  ];
+
   return (
-    <div className="qf-desk mx-auto w-full min-w-0 max-w-5xl">
-      <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-            Account
-          </p>
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--fg)] sm:text-2xl">
-            Settings
-          </h1>
-          <p className="mt-1 max-w-xl text-sm text-[var(--fg-muted)]">
-            Profile, security, notifications, and desk preferences.
-          </p>
+    <div className="qf-desk mx-auto w-full min-w-0 max-w-6xl">
+      <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] shadow-[var(--shadow-card)]">
+            <SettingsIcon className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-[var(--fg)] sm:text-2xl">
+              Settings
+            </h1>
+            <p className="mt-1 max-w-xl text-sm text-[var(--fg-muted)]">
+              Manage your account, trading, and platform preferences.
+            </p>
+          </div>
         </div>
         {tab === "Account" || headerSaveVisible ? (
           <div className="flex items-center gap-3">
@@ -459,8 +572,13 @@ export default function SettingsPage() {
               size="sm"
               disabled={savePending || !unsaved}
               onClick={() => {
-                if (tab === "Account") saveProfile.mutate();
-                else onHeaderSave();
+                if (tab === "Account" || tab === "Preferences") {
+                  if (profileDirty) saveProfile.mutate();
+                  if (deskDirty) saveDeskPrefs.mutate();
+                  if (tab === "Account" && settingsDirty) saveSettings.mutate();
+                  return;
+                }
+                onHeaderSave();
               }}
             >
               {savePending ? "Saving…" : tab === "Account" ? "Save profile" : "Save changes"}
@@ -469,9 +587,9 @@ export default function SettingsPage() {
         ) : null}
       </header>
 
-      <div className="mb-5 min-w-0 overflow-x-auto border-b border-[var(--border)] scrollbar-none">
+      <div className="mb-5 min-w-0 overflow-x-auto scrollbar-none">
         <div
-          className="flex min-w-max gap-1"
+          className="flex min-w-max gap-2"
           role="tablist"
           aria-label="Settings sections"
           onKeyDown={(e) => {
@@ -486,31 +604,30 @@ export default function SettingsPage() {
             document.getElementById(`settings-tab-${next}`)?.focus();
           }}
         >
-          {TABS.map((t) => (
-            <button
-              key={t}
-              id={`settings-tab-${t}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              aria-controls="settings-panel"
-              tabIndex={tab === t ? 0 : -1}
-              className={cn(
-                "relative h-11 shrink-0 px-3 text-sm font-medium transition-colors duration-[var(--duration-fast)]",
-                tab === t ? "text-[var(--fg)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
-              )}
-              onClick={() => selectTab(t)}
-            >
-              {t}
-              <span
+          {TABS.map((t) => {
+            const Icon = TAB_ICON[t];
+            return (
+              <button
+                key={t}
+                id={`settings-tab-${t}`}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                aria-controls="settings-panel"
+                tabIndex={tab === t ? 0 : -1}
                 className={cn(
-                  "absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[var(--accent)] transition-opacity duration-[var(--duration-fast)]",
-                  tab === t ? "opacity-100" : "opacity-0",
+                  "inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-medium transition-[background-color,color,box-shadow] duration-[var(--duration-fast)]",
+                  tab === t
+                    ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-[0_10px_24px_rgba(0,212,224,0.28),inset_0_1px_0_rgba(255,255,255,0.35)]"
+                    : "border border-[var(--border)] bg-[var(--surface)] text-[var(--fg-muted)] shadow-[var(--shadow-card)] hover:text-[var(--fg)]",
                 )}
-                aria-hidden
-              />
-            </button>
-          ))}
+                onClick={() => selectTab(t)}
+              >
+                <Icon className="h-4 w-4" aria-hidden />
+                {t}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -522,101 +639,244 @@ export default function SettingsPage() {
         <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
         <PageMotion key={tab}>
           {tab === "Account" ? (
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Card className="qf-card-interactive">
-                <CardHeader>
-                  <CardTitle>Profile</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="full-name">Display name</Label>
-                      <Input
-                        id="full-name"
-                        autoComplete="name"
-                        value={profileForm.full_name}
-                        onChange={(e) =>
-                          setProfileForm((f) => ({ ...f, full_name: e.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="username">Username</Label>
-                      <Input
-                        id="username"
-                        autoComplete="username"
-                        value={profileForm.username}
-                        onChange={(e) =>
-                          setProfileForm((f) => ({ ...f, username: e.target.value }))
-                        }
-                      />
-                    </div>
+            <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+              <SettingsDepthCard
+                icon={<UserRound className="h-4 w-4" aria-hidden />}
+                title="Profile Information"
+                description="Your personal details and account identity."
+                action={
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => document.getElementById("full-name")?.focus()}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Profile
+                  </Button>
+                }
+              >
+                <div className="mb-4 flex min-w-0 items-center gap-3">
+                  <span className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-base font-semibold text-[var(--accent-fg)] shadow-[0_10px_24px_rgba(0,212,224,0.28)]">
+                    {initials}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 truncate text-base font-semibold text-[var(--fg)]">
+                      {profileTitle}
+                      {verified ? (
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--success)] text-[10px] text-white" aria-label="Verified account">
+                          ✓
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-sm text-[var(--fg-muted)]">
+                      {user?.email || "Email unavailable"}
+                    </p>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <p className="qf-label">Email</p>
-                      <p className="text-sm text-[var(--fg)]">{user?.email || "Unavailable"}</p>
+                </div>
+                <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field
+                    id="full-name"
+                    icon={<UserRound className="h-3.5 w-3.5" aria-hidden />}
+                    label="Display Name"
+                  >
+                    <Input
+                      id="full-name"
+                      autoComplete="name"
+                      value={profileForm.full_name}
+                      onChange={(e) =>
+                        setProfileForm((f) => ({ ...f, full_name: e.target.value }))
+                      }
+                    />
+                  </Field>
+                  <Field
+                    id="username"
+                    icon={<AtSign className="h-3.5 w-3.5" aria-hidden />}
+                    label="Username"
+                  >
+                    <Input
+                      id="username"
+                      autoComplete="username"
+                      value={profileForm.username}
+                      onChange={(e) =>
+                        setProfileForm((f) => ({ ...f, username: e.target.value }))
+                      }
+                    />
+                  </Field>
+                  <Field
+                    id="account-email"
+                    icon={<Mail className="h-3.5 w-3.5" aria-hidden />}
+                    label="Email"
+                  >
+                    <Input id="account-email" value={user?.email || ""} readOnly />
+                  </Field>
+                  <Field
+                    id="user-id"
+                    icon={<Hash className="h-3.5 w-3.5" aria-hidden />}
+                    label="User ID"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Input
+                        id="user-id"
+                        readOnly
+                        inputMode="numeric"
+                        value={shownUserId}
+                        aria-label="User ID"
+                      />
+                      {shownUserId ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label="Copy user ID"
+                          onClick={() => void copyText(shownUserId, "User ID")}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
                     </div>
-                    <div className="space-y-1">
-                      <p className="qf-label">User ID</p>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate font-mono text-sm text-[var(--fg-muted)]">
-                          {user?.id ? maskIdentifier(user.id) : "Unavailable"}
-                        </p>
-                        {user?.id ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            aria-label="Copy user ID"
-                            onClick={() => void copyText(user.id, "User ID")}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </Field>
+                </div>
+              </SettingsDepthCard>
 
-              <Card className="qf-card-interactive">
-                <CardHeader>
-                  <CardTitle>Recent activity</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {activityQ.isLoading ? (
-                    <DeskSkeleton rows={4} />
-                  ) : activity.length === 0 ? (
-                    <p className="text-sm text-[var(--fg-muted)]">No recent activity recorded.</p>
-                  ) : (
-                    <ul className="divide-y divide-[var(--border)]">
-                      {activity.slice(0, 12).map((row, index) => {
-                        const status = str(row.status || row.result, "");
-                        return (
-                          <li
-                            key={`${str(row.created_at || row.timestamp, "event")}-${index}`}
-                            className="flex items-start justify-between gap-3 py-2.5"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm text-[var(--fg)]">
-                                {labelize(str(row.action || row.event || row.kind, "Activity"))}
-                              </p>
-                              <p className="text-xs text-[var(--fg-subtle)]">
-                                {formatWhen(str(row.created_at || row.timestamp, "—"))}
-                              </p>
-                            </div>
-                            {status ? (
-                              <Badge tone="neutral">{labelize(status)}</Badge>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
+              <SettingsDepthCard
+                icon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}
+                title="Trading Preferences"
+                description="Set your default trading and execution options."
+              >
+                <div className="grid flex-1 grid-cols-1 content-start gap-3 sm:grid-cols-2">
+                  <Field id="default-instrument" icon={<Coins className="h-3.5 w-3.5" aria-hidden />} label="Default Instrument">
+                    <SelectBox id="default-instrument" value="XAUUSD" disabled onChange={() => undefined}>
+                      <option value="XAUUSD">XAUUSD (Gold)</option>
+                    </SelectBox>
+                  </Field>
+                  <Field id="default-lot" icon={<Hash className="h-3.5 w-3.5" aria-hidden />} label="Default Lot Size">
+                    <SelectBox
+                      id="default-lot"
+                      value={displayPrefs.lot}
+                      onChange={(value) => updateDisplay({ lot: value })}
+                    >
+                      {["0.01", "0.02", "0.05", "0.10"].map((lot) => (
+                        <option key={lot} value={lot}>
+                          {lot}
+                        </option>
+                      ))}
+                    </SelectBox>
+                  </Field>
+                  <Field id="default-order-type" icon={<Zap className="h-3.5 w-3.5" aria-hidden />} label="Order Type (Default)">
+                    <SelectBox
+                      id="default-order-type"
+                      value={displayPrefs.orderType}
+                      onChange={(value) =>
+                        updateDisplay({ orderType: value === "limit" ? "limit" : "market" })
+                      }
+                    >
+                      <option value="market">Market</option>
+                      <option value="limit">Limit</option>
+                    </SelectBox>
+                  </Field>
+                  <Field id="max-slippage" icon={<SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />} label="Slippage (Max)">
+                    <SelectBox
+                      id="max-slippage"
+                      value={displayPrefs.slippage}
+                      onChange={(value) => updateDisplay({ slippage: value })}
+                    >
+                      {["0.10", "0.50", "1.00"].map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </SelectBox>
+                  </Field>
+                </div>
+              </SettingsDepthCard>
+
+              <SettingsDepthCard
+                icon={<SettingsIcon className="h-4 w-4" aria-hidden />}
+                title="Platform Preferences"
+                description="Customize the platform behavior and trading experience."
+              >
+                <Toggle
+                  label="Confirm before placing an order"
+                  description="Show a confirmation dialog before executing trades"
+                  checked={displayPrefs.confirmBeforeOrder}
+                  onChange={(value) => updateDisplay({ confirmBeforeOrder: value })}
+                />
+                <Toggle
+                  label="Show trading notifications"
+                  description="Receive real-time trade and system alerts"
+                  checked={settingsForm.notifications_enabled}
+                  onChange={(value) =>
+                    setSettingsForm((current) => ({ ...current, notifications_enabled: value }))
+                  }
+                />
+                <Toggle
+                  label="Enable advanced mode"
+                  description="Unlock advanced trading controls and expert settings"
+                  checked={displayPrefs.advancedMode}
+                  onChange={(value) => updateDisplay({ advancedMode: value })}
+                />
+              </SettingsDepthCard>
+
+              <SettingsDepthCard
+                icon={<Clock className="h-4 w-4" aria-hidden />}
+                title="Time & Display"
+                description="Choose your time zone, date format, and number style."
+              >
+                <div className="grid flex-1 grid-cols-1 content-start gap-3 sm:grid-cols-2">
+                  <Field id="timezone" icon={<Clock className="h-3.5 w-3.5" aria-hidden />} label="Time Zone">
+                    <SelectBox
+                      id="timezone"
+                      value={profileForm.timezone}
+                      onChange={(value) =>
+                        setProfileForm((current) => ({ ...current, timezone: value }))
+                      }
+                    >
+                      <option value="">Select timezone</option>
+                      {zoneOptions.map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
+                        </option>
+                      ))}
+                    </SelectBox>
+                  </Field>
+                  <Field id="date-format-account" icon={<Monitor className="h-3.5 w-3.5" aria-hidden />} label="Date Format">
+                    <SelectBox
+                      id="date-format-account"
+                      value={deskPrefs.dateFormat}
+                      onChange={(value) =>
+                        setDeskPrefs((current) => ({
+                          ...current,
+                          dateFormat: value as DeskPreferencesV1["dateFormat"],
+                        }))
+                      }
+                    >
+                      {dateChoices.map((choice) => (
+                        <option key={choice.value} value={choice.value}>
+                          {choice.label}
+                        </option>
+                      ))}
+                    </SelectBox>
+                  </Field>
+                  <Field id="number-format" icon={<Hash className="h-3.5 w-3.5" aria-hidden />} label="Number Format">
+                    <SelectBox
+                      id="number-format"
+                      value={displayPrefs.numberFormat}
+                      onChange={(value) =>
+                        updateDisplay({ numberFormat: value === "dot" ? "dot" : "comma" })
+                      }
+                    >
+                      <option value="comma">1,234.56</option>
+                      <option value="dot">1.234,56</option>
+                    </SelectBox>
+                  </Field>
+                  <Field id="theme" icon={<Monitor className="h-3.5 w-3.5" aria-hidden />} label="Theme">
+                    <SelectBox id="theme" value="dark" disabled onChange={() => undefined}>
+                      <option value="dark">Dark (Default)</option>
+                    </SelectBox>
+                  </Field>
+                </div>
+              </SettingsDepthCard>
             </div>
           ) : null}
 
@@ -1014,8 +1274,8 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
-          {tab === "Danger Zone" ? (
-            <Card className="border-[var(--danger)]/50">
+          {tab === "Security" ? (
+            <Card className="mt-4 border-[var(--danger)]/50">
               <CardHeader>
                 <CardTitle className="text-[var(--danger)]">Danger Zone</CardTitle>
               </CardHeader>
@@ -1243,5 +1503,85 @@ function SelectField({
         ))}
       </select>
     </div>
+  );
+}
+
+function SettingsDepthCard({
+  icon,
+  title,
+  description,
+  action,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex h-full min-h-0 min-w-0 flex-col rounded-[22px] border border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] bg-[var(--surface)] p-4 shadow-[0_16px_36px_rgba(2,12,28,0.28),inset_0_1px_0_rgba(255,255,255,0.07)] sm:p-5 lg:min-h-[22rem]">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-[var(--fg-muted)]">{description}</p>
+          </div>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  id,
+  icon,
+  label,
+  children,
+}: {
+  id?: string;
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor={id} className="inline-flex items-center gap-1.5 text-[var(--fg-muted)]">
+        {icon}
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+function SelectBox({
+  id,
+  value,
+  disabled,
+  onChange,
+  children,
+}: {
+  id: string;
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      className="flex h-11 w-full min-w-0 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 text-sm text-[var(--fg)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] disabled:opacity-80"
+    >
+      {children}
+    </select>
   );
 }

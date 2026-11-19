@@ -32,8 +32,8 @@ assert.match(desk, /MONITOR_ONLY/);
 assert.match(desk, /not win probabilities/);
 assert.doesNotMatch(desk, /guaranteed profit/i);
 assert.match(page, /Phase4AtiDesk/);
-assert.match(riskCenter, /aiTradingIntelligenceApi/);
-assert.match(riskCenter, /AI risk alerts/);
+assert.match(riskCenter, /redirect\("\/robot-control-center"\)/);
+assert.match(page, /href="\/robot-control-center"/);
 assert.match(freeze, /MONITOR_ONLY/);
 assert.match(freeze, /No auto-deploy/);
 

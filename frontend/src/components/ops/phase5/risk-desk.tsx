@@ -49,7 +49,7 @@ export function Phase5RiskDesk() {
       <Phase5Banner tone="warn">
         Backend risk enforcement remains authoritative. This desk never raises
         limits, never lets AI override hard constraints, and never invents
-        balances or margin. Trader prefs stay on Risk Center.
+        balances or margin. Trader prefs stay on Robot &amp; Risk.
       </Phase5Banner>
       <Phase5TabBar tabs={TABS} value={tab} onChange={setTab} />
 
@@ -106,7 +106,7 @@ export function Phase5RiskDesk() {
       {tab === "controls" && (
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" asChild>
-            <Link href="/risk-center">Trader Risk Center</Link>
+            <Link href="/robot-control-center">Robot &amp; Risk</Link>
           </Button>
           <Button size="sm" variant="secondary" asChild>
             <Link href="/admin/live-trading">Kill / LIVE panel</Link>

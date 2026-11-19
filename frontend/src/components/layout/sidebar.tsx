@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, Fragment, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronsLeft, ChevronsRight, LifeBuoy, Menu, X } from "lucide-react";
+import { LifeBuoy, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   isPrimaryActive,
@@ -17,13 +17,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  loadShellChrome,
-  saveShellChrome,
   SHELL_SIDEBAR_COLLAPSED,
   SHELL_SIDEBAR_DEFAULT,
-  SHELL_SIDEBAR_MAX,
-  SHELL_SIDEBAR_MIN,
-  type ShellChromeState,
 } from "@/lib/workspace/shell-chrome";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { useAuth } from "@/providers/auth-provider";
@@ -197,148 +192,84 @@ function MobileBrand() {
 }
 
 export function Sidebar() {
-  const [chrome, setChrome] = useState<ShellChromeState>({
-    collapsed: false,
-    width: SHELL_SIDEBAR_DEFAULT,
-  });
-  const [hydrated, setHydrated] = useState(false);
-  const dragging = useRef(false);
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<number | null>(null);
 
-  useEffect(() => {
-    setChrome(loadShellChrome());
-    setHydrated(true);
+  const reveal = useCallback(() => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  }, []);
+
+  const conceal = useCallback(() => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 140);
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    saveShellChrome(chrome);
-  }, [chrome, hydrated]);
-
-  const toggleCollapsed = useCallback(() => {
-    setChrome((prev) => ({ ...prev, collapsed: !prev.collapsed }));
+    return () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    };
   }, []);
 
-  const onResizeStart = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (chrome.collapsed) return;
-      e.preventDefault();
-      dragging.current = true;
-      const startX = e.clientX;
-      const startW = chrome.width;
-      const onMove = (ev: PointerEvent) => {
-        if (!dragging.current) return;
-        const next = Math.min(
-          SHELL_SIDEBAR_MAX,
-          Math.max(SHELL_SIDEBAR_MIN, startW + (ev.clientX - startX)),
-        );
-        setChrome((prev) => ({ ...prev, width: next }));
-      };
-      const onUp = () => {
-        dragging.current = false;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    },
-    [chrome.collapsed, chrome.width],
-  );
-
-  const width = chrome.collapsed ? SHELL_SIDEBAR_COLLAPSED : chrome.width;
-
   useEffect(() => {
-    if (!hydrated) return;
     const root = document.documentElement;
-    root.style.setProperty("--shell-sidebar-width", `${width}px`);
+    root.style.setProperty("--shell-sidebar-width", `${SHELL_SIDEBAR_COLLAPSED}px`);
     return () => {
       root.style.removeProperty("--shell-sidebar-width");
     };
-  }, [width, hydrated]);
+  }, []);
+
+  const width = open ? SHELL_SIDEBAR_DEFAULT : SHELL_SIDEBAR_COLLAPSED;
 
   return (
     <aside
       style={{ width }}
-      className="fixed inset-y-0 left-0 z-30 hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
+      onPointerEnter={reveal}
+      onPointerLeave={conceal}
+      onFocusCapture={reveal}
+      onBlurCapture={(event) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+        conceal();
+      }}
+      className={cn(
+        "fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width,box-shadow] duration-200 ease-[var(--ease-os)] lg:flex lg:flex-col",
+        open && "shadow-[var(--shadow-elevated)]",
+      )}
       aria-label="Workspace rail"
     >
       <div
         className={cn(
           "shrink-0 border-b border-[var(--border)]",
-          chrome.collapsed ? "px-2 py-3" : "px-3 py-3.5",
+          open ? "px-3 py-3.5" : "px-2 py-3",
         )}
       >
         <Link
           href="/dashboard"
           className={cn(
             "flex items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-            chrome.collapsed ? "justify-center" : "gap-2.5",
+            open ? "gap-2.5" : "justify-center",
           )}
           aria-label="QuantForg overview"
         >
-          {chrome.collapsed ? (
-            <BrandLogo size={28} wordmark={false} priority />
-          ) : (
-            <BrandLogo size={32} priority />
-          )}
+          {open ? <BrandLogo size={32} priority /> : <BrandLogo size={28} wordmark={false} priority />}
         </Link>
       </div>
       <Suspense fallback={<div className="flex-1" aria-hidden />}>
-        <NavBody collapsed={chrome.collapsed} />
+        <NavBody collapsed={!open} />
       </Suspense>
       <div className="shrink-0 border-t border-[var(--border)] p-2">
         <Link
           href="/support"
           className={cn(
-            "mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
-            chrome.collapsed && "justify-center px-0",
+            "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
+            !open && "justify-center px-0",
           )}
         >
           <LifeBuoy className="h-4 w-4 shrink-0" aria-hidden />
-          {chrome.collapsed ? <span className="sr-only">Support</span> : <span>Support</span>}
+          {open ? <span className="truncate">Support</span> : <span className="sr-only">Support</span>}
         </Link>
-      <div className="flex shrink-0 items-center justify-end p-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 px-0"
-          aria-label={chrome.collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-pressed={chrome.collapsed}
-          onClick={toggleCollapsed}
-        >
-          {chrome.collapsed ? (
-            <ChevronsRight className="h-4 w-4" aria-hidden />
-          ) : (
-            <ChevronsLeft className="h-4 w-4" aria-hidden />
-          )}
-        </Button>
       </div>
-      </div>
-      {!chrome.collapsed ? (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          tabIndex={0}
-          className="absolute inset-y-0 right-0 z-10 w-1 cursor-col-resize touch-none hover:bg-[var(--accent)]/30 focus-visible:bg-[var(--accent)]/40 focus-visible:outline-none"
-          onPointerDown={onResizeStart}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowLeft") {
-              e.preventDefault();
-              setChrome((prev) => ({
-                ...prev,
-                width: Math.max(SHELL_SIDEBAR_MIN, prev.width - 8),
-              }));
-            } else if (e.key === "ArrowRight") {
-              e.preventDefault();
-              setChrome((prev) => ({
-                ...prev,
-                width: Math.min(SHELL_SIDEBAR_MAX, prev.width + 8),
-              }));
-            }
-          }}
-        />
-      ) : null}
     </aside>
   );
 }

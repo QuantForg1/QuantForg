@@ -19,7 +19,7 @@ export default function AiTradingIntelligencePage() {
               <Link href="/intelligence">Market desk</Link>
             </Button>
             <Button size="sm" variant="secondary" asChild>
-              <Link href="/risk-center">Risk Center</Link>
+              <Link href="/robot-control-center">Robot &amp; Risk</Link>
             </Button>
             <Button size="sm" variant="secondary" asChild>
               <Link href="/research">Research</Link>

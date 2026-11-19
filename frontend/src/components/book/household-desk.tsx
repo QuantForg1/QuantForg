@@ -329,8 +329,8 @@ function RiskPanel({
       ) : null}
       <p className="qf-caption text-[var(--fg-muted)]">
         New orders only — open positions are not auto-closed.{" "}
-        <Link href="/risk-center" className="text-[var(--accent)] underline">
-          Risk Center
+        <Link href="/robot-control-center" className="text-[var(--accent)] underline">
+          Robot &amp; Risk
         </Link>
       </p>
     </div>

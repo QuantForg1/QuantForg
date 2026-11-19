@@ -378,7 +378,7 @@ function RiskPanel({
   if (!alerts.length) {
     return (
       <p className="qf-caption text-[var(--fg-muted)]">
-        No alerts from supplied facts. Risk Center remains authoritative.
+        No alerts from supplied facts. Server risk gates remain authoritative.
       </p>
     );
   }
