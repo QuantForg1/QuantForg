@@ -220,7 +220,7 @@ def _suitability(*, symbol: str, fresh: str, news: str | None, regime: str) -> s
     return "observation_only"
 
 
-def _session_figure(read_at: datetime, *, observed_at: str) -> dict[str, Any]:
+def _session_figure(read_at: datetime, *, observed_at: str | None) -> dict[str, Any]:
     hour = read_at.astimezone(UTC).hour
     if hour < 7:
         name = "asia"
