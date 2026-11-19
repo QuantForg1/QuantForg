@@ -561,6 +561,23 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Market observation (read-only; never places orders) -----------------
+    market_observation_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/market-observation/{symbol}. "
+                "Reads a public quote and returns an observation. "
+                "Does not place, modify, or close trades and does not "
+                "change strategy selection or risk policy. Off until enabled."
+            ),
+            validation_alias=AliasChoices(
+                "MARKET_OBSERVATION_ENABLED",
+                "market_observation_enabled",
+            ),
+        ),
+    ] = False
+
     # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
     openai_enabled: Annotated[
         bool,
