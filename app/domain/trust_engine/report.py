@@ -543,15 +543,21 @@ def _average_holding(closed: list[dict[str, Any]]) -> dict[str, Any]:
         for row in closed
         if row["holding_time_seconds"]["value"] is not None
     ]
-    samples = [item for item in samples if item is not None]
-    if not samples:
+    total = Decimal("0")
+    count = 0
+    for item in samples:
+        if item is None:
+            continue
+        total += item
+        count += 1
+    if count == 0:
         return {
             "value": None,
             "status": "unavailable",
             "method": "exit_time_minus_entry_time",
         }
-    average = sum(samples, Decimal("0")) / Decimal(len(samples))
-    status = "verified" if len(samples) == len(closed) else "partially_verified"
+    average = total / Decimal(count)
+    status = "verified" if count == len(closed) else "partially_verified"
     return {
         "value": _qty(average, Decimal("0.001")),
         "status": status,
