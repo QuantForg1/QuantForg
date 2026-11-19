@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Building2, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
+import { AdminBrokerAccounts } from "@/components/admin/admin-broker-accounts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -164,7 +165,7 @@ export default function AdminBrokersPage() {
       <PageHeader
         eyebrow="Broker Management"
         title="Connected brokers"
-        description="Ownership and connection health from production MT5 bindings. Credentials and tokens are never returned. Disconnect and ownership transfer are not available from this surface."
+        description="Manage every customer broker account (disconnect, enable, remove) and review connection health. Credentials and tokens are never returned; every change is audited."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -183,6 +184,7 @@ export default function AdminBrokersPage() {
           </div>
         }
       />
+      <AdminBrokerAccounts />
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="neutral">As of {fmt(data.as_of)}</Badge>

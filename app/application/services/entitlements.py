@@ -4,6 +4,8 @@ A customer may start or resume a robot, and a multi-account worker may send
 an entry, only while the customer holds an active paid license. The free
 trial was discontinued on 19 Nov 2026; an old trial row no longer entitles.
 Owner/admin accounts are exempt (they operate the platform).
+A suspended/deactivated customer, or one whose robot access an admin removed
+(``user_access_overrides``), is not entitled even with a paid license.
 Pause, Stop and Emergency Stop are never gated: a customer can always reduce
 risk. Unknown state (storage unreadable) is not entitled.
 """
@@ -55,7 +57,14 @@ def check_trading_entitlement(
                 SELECT 1 FROM public.billing_trials t
                  WHERE t.user_id = $1::uuid AND lower(t.status) = 'active'
                    AND t.expires_at > now()
-              ) AS trial
+              ) AS trial,
+              (SELECT lower(status::text) FROM public.users WHERE id = $1::uuid)
+                AS user_status,
+              EXISTS (
+                SELECT 1 FROM public.user_access_overrides o
+                 WHERE o.user_id = $1::uuid AND o.feature = 'robot_trading'
+                   AND o.allowed = false
+              ) AS trading_removed
             """,
             str(user_id),
         )
@@ -67,6 +76,10 @@ def check_trading_entitlement(
     row = rows[0]
     if str(row.get("role") or "") in EXEMPT_ROLES:
         return Entitlement(True, "platform_operator", "role")
+    if str(row.get("user_status") or "active") in {"suspended", "deactivated"}:
+        return Entitlement(False, "ACCOUNT_SUSPENDED", "admin")
+    if row.get("trading_removed"):
+        return Entitlement(False, "ACCESS_REMOVED_BY_ADMIN", "admin")
     if row.get("licensed"):
         return Entitlement(True, "license_active", "license")
     return Entitlement(False, "SUBSCRIPTION_INACTIVE", "none")

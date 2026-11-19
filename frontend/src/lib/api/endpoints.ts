@@ -3830,3 +3830,43 @@ export const platformApi = {
       { auth: false, silent: true, timeoutMs: 20_000 },
     ),
 };
+
+
+/** Admin portal: customers, feature access, broker accounts (owner/admin). */
+export const adminManageApi = {
+  users: (params?: { q?: string; status?: string }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    if (params?.status) sp.set("status", params.status);
+    const qs = sp.toString();
+    return apiFetch<Record<string, unknown>>(`/admin/manage/users${qs ? `?${qs}` : ""}`);
+  },
+  user: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/admin/manage/users/${encodeURIComponent(id)}`),
+  updateUser: (id: string, body: { display_name?: string; role?: string; reason: string }) =>
+    apiFetch<Record<string, unknown>>(`/admin/manage/users/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body,
+    }),
+  setStatus: (id: string, body: { action: "suspend" | "reactivate" | "deactivate"; reason: string }) =>
+    apiFetch<Record<string, unknown>>(`/admin/manage/users/${encodeURIComponent(id)}/status`, {
+      method: "POST",
+      body,
+    }),
+  setAccess: (id: string, body: { feature: string; allowed: boolean; reason: string }) =>
+    apiFetch<Record<string, unknown>>(`/admin/manage/users/${encodeURIComponent(id)}/access`, {
+      method: "POST",
+      body,
+    }),
+  brokers: (includeRemoved = false) =>
+    apiFetch<Record<string, unknown>>(
+      `/admin/manage/brokers${includeRemoved ? "?include_removed=true" : ""}`,
+    ),
+  brokerAction: (id: string, body: { action: "disable" | "enable" | "remove"; reason: string }) =>
+    apiFetch<Record<string, unknown>>(`/admin/manage/brokers/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body,
+    }),
+  audit: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/admin/manage/audit?limit=${limit}`),
+};

@@ -2,277 +2,188 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight, Search, ShieldOff, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { PageMotion } from "@/components/desk/motion";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DeskEmpty,
-  DeskError,
-  DeskSkeleton,
-  DeskTable,
-} from "@/components/desk/primitives";
-import { NocPanel } from "@/components/ops/noc/noc-primitives";
-import { customerOpsApi } from "@/lib/api/endpoints";
-import { asList, asRecord, str } from "@/lib/desk";
+import { Input } from "@/components/ui/input";
+import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { adminManageApi } from "@/lib/api/endpoints";
+import { asList, asRecord, num, str } from "@/lib/desk";
+import { formatDate, subscriptionTone, userStatusTone } from "@/lib/admin/admin-format";
 import { useAuth } from "@/providers/auth-provider";
-import {
-  canAccessIteOps,
-  iteOpsAccessDeniedMessage,
-} from "@/lib/auth/ite-ops-access";
+import { canAccessIteOps, iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
+import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 25;
-
-function fmt(v: unknown, fallback = "—"): string {
-  if (v === null || v === undefined || v === "") return fallback;
-  return String(v);
-}
-
-function brokersCount(row: Record<string, unknown>): string {
-  const explicit =
-    row.brokers_count ?? row.broker_count ?? row.connections_count;
-  if (typeof explicit === "number" && Number.isFinite(explicit)) {
-    return String(explicit);
-  }
-  const conns = row.mt5_connections ?? row.brokers ?? row.connections;
-  if (Array.isArray(conns)) return String(conns.length);
-  return "—";
-}
-
-function createdAt(row: Record<string, unknown>): string {
-  const v =
-    row.created_at ?? row.registered_at ?? asRecord(row.profile).created_at;
-  return fmt(v, "—");
-}
+const STATUS_FILTERS = [
+  { id: "", label: "All" },
+  { id: "active", label: "Active" },
+  { id: "pending", label: "Pending" },
+  { id: "suspended", label: "Suspended" },
+  { id: "deactivated", label: "Deactivated" },
+];
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
   const allowed = canAccessIteOps(user);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [licenseFilter, setLicenseFilter] = useState("");
-  const [emailQuery, setEmailQuery] = useState("");
-  const [page, setPage] = useState(0);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
 
-  const fleetQ = useQuery({
-    queryKey: ["admin-users-fleet", statusFilter, licenseFilter],
-    queryFn: () =>
-      customerOpsApi.fleet({
-        status: statusFilter.trim() || undefined,
-        license: licenseFilter.trim() || undefined,
-      }),
+  const usersQ = useQuery({
+    queryKey: ["admin-manage-users", status],
+    queryFn: () => adminManageApi.users({ status: status || undefined }),
     enabled: allowed,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 
-  const fleetRoot = asRecord(fleetQ.data);
-  const fleetRows = useMemo(
-    () => asList(fleetRoot.customers).map(asRecord),
-    [fleetRoot.customers],
-  );
-
+  const data = asRecord(usersQ.data);
+  const rows = useMemo(() => asList(data.users).map(asRecord), [data.users]);
+  const byStatus = asRecord(data.by_status);
   const filtered = useMemo(() => {
-    const q = emailQuery.trim().toLowerCase();
-    if (!q) return fleetRows;
-    return fleetRows.filter((r) => {
-      const email = fmt(r.email, "").toLowerCase();
-      const name = fmt(r.display_name, "").toLowerCase();
-      const id = fmt(r.customer_id, "").toLowerCase();
-      return email.includes(q) || name.includes(q) || id.includes(q);
-    });
-  }, [fleetRows, emailQuery]);
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        str(r.email, "").toLowerCase().includes(q) ||
+        str(r.display_name, "").toLowerCase().includes(q),
+    );
+  }, [rows, query]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
-  const pageRows = filtered.slice(
-    safePage * PAGE_SIZE,
-    safePage * PAGE_SIZE + PAGE_SIZE,
+  const header = (
+    <PageHeader
+      eyebrow="Admin Portal"
+      title="Users"
+      description="Search customers, review their subscription and brokers, and manage access. Every change is recorded in the audit log."
+    />
   );
 
   if (!allowed) {
     return (
       <div className="min-w-0 space-y-4">
-        <PageHeader
-          eyebrow="Admin Portal"
-          title="User Management"
-          description="Production customer fleet — search, filter, and open CRM workspace."
-        />
-        <DeskError
-          message={iteOpsAccessDeniedMessage(user, undefined, "User Management")}
-        />
-      </div>
-    );
-  }
-
-  if (fleetQ.isLoading && !fleetQ.data) {
-    return (
-      <div className="min-w-0 space-y-4">
-        <PageHeader
-          eyebrow="Admin Portal"
-          title="User Management"
-          description="Production customer fleet — search, filter, and open CRM workspace."
-        />
-        <DeskSkeleton rows={12} />
-      </div>
-    );
-  }
-
-  if (fleetQ.error && !fleetQ.data) {
-    return (
-      <div className="min-w-0 space-y-4">
-        <PageHeader
-          eyebrow="Admin Portal"
-          title="User Management"
-          description="Production customer fleet — search, filter, and open CRM workspace."
-        />
-        <DeskError
-          message={iteOpsAccessDeniedMessage(
-            user,
-            fleetQ.error,
-            "User Management",
-          )}
-        />
+        {header}
+        <DeskError message={iteOpsAccessDeniedMessage(user, undefined, "User Management")} />
       </div>
     );
   }
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
-        eyebrow="Admin Portal"
-        title="User Management"
-        description="Institutional user CRM — fleet data from Customer Operations. Never fabricates accounts."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href="/admin/customer-ops#fleet">COP fleet tab</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/admin/support">Support desk</Link>
-            </Button>
-          </div>
-        }
-      />
-      <PageMotion>
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="neutral">{fmt(fleetRoot.count, "0")} matched</Badge>
-            <Badge tone="neutral">
-              {fmt(fleetRoot.total_unfiltered, String(filtered.length))} total
-            </Badge>
-          </div>
+      {header}
 
-          <NocPanel
-            title="Users"
-            action={
-              <div className="flex flex-wrap gap-2">
-                <input
-                  className="min-w-[180px] border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-[11px]"
-                  placeholder="Search email / name / id"
-                  value={emailQuery}
-                  onChange={(e) => {
-                    setEmailQuery(e.target.value);
-                    setPage(0);
-                  }}
-                />
-                <input
-                  className="w-[120px] border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-[11px]"
-                  placeholder="Status"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setPage(0);
-                  }}
-                />
-                <input
-                  className="w-[120px] border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-[11px]"
-                  placeholder="License"
-                  value={licenseFilter}
-                  onChange={(e) => {
-                    setLicenseFilter(e.target.value);
-                    setPage(0);
-                  }}
-                />
-              </div>
-            }
-          >
-            {filtered.length === 0 ? (
-              <DeskEmpty
-                icon={Users}
-                title="No users match"
-                description="Adjust filters or wait for production users. Data comes from customer-ops fleet only."
-              />
-            ) : (
-              <>
-                <DeskTable
-                  columns={[
-                    "Email",
-                    "Status",
-                    "License",
-                    "Brokers",
-                    "Created",
-                    "",
-                  ]}
-                  rows={pageRows.map((r) => {
-                    const id = str(r.customer_id, "");
-                    const label = fmt(r.email || r.display_name || id);
-                    return [
-                      <Link
-                        key={`email-${id}`}
-                        href={`/admin/users/${encodeURIComponent(id)}`}
-                        className="text-[var(--accent)] hover:underline"
-                      >
-                        {label}
-                      </Link>,
-                      fmt(r.status),
-                      fmt(r.license),
-                      brokersCount(r),
-                      createdAt(r),
-                      <Button key={`open-${id}`} asChild size="sm" variant="outline">
-                        <Link href={`/admin/users/${encodeURIComponent(id)}`}>
-                          Open
-                        </Link>
-                      </Button>,
-                    ];
-                  })}
-                />
-                {pageCount > 1 ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
-                    <p className="text-[11px] text-[var(--fg-muted)]">
-                      Page {safePage + 1} of {pageCount} · {filtered.length}{" "}
-                      users
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={safePage <= 0}
-                        onClick={() => setPage((p) => Math.max(0, p - 1))}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={safePage >= pageCount - 1}
-                        onClick={() =>
-                          setPage((p) => Math.min(pageCount - 1, p + 1))
-                        }
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {(["active", "pending", "suspended", "deactivated"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatus(status === s ? "" : s)}
+            className={cn(
+              "rounded-[var(--radius-os)] border bg-[var(--surface-2)] px-4 py-3 text-left transition-colors",
+              status === s ? "border-[var(--accent)]" : "border-[var(--border)] hover:border-[var(--border-strong)]",
             )}
-          </NocPanel>
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">{s}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{num(byStatus[s]) || 0}</p>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--fg-subtle)]" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by email or name"
+            className="pl-9"
+            aria-label="Search users"
+          />
         </div>
-      </PageMotion>
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by status">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.id || "all"}
+              type="button"
+              role="tab"
+              aria-selected={status === f.id}
+              onClick={() => setStatus(f.id)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-medium",
+                status === f.id
+                  ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--fg)]"
+                  : "border-[var(--border)] text-[var(--fg-muted)] hover:text-[var(--fg)]",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {usersQ.isLoading ? (
+        <DeskSkeleton rows={8} />
+      ) : usersQ.isError ? (
+        <DeskError message="Users could not be loaded." onRetry={() => usersQ.refetch()} />
+      ) : filtered.length === 0 ? (
+        <DeskEmpty icon={Users} title="No users match" description="Change the search or the status filter." />
+      ) : (
+        <div className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)]">
+          <div className="hidden grid-cols-[2fr_1fr_1fr_0.7fr_1.2fr_24px] gap-3 border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)] md:grid">
+            <span>User</span>
+            <span>Status</span>
+            <span>Subscription</span>
+            <span>Brokers</span>
+            <span>Last sign-in</span>
+            <span />
+          </div>
+          <ul className="divide-y divide-[var(--border)]">
+            {filtered.map((r) => {
+              const id = str(r.id);
+              const st = str(r.status);
+              const sub = str(r.subscription, "none");
+              return (
+                <li key={id}>
+                  <Link
+                    href={`/admin/users/${encodeURIComponent(id)}`}
+                    className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] md:grid-cols-[2fr_1fr_1fr_0.7fr_1.2fr_24px]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{str(r.email)}</span>
+                      <span className="flex items-center gap-1.5 truncate text-xs text-[var(--fg-muted)]">
+                        {str(r.display_name) || "—"}
+                        {str(r.role) !== "trader" ? <Badge tone="accent">{str(r.role)}</Badge> : null}
+                        {num(r.restrictions) > 0 ? (
+                          <span className="inline-flex items-center gap-0.5 text-[var(--warning)]">
+                            <ShieldOff className="h-3 w-3" /> {num(r.restrictions)} restricted
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-1 flex flex-wrap gap-1.5 md:hidden">
+                        <Badge tone={userStatusTone(st)}>{st}</Badge>
+                        <Badge tone={subscriptionTone(sub)}>{sub}</Badge>
+                      </span>
+                    </span>
+                    <span className="hidden md:block">
+                      <Badge tone={userStatusTone(st)}>{st}</Badge>
+                    </span>
+                    <span className="hidden md:block">
+                      <Badge tone={subscriptionTone(sub)}>{sub}</Badge>
+                    </span>
+                    <span className="hidden text-sm tabular-nums md:block">{num(r.brokers) || 0}</span>
+                    <span className="hidden text-xs text-[var(--fg-muted)] md:block">{formatDate(str(r.last_login_at, ""))}</span>
+                    <ChevronRight className="h-4 w-4 text-[var(--fg-subtle)]" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {filtered.length > 0 ? (
+        <p className="text-xs text-[var(--fg-subtle)]">
+          Showing {filtered.length} of {num(data.count) || rows.length} users.
+        </p>
+      ) : null}
     </div>
   );
 }

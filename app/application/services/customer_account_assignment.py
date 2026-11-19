@@ -100,7 +100,8 @@ def next_unassigned_account(
 def account_still_active(
     broker_account_id: UUID | str, *, fetch: Any | None = None
 ) -> bool:
-    """False once the account is revoked/removed (its slot must be freed).
+    """False once the account is revoked/removed or admin-disabled (its slot
+    must be freed).
 
     Unknown (storage unreadable) counts as active so a read failure never
     tears down a working customer session.
@@ -124,7 +125,8 @@ def account_still_active(
         return True
     if not rows:
         return False
-    return str(rows[0].get("status") or "").lower() != "revoked"
+    # Revoked (removed) or disabled by an admin: free the slot.
+    return str(rows[0].get("status") or "").lower() not in {"revoked", "disabled"}
 
 
 def queue_depth(*, taken_account_ids: set[str], fetch: Any | None = None) -> int:

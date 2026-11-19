@@ -206,6 +206,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "app.presentation.routers.live_trading_control",
     ),
     ("admin_control", "app.presentation.routers.admin_control"),
+    ("admin_management", "app.presentation.routers.admin_management"),
     (
         "user_risk_preferences",
         "app.presentation.routers.user_risk_preferences",
