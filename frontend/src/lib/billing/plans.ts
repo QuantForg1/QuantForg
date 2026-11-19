@@ -5,7 +5,7 @@
  * only after verified IPN (`payment_status=finished`). Client clicks never activate access.
  *
  * DB license tiers: starter / professional / enterprise (Premium → enterprise).
- * Free trial uses license tier `trial` with Starter entitlements for 7 days.
+ * No free trial or free plan: the robot runs only on an active paid license.
  */
 
 export type PlanId = "starter" | "professional" | "premium";
@@ -24,7 +24,7 @@ export type BillingPlan = {
 
 export type PlanComparisonRow = {
   feature: string;
-  trial: string;
+  unpaid: string;
   starter: string;
   professional: string;
   premium: string;
@@ -44,94 +44,76 @@ export const BILLING_PROVIDER = {
     "Pay with Crypto Payment. Paid access activates only after QuantForg verifies a completed payment — never from a browser redirect alone. Automatic monthly crypto charging is not enabled; renew with a new invoice.",
 } as const;
 
-export const TRIAL_DAYS = 7;
+/** Free trial and free plan are discontinued: the robot runs on a paid plan. */
+export const FREE_TRIAL_AVAILABLE = false;
 
-export const TRIAL_POSITIONING = `${TRIAL_DAYS}-day Starter access without payment details. One claim per customer. Does not auto-convert to a paid plan.`;
-
-export const TRIAL_EXPIRES_BEHAVIOR =
-  "When the trial ends, trial-only entitlements are revoked. Your account, profile, invoices, and history are preserved. Choose a paid plan to continue — you will not be charged automatically.";
-
-export const TRIAL_FEATURES: readonly string[] = [
-  "Access to QuantForg dashboard",
-  "Live market research and chart access",
-  "Strategy and signal exploration",
-  "Controlled introduction to automated trading",
-  "Auto-trading only through explicitly enabled, approved broker and risk configurations",
-  "Basic portfolio and position visibility",
-  "Essential risk visibility",
-  "Limited research and support",
+/** What an account without a subscription can and cannot do. */
+export const UNPAID_ACCESS: readonly { feature: string; allowed: boolean }[] = [
+  { feature: "Create an account and sign in", allowed: true },
+  { feature: "Connect your MT5 broker", allowed: true },
+  { feature: "Broker verification", allowed: true },
+  { feature: "View balance, equity and margin", allowed: true },
+  { feature: "View strategies and market research", allowed: true },
+  { feature: "Start the robot", allowed: false },
+  { feature: "Open new trades / automated execution", allowed: false },
 ];
 
 export const PLAN_COMPARISON_ROWS: readonly PlanComparisonRow[] = [
   {
-    feature: "Dashboard & workspace",
-    trial: "Included",
-    starter: "Essential",
-    professional: "Full",
-    premium: "Full",
-  },
-  {
-    feature: "Market research & charts",
-    trial: "Included",
-    starter: "Core",
-    professional: "Expanded",
-    premium: "Advanced",
-  },
-  {
-    feature: "Strategy & signal exploration",
-    trial: "Exploration",
-    starter: "Standard",
-    professional: "Expanded",
-    premium: "Advanced",
-  },
-  {
-    feature: "Broker connection workflows",
-    trial: "Guided intro",
+    feature: "Account, broker connection & verification",
+    unpaid: "Included",
     starter: "Included",
     professional: "Included",
     premium: "Included",
   },
   {
-    feature: "Automated trading access",
-    trial: "Controlled intro",
-    starter: "Core (risk-gated)",
-    professional: "Enhanced (risk-gated)",
-    premium: "Full eligible (risk-gated)",
+    feature: "Balance, equity & broker details",
+    unpaid: "Included",
+    starter: "Included",
+    professional: "Included",
+    premium: "Included",
   },
   {
-    feature: "Portfolio & positions",
-    trial: "Basic",
-    starter: "Standard",
-    professional: "Full workspace",
-    premium: "Advanced",
+    feature: "Start the robot / automated trading",
+    unpaid: "Subscription required",
+    starter: "Included",
+    professional: "Included",
+    premium: "Included",
+  },
+  {
+    feature: "Verified broker accounts",
+    unpaid: "1 (view only)",
+    starter: "1",
+    professional: "1",
+    premium: "1",
+  },
+  {
+    feature: "Strategies & signals",
+    unpaid: "View",
+    starter: "Core",
+    professional: "Expanded",
+    premium: "Full eligible",
+  },
+  {
+    feature: "Analytics & reports",
+    unpaid: "Basic",
+    starter: "Essential",
+    professional: "Advanced",
+    premium: "Advanced + reporting",
   },
   {
     feature: "Risk controls",
-    trial: "Essential visibility",
-    starter: "Standard (enforced)",
-    professional: "Standard (enforced)",
-    premium: "Standard (enforced)",
-  },
-  {
-    feature: "Analytics & monitoring",
-    trial: "Limited",
-    starter: "Core",
-    professional: "Advanced",
-    premium: "Enhanced",
+    unpaid: "Your risk profile",
+    starter: "Enforced",
+    professional: "Enforced",
+    premium: "Enforced",
   },
   {
     feature: "Support",
-    trial: "Limited",
+    unpaid: "Help center",
     starter: "Email",
     professional: "Priority",
     premium: "Priority + onboarding",
-  },
-  {
-    feature: "License management",
-    trial: "Trial license",
-    starter: "Standard",
-    professional: "Standard",
-    premium: "Advanced",
   },
 ];
 
@@ -141,17 +123,18 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "starter",
     name: "Starter",
     monthlyPriceUsd: 49,
-    positioning: "Essential QuantForg workspace for individual operators.",
+    positioning: "For individual traders starting with automated trading.",
     ctaLabel: "Choose Starter",
     entitlements: [
-      "Essential QuantForg workspace",
-      "Core market research and chart access",
-      "Standard strategy access",
-      "Broker connection workflows",
-      "Core automated trading capabilities (subject to eligibility and risk checks)",
-      "Standard portfolio and position visibility",
-      "Standard risk controls (never bypassed by plan)",
-      "Email support",
+      "QuantForg dashboard",
+      "Live market data and chart access",
+      "Core strategies and signals",
+      "1 verified broker account",
+      "1 active robot",
+      "Essential analytics and portfolio visibility",
+      "Standard risk management (your own risk profile)",
+      "Standard email support",
+      "Subscription-controlled LIVE execution",
     ],
   },
   {
@@ -159,17 +142,16 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "professional",
     name: "Professional",
     monthlyPriceUsd: 99,
-    positioning: "Expanded tools for active professional desks.",
+    positioning: "For active traders who need expanded trading intelligence.",
     highlighted: true,
     ctaLabel: "Choose Professional",
     entitlements: [
       "Everything in Starter",
-      "Expanded strategy and research tools",
-      "Advanced analytics surfaces",
-      "Portfolio and performance workspaces",
-      "Enhanced trading insights and monitoring",
-      "Priority product support",
-      "Professional operator features",
+      "Expanded strategy access",
+      "Advanced analytics and performance reports",
+      "Enhanced market and risk monitoring",
+      "Advanced portfolio workspace",
+      "Priority support",
     ],
   },
   {
@@ -177,17 +159,16 @@ export const BILLING_PLANS: BillingPlan[] = [
     licenseTier: "enterprise",
     name: "Premium",
     monthlyPriceUsd: 199,
-    positioning: "Full eligible platform access with enhanced support.",
+    positioning: "For advanced operators who want every eligible tool.",
     ctaLabel: "Choose Premium",
     entitlements: [
       "Everything in Professional",
-      "Full eligible platform feature access",
-      "Advanced research and strategy tools",
-      "Enhanced analytics and reporting",
-      "Advanced monitoring and account management",
-      "Priority support",
-      "Premium onboarding assistance",
+      "Full eligible strategy access",
+      "Advanced analytics and reporting",
+      "Enhanced account and execution monitoring",
       "Advanced license management",
+      "Premium onboarding",
+      "Priority support",
     ],
   },
 ];

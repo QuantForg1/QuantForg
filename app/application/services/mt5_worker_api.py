@@ -555,6 +555,19 @@ class Mt5WorkerApiFacade:
         account_id = worker.broker_account_id
         if bool(payload.get("ok")) and bool(payload.get("trade_allowed")):
             bcv.mark(account_id, state=bcv.CONNECTED)
+            # Verified. Without an active subscription the robot does not
+            # trade, so the terminal is handed back for other customers; the
+            # account stays verified/connected in the user's UI.
+            from app.application.services.entitlements import (
+                check_trading_entitlement,
+            )
+
+            if not check_trading_entitlement(user_id=worker.user_id).allowed:
+                bcv.mark_idle(account_id)
+                try:
+                    self.revoke(worker_id=worker_id)
+                except Exception:
+                    logger.warning("verified_unsubscribed_worker_release_failed")
             return
         verdict = bcv.classify_failure(str(payload.get("error") or ""))
         if verdict is None:

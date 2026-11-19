@@ -21,7 +21,8 @@ def _f(role: str, licensed: bool, trial: bool):
         ("owner", False, False, True, "platform_operator"),
         ("admin", False, False, True, "platform_operator"),
         ("trader", True, False, True, "license_active"),
-        ("trader", False, True, True, "trial_active"),
+        # Free trial discontinued: an active trial row no longer entitles.
+        ("trader", False, True, False, "SUBSCRIPTION_INACTIVE"),
         ("trader", False, False, False, "SUBSCRIPTION_INACTIVE"),
     ],
 )

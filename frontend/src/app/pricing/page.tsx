@@ -16,10 +16,7 @@ import {
   formatUsd,
   PAYMENT_METHOD_LABEL,
   PLAN_COMPARISON_ROWS,
-  TRIAL_DAYS,
-  TRIAL_EXPIRES_BEHAVIOR,
-  TRIAL_FEATURES,
-  TRIAL_POSITIONING,
+  UNPAID_ACCESS,
 } from "@/lib/billing/plans";
 
 export const metadata: Metadata = {
@@ -56,14 +53,26 @@ export default function PricingPage() {
             </p>
           </div>
 
-          <div className="mx-auto mt-8 max-w-3xl rounded-[var(--radius-os)] border border-[var(--accent)]/35 bg-[var(--accent-soft)] px-4 py-4 text-center sm:px-6">
-            <p className="text-sm font-semibold text-[var(--fg)]">
-              {TRIAL_DAYS}-day Starter free trial
+          <div className="mx-auto mt-8 max-w-3xl rounded-[var(--radius-os)] border border-[var(--accent)]/35 bg-[var(--accent-soft)] px-4 py-4 sm:px-6">
+            <p className="text-center text-sm font-semibold text-[var(--fg)]">
+              Connect and verify your broker for free. Subscribe to start the robot.
             </p>
-            <p className="mt-1 text-sm leading-relaxed text-[var(--fg-muted)]">{TRIAL_POSITIONING}</p>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--fg-subtle)]">
-              {TRIAL_EXPIRES_BEHAVIOR}
-            </p>
+            <ul className="mx-auto mt-3 grid max-w-xl gap-1.5 text-sm sm:grid-cols-2">
+              {UNPAID_ACCESS.map((row) => (
+                <li
+                  key={row.feature}
+                  className={`flex gap-2 ${row.allowed ? "text-[var(--fg-muted)]" : "text-[var(--fg-subtle)]"}`}
+                >
+                  <span aria-hidden className={row.allowed ? "text-[var(--accent)]" : ""}>
+                    {row.allowed ? "✓" : "—"}
+                  </span>
+                  <span>
+                    {row.feature}
+                    {row.allowed ? "" : " · subscription required"}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {!ANNUAL_BILLING_SUPPORTED ? (
@@ -73,40 +82,7 @@ export default function PricingPage() {
             </p>
           ) : null}
 
-          <div className="mt-10 grid items-stretch gap-4 sm:gap-5 lg:grid-cols-4">
-            <article className="qf-glass-card relative flex h-full flex-col p-5 sm:p-6 ring-1 ring-[var(--accent)]/50">
-              <span className="qf-lifetime-badge absolute -top-3 left-1/2 -translate-x-1/2">
-                Free trial
-              </span>
-              <div className="min-h-[1.75rem]" aria-hidden />
-              <h2 className="text-xl font-semibold tracking-tight">Free Trial</h2>
-              <p className="mt-2 min-h-[3.2rem] text-sm leading-relaxed text-[var(--fg-muted)]">
-                Starter entitlements for {TRIAL_DAYS} days. One claim per customer. No payment
-                details required to start.
-              </p>
-              <p className="mt-5 flex items-baseline gap-1">
-                <span className="qf-num-lg text-4xl font-semibold">$0</span>
-                <span className="text-sm text-[var(--fg-subtle)]">/ {TRIAL_DAYS} days</span>
-              </p>
-              <p className="mt-1 text-xs text-[var(--fg-subtle)]">No payment details required</p>
-              <ul className="mt-5 flex-1 space-y-2">
-                {TRIAL_FEATURES.map((item) => (
-                  <li key={item} className="flex gap-2 text-sm text-[var(--fg-muted)]">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-6 space-y-2">
-                <Link href="/register" className={`${pricingBtnPrimary} w-full`}>
-                  Create account & start trial
-                </Link>
-                <Link href="/settings" className={`${pricingBtnSecondary} w-full`}>
-                  Start trial from Subscription
-                </Link>
-              </div>
-            </article>
-
+          <div className="mt-10 grid items-stretch gap-4 sm:gap-5 lg:grid-cols-3">
             {BILLING_PLANS.map((plan) => (
               <article
                 key={plan.id}
@@ -187,7 +163,7 @@ export default function PricingPage() {
               <thead className="bg-[var(--surface)]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Capability</th>
-                  <th className="px-4 py-3 font-medium">Free Trial</th>
+                  <th className="px-4 py-3 font-medium">Without subscription</th>
                   <th className="px-4 py-3 font-medium">Starter</th>
                   <th className="px-4 py-3 font-medium">Professional</th>
                   <th className="px-4 py-3 font-medium">Premium</th>
@@ -199,7 +175,7 @@ export default function PricingPage() {
                     <th scope="row" className="px-4 py-3 font-medium text-[var(--fg)]">
                       {row.feature}
                     </th>
-                    <td className="px-4 py-3 text-[var(--fg-muted)]">{row.trial}</td>
+                    <td className="px-4 py-3 text-[var(--fg-muted)]">{row.unpaid}</td>
                     <td className="px-4 py-3 text-[var(--fg-muted)]">{row.starter}</td>
                     <td className="px-4 py-3 text-[var(--fg-muted)]">{row.professional}</td>
                     <td className="px-4 py-3 text-[var(--fg-muted)]">{row.premium}</td>

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -27,7 +28,6 @@ from app.domain.billing.plans import (
     get_plan,
     plan_id_for_license_tier,
     plans_public,
-    trial_public,
 )
 from app.domain.exceptions.base import (
     NotFoundError,
@@ -101,7 +101,7 @@ def billing_provider_status(settings: Settings) -> dict[str, Any]:
             "QuantForg verifies a completed payment — never from a browser redirect alone."
             if checkout_open
             else (
-                "Paid plans open soon. You can start the free trial now."
+                "Paid plans open soon."
                 if configured
                 else (
                     "Crypto Payment is not configured on the API yet. "
@@ -141,15 +141,15 @@ class BillingService:
         )
 
     def list_plans(self) -> dict[str, Any]:
-        days = int(self.settings.billing_trial_days)
         return {
             "plans": plans_public(),
-            "trial": trial_public(days=days),
+            # Free trial and free plan are discontinued (2026-11-19).
+            "trial": None,
             "comparison": comparison_public(),
             "provider": billing_provider_status(self.settings),
             "grace_days": int(self.settings.billing_grace_days),
             "period_days": int(self.settings.billing_period_days),
-            "trial_days": days,
+            "trial_days": 0,
             "payment_method_label": "Crypto Payment",
             "disclaimer": BILLING_DISCLAIMER,
         }
@@ -158,7 +158,6 @@ class BillingService:
         """Public plan catalog merged with admin DB overlays when available."""
         from app.domain.billing.plan_overrides import list_plans_merged
 
-        days = int(self.settings.billing_trial_days)
         plans = plans_public()
         uow = await _uow()
         try:
@@ -173,12 +172,13 @@ class BillingService:
         return {
             "plans": active_plans,
             "all_plans": plans,
-            "trial": trial_public(days=days),
+            # Free trial and free plan are discontinued (2026-11-19).
+            "trial": None,
             "comparison": comparison_public(),
             "provider": billing_provider_status(self.settings),
             "grace_days": int(self.settings.billing_grace_days),
             "period_days": int(self.settings.billing_period_days),
-            "trial_days": days,
+            "trial_days": 0,
             "payment_method_label": "Crypto Payment",
             "disclaimer": BILLING_DISCLAIMER,
         }
@@ -270,7 +270,18 @@ class BillingService:
                 await session.rollback()
                 trial_row = None
             trial = await _sync_trial_row(session, trial_row)
+            from app.application.services.entitlements import (
+                check_trading_entitlement,
+            )
+
+            ent = await asyncio.to_thread(check_trading_entitlement, user_id=user_id)
             return {
+                # Server truth for the UI: may the robot trade for this user?
+                "robot_access": {
+                    "allowed": bool(ent.allowed),
+                    "reason": ent.reason,
+                    "source": ent.source,
+                },
                 "provider": billing_provider_status(self.settings),
                 "payment_method_label": "Crypto Payment",
                 "license": _row_license(license_row),
@@ -294,6 +305,12 @@ class BillingService:
         source_ip: str = "",
         claim_fingerprint: str = "",
     ) -> dict[str, Any]:
+        # The free trial is discontinued: the robot runs on a paid plan only.
+        raise ValidationError(
+            "The free trial is no longer offered. Choose a plan to activate "
+            "your QuantForg Robot.",
+            code="TRIAL_DISCONTINUED",
+        )
         if not email_verified:
             raise ValidationError(
                 "Verify your email before starting a free trial",
@@ -2150,40 +2167,22 @@ def _derive_subscription(
             "invoice_url": pending.get("invoice_url"),
             "order_code": pending.get("order_code"),
         }
-    if trial and trial.get("status") == "active":
-        return {
-            **base,
-            "state": "trial",
-            "subscription_type": "trial",
-            "plan_id": "starter",
-            "plan_name": "Starter Trial",
-            "activated_at": trial.get("started_at"),
-            "trial_started_at": trial.get("started_at"),
-            "trial_expires_at": trial.get("expires_at"),
-            "period_end": trial.get("expires_at"),
-            "days_remaining": trial.get("days_remaining"),
-            "trial": True,
-        }
-    if trial and trial.get("status") == "expired":
-        return {
-            **base,
-            "state": "trial_expired",
-            "subscription_type": "trial",
-            "plan_id": "starter",
-            "plan_name": "Starter Trial",
-            "trial_started_at": trial.get("started_at"),
-            "trial_expires_at": trial.get("expires_at"),
-            "period_end": trial.get("expires_at"),
-        }
-    if license_row is not None and str(license_row.get("status")) == "active":
+    # Free trial discontinued (19 Nov 2026): a trial row or trial license is
+    # not a subscription and never shows as one.
+    _ = trial
+    if (
+        license_row is not None
+        and str(license_row.get("status")) == "active"
+        and str(license_row.get("tier") or "") != "trial"
+    ):
         tier = str(license_row.get("tier") or "")
         plan_id = plan_id_for_license_tier(tier)
         return {
             **base,
-            "state": "trial" if tier == "trial" else "active",
-            "subscription_type": "trial" if tier == "trial" else "paid",
+            "state": "active",
+            "subscription_type": "paid",
             "plan_id": plan_id,
-            "plan_name": ("Starter Trial" if tier == "trial" else _plan_name(plan_id)),
+            "plan_name": _plan_name(plan_id),
             "activated_at": _iso(license_row.get("issued_at")),
             "period_end": _iso(license_row.get("expires_at")),
             "next_renewal_due": _iso(license_row.get("expires_at")),

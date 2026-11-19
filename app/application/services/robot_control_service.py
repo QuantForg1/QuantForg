@@ -131,6 +131,7 @@ def list_accounts(*, user_id: UUID) -> list[dict[str, Any]]:
                 "environment": str(r.get("environment") or "").upper(),
                 "account_status": str(r.get("status") or ""),
                 "trade_allowed_reported": str(meta.get("trade_allowed") or "unknown"),
+                "verification": str(meta.get("verification") or ""),
                 "robot_state": str(r.get("robot_state") or RUNNING),
                 "robot_reason": str(r.get("robot_reason") or ""),
                 "robot_updated_at": (
@@ -284,7 +285,7 @@ def robot_status(
     if entitled is False:
         return {
             "code": WAITING,
-            "label": "Not trading · subscription inactive",
+            "label": "Not trading · subscription required",
         }
     if conn == ROBOT_READY and entitled is True:
         if execution_enabled is True:
@@ -304,6 +305,7 @@ def robot_status(
         REQUIRES_USER_ACTION: "check your MT5 login details",
         DEGRADED: "terminal degraded",
         CONNECTED: "trade permission not yet confirmed",
+        BROKER_VERIFIED: "starting a trading terminal for your account",
     }.get(conn, "status not yet confirmed")
     return {"code": WAITING, "label": f"Not trading · {reason}"}
 
@@ -345,7 +347,8 @@ def apply_action(
         if not ent.allowed:
             raise RobotControlError(
                 "subscription_required",
-                "An active subscription or trial is required to run the robot",
+                "Choose a subscription plan to activate your QuantForg Robot. "
+                "Your broker connection stays saved.",
                 402,
             )
     readiness = Readiness(ready=True)
@@ -516,6 +519,9 @@ REQUIRES_USER_ACTION = "REQUIRES_USER_ACTION"
 # Broker evidence could not be read (gateway/worker status timed out). Never
 # shown as connected; new entries stay blocked by the execution path.
 UNAVAILABLE = "UNAVAILABLE"
+# MT5 accepted the login (verified); no live terminal session is held for it
+# right now, e.g. no active subscription. The connection stays shown.
+BROKER_VERIFIED = "BROKER_VERIFIED"
 
 _USER_ACTION_ERRORS = ("login_failed", "password", "server_required", "invalid_account")
 
@@ -557,6 +563,12 @@ def connection_state(
         if str(w.get("broker_account_id")) == str(account.get("id"))
     ]
     if not bound:
+        if str(account.get("verification") or "") == "connected":
+            return {
+                "state": BROKER_VERIFIED,
+                "source": "verification",
+                "trade_allowed": None,
+            }
         if not evidence_available:
             return {"state": UNAVAILABLE, "source": "none", "trade_allowed": None}
         return {"state": NOT_CONNECTED, "source": "none", "trade_allowed": None}

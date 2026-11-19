@@ -105,6 +105,7 @@ async def my_robot_accounts(user: CurrentUser, request: Request) -> dict[str, An
             {
                 "id": acct["broker_account_id"],
                 "external_account_id": acct.pop("_login", ""),
+                "verification": acct.get("verification", ""),
             },
             gateway_account=gateway_account,
             workers=workers,

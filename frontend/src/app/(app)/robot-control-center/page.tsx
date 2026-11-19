@@ -80,6 +80,13 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : "Request failed";
 }
 
+function isSubscriptionRequired(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 402) return true;
+  const detail = asRecord(asRecord(err.details).detail);
+  return str(detail.code, err.code ?? "") === "subscription_required";
+}
+
 function StatusDot({
   tone,
 }: {
@@ -133,6 +140,7 @@ export default function RobotControlCenterPage() {
     label: string;
   } | null>(null);
   const [reason, setReason] = useState("");
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
 
   const accountsQ = useQuery({
     queryKey: ["robot-control-accounts"],
@@ -158,8 +166,15 @@ export default function RobotControlCenterPage() {
       );
       void qc.invalidateQueries({ queryKey: ["robot-control-accounts"] });
     },
-    onError: (err) => toast.error(errorText(err)),
+    onError: (err) => {
+      if (isSubscriptionRequired(err)) {
+        setSubscribeOpen(true);
+        return;
+      }
+      toast.error(errorText(err));
+    },
   });
+  const subscriptionInactive = data.subscription_active === false;
 
   const primary = accounts[0] ?? null;
   const primaryStatus = asRecord(primary?.status);
@@ -242,6 +257,27 @@ export default function RobotControlCenterPage() {
           </div>
         </div>
       </header>
+
+      {subscriptionInactive ? (
+        <div
+          role="status"
+          data-testid="rcc-subscription-required"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-os)] border border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] px-4 py-3"
+        >
+          <p className="text-sm text-[var(--fg)]">
+            <span className="font-semibold">Subscription required.</span>{" "}
+            <span className="text-[var(--fg-muted)]">
+              Your broker stays connected and verified. Choose a plan to let the robot trade.
+            </span>
+          </p>
+          <Link
+            href="/pricing"
+            className="qf-btn-primary inline-flex h-9 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
+          >
+            View plans
+          </Link>
+        </div>
+      ) : null}
       <PageMotion className="space-y-4">
         <section
           aria-label="Robot operating summary"
@@ -456,6 +492,34 @@ export default function RobotControlCenterPage() {
         <PositionsCard />
       </PageMotion>
 
+      <Dialog open={subscribeOpen} onOpenChange={setSubscribeOpen}>
+        <DialogContent className="w-[min(94vw,460px)]" data-testid="rcc-activate-robot">
+          <DialogTitle>Activate Your QuantForg Robot</DialogTitle>
+          <p className="text-sm text-[var(--fg-muted)]">
+            Your broker has been successfully connected and verified. To activate automated
+            trading, choose a subscription plan.
+          </p>
+          <p className="text-sm text-[var(--fg-muted)]">
+            Your broker connection and account information will remain saved. No trades will be
+            executed until your subscription is active and all trading requirements are
+            satisfied.
+          </p>
+          <div className="flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                Not now
+              </Button>
+            </DialogClose>
+            <Link
+              href="/pricing"
+              className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
+            >
+              Continue to Plans
+            </Link>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <DialogContent className="w-[min(94vw,440px)]">
           {confirm ? (
@@ -464,6 +528,14 @@ export default function RobotControlCenterPage() {
               onSubmit={(ev) => {
                 ev.preventDefault();
                 if (confirm.action === "emergency_stop" && !reason.trim()) return;
+                if (
+                  subscriptionInactive &&
+                  (confirm.action === "start" || confirm.action === "resume")
+                ) {
+                  setConfirm(null);
+                  setSubscribeOpen(true);
+                  return;
+                }
                 act.mutate({ id: confirm.id, action: confirm.action, reason });
                 setConfirm(null);
               }}

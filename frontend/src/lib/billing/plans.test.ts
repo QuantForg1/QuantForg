@@ -6,7 +6,9 @@ import {
   formatUsd,
   getPlan,
   PAYMENT_METHOD_LABEL,
-  TRIAL_DAYS,
+  FREE_TRIAL_AVAILABLE,
+  PLAN_COMPARISON_ROWS,
+  UNPAID_ACCESS,
 } from "./plans.ts";
 
 assert.equal(BILLING_PLANS.length, 3);
@@ -20,7 +22,10 @@ assert.equal(BILLING_PROVIDER.configured, true);
 assert.equal(BILLING_PROVIDER.paymentMethodLabel, "Crypto Payment");
 assert.equal(PAYMENT_METHOD_LABEL, "Crypto Payment");
 assert.equal(BILLING_PROVIDER.recurringSupported, false);
-assert.equal(TRIAL_DAYS, 7);
+assert.equal(FREE_TRIAL_AVAILABLE, false);
+assert.ok(UNPAID_ACCESS.some((r) => r.feature === "Start the robot" && !r.allowed));
+assert.ok(UNPAID_ACCESS.some((r) => r.feature === "Connect your MT5 broker" && r.allowed));
+assert.ok(PLAN_COMPARISON_ROWS.every((r) => !("trial" in r)));
 assert.equal(getPlan("professional")?.name, "Professional");
 assert.equal(formatUsd(49), "$49");
 assert.ok(!JSON.stringify(BILLING_PROVIDER).includes("NOWPayments"));

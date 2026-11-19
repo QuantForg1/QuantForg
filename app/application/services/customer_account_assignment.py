@@ -70,6 +70,17 @@ def next_unassigned_account(
                      SELECT 1 FROM public.users u
                       WHERE u.id = a.user_id
                         AND lower(u.role::text) IN ('owner', 'admin'))
+               -- A slot is used either to verify a new connection, or to
+               -- trade for a paying subscriber. A verified account without
+               -- an active subscription stays "connected" in the UI but
+               -- does not hold a terminal other customers need.
+               AND (
+                     coalesce(a.metadata->>'verification', '') <> 'connected'
+                  OR EXISTS (
+                     SELECT 1 FROM public.licenses l
+                      WHERE l.user_id = a.user_id
+                        AND lower(l.status) = 'active'
+                        AND (l.expires_at IS NULL OR l.expires_at > now())))
              ORDER BY a.created_at
              LIMIT 200
             """,
