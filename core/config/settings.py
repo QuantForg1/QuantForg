@@ -545,6 +545,22 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Trust Engine (read-only performance; never places orders) -----------
+    trust_engine_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/trust/performance for the signed-in user. "
+                "Read-only broker history and account snapshot. Does not place, "
+                "modify, or close trades and does not change risk policy. "
+                "Off until explicitly enabled."
+            ),
+            validation_alias=AliasChoices(
+                "TRUST_ENGINE_ENABLED", "trust_engine_enabled"
+            ),
+        ),
+    ] = False
+
     # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
     openai_enabled: Annotated[
         bool,
