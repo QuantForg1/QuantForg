@@ -417,9 +417,11 @@ def project_decision_report(
             {
                 "name": "Block code",
                 "state": blocking,
-                "result": "failed"
-                if _text(row.get("reject")) == "true" or row.get("reject") is True
-                else "recorded",
+                "result": (
+                    "failed"
+                    if _text(row.get("reject")) == "true" or row.get("reject") is True
+                    else "recorded"
+                ),
                 "source": f"{source}.block_code",
             }
         )
@@ -557,9 +559,9 @@ def project_decision_report(
             "execution_authorization": _text(feed.get("live_authorization"))
             or _text(pipe.get("oms"))
             or _NOT_AVAILABLE,
-            "orders_may_submit": feed.get("orders_may_submit")
-            if "orders_may_submit" in feed
-            else None,
+            "orders_may_submit": (
+                feed.get("orders_may_submit") if "orders_may_submit" in feed else None
+            ),
             "live_trading_state": _text(feed.get("live_trading_state"))
             or _NOT_AVAILABLE,
             "order_sent": order_sent,
@@ -697,13 +699,13 @@ def build_decision_history(
         return {
             "available": False,
             "empty_reason": _NOT_AVAILABLE,
-        "read_only": True,
-        "executes_orders": False,
-        "source": "signal_history",
-        "history_note": _HISTORY_NOTE,
-        "count": 0,
-        "items": [],
-    }
+            "read_only": True,
+            "executes_orders": False,
+            "source": "signal_history",
+            "history_note": _HISTORY_NOTE,
+            "count": 0,
+            "items": [],
+        }
     rows = payload.get("items") if isinstance(payload, dict) else None
     items: list[dict[str, Any]] = []
     for row in rows or []:
