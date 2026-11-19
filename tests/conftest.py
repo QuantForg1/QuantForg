@@ -291,3 +291,13 @@ def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
                 reason=f"[known:{group}] {reason} — {GROUP_ISSUES.get(group, '')}",
             )
         )
+
+
+@pytest.fixture(autouse=True)
+def _clear_candle_tail_cache():
+    """Incremental candle cache is process-wide; isolate every test."""
+    from app.application.services.candle_tail_cache import shared_rates_cache
+
+    shared_rates_cache().clear()
+    yield
+    shared_rates_cache().clear()

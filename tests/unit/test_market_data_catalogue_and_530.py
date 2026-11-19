@@ -284,3 +284,111 @@ def test_execution_and_order_send_paths_unchanged() -> None:
         src = (REPO / rel).read_text(encoding="utf-8")
         assert "Restart-Service" not in src
         assert "cloudflared.exe" not in src.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_second_cycle_fetches_only_tail_bars_and_matches_full_series(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Incremental candles: cycle 2 asks the gateway for 5 bars per timeframe
+    and still hands the engine exactly the series a full fetch would."""
+    from datetime import timedelta
+
+    _stub_fetch(monkeypatch, WELTRADE_ROWS)
+    requested: list[tuple[str, int]] = []
+    end = {"t": datetime(2026, 8, 19, 12, 0, tzinfo=UTC)}
+
+    def _series(symbol: str, tf: Timeframe, count: int) -> list[MT5Rate]:
+        step = tf.duration
+        last_open = end["t"] - (end["t"] - datetime(2026, 8, 1, tzinfo=UTC)) % step
+        out = []
+        for k in range(count):
+            t = last_open - step * (count - 1 - k)
+            base = Decimal("1.0") + Decimal(int(t.timestamp()) % 997) / Decimal("10000")
+            out.append(
+                MT5Rate(
+                    symbol=symbol,
+                    timeframe=tf,
+                    open_time=t,
+                    open=base,
+                    high=base + Decimal("0.0002"),
+                    low=base - Decimal("0.0002"),
+                    close=base + Decimal("0.0001"),
+                    tick_volume=10,
+                    real_volume=Decimal("1"),
+                )
+            )
+        return out
+
+    def _bars(symbol: str, tf: Timeframe, start: int, count: int) -> list[MT5Rate]:
+        requested.append((tf.value, count))
+        return _series(symbol, tf, count)
+
+    adapter = MagicMock()
+    adapter.client = SimpleNamespace(is_connected=True, session_mode="attached")
+    adapter.client.symbol_info = MagicMock(return_value=None)
+    adapter.copy_rates_from_pos.side_effect = _bars
+    adapter.latest_tick.return_value = SimpleNamespace(
+        bid=Decimal("0.65"),
+        ask=Decimal("0.6502"),
+        mid=Decimal("0.6501"),
+        volume=Decimal("1"),
+        timestamp=datetime(2026, 8, 19, 0, 0, tzinfo=UTC),
+    )
+    adapter.account_info.return_value = SimpleNamespace(
+        login=1,
+        name="t",
+        server="s",
+        equity=Decimal("100"),
+        balance=Decimal("100"),
+        free_margin=Decimal("100"),
+        margin=Decimal("0"),
+        leverage=100,
+        trade_mode="real",
+    )
+    adapter.list_positions.return_value = []
+    adapter.history_deals = None
+    captured: list[dict] = []
+
+    async def _fake_analyze(_self: object, bars_by_tf: dict, *_a: object, **_k: object):
+        captured.append(
+            {tf.value: [c.open_time for c in cs] for tf, cs in bars_by_tf.items()}
+        )
+        return SimpleNamespace(
+            symbol="AUDUSD_I",
+            atr=Decimal("0.001"),
+            spread=Decimal("0.0002"),
+            session=SimpleNamespace(
+                session=SimpleNamespace(value="sydney"), allowed=True
+            ),
+        )
+
+    monkeypatch.setattr(
+        "app.application.services.ite_cycle_market_context."
+        "InstitutionalTradingAnalysisService.analyze_bars",
+        _fake_analyze,
+    )
+    monkeypatch.setattr(
+        "app.application.services.mt5_position_truth.force_sync_positions",
+        lambda *_a, **_k: SimpleNamespace(
+            mt5_positions=0, internal_positions=0, repaired=False, tickets=[]
+        ),
+    )
+
+    await build_ite_cycle_market_context(adapter, symbol="AUDUSD")
+    first = list(requested)
+    assert first and all(n > 5 for _, n in first)  # cycle 1: full history
+
+    requested.clear()
+    end["t"] += timedelta(minutes=1)  # one minute later: a new M1 bar exists
+    await build_ite_cycle_market_context(adapter, symbol="AUDUSD")
+    assert requested and all(n == 5 for _, n in requested)  # cycle 2: tail only
+
+    # The merged series equals what a full download returns right now.
+    assert len(captured) == 2
+    counts = dict(first)
+    for tf_value, times in captured[-1].items():
+        tf = Timeframe.parse(tf_value)
+        full = [r.open_time for r in _series("AUDUSD_I", tf, counts[tf_value])]
+        assert times == full, tf_value
