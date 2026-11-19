@@ -462,3 +462,78 @@ async def test_unreadable_exposure_does_not_switch(
             confirm_leave_exposure=True,
         )
     assert gateway._login == 10001
+
+
+@pytest.mark.asyncio
+async def test_new_broker_account_replaces_the_previous_one() -> None:
+    """Switching login or broker revokes the old row (one per user in DB)."""
+    from app.domain.enums.broker import BrokerAccountStatus
+
+    factory = MemoryBrokerUnitOfWorkFactory()
+    store = BrokerSecretStore(factory, secret_key=_SECRET)
+    user = uuid4()
+    assert await store.save_selection(
+        user_id=user,
+        login=450397410,
+        server="Weltrade-Real",
+        environment="live",
+        password="old-secret",
+        pending_terminal=True,
+    )
+    assert await store.save_selection(
+        user_id=user,
+        login=450399999,
+        server="Weltrade-Real",
+        environment="live",
+        password="new-secret",
+        pending_terminal=True,
+    )
+    assert await store.save_selection(
+        user_id=user,
+        login=77001,
+        server="HFMarketsSV-Demo",
+        environment="demo",
+        password="hfm-secret",
+        broker_slug="hfm",
+        broker_name="HFM",
+        pending_terminal=True,
+    )
+    async with factory() as uow:
+        accounts = list(await uow.accounts.list_for_user(user))
+    live = [a for a in accounts if a.status != BrokerAccountStatus.REVOKED]
+    assert [a.external_account_id for a in live] == ["77001"]
+    assert len(accounts) == 3
+    # The replaced Weltrade logins no longer restore a password.
+    assert await store.load_password(user_id=user) is None
+    async with factory() as uow:
+        from app.domain.enums.broker import BrokerCredentialType, CredentialStatus
+
+        for account in accounts:
+            cred = await uow.credentials.get_by_account_and_type(
+                account.id, BrokerCredentialType.PASSWORD
+            )
+            assert cred is not None
+            expected_active = account.external_account_id == "77001"
+            assert (cred.status != CredentialStatus.REVOKED) is expected_active
+
+
+@pytest.mark.asyncio
+async def test_same_account_saved_again_is_kept() -> None:
+    from app.domain.enums.broker import BrokerAccountStatus
+
+    factory = MemoryBrokerUnitOfWorkFactory()
+    store = BrokerSecretStore(factory, secret_key=_SECRET)
+    user = uuid4()
+    for pw in ("first", "second"):
+        assert await store.save_selection(
+            user_id=user,
+            login=10001,
+            server="Weltrade-Real",
+            environment="live",
+            password=pw,
+        )
+    async with factory() as uow:
+        accounts = list(await uow.accounts.list_for_user(user))
+    assert len(accounts) == 1
+    assert accounts[0].status == BrokerAccountStatus.ACTIVE
+    assert (await store.load_password(user_id=user))[3] == "second"

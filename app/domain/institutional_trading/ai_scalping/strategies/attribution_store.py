@@ -342,7 +342,8 @@ class StrategyAttributionStore:
             if str(c).strip() and str(c).strip() != sid
         ]
         login = int(broker_login) if broker_login else self._live_login
-        opened = datetime.now(UTC).isoformat()
+        opened_dt = datetime.now(UTC)
+        opened = opened_dt.isoformat()
         record = AttributionRecord(
             strategy_id=sid,
             engine=str(engine or "unknown"),
@@ -381,7 +382,8 @@ class StrategyAttributionStore:
                         record.remaining_volume,
                         json.dumps(contrib),
                         json.dumps(record.meta),
-                        opened,
+                        # asyncpg needs a datetime for timestamptz, not text.
+                        opened_dt,
                     )
             except Exception:
                 logger.exception("strategy_attribution_postgres_upsert_failed")
