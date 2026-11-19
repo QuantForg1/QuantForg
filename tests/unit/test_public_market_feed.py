@@ -33,3 +33,44 @@ def test_market_chat_public_list_route_exists() -> None:
     paths = {getattr(r, "path", "") for r in market_chat.router.routes}
     assert "/public/market/chat" in paths
     assert "/market/chat" in paths
+
+
+def test_public_candles_shared_cache_exact_fetch_and_single_flight(monkeypatch) -> None:
+    """Many chart/desk callers -> one gateway call per series, exact bar count."""
+    import asyncio as _asyncio
+
+    from app.application.services import public_market_feed as pmf
+    from app.domain.market_data.timeframe import Timeframe as _TF
+
+    calls: list[dict] = []
+
+    class MD:
+        adapter = object()
+
+        def historical_candles(self, symbol, tf, **kw):
+            calls.append(kw)
+            return list(range(kw["count"]))
+
+    async def ok(_adapter):
+        return None
+
+    monkeypatch.setattr(pmf, "require_platform_market_feed", ok)
+    svc = pmf.PublicMarketFeedService(market_data=MD())
+
+    async def go():
+        res = await _asyncio.gather(
+            *[
+                svc._cached_rates(symbol="XAUUSD", tf=_TF.parse("M15"), count=n)
+                for n in (400, 120, 400, 150)
+            ]
+        )
+        assert [len(r) for r in res] == [400, 120, 400, 150]
+        big = await svc._cached_rates(symbol="XAUUSD", tf=_TF.parse("M15"), count=3000)
+        assert len(big) == 3000
+        again = await svc._cached_rates(symbol="XAUUSD", tf=_TF.parse("M15"), count=400)
+        assert len(again) == 400
+
+    _asyncio.run(go())
+    # one standard-size call (shared) + one large call; start_pos path, no over-fetch
+    assert [c["count"] for c in calls] == [500, 3000]
+    assert all(c["start_pos"] == 0 for c in calls)

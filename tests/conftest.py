@@ -305,8 +305,13 @@ def _clear_candle_tail_cache():
 
 @pytest.fixture(autouse=True)
 def _clear_public_tick_cache():
+    from app.application.services.public_market_feed import (
+        clear_public_candle_cache_for_tests,
+    )
     from app.presentation.routers import public_market
 
     public_market._TICK_CACHE.clear()
+    clear_public_candle_cache_for_tests()
     yield
     public_market._TICK_CACHE.clear()
+    clear_public_candle_cache_for_tests()

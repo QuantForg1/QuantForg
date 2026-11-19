@@ -9,6 +9,8 @@ Never invents prices. Never requires a visitor's personal MT5 connection.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -24,6 +26,21 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 FeedStatus = Literal["live", "closed", "delayed", "unavailable"]
+
+# Shared MT5 candle cache. Every open chart, the Overview desk and QuantForg AI
+# read the same few series; without this each browser refresh pulled hundreds
+# of bars from the owner's gateway (which also serves the LIVE robot).
+_CANDLE_TTL_S: dict[str, float] = {"M1": 5.0, "M5": 10.0, "M15": 20.0, "M30": 30.0}
+_CANDLE_TTL_DEFAULT_S = 60.0
+_CANDLE_STD_FETCH = 500  # charts (400), desk (120-150) and AI share one series
+_CANDLE_CACHE: dict[tuple[str, str, int], tuple[float, list[Any]]] = {}
+_CANDLE_LOCKS: dict[tuple[str, str, int], asyncio.Lock] = {}
+
+
+def clear_public_candle_cache_for_tests() -> None:
+    _CANDLE_CACHE.clear()
+    _CANDLE_LOCKS.clear()
+
 
 _TF_TO_TWELVE: dict[str, str] = {
     "M1": "1min",
@@ -165,11 +182,7 @@ class PublicMarketFeedService:
             return None
         try:
             await require_platform_market_feed(adapter)
-            rates = self._market_data.historical_candles(
-                symbol,
-                tf,
-                count=count,
-            )
+            rates = await self._cached_rates(symbol=symbol, tf=tf, count=count)
         except ServiceUnavailableError as exc:
             logger.info(
                 "public_market_mt5_unavailable code=%s",
@@ -202,6 +215,45 @@ class PublicMarketFeedService:
             last_price=last.close,
             note="Platform MT5 gateway feed.",
         )
+
+    async def _cached_rates(
+        self, *, symbol: str, tf: Timeframe, count: int
+    ) -> list[Any]:
+        """Latest ``count`` bars, shared across callers, one gateway call per key.
+
+        Uses the from-position path so the gateway returns exactly ``count``
+        bars (the from-time path over-fetches 4x), and runs the blocking
+        gateway call in a worker thread so the event loop is never stalled.
+        """
+        want = _CANDLE_STD_FETCH if count <= _CANDLE_STD_FETCH else count
+        key = (symbol.upper(), tf.value, want)
+        ttl = _CANDLE_TTL_S.get(tf.value, _CANDLE_TTL_DEFAULT_S)
+
+        def fresh() -> list[Any] | None:
+            hit = _CANDLE_CACHE.get(key)
+            if hit and time.monotonic() - hit[0] < ttl:
+                return hit[1][-count:]
+            return None
+
+        cached = fresh()
+        if cached is not None:
+            return cached
+        lock = _CANDLE_LOCKS.setdefault(key, asyncio.Lock())
+        async with lock:
+            cached = fresh()
+            if cached is not None:
+                return cached
+            rates = await asyncio.to_thread(
+                self._market_data.historical_candles,
+                symbol,
+                tf,
+                count=want,
+                start_pos=0,
+            )
+            rates = list(rates or [])
+            if rates:
+                _CANDLE_CACHE[key] = (time.monotonic(), rates)
+            return rates[-count:]
 
     async def _try_mt5_tick(self, *, symbol: str) -> PublicTickBundle | None:
         adapter = getattr(self._market_data, "adapter", None)
