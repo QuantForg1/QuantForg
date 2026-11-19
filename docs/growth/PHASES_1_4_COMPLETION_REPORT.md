@@ -87,7 +87,26 @@ A completed check is replayed for the same job in the same UTC minute (`idempote
 
 ## Deployment
 
-Not recorded in this revision. A later note in this file must name the commit SHA and the Vercel deployment only after both exist. Public HTTP checks and an authenticated session are separate. An HTTP 200 shell is not authenticated verification.
+`origin/main` includes `091ab3f9bac3a06d13ed48f11aa7ce56ec6c1c78` (`fix: export the decision evidence API client`), on top of `d2e128f6f` (owner growth checks restored) and `1ac16995e` (the decision-intelligence commit).
+
+Vercel production deployment `https://quant-forg-h96kevlwn-quantforg.vercel.app` is Ready and aliased to `https://www.quantforg.com`, `https://quantforg.com`, and `https://quant-forg-git-main-quantforg.vercel.app`.
+
+Public checks, unsigned:
+
+| Request | Result |
+| --- | --- |
+| `/learn`, `/learn/decision-lifecycle`, `/pricing`, `/robots.txt`, `/sitemap.xml` | HTTP 200 |
+| `/learn/decision-lifecycle` body | States that ORDER_SENT is not a fill and NOT_REACHED is not a pass |
+| `/decision-evidence` | HTTP 200 app shell, `noindex` |
+| `robots.txt` | Allows `/learn`. Disallows `/decision-evidence` |
+| Sitemap | Contains `/learn/decision-lifecycle` |
+| `GET /api/v1/decision-evidence/report` | 401 `missing_token` |
+| `GET /api/v1/growth/status` | 401 `missing_token` |
+| `POST /api/v1/growth/automation/emergency-stop` | Route exists. An unsigned call did not execute a check |
+
+No designated-owner session and no paid customer session were used. Authenticated report content, owner controls, and a viewed decision report were not demonstrated in production.
+
+`pytest -m trading_core` was not run. This change does not modify the trading scheduler, OMS, gateway, or risk enforcement.
 
 ## Still blocked
 

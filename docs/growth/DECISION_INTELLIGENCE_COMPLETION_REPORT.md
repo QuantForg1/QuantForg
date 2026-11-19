@@ -4,6 +4,18 @@
 **Branch at authoring:** `feat/trade-explanation`.  
 **Production verification of an authenticated paid session:** not performed. This report does not claim the live decision feed was viewed while signed in.
 
+## Release
+
+Pushed to `origin/main`. The production frontend alias `https://www.quantforg.com` is the Ready Vercel deployment `quant-forg-h96kevlwn` (`dpl_9qdKqerEycaKZnJujpQm3bDz79vE`), created 19 November 2026 15:33 Pacific. An earlier production build of `1ac16995e` failed typecheck because `decisionEvidenceApi` was missing after the merge. Commit `091ab3f9b` added that export.
+
+Checked without a signed-in session on 19 November 2026:
+
+- `GET /learn/decision-lifecycle` returned 200 and the page text says ORDER_SENT is not a fill.
+- `GET /decision-evidence` returned the app shell with `noindex`.
+- `robots.txt` disallows `/decision-evidence`.
+- The sitemap lists `https://www.quantforg.com/learn/decision-lifecycle`.
+- `GET /api/v1/decision-evidence/report` on the production API returned 401 `missing_token`. The route is present. No paid session was used, so the report body was not read.
+
 ## What this is
 
 Decision Evidence is a read-only projection of the existing Signal Center row and the existing signal-history rows. It does not score, size, authorize, or send orders. It does not call the institutional decision evaluator, the strategy engine, the risk engine, the OMS, or the MT5 gateway.
