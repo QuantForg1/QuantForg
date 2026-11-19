@@ -165,6 +165,31 @@ def mark(
     return True
 
 
+def mark_idle(broker_account_id: UUID | str, *, execute: Any | None = None) -> bool:
+    """Verified, no subscription: keep 'connected', release the terminal."""
+    if execute is None:
+        from app.infrastructure.persistence.direct_postgres import (
+            execute as _execute,
+        )
+
+        execute = _execute
+    try:
+        execute(
+            """
+            UPDATE public.broker_accounts
+               SET metadata = coalesce(metadata, '{}'::jsonb)
+                              || '{"assignment": "verified_idle"}'::jsonb,
+                   updated_at = now()
+             WHERE id = $1::uuid AND status <> 'revoked'
+            """,
+            str(broker_account_id),
+        )
+    except Exception:
+        logger.exception("broker_verification_idle_failed")
+        return False
+    return True
+
+
 def status_for_user(user_id: UUID | str, *, fetch: Any | None = None) -> dict[str, Any]:
     """Latest connect attempt for the user (including a just-rejected one)."""
     if fetch is None:
@@ -199,7 +224,15 @@ def status_for_user(user_id: UUID | str, *, fetch: Any | None = None) -> dict[st
     if not state:
         state = CONNECTED if meta.get("last_verified") else VERIFYING
     login = str(row.get("external_account_id") or "")
+    from app.application.services.entitlements import check_trading_entitlement
+
+    try:
+        subscribed = bool(check_trading_entitlement(user_id=UUID(str(user_id))).allowed)
+    except Exception:
+        subscribed = False
     return {
+        "subscription_active": subscribed,
+        "robot_ready": state == CONNECTED and subscribed,
         "state": state,
         "code": str(meta.get("verification_code") or ""),
         "message": str(meta.get("verification_message") or ""),

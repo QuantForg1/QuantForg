@@ -1,8 +1,9 @@
 """Server-side entitlement check for automated trading.
 
 A customer may start or resume a robot, and a multi-account worker may send
-an entry, only while the customer holds an active license (paid) or an
-active trial. Owner/admin accounts are exempt (they operate the platform).
+an entry, only while the customer holds an active paid license. The free
+trial was discontinued on 19 Nov 2026; an old trial row no longer entitles.
+Owner/admin accounts are exempt (they operate the platform).
 Pause, Stop and Emergency Stop are never gated: a customer can always reduce
 risk. Unknown state (storage unreadable) is not entitled.
 """
@@ -68,6 +69,4 @@ def check_trading_entitlement(
         return Entitlement(True, "platform_operator", "role")
     if row.get("licensed"):
         return Entitlement(True, "license_active", "license")
-    if row.get("trial"):
-        return Entitlement(True, "trial_active", "trial")
     return Entitlement(False, "SUBSCRIPTION_INACTIVE", "none")

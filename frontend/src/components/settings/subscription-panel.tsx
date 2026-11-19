@@ -10,16 +10,69 @@ import {
   formatUsd,
   PAYMENT_METHOD_LABEL,
   PLAN_COMPARISON_ROWS,
-  TRIAL_DAYS,
-  TRIAL_EXPIRES_BEHAVIOR,
-  TRIAL_FEATURES,
-  TRIAL_POSITIONING,
 } from "@/lib/billing/plans";
 import { billingApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+type StatusView = { label: string; detail: string; badgeClass: string };
+
+/** One clear status for the customer: paid, pending, ending, or required. */
+function subscriptionStatusView(state: string, robotAllowed: boolean): StatusView {
+  const ok =
+    "border-[color-mix(in_srgb,var(--success)_50%,var(--border))] text-[var(--success)]";
+  const warn =
+    "border-[color-mix(in_srgb,var(--warning)_50%,var(--border))] text-[var(--warning)]";
+  const off = "border-[var(--border)] text-[var(--fg-muted)]";
+  switch (state) {
+    case "active":
+      return {
+        label: "Active · Paid",
+        detail: "Your plan is paid. The robot may trade under your risk profile.",
+        badgeClass: ok,
+      };
+    case "cancelled":
+      return {
+        label: robotAllowed ? "Cancelled · active until period end" : "Cancelled",
+        detail:
+          "Renewal is cancelled. The robot keeps working until the paid period ends, then stops opening new trades.",
+        badgeClass: warn,
+      };
+    case "pending_payment":
+      return {
+        label: "Payment pending",
+        detail:
+          "Your invoice is waiting for payment or confirmation. The robot starts as soon as the payment is verified.",
+        badgeClass: warn,
+      };
+    case "expired":
+    case "payment_failed":
+    case "suspended":
+      return {
+        label: state === "expired" ? "Expired" : "Payment required",
+        detail:
+          "Your subscription is not active. The robot does not open new trades; open positions stay protected. Renew to continue.",
+        badgeClass: warn,
+      };
+    case "loading":
+      return { label: "Checking…", detail: "Reading your billing status.", badgeClass: off };
+    default:
+      return robotAllowed
+        ? {
+            label: "Active",
+            detail: "The robot may trade under your risk profile.",
+            badgeClass: ok,
+          }
+        : {
+            label: "No subscription",
+            detail:
+              "Your broker can be connected and verified for free. Choose a plan to start the robot.",
+            badgeClass: off,
+          };
+  }
+}
 
 function unpaidInvoiceStatuses(status: string): boolean {
   return ["pending_payment", "confirming", "partially_paid"].includes(status);
@@ -48,21 +101,11 @@ export function SubscriptionPanel() {
       toast.error(e instanceof ApiError ? e.message : "Cancel failed"),
   });
 
-  const trialMut = useMutation({
-    mutationFn: () => billingApi.startTrial(),
-    onSuccess: async () => {
-      toast.success(`Your ${TRIAL_DAYS}-day Starter trial is active`);
-      await qc.invalidateQueries({ queryKey: ["billing-me"] });
-    },
-    onError: (e) =>
-      toast.error(e instanceof ApiError ? e.message : "Unable to start trial"),
-  });
-
   const me = asRecord(meQ.data);
   const provider = asRecord(me.provider || BILLING_PROVIDER);
   const subscription = asRecord(me.subscription);
   const license = asRecord(me.license);
-  const trial = asRecord(me.trial);
+  const robotAccess = asRecord(me.robot_access);
   const invoices = asList(me.invoices ?? me.orders).map(asRecord);
   const state = str(subscription.state, meQ.isLoading ? "loading" : "none");
   const configured = Boolean(
@@ -75,18 +118,14 @@ export function SubscriptionPanel() {
     PAYMENT_METHOD_LABEL,
   );
   const subscriptionType = str(subscription.subscription_type, "—");
-  const daysRemaining = num(
-    trial.days_remaining ?? subscription.days_remaining,
-    0,
-  );
-  const trialActive = state === "trial" || str(trial.status) === "active";
-  const trialExpired = state === "trial_expired" || str(trial.status) === "expired";
-  const canStartTrial = state === "none" && !trial.status;
   const graceDays = num(subscription.grace_days, 0);
-
-  const planDisplay = trialActive
-    ? str(trial.plan_name, "Starter Trial")
-    : str(subscription.plan_name || subscription.plan_id, "—");
+  const robotAllowed = robotAccess.allowed === true;
+  const periodEnd = str(subscription.period_end || subscription.access_until, "");
+  const daysLeft = periodEnd
+    ? Math.max(0, Math.ceil((Date.parse(periodEnd) - Date.now()) / 86_400_000))
+    : null;
+  const statusView = subscriptionStatusView(state, robotAllowed);
+  const planDisplay = str(subscription.plan_name || subscription.plan_id, "No plan");
 
   const handleCancel = () => {
     const confirmed = window.confirm(
@@ -98,41 +137,44 @@ export function SubscriptionPanel() {
   return (
     <div className="space-y-6">
       <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
-        <h3 className="text-base font-semibold">Current plan</h3>
-        <p className="mt-1 text-sm leading-relaxed text-[var(--fg-muted)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold">Subscription</h3>
+            <p className="mt-1 text-2xl font-semibold tracking-tight">{planDisplay}</p>
+          </div>
+          <span
+            data-testid="subscription-status-badge"
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${statusView.badgeClass}`}
+          >
+            {statusView.label}
+          </span>
+        </div>
+
+        <div
+          data-testid="robot-access"
+          className={`mt-4 rounded-[var(--radius-sm)] border p-4 ${
+            robotAllowed
+              ? "border-[color-mix(in_srgb,var(--success)_45%,var(--border))] bg-[color-mix(in_srgb,var(--success)_10%,transparent)]"
+              : "border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)]"
+          }`}
+        >
+          <p className="text-sm font-semibold">
+            Robot access: {robotAllowed ? "Active" : "Subscription required"}
+          </p>
+          <p className="mt-1 text-sm text-[var(--fg-muted)]">{statusView.detail}</p>
+          {robotAllowed && daysLeft !== null ? (
+            <p className="mt-2 text-xs text-[var(--fg-subtle)]">
+              {daysLeft} day{daysLeft === 1 ? "" : "s"} left in this period · renew before{" "}
+              {formatBillingDate(periodEnd)}
+            </p>
+          ) : null}
+        </div>
+
+        <p className="mt-3 text-xs leading-relaxed text-[var(--fg-subtle)]">
           {configured
-            ? `Status is read from the billing service. Checkout and invoices use the existing ${paymentLabel} flow.`
+            ? `Paid access activates only after QuantForg verifies a completed ${paymentLabel}.`
             : `${paymentLabel} is not configured on the API yet. Checkout will fail until production credentials are set.`}
         </p>
-
-        {trialActive ? (
-          <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--accent)]/40 bg-[var(--surface-2)] p-4">
-            <p className="text-sm font-semibold text-[var(--accent)]">
-              Your {TRIAL_DAYS}-day Starter trial is active.
-            </p>
-            <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              {daysRemaining} day{daysRemaining === 1 ? "" : "s"} remaining · ends{" "}
-              {formatBillingDate(
-                str(trial.expires_at || subscription.trial_expires_at || subscription.period_end),
-              )}
-            </p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-2)]">
-              <div
-                className="h-full rounded-full bg-[var(--accent)] transition-all"
-                style={{
-                  width: `${Math.max(4, Math.min(100, (daysRemaining / TRIAL_DAYS) * 100))}%`,
-                }}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {trialExpired ? (
-          <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--warning)]/40 p-4 text-sm text-[var(--fg-muted)]">
-            Your Starter trial has ended. Choose a plan and pay with {paymentLabel} to continue
-            paid features. Your account and history are preserved.
-          </div>
-        ) : null}
 
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
           <div>
@@ -152,22 +194,6 @@ export function SubscriptionPanel() {
           <div>
             <dt className="text-[var(--fg-subtle)]">Payment method</dt>
             <dd className="font-medium">{paymentLabel}</dd>
-          </div>
-          <div>
-            <dt className="text-[var(--fg-subtle)]">Trial started</dt>
-            <dd className="font-medium">
-              {formatBillingDate(
-                str(trial.started_at || subscription.trial_started_at),
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[var(--fg-subtle)]">Trial ends</dt>
-            <dd className="font-medium">
-              {formatBillingDate(
-                str(trial.expires_at || subscription.trial_expires_at),
-              )}
-            </dd>
           </div>
           <div>
             <dt className="text-[var(--fg-subtle)]">Activated</dt>
@@ -229,25 +255,11 @@ export function SubscriptionPanel() {
         ) : null}
 
         <div className="mt-4 flex flex-wrap gap-3">
-          {canStartTrial ? (
-            <Button
-              className="qf-btn-primary"
-              size="sm"
-              disabled={trialMut.isPending}
-              onClick={() => trialMut.mutate()}
-            >
-              {trialMut.isPending
-                ? "Starting trial…"
-                : `Start ${TRIAL_DAYS}-day free trial`}
-            </Button>
-          ) : null}
           <Link
             href="/billing/checkout?plan=professional"
             className="qf-btn-primary inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold"
           >
-            {trialActive || trialExpired || state === "none"
-              ? `Subscribe with ${paymentLabel}`
-              : "Upgrade / renew"}
+            {robotAllowed ? "Upgrade / renew" : "Choose a plan"}
           </Link>
           <Link
             href="/pricing"
@@ -289,35 +301,7 @@ export function SubscriptionPanel() {
             Monthly pricing only — automatic recurring crypto charging is not enabled.
           </p>
         ) : null}
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <li className="rounded-[var(--radius-sm)] border border-[var(--accent)]/40 bg-[var(--surface)] p-4">
-            <p className="font-medium">Free Trial</p>
-            <p className="mt-1 text-sm text-[var(--accent)]">
-              $0
-              <span className="text-[var(--fg-subtle)]"> · {TRIAL_DAYS} days</span>
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--fg-muted)]">
-              {TRIAL_POSITIONING}
-            </p>
-            <ul className="mt-3 space-y-1 text-xs text-[var(--fg-muted)]">
-              {TRIAL_FEATURES.slice(0, 4).map((item) => (
-                <li key={item}>· {item}</li>
-              ))}
-            </ul>
-            {canStartTrial ? (
-              <Button
-                className="mt-3 w-full"
-                size="sm"
-                variant="secondary"
-                disabled={trialMut.isPending}
-                onClick={() => trialMut.mutate()}
-              >
-                Start trial
-              </Button>
-            ) : (
-              <p className="mt-3 text-xs text-[var(--fg-subtle)]">{TRIAL_EXPIRES_BEHAVIOR}</p>
-            )}
-          </li>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-3">
           {BILLING_PLANS.map((plan) => (
             <li
               key={plan.id}
@@ -348,7 +332,7 @@ export function SubscriptionPanel() {
             <thead className="bg-[var(--surface)]">
               <tr>
                 <th className="px-3 py-2 font-medium">Capability</th>
-                <th className="px-3 py-2 font-medium">Free Trial</th>
+                <th className="px-3 py-2 font-medium">Without subscription</th>
                 <th className="px-3 py-2 font-medium">Starter</th>
                 <th className="px-3 py-2 font-medium">Professional</th>
                 <th className="px-3 py-2 font-medium">Premium</th>
@@ -360,7 +344,7 @@ export function SubscriptionPanel() {
                   <th scope="row" className="px-3 py-2 font-medium text-[var(--fg)]">
                     {row.feature}
                   </th>
-                  <td className="px-3 py-2 text-[var(--fg-muted)]">{row.trial}</td>
+                  <td className="px-3 py-2 text-[var(--fg-muted)]">{row.unpaid}</td>
                   <td className="px-3 py-2 text-[var(--fg-muted)]">{row.starter}</td>
                   <td className="px-3 py-2 text-[var(--fg-muted)]">{row.professional}</td>
                   <td className="px-3 py-2 text-[var(--fg-muted)]">{row.premium}</td>

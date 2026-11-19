@@ -34,8 +34,6 @@ import {
   BILLING_PLANS,
   BILLING_PROVIDER,
   formatUsd,
-  TRIAL_DAYS,
-  TRIAL_POSITIONING,
 } from "@/lib/billing/plans";
 import styles from "./home-landing.module.css";
 
@@ -696,10 +694,9 @@ export function HomeLanding() {
               ))}
             </div>
             <div className={styles.billingNote}>
-              <p>{TRIAL_POSITIONING}</p>
               <p>
-                The trial is {TRIAL_DAYS} days of Starter access. It does not auto-convert to a
-                paid plan.
+                Create your account, connect and verify your MT5 broker for free. The robot
+                starts trading only on an active subscription.
               </p>
               <p>{BILLING_PROVIDER.note}</p>
               {ANNUAL_BILLING_SUPPORTED ? null : (

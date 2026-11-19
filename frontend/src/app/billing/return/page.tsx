@@ -46,8 +46,6 @@ function ReturnInner() {
             setSummary(
               "Payment is still pending or confirming. This page does not grant access — wait for verified completion, then refresh.",
             );
-          } else if (state === "trial") {
-            setSummary("Your Starter trial is active. Upgrade anytime from Settings → Subscription.");
           } else {
             setSummary(
               "No active paid subscription yet. If you just paid, wait for confirmation, then refresh.",

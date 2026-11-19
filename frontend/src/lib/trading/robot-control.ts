@@ -51,6 +51,8 @@ export function connectionStateLabel(state: string): string {
       return "Degraded";
     case "REQUIRES_USER_ACTION":
       return "Action required";
+    case "BROKER_VERIFIED":
+      return "Broker verified · connected";
     case "NOT_CONNECTED":
       return "Not connected";
     case "UNAVAILABLE":
@@ -63,7 +65,7 @@ export function connectionStateLabel(state: string): string {
 export function connectionStateTone(
   state: string,
 ): "success" | "warning" | "danger" | "neutral" {
-  if (state === "ROBOT_READY") return "success";
+  if (state === "ROBOT_READY" || state === "BROKER_VERIFIED") return "success";
   if (state === "CONNECTED" || state === "DEGRADED") return "warning";
   if (
     state === "TRADING_PERMISSION_DISABLED" ||

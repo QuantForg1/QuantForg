@@ -70,6 +70,11 @@ def test_derive_subscription_trial_expired() -> None:
         "expires_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
     }
     sub = _derive_subscription(None, [], settings, trial=trial)
-    assert sub["state"] == "trial_expired"
-    assert sub["plan_id"] == "starter"
+    # Free trial discontinued: a trial is never shown as a subscription.
+    assert sub["state"] == "none"
+    assert sub["plan_id"] is None
     assert sub["payment_method_label"] == "Crypto Payment"
+    active = _derive_subscription(
+        None, [], settings, trial={"status": "active", "expires_at": None}
+    )
+    assert active["state"] == "none"

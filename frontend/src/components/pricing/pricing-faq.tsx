@@ -18,7 +18,11 @@ const faqs = [
   },
   {
     q: "Is there a free trial?",
-    a: "Eligible new customers can start one 7-day Starter trial after email verification. No payment is required to start. The trial does not auto-charge. When it ends, choose a plan and pay with Crypto Payment to continue paid features.",
+    a: "No. Creating an account, connecting your MT5 broker, verifying it and viewing your balance are free. Starting the robot and automated trading require an active Starter, Professional or Premium subscription.",
+  },
+  {
+    q: "What happens when my subscription ends?",
+    a: "The robot stops opening new trades. Positions that are already open keep their protection and management. Your broker connection, verification and risk profile stay saved, so you can renew and continue.",
   },
   {
     q: "Can I checkout online today?",

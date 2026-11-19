@@ -59,7 +59,7 @@ function CheckoutInner() {
       if (e instanceof ApiError) {
         const detailCode = str(asRecord(asRecord(e.details).detail).code, "");
         if (e.code === "PAYMENTS_NOT_OPEN" || detailCode === "PAYMENTS_NOT_OPEN")
-          msg = "Paid plans open soon. You can start the free trial now.";
+          msg = "Paid plans open soon. Your broker connection stays saved meanwhile.";
         else if (e.code === "UNKNOWN_PLAN") msg = "That plan is not available.";
         else if (e.code === "CRYPTO_INVOICE_FAILED" || e.code === "NOWPAYMENTS_INVOICE_FAILED")
           msg = "Unable to create a Crypto Payment invoice. Please retry in a moment.";

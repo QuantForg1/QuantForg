@@ -99,3 +99,42 @@ def test_status_reports_masked_account() -> None:
     assert out["account"] == "***3676"
     assert "49903676" not in json.dumps(out)
     assert bcv.status_for_user(uuid4(), fetch=lambda *_a: [])["state"] == "none"
+
+
+def test_verified_idle_keeps_connection_and_marks_released() -> None:
+    calls: list[tuple[str, tuple[Any, ...]]] = []
+    assert bcv.mark_idle(uuid4(), execute=lambda q, *a: calls.append((q, a)))
+    assert "verified_idle" in calls[0][0]
+    assert "revoked" not in calls[0][0].split("WHERE")[0]
+
+
+def test_assignment_skips_verified_accounts_without_subscription() -> None:
+    from app.application.services.customer_account_assignment import (
+        next_unassigned_account,
+    )
+
+    seen: list[str] = []
+
+    def fetch(query: str, *_a: Any) -> list[dict[str, Any]]:
+        seen.append(query)
+        return []
+
+    assert next_unassigned_account(taken_account_ids=set(), fetch=fetch) is None
+    sql = seen[0]
+    assert "metadata->>'verification'" in sql
+    assert "public.licenses" in sql
+
+
+def test_trial_start_is_discontinued() -> None:
+    import asyncio
+
+    from app.application.services.billing_service import BillingService
+    from app.domain.exceptions.base import ValidationError
+    from core.config.settings import get_settings
+
+    svc = BillingService(get_settings())
+    with pytest.raises(ValidationError) as err:
+        asyncio.run(
+            svc.start_trial(user_id=uuid4(), email="a@b.c", email_verified=True)
+        )
+    assert "no longer offered" in str(err.value)
