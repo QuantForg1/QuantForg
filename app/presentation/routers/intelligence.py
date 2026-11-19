@@ -371,3 +371,35 @@ async def intelligence_desk(
         "snapshot": snap,
         "conditions": ma.trade_conditions(snap),
     }
+
+
+_PUBLIC_STRATEGY_FIELDS = (
+    "key",
+    "name",
+    "family",
+    "description",
+    "best_regimes",
+    "engine_plugin",
+)
+
+
+@router.get("/strategies")
+async def intelligence_strategies(user: CurrentUser) -> dict[str, Any]:
+    """Read-only strategy catalogue for the customer Strategy Lab desk.
+
+    The Strategy Lab router itself is operator-only (it has write actions);
+    customers get the public description fields only, nothing internal.
+    """
+    _ = user
+    from app.application.services.strategy_research_lab import (
+        StrategyResearchLabService,
+    )
+
+    registry = await asyncio.to_thread(StrategyResearchLabService().registry)
+    rows = registry.get("strategies") if isinstance(registry, dict) else None
+    strategies = [
+        {k: r.get(k) for k in _PUBLIC_STRATEGY_FIELDS}
+        for r in (rows if isinstance(rows, list) else [])
+        if isinstance(r, dict)
+    ]
+    return {"strategies": strategies, "count": len(strategies)}

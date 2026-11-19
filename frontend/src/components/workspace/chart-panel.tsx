@@ -14,13 +14,14 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
+import { applyLivePrice, clockOffsetSeconds, TIMEFRAME_SECONDS } from "@/lib/market/live-candles";
 import { useQuery } from "@tanstack/react-query";
 import {
   Maximize2,
   Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { cn, formatNumber } from "@/lib/utils";
@@ -140,11 +141,32 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         };
       }
     },
-    retry: 1,
+    retry: 2,
+    retryDelay: (n) => Math.min(1000 * 2 ** n, 8000),
     enabled: marketFeedEnabled && Boolean(symbol),
-    staleTime: 60_000,
-    refetchInterval: marketFeedEnabled ? 60_000 : false,
+    staleTime: 15_000,
+    // Live price updates the forming bar every ~2 s; a full refresh keeps
+    // closed bars exact (shorter timeframes refresh more often).
+    refetchInterval: marketFeedEnabled
+      ? timeframe === "M1" || timeframe === "M5"
+        ? 20_000
+        : 60_000
+      : false,
   });
+
+  // Live price for the forming candle (server caches it for 1 s).
+  const liveTickQ = useQuery({
+    queryKey: ["chart-live-tick", symbol],
+    queryFn: () => mt5Api.publicTick(symbol),
+    enabled: marketFeedEnabled && Boolean(symbol),
+    refetchInterval: 2_000,
+    refetchIntervalInBackground: false,
+    retry: 0,
+    staleTime: 1_000,
+  });
+  const liveTick = asRecord(asRecord(liveTickQ.data).tick);
+  const liveBid = num(liveTick.bid);
+  const livePrice = Number.isFinite(liveBid) && liveBid > 0 ? liveBid : lastPrice;
 
   const feedMeta = asRecord(candlesQ.data);
   const candles = useMemo(
@@ -168,41 +190,104 @@ export const WorkspaceChart = memo(function WorkspaceChart({
     }).format(parsed);
   })();
 
-  useEffect(() => {
-    candlesCache.current = candles;
-    if (candles.length) setOhlc(candles[candles.length - 1]);
-  }, [candles]);
+  const tfSec = TIMEFRAME_SECONDS[timeframe] ?? 900;
+  const offsetRef = useRef(0);
+  const fittedKey = useRef("");
 
-  useEffect(() => {
-    if (!Number.isFinite(lastPrice) || lastPrice == null || !mainRef.current) return;
-    const series = candlesCache.current;
-    if (!series.length) return;
-    const last = { ...series[series.length - 1] };
-    last.close = lastPrice;
-    last.high = Math.max(last.high, lastPrice);
-    last.low = Math.min(last.low, lastPrice);
-    series[series.length - 1] = last;
-    setOhlc(last);
+  const pushToSeries = (bar: CandlePoint) => {
+    const main = mainRef.current;
+    if (!main) return;
     if (chartType === "candles") {
-      (mainRef.current as ISeriesApi<"Candlestick">).update({
-        time: last.time,
-        open: last.open,
-        high: last.high,
-        low: last.low,
-        close: last.close,
+      (main as ISeriesApi<"Candlestick">).update({
+        time: bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
       });
     } else {
-      (mainRef.current as ISeriesApi<"Line"> | ISeriesApi<"Area">).update({
-        time: last.time,
-        value: last.close,
+      (main as ISeriesApi<"Line"> | ISeriesApi<"Area">).update({ time: bar.time, value: bar.close });
+    }
+    volumeRef.current?.update({
+      time: bar.time,
+      value: bar.volume ?? 0,
+      color: bar.close >= bar.open ? "rgba(20, 184, 166, 0.35)" : "rgba(244, 63, 94, 0.35)",
+    });
+  };
+
+  const setSeriesData = (rows: CandlePoint[]) => {
+    const main = mainRef.current;
+    if (!main) return;
+    if (chartType === "candles") {
+      (main as ISeriesApi<"Candlestick">).setData(
+        rows.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })),
+      );
+    } else {
+      (main as ISeriesApi<"Line"> | ISeriesApi<"Area">).setData(
+        rows.map((c) => ({ time: c.time, value: c.close })),
+      );
+    }
+    volumeRef.current?.setData(
+      rows.map((c) => ({
+        time: c.time,
+        value: c.volume,
+        color: c.close >= c.open ? "rgba(20, 184, 166, 0.35)" : "rgba(244, 63, 94, 0.35)",
+      })),
+    );
+    const key = `${symbol}|${timeframe}|${chartType}`;
+    if (rows.length && fittedKey.current !== key && chartRef.current) {
+      fittedKey.current = key;
+      // Show the most recent ~120 bars, right edge at the live candle.
+      chartRef.current.timeScale().setVisibleLogicalRange({
+        from: Math.max(0, rows.length - 120),
+        to: rows.length + 4,
       });
     }
-  }, [lastPrice, chartType]);
+  };
 
+  // Fresh history: keep a newer live-built bar if the feed has not caught up.
+  const cacheKeyRef = useRef("");
+  useEffect(() => {
+    const key = `${symbol}|${timeframe}`;
+    const sameSeries = cacheKeyRef.current === key;
+    const prev = sameSeries ? candlesCache.current : [];
+    const merged = candles.slice();
+    const prevLast = prev[prev.length - 1];
+    const newLast = merged[merged.length - 1];
+    if (prevLast && newLast && prevLast.time > newLast.time && prevLast.time - newLast.time <= tfSec * 3) {
+      merged.push(prevLast);
+    }
+    cacheKeyRef.current = key;
+    candlesCache.current = merged;
+    if (merged.length) {
+      offsetRef.current = clockOffsetSeconds(merged[merged.length - 1].time, Date.now() / 1000, tfSec);
+      setOhlc(merged[merged.length - 1]);
+    }
+    setSeriesData(merged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles, tfSec, symbol, timeframe]);
+
+  // Live price: move the forming candle, open a new one when its period starts.
+  useEffect(() => {
+    if (livePrice == null || !Number.isFinite(livePrice)) return;
+    if (cacheKeyRef.current !== `${symbol}|${timeframe}`) return;
+    const applied = applyLivePrice(
+      candlesCache.current,
+      livePrice,
+      Date.now() / 1000,
+      tfSec,
+      offsetRef.current,
+    );
+    if (!applied) return;
+    setOhlc(applied.bar as CandlePoint);
+    pushToSeries(applied.bar as CandlePoint);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livePrice, liveTickQ.dataUpdatedAt, tfSec, symbol, timeframe]);
+
+  // Build the chart once per type/volume setting; data flows in above.
   useEffect(() => {
     const el = hostRef.current;
     if (!el) return;
-
     const chart = createChart(el, {
       autoSize: false,
       width: Math.max(el.clientWidth, 1),
@@ -213,12 +298,12 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: "rgba(148, 163, 184, 0.08)" },
-        horzLines: { color: "rgba(148, 163, 184, 0.08)" },
+        vertLines: { color: "rgba(148, 163, 184, 0.06)" },
+        horzLines: { color: "rgba(148, 163, 184, 0.06)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+      timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false, rightOffset: 4 },
     });
     chartRef.current = chart;
 
@@ -231,22 +316,11 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         borderDownColor: "#f43f5e",
         wickUpColor: "#14b8a6",
         wickDownColor: "#f43f5e",
+        priceLineVisible: true,
+        lastValueVisible: true,
       });
-      main.setData(
-        candles.map((c) => ({
-          time: c.time,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        })),
-      );
     } else if (chartType === "line") {
-      main = chart.addSeries(LineSeries, {
-        color: "#00D4E0",
-        lineWidth: 2,
-      });
-      main.setData(candles.map((c) => ({ time: c.time, value: c.close })));
+      main = chart.addSeries(LineSeries, { color: "#00D4E0", lineWidth: 2 });
     } else {
       main = chart.addSeries(AreaSeries, {
         lineColor: "#00D4E0",
@@ -254,7 +328,6 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         bottomColor: "rgba(0, 212, 224, 0.02)",
         lineWidth: 2,
       });
-      main.setData(candles.map((c) => ({ time: c.time, value: c.close })));
     }
     mainRef.current = main;
 
@@ -262,32 +335,22 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       const volume = chart.addSeries(HistogramSeries, {
         priceFormat: { type: "volume" },
         priceScaleId: "volume",
+        lastValueVisible: false,
+        priceLineVisible: false,
       });
-      chart.priceScale("volume").applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
-      });
-      volume.setData(
-        candles.map((c) => ({
-          time: c.time,
-          value: c.volume,
-          color:
-            c.close >= c.open
-              ? "rgba(20, 184, 166, 0.35)"
-              : "rgba(244, 63, 94, 0.35)",
-        })),
-      );
+      chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
       volumeRef.current = volume;
     }
+
+    fittedKey.current = "";
+    setSeriesData(candlesCache.current);
 
     const fit = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
-      if (w > 0 && h > 0) {
-        chart.applyOptions({ width: w, height: h });
-      }
+      if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
     };
     fit();
-    chart.timeScale().fitContent();
     const observer = new ResizeObserver(fit);
     observer.observe(el);
 
@@ -308,7 +371,8 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       mainRef.current = null;
       volumeRef.current = null;
     };
-  }, [chartType, showVolume, candles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartType, showVolume]);
 
   return (
     <section
@@ -318,10 +382,16 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       <div
         className={cn(
           "flex min-h-9 min-w-0 shrink-0 items-center gap-2 border-b border-[var(--border)]/70 px-2 py-1",
-          comfortable && "flex-col items-stretch gap-2 px-3 py-2",
+          comfortable && "flex-col items-stretch gap-1 px-2 py-1.5",
         )}
       >
-        <div className={cn("flex min-w-0 items-center gap-2", !comfortable && "contents")}>
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-2",
+            !comfortable && "contents",
+            comfortable && feedStatus === "live" && "hidden",
+          )}
+        >
         {!hideSymbolLabel ? (
           <>
             <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">
@@ -341,7 +411,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
             {feedBadge.label}
           </span>
         )}
-        {ohlc ? (
+        {ohlc && !comfortable ? (
           <p
             className="min-w-0 flex-1 truncate tabular text-[10px] text-[var(--fg-muted)]"
             aria-live="polite"
@@ -364,7 +434,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
                 key={tf}
                 size="sm"
                 variant={timeframe === tf ? "secondary" : "ghost"}
-                className={comfortable ? "h-8 min-w-8 px-2 text-[11px]" : "h-6 min-w-[1.75rem] px-1.5 text-[10px]"}
+                className={comfortable ? "h-6 min-w-[1.6rem] px-1 text-[10px]" : "h-6 min-w-[1.75rem] px-1.5 text-[10px]"}
                 data-compact
                 onClick={() => onTimeframeChange(tf)}
                 aria-pressed={timeframe === tf}
@@ -385,7 +455,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
                 key={id}
                 size="sm"
                 variant={chartType === id ? "secondary" : "ghost"}
-                className={comfortable ? "h-8 w-8 px-0 text-[11px]" : "h-6 w-6 px-0 text-[10px]"}
+                className={comfortable ? "h-6 w-6 px-0 text-[10px]" : "h-6 w-6 px-0 text-[10px]"}
                 data-compact
                 onClick={() => onChartTypeChange(id)}
                 aria-label={id}
@@ -398,7 +468,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           <Button
             size="sm"
             variant={showVolume ? "secondary" : "ghost"}
-            className={comfortable ? "h-8 px-2 text-[11px]" : "h-6 px-1.5 text-[10px]"}
+            className={comfortable ? "h-6 px-1.5 text-[10px]" : "h-6 px-1.5 text-[10px]"}
             data-compact
             onClick={() => onShowVolumeChange(!showVolume)}
             aria-pressed={showVolume}
@@ -408,7 +478,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           <Button
             size="sm"
             variant="ghost"
-            className={comfortable ? "h-8 w-8 px-0" : "h-6 w-6 px-0"}
+            className="h-6 w-6 px-0"
             data-compact
             onClick={() => onFullscreenChange(!fullscreen)}
             aria-label={fullscreen ? "Exit fullscreen chart" : "Fullscreen chart"}
@@ -419,51 +489,41 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       </div>
 
       <div className={cn("relative min-h-[280px] flex-1", comfortable && "min-h-[180px] sm:min-h-[280px]")}>
-        {candlesQ.isLoading ? (
-          <div className="p-4">
-            <DeskSkeleton rows={6} />
+        {/* The chart host always exists so the chart is built once and data flows in. */}
+        <div
+          ref={hostRef}
+          className={cn(
+            "absolute inset-0 min-h-[280px] transition-opacity duration-300",
+            comfortable && "min-h-[180px] sm:min-h-[280px]",
+            candles.length > 0 ? "opacity-100" : "opacity-0",
+          )}
+          role="img"
+          aria-label={`${displayTradingSymbol(symbol)} price chart`}
+        />
+        {candles.length > 0 && feedStatus === "closed" ? (
+          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-2 py-1 text-[10px] font-medium text-[var(--fg-muted)] backdrop-blur">
+            Market closed · last available candles{asOf ? ` · ${asOf}` : ""}
           </div>
-        ) : candles.length > 0 ? (
-          <>
-            {feedStatus === "closed" && (
-              <div className="pointer-events-none absolute left-3 top-3 z-10 rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-2 py-1 text-[10px] font-medium text-[var(--fg-muted)] backdrop-blur">
-                MARKET CLOSED — showing last available candles
-                {asOf ? ` · ${asOf}` : ""}
-              </div>
-            )}
-            <div
-              ref={hostRef}
-              className={cn("absolute inset-0 min-h-[280px]", comfortable && "min-h-[180px] sm:min-h-[280px]")}
-              role="img"
-              aria-label={`${displayTradingSymbol(symbol)} price chart`}
-            />
-          </>
-        ) : candlesQ.isError ? (
-          <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
-            <DeskError
-              message={candleLoadErrorMessage(
-                candlesQ.error,
-                symbol,
-                session?.gatewayOnline ?? null,
-              )}
-              onRetry={() => candlesQ.refetch()}
-            />
-            <p className="max-w-sm text-xs text-[var(--fg-muted)]">
-              Live Market uses the platform feed and does not require your personal MT5
-              account.
-            </p>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="text-sm text-[var(--fg-muted)]">
-              No genuine candle history available for {displayTradingSymbol(symbol)} (
-              {timeframe}).
-            </p>
-            <Button size="sm" variant="secondary" onClick={() => candlesQ.refetch()}>
-              Retry
-            </Button>
-          </div>
-        )}
+        ) : null}
+        {candles.length === 0 ? (
+          candlesQ.isLoading ? (
+            <div className="absolute inset-0 p-4">
+              <DeskSkeleton rows={6} />
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--accent)]" aria-hidden />
+              <p className="text-sm text-[var(--fg-muted)]">
+                Connecting to the {displayTradingSymbol(symbol)} market feed…
+              </p>
+              <p className="max-w-sm text-xs text-[var(--fg-subtle)]">
+                {candlesQ.isError
+                  ? candleLoadErrorMessage(candlesQ.error, symbol, session?.gatewayOnline ?? null)
+                  : "Retrying automatically."}
+              </p>
+            </div>
+          )
+        ) : null}
       </div>
     </section>
   );

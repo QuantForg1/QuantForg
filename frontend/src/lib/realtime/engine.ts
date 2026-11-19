@@ -8,7 +8,6 @@ import type {
   RealtimeStatus,
   RealtimeTransport,
 } from "@/lib/realtime/types";
-import { env } from "@/lib/env";
 
 type SubKey = string;
 
@@ -28,11 +27,12 @@ function subKey(channel: RealtimeChannel, opts?: ChannelSubscriptionOptions): Su
   return channel;
 }
 
+/**
+ * The backend has no WebSocket endpoint; probing produced 403 noise in the
+ * console and never changed the transport (polling either way).
+ */
 function wsCandidateUrls(): string[] {
-  const http = env.apiBaseUrl.replace(/\/$/, "");
-  const root = http.replace(/\/api\/v1$/, "");
-  const toWs = (u: string) => u.replace(/^http/, "ws");
-  return [`${toWs(root)}/ws`, `${toWs(http)}/ws`, `${toWs(root)}/api/v1/ws`];
+  return [];
 }
 
 /**

@@ -17,7 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskError } from "@/components/desk/primitives";
-import { intelligenceApi, strategyLabApi } from "@/lib/api/endpoints";
+import { intelligenceApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import {
   biasTone,
@@ -40,7 +40,7 @@ export function useMarketDesk(enabled = true) {
   return useQuery({
     queryKey: DESK_QUERY_KEY,
     queryFn: () => intelligenceApi.desk(),
-    retry: 1,
+    retry: 2,
     staleTime: 10_000,
     refetchInterval: enabled ? 20_000 : false,
     enabled,
@@ -150,7 +150,7 @@ function Sparkline({ closes }: { closes: number[] }) {
 export function InsightsDesk({ onAsk }: { onAsk: Ask }) {
   const q = useMarketDesk();
   if (q.isLoading) return <Loading label="Loading live market" />;
-  if (q.isError) return <DeskError message="Live market data could not be loaded." onRetry={() => q.refetch()} />;
+  if (q.isError && !q.data) return <DeskError message="Live market data could not be loaded." onRetry={() => q.refetch()} />;
 
   const snap = asRecord(asRecord(q.data).snapshot);
   const quote = asRecord(snap.quote);
@@ -328,12 +328,12 @@ export function AnalysisDesk({ onAsk }: { onAsk: Ask }) {
   const dash = useQuery({
     queryKey: ["intelligence-dashboard"],
     queryFn: () => intelligenceApi.dashboard("FX"),
-    retry: false,
+    retry: 2,
     refetchInterval: 45_000,
     staleTime: 12_000,
   });
   if (q.isLoading) return <Loading label="Evaluating conditions" />;
-  if (q.isError) return <DeskError message="Trade conditions could not be evaluated." onRetry={() => q.refetch()} />;
+  if (q.isError && !q.data) return <DeskError message="Trade conditions could not be loaded." onRetry={() => q.refetch()} />;
 
   const data = asRecord(q.data);
   const cond = asRecord(data.conditions);
@@ -464,13 +464,13 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 export function StrategyDesk({ onAsk }: { onAsk: Ask }) {
   const desk = useMarketDesk();
   const registryQ = useQuery({
-    queryKey: ["strategy-lab-registry"],
-    queryFn: () => strategyLabApi.registry(),
-    retry: false,
+    queryKey: ["intelligence-strategies"],
+    queryFn: () => intelligenceApi.strategies(),
+    retry: 2,
     staleTime: 60_000,
   });
   if (registryQ.isLoading) return <Loading label="Loading strategies" />;
-  if (registryQ.isError) return <DeskError message="Strategy Lab could not be loaded." onRetry={() => registryQ.refetch()} />;
+  if (registryQ.isError && !registryQ.data) return <DeskError message="Strategy Lab could not be loaded." onRetry={() => registryQ.refetch()} />;
 
   const snap = asRecord(asRecord(desk.data).snapshot);
   const regimes = regimeLabels(asRecord(snap.bias), asRecord(snap.volatility_h1));
@@ -564,19 +564,19 @@ export function NewsDesk({ onAsk }: { onAsk: Ask }) {
   const newsQ = useQuery({
     queryKey: ["intelligence-news"],
     queryFn: () => intelligenceApi.news(20),
-    retry: false,
+    retry: 2,
     staleTime: 60_000,
     refetchInterval: 120_000,
   });
   const calendarQ = useQuery({
     queryKey: ["intelligence-calendar"],
     queryFn: () => intelligenceApi.calendar(30),
-    retry: false,
+    retry: 2,
     staleTime: 60_000,
     refetchInterval: 120_000,
   });
   if (newsQ.isLoading || calendarQ.isLoading) return <Loading label="Loading news" />;
-  if (newsQ.isError && calendarQ.isError) {
+  if (newsQ.isError && calendarQ.isError && !newsQ.data && !calendarQ.data) {
     return (
       <DeskError
         message="The news and economic-calendar feeds could not be loaded."

@@ -322,19 +322,19 @@ def volatility_regime(candles: list[Any]) -> dict[str, Any]:
 
 
 def trading_session(now: datetime) -> str:
-    """Gold session by UTC hour (FX week: Sun 22:00 → Fri 21:00 UTC)."""
-    wd, h = now.weekday(), now.hour
+    """Gold session by UTC time (same windows as the web app's top bar)."""
+    wd, h = now.weekday(), now.hour  # Mon=0 … Sun=6
     if wd == 5 or (wd == 6 and h < 22) or (wd == 4 and h >= 21):
-        return "closed (weekend)"
-    if 12 <= h < 16:
-        return "London-New York overlap"
-    if 7 <= h < 12:
-        return "London"
-    if 16 <= h < 21:
-        return "New York"
+        return "Market closed"
+    if h == 21:
+        return "Daily break"
     if h >= 22 or h < 7:
-        return "Asia"
-    return "rollover / thin liquidity"
+        return "Asian"
+    if h < 12:
+        return "London"
+    if h < 16:
+        return "London / New York"
+    return "New York"
 
 
 def overall_bias(timeframes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -700,9 +700,18 @@ def trade_conditions(snap: dict[str, Any]) -> dict[str, Any]:
 
     # 7. Session liquidity
     session = str(snap.get("session") or "")
-    if session.startswith("closed"):
+    if session == "Market closed":
         items.append(_cond("session", "Session", "avoid", "Market closed."))
-    elif session in {"London-New York overlap", "London", "New York"}:
+    elif session == "Daily break":
+        items.append(
+            _cond(
+                "session",
+                "Session",
+                "avoid",
+                "Daily break: spreads widen, no new trades.",
+            )
+        )
+    elif session in {"London / New York", "London", "New York"}:
         items.append(_cond("session", "Session", "good", f"{session}: deep liquidity."))
     else:
         items.append(

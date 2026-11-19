@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+
 import type { LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -65,31 +64,7 @@ export function DeskSkeleton({
   );
 }
 
-export function DeskError({
-  message = "Unable to load this resource.",
-  onRetry,
-}: {
-  message?: string;
-  onRetry?: () => void;
-}) {
-  return (
-    <div
-      role="alert"
-      className="flex flex-col items-start gap-3 rounded-[var(--radius-os)] border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-[var(--space-3)] sm:flex-row sm:items-center sm:justify-between"
-    >
-      <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" aria-hidden />
-        <p className="text-sm text-[var(--fg)]">{message}</p>
-      </div>
-      {onRetry ? (
-        <Button variant="secondary" size="sm" onClick={onRetry} aria-label="Retry loading">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Retry
-        </Button>
-      ) : null}
-    </div>
-  );
-}
+export { DeskError } from "@/components/desk/desk-error";
 
 export function DeskEmpty({
   icon,

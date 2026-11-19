@@ -202,17 +202,19 @@ export function classifyDirection(
   return "Neutral";
 }
 
+/**
+ * Gold (XAUUSD) trading session by UTC time. Single source for the top bar,
+ * the Overview panel and QuantForg AI (backend uses the same windows).
+ */
 export function tradingSessionLabel(at: Date): string {
-  const minutes = at.getUTCHours() * 60 + at.getUTCMinutes();
-  const asian = minutes < 9 * 60;
-  const london = minutes >= 7 * 60 && minutes < 16 * 60;
-  const newYork = minutes >= 12 * 60 && minutes < 21 * 60;
-  if (london && newYork) return "London / New York";
-  if (asian && london) return "Asian / London";
-  if (london) return "London";
-  if (newYork) return "New York";
-  if (asian) return "Asian";
-  return "Off hours";
+  const day = at.getUTCDay(); // 0 Sun … 6 Sat
+  const h = at.getUTCHours();
+  if (day === 6 || (day === 0 && h < 22) || (day === 5 && h >= 21)) return "Market closed";
+  if (h === 21) return "Daily break";
+  if (h >= 22 || h < 7) return "Asian";
+  if (h < 12) return "London";
+  if (h < 16) return "London / New York";
+  return "New York";
 }
 
 export type FeedFreshness = {

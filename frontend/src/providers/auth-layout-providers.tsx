@@ -17,14 +17,18 @@ export function AuthLayoutProviders({ children }: { children: React.ReactNode })
           queries: {
             staleTime: 30_000,
             refetchOnWindowFocus: false,
+            // Brief network or server hiccups heal silently before any
+            // message is shown; client errors (4xx) are not retried.
             retry: (failureCount, error) => {
-              if (isNetworkFailure(error)) return false;
-              if (error instanceof ApiError && error.status === 0) return false;
               if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
                 return false;
               }
-              return failureCount < 1;
+              if (isNetworkFailure(error) || (error instanceof ApiError && error.status === 0)) {
+                return failureCount < 2;
+              }
+              return failureCount < 2;
             },
+            retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 6_000),
           },
           mutations: {
             retry: false,
