@@ -564,6 +564,17 @@ export const robotControlApi = {
 };
 
 /** SaaS billing — Crypto Payment LIVE invoices (server-side processor). */
+export const decisionEvidenceApi = {
+  report: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/decision-evidence/report?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  history: (symbol: string, limit = 20) =>
+    apiFetch<Record<string, unknown>>(
+      `/decision-evidence/history?symbol=${encodeURIComponent(symbol)}&limit=${limit}`,
+    ),
+};
+
 export const growthApi = {
   status: () => apiFetch<Record<string, unknown>>("/growth/status"),
   setEmergencyStop: (engaged: boolean) =>
