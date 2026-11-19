@@ -27,6 +27,35 @@ OperatorUser = Annotated[
 ]
 
 
+async def require_signals_subscription(user: CurrentUser) -> AuthUserDTO:
+    """Signals are a paid feature: owner/admin or an active license only.
+
+    Gated on the server so a locked page cannot be bypassed via the API.
+    Unknown billing state fails closed (same rule as the robot).
+    """
+    if str(user.role).strip().lower() in {"owner", "admin"}:
+        return user
+    from app.application.services.entitlements import check_trading_entitlement
+
+    try:
+        ent = await asyncio.to_thread(check_trading_entitlement, user_id=user.id)
+        allowed = bool(ent.allowed)
+    except Exception:
+        allowed = False
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "subscription_required",
+                "message": "Signals are available on a paid QuantForg plan.",
+            },
+        )
+    return user
+
+
+SignalsUser = Annotated[AuthUserDTO, Depends(require_signals_subscription)]
+
+
 def _operator(
     user: AuthUserDTO,
     request: Request,
@@ -176,7 +205,7 @@ async def post_symbols_reorder(
 
 @router.get("/signals")
 async def get_signals(
-    user: CurrentUser,
+    user: SignalsUser,
     q: str = Query(default=""),
     direction: str | None = Query(default=None),
     asset_class: str | None = Query(default=None),
@@ -221,7 +250,7 @@ async def signals_research_refresh(user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/signals/intelligence/overview")
 async def si_overview(
-    user: CurrentUser,
+    user: SignalsUser,
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
     _ = user
@@ -232,7 +261,7 @@ async def si_overview(
 
 @router.get("/signals/intelligence/history")
 async def si_history(
-    user: CurrentUser,
+    user: SignalsUser,
     symbol: str | None = Query(default=None),
     direction: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
@@ -247,7 +276,7 @@ async def si_history(
 
 @router.get("/signals/intelligence/outcomes")
 async def si_outcomes(
-    user: CurrentUser,
+    user: SignalsUser,
     days: int = Query(default=14, ge=1, le=90),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> dict[str, Any]:
@@ -258,7 +287,7 @@ async def si_outcomes(
 
 
 @router.get("/signals/intelligence/probability")
-async def si_probability(user: CurrentUser) -> dict[str, Any]:
+async def si_probability(user: SignalsUser) -> dict[str, Any]:
     _ = user
     from app.application.services import signal_intelligence_service as si
 
@@ -266,7 +295,7 @@ async def si_probability(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.get("/signals/intelligence/heatmap")
-async def si_heatmap(user: CurrentUser) -> dict[str, Any]:
+async def si_heatmap(user: SignalsUser) -> dict[str, Any]:
     _ = user
     from app.application.services import signal_intelligence_service as si
 
@@ -275,7 +304,7 @@ async def si_heatmap(user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/signals/intelligence/analytics")
 async def si_analytics(
-    user: CurrentUser,
+    user: SignalsUser,
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
     _ = user
@@ -287,7 +316,7 @@ async def si_analytics(
 @router.get("/signals/intelligence/chart-markers/{symbol}")
 async def si_chart_markers(
     symbol: str,
-    user: CurrentUser,
+    user: SignalsUser,
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
     _ = user
@@ -362,7 +391,7 @@ async def synthetic_signal_once_inject(
 
 
 @router.get("/signals/{symbol}")
-async def get_signal_detail(symbol: str, user: CurrentUser) -> dict[str, Any]:
+async def get_signal_detail(symbol: str, user: SignalsUser) -> dict[str, Any]:
     _ = user
     if symbol.strip().lower() == "intelligence":
         raise HTTPException(status_code=404, detail="Use /signals/intelligence/*")

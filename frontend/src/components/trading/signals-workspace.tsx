@@ -32,6 +32,8 @@ import {
   type SignalSortKey,
 } from "@/lib/trading/trader-ux";
 import { isGoldSymbol, MULTI_SYMBOL_ENABLED } from "@/lib/trading/gold-only";
+import { SignalsLockedView } from "@/components/billing/feature-locked";
+import { isSubscriptionRequiredError } from "@/lib/billing/feature-access";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
   { id: "strongest", label: "Strongest" },
@@ -308,6 +310,10 @@ export function SignalsWorkspace() {
         : "Research health reported an issue — retry to run one analysis cycle.");
 
   const researchFailed = Boolean(signalsQ.isError);
+
+  if (isSubscriptionRequiredError(signalsQ.error)) {
+    return <SignalsLockedView />;
+  }
 
   return (
     <div className="qf-desk min-w-0 space-y-5">
