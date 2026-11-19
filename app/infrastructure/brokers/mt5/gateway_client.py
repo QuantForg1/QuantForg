@@ -68,6 +68,19 @@ from core.utils import request_trace
 
 logger = get_logger(__name__)
 
+
+def gateway_http2_enabled() -> bool:
+    """HTTP/2 to the gateway is opt-in (``MT5_GATEWAY_HTTP2=1``)."""
+    import os
+
+    return os.environ.get("MT5_GATEWAY_HTTP2", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 _BODY_PREVIEW_LIMIT = 200
 _CLOUDFLARE_HOST_MARKERS = (
     "trycloudflare.com",
@@ -469,7 +482,17 @@ class GatewayMT5Client:
             pass
 
     def _build_http_client(self) -> httpx.Client:
-        """Prefer HTTP/2; fall back to 1.1 if the runtime lacks ``h2``."""
+        """HTTP/1.1 connection pool by default (thread-safe, one TCP
+        connection per in-flight request).
+
+        HTTP/2 multiplexed every gateway call over ONE TCP connection shared by
+        all worker threads. In production (19 Nov) that produced bursts where
+        every in-flight call timed out together (one slow /candles stalled the
+        connection) followed by ``ReadError [Errno 11]`` within ~1 ms on
+        concurrent threads reading the same socket — the robot then saw
+        MARKET_DATA_UNAVAILABLE and could not read positions. Opt back into
+        HTTP/2 with ``MT5_GATEWAY_HTTP2=1``.
+        """
         # Bound pool size so concurrent ITE candle GETs cannot exhaust FDs.
         limits = httpx.Limits(
             max_connections=20,
@@ -484,6 +507,8 @@ class GatewayMT5Client:
         }
         with contextlib.suppress(Exception):
             gateway_metrics.record_client_built()
+        if not gateway_http2_enabled():
+            return httpx.Client(http2=False, **common)
         try:
             return httpx.Client(http2=True, **common)
         except Exception as exc:
@@ -712,7 +737,7 @@ class GatewayMT5Client:
             timeout_seconds=self.timeout_seconds,
             cloudflare=cloudflare,
             follow_redirects=True,
-            http2=True,
+            http2=gateway_http2_enabled(),
             has_json_body=json_body is not None,
             # Never log password even if present in body keys.
             json_keys=sorted(k for k in (json_body or {}) if k.lower() != "password"),
@@ -1079,7 +1104,7 @@ class GatewayMT5Client:
             "timeout_seconds": self.timeout_seconds,
             "cloudflare": self.is_cloudflare or bool(upstream.get("cloudflare")),
             "follow_redirects": True,
-            "http2": True,
+            "http2": gateway_http2_enabled(),
             "last_upstream": upstream,
             "last_gateway_health": dict(self._last_gateway_health),
             "session_mode": self._session_mode,
