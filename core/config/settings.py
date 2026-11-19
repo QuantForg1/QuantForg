@@ -595,6 +595,47 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    risk_intelligence_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/risk-intelligence/insight. "
+                "Read-only. Does not change risk settings or place orders."
+            ),
+            validation_alias=AliasChoices(
+                "RISK_INTELLIGENCE_ENABLED",
+                "risk_intelligence_enabled",
+            ),
+        ),
+    ] = False
+    reliability_center_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/reliability/status. "
+                "Does not restart the gateway or place orders."
+            ),
+            validation_alias=AliasChoices(
+                "RELIABILITY_CENTER_ENABLED",
+                "reliability_center_enabled",
+            ),
+        ),
+    ] = False
+    trading_coach_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/trading-coach/answer. "
+                "Answers stay unavailable until a server-side record exists. "
+                "Does not place orders or change settings."
+            ),
+            validation_alias=AliasChoices(
+                "TRADING_COACH_ENABLED",
+                "trading_coach_enabled",
+            ),
+        ),
+    ] = False
+
     # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
     openai_enabled: Annotated[
         bool,
