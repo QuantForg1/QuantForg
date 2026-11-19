@@ -220,7 +220,7 @@ def test_chat_sends_snapshot_history_and_images():
     assert items[0]["content"][0]["type"] == "input_text"
     assert items[1]["content"][0]["type"] == "output_text"
     last = items[-1]["content"]
-    assert last[0]["text"].startswith("LIVE_SNAPSHOT:")
+    assert last[0]["text"].startswith("LIVE_DATA:")
     assert any(p["type"] == "input_image" and p["image_url"] == img for p in last)
     assert "Never invent" in c.calls[0]["instructions"]
 
@@ -249,3 +249,300 @@ def test_history_is_trimmed_and_cleaned():
     out = ma.clean_history(turns)
     assert len(out) == ma.MAX_HISTORY_TURNS
     assert all(t.role in {"user", "assistant"} for t in out)
+
+
+# ------------------------------------------------------------ v2: streaming
+
+
+def _sse_body(*events: dict) -> bytes:
+    import json as _j
+
+    return "".join(f"data: {_j.dumps(e)}\n\n" for e in events).encode()
+
+
+def _stream_client(handler):
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import OpenAIResponsesClient
+
+    return OpenAIResponsesClient(
+        api_key="sk-test", model="m", transport=httpx.MockTransport(handler)
+    )
+
+
+def _collect(agen):
+    async def run():
+        return [x async for x in agen]
+
+    return asyncio.run(run())
+
+
+def test_stream_output_text_yields_deltas_and_sends_reasoning():
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import stream_output_text
+
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _j
+
+        seen.append(_j.loads(request.content))
+        return httpx.Response(
+            200,
+            content=_sse_body(
+                {"type": "response.created"},
+                {"type": "response.output_text.delta", "delta": "Gold "},
+                {"type": "response.output_text.delta", "delta": "is up."},
+                {"type": "response.completed"},
+            ),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    out = _collect(
+        stream_output_text(
+            _stream_client(handler),
+            input_items="hi",
+            instructions="x",
+            reasoning_effort="low",
+        )
+    )
+    assert "".join(out) == "Gold is up."
+    assert seen[0]["stream"] is True
+    assert seen[0]["reasoning"] == {"effort": "low"}
+    assert seen[0]["store"] is False
+
+
+def test_stream_retries_without_reasoning_when_model_rejects_it():
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import stream_output_text
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _j
+
+        body = _j.loads(request.content)
+        calls.append("reasoning" in body)
+        if "reasoning" in body:
+            return httpx.Response(400, json={"error": {"message": "unsupported"}})
+        return httpx.Response(
+            200,
+            content=_sse_body({"type": "response.output_text.delta", "delta": "ok"}),
+        )
+
+    out = _collect(
+        stream_output_text(
+            _stream_client(handler),
+            input_items="hi",
+            instructions="x",
+            reasoning_effort="low",
+        )
+    )
+    assert out == ["ok"]
+    assert calls == [True, False]
+
+
+def test_stream_quota_error_raises_typed_error():
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import stream_output_text
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": {"code": "insufficient_quota"}})
+
+    with pytest.raises(OpenAIProviderError) as exc:
+        _collect(
+            stream_output_text(
+                _stream_client(handler), input_items="x", instructions="x"
+            )
+        )
+    assert exc.value.code == "insufficient_quota"
+
+
+def test_stream_chat_emits_meta_deltas_done():
+    async def fake_stream(client, **kw):
+        assert kw["reasoning_effort"] == "low"
+        for t in ("A", "B"):
+            yield t
+
+    out = _collect(
+        ma.stream_chat(
+            client=SimpleNamespace(model="m"),
+            history=[],
+            message="hi",
+            images=[],
+            snapshot={
+                "generated_at_utc": "2026-11-19T19:22:43+00:00",
+                "quote": {"bid": 1},
+            },
+            streamer=fake_stream,
+        )
+    )
+    assert out[0].startswith("event: meta")
+    assert '"as_of_utc": "2026-11-19T19:22:43+00:00"' in out[0]
+    assert [o.split("\n")[0] for o in out[1:]] == [
+        "event: delta",
+        "event: delta",
+        "event: done",
+    ]
+
+
+def test_stream_chat_reports_provider_error_as_event():
+    async def failing(client, **kw):
+        raise OpenAIProviderError("insufficient_quota", "x")
+        yield  # pragma: no cover
+
+    out = _collect(
+        ma.stream_chat(
+            client=SimpleNamespace(model="m"),
+            history=[],
+            message="hi",
+            images=[],
+            snapshot={},
+            streamer=failing,
+        )
+    )
+    assert out[-1].startswith("event: error")
+    assert "credits" in out[-1]
+
+
+def test_stream_chat_uses_more_reasoning_for_images():
+    assert ma.reasoning_for([]) == "low"
+    assert ma.reasoning_for(["x"]) == "medium"
+
+
+# --------------------------------------------------- v2: levels & conditions
+
+
+def test_quote_time_is_fetch_time_not_broker_clock():
+    snap = asyncio.run(
+        ma.build_market_snapshot(
+            feed=_Feed(), news=None, now=datetime(2026, 11, 19, 19, 22, 43, tzinfo=UTC)
+        )
+    )
+    assert snap["quote"]["fetched_at_utc"] == "2026-11-19T19:22:43+00:00"
+    assert "as_of" not in snap["quote"]
+    assert snap["session"] == "New York"
+    assert snap["bias"]["direction"] == "bullish"
+
+
+def test_swing_levels_split_around_price():
+    base = []
+    t0 = datetime(2026, 11, 1, tzinfo=UTC)
+    prices = [
+        100,
+        104,
+        108,
+        104,
+        100,
+        96,
+        92,
+        96,
+        100,
+        104,
+        108,
+        112,
+        108,
+        104,
+        100,
+    ] * 3
+    for i, p in enumerate(prices):
+        base.append(
+            _Candle(t0 + timedelta(hours=i), str(p), str(p + 1), str(p - 1), str(p))
+        )
+    lv = ma.swing_levels(base, 101.0)
+    assert lv["resistances"] and all(x > 101 for x in lv["resistances"])
+    assert lv["supports"] and all(x < 101 for x in lv["supports"])
+    assert lv["resistances"] == sorted(lv["resistances"])
+    assert lv["supports"] == sorted(lv["supports"], reverse=True)
+
+
+@pytest.mark.parametrize(
+    ("when", "expected"),
+    [
+        (datetime(2026, 11, 19, 13, 0, tzinfo=UTC), "London-New York overlap"),
+        (datetime(2026, 11, 19, 8, 0, tzinfo=UTC), "London"),
+        (datetime(2026, 11, 19, 2, 0, tzinfo=UTC), "Asia"),
+        (datetime(2026, 11, 21, 12, 0, tzinfo=UTC), "closed (weekend)"),
+    ],
+)
+def test_trading_session(when, expected):
+    assert ma.trading_session(when) == expected
+
+
+def _snap_for_conditions(**over):
+    snap = {
+        "session": "London",
+        "bias": {"direction": "bearish", "aligned": 3, "of": 3},
+        "quote": {"bid": 2650.0, "ask": 2650.3, "spread": 0.3},
+        "timeframes": [
+            {"timeframe": "M15", "available": True, "atr14": 4.0},
+            {
+                "timeframe": "H1",
+                "available": True,
+                "atr14": 10.0,
+                "rsi14": 45.0,
+                "last_close": 2650,
+            },
+            {"timeframe": "H4", "available": True},
+        ],
+        "key_levels_h1": {"supports": [2620.0], "resistances": [2670.0]},
+        "volatility_h1": {"state": "normal", "atr_vs_average": 1.0},
+        "economic_calendar": [],
+    }
+    snap.update(over)
+    return snap
+
+
+def test_conditions_supportive_when_everything_lines_up():
+    c = ma.trade_conditions(_snap_for_conditions())
+    assert c["tone"] == "good"
+    assert c["score"] == 100
+    assert {i["key"] for i in c["items"]} == {
+        "trend",
+        "momentum",
+        "room",
+        "volatility",
+        "spread",
+        "news",
+        "session",
+    }
+
+
+def test_imminent_high_impact_news_means_stand_aside():
+    cal = [{"title": "US CPI", "impact": "High", "minutes_from_now": 30}]
+    c = ma.trade_conditions(_snap_for_conditions(economic_calendar=cal))
+    news = next(i for i in c["items"] if i["key"] == "news")
+    assert news["status"] == "avoid"
+    assert "US CPI in 30 min" in news["detail"]
+    assert c["tone"] == "avoid"
+
+
+def test_no_room_to_level_and_stretched_rsi_flagged():
+    snap = _snap_for_conditions(key_levels_h1={"supports": [2648.0], "resistances": []})
+    snap["timeframes"][1]["rsi14"] = 22.0
+    c = ma.trade_conditions(snap)
+    by = {i["key"]: i for i in c["items"]}
+    assert by["room"]["status"] == "avoid"
+    assert by["momentum"]["status"] == "caution"
+
+
+def test_snapshot_cache_reuses_recent_data():
+    ma.clear_snapshot_cache_for_tests()
+    calls = {"n": 0}
+
+    class CountingFeed(_Feed):
+        async def tick(self, *, symbol):
+            calls["n"] += 1
+            return await super().tick(symbol=symbol)
+
+    async def run():
+        f = CountingFeed()
+        await ma.cached_market_snapshot(feed=f, news=None)
+        await ma.cached_market_snapshot(feed=f, news=None)
+
+    asyncio.run(run())
+    assert calls["n"] == 1
+    ma.clear_snapshot_cache_for_tests()

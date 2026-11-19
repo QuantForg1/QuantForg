@@ -19,4 +19,17 @@ assert.equal(blocks[4].kind, "rule");
 // raw HTML stays plain text (rendered as text, never as HTML)
 assert.equal(blocks[5].kind === "paragraph" && blocks[5].inline[0].text, "<script>x</script>");
 
+// nested bullets stay nested under their parent
+const nested = parseMarkdown("- Momentum is weak:\n  - M15 RSI **38.5**\n  - H1 RSI 31.4\n- Next point");
+assert.equal(nested.length, 1);
+assert.equal(nested[0].kind, "bullets");
+if (nested[0].kind === "bullets") {
+  assert.equal(nested[0].items.length, 2);
+  assert.equal(nested[0].items[0].children.length, 2);
+  assert.equal(nested[0].items[0].children[0][1].text, "38.5");
+}
+// "### " headings
+const h3 = parseMarkdown("### Key levels");
+assert.equal(h3[0].kind === "heading" && h3[0].level, 3);
+
 console.log("assistant markdown: ok");

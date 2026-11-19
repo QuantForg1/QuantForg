@@ -6,6 +6,7 @@ import asyncio
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.application.services.mt5_market_data import MT5MarketDataService
@@ -244,6 +245,31 @@ def _risk_settings_for(user_id: Any) -> dict[str, Any] | None:
     return out or None
 
 
+async def _assistant_prepare(
+    body: AssistantChatBody, user: Any, news: Any, feed: Any
+) -> tuple[Any, list[Any], str, list[str], dict[str, Any]]:
+    from app.application.services import market_assistant as ma
+    from core.config.settings import get_settings
+
+    message = body.message.strip()
+    if not message and not body.images:
+        raise ma.AssistantError("empty_message", "Type a question or attach a chart.")
+    ma.check_rate_limit(str(user.id))
+    images = [ma.validate_image(u) for u in body.images[: ma.MAX_IMAGES]]
+    history = ma.clean_history([ma.ChatTurn(t.role, t.content) for t in body.history])
+    snapshot = await ma.cached_market_snapshot(feed=feed, news=news)
+    risk = await asyncio.to_thread(_risk_settings_for, user.id)
+    if risk:
+        snapshot["user_risk_settings"] = risk
+    return ma.assistant_client(get_settings()), history, message, images, snapshot
+
+
+def _assistant_http_error(exc: Any) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status, detail={"code": exc.code, "message": exc.message}
+    )
+
+
 @router.post("/assistant/chat")
 async def assistant_chat(
     body: AssistantChatBody,
@@ -251,39 +277,66 @@ async def assistant_chat(
     news: NewsIntelSvc,
     feed: Annotated[PublicMarketFeedService, Depends(_assistant_feed)],
 ) -> dict[str, Any]:
-    """Grounded AI answer. Advisory only — never places or changes trades."""
+    """Grounded AI answer (non-streaming fallback). Advisory only."""
     from app.application.services import market_assistant as ma
-    from core.config.settings import get_settings
 
-    message = body.message.strip()
-    if not message and not body.images:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "empty_message",
-                "message": "Type a question or attach a chart.",
-            },
-        )
     try:
-        ma.check_rate_limit(str(user.id))
-        images = [ma.validate_image(u) for u in body.images[: ma.MAX_IMAGES]]
-        history = ma.clean_history(
-            [ma.ChatTurn(t.role, t.content) for t in body.history]
-        )
-        snapshot = await ma.build_market_snapshot(
-            feed=feed,
-            news=news,
-            risk_settings=await asyncio.to_thread(_risk_settings_for, user.id),
+        client, history, message, images, snapshot = await _assistant_prepare(
+            body, user, news, feed
         )
         return await ma.chat(
-            client=ma.assistant_client(get_settings()),
+            client=client,
             history=history,
             message=message,
             images=images,
             snapshot=snapshot,
         )
     except ma.AssistantError as exc:
-        raise HTTPException(
-            status_code=exc.status,
-            detail={"code": exc.code, "message": exc.message},
-        ) from exc
+        raise _assistant_http_error(exc) from exc
+
+
+@router.post("/assistant/stream")
+async def assistant_stream(
+    body: AssistantChatBody,
+    user: CurrentUser,
+    news: NewsIntelSvc,
+    feed: Annotated[PublicMarketFeedService, Depends(_assistant_feed)],
+) -> StreamingResponse:
+    """Same as /assistant/chat, streamed as server-sent events."""
+    from app.application.services import market_assistant as ma
+
+    try:
+        client, history, message, images, snapshot = await _assistant_prepare(
+            body, user, news, feed
+        )
+    except ma.AssistantError as exc:
+        raise _assistant_http_error(exc) from exc
+    return StreamingResponse(
+        ma.stream_chat(
+            client=client,
+            history=history,
+            message=message,
+            images=images,
+            snapshot=snapshot,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/desk")
+async def intelligence_desk(
+    user: CurrentUser,
+    news: NewsIntelSvc,
+    feed: Annotated[PublicMarketFeedService, Depends(_assistant_feed)],
+) -> dict[str, Any]:
+    """Computed gold market desk: trend per timeframe, levels, volatility,
+    session, and a trade-conditions checklist. Same data the AI reads."""
+    from app.application.services import market_assistant as ma
+
+    _ = user
+    snap = await ma.cached_market_snapshot(feed=feed, news=news)
+    return {
+        "snapshot": snap,
+        "conditions": ma.trade_conditions(snap),
+    }

@@ -3,10 +3,11 @@
  * No HTML is ever injected: the renderer builds React nodes from these blocks.
  */
 export type Inline = { text: string; bold: boolean };
+export type ListItem = { inline: Inline[]; children: Inline[][] };
 export type Block =
   | { kind: "heading"; level: 1 | 2 | 3; inline: Inline[] }
-  | { kind: "bullets"; items: Inline[][] }
-  | { kind: "numbered"; items: Inline[][] }
+  | { kind: "bullets"; items: ListItem[] }
+  | { kind: "numbered"; items: ListItem[] }
   | { kind: "paragraph"; inline: Inline[] }
   | { kind: "rule" };
 
@@ -52,20 +53,22 @@ export function parseMarkdown(src: string): Block[] {
       blocks.push({ kind: "heading", level, inline: parseInline(h[2].replace(/#+$/, "").trim()) });
       continue;
     }
+    const indent = line.replace(/\t/g, "  ").search(/\S/);
     const b = /^[-*•]\s+(.*)$/.exec(t);
-    if (b) {
+    const n = b ? null : /^\d+[.)]\s+(.*)$/.exec(t);
+    if (b || n) {
       flush();
+      const content = parseInline((b ?? n)![1]);
+      const kind = b ? "bullets" : "numbered";
       const prev = blocks[blocks.length - 1];
-      if (prev && prev.kind === "bullets") prev.items.push(parseInline(b[1]));
-      else blocks.push({ kind: "bullets", items: [parseInline(b[1])] });
-      continue;
-    }
-    const n = /^\d+[.)]\s+(.*)$/.exec(t);
-    if (n) {
-      flush();
-      const prev = blocks[blocks.length - 1];
-      if (prev && prev.kind === "numbered") prev.items.push(parseInline(n[1]));
-      else blocks.push({ kind: "numbered", items: [parseInline(n[1])] });
+      const prevList = prev && (prev.kind === "bullets" || prev.kind === "numbered") ? prev : null;
+      if (prevList && indent >= 2 && prevList.items.length > 0) {
+        prevList.items[prevList.items.length - 1].children.push(content);
+      } else if (prevList && prevList.kind === kind) {
+        prevList.items.push({ inline: content, children: [] });
+      } else {
+        blocks.push({ kind, items: [{ inline: content, children: [] }] });
+      }
       continue;
     }
     para.push(t);

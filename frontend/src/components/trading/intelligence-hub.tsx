@@ -10,38 +10,53 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Brain,
   CandlestickChart,
+  Check,
+  Copy,
   ImagePlus,
   Layers3,
   Newspaper,
   Send,
   Sparkles,
+  Square,
   Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DeskError } from "@/components/desk/primitives";
-import { OverviewMarketIntelligence } from "@/components/trading/overview-market-intelligence";
 import { AssistantMarkdown } from "@/components/trading/assistant-message";
-import { intelligenceApi, mt5Api, strategyLabApi } from "@/lib/api/endpoints";
+import {
+  AnalysisDesk,
+  InsightsDesk,
+  NewsDesk,
+  StrategyDesk,
+  useMarketDesk,
+} from "@/components/trading/intelligence-desks";
+import { intelligenceApi } from "@/lib/api/endpoints";
+import { formatPrice, formatUtcTime } from "@/lib/assistant/desk-format";
+import { AssistantStreamError, streamAssistant, type AssistantMeta } from "@/lib/assistant/stream";
 import {
   ASSISTANT_ACCEPTED,
   ASSISTANT_MAX_IMAGES,
   prepareChartImage,
 } from "@/lib/assistant/image";
 import { ApiError } from "@/lib/api/client";
-import { asList, asRecord, num, str } from "@/lib/desk";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 
 type DeskId = "assistant" | "insights" | "analysis" | "strategy" | "news";
-type Msg = { role: "user" | "assistant"; content: string; images?: string[]; error?: boolean };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  images?: string[];
+  error?: boolean;
+  streaming?: boolean;
+  meta?: AssistantMeta;
+};
 
 const DESKS: {
   id: DeskId;
@@ -82,21 +97,20 @@ const DESKS: {
 ];
 
 const PROMPTS = [
-  "Analyze XAUUSD trend",
   "Where is gold heading today?",
-  "Find a trade setup",
+  "Key support and resistance now",
+  "Is now a good time to trade?",
   "Review my risk settings",
-  "Suggest a strategy",
-  "Latest market news",
+  "What news could move gold?",
 ];
 
 const DESK_NOTE: Record<DeskId, string> = {
   assistant:
     "Answers grounded in the live gold feed. Attach a chart screenshot for a full analysis. Advisory only — it never places trades.",
-  insights: "XAUUSD structure from the live feed. Missing figures stay blank.",
-  analysis: "Setups, exposure, and positions the intelligence service returned.",
-  strategy: "Registered strategies only. The lab does not send orders.",
-  news: "Headlines and calendar items from the connected feeds.",
+  insights: "Live XAUUSD trend, momentum and key levels on M15, H1 and H4. Refreshes every 20 seconds.",
+  analysis: "Is now a reasonable moment to trade gold? Seven measured checks, plus your open positions.",
+  strategy: "Research strategies ranked by how well they fit the live gold regime.",
+  news: "Economic calendar with countdowns and the latest headlines from the connected feeds.",
 };
 
 export function IntelligenceHub() {
@@ -111,63 +125,9 @@ export function IntelligenceHub() {
   const panelRef = useRef<HTMLElement>(null);
   const skipScroll = useRef(true);
 
-  const dash = useQuery({
-    queryKey: ["intelligence-dashboard"],
-    queryFn: () => intelligenceApi.dashboard("FX"),
-    retry: false,
-    refetchInterval: 45_000,
-    staleTime: 12_000,
-  });
-  const contextQ = useQuery({
-    queryKey: ["intelligence-market-context"],
-    queryFn: () => intelligenceApi.marketContext("FX"),
-    retry: false,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-    enabled: desk === "insights",
-  });
-  const tickQ = useQuery({
-    queryKey: ["research-tick", TRADING_SYMBOL],
-    queryFn: async () => {
-      try {
-        return await mt5Api.publicTick(TRADING_SYMBOL);
-      } catch {
-        return mt5Api.researchTick(TRADING_SYMBOL);
-      }
-    },
-    retry: 1,
-    staleTime: 5_000,
-    refetchInterval: desk === "insights" ? 10_000 : false,
-    enabled: desk === "insights",
-  });
-  const newsQ = useQuery({
-    queryKey: ["intelligence-news"],
-    queryFn: () => intelligenceApi.news(12),
-    retry: false,
-    staleTime: 30_000,
-    enabled: desk === "news",
-  });
-  const calendarQ = useQuery({
-    queryKey: ["intelligence-calendar"],
-    queryFn: () => intelligenceApi.calendar(12),
-    retry: false,
-    staleTime: 30_000,
-    enabled: desk === "news",
-  });
-  const registryQ = useQuery({
-    queryKey: ["strategy-lab-registry"],
-    queryFn: () => strategyLabApi.registry(),
-    retry: false,
-    staleTime: 30_000,
-    enabled: desk === "strategy",
-  });
-  const labStatusQ = useQuery({
-    queryKey: ["strategy-lab-status"],
-    queryFn: () => strategyLabApi.status(),
-    retry: false,
-    staleTime: 30_000,
-    enabled: desk === "strategy",
-  });
+  const deskQ = useMarketDesk(desk !== "assistant");
+  const abortRef = useRef<AbortController | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -220,38 +180,93 @@ export function IntelligenceHub() {
     void addFiles(event.dataTransfer.files);
   }
 
+  function askFromDesk(prompt: string) {
+    setDesk("assistant");
+    void send(prompt);
+  }
+
+  function updateLast(patch: (m: Msg) => Msg) {
+    setMessages((current) => {
+      if (current.length === 0) return current;
+      const next = current.slice();
+      next[next.length - 1] = patch(next[next.length - 1]);
+      return next;
+    });
+  }
+
   async function send(text: string) {
     const prompt = text.trim();
     const images = attachments;
     if ((!prompt && images.length === 0) || busy) return;
     const history = messages
-      .filter((m) => !m.error)
+      .filter((m) => !m.error && !m.streaming)
       .slice(-12)
       .map((m) => ({ role: m.role, content: m.content }));
+    const body = { message: prompt, history, images };
     setBusy(true);
     setMessages((current) => [
       ...current,
       { role: "user", content: prompt || "Analyze this chart.", images },
+      { role: "assistant", content: "", streaming: true },
     ]);
     setInput("");
     setAttachments([]);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const res = asRecord(
-        await intelligenceApi.assistantChat({ message: prompt, history, images }),
-      );
-      const answer = str(res.answer, "");
-      setMessages((current) => [
-        ...current,
-        answer
-          ? { role: "assistant", content: answer }
-          : { role: "assistant", content: "No answer was returned. Please try again.", error: true },
-      ]);
+      try {
+        await streamAssistant(
+          body,
+          {
+            onMeta: (meta) => updateLast((m) => ({ ...m, meta })),
+            onDelta: (delta) => updateLast((m) => ({ ...m, content: m.content + delta })),
+          },
+          controller.signal,
+        );
+        updateLast((m) => ({ ...m, streaming: false }));
+      } catch (error) {
+        if (controller.signal.aborted) {
+          updateLast((m) => ({ ...m, streaming: false, content: m.content || "Stopped." }));
+          return;
+        }
+        // Streaming unavailable before any text (proxy, expired session…):
+        // fall back to the regular endpoint, which refreshes the session.
+        const fallback =
+          error instanceof AssistantStreamError &&
+          error.beforeFirstToken &&
+          (error.status === 0 || error.status === 401 || error.status >= 500 || error.code === "interrupted");
+        if (!fallback && !(error instanceof TypeError)) throw error;
+        const res = asRecord(await intelligenceApi.assistantChat(body));
+        const answer = str(res.answer, "");
+        if (!answer) throw new Error("No answer was returned. Please try again.");
+        updateLast((m) => ({
+          ...m,
+          content: answer,
+          streaming: false,
+          meta: asRecord(res.meta) as AssistantMeta,
+        }));
+      }
     } catch (error) {
       const message = assistantErrorMessage(error);
       toast.error(message);
-      setMessages((current) => [...current, { role: "assistant", content: message, error: true }]);
+      updateLast((m) =>
+        m.content
+          ? { ...m, streaming: false, content: `${m.content}\n\n(${message})` }
+          : { ...m, streaming: false, error: true, content: message },
+      );
     } finally {
+      abortRef.current = null;
       setBusy(false);
+    }
+  }
+
+  async function copyAnswer(index: number, content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(index);
+      window.setTimeout(() => setCopied(null), 1500);
+    } catch {
+      toast.error("Could not copy.");
     }
   }
 
@@ -262,21 +277,16 @@ export function IntelligenceHub() {
     }
   }
 
-  const data = asRecord(dash.data);
-  const context = { ...asRecord(data.market_context), ...asRecord(contextQ.data) };
-  const analysis = asRecord(data.analysis);
-  const positions = asList(data.positions).map(asRecord);
-  const pending = asList(data.pending_orders).map(asRecord);
-  const spreads = asList(asRecord(data.market).spread_movers).map(asRecord);
-  const tickEnvelope = asRecord(tickQ.data);
-  const tick = asRecord(tickEnvelope.tick ?? tickQ.data);
-  const bid = num(tick.bid);
-  const ask = num(tick.ask);
-  const tickMid =
-    Number.isFinite(bid) && Number.isFinite(ask) ? (bid + ask) / 2 : Number.isFinite(bid) ? bid : ask;
   const active = DESKS.find((item) => item.id === desk) ?? DESKS[0];
   const ActiveIcon = active.icon;
-  const ready = dash.isSuccess;
+  const liveState =
+    desk === "assistant"
+      ? { tone: "success" as const, label: "Live data" }
+      : deskQ.isError
+        ? { tone: "warning" as const, label: "Unavailable" }
+        : deskQ.isLoading
+          ? { tone: "neutral" as const, label: "Loading" }
+          : { tone: "success" as const, label: "Live" };
 
   return (
     <div className="qf-overview mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-4">
@@ -358,9 +368,7 @@ export function IntelligenceHub() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold tracking-tight sm:text-base">{active.label}</h2>
-                <Badge tone={dash.isError ? "warning" : ready ? "success" : "neutral"}>
-                  {dash.isLoading ? "Checking" : dash.isError ? "Unavailable" : "Ready"}
-                </Badge>
+                <Badge tone={liveState.tone}>{liveState.label}</Badge>
               </div>
               <p className="mt-1 text-xs leading-relaxed text-[var(--fg-muted)] sm:text-sm">{DESK_NOTE[desk]}</p>
             </div>
@@ -406,49 +414,58 @@ export function IntelligenceHub() {
                       </p>
                     </div>
                   ) : (
-                    <div
-                      key={`a-${index}`}
-                      className={cn(
-                        "mr-auto max-w-[min(100%,46rem)] rounded-2xl border px-4 py-3 text-[var(--fg)]",
-                        message.error
-                          ? "border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[var(--surface-2)]"
-                          : "border-[var(--border)] bg-[var(--surface-2)]",
-                      )}
-                    >
-                      <AssistantMarkdown text={message.content} />
+                    <div key={`a-${index}`} className="mr-auto w-full max-w-[min(100%,46rem)]">
+                      <div
+                        className={cn(
+                          "rounded-2xl border px-4 py-3 text-[var(--fg)]",
+                          message.error
+                            ? "border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[var(--surface-2)]"
+                            : "border-[var(--border)] bg-[var(--surface-2)]",
+                        )}
+                      >
+                        {message.content ? (
+                          <AssistantMarkdown text={message.content} />
+                        ) : (
+                          <ThinkingDots hasImage={Boolean(messages[index - 1]?.images?.length)} />
+                        )}
+                        {message.streaming && message.content ? (
+                          <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-[var(--accent)] align-middle" aria-hidden />
+                        ) : null}
+                      </div>
+                      {!message.error && (message.meta || !message.streaming) ? (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-[var(--fg-subtle)]">
+                          {message.meta?.as_of_utc ? (
+                            <span>
+                              Live data {formatUtcTime(String(message.meta.as_of_utc))}
+                              {typeof message.meta.bid === "number" && typeof message.meta.ask === "number"
+                                ? ` · XAUUSD ${formatPrice((message.meta.bid + message.meta.ask) / 2)}`
+                                : ""}
+                            </span>
+                          ) : null}
+                          {message.meta?.model ? <span>QuantForg AI · {message.meta.model}</span> : null}
+                          {!message.streaming && message.content ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 hover:text-[var(--fg)]"
+                              onClick={() => void copyAnswer(index, message.content)}
+                            >
+                              {copied === index ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              {copied === index ? "Copied" : "Copy"}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ),
                 )}
-                {busy ? (
-                  <p className="mr-auto rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5 text-sm text-[var(--fg-muted)]">
-                    Analyzing the live market…
-                  </p>
-                ) : null}
               </div>
             )
           ) : null}
 
-          {desk === "insights" ? (
-            <InsightsBody
-              context={context}
-              spreads={spreads}
-              tickMid={tickMid}
-              tick={tick}
-              tickEnvelope={tickEnvelope}
-              tickQ={tickQ}
-              dash={dash}
-            />
-          ) : null}
-
-          {desk === "analysis" ? (
-            <AnalysisBody analysis={analysis} positions={positions} pending={pending} dash={dash} />
-          ) : null}
-
-          {desk === "strategy" ? (
-            <StrategyBody registryQ={registryQ} statusQ={labStatusQ} />
-          ) : null}
-
-          {desk === "news" ? <NewsBody newsQ={newsQ} calendarQ={calendarQ} /> : null}
+          {desk === "insights" ? <InsightsDesk onAsk={askFromDesk} /> : null}
+          {desk === "analysis" ? <AnalysisDesk onAsk={askFromDesk} /> : null}
+          {desk === "strategy" ? <StrategyDesk onAsk={askFromDesk} /> : null}
+          {desk === "news" ? <NewsDesk onAsk={askFromDesk} /> : null}
         </div>
 
         {desk === "assistant" ? (
@@ -531,14 +548,26 @@ export function IntelligenceHub() {
                 onKeyDown={onComposerKey}
                 onPaste={onPaste}
               />
-              <Button
-                type="submit"
-                className="h-11 w-11 shrink-0 px-0"
-                aria-label="Send message"
-                disabled={busy || (input.trim() === "" && attachments.length === 0)}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+              {busy ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-11 w-11 shrink-0 px-0"
+                  aria-label="Stop answer"
+                  onClick={() => abortRef.current?.abort()}
+                >
+                  <Square className="h-3.5 w-3.5" fill="currentColor" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  className="h-11 w-11 shrink-0 px-0"
+                  aria-label="Send message"
+                  disabled={input.trim() === "" && attachments.length === 0}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              )}
             </form>
           </div>
         ) : null}
@@ -562,265 +591,16 @@ function AssistantEmpty() {
   );
 }
 
-function InsightsBody({
-  context,
-  spreads,
-  tickMid,
-  tick,
-  tickEnvelope,
-  tickQ,
-  dash,
-}: {
-  context: Record<string, unknown>;
-  spreads: Record<string, unknown>[];
-  tickMid: number;
-  tick: Record<string, unknown>;
-  tickEnvelope: Record<string, unknown>;
-  tickQ: { isLoading: boolean; isError: boolean; dataUpdatedAt: number };
-  dash: { isError: boolean; refetch: () => void };
-}) {
-  const facts = [
-    ["Session", str(context.session, "")],
-    ["Volatility", str(context.volatility_level, "")],
-    ["Liquidity", str(context.liquidity_level, "")],
-  ].filter(([, value]) => value && value !== "—");
-
+function ThinkingDots({ hasImage }: { hasImage: boolean }) {
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-      {dash.isError ? (
-        <DeskError message="Market intelligence could not be loaded." onRetry={() => dash.refetch()} />
-      ) : null}
-      <OverviewMarketIntelligence
-        timeframe="M15"
-        lastPrice={Number.isFinite(tickMid) ? tickMid : undefined}
-        marketFeedStatus={str(tickEnvelope.status || (Number.isFinite(tickMid) ? "live" : "unavailable"))}
-        tickUpdatedAt={tickQ.dataUpdatedAt || undefined}
-        tickTime={str(tick.time || tick.timestamp || tickEnvelope.as_of || "")}
-        tickLoading={tickQ.isLoading}
-        tickError={tickQ.isError}
-        support=""
-        resistance=""
-        confidencePct={null}
-        signalDirection="WAIT"
-      />
-      {facts.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {facts.map(([label, value]) => (
-            <div key={label} className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">{label}</p>
-              <p className="mt-1 truncate text-sm font-semibold text-[var(--fg)]">{value}</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {spreads.length > 0 ? (
-        <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-os)] border border-[var(--border)]">
-          {spreads.slice(0, 6).map((row, index) => (
-            <li key={`${str(row.symbol)}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
-              <span className="font-medium">{str(row.symbol, "Symbol")}</span>
-              <span className="tabular text-[var(--fg-muted)]">
-                {str(row.bid, "—")} / {str(row.ask, "—")} · {str(row.spread, "—")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function AnalysisBody({
-  analysis,
-  positions,
-  pending,
-  dash,
-}: {
-  analysis: Record<string, unknown>;
-  positions: Record<string, unknown>[];
-  pending: Record<string, unknown>[];
-  dash: { isLoading: boolean; isError: boolean; refetch: () => void };
-}) {
-  const groups = (
-    [
-      ["Market conditions", asList(analysis.market_conditions)],
-      ["Risk factors", asList(analysis.risk_factors)],
-      ["News impact", asList(analysis.news_impact)],
-      ["Portfolio exposure", asList(analysis.portfolio_exposure)],
-    ] as const
-  ).filter(([, lines]) => lines.length > 0);
-
-  if (dash.isLoading) return <p className="text-sm text-[var(--fg-muted)]">Loading trade analysis…</p>;
-  if (dash.isError) return <DeskError message="Trade analysis could not be loaded." onRetry={() => dash.refetch()} />;
-  if (groups.length === 0 && positions.length === 0 && pending.length === 0) {
-    return (
-      <p className="mx-auto max-w-md py-16 text-center text-sm leading-relaxed text-[var(--fg-muted)]">
-        No trade analysis or open positions were returned.
-      </p>
-    );
-  }
-
-  return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-      {groups.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {groups.map(([title, lines]) => (
-            <section key={title} className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-4">
-              <h3 className="text-sm font-semibold">{title}</h3>
-              <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-[var(--fg-muted)]">
-                {lines.map((line, index) => (
-                  <li key={index}>{String(line)}</li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      ) : null}
-      {str(analysis.disclaimer, "") ? (
-        <p className="text-xs leading-relaxed text-[var(--fg-subtle)]">{str(analysis.disclaimer, "")}</p>
-      ) : null}
-      {positions.length > 0 ? <TicketList title="Open positions" rows={positions} kind="position" /> : null}
-      {pending.length > 0 ? <TicketList title="Pending orders" rows={pending} kind="order" /> : null}
-    </div>
-  );
-}
-
-function TicketList({
-  title,
-  rows,
-  kind,
-}: {
-  title: string;
-  rows: Record<string, unknown>[];
-  kind: "position" | "order";
-}) {
-  return (
-    <section>
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
-      <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-os)] border border-[var(--border)]">
-        {rows.slice(0, 8).map((row, index) => {
-          const pnl = num(row.profit);
-          return (
-            <li key={`${str(row.ticket, String(index))}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
-              <span className="min-w-0 truncate font-medium">
-                {str(row.symbol, "—")} · {str(kind === "position" ? row.side : row.order_type, "—")}
-              </span>
-              <span className="shrink-0 tabular text-[var(--fg-muted)]">
-                {str(row.volume, "—")}
-                {kind === "position" && Number.isFinite(pnl) ? (
-                  <span className={pnl >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"}> · {pnl.toFixed(2)}</span>
-                ) : null}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
-function StrategyBody({
-  registryQ,
-  statusQ,
-}: {
-  registryQ: { isLoading: boolean; isError: boolean; data: unknown; refetch: () => void };
-  statusQ: { data: unknown };
-}) {
-  const status = asRecord(statusQ.data);
-  const strategies = asList(asRecord(registryQ.data).strategies).map(asRecord);
-  const mission = str(asRecord(status.config).mission, "");
-  const disclaimer = str(status.disclaimer, "");
-
-  if (registryQ.isLoading) return <p className="text-sm text-[var(--fg-muted)]">Loading Strategy Lab…</p>;
-  if (registryQ.isError) {
-    return <DeskError message="Strategy Lab could not be loaded." onRetry={() => registryQ.refetch()} />;
-  }
-
-  return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-      {mission ? <p className="text-sm leading-relaxed text-[var(--fg)]">{mission}</p> : null}
-      {disclaimer ? <p className="text-xs leading-relaxed text-[var(--fg-subtle)]">{disclaimer}</p> : null}
-      {strategies.length === 0 ? (
-        <p className="py-16 text-center text-sm leading-relaxed text-[var(--fg-muted)]">
-          No strategies are registered.
-        </p>
-      ) : (
-        <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-os)] border border-[var(--border)]">
-          {strategies.slice(0, 12).map((row, index) => (
-            <li key={`${str(row.key, String(index))}`} className="flex items-center justify-between gap-3 px-3 py-3">
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">{str(row.name, "") || str(row.key, "Strategy")}</span>
-                {str(row.name, "") && str(row.key, "") ? (
-                  <span className="block truncate font-mono text-xs text-[var(--fg-muted)]">{str(row.key, "")}</span>
-                ) : null}
-              </span>
-              {str(row.status, "") ? <Badge tone="neutral">{str(row.status, "")}</Badge> : null}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function NewsBody({
-  newsQ,
-  calendarQ,
-}: {
-  newsQ: { isLoading: boolean; isError: boolean; data: unknown; refetch: () => void };
-  calendarQ: { isLoading: boolean; isError: boolean; data: unknown; refetch: () => void };
-}) {
-  if (newsQ.isLoading || calendarQ.isLoading) {
-    return <p className="text-sm text-[var(--fg-muted)]">Loading the connected news and calendar feeds.</p>;
-  }
-  if (newsQ.isError && calendarQ.isError) {
-    return (
-      <DeskError
-        message="The news and economic-calendar feeds could not be loaded. No headlines are shown in their place."
-        onRetry={() => {
-          newsQ.refetch();
-          calendarQ.refetch();
-        }}
-      />
-    );
-  }
-  const headlines = asList(newsQ.isError ? [] : newsQ.data).map(asRecord).filter((item) => str(item.title, ""));
-  const events = asList(calendarQ.isError ? [] : calendarQ.data).map(asRecord).filter((item) => str(item.title, ""));
-  if (headlines.length === 0 && events.length === 0) {
-    return (
-      <p className="mx-auto max-w-md py-16 text-center text-sm leading-relaxed text-[var(--fg-muted)]">
-        No Gold or market headlines are available from the connected news and calendar feeds.
-      </p>
-    );
-  }
-  return (
-    <div className="mx-auto grid w-full max-w-4xl gap-4 lg:grid-cols-2">
-      {headlines.length > 0 ? (
-        <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-os)] border border-[var(--border)]">
-          {headlines.slice(0, 8).map((item, index) => (
-            <li key={`${str(item.title)}-${index}`} className="px-3 py-3">
-              <p className="text-sm font-medium leading-relaxed">{str(item.title)}</p>
-              <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                {[str(item.source, ""), str(item.published_at, "").slice(0, 16)].filter(Boolean).join(" · ")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {events.length > 0 ? (
-        <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-os)] border border-[var(--border)]">
-          {events.slice(0, 8).map((item, index) => (
-            <li key={`${str(item.title)}-${index}`} className="px-3 py-3">
-              <p className="text-sm font-medium leading-relaxed">{str(item.title)}</p>
-              <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                {[str(item.scheduled_at, "").slice(0, 16), str(item.country, ""), str(item.impact, "")]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    <span className="inline-flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+      <span className="inline-flex gap-1" aria-hidden>
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)] [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent)]" />
+      </span>
+      {hasImage ? "Reading your chart and the live market…" : "Reading the live market…"}
+    </span>
   );
 }
 

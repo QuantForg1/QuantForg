@@ -235,3 +235,100 @@ def extract_output_text(payload: dict[str, Any]) -> str:
                     if isinstance(value, str) and value.strip():
                         chunks.append(value.strip())
     return "\n".join(chunks).strip()
+
+
+async def stream_output_text(
+    client: OpenAIResponsesClient,
+    *,
+    input_items: str | list[dict[str, Any]],
+    instructions: str,
+    max_output_tokens: int | None = None,
+    reasoning_effort: str | None = None,
+    timeout_seconds: float = 90.0,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> Any:
+    """Yield text deltas from ``POST /v1/responses`` with ``stream: true``.
+
+    Raises ``OpenAIProviderError`` before the first delta on HTTP errors.
+    If the model rejects ``reasoning`` (HTTP 400), retries once without it.
+    """
+    if not client.configured:
+        raise OpenAIProviderError("missing_api_key", "OPENAI_API_KEY is not configured")
+
+    def _payload(with_reasoning: bool) -> dict[str, Any]:
+        p: dict[str, Any] = {
+            "model": client.model,
+            "instructions": instructions,
+            "input": input_items,
+            "store": False,
+            "stream": True,
+        }
+        if max_output_tokens is not None:
+            p["max_output_tokens"] = int(max_output_tokens)
+        if with_reasoning and reasoning_effort:
+            p["reasoning"] = {"effort": reasoning_effort}
+        return p
+
+    headers = {
+        "Authorization": f"Bearer {client._api_key}",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    url = f"{client.base_url}/responses"
+    timeout = httpx.Timeout(timeout_seconds, connect=10.0)
+    async with httpx.AsyncClient(
+        timeout=timeout, transport=transport or client._transport
+    ) as http:
+        for with_reasoning in ((True, False) if reasoning_effort else (False,)):
+            async with http.stream(
+                "POST", url, headers=headers, json=_payload(with_reasoning)
+            ) as resp:
+                if resp.status_code == 400 and with_reasoning:
+                    await resp.aread()
+                    logger.info(
+                        "openai_stream_retry_without_reasoning", model=client.model
+                    )
+                    continue
+                if resp.status_code == 401:
+                    raise OpenAIProviderError(
+                        "auth_failed", "OpenAI authentication failed"
+                    )
+                if resp.status_code == 429:
+                    body = (await resp.aread()).decode("utf-8", "ignore")
+                    code = (
+                        "insufficient_quota"
+                        if "insufficient_quota" in body or "billing" in body
+                        else "rate_limited"
+                    )
+                    raise OpenAIProviderError(code, "OpenAI rate/quota limit")
+                if resp.status_code >= 500:
+                    raise OpenAIProviderError(
+                        "provider_outage", f"OpenAI upstream HTTP {resp.status_code}"
+                    )
+                if resp.status_code >= 400:
+                    raise OpenAIProviderError(
+                        "bad_request",
+                        f"OpenAI rejected the request (HTTP {resp.status_code})",
+                    )
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    etype = str(event.get("type") or "")
+                    if etype == "response.output_text.delta":
+                        delta = event.get("delta")
+                        if isinstance(delta, str) and delta:
+                            yield delta
+                    elif etype in {"response.failed", "error"}:
+                        raise OpenAIProviderError(
+                            "provider_outage", "OpenAI stream reported an error"
+                        )
+                    elif etype == "response.completed":
+                        return
+                return
