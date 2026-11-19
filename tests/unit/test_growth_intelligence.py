@@ -11,7 +11,9 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.application.dto.auth import AuthUserDTO
+from app.application.services.growth_automation import reset_growth_automation_state
 from app.application.services.growth_intelligence import growth_intelligence_status
+from app.domain.billing.plans import plans_public
 from app.domain.identity.designated_owner import DESIGNATED_OWNER_EMAIL
 from app.presentation.dependencies.auth import get_current_user
 from app.presentation.routers import growth_intelligence as growth_router
@@ -34,11 +36,19 @@ def test_status_document_has_no_numeric_measurements() -> None:
             assert metric["status"] in {"not_connected", "unavailable", "stopped"}
 
 
-def test_router_is_get_only() -> None:
+def test_router_writes_are_limited_to_owner_checks() -> None:
     methods: set[str] = set()
+    post_paths: list[str] = []
     for route in growth_router.router.routes:
-        methods.update(getattr(route, "methods", set()))
-    assert methods <= {"GET", "HEAD"}
+        route_methods = getattr(route, "methods", set())
+        methods.update(route_methods)
+        if "POST" in route_methods:
+            post_paths.append(getattr(route, "path", ""))
+    assert methods <= {"GET", "HEAD", "POST"}
+    assert sorted(post_paths) == [
+        "/growth/automation/emergency-stop",
+        "/growth/automation/run",
+    ]
     names = [name for name, _path in main._ROUTER_SPECS]
     assert "growth_intelligence" in names
     assert "growth_intelligence" not in main._OPERATOR_ONLY_ROUTER_MODULES
@@ -85,3 +95,68 @@ def test_designated_owner_can_read_status() -> None:
     assert body["automation"]["scheduler_attachment"] == "not_registered"
     assert body["automation"]["places_orders"] is False
     assert body["automation"]["ads_can_be_enabled"] is False
+
+
+def test_trader_cannot_run_growth_checks() -> None:
+    client = _client("trader", "trader@example.invalid")
+    response = client.post(
+        "/api/v1/growth/automation/run",
+        json={"job_id": "catalog_prices"},
+    )
+    assert response.status_code == 403
+
+
+def test_emergency_stop_blocks_then_allows_one_real_check() -> None:
+    reset_growth_automation_state()
+    client = _client("owner", DESIGNATED_OWNER_EMAIL)
+    blocked = client.post(
+        "/api/v1/growth/automation/run",
+        json={"job_id": "catalog_prices"},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["executed"] is False
+    assert blocked.json()["status"] == "stopped"
+
+    released = client.post(
+        "/api/v1/growth/automation/emergency-stop",
+        json={"engaged": False},
+    )
+    assert released.status_code == 200
+    assert released.json()["ads_can_be_enabled"] is False
+    assert released.json()["places_orders"] is False
+
+    ran = client.post(
+        "/api/v1/growth/automation/run",
+        json={"job_id": "catalog_prices"},
+    )
+    assert ran.status_code == 200
+    body = ran.json()
+    assert body["executed"] is True
+    assert body["result"]["subscriber_count"] is None
+    assert body["result"]["prices_usd"] == [
+        plan["monthly_price_usd"] for plan in plans_public()
+    ]
+
+    replay = client.post(
+        "/api/v1/growth/automation/run",
+        json={"job_id": "catalog_prices"},
+    )
+    assert replay.json()["idempotent_replay"] is True
+    assert replay.json()["id"] == body["id"]
+
+    unknown = client.post(
+        "/api/v1/growth/automation/run",
+        json={"job_id": "enable_ads"},
+    )
+    assert unknown.status_code == 422
+
+    client.post(
+        "/api/v1/growth/automation/emergency-stop",
+        json={"engaged": True},
+    )
+    again = client.post(
+        "/api/v1/growth/automation/run",
+        json={"job_id": "decision_evidence_contract"},
+    )
+    assert again.json()["executed"] is False
+    reset_growth_automation_state()
