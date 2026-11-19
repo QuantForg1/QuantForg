@@ -174,6 +174,7 @@ const TRADER_COMMAND_EXTRA = new Set([
   "/journal",
   "/counsel",
   "/book",
+  "/trust",
 ]);
 
 export function isTraderFacingHref(href: string): boolean {
@@ -1561,6 +1562,12 @@ export const appNav: NavGroup[] = [
         label: "Analytics",
         icon: Activity,
         hint: "Win rate · expectancy · DD",
+      },
+      {
+        href: "/trust",
+        label: "Verified performance",
+        icon: ShieldCheck,
+        hint: "Broker history · missing money stays unavailable",
       },
       {
         href: "/performance-intelligence",

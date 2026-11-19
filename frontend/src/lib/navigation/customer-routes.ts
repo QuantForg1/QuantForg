@@ -38,6 +38,7 @@ export const CUSTOMER_ROUTES: readonly string[] = [
   "/ai-robot",
   "/trade-replay",
   "/analytics",
+  "/trust",
 ];
 
 export function isCustomerRoute(pathname: string): boolean {
