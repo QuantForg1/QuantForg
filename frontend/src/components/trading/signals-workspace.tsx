@@ -130,7 +130,7 @@ export function SignalsWorkspace() {
             <button
               type="button"
               className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-              aria-label="Refresh signal"
+              aria-label="Refresh analysis"
               disabled={signalsQ.isFetching || quoteQ.isFetching}
               onClick={() => {
                 void signalsQ.refetch();
