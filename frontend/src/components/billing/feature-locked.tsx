@@ -72,7 +72,7 @@ export function FeatureLocked({
 
 function ShieldLock() {
   return (
-    <div className="relative h-32 w-28">
+    <div className="relative h-36 w-32">
       <svg viewBox="0 0 112 128" className="h-full w-full drop-shadow-[0_0_24px_rgba(56,189,248,0.6)]" aria-hidden>
         <defs>
           <linearGradient id="qf-shield-fill" x1="0" y1="0" x2="0" y2="1">
@@ -113,7 +113,7 @@ function LockedPreview() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-0 select-none blur-[7px] opacity-60"
+      className="pointer-events-none absolute inset-0 select-none blur-[8px] opacity-45"
     >
       <div className="grid h-full grid-cols-1 gap-8 p-10 md:grid-cols-[1fr_1.6fr]">
         <div className="flex flex-col items-center justify-center gap-4">
