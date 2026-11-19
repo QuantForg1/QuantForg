@@ -3754,6 +3754,7 @@ export const intelligenceApi = {
     apiFetch<unknown[]>(`/intelligence/events?limit=${limit}`),
   providers: () => apiFetch<unknown[]>(`/intelligence/providers`),
   status: () => apiFetch<Record<string, unknown>>(`/intelligence/status`),
+  desk: () => apiFetch<Record<string, unknown>>("/intelligence/desk"),
   assistantChat: (body: {
     message: string;
     history: { role: "user" | "assistant"; content: string }[];
