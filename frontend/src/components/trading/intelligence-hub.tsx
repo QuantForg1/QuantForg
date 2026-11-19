@@ -1,30 +1,47 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type ComponentType,
+  type DragEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Brain,
   CandlestickChart,
+  ImagePlus,
   Layers3,
   Newspaper,
   Send,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskError } from "@/components/desk/primitives";
 import { OverviewMarketIntelligence } from "@/components/trading/overview-market-intelligence";
-import { intelligenceApi, mt5Api, riskApi, strategyLabApi } from "@/lib/api/endpoints";
+import { AssistantMarkdown } from "@/components/trading/assistant-message";
+import { intelligenceApi, mt5Api, strategyLabApi } from "@/lib/api/endpoints";
+import {
+  ASSISTANT_ACCEPTED,
+  ASSISTANT_MAX_IMAGES,
+  prepareChartImage,
+} from "@/lib/assistant/image";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
 type DeskId = "assistant" | "insights" | "analysis" | "strategy" | "news";
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; images?: string[]; error?: boolean };
 
 const DESKS: {
   id: DeskId;
@@ -66,6 +83,7 @@ const DESKS: {
 
 const PROMPTS = [
   "Analyze XAUUSD trend",
+  "Where is gold heading today?",
   "Find a trade setup",
   "Review my risk settings",
   "Suggest a strategy",
@@ -73,7 +91,8 @@ const PROMPTS = [
 ];
 
 const DESK_NOTE: Record<DeskId, string> = {
-  assistant: "Advisory answers from live platform data. This desk does not place trades.",
+  assistant:
+    "Answers grounded in the live gold feed. Attach a chart screenshot for a full analysis. Advisory only — it never places trades.",
   insights: "XAUUSD structure from the live feed. Missing figures stay blank.",
   analysis: "Setups, exposure, and positions the intelligence service returned.",
   strategy: "Registered strategies only. The lab does not send orders.",
@@ -85,6 +104,9 @@ export function IntelligenceHub() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const skipScroll = useRef(true);
@@ -164,24 +186,70 @@ export function IntelligenceHub() {
     panel.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
   }, [desk]);
 
+  async function addFiles(files: FileList | File[] | null) {
+    const list = Array.from(files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (list.length === 0) return;
+    const room = ASSISTANT_MAX_IMAGES - attachments.length;
+    if (room <= 0) {
+      toast.error(`You can attach up to ${ASSISTANT_MAX_IMAGES} images.`);
+      return;
+    }
+    const ready: string[] = [];
+    for (const file of list.slice(0, room)) {
+      try {
+        ready.push(await prepareChartImage(file));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "The image could not be read.");
+      }
+    }
+    if (ready.length) setAttachments((current) => [...current, ...ready].slice(0, ASSISTANT_MAX_IMAGES));
+  }
+
+  function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData.files);
+    if (files.some((f) => f.type.startsWith("image/"))) {
+      event.preventDefault();
+      void addFiles(files);
+    }
+  }
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    if (desk !== "assistant") return;
+    event.preventDefault();
+    setDragging(false);
+    void addFiles(event.dataTransfer.files);
+  }
+
   async function send(text: string) {
     const prompt = text.trim();
-    if (!prompt || busy) return;
+    const images = attachments;
+    if ((!prompt && images.length === 0) || busy) return;
+    const history = messages
+      .filter((m) => !m.error)
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: m.content }));
     setBusy(true);
-    setMessages((current) => [...current, { role: "user", content: prompt }]);
+    setMessages((current) => [
+      ...current,
+      { role: "user", content: prompt || "Analyze this chart.", images },
+    ]);
     setInput("");
+    setAttachments([]);
     try {
-      const content = await answerPrompt(prompt);
-      setMessages((current) => [...current, { role: "assistant", content }]);
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "The live brief could not be loaded");
+      const res = asRecord(
+        await intelligenceApi.assistantChat({ message: prompt, history, images }),
+      );
+      const answer = str(res.answer, "");
       setMessages((current) => [
         ...current,
-        {
-          role: "assistant",
-          content: "The live brief could not be loaded. No answer was invented in its place.",
-        },
+        answer
+          ? { role: "assistant", content: answer }
+          : { role: "assistant", content: "No answer was returned. Please try again.", error: true },
       ]);
+    } catch (error) {
+      const message = assistantErrorMessage(error);
+      toast.error(message);
+      setMessages((current) => [...current, { role: "assistant", content: message, error: true }]);
     } finally {
       setBusy(false);
     }
@@ -270,7 +338,17 @@ export function IntelligenceHub() {
         id="intel-panel"
         role="tabpanel"
         aria-labelledby={`intel-tab-${desk}`}
-        className="qf-overview-panel flex min-h-[36rem] flex-col lg:min-h-[calc(100dvh-18rem)]"
+        className={cn(
+          "qf-overview-panel flex min-h-[36rem] flex-col lg:min-h-[calc(100dvh-18rem)]",
+          dragging && desk === "assistant" && "ring-2 ring-[var(--accent)]",
+        )}
+        onDragOver={(event) => {
+          if (desk !== "assistant") return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[color-mix(in_srgb,var(--accent)_16%,var(--border))] px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-start gap-3">
@@ -307,22 +385,43 @@ export function IntelligenceHub() {
               <AssistantEmpty />
             ) : (
               <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-                {messages.map((message, index) => (
-                  <p
-                    key={`${message.role}-${index}`}
-                    className={cn(
-                      "max-w-[min(100%,40rem)] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                      message.role === "user"
-                        ? "ml-auto bg-[var(--accent)] text-[var(--accent-fg)]"
-                        : "mr-auto border border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg)]",
-                    )}
-                  >
-                    {message.content}
-                  </p>
-                ))}
+                {messages.map((message, index) =>
+                  message.role === "user" ? (
+                    <div key={`u-${index}`} className="ml-auto flex max-w-[min(100%,40rem)] flex-col items-end gap-2">
+                      {message.images && message.images.length > 0 ? (
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {message.images.map((src, i) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              key={i}
+                              src={src}
+                              alt="Attached chart"
+                              className="max-h-48 rounded-xl border border-[var(--border)] object-contain"
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                      <p className="whitespace-pre-wrap rounded-2xl bg-[var(--accent)] px-3.5 py-2.5 text-sm leading-relaxed text-[var(--accent-fg)]">
+                        {message.content}
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      key={`a-${index}`}
+                      className={cn(
+                        "mr-auto max-w-[min(100%,46rem)] rounded-2xl border px-4 py-3 text-[var(--fg)]",
+                        message.error
+                          ? "border-[color-mix(in_srgb,var(--warning)_45%,var(--border))] bg-[var(--surface-2)]"
+                          : "border-[var(--border)] bg-[var(--surface-2)]",
+                      )}
+                    >
+                      <AssistantMarkdown text={message.content} />
+                    </div>
+                  ),
+                )}
                 {busy ? (
                   <p className="mr-auto rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5 text-sm text-[var(--fg-muted)]">
-                    Reading the live brief…
+                    Analyzing the live market…
                   </p>
                 ) : null}
               </div>
@@ -367,6 +466,28 @@ export function IntelligenceHub() {
                 </button>
               ))}
             </div>
+            {attachments.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {attachments.map((src, i) => (
+                  <div key={i} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`Chart ${i + 1}`}
+                      className="h-16 w-24 rounded-lg border border-[var(--border)] object-cover"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove image"
+                      className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-[var(--surface)] text-[var(--fg)] shadow ring-1 ring-[var(--border)]"
+                      onClick={() => setAttachments((cur) => cur.filter((_, j) => j !== i))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <form
               className="flex items-end gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 focus-within:border-[var(--accent)]"
               onSubmit={(event: FormEvent) => {
@@ -374,6 +495,28 @@ export function IntelligenceHub() {
                 void send(input);
               }}
             >
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ASSISTANT_ACCEPTED.join(",")}
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void addFiles(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 w-11 shrink-0 px-0"
+                aria-label="Attach chart screenshot"
+                title="Attach chart screenshot"
+                disabled={busy || attachments.length >= ASSISTANT_MAX_IMAGES}
+                onClick={() => fileRef.current?.click()}
+              >
+                <ImagePlus className="h-4 w-4" />
+              </Button>
               <label className="sr-only" htmlFor="intel-composer">
                 Message to QuantForg AI
               </label>
@@ -382,16 +525,17 @@ export function IntelligenceHub() {
                 value={input}
                 rows={1}
                 disabled={busy}
-                placeholder="Ask anything about the market, strategy, or trading…"
+                placeholder="Ask anything, or paste a chart screenshot…"
                 className="max-h-32 min-h-11 flex-1 resize-none bg-transparent py-2.5 text-base leading-relaxed text-[var(--fg)] placeholder:text-[var(--fg-subtle)] focus:outline-none disabled:opacity-60"
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={onComposerKey}
+                onPaste={onPaste}
               />
               <Button
                 type="submit"
                 className="h-11 w-11 shrink-0 px-0"
                 aria-label="Send message"
-                disabled={busy || input.trim() === ""}
+                disabled={busy || (input.trim() === "" && attachments.length === 0)}
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -411,7 +555,8 @@ function AssistantEmpty() {
       </span>
       <h3 className="mt-5 text-xl font-semibold tracking-tight text-[var(--fg)] sm:text-2xl">Ask QuantForg AI</h3>
       <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)] sm:text-base">
-        Get trading insights, market analysis, strategy notes, and risk guidance from the live platform.
+        Ask about gold, risk, strategy or the platform, in any language. Attach or paste a chart
+        screenshot and QuantForg AI will read the structure, levels and scenarios against the live price.
       </p>
     </div>
   );
@@ -679,104 +824,14 @@ function NewsBody({
   );
 }
 
-async function answerPrompt(prompt: string): Promise<string> {
-  const question = prompt.toLowerCase();
-  if (/\bnews\b|headline|calendar/.test(question)) return newsBrief();
-  if (/\brisk\b/.test(question)) return riskBrief();
-  if (/strateg/.test(question)) return strategyBrief();
-  return analysisBrief(question.includes("setup"));
-}
-
-async function newsBrief(): Promise<string> {
-  const [newsRaw, calendarRaw] = await Promise.all([
-    intelligenceApi.news(8),
-    intelligenceApi.calendar(6),
-  ]);
-  const headlines = asList(newsRaw).map(asRecord).filter((item) => str(item.title, ""));
-  const events = asList(calendarRaw).map(asRecord).filter((item) => str(item.title, ""));
-  const lines = [
-    ...headlines.slice(0, 6).map((item) => `• ${str(item.title)} — ${str(item.source, "source not supplied")}`),
-    ...events.slice(0, 4).map((item) => `• ${str(item.title)} — ${str(item.scheduled_at, "").slice(0, 16) || "time not supplied"}`),
-  ];
-  return lines.length > 0 ? lines.join("\n") : "No news or calendar items were returned.";
-}
-
-async function riskBrief(): Promise<string> {
-  const [prefsRaw, profileRaw] = await Promise.all([
-    riskApi.preferences(),
-    riskApi.profile().catch(() => ({})),
-  ]);
-  const prefs = asRecord(asRecord(prefsRaw).preferences);
-  const effective = asRecord(asRecord(profileRaw).effective);
-  const rows: [string, unknown, string][] = [
-    ["Preferred risk per trade", prefs.planned_risk_pct, "%"],
-    ["Personal daily loss threshold", prefs.daily_loss_pct, "%"],
-    ["Aggregate open risk", prefs.aggregate_open_risk_pct, "%"],
-    ["Personal maximum lot", prefs.max_lot, ""],
-    ["Personal maximum concurrent positions", prefs.max_concurrent_positions, ""],
-    ["Weekly loss limit", effective.weekly_loss_pct, "%"],
-    ["Monthly loss limit", effective.monthly_loss_pct, "%"],
-    ["Maximum drawdown halt", effective.max_drawdown_pct, "%"],
-  ];
-  const lines = rows
-    .map(([label, value, suffix]) => {
-      const raw = str(value, "");
-      if (raw === "") return "";
-      const amount = Number(raw);
-      const shown = Number.isFinite(amount) ? `${amount}${suffix}` : raw;
-      return `• ${label}: ${shown}`;
-    })
-    .filter(Boolean);
-  if (lines.length === 0) return "No personal risk settings were returned.";
-  return `${lines.join("\n")}\n\nThese are your saved settings. This desk does not change them or close positions.`;
-}
-
-async function strategyBrief(): Promise<string> {
-  const registry = asRecord(await strategyLabApi.registry());
-  const strategies = asList(registry.strategies).map(asRecord);
-  if (strategies.length === 0) return "No strategies are registered in Strategy Lab.";
-  const lines = strategies.slice(0, 8).map((row) => {
-    const name = str(row.name, "") || str(row.key, "Strategy");
-    const status = str(row.status, "");
-    return status ? `• ${name} — ${status}` : `• ${name}`;
-  });
-  return `${lines.join("\n")}\n\nStrategy Lab is advisory and does not place trades.`;
-}
-
-async function analysisBrief(setup: boolean): Promise<string> {
-  const [analysisRaw, contextRaw] = await Promise.all([
-    intelligenceApi.analysis("FX", TRADING_SYMBOL),
-    intelligenceApi.marketContext("FX"),
-  ]);
-  const analysis = asRecord(analysisRaw);
-  const context = asRecord(contextRaw);
-  const sections = [
-    section("Market conditions", asList(analysis.market_conditions)),
-    section("Risk factors", asList(analysis.risk_factors)),
-    section("News impact", asList(analysis.news_impact)),
-    section("Portfolio exposure", asList(analysis.portfolio_exposure)),
-  ].filter(Boolean);
-  const contextLine = [
-    str(context.session, "") && `Session ${str(context.session, "")}`,
-    str(context.volatility_level, "") && `volatility ${str(context.volatility_level, "")}`,
-    str(context.liquidity_level, "") && `liquidity ${str(context.liquidity_level, "")}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const parts = [
-    setup ? "No separate trade setup was returned." : "",
-    contextLine,
-    ...sections,
-    str(analysis.disclaimer, ""),
-  ].filter(Boolean);
-  if (parts.length === 0 || (setup && parts.length === 1)) {
-    return "No advisory analysis was returned for this request.";
+function assistantErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    const details = asRecord(error.details);
+    const detail = asRecord(details.detail);
+    const msg = str(detail.message, "") || str(asRecord(details.error).message, "");
+    if (msg) return msg;
+    if (error.status === 429) return "You've reached the assistant limit for now. Try again in a few minutes.";
+    if (error.message && error.message !== "Request failed") return error.message;
   }
-  return parts.join("\n\n");
-}
-
-function section(title: string, lines: unknown[]): string {
-  const body = lines.map((line) => String(line).trim()).filter(Boolean);
-  if (body.length === 0) return "";
-  return `${title}\n${body.map((line) => `• ${line}`).join("\n")}`;
+  return "QuantForg AI could not answer right now. Please try again.";
 }
