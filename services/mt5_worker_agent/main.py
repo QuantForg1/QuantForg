@@ -219,8 +219,8 @@ def cmd_railway_dispatch_poll(
         logger.error("WORKER_SERVICE_TOKEN missing or too short")
         return 2
     env = str(environment or "demo").strip().lower()
-    if env not in {"demo", "live"}:
-        logger.error("environment must be demo or live")
+    if env not in {"demo", "live", "auto"}:
+        logger.error("environment must be demo, live or auto")
         return 2
     client = RailwayWorkerClient(RailwayClientConfig.from_env())
     sup = LocalWorkerSupervisor()
@@ -297,10 +297,20 @@ def cmd_railway_dispatch_poll(
                     )
                 except Exception as exc:
                     entry["snapshot_error"] = type(exc).__name__
+            # ``auto``: each slot claims what its own MT5 account reports
+            # (trade_mode). Unknown is claimed as LIVE so the send lock holds.
+            slot_env = env
+            if env == "auto":
+                from app.application.services.multi_account_owner_guard import (
+                    environment_from_snapshot,
+                )
+
+                slot_env = environment_from_snapshot(snapshot) or "live"
+            entry["environment"] = slot_env
             auth = client.dispatch_execute_authorize(
                 worker_id=worker_id,
                 intent_id=intent_id,
-                account_environment=env,
+                account_environment=slot_env,
                 account_snapshot=snapshot,
             )
             entry["authorization"] = auth
@@ -315,7 +325,7 @@ def cmd_railway_dispatch_poll(
             if not send_ok and attached:
                 with contextlib.suppress(Exception):
                     mt5_shutdown()
-            if env == "live" and not send_ok:
+            if slot_env == "live" and not send_ok:
                 entry["live_execution"] = {
                     "order_send": False,
                     "reason": "live_order_send_fail_closed",
@@ -369,7 +379,7 @@ def cmd_railway_dispatch_poll(
                         "side": broker.get("side") or auth_body.get("side"),
                         "volume": broker.get("volume") or auth_body.get("volume"),
                         "price": broker.get("price"),
-                        "environment": env,
+                        "environment": slot_env,
                         "idempotency_key": auth_body.get("idempotency_key") or "",
                         "comment": broker.get("comment") or "",
                         "detail": detail,
@@ -839,8 +849,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_poll.add_argument(
         "--env",
         default="demo",
-        choices=("demo", "live"),
-        help="Account environment for authorize/execute",
+        choices=("demo", "live", "auto"),
+        help="Account environment for authorize/execute (auto = from MT5)",
+    )
+    p_poll.add_argument(
+        "--loop",
+        type=float,
+        default=0.0,
+        help="Repeat every N seconds (0 = run once)",
     )
     p_poll.add_argument(
         "--dry-run",
@@ -899,12 +915,21 @@ def main(argv: list[str] | None = None) -> int:
     if command == "railway-heartbeat":
         return cmd_railway_heartbeat()
     if command == "railway-dispatch-poll":
-        return cmd_railway_dispatch_poll(
-            ack=not bool(getattr(args, "no_ack", False)),
-            execute=bool(getattr(args, "execute", False)),
-            environment=str(getattr(args, "env", "demo")),
-            dry_run=bool(getattr(args, "dry_run", False)),
-        )
+        interval = float(getattr(args, "loop", 0.0) or 0.0)
+        while True:
+            try:
+                code = cmd_railway_dispatch_poll(
+                    ack=not bool(getattr(args, "no_ack", False)),
+                    execute=bool(getattr(args, "execute", False)),
+                    environment=str(getattr(args, "env", "demo")),
+                    dry_run=bool(getattr(args, "dry_run", False)),
+                )
+            except Exception:
+                logger.exception("dispatch_poll_cycle_failed")
+                code = 1
+            if interval <= 0:
+                return code
+            time.sleep(max(1.0, interval))
     if command == "railway-dispatch-recover":
         return cmd_railway_dispatch_recover()
     if command == "connect-demo":
