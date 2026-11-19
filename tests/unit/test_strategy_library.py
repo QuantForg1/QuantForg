@@ -7,7 +7,9 @@ from app.domain.interfaces.strategy_engine import OhlcBar
 from app.strategies.library import library_plugins
 
 
-def _bars(n: int, *, start: float = 100.0, step: float = 0.0, volume: float = 0.0) -> list[OhlcBar]:
+def _bars(
+    n: int, *, start: float = 100.0, step: float = 0.0, volume: float = 0.0
+) -> list[OhlcBar]:
     price = start
     rows: list[OhlcBar] = []
     for i in range(n):
@@ -69,7 +71,9 @@ def test_session_breakout_holds_without_timestamps() -> None:
     engine = StrategyEngine()
     bars = _bars(12)
     bars = [
-        OhlcBar(open=b.open, high=b.high, low=b.low, close=b.close, volume=b.volume, time="")
+        OhlcBar(
+            open=b.open, high=b.high, low=b.low, close=b.close, volume=b.volume, time=""
+        )
         for b in bars
     ]
     result = engine.run(
