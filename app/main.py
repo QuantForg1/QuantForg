@@ -155,6 +155,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("portfolio", "app.presentation.routers.portfolio"),
     ("trust_engine", "app.presentation.routers.trust_engine"),
     ("market_observation", "app.presentation.routers.market_observation"),
+    ("trade_explanation", "app.presentation.routers.trade_explanation"),
     ("household_portfolio", "app.presentation.routers.household_portfolio"),
     (
         "ai_trading_intelligence",

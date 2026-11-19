@@ -578,6 +578,23 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Trade explanation (catalog text only; never overrides execution) ----
+    trade_explanation_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/trade-explanations. "
+                "Renders catalog text for stored reasons when a user-scoped "
+                "log is attached. Does not place orders or override decisions. "
+                "Off until enabled."
+            ),
+            validation_alias=AliasChoices(
+                "TRADE_EXPLANATION_ENABLED",
+                "trade_explanation_enabled",
+            ),
+        ),
+    ] = False
+
     # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
     openai_enabled: Annotated[
         bool,
