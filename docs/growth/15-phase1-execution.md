@@ -20,6 +20,6 @@ Search Console, analytics, ad accounts, registration aggregates, subscriber coun
 
 No trading, risk, OMS, gateway, auth-rule, price, or entitlement change. No ads. No production secret.
 
-## Corrected after a follow-on commit
+## Follow-on in the same release
 
-A later commit mounted `POST /api/v1/growth/automation/emergency-stop` and `POST /api/v1/growth/automation/run`, and the owner screen gained buttons that called them. Those routes and buttons are removed again. Growth Intelligence is `GET /status` only. The status document may still describe automation as stopped and not registered on a scheduler. That description is not a control. Advertising stays stopped.
+`/learn/decision-lifecycle` is a fifth guide. Owner-invoked checks live at `POST /api/v1/growth/automation/emergency-stop` and `POST /api/v1/growth/automation/run`. The emergency stop starts engaged, so a run does not execute until an owner releases it. Releasing it does not enable ads. Details and the tests that were actually run are in [PHASES_1_4_COMPLETION_REPORT.md](./PHASES_1_4_COMPLETION_REPORT.md).
