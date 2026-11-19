@@ -276,7 +276,18 @@ async def _assistant_prepare(
     risk = await asyncio.to_thread(_risk_settings_for, user.id)
     if risk:
         snapshot["user_risk_settings"] = risk
+    _attach_scorecard(snapshot)
     return ma.assistant_client(get_settings()), history, message, images, snapshot
+
+
+def _attach_scorecard(snap: dict[str, Any]) -> None:
+    from app.application.services.strategy_scorecard import (
+        get_strategy_scorecard_service,
+    )
+
+    compact = get_strategy_scorecard_service().compact()
+    if compact:
+        snap["strategy_scorecard"] = compact
 
 
 def _assistant_http_error(exc: Any) -> HTTPException:
@@ -340,6 +351,7 @@ async def assistant_stream(
         risk = await asyncio.to_thread(_risk_settings_for, user.id)
         if risk:
             snap["user_risk_settings"] = risk
+        _attach_scorecard(snap)
         return snap
 
     return StreamingResponse(
@@ -381,6 +393,25 @@ _PUBLIC_STRATEGY_FIELDS = (
     "best_regimes",
     "engine_plugin",
 )
+
+
+@router.get("/strategy-scorecard")
+async def intelligence_strategy_scorecard(
+    user: CurrentUser,
+    feed: Annotated[PublicMarketFeedService, Depends(_assistant_feed)],
+) -> dict[str, Any]:
+    """Every strategy backtested on recent real XAUUSD data (read-only).
+
+    Research output only: it never places orders or changes LIVE selection.
+    The first call after a deploy returns ``status="warming"`` while the
+    backtest runs in a separate worker process.
+    """
+    _ = user
+    from app.application.services.strategy_scorecard import (
+        get_strategy_scorecard_service,
+    )
+
+    return await get_strategy_scorecard_service().get(feed)
 
 
 @router.get("/strategies")
