@@ -97,6 +97,36 @@ def next_unassigned_account(
     return None
 
 
+def account_still_active(
+    broker_account_id: UUID | str, *, fetch: Any | None = None
+) -> bool:
+    """False once the account is revoked/removed (its slot must be freed).
+
+    Unknown (storage unreadable) counts as active so a read failure never
+    tears down a working customer session.
+    """
+    if fetch is None:
+        from app.infrastructure.persistence.direct_postgres import (
+            direct_postgres_available,
+            fetch as _fetch,
+        )
+
+        if not direct_postgres_available():
+            return True
+        fetch = _fetch
+    try:
+        rows = fetch(
+            "SELECT status FROM public.broker_accounts WHERE id = $1::uuid",
+            str(broker_account_id),
+        )
+    except Exception:
+        logger.exception("account_active_check_failed")
+        return True
+    if not rows:
+        return False
+    return str(rows[0].get("status") or "").lower() != "revoked"
+
+
 def queue_depth(*, taken_account_ids: set[str], fetch: Any | None = None) -> int:
     """Eligible accounts still waiting for a slot (for capacity monitoring)."""
     count = 0

@@ -141,6 +141,18 @@ class Mt5WorkerApiFacade:
                 if (
                     worker is not None
                     and worker.lifecycle is not WorkerLifecycleState.REVOKED
+                    and not worker.metadata.get("lab_binding")
+                    and not self._account_active(worker.broker_account_id)
+                ):
+                    # The customer's account was removed/rejected: free the
+                    # slot for the next customer instead of holding it.
+                    self._revoked_workers.add(worker.worker_id)
+                    self._slot_to_worker.pop(key, None)
+                    self._worker_to_slot.pop(worker.worker_id, None)
+                    worker = None
+                if (
+                    worker is not None
+                    and worker.lifecycle is not WorkerLifecycleState.REVOKED
                     and user_id is None
                     and broker_account_id is None
                     and worker.metadata.get("lab_binding")
@@ -233,6 +245,14 @@ class Mt5WorkerApiFacade:
             if w is not None and w.lifecycle is not WorkerLifecycleState.REVOKED:
                 out.add(str(w.user_id))
         return out
+
+    @staticmethod
+    def _account_active(broker_account_id: UUID) -> bool:
+        from app.application.services.customer_account_assignment import (
+            account_still_active,
+        )
+
+        return account_still_active(broker_account_id)
 
     def _has_waiting_customer(self) -> bool:
         from app.application.services.customer_account_assignment import (
