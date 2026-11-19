@@ -33,6 +33,11 @@ WELTRADE_SLUG = "weltrade"
 _MIN_SECRET_LEN = 32
 
 
+def _broker_label(broker: Any, name: str, slug: str) -> str:
+    raw = getattr(broker.name, "value", broker.name)
+    return str(raw or name or slug or "MT5")
+
+
 class BrokerSecretStore:
     """Persist the owner's selected Weltrade account in the broker tables."""
 
@@ -97,8 +102,18 @@ class BrokerSecretStore:
                 broker = await self._ensure_broker(
                     uow, slug=broker_slug, name=broker_name
                 )
+                # One non-revoked account per user (DB unique index). A new
+                # login or broker replaces the previous account.
+                await self._retire_replaced_accounts(
+                    uow, user_id=user_id, broker_id=broker.id, login=int(login)
+                )
                 account = await self._upsert_account(
                     uow,
+                    label=str(
+                        getattr(broker.name, "value", broker.name)
+                        or broker_name
+                        or broker_slug
+                    ),
                     broker_id=broker.id,
                     user_id=user_id,
                     login=int(login),
@@ -388,6 +403,7 @@ class BrokerSecretStore:
         server: str,
         environment: BrokerEnvironment,
         metadata: dict[str, str],
+        label: str = "MT5",
     ) -> BrokerAccount:
         found = await uow.accounts.get_by_user_broker_external(
             user_id, broker_id, str(login)
@@ -399,7 +415,7 @@ class BrokerSecretStore:
                 user_id=user_id,
                 broker_id=broker_id,
                 external_account_id=str(login),
-                label="Weltrade",
+                label=label,
                 environment=environment,
                 server=server,
                 metadata=metadata,
@@ -408,12 +424,45 @@ class BrokerSecretStore:
             await uow.accounts.add(account)
             return account
         found.update_fields(
-            server=server, environment=environment, metadata=metadata, label="Weltrade"
+            server=server, environment=environment, metadata=metadata, label=label
         )
         if found.status != BrokerAccountStatus.ACTIVE:
             found.activate()
         await uow.accounts.update(found)
         return cast("BrokerAccount", found)
+
+    async def _retire_replaced_accounts(
+        self, uow: Any, *, user_id: UUID, broker_id: UUID, login: int
+    ) -> None:
+        """Revoke the user's other non-revoked accounts and their credentials.
+
+        Runs before the insert so the one-account-per-user index never trips.
+        The same broker + login is kept (it is updated in place).
+        """
+        for account in await uow.accounts.list_for_user(user_id):
+            if account.status == BrokerAccountStatus.REVOKED:
+                continue
+            if account.broker_id == broker_id and str(
+                account.external_account_id
+            ) == str(login):
+                continue
+            meta = dict(account.metadata)
+            meta["selected"] = "false"
+            meta["replaced_at"] = datetime.now(UTC).isoformat()
+            account.update_fields(metadata=meta)
+            account.revoke()
+            await uow.accounts.update(account)
+            cred = await uow.credentials.get_by_account_and_type(
+                account.id, BrokerCredentialType.PASSWORD
+            )
+            if cred is not None and cred.status != CredentialStatus.REVOKED:
+                cred.revoke()
+                await uow.credentials.update(cred)
+            logger.info(
+                "broker_account_replaced",
+                user_id=str(user_id),
+                replaced_account_id=str(account.id),
+            )
 
     async def _deselect_others(
         self, uow: Any, *, user_id: UUID, broker_id: UUID, keep_id: UUID
