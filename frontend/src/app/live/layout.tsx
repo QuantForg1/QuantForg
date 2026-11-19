@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { PublicMarketProviders } from "@/providers/public-market-providers";
 
 export const metadata: Metadata = {
-  title: "Live Market",
+  title: "Live Gold Price Chart (XAUUSD)",
   description:
-    "Public QuantForg live market chart for XAUUSD. No login or personal broker connection required.",
+    "Free live gold price chart (XAUUSD) with real-time candles on every timeframe from M1 to D1. No login required.",
+  alternates: { canonical: "/live" },
   robots: { index: true, follow: true },
 };
 

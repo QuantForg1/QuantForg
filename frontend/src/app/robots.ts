@@ -8,7 +8,20 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/pricing", "/contact", "/login", "/register", "/privacy", "/terms", "/risk-disclosure"],
+        allow: [
+          "/",
+          "/gold-trading-robot",
+          "/ai-trading-assistant",
+          "/strategies",
+          "/pricing",
+          "/live",
+          "/contact",
+          "/login",
+          "/register",
+          "/privacy",
+          "/terms",
+          "/risk-disclosure",
+        ],
         disallow: [
           "/dashboard",
           "/admin",

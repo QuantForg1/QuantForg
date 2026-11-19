@@ -11,9 +11,9 @@ const LINKS = [
   { href: "/#features", label: "Features" },
   { href: "/#platform", label: "Platform" },
   { href: "/live", label: "Live Market" },
-  { href: "/#how-it-works", label: "How It Works" },
-  { href: "/#strategies", label: "Strategies" },
-  { href: "/#security", label: "Security" },
+  { href: "/gold-trading-robot", label: "Gold Robot" },
+  { href: "/ai-trading-assistant", label: "QuantForg AI" },
+  { href: "/strategies", label: "Strategies" },
   { href: "/pricing", label: "Pricing" },
 ] as const;
 

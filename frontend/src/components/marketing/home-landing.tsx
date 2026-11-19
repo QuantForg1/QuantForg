@@ -563,6 +563,17 @@ export function HomeLanding() {
                 </li>
               ))}
             </ul>
+            <p className="mt-8 text-center text-sm text-[var(--fg-muted)]">
+              Explore the full library of{" "}
+              <Link href="/strategies" className="font-medium text-[var(--accent)] underline-offset-4 hover:underline">
+                100+ gold trading strategies
+              </Link>{" "}
+              or read how the{" "}
+              <Link href="/gold-trading-robot" className="font-medium text-[var(--accent)] underline-offset-4 hover:underline">
+                gold trading robot
+              </Link>{" "}
+              works.
+            </p>
           </div>
         </section>
 

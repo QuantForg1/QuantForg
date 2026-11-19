@@ -6,13 +6,13 @@ import { AuthFormProviders } from "@/providers/auth-form-providers";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "QuantForg — Institutional AI Trading Platform",
+    absolute: "QuantForg — AI Gold Trading Robot for MT5 & AI Trading Assistant",
   },
   description:
-    "QuantForg connects your MT5 trading account to institutional market intelligence, strategy analysis and risk controls — keeping your capital and broker account under your control. Software access is not a promise of trading profits.",
+    "QuantForg is an AI gold (XAUUSD) trading robot for MetaTrader 5 with QuantForg AI, an assistant that analyzes the live gold market and your chart screenshots. Risk limits on every trade, no martingale, your money stays at your broker. Start free.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "QuantForg — Institutional AI Trading Platform",
+    title: "QuantForg — AI Gold Trading Robot for MT5",
     description:
       "Connect your MT5 broker, analyze markets, manage risk, and execute under approved settings.",
     url: "/",
