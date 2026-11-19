@@ -302,25 +302,40 @@ async def assistant_stream(
     news: NewsIntelSvc,
     feed: Annotated[PublicMarketFeedService, Depends(_assistant_feed)],
 ) -> StreamingResponse:
-    """Same as /assistant/chat, streamed as server-sent events."""
+    """Same as /assistant/chat, streamed as server-sent events with live
+    analysis stages. Validation happens before the stream opens."""
     from app.application.services import market_assistant as ma
+    from core.config.settings import get_settings
 
+    message = body.message.strip()
     try:
-        client, history, message, images, snapshot = await _assistant_prepare(
-            body, user, news, feed
-        )
+        if not message and not body.images:
+            raise ma.AssistantError(
+                "empty_message", "Type a question or attach a chart."
+            )
+        ma.check_rate_limit(str(user.id))
+        images = [ma.validate_image(u) for u in body.images[: ma.MAX_IMAGES]]
     except ma.AssistantError as exc:
         raise _assistant_http_error(exc) from exc
+    history = ma.clean_history([ma.ChatTurn(t.role, t.content) for t in body.history])
+
+    async def snapshot_provider() -> dict[str, Any]:
+        snap = await ma.cached_market_snapshot(feed=feed, news=news)
+        risk = await asyncio.to_thread(_risk_settings_for, user.id)
+        if risk:
+            snap["user_risk_settings"] = risk
+        return snap
+
     return StreamingResponse(
         ma.stream_chat(
-            client=client,
+            client=ma.assistant_client(get_settings()),
             history=history,
             message=message,
             images=images,
-            snapshot=snapshot,
+            snapshot_provider=snapshot_provider,
         ),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
 
 

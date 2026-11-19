@@ -13,3 +13,12 @@ export function parseSseFrame(frame: string): { event: string; data: Record<stri
     return null;
   }
 }
+
+/** Absolute API origin first (no proxy buffering), then the runtime base. */
+export function streamBaseCandidates(configured: string, runtime: string): string[] {
+  const clean = (v: string) => v.replace(/\/+$/, "");
+  const out: string[] = [];
+  if (/^https?:\/\//.test(configured)) out.push(clean(configured));
+  if (runtime && !out.includes(clean(runtime))) out.push(clean(runtime));
+  return out;
+}

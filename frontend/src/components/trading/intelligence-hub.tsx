@@ -28,7 +28,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AssistantMarkdown } from "@/components/trading/assistant-message";
+import { AnalysisTrace, TypewriterMarkdown } from "@/components/trading/assistant-trace";
 import {
   AnalysisDesk,
   InsightsDesk,
@@ -38,7 +38,13 @@ import {
 } from "@/components/trading/intelligence-desks";
 import { intelligenceApi } from "@/lib/api/endpoints";
 import { formatPrice, formatUtcTime } from "@/lib/assistant/desk-format";
-import { AssistantStreamError, streamAssistant, type AssistantMeta } from "@/lib/assistant/stream";
+import { settleStages, upsertStage } from "@/lib/assistant/stages";
+import {
+  AssistantStreamError,
+  streamAssistant,
+  type AssistantMeta,
+  type AssistantStage,
+} from "@/lib/assistant/stream";
 import {
   ASSISTANT_ACCEPTED,
   ASSISTANT_MAX_IMAGES,
@@ -56,6 +62,15 @@ type Msg = {
   error?: boolean;
   streaming?: boolean;
   meta?: AssistantMeta;
+  /** Live analysis trace (assistant messages produced this session). */
+  stages?: AssistantStage[];
+  thinking?: string;
+  startedAt?: number;
+  endedAt?: number;
+  /** Type the answer out (true for answers produced in this session). */
+  live?: boolean;
+  /** Typewriter has revealed the full answer. */
+  typed?: boolean;
 };
 
 const DESKS: {
@@ -207,7 +222,15 @@ export function IntelligenceHub() {
     setMessages((current) => [
       ...current,
       { role: "user", content: prompt || "Analyze this chart.", images },
-      { role: "assistant", content: "", streaming: true },
+      {
+        role: "assistant",
+        content: "",
+        streaming: true,
+        live: true,
+        stages: [],
+        thinking: "",
+        startedAt: Date.now(),
+      },
     ]);
     setInput("");
     setAttachments([]);
@@ -219,14 +242,27 @@ export function IntelligenceHub() {
           body,
           {
             onMeta: (meta) => updateLast((m) => ({ ...m, meta })),
-            onDelta: (delta) => updateLast((m) => ({ ...m, content: m.content + delta })),
+            onStage: (stage) => updateLast((m) => ({ ...m, stages: upsertStage(m.stages ?? [], stage) })),
+            onThinking: (text) => updateLast((m) => ({ ...m, thinking: (m.thinking ?? "") + text })),
+            onDelta: (delta) =>
+              updateLast((m) => ({
+                ...m,
+                content: m.content + delta,
+                endedAt: m.endedAt ?? Date.now(),
+              })),
           },
           controller.signal,
         );
-        updateLast((m) => ({ ...m, streaming: false }));
+        updateLast((m) => ({ ...m, streaming: false, stages: settleStages(m.stages ?? []) }));
       } catch (error) {
         if (controller.signal.aborted) {
-          updateLast((m) => ({ ...m, streaming: false, content: m.content || "Stopped." }));
+          updateLast((m) => ({
+            ...m,
+            streaming: false,
+            stages: settleStages(m.stages ?? []),
+            endedAt: m.endedAt ?? Date.now(),
+            content: m.content || "Stopped.",
+          }));
           return;
         }
         // Streaming unavailable before any text (proxy, expired session…):
@@ -243,6 +279,8 @@ export function IntelligenceHub() {
           ...m,
           content: answer,
           streaming: false,
+          stages: settleStages(m.stages ?? []),
+          endedAt: m.endedAt ?? Date.now(),
           meta: asRecord(res.meta) as AssistantMeta,
         }));
       }
@@ -251,8 +289,8 @@ export function IntelligenceHub() {
       toast.error(message);
       updateLast((m) =>
         m.content
-          ? { ...m, streaming: false, content: `${m.content}\n\n(${message})` }
-          : { ...m, streaming: false, error: true, content: message },
+          ? { ...m, streaming: false, stages: settleStages(m.stages ?? []), content: `${m.content}\n\n(${message})` }
+          : { ...m, streaming: false, stages: settleStages(m.stages ?? []), error: true, live: false, content: message },
       );
     } finally {
       abortRef.current = null;
@@ -423,16 +461,33 @@ export function IntelligenceHub() {
                             : "border-[var(--border)] bg-[var(--surface-2)]",
                         )}
                       >
+                        {message.live && !message.error && message.startedAt ? (
+                          <AnalysisTrace
+                            stages={message.stages ?? []}
+                            thinking={message.thinking ?? ""}
+                            startedAt={message.startedAt}
+                            endedAt={message.endedAt}
+                            answering={Boolean(message.content)}
+                            finished={!message.streaming}
+                          />
+                        ) : null}
                         {message.content ? (
-                          <AssistantMarkdown text={message.content} />
-                        ) : (
+                          <TypewriterMarkdown
+                            text={message.content}
+                            animate={Boolean(message.live) && !message.typed}
+                            onCaughtUp={() => {
+                              if (!message.streaming && !message.typed && message.live) {
+                                setMessages((cur) =>
+                                  cur.map((m, j) => (j === index ? { ...m, typed: true } : m)),
+                                );
+                              }
+                            }}
+                          />
+                        ) : !message.live || message.error ? (
                           <ThinkingDots hasImage={Boolean(messages[index - 1]?.images?.length)} />
-                        )}
-                        {message.streaming && message.content ? (
-                          <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-[var(--accent)] align-middle" aria-hidden />
                         ) : null}
                       </div>
-                      {!message.error && (message.meta || !message.streaming) ? (
+                      {!message.error && !message.streaming && (message.typed || !message.live) ? (
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-[var(--fg-subtle)]">
                           {message.meta?.as_of_utc ? (
                             <span>

@@ -307,7 +307,7 @@ def test_stream_output_text_yields_deltas_and_sends_reasoning():
             reasoning_effort="low",
         )
     )
-    assert "".join(out) == "Gold is up."
+    assert "".join(e["text"] for e in out) == "Gold is up."
     assert seen[0]["stream"] is True
     assert seen[0]["reasoning"] == {"effort": "low"}
     assert seen[0]["store"] is False
@@ -340,7 +340,7 @@ def test_stream_retries_without_reasoning_when_model_rejects_it():
             reasoning_effort="low",
         )
     )
-    assert out == ["ok"]
+    assert out == [{"type": "text", "text": "ok"}]
     assert calls == [True, False]
 
 
@@ -364,8 +364,10 @@ def test_stream_quota_error_raises_typed_error():
 def test_stream_chat_emits_meta_deltas_done():
     async def fake_stream(client, **kw):
         assert kw["reasoning_effort"] == "low"
+        assert kw["reasoning_summary"] is True
+        yield {"type": "thinking", "text": "hmm"}
         for t in ("A", "B"):
-            yield t
+            yield {"type": "text", "text": t}
 
     out = _collect(
         ma.stream_chat(
@@ -380,12 +382,16 @@ def test_stream_chat_emits_meta_deltas_done():
             streamer=fake_stream,
         )
     )
-    assert out[0].startswith("event: meta")
-    assert '"as_of_utc": "2026-11-19T19:22:43+00:00"' in out[0]
-    assert [o.split("\n")[0] for o in out[1:]] == [
-        "event: delta",
-        "event: delta",
-        "event: done",
+    kinds = [o.split("\n")[0].removeprefix("event: ") for o in out]
+    assert kinds[0] == "stage" and '"status": "active"' in out[0]
+    meta = out[kinds.index("meta")]
+    assert '"as_of_utc": "2026-11-19T19:22:43+00:00"' in meta
+    assert kinds[kinds.index("meta") + 1 :] == [
+        "thinking",
+        "stage",
+        "delta",
+        "delta",
+        "done",
     ]
 
 
@@ -546,3 +552,120 @@ def test_snapshot_cache_reuses_recent_data():
     asyncio.run(run())
     assert calls["n"] == 1
     ma.clear_snapshot_cache_for_tests()
+
+
+def test_stream_sends_reasoning_summary_and_parses_thinking():
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import stream_output_text
+
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _j
+
+        seen.append(_j.loads(request.content))
+        return httpx.Response(
+            200,
+            content=_sse_body(
+                {
+                    "type": "response.reasoning_summary_text.delta",
+                    "delta": "Checking trend",
+                },
+                {"type": "response.reasoning_summary_part.done"},
+                {"type": "response.output_text.delta", "delta": "Down."},
+                {"type": "response.completed"},
+            ),
+        )
+
+    out = _collect(
+        stream_output_text(
+            _stream_client(handler),
+            input_items="hi",
+            instructions="x",
+            reasoning_effort="low",
+            reasoning_summary=True,
+        )
+    )
+    assert seen[0]["reasoning"] == {"effort": "low", "summary": "auto"}
+    assert out[0] == {"type": "thinking", "text": "Checking trend"}
+    assert out[-1] == {"type": "text", "text": "Down."}
+
+
+def test_stream_downgrade_ladder_summary_then_effort_then_none():
+    import httpx
+
+    from app.infrastructure.ai.openai_responses import stream_output_text
+
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _j
+
+        body = _j.loads(request.content)
+        sent.append(body.get("reasoning"))
+        if body.get("reasoning"):
+            return httpx.Response(400, json={"error": {"message": "unsupported"}})
+        return httpx.Response(
+            200,
+            content=_sse_body({"type": "response.output_text.delta", "delta": "ok"}),
+        )
+
+    out = _collect(
+        stream_output_text(
+            _stream_client(handler),
+            input_items="hi",
+            instructions="x",
+            reasoning_effort="low",
+            reasoning_summary=True,
+        )
+    )
+    assert out == [{"type": "text", "text": "ok"}]
+    assert sent == [{"effort": "low", "summary": "auto"}, {"effort": "low"}, None]
+
+
+def test_analysis_stages_describe_real_data():
+    snap = {
+        "quote": {"bid": 3675.33, "ask": 3675.68, "spread": 0.35},
+        "session": "New York",
+        "timeframes": [{"timeframe": "H1", "rsi14": 20.3}],
+        "bias": {"direction": "bearish", "aligned": 3, "of": 3},
+        "key_levels_h1": {"supports": [3665.73], "resistances": [3680.08]},
+        "economic_calendar": [
+            {"title": "Fed Chair Speech", "impact": "High", "minutes_from_now": 95}
+        ],
+    }
+    st = {s["key"]: s["detail"] for s in ma.analysis_stages(snap)}
+    assert st["price"] == "XAUUSD 3,675.51 · spread 0.35 · New York"
+    assert st["trend"] == "Bearish on 3/3 timeframes · H1 RSI 20.3"
+    assert st["levels"] == "Support 3,665.73 · Resistance 3,680.08"
+    assert st["news"] == "Fed Chair Speech in 95 min"
+
+
+def test_analysis_stages_say_when_data_missing():
+    st = {s["key"]: s["detail"] for s in ma.analysis_stages({})}
+    assert "unavailable" in st["price"].lower()
+    assert "unavailable" in st["trend"].lower()
+    assert st["news"] == "Calendar unavailable"
+
+
+def test_stream_chat_fetches_snapshot_inside_stream_and_reports_chart_stage():
+    async def provider():
+        return {"generated_at_utc": "t"}
+
+    async def fake_stream(client, **kw):
+        assert kw["reasoning_effort"] == "medium"
+        yield {"type": "text", "text": "x"}
+
+    out = _collect(
+        ma.stream_chat(
+            client=SimpleNamespace(model="m"),
+            history=[],
+            message="",
+            images=["data:image/png;base64,AA=="],
+            snapshot_provider=provider,
+            streamer=fake_stream,
+        )
+    )
+    assert any('"key": "chart"' in o for o in out)
+    assert out[-1].startswith("event: done")

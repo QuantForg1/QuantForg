@@ -936,16 +936,102 @@ def _sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
 
+def _fmt(v: Any) -> str:
+    x = _f(v)
+    return f"{x:,.2f}" if x is not None else "n/a"
+
+
+def analysis_stages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    """Human-readable summary of what was actually read, step by step."""
+    stages: list[dict[str, str]] = []
+    q = snapshot.get("quote") or {}
+    bid, ask = _f(q.get("bid")), _f(q.get("ask"))
+    if bid is not None and ask is not None:
+        price = f"XAUUSD {_fmt((bid + ask) / 2)} · spread {_fmt(q.get('spread'))}"
+    else:
+        price = "Live quote unavailable; using latest candles"
+    stages.append(
+        {
+            "key": "price",
+            "label": "Reading the live gold market",
+            "detail": f"{price} · {snapshot.get('session', '')}".strip(" ·"),
+        }
+    )
+    tfs = {t.get("timeframe"): t for t in snapshot.get("timeframes", [])}
+    bias = snapshot.get("bias") or {}
+    h1 = tfs.get("H1") or {}
+    if bias.get("of"):
+        trend = (
+            f"{str(bias.get('direction', '')).capitalize()} on "
+            f"{bias.get('aligned')}/{bias.get('of')} timeframes"
+        )
+        if h1.get("rsi14") is not None:
+            trend += f" · H1 RSI {h1.get('rsi14')}"
+    else:
+        trend = "Candle data unavailable"
+    stages.append(
+        {"key": "trend", "label": "Analyzing trend on M15, H1 and H4", "detail": trend}
+    )
+    lv = snapshot.get("key_levels_h1") or {}
+    sup = (lv.get("supports") or [None])[0]
+    res = (lv.get("resistances") or [None])[0]
+    levels = " · ".join(
+        x
+        for x in (
+            f"Support {_fmt(sup)}" if sup is not None else "",
+            f"Resistance {_fmt(res)}" if res is not None else "",
+        )
+        if x
+    )
+    stages.append(
+        {
+            "key": "levels",
+            "label": "Mapping support and resistance",
+            "detail": levels or "No clear swing levels",
+        }
+    )
+    cal = snapshot.get("economic_calendar")
+    news_detail = "Calendar unavailable"
+    if isinstance(cal, list):
+        upcoming = [
+            e
+            for e in cal
+            if isinstance(e.get("minutes_from_now"), int)
+            and 0 <= e["minutes_from_now"] <= 24 * 60
+            and str(e.get("impact", "")).lower() in {"high", "3", "red"}
+        ]
+        if upcoming:
+            e = min(upcoming, key=lambda x: x["minutes_from_now"])
+            mins = e["minutes_from_now"]
+            when = f"{mins} min" if mins < 120 else f"{round(mins / 60)} h"
+            news_detail = f"{e.get('title')} in {when}"
+        else:
+            news_detail = "No high-impact event in the next 24 h"
+    stages.append(
+        {
+            "key": "news",
+            "label": "Checking news and economic calendar",
+            "detail": news_detail,
+        }
+    )
+    return stages
+
+
 async def stream_chat(
     *,
     client: Any | None,
     history: list[ChatTurn],
     message: str,
     images: list[str],
-    snapshot: dict[str, Any],
+    snapshot: dict[str, Any] | None = None,
+    snapshot_provider: Any | None = None,
     streamer: Any | None = None,
 ) -> Any:
-    """Server-sent events: ``meta`` → many ``delta`` → ``done`` (or ``error``)."""
+    """Server-sent events, in order:
+
+    ``stage`` (active/done, real steps) → ``meta`` → ``thinking``* (model's
+    reasoning summary, when available) → ``delta``* → ``done`` | ``error``.
+    """
     import httpx
 
     from app.infrastructure.ai.openai_responses import (
@@ -953,6 +1039,30 @@ async def stream_chat(
         stream_output_text,
     )
 
+    yield _sse(
+        "stage",
+        {"key": "price", "label": "Reading the live gold market", "status": "active"},
+    )
+    if snapshot is None:
+        try:
+            snapshot = await snapshot_provider() if snapshot_provider else {}
+        except Exception:
+            logger.exception("assistant_snapshot_failed")
+            snapshot = {}
+    for st in analysis_stages(snapshot):
+        yield _sse("stage", {**st, "status": "done"})
+    if images:
+        yield _sse(
+            "stage",
+            {
+                "key": "chart",
+                "label": f"Reading your chart{'s' if len(images) > 1 else ''}",
+                "status": "active",
+            },
+        )
+    yield _sse(
+        "stage", {"key": "write", "label": "Thinking it through", "status": "active"}
+    )
     yield _sse(
         "meta", {**snapshot_meta(snapshot), "model": getattr(client, "model", "")}
     )
@@ -969,21 +1079,35 @@ async def stream_chat(
     started = time.monotonic()
     first_ms: int | None = None
     chars = 0
+    thinking_chars = 0
     try:
-        async for delta in stream(
+        async for ev in stream(
             client,
             input_items=build_input(
                 history=history, message=message, images=images, snapshot=snapshot
             ),
             instructions=INSTRUCTIONS,
-            max_output_tokens=3000,
+            max_output_tokens=4000,
             reasoning_effort=reasoning_for(images),
+            reasoning_summary=True,
             timeout_seconds=120.0 if images else 90.0,
         ):
+            kind = ev.get("type") if isinstance(ev, dict) else "text"
+            text = ev.get("text", "") if isinstance(ev, dict) else str(ev)
+            if not text:
+                continue
+            if kind == "thinking":
+                thinking_chars += len(text)
+                yield _sse("thinking", {"text": text})
+                continue
             if first_ms is None:
                 first_ms = round((time.monotonic() - started) * 1000)
-            chars += len(delta)
-            yield _sse("delta", {"text": delta})
+                yield _sse(
+                    "stage",
+                    {"key": "write", "label": "Writing the answer", "status": "done"},
+                )
+            chars += len(text)
+            yield _sse("delta", {"text": text})
     except OpenAIProviderError as exc:
         logger.warning("assistant_provider_error", code=exc.code)
         yield _sse(
@@ -1010,6 +1134,7 @@ async def stream_chat(
         first_token_ms=first_ms,
         model_ms=total_ms,
         chars=chars,
+        thinking_chars=thinking_chars,
     )
     if chars == 0:
         yield _sse(
