@@ -565,21 +565,90 @@ def _ensure_gateway_session(mt5_adapter: Any, diag: dict[str, Any]) -> str | Non
     return "MT5 gateway session not connected (process flag false; adopt unavailable)"
 
 
+def _fetch_history_deals(
+    mt5_adapter: Any, *, date_from: datetime, date_to: datetime
+) -> list[Any] | None:
+    hist = getattr(mt5_adapter, "history_deals", None)
+    if callable(hist):
+        return list(hist(date_from=date_from, date_to=date_to))
+    client = _client_of(mt5_adapter)
+    hist_c = getattr(client, "history_deals", None)
+    if callable(hist_c):
+        return list(hist_c(date_from=date_from, date_to=date_to))
+    return None
+
+
+# Deals before today change only when history is edited, so the weekly/monthly
+# window is fetched at most every few minutes; today's deals are fetched fresh
+# every cycle (the daily stop never uses a cached day). A month of history on
+# every 10 s cycle timed the gateway out and blocked LIVE with "Daily P/L
+# unavailable" (19 Nov 2026).
+_HISTORY_REFRESH_S = 300.0
+_HISTORY_MAX_STALE_S = 3600.0
+_HISTORY_LOCK = threading.Lock()
+_HISTORY_CACHE: dict[str, Any] = {}
+
+
+def _deal_time(deal: Any) -> datetime | None:
+    when = getattr(deal, "time", None)
+    if not isinstance(when, datetime):
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=UTC)
+
+
 def _load_history_deals(
     mt5_adapter: Any,
     *,
     date_from: datetime,
     date_to: datetime,
+    now: Any = None,
 ) -> tuple[bool, list[Any] | None, str | None]:
-    """Sync Gateway history fetch — caller must offload this off the event loop."""
-    hist = getattr(mt5_adapter, "history_deals", None)
-    if callable(hist):
-        return True, list(hist(date_from=date_from, date_to=date_to)), None
-    client = _client_of(mt5_adapter)
-    hist_c = getattr(client, "history_deals", None)
-    if callable(hist_c):
-        return True, list(hist_c(date_from=date_from, date_to=date_to)), None
-    return False, None, "UNAVAILABLE"
+    """Sync Gateway history fetch — caller must offload this off the event loop.
+
+    Today's deals: fresh every call (failure = not trusted). Older deals in
+    ``date_from``..today: cached up to 5 min, kept up to 1 h if a refresh fails.
+    """
+    import time as _time
+
+    clock = now or _time.monotonic
+    day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    if date_from >= day_start:
+        deals = _fetch_history_deals(mt5_adapter, date_from=date_from, date_to=date_to)
+        return (
+            (deals is not None),
+            deals,
+            (None if deals is not None else "UNAVAILABLE"),
+        )
+    today = _fetch_history_deals(mt5_adapter, date_from=day_start, date_to=date_to)
+    if today is None:
+        return False, None, "UNAVAILABLE"
+    key = f"{id(mt5_adapter)}:{date_from.isoformat()}:{day_start.isoformat()}"
+    with _HISTORY_LOCK:
+        cached = _HISTORY_CACHE.get(key)
+    older: list[Any] | None = None
+    age = clock() - cached[0] if cached else None
+    if cached is not None and age is not None and age < _HISTORY_REFRESH_S:
+        older = cached[1]
+    else:
+        try:
+            fetched = _fetch_history_deals(
+                mt5_adapter, date_from=date_from, date_to=day_start
+            )
+        except Exception as exc:
+            fetched = None
+            logger.warning("history_deals_older_refresh_failed", error=str(exc))
+        if fetched is not None:
+            older = [d for d in fetched if (_deal_time(d) or day_start) < day_start]
+            with _HISTORY_LOCK:
+                _HISTORY_CACHE.clear()
+                _HISTORY_CACHE[key] = (clock(), older)
+        elif cached is not None and age is not None and age < _HISTORY_MAX_STALE_S:
+            older = cached[1]
+    if older is None:
+        return False, None, "HISTORY_OLDER_UNAVAILABLE"
+    seen = {getattr(d, "ticket", None) for d in today}
+    merged = [d for d in older if getattr(d, "ticket", None) not in seen] + today
+    return True, merged, None
 
 
 async def build_ite_cycle_market_context(
