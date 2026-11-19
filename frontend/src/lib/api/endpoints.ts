@@ -1610,6 +1610,8 @@ export const weltradeApi = {
       method: "POST",
       body,
     }),
+  connectStatus: () =>
+    apiFetch<Record<string, unknown>>("/weltrade/connect/status"),
   attach: (body: { path?: string } = {}) =>
     apiFetch<Record<string, unknown>>("/weltrade/attach", {
       method: "POST",

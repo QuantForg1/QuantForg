@@ -425,11 +425,9 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           </div>
         ) : candles.length > 0 ? (
           <>
-            {(feedStatus === "closed" || feedStatus === "delayed") && (
+            {feedStatus === "closed" && (
               <div className="pointer-events-none absolute left-3 top-3 z-10 rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_88%,transparent)] px-2 py-1 text-[10px] font-medium text-[var(--fg-muted)] backdrop-blur">
-                {feedStatus === "closed"
-                  ? "MARKET CLOSED — showing last available candles"
-                  : "DELAYED — licensed reference data (not broker execution)"}
+                MARKET CLOSED — showing last available candles
                 {asOf ? ` · ${asOf}` : ""}
               </div>
             )}

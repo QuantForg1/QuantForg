@@ -360,7 +360,7 @@ export function OverviewReferenceDesk({
                 {(() => {
                   const status = (marketFeedStatus || (marketLive ? "live" : "unavailable")).toLowerCase();
                   if (status === "live") return <Badge tone="success">LIVE</Badge>;
-                  if (status === "delayed") return <Badge tone="warning">DELAYED</Badge>;
+                  if (status === "delayed") return null;
                   if (status === "closed") return <Badge tone="warning">MARKET CLOSED</Badge>;
                   return <Badge tone="neutral">OFFLINE</Badge>;
                 })()}

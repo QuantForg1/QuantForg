@@ -811,11 +811,12 @@ export function BrokerConfigWorkspace() {
     onSuccess: async (data) => {
       clearPasswordField();
       if (str(asRecord(data).state, "") === "QUEUED_FOR_TERMINAL") {
-        // Customer accounts run on a dedicated QuantForg terminal.
+        // Customer accounts are verified by a real MT5 login on their own
+        // QuantForg terminal; the panel below shows connected / rejected.
         setQueuedForTerminal(true);
-        toast.success(str(asRecord(data).message, "Account saved"));
         setChangingAccount(false);
         setProgress(null);
+        await qc.invalidateQueries({ queryKey: ["broker-connect-status"] });
         return;
       }
       setQueuedForTerminal(false);
@@ -1293,22 +1294,14 @@ export function BrokerConfigWorkspace() {
           ))}
         </section>
 
-        {queuedForTerminal && !layers.authenticated ? (
-          <div
-            role="status"
-            aria-live="polite"
-            data-testid="broker-queued-for-terminal"
-            className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-soft)_55%,transparent)] px-4 py-4 text-center sm:px-5"
-          >
-            <p className="text-sm font-semibold text-[var(--fg)]">
-              Queued for a QuantForg trading terminal
-            </p>
-            <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              Your MT5 account is saved securely. It is assigned to a dedicated
-              terminal automatically — this is not the platform terminal. Status
-              updates in Robot Control Center when a worker is available.
-            </p>
-          </div>
+        {!layers.authenticated ? (
+          <BrokerVerificationPanel
+            active={queuedForTerminal}
+            onRetry={() => {
+              setQueuedForTerminal(false);
+              setChangingAccount(true);
+            }}
+          />
         ) : null}
 
         {sessionUnknown ? (
@@ -1843,6 +1836,106 @@ export function BrokerConfigWorkspace() {
           </p>
         ) : null}
       </article>
+    </div>
+  );
+}
+
+const VERIFY_STEPS = [
+  "Account received",
+  "Logging in to your broker",
+  "Checking trading permission",
+] as const;
+
+/** Live verdict of the last connect: verifying → connected or rejected. */
+function BrokerVerificationPanel({
+  active,
+  onRetry,
+}: {
+  active: boolean;
+  onRetry: () => void;
+}) {
+  const statusQ = useQuery({
+    queryKey: ["broker-connect-status"],
+    queryFn: () => weltradeApi.connectStatus(),
+    refetchInterval: (query) => {
+      const state = str(asRecord(query.state.data).state, "");
+      return state === "verifying" ? 2000 : false;
+    },
+    staleTime: 0,
+  });
+  const data = asRecord(statusQ.data);
+  const state = str(data.state, "");
+  const broker = str(data.broker, "your broker");
+  const account = str(data.account, "");
+  if (!active && state !== "verifying" && state !== "rejected") return null;
+  if (state === "connected") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        data-testid="broker-verification-connected"
+        className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--success)_45%,var(--border))] bg-[color-mix(in_srgb,var(--success)_12%,transparent)] px-4 py-4 text-center sm:px-5"
+      >
+        <p className="text-sm font-semibold text-[var(--fg)]">
+          Connected to {broker} {account}
+        </p>
+        <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          MT5 accepted the login and trading is allowed. The robot now trades
+          this account under your own risk profile.
+        </p>
+      </div>
+    );
+  }
+  if (state === "rejected") {
+    return (
+      <div
+        role="alert"
+        data-testid="broker-verification-rejected"
+        className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--danger)_45%,var(--border))] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-4 py-4 text-center sm:px-5"
+      >
+        <p className="text-sm font-semibold text-[var(--fg)]">
+          {broker} rejected this account {account}
+        </p>
+        <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          {str(data.message, "Check the login, master password and server.")}{" "}
+          Nothing was kept: enter the details again to retry.
+        </p>
+        <Button className="mt-3" size="sm" variant="secondary" onClick={onRetry}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="broker-queued-for-terminal"
+      className="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent-soft)_55%,transparent)] px-4 py-4 sm:px-5"
+    >
+      <p className="text-center text-sm font-semibold text-[var(--fg)]">
+        Verifying with {broker} {account}
+      </p>
+      <ol className="mx-auto mt-3 max-w-xs space-y-1.5 text-sm text-[var(--fg-muted)]">
+        {VERIFY_STEPS.map((step, index) => (
+          <li key={step} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className={cn(
+                "inline-block h-2 w-2 rounded-full",
+                index === 0
+                  ? "bg-[var(--success)]"
+                  : "animate-pulse bg-[var(--accent)]",
+              )}
+            />
+            {step}
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-center text-xs text-[var(--fg-subtle)]">
+        Your QuantForg trading terminal is logging in now. This page updates by
+        itself with Connected or Rejected.
+      </p>
     </div>
   );
 }

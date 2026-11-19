@@ -15,13 +15,13 @@ assert.match(src, /CLOUDFLARE_ORIGIN_UNREACHABLE/);
 assert.match(src, /Never treat a bare HTTP 503 as market-closed/);
 assert.match(src, /publicFeedBadge/);
 assert.match(src, /MARKET CLOSED/);
-assert.match(src, /DELAYED/);
 assert.match(src, /personal broker login is not required/);
 
 // Badge labels stay explicit for chart chrome.
 assert.match(src, /case "live":\s*return \{ label: "LIVE"/);
 assert.match(src, /case "closed":\s*return \{ label: "MARKET CLOSED"/);
-assert.match(src, /case "delayed":\s*return \{ label: "DELAYED"/);
+assert.match(src, /case "delayed":[\s\S]*?return \{ label: "MARKET OPEN"/);
+assert.doesNotMatch(src, /label: "DELAYED"/);
 assert.match(src, /case "loading":\s*return \{ label: "LOADING"/);
 
 console.log("market-status: ok");

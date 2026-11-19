@@ -1291,10 +1291,10 @@ class WeltradeIntegrationService:
             "state": "QUEUED_FOR_TERMINAL",
             "broker": matched.slug,
             "environment": env.upper(),
+            "verification": "verifying",
             "message": (
-                "Saved. Your account is assigned to a QuantForg trading "
-                "terminal automatically; its status appears in the Robot "
-                "Control Center."
+                f"Checking your account with {matched.name}. MT5 confirms the "
+                "login or rejects it in a moment."
             ),
         }
 

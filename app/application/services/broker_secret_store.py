@@ -97,6 +97,10 @@ class BrokerSecretStore:
         if pending_terminal:
             meta["assignment"] = "pending_terminal"
             meta["submitted_at"] = verified
+            # Real MT5 login on the account's worker decides connected/rejected.
+            meta["verification"] = "verifying"
+            meta["verification_code"] = ""
+            meta["verification_message"] = ""
         try:
             async with self._uow_factory() as uow:
                 broker = await self._ensure_broker(

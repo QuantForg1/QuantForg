@@ -519,6 +519,7 @@ class Mt5WorkerApiFacade:
         except Exception:
             logger.warning("mt5_broker_verification_pg_persist_failed")
 
+        self._record_connect_verification(payload)
         worker_status: dict[str, Any] | None = None
         applied = self._apply_slot_verification_to_worker(payload)
         if applied is not None:
@@ -535,6 +536,36 @@ class Mt5WorkerApiFacade:
             "worker": worker_status,
             "evidence": ops_snapshot(),
         }
+
+    def _record_connect_verification(self, payload: dict[str, Any]) -> None:
+        """Tell the customer whether MT5 accepted their account (never 'saved')."""
+        from app.application.services import broker_connect_verification as bcv
+
+        key = _slot_key(
+            str(payload.get("host_code") or ""), str(payload.get("slot_id") or "")
+        )
+        with self._lock:
+            worker_id = self._slot_to_worker.get(key)
+        if worker_id is None or worker_id in self._revoked_workers:
+            return
+        assert self.plane.provisioner is not None
+        worker = self.plane.provisioner.get(worker_id)
+        if worker is None or worker.metadata.get("lab_binding"):
+            return
+        account_id = worker.broker_account_id
+        if bool(payload.get("ok")) and bool(payload.get("trade_allowed")):
+            bcv.mark(account_id, state=bcv.CONNECTED)
+            return
+        verdict = bcv.classify_failure(str(payload.get("error") or ""))
+        if verdict is None:
+            return  # our side (terminal/IPC): retry, still verifying
+        state, code, message = verdict
+        bcv.mark(account_id, state=state, code=code, message=message)
+        # Free the slot: a rejected account is not kept on a terminal.
+        try:
+            self.revoke(worker_id=worker_id)
+        except Exception:
+            logger.warning("rejected_account_worker_revoke_failed")
 
     def _apply_slot_verification_to_worker(
         self, payload: dict[str, Any]

@@ -115,6 +115,18 @@ async def weltrade_connect(
         raise_trader_broker_failure(exc)
 
 
+@router.get("/connect/status")
+async def weltrade_connect_status(user: CurrentUser) -> dict[str, Any]:
+    """Live result of the user's last broker connect: verifying/connected/rejected."""
+    import asyncio
+
+    from app.application.services.broker_connect_verification import (
+        status_for_user,
+    )
+
+    return await asyncio.to_thread(status_for_user, user.id)
+
+
 @router.post("/attach", dependencies=_SHARED_TERMINAL_GUARD)
 async def weltrade_attach(
     body: WeltradeAttachRequest, user: CurrentUser, svc: WeltradeSvc
