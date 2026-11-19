@@ -53,7 +53,10 @@ assert.match(workspace, /Connect MT5 Account/);
 // Customers must not restore the shared platform terminal on mount.
 assert.match(workspace, /isOperator && !connected/);
 assert.match(workspace, /restoreProfile\(\)/);
-assert.match(workspace, /Queued for a QuantForg trading terminal/);
+assert.match(workspace, /BrokerVerificationPanel/);
+assert.match(workspace, /broker-verification-rejected/);
+assert.match(workspace, /broker-verification-connected/);
+assert.doesNotMatch(workspace, /Your MT5 account is saved securely/);
 assert.match(workspace, /broker-queued-for-terminal/);
 // Passwordless claim/restore remains operator-only.
 assert.match(workspace, /Passwordless claim \/ shared-terminal restore is owner-only/);

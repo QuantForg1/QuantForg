@@ -151,7 +151,8 @@ export function publicFeedBadge(status: string | null | undefined): {
     case "closed":
       return { label: "MARKET CLOSED", tone: "warn" };
     case "delayed":
-      return { label: "DELAYED", tone: "warn" };
+      // Reference feed while the market is open: no "DELAYED" label for users.
+      return { label: "MARKET OPEN", tone: "ok" };
     case "loading":
       return { label: "LOADING", tone: "muted" };
     case "unavailable":
