@@ -244,18 +244,28 @@ async def stream_output_text(
     instructions: str,
     max_output_tokens: int | None = None,
     reasoning_effort: str | None = None,
+    reasoning_summary: bool = False,
     timeout_seconds: float = 90.0,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> Any:
-    """Yield text deltas from ``POST /v1/responses`` with ``stream: true``.
+    """Stream ``POST /v1/responses`` events as ``{"type", "text"}`` dicts.
 
-    Raises ``OpenAIProviderError`` before the first delta on HTTP errors.
-    If the model rejects ``reasoning`` (HTTP 400), retries once without it.
+    ``type`` is ``"text"`` for answer deltas and ``"thinking"`` for the
+    model's reasoning-summary deltas. Raises ``OpenAIProviderError`` on HTTP
+    errors. If the model rejects a reasoning option (HTTP 400) the request is
+    retried with less: summary+effort → effort → none.
     """
     if not client.configured:
         raise OpenAIProviderError("missing_api_key", "OPENAI_API_KEY is not configured")
 
-    def _payload(with_reasoning: bool) -> dict[str, Any]:
+    ladder: list[tuple[str | None, bool]] = []
+    if reasoning_effort and reasoning_summary:
+        ladder.append((reasoning_effort, True))
+    if reasoning_effort:
+        ladder.append((reasoning_effort, False))
+    ladder.append((None, False))
+
+    def _payload(effort: str | None, summary: bool) -> dict[str, Any]:
         p: dict[str, Any] = {
             "model": client.model,
             "instructions": instructions,
@@ -265,8 +275,10 @@ async def stream_output_text(
         }
         if max_output_tokens is not None:
             p["max_output_tokens"] = int(max_output_tokens)
-        if with_reasoning and reasoning_effort:
-            p["reasoning"] = {"effort": reasoning_effort}
+        if effort:
+            p["reasoning"] = {"effort": effort}
+            if summary:
+                p["reasoning"]["summary"] = "auto"
         return p
 
     headers = {
@@ -279,14 +291,18 @@ async def stream_output_text(
     async with httpx.AsyncClient(
         timeout=timeout, transport=transport or client._transport
     ) as http:
-        for with_reasoning in ((True, False) if reasoning_effort else (False,)):
+        for idx, (effort, summary) in enumerate(ladder):
+            last = idx == len(ladder) - 1
             async with http.stream(
-                "POST", url, headers=headers, json=_payload(with_reasoning)
+                "POST", url, headers=headers, json=_payload(effort, summary)
             ) as resp:
-                if resp.status_code == 400 and with_reasoning:
+                if resp.status_code == 400 and not last:
                     await resp.aread()
                     logger.info(
-                        "openai_stream_retry_without_reasoning", model=client.model
+                        "openai_stream_downgrade",
+                        model=client.model,
+                        effort=effort,
+                        summary=summary,
                     )
                     continue
                 if resp.status_code == 401:
@@ -321,10 +337,15 @@ async def stream_output_text(
                     except json.JSONDecodeError:
                         continue
                     etype = str(event.get("type") or "")
+                    delta = event.get("delta")
                     if etype == "response.output_text.delta":
-                        delta = event.get("delta")
                         if isinstance(delta, str) and delta:
-                            yield delta
+                            yield {"type": "text", "text": delta}
+                    elif etype == "response.reasoning_summary_text.delta":
+                        if isinstance(delta, str) and delta:
+                            yield {"type": "thinking", "text": delta}
+                    elif etype == "response.reasoning_summary_part.done":
+                        yield {"type": "thinking", "text": "\n\n"}
                     elif etype in {"response.failed", "error"}:
                         raise OpenAIProviderError(
                             "provider_outage", "OpenAI stream reported an error"

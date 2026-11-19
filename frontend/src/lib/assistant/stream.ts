@@ -1,6 +1,6 @@
-import { getRuntimeApiBaseUrl } from "@/lib/env";
+import { env, getRuntimeApiBaseUrl } from "@/lib/env";
 import { getAccessToken } from "@/lib/auth/session";
-import { parseSseFrame } from "@/lib/assistant/sse";
+import { parseSseFrame, streamBaseCandidates } from "@/lib/assistant/sse";
 
 export type AssistantMeta = {
   as_of_utc?: string;
@@ -12,9 +12,18 @@ export type AssistantMeta = {
   model?: string;
 };
 
+export type AssistantStage = {
+  key: string;
+  label: string;
+  detail?: string;
+  status: "active" | "done";
+};
+
 export type StreamHandlers = {
   onMeta: (meta: AssistantMeta) => void;
   onDelta: (text: string) => void;
+  onStage?: (stage: AssistantStage) => void;
+  onThinking?: (text: string) => void;
 };
 
 export class AssistantStreamError extends Error {
@@ -37,16 +46,29 @@ export async function streamAssistant(
 ): Promise<{ model: string }> {
   const token = getAccessToken();
   if (!token) throw new AssistantStreamError("Sign in required", "auth", true, 401);
-  const res = await fetch(`${getRuntimeApiBaseUrl()}/intelligence/assistant/stream`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
+  // Stream straight from the API origin when possible: a CDN rewrite proxy
+  // may hold the stream back. Network/CORS failure → try the next base.
+  let res: Response | null = null;
+  let lastError: unknown = null;
+  for (const base of streamBaseCandidates(env.apiBaseUrl, getRuntimeApiBaseUrl())) {
+    try {
+      res = await fetch(`${base}/intelligence/assistant/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+      break;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+    }
+  }
+  if (!res) throw lastError ?? new TypeError("Network error");
   if (!res.ok || !res.body) {
     let message = "QuantForg AI could not answer right now. Please try again.";
     let code = `http_${res.status}`;
@@ -85,6 +107,11 @@ export async function streamAssistant(
       if (event === "meta") {
         model = String(data.model ?? "");
         handlers.onMeta(data as AssistantMeta);
+      } else if (event === "stage") {
+        handlers.onStage?.(data as unknown as AssistantStage);
+      } else if (event === "thinking") {
+        const text = String(data.text ?? "");
+        if (text) handlers.onThinking?.(text);
       } else if (event === "delta") {
         const text = String(data.text ?? "");
         if (text) {

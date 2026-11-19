@@ -1208,3 +1208,26 @@ header[data-desk-header="overview"] {
     transform: none;
   }
 }
+
+/* QuantForg AI: analysis trace + typing */
+@keyframes qf-step-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.qf-step-in { animation: qf-step-in 0.3s ease-out both; }
+@keyframes qf-shimmer-text {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.qf-shimmer-text {
+  background: linear-gradient(90deg, var(--fg-muted) 0%, var(--fg-muted) 40%, var(--accent) 50%, var(--fg-muted) 60%, var(--fg-muted) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: qf-shimmer-text 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qf-step-in, .qf-shimmer-text { animation: none; }
+  .qf-shimmer-text { color: var(--fg-muted); background: none; }
+}

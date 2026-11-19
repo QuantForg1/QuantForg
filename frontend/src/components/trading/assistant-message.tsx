@@ -47,10 +47,16 @@ function List({ ordered, items }: { ordered: boolean; items: ListItem[] }) {
 }
 
 /** Renders an assistant reply from a safe block model (no raw HTML). */
-export function AssistantMarkdown({ text }: { text: string }) {
+export function AssistantMarkdown({ text, compact = false }: { text: string; compact?: boolean }) {
   const blocks = parseMarkdown(text);
   return (
-    <div className="space-y-2.5 text-[0.9rem] leading-relaxed text-[var(--fg)]">
+    <div
+      className={
+        compact
+          ? "space-y-1.5 text-xs leading-relaxed"
+          : "space-y-2.5 text-[0.9rem] leading-relaxed text-[var(--fg)]"
+      }
+    >
       {blocks.map((b, i) => {
         switch (b.kind) {
           case "heading":
