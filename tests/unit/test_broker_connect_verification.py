@@ -158,3 +158,32 @@ def test_removed_account_is_not_active() -> None:
         raise RuntimeError("db down")
 
     assert account_still_active(uuid4(), fetch=boom) is True
+
+
+def test_status_reports_whether_a_verifier_is_online() -> None:
+    row = {
+        "id": uuid4(),
+        "status": "active",
+        "environment": "demo",
+        "external_account_id": "43420953",
+        "server": "Weltrade-Demo",
+        "metadata": {"verification": "verifying"},
+        "slug": "weltrade",
+        "name": "Weltrade",
+    }
+
+    def fetch_with(n):
+        def fetch(sql, *_a):
+            return [{"n": n}] if "mt5_worker_control_plane" in sql else [row]
+
+        return fetch
+
+    assert bcv.status_for_user(uuid4(), fetch=fetch_with(0))["verifier_online"] is False
+    assert bcv.status_for_user(uuid4(), fetch=fetch_with(2))["verifier_online"] is True
+
+    def broken(sql, *_a):
+        if "mt5_worker_control_plane" in sql:
+            raise RuntimeError("db down")
+        return [row]
+
+    assert bcv.status_for_user(uuid4(), fetch=broken)["verifier_online"] is None
