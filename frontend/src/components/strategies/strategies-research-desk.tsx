@@ -479,7 +479,7 @@ export function StrategiesResearchDesk() {
   const evidenceCount = backtests.length + walkforwards.length + compareItems.length;
 
   return (
-    <div className="qf-sr-desk flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div className="qf-sr-desk flex w-full flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
       <header className="shrink-0 border-b border-[var(--border)] px-3 py-3 sm:px-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
@@ -493,7 +493,7 @@ export function StrategiesResearchDesk() {
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-nowrap items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:flex-nowrap sm:items-center">
             <Button type="button" variant="secondary" className="h-10 whitespace-nowrap px-3" onClick={() => { setTab("rules"); setMode("explore"); }}>
               Strategy Builder
             </Button>
@@ -515,7 +515,7 @@ export function StrategiesResearchDesk() {
             />
             <Button
               type="button"
-              className="h-10 whitespace-nowrap px-3.5"
+              className="order-first col-span-2 h-10 whitespace-nowrap px-3.5 sm:order-none sm:col-span-1"
               onClick={() => {
                 if (catalog.some((item) => str(item.key, "") === "custom_rules")) selectStrategy("custom_rules");
                 setTab("rules");
@@ -527,7 +527,7 @@ export function StrategiesResearchDesk() {
             </Button>
           </div>
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto" role="tablist" aria-label="Strategies and research modes">
+        <div className="mt-3 grid grid-cols-3 gap-1.5 sm:flex sm:gap-2 sm:overflow-x-auto" role="tablist" aria-label="Strategies and research modes">
           {MODES.map((item) => (
             <button
               key={item.id}
@@ -535,7 +535,7 @@ export function StrategiesResearchDesk() {
               role="tab"
               aria-selected={mode === item.id}
               className={cn(
-                "min-h-11 shrink-0 rounded-full px-3 text-xs font-semibold",
+                "min-h-10 rounded-xl px-2 text-[11px] font-semibold leading-tight sm:min-h-11 sm:shrink-0 sm:rounded-full sm:px-3 sm:text-xs",
                 mode === item.id ? "bg-[var(--accent)] text-[var(--accent-fg)]" : "bg-[var(--surface-2)] text-[var(--fg-muted)]",
               )}
               onClick={() => openMode(item.id)}
@@ -547,8 +547,8 @@ export function StrategiesResearchDesk() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(14rem,38vh)_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)] xl:grid-rows-1">
-        <section className="flex min-h-0 min-w-0 flex-col border-b border-[var(--border)] xl:border-b-0 xl:border-r" aria-label="Strategy library">
+      <div className="grid grid-cols-1 xl:min-h-0 xl:flex-1 xl:grid-cols-[22rem_minmax(0,1fr)]">
+        <section className="flex min-w-0 flex-col border-b border-[var(--border)] xl:min-h-0 xl:border-b-0 xl:border-r" aria-label="Strategy library">
           <div className="shrink-0 space-y-3 p-3">
             <div>
               <h2 className="text-sm font-semibold text-[var(--fg)]">Strategy Library</h2>
@@ -564,8 +564,8 @@ export function StrategiesResearchDesk() {
                 className="h-11 pl-9"
               />
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <select className="h-11 min-w-0 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--fg)]" aria-label="All Markets" value={displayTradingSymbol(symbol)} onChange={() => undefined}>
+            <div className="grid grid-cols-2 gap-2">
+              <select className="col-span-2 h-11 min-w-0 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--fg)]" aria-label="All Markets" value={displayTradingSymbol(symbol)} onChange={() => undefined}>
                 <option>{displayTradingSymbol(symbol)}</option>
               </select>
               <select className="h-11 min-w-0 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--fg)]" aria-label="All Types" value={catalogCategory} onChange={(event) => setCatalogCategory(event.target.value)}>
@@ -581,7 +581,7 @@ export function StrategiesResearchDesk() {
               </select>
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3">
+          <div className="max-h-[22rem] overflow-y-auto px-3 xl:max-h-none xl:min-h-0 xl:flex-1">
             {catalogQ.isLoading ? <DeskSkeleton rows={4} /> : null}
             {catalogQ.isError ? <DeskError message="Catalog unavailable." onRetry={() => catalogQ.refetch()} /> : null}
             {!catalogQ.isLoading && !catalogQ.isError && libraryRows.length === 0 ? (
@@ -643,10 +643,10 @@ export function StrategiesResearchDesk() {
           </div>
         </section>
 
-        <section id="strategy-detail" className="flex min-h-0 min-w-0 flex-col" aria-live="polite">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
-          <article className="qf-overview-card grid min-h-[11rem] gap-4 p-4 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:p-5">
-            <div className="flex h-full min-h-[7.5rem] items-center justify-center rounded-[var(--radius-os)] border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)]">
+        <section id="strategy-detail" className="flex min-w-0 flex-col xl:min-h-0" aria-live="polite">
+          <div className="space-y-3 p-3 sm:p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+          <article className="qf-overview-card grid gap-4 p-4 sm:min-h-[11rem] sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:p-5">
+            <div className="hidden h-full min-h-[7.5rem] items-center justify-center rounded-[var(--radius-os)] sm:flex border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)]">
               <span className="qf-overview-icon" aria-hidden>
                 {createElement(strategyIconForKey(strategyKey), { className: "h-6 w-6" })}
               </span>
@@ -778,7 +778,7 @@ export function StrategiesResearchDesk() {
                   </div>
                 </>
               ) : (
-                <article className="qf-overview-card min-h-[16rem] p-4">
+                <article className="qf-overview-card min-h-[9rem] p-4 sm:min-h-[16rem]">
                   <h3 className="text-sm font-semibold text-[var(--fg)]">Equity Curve (Backtest)</h3>
                   {curve.length > 0 ? <LazyEquityChart data={curve} emptyLabel="No equity curve stored for this strategy." /> : <p className="mt-4 text-sm text-[var(--fg-muted)]">Not available.</p>}
                 </article>
@@ -788,10 +788,10 @@ export function StrategiesResearchDesk() {
 
           {tab === "research" ? (
             <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
-              <StrategyDna catalogItem={catalogItem} libraryItem={libraryItem} strategyKey={strategyKey} className="h-[18rem] overflow-hidden" />
-              <ResearchMemory dashboard={dash} paper={paper && Object.keys(paper).length ? paper : null} regime={regime && Object.keys(regime).length ? regime : null} className="h-[18rem] overflow-hidden" />
-              <ConfidenceTimeline validation={validation} walkforwardItem={matchedWalk} backtestItem={matchedBacktest} strategyPresent={Boolean(strategyKey)} hasEvidence={evidenceCount > 0} className="h-[18rem] overflow-hidden" />
-              <EvidenceStack backtests={backtests} walkforwards={walkforwards} compareItems={compareItems} libraryItems={libraryItems} selectedId={strategyKey} onSelect={selectStrategy} className="h-[18rem] overflow-hidden" />
+              <StrategyDna catalogItem={catalogItem} libraryItem={libraryItem} strategyKey={strategyKey} className="max-h-[22rem] min-h-[9rem] overflow-hidden sm:h-[18rem]" />
+              <ResearchMemory dashboard={dash} paper={paper && Object.keys(paper).length ? paper : null} regime={regime && Object.keys(regime).length ? regime : null} className="max-h-[22rem] min-h-[9rem] overflow-hidden sm:h-[18rem]" />
+              <ConfidenceTimeline validation={validation} walkforwardItem={matchedWalk} backtestItem={matchedBacktest} strategyPresent={Boolean(strategyKey)} hasEvidence={evidenceCount > 0} className="max-h-[22rem] min-h-[9rem] overflow-hidden sm:h-[18rem]" />
+              <EvidenceStack backtests={backtests} walkforwards={walkforwards} compareItems={compareItems} libraryItems={libraryItems} selectedId={strategyKey} onSelect={selectStrategy} className="max-h-[22rem] min-h-[9rem] overflow-hidden sm:h-[18rem]" />
             </div>
           ) : null}
 
@@ -812,14 +812,14 @@ export function StrategiesResearchDesk() {
                 </InfoCard>
               </div>
               {curve.length > 0 ? (
-                <article className="qf-overview-card min-h-[16rem] p-4">
+                <article className="qf-overview-card min-h-[9rem] p-4 sm:min-h-[16rem]">
                   <h3 className="text-sm font-semibold text-[var(--fg)]">Equity curve</h3>
                   <LazyEquityChart data={curve} emptyLabel="No equity curve stored for this strategy." />
                 </article>
               ) : (
                 <DeskEmpty icon={FlaskConical} title="No equity curve for this strategy" description="A curve appears when a saved backtest for this strategy includes one." />
               )}
-              <EvidenceStack backtests={backtests} walkforwards={walkforwards} compareItems={compareItems} libraryItems={libraryItems} selectedId={strategyKey} onSelect={selectStrategy} className="min-h-[18rem]" />
+              <EvidenceStack backtests={backtests} walkforwards={walkforwards} compareItems={compareItems} libraryItems={libraryItems} selectedId={strategyKey} onSelect={selectStrategy} className="min-h-[9rem] sm:min-h-[18rem]" />
             </div>
           ) : null}
 
@@ -939,7 +939,7 @@ export function StrategiesResearchDesk() {
                 strategyKey={strategyKey}
                 onEvaluate={() => promoteMut.mutate()}
                 evaluating={promoteMut.isPending}
-                className="min-h-[18rem]"
+                className="min-h-[9rem] sm:min-h-[18rem]"
               />
             </div>
           ) : null}
@@ -993,7 +993,7 @@ function AlignCard({
   children: ReactNode;
 }) {
   return (
-    <article className="qf-overview-card flex h-[16rem] min-w-0 flex-col overflow-hidden p-4">
+    <article className="qf-overview-card flex min-h-[9rem] min-w-0 flex-col overflow-hidden p-4 sm:h-[16rem]">
       <header className="mb-3 flex h-6 shrink-0 items-center justify-between gap-2">
         <h3 className="truncate text-sm font-semibold text-[var(--fg)]">{title}</h3>
         {action}
