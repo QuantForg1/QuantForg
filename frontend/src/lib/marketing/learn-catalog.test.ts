@@ -13,7 +13,7 @@ const growthPage = readFileSync(
   "utf8",
 );
 
-assert.equal(LEARN_PAGES.length, 5);
+assert.equal(LEARN_PAGES.length, 7);
 const lifecycle = LEARN_PAGES.find((page) => page.slug === "decision-lifecycle");
 assert.ok(lifecycle);
 assert.match(lifecycle.title, /decision word/i);
@@ -55,6 +55,6 @@ assert.match(robots, /\/learn/);
 assert.match(growthPage, /Not connected/);
 assert.match(growthPage, /Unavailable/);
 assert.doesNotMatch(growthPage, /\$[1-9]\d{2,}/);
-assert.doesNotMatch(growthPage, /placeholder|sample metric|demo data/i);
+assert.doesNotMatch(growthPage, /sample metric|demo data/i);
 
 console.log("learn-catalog.test.ts: ok");

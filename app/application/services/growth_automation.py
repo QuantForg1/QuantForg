@@ -24,7 +24,9 @@ _LOCK = threading.Lock()
 _EMERGENCY_STOP = True
 _HISTORY: list[dict[str, Any]] = []
 _IDEMPOTENCY: dict[str, dict[str, Any]] = {}
+_DRAFTS: list[dict[str, Any]] = []
 _MAX_HISTORY = 20
+_MAX_DRAFTS = 20
 _TIMEOUT_SECONDS = 2.0
 
 _JOBS: dict[str, dict[str, str]] = {
@@ -44,6 +46,14 @@ _JOBS: dict[str, dict[str, str]] = {
         "title": "Decision Evidence contract",
         "source": "app.application.services.decision_evidence.evidence_contract",
     },
+    "seo_contract": {
+        "title": "Declared SEO contract",
+        "source": "growth_automation.seo_contract",
+    },
+    "recommendations": {
+        "title": "Labeled hypotheses",
+        "source": "growth_automation.recommendations",
+    },
 }
 
 
@@ -58,6 +68,7 @@ def reset_growth_automation_state() -> None:
         _EMERGENCY_STOP = True
         _HISTORY.clear()
         _IDEMPOTENCY.clear()
+        _DRAFTS.clear()
 
 
 def _stamp(kind: str, **fields: Any) -> dict[str, Any]:
@@ -91,6 +102,24 @@ def growth_automation_status() -> dict[str, Any]:
                 for job_id, meta in _JOBS.items()
             ],
             "history": list(_HISTORY),
+            "drafts": list(_DRAFTS),
+            "clock": {
+                "attached": False,
+                "next_run": None,
+                "reason": (
+                    "No growth clock is registered. "
+                    "Jobs are not attached to the trading scheduler."
+                ),
+            },
+            "permissions": {
+                "read_only_checks": "owner_when_stop_released",
+                "content_drafts": "owner_when_stop_released",
+                "publish": "approval_required_not_implemented",
+                "ads": "prohibited",
+                "billing_changes": "prohibited",
+                "trading_changes": "prohibited",
+                "mass_email": "prohibited",
+            },
             "note": (
                 "Nothing is attached to the trading scheduler. "
                 "A restart engages the emergency stop and drops this log. "
@@ -167,11 +196,47 @@ def _decision_contract() -> dict[str, Any]:
     }
 
 
+def _seo_contract() -> dict[str, Any]:
+    return {
+        "source": "growth_automation.seo_contract",
+        "sitemap_lastmod_policy": "omitted_until_content_changes",
+        "live_canonical_required": "/live",
+        "authenticated_desks": "noindex",
+        "indexed_page_count": None,
+        "search_volume": None,
+        "average_position": None,
+        "note": "Declared repository policy. Not a Google index or rank report.",
+    }
+
+
+def _recommendations() -> dict[str, Any]:
+    return {
+        "source": "growth_automation.recommendations",
+        "proven_outcomes": False,
+        "items": [
+            {
+                "id": "connect_search_console",
+                "evidence": "Search Console is not connected.",
+                "hypothesis": "A connected property could show queries. Impact is unknown.",
+                "proven_outcome": False,
+            },
+            {
+                "id": "keep_ads_stopped",
+                "evidence": "Phase 0 keeps paid robot advertising disabled pending review.",
+                "hypothesis": None,
+                "proven_outcome": False,
+            },
+        ],
+    }
+
+
 _RUNNERS = {
     "catalog_prices": _catalog_prices,
     "public_route_policy": _public_route_policy,
     "integration_sources": _integration_sources,
     "decision_evidence_contract": _decision_contract,
+    "seo_contract": _seo_contract,
+    "recommendations": _recommendations,
 }
 
 
@@ -235,3 +300,51 @@ def run_growth_job(job_id: str) -> dict[str, Any]:
         if status == "completed":
             _IDEMPOTENCY[key] = dict(entry)
         return entry
+
+
+def save_growth_draft(title: str, body: str) -> dict[str, Any]:
+    """Store an unpublished draft. Does not publish, email, or spend."""
+    clean_title = " ".join(title.split())
+    clean_body = body.strip()
+    if not clean_title or not clean_body:
+        raise ValueError("draft_empty")
+    if len(clean_title) > 120 or len(clean_body) > 4000:
+        raise ValueError("draft_too_long")
+    with _LOCK:
+        if _EMERGENCY_STOP:
+            return _stamp(
+                "draft",
+                executed=False,
+                status="stopped",
+                published=False,
+                title=clean_title,
+            )
+        draft = {
+            "id": str(uuid4()),
+            "title": clean_title,
+            "body": clean_body,
+            "status": "draft",
+            "published": False,
+            "at": datetime.now(UTC).isoformat(),
+        }
+        _DRAFTS.append(draft)
+        del _DRAFTS[:-_MAX_DRAFTS]
+        saved = _stamp("draft", executed=True, status="draft", published=False, draft_id=draft["id"])
+        saved["draft"] = draft
+        return saved
+
+
+def refuse_growth_publish(draft_id: str) -> dict[str, Any]:
+    """Publishing stays closed. Releasing the stop does not publish."""
+    with _LOCK:
+        return _stamp(
+            "publish",
+            executed=False,
+            status="approval_required",
+            published=False,
+            draft_id=draft_id,
+            reason=(
+                "Publishing financial content requires a separate owner approval. "
+                "This route does not publish."
+            ),
+        )

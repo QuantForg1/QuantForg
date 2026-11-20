@@ -17,6 +17,8 @@ Public guides in `frontend/src/lib/marketing/learn-catalog.ts`:
 | `/learn/decision-record` | Decision record versus a broker fill |
 | `/learn/decision-lifecycle` | BUY, SELL, WAIT, ORDER_SENT, FILLED, NOT_REACHED, and thinner history |
 | `/learn/simulation` | Simulation is not broker performance |
+| `/learn/mt5-and-broker-history` | Broker holds the account; this page does not connect it |
+| `/learn/spread-slippage-and-rejects` | Definitions only. No broker ranking and no sample rate |
 
 Copy is original and matches the implemented report. The catalog test rejects guaranteed-profit language, win-rate claims, percentage figures, and “free trial is available”.
 
@@ -57,29 +59,34 @@ Plan prices and entitlements on the pricing page are the existing catalog. No ch
 
 ## Phase 4 — Automation
 
-Growth checks are not registered on the trading scheduler. That scheduler was not modified.
+Growth checks are not registered on the trading scheduler. That scheduler was not modified. No growth clock is attached, so nothing runs on a timer.
 
-As of `38f5dc8bf`, the owner HTTP surface is `GET /api/v1/growth/status` only. The earlier `POST /api/v1/growth/automation/emergency-stop` and `POST /api/v1/growth/automation/run` routes, and the screen buttons that called them, are removed. Production returns 404 for both POST paths. Nothing in the product can release the stop or start a check.
+The emergency stop starts engaged. While it is engaged, `POST /api/v1/growth/automation/run` returns `executed: false` and `status: "stopped"`, and a draft is not saved. Releasing the stop allows one owner to request a check or save an unpublished draft. Releasing it does not enable ads, change billing, or place orders.
 
-`growth_automation.py` still defaults its in-process stop to engaged and can describe catalog, index-policy, integration, and decision-contract checks. Those functions are not mounted on the API. The status document reports the stop as engaged and the scheduler as not registered. The in-process log is process memory. A restart drops it. It is not a durable audit history.
+Owner routes, all behind the designated-owner role:
 
-Ads stay stopped. The API has no route that enables them, changes billing, or places orders.
+- `GET /api/v1/growth/status`
+- `POST /api/v1/growth/automation/emergency-stop`
+- `POST /api/v1/growth/automation/run`
+- `POST /api/v1/growth/content/drafts`
+- `POST /api/v1/growth/content/publish` — always returns `published: false` and `status: "approval_required"`
+
+Checks: catalog prices (subscriber count null), declared index policy (indexed count null), integration sources, decision-evidence contract, SEO contract (search volume null), and labeled hypotheses (`proven_outcome: false`). A completed check replays inside the same UTC minute. An unknown job returns 422. There is no retry. The log and drafts live in process memory and are dropped on restart.
+
+Ads stay stopped. There is no route that enables them.
 
 ## Tests actually run
 
-Rechecked on 19 November 2026 against `38f5dc8bf`:
+For this change, on 19 November 2026:
 
-- `ruff check` on the decision-evidence and growth modules: passed.
-- `pytest tests/unit/test_decision_evidence.py tests/unit/test_growth_intelligence.py`: 19 passed. The growth router test requires GET and HEAD only.
-- `learn-catalog.test.ts`, `decision-evidence.test.ts`, and `customer-routes.test.ts`: passed.
+- `poetry run pytest tests/unit/test_growth_intelligence.py -o addopts=`: 6 passed. Covers null metrics, owner 403s, stop-before-run, catalog prices with a null subscriber count, idempotent replay, null search volume, unknown job 422, unpublished drafts, publish refusal, and the stop blocking a later draft.
+- `learn-catalog.test.ts`: passed. Seven guides, no `lastModified:` assignment, no profit or trial-available language.
 
-`pytest -m trading_core -q --tb=line --no-cov -p no:cacheprovider` finished with exit code 0: 2318 passed, 3328 deselected, 3 xfailed. The xfail cases are the known gold-only markers. The trading scheduler, OMS, gateway, and risk enforcement were not edited.
+`pytest -m trading_core` was not re-run for this change. The trading scheduler, OMS, gateway, and risk enforcement were not edited.
 
 ## Deployment
 
-`c6953bd34` is no longer the tip. `origin/main` is `38f5dc8bf` (`fix: remove growth check controls from the owner screen`).
-
-Vercel production deployment `https://quant-forg-5d6kvxki1-quantforg.vercel.app` (`dpl_57tTbCYJu9rE86htaBz3DQLL7Dm1`) is Ready. Its build log clones commit `38f5dc8`. It is aliased to `https://www.quantforg.com` and `https://quantforg.com`.
+The production alias before this change served commit `8121d6840`. Deployment of the commit that adds the guides, onboarding steps, and owner checks is recorded after that Vercel deployment is Ready. Until then, do not treat this file as proof that those routes are live.
 
 Unsigned checks on 19 November 2026:
 
@@ -102,6 +109,6 @@ No designated-owner session and no paid customer session were available. Authent
 | Organic sessions and landing conversion | No analytics property is connected |
 | Subscriber, revenue, churn, registration, activation counts | This view does not query billing rows or an event store |
 | Decision Evidence view counts | No usage event is written |
-| Cron on a clock | Not attached to the trading scheduler. The run routes are not mounted, so nothing is scheduled |
+| Cron on a clock | Not attached. Owner-invoked checks exist. Nothing runs unattended |
 | Paid ads | Phase 0 restriction. The API cannot enable them |
 | Authenticated production proof | No paid session was used for this report |

@@ -9,6 +9,7 @@ import {
   ProductTour,
   ProductTourTrigger,
 } from "@/components/platform/product-tour";
+import { BILLING_PLANS, formatUsd, FREE_TRIAL_AVAILABLE } from "@/lib/billing/plans";
 import {
   getChecklist,
   setChecklistItem,
@@ -19,7 +20,14 @@ const STEPS = [
   {
     title: "Welcome to QuantForg",
     detail:
-      "This is your workspace for market research and, when you choose, live trading. Research never requires a broker connection.",
+      "QuantForg is MT5 software for XAUUSD. Your funds stay at your broker. Research does not require a broker connection, and this guide never asks for a broker password.",
+  },
+  {
+    title: "Read what the product will and will not do",
+    detail:
+      "Analysis is not an order. A failed risk check means no order is submitted. A stop is not a guaranteed fill price. A simulation is not broker profit and loss. The decision record shows stored fields only.",
+    href: "/learn",
+    checklist: "guides" as const,
   },
   {
     title: "Explore markets",
@@ -50,9 +58,17 @@ const STEPS = [
   },
   {
     title: "Configure trading preferences",
-    detail: "Set appearance, notifications, and workspace defaults in Settings.",
+    detail: "Set appearance, notifications, and workspace defaults in Settings. This checklist is stored in this browser. It is not a server activation count.",
     href: "/settings",
     checklist: "preferences" as const,
+  },
+  {
+    title: "Review plans before you subscribe",
+    detail: FREE_TRIAL_AVAILABLE
+      ? "See the pricing page for the current offer."
+      : `Current software prices: ${BILLING_PLANS.map((plan) => `${plan.name} ${formatUsd(plan.monthlyPriceUsd)}`).join(", ")}. A free trial is not offered. A plan does not bypass a risk check, and opening the pricing page is not a subscription.`,
+    href: "/pricing",
+    checklist: "plans" as const,
   },
   {
     title: "Enable live trading only when explicitly ready",

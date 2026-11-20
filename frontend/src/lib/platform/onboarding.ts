@@ -10,20 +10,24 @@ const FIRST_RUN_DISMISSED_KEY = "qf.onboarding.first_run.dismissed.v1";
 
 export type ChecklistId =
   | "welcome"
+  | "guides"
   | "markets"
   | "signals"
   | "broker"
   | "preferences"
+  | "plans"
   | "live_ready";
 
 export type ChecklistState = Record<ChecklistId, boolean>;
 
 const DEFAULT_CHECKLIST: ChecklistState = {
   welcome: false,
+  guides: false,
   markets: false,
   signals: false,
   broker: false,
   preferences: false,
+  plans: false,
   live_ready: false,
 };
 
@@ -118,6 +122,12 @@ export const CHECKLIST_ITEMS: {
     description: "See how research, markets, and trading fit together",
   },
   {
+    id: "guides",
+    title: "Read the product limits",
+    href: "/learn",
+    description: "Analysis, risk checks, decision records, and broker history",
+  },
+  {
     id: "markets",
     title: "Explore markets",
     href: "/markets",
@@ -140,6 +150,12 @@ export const CHECKLIST_ITEMS: {
     title: "Configure trading preferences",
     href: "/settings",
     description: "Theme, alerts, and workspace defaults",
+  },
+  {
+    id: "plans",
+    title: "Review the current plans",
+    href: "/pricing",
+    description: "Software access only. A plan does not bypass a risk check",
   },
   {
     id: "live_ready",

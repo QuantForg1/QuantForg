@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { growthApi } from "@/lib/api/endpoints";
@@ -17,9 +18,30 @@ function statusLabel(status: string): string {
 
 export default function GrowthIntelligencePage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftBody, setDraftBody] = useState("");
   const query = useQuery({
     queryKey: ["growth-intelligence-status"],
     queryFn: () => growthApi.status(),
+  });
+  const refresh = () =>
+    void queryClient.invalidateQueries({ queryKey: ["growth-intelligence-status"] });
+  const stop = useMutation({
+    mutationFn: (engaged: boolean) => growthApi.setEmergencyStop(engaged),
+    onSuccess: refresh,
+  });
+  const run = useMutation({
+    mutationFn: (jobId: string) => growthApi.runJob(jobId),
+    onSuccess: refresh,
+  });
+  const draft = useMutation({
+    mutationFn: () => growthApi.saveDraft(draftTitle, draftBody),
+    onSuccess: () => {
+      setDraftTitle("");
+      setDraftBody("");
+      refresh();
+    },
   });
 
   if (query.isLoading) return <DeskSkeleton variant="page" />;
@@ -38,14 +60,19 @@ export default function GrowthIntelligencePage() {
   const plans = asList(catalog.plans);
   const sections = asList(payload.sections);
   const automation = asRecord(payload.automation);
+  const jobs = asList(automation.jobs);
+  const drafts = asList(automation.drafts);
+  const history = asList(automation.history);
+  const permissions = asRecord(automation.permissions);
   const builtAt = str(payload.status_document_built_at, "");
+  const stopped = automation.emergency_stop !== false;
 
   return (
     <div className="min-w-0">
       <PageHeader
-        eyebrow="Owner · read only"
+        eyebrow="Owner"
         title="Growth Intelligence"
-        description="Integration status for acquisition and subscriptions. Missing sources stay blank. This screen does not publish, spend, or change accounts."
+        description="Missing sources stay blank. Checks do not publish, spend, email, or change accounts. Releasing the stop does not enable advertising."
         status={
           <p className="text-xs text-[var(--fg-subtle)]">
             Ads kill switch: {statusLabel(str(payload.ads_kill_switch, "stopped"))}
@@ -87,14 +114,109 @@ export default function GrowthIntelligencePage() {
             Automation health
           </h2>
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-            Stopped
+            {stopped ? "Stopped" : "Released"}
           </span>
         </div>
         <p className="mt-1 text-sm leading-relaxed text-[var(--fg-muted)]">
-          {str(automation.note, "No growth job is registered on a scheduler.")}
-          {" "}This screen cannot start a check, publish, spend, or change an account.
-          Scheduler attachment: {str(automation.scheduler_attachment, "Not connected")}.
+          {str(automation.note, "No growth job is registered on the trading scheduler.")}
+          {" "}Clock: {asRecord(automation.clock).attached === false ? "not attached" : "Unavailable"}.
+          {" "}Ads: {str(permissions.ads, "prohibited")}. Publish: {str(permissions.publish, "approval required")}.
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm disabled:opacity-50"
+            disabled={stop.isPending || stopped}
+            onClick={() => stop.mutate(true)}
+          >
+            Engage emergency stop
+          </button>
+          <button
+            type="button"
+            className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm disabled:opacity-50"
+            disabled={stop.isPending || !stopped}
+            onClick={() => stop.mutate(false)}
+          >
+            Release stop for checks
+          </button>
+        </div>
+        <ul className="mt-4 space-y-2">
+          {jobs.map((row) => {
+            const job = asRecord(row);
+            const jobId = str(job.id);
+            return (
+              <li key={jobId} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>
+                  {str(job.title, jobId)}
+                  <span className="text-[var(--fg-muted)]"> · {str(job.source, "source unavailable")}</span>
+                </span>
+                <button
+                  type="button"
+                  className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-1 text-sm text-[var(--accent)] disabled:opacity-50"
+                  disabled={run.isPending || stopped || !jobId}
+                  onClick={() => run.mutate(jobId)}
+                >
+                  Run check
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-3 text-xs text-[var(--fg-subtle)]">
+          Recent log entries: {history.length}. This log is process memory and is not a traffic or revenue report.
+        </p>
+      </section>
+
+      <section className="mb-6 rounded-[var(--radius-os)] border border-[var(--border)] p-4" aria-labelledby="growth-drafts">
+        <h2 id="growth-drafts" className="text-sm font-semibold text-[var(--fg)]">
+          Unpublished drafts
+        </h2>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--fg-muted)]">
+          A saved draft stays internal. This screen cannot publish it, send it, or turn it into an advertisement.
+        </p>
+        <form
+          className="mt-3 space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!stopped && draftTitle.trim() && draftBody.trim()) draft.mutate();
+          }}
+        >
+          <input
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            maxLength={120}
+            placeholder="Draft title"
+            aria-label="Draft title"
+            className="w-full min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-transparent px-3 py-2 text-sm"
+          />
+          <textarea
+            value={draftBody}
+            onChange={(event) => setDraftBody(event.target.value)}
+            maxLength={4000}
+            rows={3}
+            placeholder="Draft body"
+            aria-label="Draft body"
+            className="w-full min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-transparent px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm disabled:opacity-50"
+            disabled={draft.isPending || stopped || !draftTitle.trim() || !draftBody.trim()}
+          >
+            Save unpublished draft
+          </button>
+        </form>
+        <ul className="mt-3 space-y-1 text-sm text-[var(--fg-muted)]">
+          {drafts.length === 0 ? <li>No drafts in this process.</li> : null}
+          {drafts.map((row) => {
+            const item = asRecord(row);
+            return (
+              <li key={str(item.id)}>
+                {str(item.title, "Untitled")} · {item.published === true ? "Published" : "Not published"}
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       <div className="grid gap-4 md:grid-cols-2">

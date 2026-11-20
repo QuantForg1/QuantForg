@@ -201,6 +201,73 @@ export const LEARN_PAGES: readonly LearnPage[] = [
       },
     ],
   },
+  {
+    slug: "mt5-and-broker-history",
+    title: "MT5 connection and broker history",
+    description:
+      "How a QuantForg account relates to the MT5 broker account you choose to connect, and where live results come from.",
+    sections: [
+      {
+        heading: "The broker still holds the account",
+        paragraphs: [
+          "QuantForg is software for XAUUSD on MetaTrader 5. Customer funds stay at the broker. This guide does not collect a broker password, and connecting a broker is a separate action you take in the broker screen.",
+          "Closing this website does not close a position at the broker. An open position remains on the MT5 account, with whatever stop or take-profit was already placed there.",
+        ],
+      },
+      {
+        heading: "Live results are the broker’s history",
+        paragraphs: [
+          "A number that counts as account profit or loss comes from the broker’s own trade history: entry, exit, commission, swap, and net result as that account recorded them.",
+          "A decision report, a chart, and a simulation are not that history. They are not added to it.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Does reading this page connect my broker?",
+        answer:
+          "No. Nothing on this page starts a connection or sends an order. Broker connection stays on the broker screen, and only when you choose it.",
+      },
+      {
+        question: "If QuantForg is closed, what happens to an open trade?",
+        answer:
+          "The trade remains at the broker. This page does not claim that a stop will fill at a particular price.",
+      },
+    ],
+  },
+  {
+    slug: "spread-slippage-and-rejects",
+    title: "Spread, slippage, and rejects",
+    description:
+      "What those words mean on QuantForg, and why this page does not rank a broker.",
+    sections: [
+      {
+        heading: "A wide spread can block a new order",
+        paragraphs: [
+          "Before a new order is sent, QuantForg checks the spread. If the spread is too wide for the existing rule, the order is not submitted. That check is a gate. It is not a measurement of a broker’s average spread, and this page does not publish one.",
+        ],
+      },
+      {
+        heading: "Slippage and a reject are broker outcomes",
+        paragraphs: [
+          "Slippage means the filled price can differ from the price you saw when the order was sent. A gap can make a loss larger than the planned stop. A reject means the broker did not accept the order. Neither word is a profit figure.",
+          "QuantForg does not rank brokers here, and it does not show a sample slippage statistic. If a live measurement is not stored, the product should say it is unavailable rather than substitute zero.",
+        ],
+      },
+    ],
+    faqs: [
+      {
+        question: "Does a passed spread check guarantee the fill price?",
+        answer:
+          "No. The spread check decides whether an order may be sent. The broker’s fill can still differ from the requested price.",
+      },
+      {
+        question: "Where would a real reject count come from?",
+        answer:
+          "From the broker or gateway record of that order. This page does not invent a reject rate.",
+      },
+    ],
+  },
 ] as const;
 
 export function learnPath(slug: string): string {
