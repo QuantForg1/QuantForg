@@ -26,6 +26,7 @@ This folder is the Phase 0 record required before major product, marketing, or l
 | 13 | [13-test-results.md](./13-test-results.md) | What was and was not executed |
 | 14 | [14-production-release.md](./14-production-release.md) | Phase 0 did not deploy |
 | 15 | [15-phase1-execution.md](./15-phase1-execution.md) | Guides and read-only growth status |
+| 16 | [16-measurement-sources-and-migrations.md](./16-measurement-sources-and-migrations.md) | Signed-in QA, Search Console, GA4, billing sources, activation, pending migrations |
 
 ## Baseline that later phases must not invent past
 
