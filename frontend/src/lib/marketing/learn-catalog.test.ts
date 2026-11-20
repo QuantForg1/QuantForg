@@ -50,6 +50,7 @@ for (const pattern of banned) {
 
 assert.match(sitemap, /\/learn/);
 assert.match(sitemap, /learnPath/);
+assert.doesNotMatch(sitemap, /lastModified:/);
 assert.match(robots, /\/learn/);
 assert.match(growthPage, /Not connected/);
 assert.match(growthPage, /Unavailable/);

@@ -13,7 +13,6 @@ const SITE =
  * actually changes.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date();
   const core: Array<[string, number, "daily" | "weekly" | "monthly"]> = [
     ["/", 1, "weekly"],
     ["/gold-trading-robot", 0.95, "weekly"],
@@ -32,19 +31,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...core.map(([path, priority, changeFrequency]) => ({
       url: `${SITE}${path === "/" ? "" : path}`,
-      lastModified: now,
       changeFrequency,
       priority,
     })),
     ...LEARN_PAGES.map((page) => ({
       url: `${SITE}${learnPath(page.slug)}`,
-      lastModified: now,
       changeFrequency: "monthly" as const,
       priority: 0.7,
     })),
     ...STRATEGIES.map((s) => ({
       url: `${SITE}/strategies/${s.slug}`,
-      lastModified: now,
       changeFrequency: "monthly" as const,
       priority: 0.7,
     })),
