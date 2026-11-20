@@ -693,18 +693,27 @@ function RiskSettingsCard() {
     () => editableRiskFields(asRecord(payload.bounds)),
     [payload.bounds],
   );
+  // Period limits are only editable when the profile really loaded: a failed
+  // load must never be shown (or saved) as 0 = "limit off".
+  const periodLoaded = profileQ.isSuccess && Object.keys(effective).length > 0;
   const rows = [
     ...fields,
-    ...PERIOD_LIMITS.map((field) => ({ ...field })),
+    ...(periodLoaded ? PERIOD_LIMITS.map((field) => ({ ...field })) : []),
   ];
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [periodBaseline, setPeriodBaseline] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!q.data && !profileQ.data) return;
     const next: Record<string, string> = {};
     for (const f of fields) next[f.key] = trimNumber(str(prefs[f.key], ""));
-    for (const f of PERIOD_LIMITS) {
-      next[f.key] = trimNumber(str(effective[f.key], "0")) || "0";
+    const base: Record<string, string> = {};
+    if (periodLoaded) {
+      for (const f of PERIOD_LIMITS) {
+        base[f.key] = trimNumber(str(effective[f.key], "0")) || "0";
+        next[f.key] = base[f.key];
+      }
     }
+    setPeriodBaseline(base);
     setDraft(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data, profileQ.data]);
@@ -712,9 +721,11 @@ function RiskSettingsCard() {
   const prefDirty = fields.some(
     (f) => (draft[f.key] ?? "") !== trimNumber(str(prefs[f.key], "")),
   );
-  const periodDirty = PERIOD_LIMITS.some(
-    (f) => (draft[f.key] ?? "0") !== (trimNumber(str(effective[f.key], "0")) || "0"),
-  );
+  const periodDirty =
+    periodLoaded &&
+    PERIOD_LIMITS.some(
+      (f) => f.key in periodBaseline && (draft[f.key] ?? "") !== periodBaseline[f.key],
+    );
   const dirty = prefDirty || periodDirty;
 
   const save = useMutation({
@@ -734,10 +745,13 @@ function RiskSettingsCard() {
       if (periodDirty) {
         const fresh = asRecord(await riskApi.profile());
         const changes: Record<string, string> = {};
+        // Send only what the customer edited; untouched limits keep their
+        // server value even if it changed meanwhile.
         for (const field of PERIOD_LIMITS) {
-          const next = draft[field.key] ?? "0";
-          const previous = trimNumber(str(asRecord(fresh.effective)[field.key], "0")) || "0";
-          if (next !== previous) changes[field.key] = next;
+          if (!(field.key in periodBaseline)) continue;
+          const next = (draft[field.key] ?? "").trim();
+          if (next === "" || next === periodBaseline[field.key]) continue;
+          changes[field.key] = next;
         }
         if (Object.keys(changes).length > 0) {
           await riskApi.updateProfile({
@@ -839,6 +853,13 @@ function RiskSettingsCard() {
                 </div>
               </div>
             ))}
+            {!periodLoaded ? (
+              <p className="py-2 text-xs text-[var(--fg-muted)]">
+                {profileQ.isLoading
+                  ? "Loading weekly, monthly and drawdown limits…"
+                  : "Weekly, monthly and drawdown limits are unavailable right now. They are unchanged and still enforced."}
+              </p>
+            ) : null}
             <div className="mt-auto pt-3">
               <Button type="submit" className="min-h-11 w-full" disabled={!dirty || save.isPending}>
                 {save.isPending ? "Saving…" : "Save settings"}
