@@ -230,7 +230,11 @@ def status_for_user(user_id: UUID | str, *, fetch: Any | None = None) -> dict[st
         subscribed = bool(check_trading_entitlement(user_id=UUID(str(user_id))).allowed)
     except Exception:
         subscribed = False
+    verifier_online: bool | None = None
+    if state == VERIFYING:
+        verifier_online = _verifier_online(fetch)
     return {
+        "verifier_online": verifier_online,
         "subscription_active": subscribed,
         "robot_ready": state == CONNECTED and subscribed,
         "state": state,
@@ -243,3 +247,29 @@ def status_for_user(user_id: UUID | str, *, fetch: Any | None = None) -> dict[st
         "submitted_at": str(meta.get("submitted_at") or ""),
         "verified_at": str(meta.get("verification_at") or ""),
     }
+
+
+VERIFIER_HEARTBEAT_SECONDS = 180
+
+
+def _verifier_online(fetch: Any) -> bool | None:
+    """True if any MT5 verification worker sent a heartbeat recently.
+
+    ``None`` when it cannot be determined (never reported as healthy).
+    """
+    try:
+        rows = fetch(
+            """
+            SELECT count(*) AS n
+              FROM public.mt5_worker_control_plane
+             WHERE revoked = false
+               AND last_heartbeat_at > now() - make_interval(secs => $1)
+            """,
+            VERIFIER_HEARTBEAT_SECONDS,
+        )
+    except Exception:
+        logger.warning("broker_verifier_heartbeat_check_failed")
+        return None
+    if not rows:
+        return None
+    return int(rows[0].get("n") or 0) > 0

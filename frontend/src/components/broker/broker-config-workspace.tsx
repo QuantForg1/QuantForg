@@ -536,6 +536,10 @@ export function BrokerConfigWorkspace() {
   const isOperator = canAccessIteOps(user);
   /** Customer accounts waiting for a dedicated worker terminal (never the shared gateway). */
   const [queuedForTerminal, setQueuedForTerminal] = useState(false);
+  const queuedRef = useRef(false);
+  useEffect(() => {
+    queuedRef.current = queuedForTerminal;
+  }, [queuedForTerminal]);
 
   const tradingSessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -1060,11 +1064,46 @@ export function BrokerConfigWorkspace() {
     isError: tradingSessionQ.isError,
     changingAccount,
   });
+  // Live verdict of the last connect, shared with BrokerVerificationPanel.
+  const connectStatusQ = useQuery({
+    queryKey: ["broker-connect-status"],
+    queryFn: () => weltradeApi.connectStatus(),
+    refetchInterval: (query) => {
+      const st = str(asRecord(query.state.data).state, "");
+      return st === "verifying" || queuedRef.current ? 2000 : false;
+    },
+    staleTime: 0,
+  });
+  const verifyState = str(asRecord(connectStatusQ.data).state, "");
+  const verifying =
+    verifyState === "verifying" ||
+    (queuedForTerminal && verifyState !== "connected" && verifyState !== "rejected");
   const showConnectForm =
     !sessionUnknown &&
     (!(connected || accountLinked) ||
       uxState === "SESSION_MISMATCH" ||
       changingAccount);
+  const prevVerifyState = useRef(verifyState);
+  useEffect(() => {
+    const prev = prevVerifyState.current;
+    prevVerifyState.current = verifyState;
+    if (prev === verifyState) return;
+    if (verifyState === "connected") {
+      // Broker accepted the login: pull fresh account, balance and robot state now.
+      setQueuedForTerminal(false);
+      setChangingAccount(false);
+      if (prev === "verifying") toast.success("Broker connected");
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["trading-session"] }),
+        qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
+        qc.invalidateQueries({ queryKey: ["weltrade-health"] }),
+        qc.invalidateQueries({ queryKey: ["weltrade-profile"] }),
+        qc.invalidateQueries({ queryKey: ["mt5-status"] }),
+      ]);
+    } else if (verifyState === "rejected") {
+      setQueuedForTerminal(false);
+    }
+  }, [verifyState, qc]);
   const exposure = asRecord(exposureQ.data);
   const exposureOpen = Number(exposure.open_positions ?? 0);
   const exposurePending = Number(exposure.pending_orders ?? 0);
@@ -1338,7 +1377,7 @@ export function BrokerConfigWorkspace() {
           </div>
         ) : null}
 
-        {sessionUnknown ? null : (connected || accountLinked) &&
+        {sessionUnknown || verifying ? null : (connected || accountLinked) &&
           !showConnectForm ? (
           <div className="space-y-4">
             <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_60%,transparent)] px-4 py-4 sm:px-5">
@@ -1388,7 +1427,9 @@ export function BrokerConfigWorkspace() {
               </div>
             </div>
 
-            <div className="grid gap-2.5 sm:grid-cols-3">
+            {/* 12 account cards: 6 rows x 2 on phones, 4 x 3 from sm. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
+            <div className="contents">
               {(
                 [
                   {
@@ -1496,7 +1537,7 @@ export function BrokerConfigWorkspace() {
               ).map((cell) => (
                 <div
                   key={cell.label}
-                  className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] px-3.5 py-3"
+                  className="min-w-0 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] px-3 py-2.5 sm:px-3.5 sm:py-3"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                     {cell.label}
@@ -1511,7 +1552,7 @@ export function BrokerConfigWorkspace() {
               ))}
             </div>
 
-            <div className="grid gap-2.5 sm:grid-cols-3">
+            <div className="contents">
               {(
                 [
                   {
@@ -1539,7 +1580,7 @@ export function BrokerConfigWorkspace() {
               ).map((row) => (
                 <div
                   key={row.label}
-                  className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] px-3.5 py-3"
+                  className="min-w-0 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_40%,transparent)] px-3 py-2.5 sm:px-3.5 sm:py-3"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                     {row.label}
@@ -1566,6 +1607,7 @@ export function BrokerConfigWorkspace() {
                   </div>
                 </div>
               ))}
+            </div>
             </div>
 
             <p className="text-xs text-[var(--fg-subtle)]">
@@ -1932,10 +1974,21 @@ function BrokerVerificationPanel({
           </li>
         ))}
       </ol>
-      <p className="mt-3 text-center text-xs text-[var(--fg-subtle)]">
-        Your QuantForg trading terminal is logging in now. This page updates by
-        itself with Connected or Rejected.
-      </p>
+      {data.verifier_online === false ? (
+        <p
+          data-testid="broker-verifier-offline"
+          className="mt-3 rounded-lg border border-[color-mix(in_srgb,var(--warning)_40%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-center text-xs text-[var(--fg)]"
+        >
+          Our verification terminal is temporarily offline. Your request is
+          saved and continues automatically as soon as it is back. You don&apos;t
+          need to submit it again.
+        </p>
+      ) : (
+        <p className="mt-3 text-center text-xs text-[var(--fg-subtle)]">
+          Your QuantForg trading terminal is logging in now. This usually takes
+          under a minute. This page updates by itself with Connected or Rejected.
+        </p>
+      )}
     </div>
   );
 }
