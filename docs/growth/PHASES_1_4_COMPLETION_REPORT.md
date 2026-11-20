@@ -59,54 +59,39 @@ Plan prices and entitlements on the pricing page are the existing catalog. No ch
 
 Growth checks are not registered on the trading scheduler. That scheduler was not modified.
 
-Owner routes, in addition to the status GET:
+As of `38f5dc8bf`, the owner HTTP surface is `GET /api/v1/growth/status` only. The earlier `POST /api/v1/growth/automation/emergency-stop` and `POST /api/v1/growth/automation/run` routes, and the screen buttons that called them, are removed. Production returns 404 for both POST paths. Nothing in the product can release the stop or start a check.
 
-- `POST /api/v1/growth/automation/emergency-stop` with `{ "engaged": true | false }`
-- `POST /api/v1/growth/automation/run` with `{ "job_id": "..." }`
+`growth_automation.py` still defaults its in-process stop to engaged and can describe catalog, index-policy, integration, and decision-contract checks. Those functions are not mounted on the API. The status document reports the stop as engaged and the scheduler as not registered. The in-process log is process memory. A restart drops it. It is not a durable audit history.
 
-The emergency stop starts engaged. A run while it is engaged returns `executed: false` and `status: "stopped"` and does not call the check. Releasing the stop does not enable ads, change billing, or place orders. There is no job id that turns ads on. An unknown job returns 422.
-
-Checks that can run after a release:
-
-| Job | What it returns |
-| --- | --- |
-| `catalog_prices` | Prices from `plans_public()`. `subscriber_count` is null |
-| `public_route_policy` | The declared indexable and noindex paths. `indexed_page_count` is null |
-| `integration_sources` | Search Console and analytics `not_connected`. Ads `stopped`. Counts null |
-| `decision_evidence_contract` | The read-only flags from `evidence_contract()`. Usage events null |
-
-A completed check is replayed for the same job in the same UTC minute (`idempotent_replay`). A failed check is not retried. The timeout budget is 2 seconds. The log is process memory: a restart engages the stop and drops the log. The owner page states that.
+Ads stay stopped. The API has no route that enables them, changes billing, or places orders.
 
 ## Tests actually run
 
-- `pytest tests/unit/test_decision_evidence.py tests/unit/test_growth_intelligence.py`: 21 passed. Coverage includes null metrics, trader and non-designated-owner 403, designated-owner 200, stop-before-run, catalog prices equal to `plans_public()`, idempotent replay, unknown job 422, and stop-after-release.
-- `ruff check` on the growth and decision-evidence modules: passed.
-- `learn-catalog.test.ts`, `decision-evidence.test.ts`, `customer-routes.test.ts`: passed.
+Rechecked on 19 November 2026 against `38f5dc8bf`:
 
-`pytest -m trading_core` was not run. Frozen trading modules were not edited.
+- `ruff check` on the decision-evidence and growth modules: passed.
+- `pytest tests/unit/test_decision_evidence.py tests/unit/test_growth_intelligence.py`: 19 passed. The growth router test requires GET and HEAD only.
+- `learn-catalog.test.ts`, `decision-evidence.test.ts`, and `customer-routes.test.ts`: passed.
+
+`pytest -m trading_core -q --tb=line --no-cov -p no:cacheprovider` finished with exit code 0: 2318 passed, 3328 deselected, 3 xfailed. The xfail cases are the known gold-only markers. The trading scheduler, OMS, gateway, and risk enforcement were not edited.
 
 ## Deployment
 
-`origin/main` includes `091ab3f9bac3a06d13ed48f11aa7ce56ec6c1c78` (`fix: export the decision evidence API client`), on top of `d2e128f6f` (owner growth checks restored) and `1ac16995e` (the decision-intelligence commit).
+`c6953bd34` is no longer the tip. `origin/main` is `38f5dc8bf` (`fix: remove growth check controls from the owner screen`).
 
-Vercel production deployment `https://quant-forg-h96kevlwn-quantforg.vercel.app` is Ready and aliased to `https://www.quantforg.com`, `https://quantforg.com`, and `https://quant-forg-git-main-quantforg.vercel.app`.
+Vercel production deployment `https://quant-forg-5d6kvxki1-quantforg.vercel.app` (`dpl_57tTbCYJu9rE86htaBz3DQLL7Dm1`) is Ready. Its build log clones commit `38f5dc8`. It is aliased to `https://www.quantforg.com` and `https://quantforg.com`.
 
-Public checks, unsigned:
+Unsigned checks on 19 November 2026:
 
 | Request | Result |
 | --- | --- |
-| `/learn`, `/learn/decision-lifecycle`, `/pricing`, `/robots.txt`, `/sitemap.xml` | HTTP 200 |
-| `/learn/decision-lifecycle` body | States that ORDER_SENT is not a fill and NOT_REACHED is not a pass |
-| `/decision-evidence` | HTTP 200 app shell, `noindex` |
-| `robots.txt` | Allows `/learn`. Disallows `/decision-evidence` |
-| Sitemap | Contains `/learn/decision-lifecycle` |
-| `GET /api/v1/decision-evidence/report` | 401 `missing_token` |
+| `https://www.quantforg.com/learn`, `/learn/decision-lifecycle`, `/pricing`, `/robots.txt`, `/sitemap.xml` | HTTP 200 |
+| `https://quantforg.com/learn/decision-lifecycle` | HTTP 308 to `https://www.quantforg.com/learn/decision-lifecycle` |
+| `GET /api/v1/decision-evidence/report` and `/history` | 401 `missing_token` |
 | `GET /api/v1/growth/status` | 401 `missing_token` |
-| `POST /api/v1/growth/automation/emergency-stop` | Route exists. An unsigned call did not execute a check |
+| `POST /api/v1/growth/automation/emergency-stop` and `/run` | 404 Not Found |
 
-No designated-owner session and no paid customer session were used. Authenticated report content, owner controls, and a viewed decision report were not demonstrated in production.
-
-`pytest -m trading_core` was not run. This change does not modify the trading scheduler, OMS, gateway, or risk enforcement.
+No designated-owner session and no paid customer session were available. Authenticated report content was not read. An HTTP 200 on `/decision-evidence` is the app shell, not a viewed decision report.
 
 ## Still blocked
 
@@ -117,6 +102,6 @@ No designated-owner session and no paid customer session were used. Authenticate
 | Organic sessions and landing conversion | No analytics property is connected |
 | Subscriber, revenue, churn, registration, activation counts | This view does not query billing rows or an event store |
 | Decision Evidence view counts | No usage event is written |
-| Cron on a clock | Not attached to the trading scheduler. Checks run only when an owner requests them and the stop is released |
+| Cron on a clock | Not attached to the trading scheduler. The run routes are not mounted, so nothing is scheduled |
 | Paid ads | Phase 0 restriction. The API cannot enable them |
 | Authenticated production proof | No paid session was used for this report |

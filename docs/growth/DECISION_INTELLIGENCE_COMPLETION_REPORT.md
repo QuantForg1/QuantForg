@@ -6,15 +6,16 @@
 
 ## Release
 
-Pushed to `origin/main`. The production frontend alias `https://www.quantforg.com` is the Ready Vercel deployment `quant-forg-h96kevlwn` (`dpl_9qdKqerEycaKZnJujpQm3bDz79vE`), created 19 November 2026 15:33 Pacific. An earlier production build of `1ac16995e` failed typecheck because `decisionEvidenceApi` was missing after the merge. Commit `091ab3f9b` added that export.
+`origin/main` at the 19 November 2026 recheck is `38f5dc8bf`. `c6953bd34` is an ancestor, not the tip.
 
-Checked without a signed-in session on 19 November 2026:
+The Ready production deployment is `quant-forg-5d6kvxki1` (`dpl_57tTbCYJu9rE86htaBz3DQLL7Dm1`). The build log clones `38f5dc8`. Aliases include `https://www.quantforg.com` and `https://quantforg.com`.
 
-- `GET /learn/decision-lifecycle` returned 200 and the page text says ORDER_SENT is not a fill.
-- `GET /decision-evidence` returned the app shell with `noindex`.
-- `robots.txt` disallows `/decision-evidence`.
-- The sitemap lists `https://www.quantforg.com/learn/decision-lifecycle`.
-- `GET /api/v1/decision-evidence/report` on the production API returned 401 `missing_token`. The route is present. No paid session was used, so the report body was not read.
+Checked without a signed-in session:
+
+- `GET /learn/decision-lifecycle` on www returned 200.
+- `GET /decision-evidence` returned the app shell. That is not a loaded decision report.
+- `GET /api/v1/decision-evidence/report` and `/history` returned 401 `missing_token`.
+- No paid, unpaid, owner, or admin session was available, so entitlement differences and report contents were not observed in production.
 
 ## What this is
 
@@ -56,6 +57,15 @@ Signal history cannot support it: rows have no owner, so they cannot be isolated
 
 Approval still required before any journal table: explicit permission to add an append-only evidence table, a retention period, and an access policy that stores only source ids, timestamps, and fields the platform already recorded.
 
+Proposed shape, not migrated:
+
+- Table `decision_journal_entries`, append-only. Columns: `id`, `user_id` (required, indexed), `source_kind`, `source_id`, `symbol`, `recorded_at`, `copied_fields` (only fields the source row already had), `created_at`.
+- Access: the authenticated user can read only rows with their `user_id`. No cross-account list.
+- Retention: undefined. A 24-month delete needs a separate decision. No automatic delete is implemented.
+- Backfill: none. History rows have no owner, so they cannot be assigned to a customer.
+- Rollback: drop the new table only if it has not been used to replace an existing store. Do not delete signal history.
+- Privacy: no broker passwords, tokens, or account secrets. Global signal history stays a platform feed, not a personal journal.
+
 ## Customer surface
 
 - Page: `/decision-evidence`, behind the existing app shell and the same Signals access gate.
@@ -67,11 +77,11 @@ Approval still required before any journal table: explicit permission to add an 
 
 From the repository virtualenv, 19 November 2026:
 
-- `ruff check` on the decision-evidence service, router, and unit test: passed.
-- `pytest tests/unit/test_decision_evidence.py tests/unit/test_growth_intelligence.py`: 21 passed.
+- `ruff check` on the decision-evidence and growth modules: passed.
+- `pytest tests/unit/test_decision_evidence.py tests/unit/test_growth_intelligence.py`: 19 passed on the GET-only growth router.
 - Frontend `decision-evidence.test.ts`, `customer-routes.test.ts`, and `learn-catalog.test.ts`: passed.
 
-Not run: `pytest -m trading_core`. This work does not modify the scheduler, strategy engine, risk enforcement, OMS, MT5 gateway, or position management. The full trading-core suite was not used as a substitute for that review.
+`pytest -m trading_core -q --tb=line --no-cov -p no:cacheprovider` finished with exit code 0: 2318 passed, 3328 deselected, 3 xfailed. The xfail cases are the known gold-only markers in `test_cycle_timeout_budget.py` and `test_multi_market_live_execution.py`. The scheduler, strategy engine, risk enforcement, OMS, MT5 gateway, and position management were not edited.
 
 ## Not claimed
 
