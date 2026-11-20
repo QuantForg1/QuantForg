@@ -17,6 +17,7 @@ from app.application.services.strategy_engine import StrategyAllocation
 from app.domain.enums.user import UserRole
 from app.domain.interfaces.strategy_engine import OhlcBar, StrategyRiskLimits
 from app.domain.market_data.timeframe import Timeframe
+from app.domain.marketplace.catalog_view import present_catalog
 from app.presentation.dependencies.auth import (
     CurrentUser,
     get_client_meta,
@@ -161,7 +162,7 @@ async def strategy_catalog(
 ) -> dict[str, Any]:
     """List deterministic Strategy Engine plugins (not ICT runtime)."""
     _ = user
-    items = engine.catalog()
+    items = [present_catalog(row) for row in engine.catalog()]
     return {"items": items, "count": len(items)}
 
 

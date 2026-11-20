@@ -68,11 +68,31 @@ export function StrategyDetail({ strategyKey }: { strategyKey: string }) {
                 <Fact label="Timeframe" value={displayValue(entry.timeframe)} />
                 <Fact label="Version" value={displayValue(entry.version)} />
                 <Fact label="Status" value={displayValue(entry.status)} />
+                <Fact label="Compatibility" value={displayValue(entry.compatibility)} />
+                <Fact label="Risk" value={displayValue(entry.riskCharacteristics)} />
                 <Fact label="Release notes" value={displayValue(entry.releaseNotes)} />
-                <Fact label="Version history" value="Unavailable" />
                 <Fact label="Sales" value="Off" />
                 <Fact label="Copy trading" value="Off" />
               </dl>
+            </section>
+            <section className="rounded-md border border-[var(--border)] p-4">
+              <h2 className="text-sm font-medium">Version history</h2>
+              {entry.versions.length === 0 ? (
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">Version history unavailable</p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {entry.versions.map((version) => (
+                    <li key={`${version.version}-${version.releasedAt}`} className="text-sm">
+                      <p className="font-medium">{version.version}</p>
+                      <p className="text-[var(--text-secondary)]">{version.releasedAt}</p>
+                      <p>{displayValue(version.releaseNotes)}</p>
+                      <p className="text-[var(--text-secondary)]">
+                        Compatibility: {displayValue(version.compatibility)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
             <section className="rounded-md border border-[var(--border)] p-4" aria-labelledby="performance-lanes">
               <h2 id="performance-lanes" className="text-sm font-medium">Performance</h2>
@@ -83,7 +103,11 @@ export function StrategyDetail({ strategyKey }: { strategyKey: string }) {
                 {PERFORMANCE_LANES.map((lane) => (
                   <li key={lane} className="flex flex-wrap justify-between gap-2 text-sm">
                     <span>{LANE_LABEL[lane]}</span>
-                    <span className="text-[var(--text-secondary)]">Performance unavailable</span>
+                    <span className="text-[var(--text-secondary)]">
+                      {entry.performance[lane] === "unavailable"
+                        ? "Performance unavailable"
+                        : entry.performance[lane]}
+                    </span>
                   </li>
                 ))}
               </ul>
