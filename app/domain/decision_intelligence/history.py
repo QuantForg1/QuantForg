@@ -40,7 +40,8 @@ class DecisionHistoryStore:
         with self._lock:
             for row in reversed(self._rows):
                 if row.get("audit_id") == audit_id:
-                    return deepcopy(row)
+                    found: dict[str, Any] = deepcopy(row)
+                    return found
         return None
 
     def replay(self, audit_id: str) -> dict[str, Any]:

@@ -84,8 +84,8 @@ class DataQuality:
     missing_bars: int | None
     history_depth: int | None
     spread: float | None
-    tick_frequency: float | None | str
-    volume: float | None | str
+    tick_frequency: float | str | None
+    volume: float | str | None
     session_status: str
     symbol_available: bool
     reason: str
