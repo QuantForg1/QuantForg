@@ -1,3 +1,13 @@
+export const PERFORMANCE_LANES = [
+  "live",
+  "demo",
+  "backtest",
+  "simulated",
+  "unverified",
+] as const;
+
+export type PerformanceLane = (typeof PERFORMANCE_LANES)[number];
+
 export type CatalogStrategy = {
   key: string;
   name: string;
@@ -6,7 +16,13 @@ export type CatalogStrategy = {
 };
 
 export type MarketplaceEntry = CatalogStrategy & {
-  performance: "unavailable";
+  version: string | null;
+  timeframe: string | null;
+  instrument: string | null;
+  status: string | null;
+  releaseNotes: string | null;
+  performance: Record<PerformanceLane, "unavailable">;
+  combinedPerformance: null;
   salesEnabled: false;
   copyTradingEnabled: false;
 };
@@ -30,12 +46,31 @@ export function marketplaceEntries(payload: unknown): MarketplaceEntry[] {
       name: text(row.name) || key,
       category: text(row.category) || EMPTY,
       description: text(row.description) || EMPTY,
-      performance: "unavailable",
+      version: text(row.version) || null,
+      timeframe: text(row.timeframe) || null,
+      instrument: text(row.instrument) || text(row.symbol) || null,
+      status: text(row.status) || null,
+      releaseNotes: text(row.release_notes) || text(row.releaseNotes) || null,
+      performance: {
+        live: "unavailable",
+        demo: "unavailable",
+        backtest: "unavailable",
+        simulated: "unavailable",
+        unverified: "unavailable",
+      },
+      combinedPerformance: null,
       salesEnabled: false,
       copyTradingEnabled: false,
     });
   }
   return entries;
+}
+
+export function findMarketplaceEntry(
+  entries: readonly MarketplaceEntry[],
+  key: string,
+): MarketplaceEntry | null {
+  return entries.find((entry) => entry.key === key) ?? null;
 }
 
 export function filterMarketplace(
@@ -51,9 +86,14 @@ export function filterMarketplace(
     return (
       entry.name.toLowerCase().includes(needle) ||
       entry.key.toLowerCase().includes(needle) ||
-      entry.description.toLowerCase().includes(needle)
+      entry.description.toLowerCase().includes(needle) ||
+      (entry.instrument ?? "").toLowerCase().includes(needle)
     );
   });
+}
+
+export function displayValue(value: string | null): string {
+  return value && value.trim() ? value : "Unavailable";
 }
 
 function text(value: unknown): string {
