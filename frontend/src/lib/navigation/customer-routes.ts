@@ -15,6 +15,7 @@ export const CUSTOMER_ROUTES: readonly string[] = [
   "/broker",
   "/research",
   "/strategy",
+  "/marketplace",
   "/robot-control-center",
   "/settings",
   // Linked from those desks / command palette
