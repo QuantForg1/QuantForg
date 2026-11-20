@@ -561,6 +561,81 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Market observation (read-only; never places orders) -----------------
+    market_observation_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/market-observation/{symbol}. "
+                "Reads a public quote and returns an observation. "
+                "Does not place, modify, or close trades and does not "
+                "change strategy selection or risk policy. Off until enabled."
+            ),
+            validation_alias=AliasChoices(
+                "MARKET_OBSERVATION_ENABLED",
+                "market_observation_enabled",
+            ),
+        ),
+    ] = False
+
+    # -- Trade explanation (catalog text only; never overrides execution) ----
+    trade_explanation_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/trade-explanations. "
+                "Renders catalog text for stored reasons when a user-scoped "
+                "log is attached. Does not place orders or override decisions. "
+                "Off until enabled."
+            ),
+            validation_alias=AliasChoices(
+                "TRADE_EXPLANATION_ENABLED",
+                "trade_explanation_enabled",
+            ),
+        ),
+    ] = False
+
+    risk_intelligence_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/risk-intelligence/insight. "
+                "Read-only. Does not change risk settings or place orders."
+            ),
+            validation_alias=AliasChoices(
+                "RISK_INTELLIGENCE_ENABLED",
+                "risk_intelligence_enabled",
+            ),
+        ),
+    ] = False
+    reliability_center_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/reliability/status. "
+                "Does not restart the gateway or place orders."
+            ),
+            validation_alias=AliasChoices(
+                "RELIABILITY_CENTER_ENABLED",
+                "reliability_center_enabled",
+            ),
+        ),
+    ] = False
+    trading_coach_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose GET /api/v1/trading-coach/answer. "
+                "Answers stay unavailable until a server-side record exists. "
+                "Does not place orders or change settings."
+            ),
+            validation_alias=AliasChoices(
+                "TRADING_COACH_ENABLED",
+                "trading_coach_enabled",
+            ),
+        ),
+    ] = False
+
     # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
     openai_enabled: Annotated[
         bool,
