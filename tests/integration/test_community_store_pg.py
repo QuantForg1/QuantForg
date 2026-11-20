@@ -19,7 +19,7 @@ pytestmark = [
 
 MIGRATION = (
     Path(__file__).resolve().parents[2]
-    / "supabase/migrations/20261120123100_community_foundation.sql"
+    / "supabase/migrations/20261120115930_community_foundation.sql"
 )
 
 

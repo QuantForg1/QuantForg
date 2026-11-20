@@ -24,7 +24,7 @@ pytestmark = [
 
 MIGRATION = (
     Path(__file__).resolve().parents[2]
-    / "supabase/migrations/20261120123000_referral_program.sql"
+    / "supabase/migrations/20261120115928_referral_program.sql"
 )
 
 BASE_SCHEMA = """
