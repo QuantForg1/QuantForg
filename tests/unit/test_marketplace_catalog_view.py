@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.domain.marketplace.catalog_view import (
     PUBLISHED_VERSIONS,
     present_catalog,
 )
+
+pytestmark = pytest.mark.unit
 
 _PLUGIN = {
     "key": "trend_following",

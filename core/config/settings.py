@@ -635,6 +635,28 @@ class Settings(BaseSettings):
             ),
         ),
     ] = False
+    referral_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose /api/v1/referrals. Codes and attributions are stored. "
+                "Reward amounts stay empty until a payout ledger exists. "
+                "Off until enabled."
+            ),
+            validation_alias=AliasChoices("REFERRAL_ENABLED", "referral_enabled"),
+        ),
+    ] = False
+    community_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Expose /api/v1/community. Customers can only change their "
+                "own posts unless the server marks the caller as a moderator. "
+                "Off until enabled."
+            ),
+            validation_alias=AliasChoices("COMMUNITY_ENABLED", "community_enabled"),
+        ),
+    ] = False
 
     # -- OpenAI advisor (ADR-0015 — never places orders; no Gemini) ----------
     openai_enabled: Annotated[

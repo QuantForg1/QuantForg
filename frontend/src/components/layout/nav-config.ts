@@ -176,6 +176,9 @@ const TRADER_COMMAND_EXTRA = new Set([
   "/book",
   "/trust",
   "/marketplace",
+  "/account-intelligence",
+  "/referrals",
+  "/community",
 ]);
 
 export function isTraderFacingHref(href: string): boolean {
@@ -1575,6 +1578,24 @@ export const appNav: NavGroup[] = [
         label: "Strategy catalog",
         icon: Library,
         hint: "Catalog names · performance stays unavailable",
+      },
+      {
+        href: "/account-intelligence",
+        label: "Account intelligence",
+        icon: HeartPulse,
+        hint: "Read-only · missing checks stay unknown",
+      },
+      {
+        href: "/referrals",
+        label: "Referrals",
+        icon: Coins,
+        hint: "Codes and attributions · rewards stay unavailable",
+      },
+      {
+        href: "/community",
+        label: "Community",
+        icon: MessageSquareWarning,
+        hint: "Your posts · private until you choose public",
       },
       {
         href: "/performance-intelligence",
