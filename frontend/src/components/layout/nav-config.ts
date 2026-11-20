@@ -175,6 +175,7 @@ const TRADER_COMMAND_EXTRA = new Set([
   "/counsel",
   "/book",
   "/trust",
+  "/marketplace",
 ]);
 
 export function isTraderFacingHref(href: string): boolean {
@@ -1568,6 +1569,12 @@ export const appNav: NavGroup[] = [
         label: "Verified performance",
         icon: ShieldCheck,
         hint: "Broker history · missing money stays unavailable",
+      },
+      {
+        href: "/marketplace",
+        label: "Strategy catalog",
+        icon: Library,
+        hint: "Catalog names · performance stays unavailable",
       },
       {
         href: "/performance-intelligence",
