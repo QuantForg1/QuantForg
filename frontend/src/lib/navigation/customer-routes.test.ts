@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { isCustomerRoute, isPrivilegedRole } from "./customer-routes.ts";
 
-for (const ok of ["/dashboard", "/robot-control-center", "/symbols/XAUUSD", "/settings/", "/book?x=1", "/decision-evidence", "/trust", "/marketplace"]) {
+for (const ok of ["/dashboard", "/robot-control-center", "/symbols/XAUUSD", "/settings/", "/book?x=1", "/decision-evidence", "/trust", "/marketplace", "/account-intelligence", "/referrals", "/community"]) {
   assert.ok(isCustomerRoute(ok), ok);
 }
 for (const retired of ["/history", "/history?x=1", "/risk-center", "/risk"]) {

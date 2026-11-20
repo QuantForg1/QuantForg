@@ -96,7 +96,7 @@ export function StrategyMarketplace() {
                 </div>
               </dl>
               <p className="mt-3 text-xs text-[var(--text-secondary)]">
-                Performance unavailable. Sales and copy trading are off.
+                Performance lanes stay separate. Sales and copy trading are off.
               </p>
             </li>
           ))}
