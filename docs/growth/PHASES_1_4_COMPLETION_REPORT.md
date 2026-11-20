@@ -61,28 +61,23 @@ Plan prices and entitlements on the pricing page are the existing catalog. No ch
 
 Growth checks are not registered on the trading scheduler. That scheduler was not modified. No growth clock is attached, so nothing runs on a timer.
 
-The emergency stop starts engaged. While it is engaged, `POST /api/v1/growth/automation/run` returns `executed: false` and `status: "stopped"`, and a draft is not saved. Releasing the stop allows one owner to request a check or save an unpublished draft. Releasing it does not enable ads, change billing, or place orders.
+Commit `f32d91076` mounted owner routes that could release the emergency stop, run a check, or save an unpublished draft. Vercel deployment `dpl_GwysTdxsYmVBvkwPd5yHWYBfYSU8` served that commit, and Railway `/health` reported the same SHA. Unsigned calls to those POST paths returned 401, so the routes were mounted. The following commit removes them.
 
-Owner routes, all behind the designated-owner role:
-
-- `GET /api/v1/growth/status`
-- `POST /api/v1/growth/automation/emergency-stop`
-- `POST /api/v1/growth/automation/run`
-- `POST /api/v1/growth/content/drafts`
-- `POST /api/v1/growth/content/publish` — always returns `published: false` and `status: "approval_required"`
-
-Checks: catalog prices (subscriber count null), declared index policy (indexed count null), integration sources, decision-evidence contract, SEO contract (search volume null), and labeled hypotheses (`proven_outcome: false`). A completed check replays inside the same UTC minute. An unknown job returns 422. There is no retry. The log and drafts live in process memory and are dropped on restart.
-
-Ads stay stopped. There is no route that enables them.
+The only growth HTTP route after that correction is `GET /api/v1/growth/status`. The owner screen has no button that starts a check, releases the stop, or saves a draft. The emergency stop still starts engaged inside `growth_automation.py`. That module can describe checks, but the API does not call them. A restart drops the in-process log. It is not a durable audit history. Ads stay stopped. There is no route that enables them, publishes, spends, or changes a customer account.
 
 ## Tests actually run
 
-For this change, on 19 November 2026:
+On 19 November 2026, for the correction that unmounts the control routes:
 
-- `poetry run pytest tests/unit/test_growth_intelligence.py -o addopts=`: 6 passed. Covers null metrics, owner 403s, stop-before-run, catalog prices with a null subscriber count, idempotent replay, null search volume, unknown job 422, unpublished drafts, publish refusal, and the stop blocking a later draft.
-- `learn-catalog.test.ts`: passed. Seven guides, no `lastModified:` assignment, no profit or trial-available language.
+- Ruff on the decision-evidence and growth modules, routers, and unit tests: passed.
+- `pytest tests/unit/test_decision_evidence.py tests/unit/test_growth_intelligence.py`: 20 passed.
+- `learn-catalog.test.ts`, `customer-routes.test.ts`, and `decision-evidence.test.ts`: passed.
+- `npx tsc --noEmit` in `frontend/`: passed on the tree before this correction. ESLint on the growth page, API client, and learn-catalog test is re-run with the correction.
+- `pytest -m trading_core` on the tree that already contained the guides: 2318 passed, 3355 deselected, 3 xfailed, exit 0. This correction does not edit trading, OMS, gateway, or risk enforcement.
 
-`pytest -m trading_core` was not re-run for this change. The trading scheduler, OMS, gateway, and risk enforcement were not edited.
+There is no `npm test` script. The relevant contract tests are the three named above. The full `npm run test:unit` list was not re-run.
+
+The earlier `f32d91076` note of 6 growth tests described the mounted-control behavior. Those POST tests are replaced by a 404 assertion.
 
 ## Deployment
 
@@ -113,6 +108,6 @@ No designated-owner session and no paid customer session were available. Authent
 | Organic sessions and landing conversion | No analytics property is connected |
 | Subscriber, revenue, churn, registration, activation counts | This view does not query billing rows or an event store |
 | Decision Evidence view counts | No usage event is written |
-| Cron on a clock | Not attached. Owner-invoked checks exist. Nothing runs unattended |
+| Cron on a clock | Not attached. The run routes are not mounted, so nothing is scheduled |
 | Paid ads | Phase 0 restriction. The API cannot enable them |
 | Authenticated production proof | No paid session was used for this report |

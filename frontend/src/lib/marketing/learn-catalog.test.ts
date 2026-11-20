@@ -54,6 +54,8 @@ assert.doesNotMatch(sitemap, /lastModified:/);
 assert.match(robots, /\/learn/);
 assert.match(growthPage, /Not connected/);
 assert.match(growthPage, /Unavailable/);
+assert.match(growthPage, /cannot start a check/);
+assert.doesNotMatch(growthPage, /Release stop|Run check|setEmergencyStop/);
 assert.doesNotMatch(growthPage, /\$[1-9]\d{2,}/);
 assert.doesNotMatch(growthPage, /sample metric|demo data/i);
 

@@ -98,7 +98,7 @@ def growth_automation_status() -> dict[str, Any]:
             "retry_limit": 0,
             "timeout_seconds": _TIMEOUT_SECONDS,
             "jobs": [
-                {"id": job_id, **meta, "invocation": "owner_request"}
+                {"id": job_id, **meta, "invocation": "not_mounted"}
                 for job_id, meta in _JOBS.items()
             ],
             "history": list(_HISTORY),
@@ -112,8 +112,8 @@ def growth_automation_status() -> dict[str, Any]:
                 ),
             },
             "permissions": {
-                "read_only_checks": "owner_when_stop_released",
-                "content_drafts": "owner_when_stop_released",
+                "read_only_checks": "not_mounted",
+                "content_drafts": "not_mounted",
                 "publish": "approval_required_not_implemented",
                 "ads": "prohibited",
                 "billing_changes": "prohibited",
@@ -122,6 +122,7 @@ def growth_automation_status() -> dict[str, Any]:
             },
             "note": (
                 "Nothing is attached to the trading scheduler. "
+                "The run, stop-release, draft, and publish routes are not mounted. "
                 "A restart engages the emergency stop and drops this log. "
                 "Search Console and analytics stay not connected."
             ),
@@ -217,12 +218,16 @@ def _recommendations() -> dict[str, Any]:
             {
                 "id": "connect_search_console",
                 "evidence": "Search Console is not connected.",
-                "hypothesis": "A connected property could show queries. Impact is unknown.",
+                "hypothesis": (
+                    "A connected property could show queries. Impact is unknown."
+                ),
                 "proven_outcome": False,
             },
             {
                 "id": "keep_ads_stopped",
-                "evidence": "Phase 0 keeps paid robot advertising disabled pending review.",
+                "evidence": (
+                    "Phase 0 keeps paid robot advertising disabled pending review."
+                ),
                 "hypothesis": None,
                 "proven_outcome": False,
             },
@@ -329,7 +334,13 @@ def save_growth_draft(title: str, body: str) -> dict[str, Any]:
         }
         _DRAFTS.append(draft)
         del _DRAFTS[:-_MAX_DRAFTS]
-        saved = _stamp("draft", executed=True, status="draft", published=False, draft_id=draft["id"])
+        saved = _stamp(
+            "draft",
+            executed=True,
+            status="draft",
+            published=False,
+            draft_id=draft["id"],
+        )
         saved["draft"] = draft
         return saved
 
