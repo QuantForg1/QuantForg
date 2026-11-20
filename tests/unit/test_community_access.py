@@ -25,9 +25,7 @@ def test_only_the_owner_or_a_moderator_can_change_content() -> None:
 def test_private_profiles_and_blocks_stay_hidden() -> None:
     assert normalize_visibility("PUBLIC") == "public"
     assert normalize_visibility("friends") == "private"
-    hidden = can_view_profile(
-        visibility="private", is_owner=False, blocked=False
-    )
+    hidden = can_view_profile(visibility="private", is_owner=False, blocked=False)
     assert hidden is False
     assert can_view_profile(visibility="public", is_owner=False, blocked=True) is False
     assert can_view_profile(visibility="public", is_owner=False, blocked=False) is True
