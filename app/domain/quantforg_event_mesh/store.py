@@ -89,7 +89,8 @@ class QemStore:
         with self._lock:
             for e in reversed(self._events):
                 if str(e.get("id")) == event_id:
-                    return deepcopy(e)
+                    found: dict[str, Any] = deepcopy(e)
+                    return found
             return None
 
     def set_subscribers(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
