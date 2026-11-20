@@ -73,11 +73,9 @@ class PostgresReferralStore:
 
     async def events_for(self, referrer_user_id: str) -> list[dict[str, Any]]:
         rows = await self._all(
-            "SELECT event.event_key, event.reward_status "
-            "FROM referral_events AS event "
-            "JOIN referral_attributions AS attribution "
-            "ON attribution.referred_user_id = event.referred_user_id "
-            "WHERE attribution.referrer_user_id = :user_id",
+            "SELECT event_key, reward_status, reward_kind, reward_days, "
+            "created_at, applied_at FROM referral_events "
+            "WHERE beneficiary_user_id = :user_id ORDER BY created_at DESC",
             {"user_id": referrer_user_id},
         )
         return [
@@ -85,9 +83,21 @@ class PostgresReferralStore:
                 "event_id": str(row[0]),
                 "reward_amount": None,
                 "reward_status": str(row[1]),
+                "reward_kind": None if row[2] is None else str(row[2]),
+                "reward_days": None if row[3] is None else int(row[3]),
+                "created_at": None if row[4] is None else row[4].isoformat(),
+                "applied_at": None if row[5] is None else row[5].isoformat(),
             }
             for row in rows
         ]
+
+    async def has_paid(self, user_id: str) -> bool:
+        row = await self._one(
+            "SELECT 1 FROM billing_orders WHERE user_id = :user_id "
+            "AND paid_at IS NOT NULL LIMIT 1",
+            {"user_id": user_id},
+        )
+        return row is not None
 
     async def known_events(self) -> frozenset[str]:
         rows = await self._all("SELECT event_key FROM referral_events", {})

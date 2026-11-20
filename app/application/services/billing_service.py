@@ -1792,10 +1792,26 @@ class BillingService:
         if str(order["status"]) == "active":
             return "already_active"
         now = datetime.now(UTC)
-        period_end = now + timedelta(days=int(self.settings.billing_period_days))
-        grace_end = period_end + timedelta(days=int(self.settings.billing_grace_days))
         user_id = str(order["user_id"])
         tier = str(order["license_tier"])
+        grace = timedelta(days=int(self.settings.billing_grace_days))
+        # Early renewal stacks on the time the customer already has (it used
+        # to overwrite it, which also erased referral bonus days).
+        current_expiry = (
+            await session.execute(
+                text("""
+                    SELECT max(expires_at) FROM licenses
+                    WHERE user_id = :user_id AND status = 'active'
+                      AND tier <> 'trial' AND expires_at > :now
+                    """),
+                {"user_id": user_id, "now": now},
+            )
+        ).scalar()
+        start = now
+        if isinstance(current_expiry, datetime) and current_expiry - grace > now:
+            start = current_expiry - grace
+        period_end = start + timedelta(days=int(self.settings.billing_period_days))
+        grace_end = period_end + grace
 
         await session.execute(
             text("""
@@ -1815,7 +1831,7 @@ class BillingService:
                 "payment_id": payment_id or None,
                 "pay_currency": pay_currency,
                 "paid_at": now,
-                "period_start": now,
+                "period_start": start,
                 "period_end": period_end,
                 "grace_end": grace_end,
                 "id": str(order["id"]),
@@ -1914,6 +1930,11 @@ class BillingService:
             order_code=str(order["order_code"]),
             license_tier=tier,
             period_end=period_end.isoformat(),
+        )
+        from app.application.services.referral_rewards import apply_referral_rewards
+
+        await apply_referral_rewards(
+            session, user_id=user_id, order_id=str(order["id"]), now=now
         )
         return "activated"
 

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import "./globals.css";
+import { ReferralCapture } from "@/components/referrals/referral-tracking";
 
 /**
  * Self-hosted IBM Plex (latin) — avoids next/font/google fetch failures on Vercel
@@ -125,6 +126,7 @@ export default function RootLayout({
         <a href="#main-content" className="qf-skip-link">
           Skip to content
         </a>
+        <ReferralCapture />
         {children}
       </body>
     </html>

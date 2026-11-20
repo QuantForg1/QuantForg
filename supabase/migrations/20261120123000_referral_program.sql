@@ -1,5 +1,6 @@
 -- Referral ledger. Client roles cannot read or write these tables.
--- The API uses the database owner. Rewards are not amounts.
+-- The API uses the database owner. The only reward is 30 subscription days
+-- for the referrer when a referred customer's first payment is confirmed.
 
 CREATE TABLE IF NOT EXISTS public.referral_codes (
   user_id uuid PRIMARY KEY REFERENCES public.users (id) ON DELETE CASCADE,
@@ -21,17 +22,35 @@ CREATE TABLE IF NOT EXISTS public.referral_events (
   event_key text PRIMARY KEY,
   event_type text NOT NULL,
   referred_user_id uuid REFERENCES public.users (id),
+  -- Reward = subscription days for the referrer (no cash, no payout).
+  beneficiary_user_id uuid REFERENCES public.users (id),
+  reward_kind text,
+  reward_days integer,
   reward_status text NOT NULL,
-  reward_amount numeric,
-  reward_currency text,
+  applied_at timestamptz,
+  applied_license_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT referral_events_amount_check CHECK (
-    reward_amount IS NULL AND reward_currency IS NULL
+  CONSTRAINT referral_events_reward_check CHECK (
+    (reward_kind IS NULL AND reward_days IS NULL)
+    OR (reward_kind = 'free_month' AND reward_days = 30
+        AND beneficiary_user_id IS NOT NULL)
   ),
   CONSTRAINT referral_events_status_check CHECK (
-    reward_status IN ('not_qualified', 'not_issued', 'eligible')
+    reward_status IN ('not_qualified', 'not_issued', 'eligible', 'pending', 'applied')
+  ),
+  CONSTRAINT referral_events_applied_check CHECK (
+    (reward_status = 'applied') = (applied_at IS NOT NULL)
   )
 );
+
+-- One reward per referred customer, ever.
+CREATE UNIQUE INDEX IF NOT EXISTS referral_events_one_reward_per_referred
+  ON public.referral_events (referred_user_id)
+  WHERE reward_kind IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS referral_events_pending_beneficiary
+  ON public.referral_events (beneficiary_user_id)
+  WHERE reward_status = 'pending';
 
 CREATE TABLE IF NOT EXISTS public.referral_attempts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

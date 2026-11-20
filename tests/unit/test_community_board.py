@@ -83,3 +83,78 @@ async def test_invalid_report_and_rate_limit() -> None:
         author_id="user-a", body="Too many", visibility="public"
     )
     assert limited["reason"] == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_moderation_queue_is_moderator_only_and_remove_deletes_content() -> None:
+    store = MemoryCommunityStore()
+    board = CommunityBoard(store)
+    created = await board.write_post(
+        author_id="author", body="spam", visibility="public"
+    )
+    post_id = created["post_id"]
+    await board.report(
+        reporter_id="r1", target_type="post", target_id=post_id, reason="spam"
+    )
+    await board.report(
+        reporter_id="r2", target_type="post", target_id=post_id, reason="spam"
+    )
+
+    denied = await board.moderation_queue(actor_role="trader")
+    assert denied["reason"] == "forbidden"
+
+    queue = await board.moderation_queue(actor_role="moderator")
+    assert len(queue["reports"]) == 2
+    assert queue["reports"][0]["content"] == "spam"
+    assert queue["reports"][0]["reports_on_target"] == 2
+
+    customer = await board.resolve_report(
+        actor_id="author",
+        actor_role="trader",
+        report_id=queue["reports"][0]["report_id"],
+        action="remove",
+    )
+    assert customer["reason"] == "forbidden"
+    assert await store.post(post_id) is not None
+
+    done = await board.resolve_report(
+        actor_id="mod",
+        actor_role="moderator",
+        report_id=queue["reports"][0]["report_id"],
+        action="remove",
+    )
+    assert done == {"status": "resolved", "action": "remove"}
+    assert await store.post(post_id) is None
+    # both reports on the same post are closed
+    assert (await board.moderation_queue(actor_role="moderator"))["reports"] == []
+
+
+@pytest.mark.asyncio
+async def test_dismiss_keeps_content_and_bad_input_is_rejected() -> None:
+    store = MemoryCommunityStore()
+    board = CommunityBoard(store)
+    post_id = (await board.write_post(author_id="a", body="fine", visibility="public"))[
+        "post_id"
+    ]
+    await board.report(
+        reporter_id="r", target_type="post", target_id=post_id, reason="x"
+    )
+    rid = (await board.moderation_queue(actor_role="moderator"))["reports"][0][
+        "report_id"
+    ]
+    assert (
+        await board.resolve_report(
+            actor_id="m", actor_role="moderator", report_id=rid, action="ban"
+        )
+    )["reason"] == "invalid_action"
+    assert (
+        await board.resolve_report(
+            actor_id="m", actor_role="moderator", report_id=rid, action="dismiss"
+        )
+    )["status"] == "resolved"
+    assert await store.post(post_id) is not None
+    assert (
+        await board.resolve_report(
+            actor_id="m", actor_role="moderator", report_id=rid, action="dismiss"
+        )
+    )["status"] == "already_resolved"

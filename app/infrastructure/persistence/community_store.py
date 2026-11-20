@@ -160,6 +160,65 @@ class PostgresCommunityStore:
             },
         )
 
+    async def open_reports(self, limit: int) -> list[dict[str, Any]]:
+        rows = await self._all(
+            "SELECT r.id, r.target_type, r.target_id, r.reason, r.created_at, "
+            "COALESCE(p.body, c.body) AS body, "
+            "COALESCE(p.author_id, c.author_id) AS author_id, "
+            "count(*) OVER (PARTITION BY r.target_type, r.target_id) AS reports "
+            "FROM community_reports r "
+            "LEFT JOIN community_posts p "
+            "ON r.target_type = 'post' AND p.id = r.target_id "
+            "LEFT JOIN community_comments c "
+            "ON r.target_type = 'comment' AND c.id = r.target_id "
+            "WHERE r.resolved_at IS NULL ORDER BY r.created_at LIMIT :limit",
+            {"limit": limit},
+        )
+        return [
+            {
+                "report_id": str(row[0]),
+                "target_type": str(row[1]),
+                "target_id": str(row[2]),
+                "reason": str(row[3]),
+                "created_at": row[4].isoformat() if row[4] is not None else None,
+                "content": None if row[5] is None else str(row[5]),
+                "author_id": None if row[6] is None else str(row[6]),
+                "reports_on_target": int(row[7]),
+            }
+            for row in rows
+        ]
+
+    async def report(self, report_id: str) -> dict[str, Any] | None:
+        row = await self._one(
+            "SELECT id, target_type, target_id, resolved_at FROM community_reports "
+            "WHERE id = :id",
+            {"id": report_id},
+        )
+        if row is None:
+            return None
+        return {
+            "report_id": str(row[0]),
+            "target_type": str(row[1]),
+            "target_id": str(row[2]),
+            "resolved": row[3] is not None,
+        }
+
+    async def resolve_reports(
+        self, *, target_type: str, target_id: str, moderator_id: str, resolution: str
+    ) -> None:
+        await self._write(
+            "UPDATE community_reports SET resolved_at = now(), "
+            "resolved_by = :moderator, resolution = :resolution "
+            "WHERE target_type = :target_type AND target_id = :target_id "
+            "AND resolved_at IS NULL",
+            {
+                "moderator": moderator_id,
+                "resolution": resolution,
+                "target_type": target_type,
+                "target_id": target_id,
+            },
+        )
+
     async def block(self, blocker_id: str, blocked_id: str) -> None:
         await self._write(
             "INSERT INTO community_blocks (blocker_id, blocked_id) "

@@ -12,11 +12,13 @@ import {
 } from "@/components/platform/beta-controls";
 import { ProductTour } from "@/components/platform/product-tour";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ReferralAutoAttribute } from "@/components/referrals/referral-tracking";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <AuthLayoutProviders>
       <ObservabilityBootstrap />
+      <ReferralAutoAttribute />
       <RealtimeProvider>
         <TradingSessionProvider>
         <TooltipProvider delayDuration={320} skipDelayDuration={100}>

@@ -44,6 +44,10 @@ class BlockCreate(BaseModel):
     user_id: str
 
 
+class ReportDecision(BaseModel):
+    action: str = Field(pattern="^(remove|dismiss)$")
+
+
 def _board() -> CommunityBoard:
     return CommunityBoard(PostgresCommunityStore(get_container().database))
 
@@ -96,7 +100,10 @@ async def list_posts(
     _enabled()
     try:
         return await _board().feed(
-            viewer_id=str(user.id), page=page, page_size=page_size
+            viewer_id=str(user.id),
+            page=page,
+            page_size=page_size,
+            viewer_role=_role(user),
         )
     except StoreUnavailable:
         return {"available": False, "page": 1, "page_size": 20, "posts": []}
@@ -203,3 +210,39 @@ async def _change_post(
         )
     except StoreUnavailable:
         return {"status": "unavailable"}
+
+
+@router.get("/moderation/reports")
+async def moderation_reports(user: CurrentUser) -> dict[str, Any]:
+    """Open reports with the reported content. Moderators only."""
+    _enabled()
+    try:
+        result = await _board().moderation_queue(actor_role=_role(user))
+    except StoreUnavailable:
+        return {"status": "unavailable", "reports": []}
+    if result.get("reason") == "forbidden":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only"
+        )
+    return result
+
+
+@router.post("/moderation/reports/{report_id}")
+async def moderation_decide(
+    report_id: str, body: ReportDecision, user: CurrentUser
+) -> dict[str, Any]:
+    _enabled()
+    try:
+        result = await _board().resolve_report(
+            actor_id=str(user.id),
+            actor_role=_role(user),
+            report_id=report_id,
+            action=body.action,
+        )
+    except StoreUnavailable:
+        return {"status": "unavailable"}
+    if result.get("reason") == "forbidden":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Moderators only"
+        )
+    return result

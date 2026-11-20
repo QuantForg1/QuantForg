@@ -1,4 +1,9 @@
-"""Referral program. Rewards stay unissued until a separate payout exists."""
+"""Referral program: codes, attribution and the reward ledger view.
+
+Rewards (30 subscription days for the referrer) are created only inside
+the payment confirmation, see ``referral_rewards``. Customers cannot mint
+them through this API.
+"""
 
 from __future__ import annotations
 
@@ -50,6 +55,8 @@ class ReferralStore(Protocol):
 
     async def record_attempt(self, user_id: str, outcome: str) -> None: ...
 
+    async def has_paid(self, user_id: str) -> bool: ...
+
 
 class MemoryReferralStore:
     """Process-local store used by tests and as a behavior reference."""
@@ -60,6 +67,8 @@ class MemoryReferralStore:
         self.attributions: dict[str, Attribution] = {}
         self.events: dict[str, dict[str, Any]] = {}
         self.attempts: dict[str, list[str]] = {}
+        self.paid: set[str] = set()
+        self.rewards: list[dict[str, Any]] = []
 
     async def code_for(self, user_id: str) -> str | None:
         return self.codes.get(user_id)
@@ -103,7 +112,15 @@ class MemoryReferralStore:
                         "reward_status": event["reward_status"],
                     }
                 )
+        rows.extend(
+            dict(row)
+            for row in self.rewards
+            if row.get("beneficiary_user_id") == referrer_user_id
+        )
         return rows
+
+    async def has_paid(self, user_id: str) -> bool:
+        return user_id in self.paid
 
     async def known_events(self) -> frozenset[str]:
         return frozenset(self.events)
@@ -141,12 +158,29 @@ class ReferralProgram:
     async def summary(self, user_id: str) -> dict[str, Any]:
         issued = await self._ensure_code(user_id)
         rewards = await self._store.events_for(user_id)
+        applied = sum(
+            int(r.get("reward_days") or 0)
+            for r in rewards
+            if r.get("reward_status") == "applied"
+        )
+        pending = sum(
+            int(r.get("reward_days") or 0)
+            for r in rewards
+            if r.get("reward_status") == "pending"
+        )
         return {
             "available": True,
             "code": issued["code"],
             "link_path": issued["link_path"],
             "history": await self._store.history_for(user_id),
             "rewards": rewards,
+            "reward_rule": {
+                "kind": "free_month",
+                "days": 30,
+                "when": "first confirmed payment of a customer you referred",
+            },
+            "reward_days_applied": applied,
+            "reward_days_pending": pending,
             "reward_balance": None,
             "sales_or_payouts": False,
         }
@@ -155,6 +189,9 @@ class ReferralProgram:
         if not await self._store.attempts_allowed(user_id, limit=10):
             await self._store.record_attempt(user_id, "rate_limited")
             return _rejected("rate_limited")
+        if await self._store.has_paid(user_id):
+            await self._store.record_attempt(user_id, "existing_customer")
+            return _rejected("existing_customer")
         owner = await self._store.code_owner(code.strip().upper())
         existing = await self._store.attribution_for(user_id)
         decision = attribute_referral(
@@ -220,14 +257,14 @@ class ReferralProgram:
     async def _ensure_code(self, user_id: str) -> dict[str, str]:
         current = await self._store.code_for(user_id)
         if current:
-            return {"code": current, "link_path": f"/get-started?ref={current}"}
+            return {"code": current, "link_path": f"/register?ref={current}"}
         for _ in range(5):
             code = secrets.token_hex(4).upper()
             try:
                 await self._store.save_code(user_id, code)
             except DuplicateRecord:
                 continue
-            return {"code": code, "link_path": f"/get-started?ref={code}"}
+            return {"code": code, "link_path": f"/register?ref={code}"}
         raise StoreUnavailable
 
 

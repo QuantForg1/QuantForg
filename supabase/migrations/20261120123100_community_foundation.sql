@@ -34,10 +34,19 @@ CREATE TABLE IF NOT EXISTS public.community_reports (
   target_id uuid NOT NULL,
   reason text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz,
+  resolved_by uuid REFERENCES public.users (id),
+  resolution text,
+  CONSTRAINT community_reports_resolution_check
+    CHECK (resolution IS NULL OR resolution IN ('removed', 'dismissed')),
   CONSTRAINT community_reports_type_check
     CHECK (target_type IN ('post', 'comment', 'profile')),
   CONSTRAINT community_reports_reason_check CHECK (char_length(reason) BETWEEN 1 AND 500)
 );
+
+CREATE INDEX IF NOT EXISTS community_reports_open
+  ON public.community_reports (created_at)
+  WHERE resolved_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS public.community_blocks (
   blocker_id uuid NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
