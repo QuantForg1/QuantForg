@@ -32,7 +32,7 @@ const PORTFOLIO_SHORTCUTS: [string, string][] = [
   ["3", "Focus Risk DNA"],
   ["4", "Focus Exposure Map"],
   ["5", "Focus Position Intelligence"],
-  ["C", "Toggle Portfolio Counsel"],
+  ["C", "Toggle portfolio check"],
   ["R", "Refresh book data"],
   ["?", "Keyboard help"],
 ];

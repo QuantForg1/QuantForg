@@ -87,7 +87,8 @@ export type PrimaryNavItem = NavItem & {
     | "Operator"
     | "Research"
     | "System"
-    | "Tools";
+    | "Tools"
+    | "More";
 };
 
 /** Product desks for authenticated traders — ops/internal routes stay off this list. */
@@ -207,13 +208,40 @@ export const TRADER_DESK_ORDER = [
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
 /**
+ * Secondary customer pages under a "More" section of the rail / mobile menu.
+ * They exist and are allowed (CUSTOMER_ROUTES) but used to be reachable only
+ * through search.
+ */
+export const TRADER_MORE_ORDER = [
+  "/referrals",
+  "/community",
+  "/trust",
+  "/marketplace",
+  "/journal",
+  "/analytics",
+  "/trade-replay",
+  "/account-intelligence",
+] as const;
+
+const MORE_LABELS: Record<string, { label: string; hint: string }> = {
+  "/referrals": { label: "Invite friends", hint: "Share your link · get a free month" },
+  "/community": { label: "Community", hint: "Posts and discussion with members" },
+  "/trust": { label: "Verified performance", hint: "Broker-verified results" },
+  "/marketplace": { label: "Strategy catalog", hint: "Strategies and their evidence" },
+  "/journal": { label: "Journal", hint: "Closed trades and notes" },
+  "/analytics": { label: "Analytics", hint: "Win rate · expectancy · drawdown" },
+  "/trade-replay": { label: "Trade replay", hint: "Replay closed trades" },
+  "/account-intelligence": { label: "Account health", hint: "Risk, reliability and coaching" },
+};
+
+/**
  * Authenticated trader shell rail.
  * Admin is never shown here — operators open /admin by URL; RBAC still gates the route.
  */
 export function visiblePrimaryRail(isOperator = false): PrimaryNavItem[] {
   void isOperator;
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
-  return TRADER_DESK_ORDER.map((href) => allowed.get(href))
+  const desks = TRADER_DESK_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
     .map((item) => {
       // Flat institutional reference rail — no section headers between desks.
@@ -223,6 +251,19 @@ export function visiblePrimaryRail(isOperator = false): PrimaryNavItem[] {
           : item;
       return { ...withBadge, section: undefined };
     });
+  const byHref = new Map(
+    appNav.flatMap((group) => group.items).map((item) => [item.href, item]),
+  );
+  const more = TRADER_MORE_ORDER.map((href) => byHref.get(href))
+    .filter((item): item is NavItem => item != null)
+    .map(
+      (item): PrimaryNavItem => ({
+        ...item,
+        ...(MORE_LABELS[item.href] ?? {}),
+        section: "More",
+      }),
+    );
+  return [...desks, ...more];
 }
 
 /**

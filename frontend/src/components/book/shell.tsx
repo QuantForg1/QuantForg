@@ -48,7 +48,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "3", action: "Focus Risk DNA" },
   { keys: "4", action: "Focus Exposure Map" },
   { keys: "5", action: "Focus Position Intelligence" },
-  { keys: "C", action: "Toggle Portfolio Counsel" },
+  { keys: "C", action: "Toggle portfolio check" },
   { keys: "R", action: "Refresh book data" },
   { keys: "?", action: "This help" },
   { keys: "⌘2", action: "Book (OS desk)" },

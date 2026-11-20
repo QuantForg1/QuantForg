@@ -13,10 +13,19 @@ import {
   type TrustReport,
 } from "@/lib/trust/performance";
 
+const SCOPES: Record<string, string> = {
+  live: "Real account",
+  demo: "Demo account",
+  paper: "Paper trading",
+  backtest: "Backtest",
+  unknown: "Account type not confirmed",
+};
+
 function scopeLabel(report: TrustReport): string {
-  const scope = (report.account_scope || "unknown").replaceAll("_", " ");
-  if (report.live_performance) return `${scope} · verified live performance`;
-  return `${scope} · not labeled as verified live performance`;
+  const key = String(report.account_scope || "").toLowerCase();
+  const scope = SCOPES[key] ?? (key ? key.replaceAll("_", " ") : "Account type not confirmed");
+  if (report.live_performance) return `${scope} · broker-verified live results`;
+  return `${scope} · not verified as live results yet`;
 }
 
 export function TrustPerformancePanel() {

@@ -48,6 +48,8 @@ const nextConfig: NextConfig = {
       { source: "/workspace", destination: "/dashboard", permanent: true },
       { source: "/execution", destination: "/dashboard", permanent: true },  // /execution/diagnostics stays
       { source: "/paper", destination: "/dashboard", permanent: false },
+      // /symbols/:code is a page; the bare list lives on Markets.
+      { source: "/symbols", destination: "/markets", permanent: false },
       { source: "/execution-intel", destination: "/executions", permanent: false },
       // Closed-order History desk retired; Book remains the trader ledger.
       { source: "/history", destination: "/book", permanent: false },

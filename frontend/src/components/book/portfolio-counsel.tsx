@@ -45,8 +45,8 @@ export const PortfolioCounsel = memo(function PortfolioCounsel({
     if (!connected) {
       next.push({
         id: "offline",
-        text: "Attach a live session to counsel the book.",
-        tone: "block",
+        text: "Connect your broker to see a live check of your open positions.",
+        tone: "neutral",
       });
       return next;
     }
@@ -148,6 +148,7 @@ export const PortfolioCounsel = memo(function PortfolioCounsel({
   ]);
 
   const blocked = lines.some((l) => l.tone === "block");
+  const offline = lines.some((l) => l.id === "offline");
   const warned = lines.some((l) => l.tone === "warn");
 
   if (collapsed) {
@@ -161,16 +162,17 @@ export const PortfolioCounsel = memo(function PortfolioCounsel({
         <div className="flex items-center gap-2">
           <Scale className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
           <span className="qf-caption">
-            Portfolio Counsel{" "}
+            Portfolio check{" "}
             <span
               className={cn(
                 "tabular",
                 blocked && "text-[var(--danger)]",
                 !blocked && warned && "text-[var(--warning)]",
-                !blocked && !warned && "text-[var(--success)]",
+                !blocked && !warned && !offline && "text-[var(--success)]",
+                offline && "text-[var(--fg-muted)]",
               )}
             >
-              {blocked ? "intervene" : warned ? "caution" : "clear"}
+              {offline ? "not connected" : blocked ? "action needed" : warned ? "caution" : "all clear"}
             </span>
           </span>
         </div>
@@ -187,21 +189,22 @@ export const PortfolioCounsel = memo(function PortfolioCounsel({
         "shrink-0 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2",
         className,
       )}
-      aria-label="Portfolio Counsel"
+      aria-label="Portfolio check"
     >
       <header className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Scale className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
-          <h2 className="qf-label text-[var(--fg)]">Portfolio Counsel</h2>
+          <h2 className="qf-label text-[var(--fg)]">Portfolio check</h2>
           <span
             className={cn(
               "qf-caption tabular",
               blocked && "text-[var(--danger)]",
               !blocked && warned && "text-[var(--warning)]",
-              !blocked && !warned && "text-[var(--success)]",
+              !blocked && !warned && !offline && "text-[var(--success)]",
+              offline && "text-[var(--fg-muted)]",
             )}
           >
-            {blocked ? "Intervention" : warned ? "Caution" : "Ready"}
+            {offline ? "Not connected" : blocked ? "Action needed" : warned ? "Caution" : "All clear"}
           </span>
         </div>
         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={onToggle}>
