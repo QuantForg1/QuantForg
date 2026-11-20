@@ -86,7 +86,11 @@ For this change, on 19 November 2026:
 
 ## Deployment
 
-The production alias before this change served commit `8121d6840`. Deployment of the commit that adds the guides, onboarding steps, and owner checks is recorded after that Vercel deployment is Ready. Until then, do not treat this file as proof that those routes are live.
+Commit `f32d91076e0d0c092211fb196c56275ef21d2947` is on `origin/main`. Vercel deployment `dpl_GwysTdxsYmVBvkwPd5yHWYBfYSU8` is Ready and its build log clones `f32d910`. Aliases include `https://www.quantforg.com`.
+
+Unsigned checks after that alias moved: `/learn/mt5-and-broker-history` and `/learn/spread-slippage-and-rejects` returned 200 with their own canonicals and `index, follow`. Sitemap `lastmod` count was 0 and both new URLs were present. `/get-started` and `/admin/growth` returned the app shell with `noindex, nofollow`. `GET /growth/status`, `POST /growth/automation/emergency-stop`, and `POST /growth/automation/run` returned 401 `missing_token`. No owner session was used, so the stop was not released and no check ran. The six viewport widths were not checked in a browser.
+
+The production alias before this change served commit `8121d6840`.
 
 Unsigned checks on 19 November 2026:
 
