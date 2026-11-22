@@ -864,6 +864,7 @@ export function BrokerConfigWorkspace() {
       );
       setQueuedForTerminal(false);
       setChangingAccount(false);
+      await qc.invalidateQueries({ queryKey: ["broker-connect-status"] });
       await refresh();
       await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
     },
@@ -1315,7 +1316,9 @@ export function BrokerConfigWorkspace() {
                     ? "Checking"
                     : layersEarly.dispatchReady
                       ? "Ready"
-                      : "Blocked",
+                      : verifying
+                        ? "Pending verification"
+                        : "Blocked",
               ],
             ] as const
           ).map(([label, value]) => (
@@ -1340,6 +1343,8 @@ export function BrokerConfigWorkspace() {
               setQueuedForTerminal(false);
               setChangingAccount(true);
             }}
+            onCancel={() => disconnectMut.mutate()}
+            cancelling={disconnectMut.isPending}
           />
         ) : null}
 
@@ -1892,9 +1897,13 @@ const VERIFY_STEPS = [
 function BrokerVerificationPanel({
   active,
   onRetry,
+  onCancel,
+  cancelling = false,
 }: {
   active: boolean;
   onRetry: () => void;
+  onCancel?: () => void;
+  cancelling?: boolean;
 }) {
   const statusQ = useQuery({
     queryKey: ["broker-connect-status"],
@@ -1989,6 +1998,20 @@ function BrokerVerificationPanel({
           under a minute. This page updates by itself with Connected or Rejected.
         </p>
       )}
+      {onCancel ? (
+        <div className="mt-3 text-center">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={cancelling}
+            data-testid="broker-cancel-verification"
+            onClick={onCancel}
+          >
+            <Unplug className="h-4 w-4" />
+            {cancelling ? "Disconnecting…" : "Cancel and disconnect"}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
