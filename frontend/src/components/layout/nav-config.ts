@@ -212,16 +212,7 @@ export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
  * They exist and are allowed (CUSTOMER_ROUTES) but used to be reachable only
  * through search.
  */
-export const TRADER_MORE_ORDER = [
-  "/referrals",
-  "/community",
-  "/trust",
-  "/marketplace",
-  "/journal",
-  "/analytics",
-  "/trade-replay",
-  "/account-intelligence",
-] as const;
+export const TRADER_MORE_ORDER = ["/referrals", "/community"] as const;
 
 const MORE_LABELS: Record<string, { label: string; hint: string }> = {
   "/referrals": { label: "Invite friends", hint: "Share your link · get a free month" },
