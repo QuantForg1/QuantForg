@@ -398,7 +398,7 @@ class LocalWorkerSupervisor:
             except Exception:
                 logger.exception("slot_refresh_cycle_failed")
             try:
-                self.provision_assigned_accounts()
+                self._log_provision_outcome(self.provision_assigned_accounts())
             except Exception:
                 logger.exception("slot_provision_cycle_failed")
             report = self.heartbeat_once()
@@ -413,6 +413,20 @@ class LocalWorkerSupervisor:
                 len(report["resources"]["terminals"]),
             )
             time.sleep(interval_seconds)
+
+    @staticmethod
+    def _log_provision_outcome(outcome: dict[str, Any]) -> None:
+        """Say why a slot is not ready (error codes only, never credentials)."""
+        if not outcome.get("ok") and outcome.get("error"):
+            logger.warning("slot_provision_blocked error=%s", outcome.get("error"))
+            return
+        for slot_id, res in dict(outcome.get("slots") or {}).items():
+            if isinstance(res, dict) and not res.get("ok"):
+                logger.warning(
+                    "slot_provision_blocked slot=%s error=%s",
+                    slot_id,
+                    str(res.get("error") or "unknown")[:200],
+                )
 
     def terminal_exe_for(self, slot_id: str) -> str:
         return str(slot_terminal_exe(slot_id))
