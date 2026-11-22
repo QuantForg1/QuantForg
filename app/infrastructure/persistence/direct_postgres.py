@@ -130,6 +130,22 @@ def fetch(query: str, *args: Any, timeout: float = 8.0) -> list[dict[str, Any]]:
         raise
 
 
+def _safe_error_fields(exc: BaseException) -> dict[str, str]:
+    """Non-secret diagnostics for a failed statement.
+
+    Only the exception class, the SQLSTATE and the server's one-line message
+    (never the detail, which can echo row values, and never the arguments).
+    """
+    out: dict[str, str] = {}
+    sqlstate = getattr(exc, "sqlstate", None)
+    if sqlstate:
+        out["sqlstate"] = str(sqlstate)
+        message = getattr(exc, "message", None)
+        if message:
+            out["pg_message"] = str(message)[:160]
+    return out
+
+
 def execute(query: str, *args: Any, timeout: float = 8.0) -> str:
     """Run INSERT/UPDATE/DELETE. Returns command status."""
     if not direct_postgres_available():
@@ -143,8 +159,13 @@ def execute(query: str, *args: Any, timeout: float = 8.0) -> str:
     try:
         status: str = _run(_go(), timeout=timeout)
         return status
-    except Exception:
-        logger.warning("direct_postgres_execute_failed", query=query[:80])
+    except Exception as exc:
+        logger.warning(
+            "direct_postgres_execute_failed",
+            query=query[:80],
+            error_type=type(exc).__name__,
+            **_safe_error_fields(exc),
+        )
         raise
 
 
