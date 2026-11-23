@@ -1290,12 +1290,11 @@
 
   .hero {
     margin-top: -60px;
-    padding: 72px 0 8px;
+    padding: 72px 0 64px;
   }
 
   .heroPicture {
-    height: clamp(240px, 77vw, 330px);
-    margin-top: 8px;
+    display: none;
   }
 
   .headline {
