@@ -222,7 +222,7 @@
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  aspect-ratio: 1024 / 576;
+  aspect-ratio: 1848 / 851;
   margin-top: -76px;
   padding: 96px 0 40px;
   overflow: hidden;
@@ -243,7 +243,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center center;
+  object-position: right center;
 }
 
 .hero::after {
@@ -1263,7 +1263,7 @@
     inset: auto;
     order: 2;
     width: 100%;
-    height: clamp(340px, 78vw, 520px);
+    height: clamp(260px, 56vw, 440px);
     margin-top: 16px;
   }
 
@@ -1294,7 +1294,7 @@
   }
 
   .heroPicture {
-    height: clamp(188px, 52vw, 280px);
+    height: clamp(240px, 77vw, 330px);
     margin-top: 8px;
   }
 
