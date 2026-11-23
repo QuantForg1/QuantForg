@@ -333,12 +333,12 @@ export function HomeLanding() {
       <main id="main-content" tabIndex={-1}>
         <section id="platform" className={styles.hero}>
           <picture className={styles.heroPicture}>
-            <source srcSet="/images/quantforg-hero-background.webp" type="image/webp" />
+            <source srcSet="/images/quantforg-hero-dashboard.webp" type="image/webp" />
             <img
-              src="/images/quantforg-hero-background.png"
+              src="/images/quantforg-hero-dashboard.jpg"
               alt=""
-              width={1024}
-              height={576}
+              width={1848}
+              height={851}
               className={styles.heroBackground}
               decoding="async"
               fetchPriority="high"
