@@ -424,3 +424,28 @@ def test_verification_for_another_login_never_marks_ready(
     )
     assert report.status_code == 200
     assert report.json().get("worker_ready_applied") is False
+
+
+def test_reconnect_with_new_account_frees_worker_of_removed_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rehydrated worker of a revoked account must not 409 the user's new one."""
+    from uuid import uuid4
+
+    facade = _facade()
+    user, old_acct, new_acct = uuid4(), uuid4(), uuid4()
+    first = facade.register(
+        host_code="h1", slot_id="a", user_id=user, broker_account_id=old_acct
+    )
+    assert first["ok"] is True
+    # Simulate an API restart: slot map empty, provisioner still has the worker.
+    facade._slot_to_worker.clear()
+    facade._worker_to_slot.clear()
+    monkeypatch.setattr(
+        Mt5WorkerApiFacade, "_account_active", staticmethod(lambda _id: False)
+    )
+    second = facade.register(
+        host_code="h1", slot_id="a", user_id=user, broker_account_id=new_acct
+    )
+    assert second["ok"] is True
+    assert second["broker_account_id"] == str(new_acct)
