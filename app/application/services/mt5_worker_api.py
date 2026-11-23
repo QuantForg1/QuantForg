@@ -146,9 +146,7 @@ class Mt5WorkerApiFacade:
                 ):
                     # The customer's account was removed/rejected: free the
                     # slot for the next customer instead of holding it.
-                    self._revoked_workers.add(worker.worker_id)
-                    self._slot_to_worker.pop(key, None)
-                    self._worker_to_slot.pop(worker.worker_id, None)
+                    self._retire_for_reuse(worker, key)
                     worker = None
                 if (
                     worker is not None
@@ -160,9 +158,7 @@ class Mt5WorkerApiFacade:
                 ):
                     # A customer is waiting: retire the lab binding and
                     # re-provision this slot for them below.
-                    self._revoked_workers.add(worker.worker_id)
-                    self._slot_to_worker.pop(key, None)
-                    self._worker_to_slot.pop(worker.worker_id, None)
+                    self._retire_for_reuse(worker, key)
                     worker = None
                 if (
                     worker is not None
@@ -192,6 +188,8 @@ class Mt5WorkerApiFacade:
                     user_id, broker_account_id = picked
             owner = user_id or lab_user
             account = broker_account_id or lab_acct
+            if user_id is not None:
+                self._retire_stale_workers_for_user(user_id)
             worker = self.plane.provision_worker(
                 user_id=owner,
                 broker_account_id=account,
@@ -221,6 +219,57 @@ class Mt5WorkerApiFacade:
             slot,
         )
         return {"ok": True, "idempotent": False, **self._public(worker)}
+
+    def _retire_stale_workers_for_user(self, user_id: UUID) -> None:
+        """Free workers still bound to this user's removed/rejected accounts.
+
+        After an API restart the provisioner is rehydrated from storage while
+        the slot map is empty, so a customer who reconnects with a new account
+        hit a 409 ("already has an active worker for another account") against
+        a worker of their old, revoked account. Caller holds ``self._lock``.
+        """
+        assert self.plane.provisioner is not None
+        for w in self.plane.provisioner.list_for_user(user_id):
+            if (
+                w.lifecycle is WorkerLifecycleState.REVOKED
+                or w.metadata.get("lab_binding")
+                or self._account_active(w.broker_account_id)
+            ):
+                continue
+            slot_key = self._worker_to_slot.pop(w.worker_id, None)
+            if slot_key is not None:
+                self._slot_to_worker.pop(slot_key, None)
+            self._revoked_workers.add(w.worker_id)
+            try:
+                self._persist(
+                    self.plane.provisioner.revoke(
+                        worker_id=w.worker_id, user_id=w.user_id
+                    )
+                )
+            except Exception:
+                logger.warning("mt5_worker_retire_failed worker_id=%s", w.worker_id)
+
+    def _retire_for_reuse(self, worker: WorkerRuntime, key: str) -> None:
+        """Release a worker so its slot AND its owner can be provisioned again.
+
+        Marking the worker revoked in the facade alone left the provisioner's
+        one-active-worker-per-user/account indexes pointing at it, so the same
+        customer reconnecting after a removed/rejected account got a 409
+        ("User already has an active worker for another account") forever.
+        Caller holds ``self._lock``.
+        """
+        assert self.plane.provisioner is not None
+        self._revoked_workers.add(worker.worker_id)
+        self._slot_to_worker.pop(key, None)
+        self._worker_to_slot.pop(worker.worker_id, None)
+        try:
+            retired = self.plane.provisioner.revoke(
+                worker_id=worker.worker_id, user_id=worker.user_id
+            )
+        except Exception:
+            logger.warning("mt5_worker_retire_failed worker_id=%s", worker.worker_id)
+            return
+        self._persist(retired)
 
     def _bound_account_ids(self) -> set[str]:
         """Broker accounts already bound to a live (non-revoked) worker."""
