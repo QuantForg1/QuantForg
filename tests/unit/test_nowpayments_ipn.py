@@ -28,7 +28,7 @@ def test_plans_catalog() -> None:
     assert len(plans) == 3
     assert get_plan("premium") is not None
     assert get_plan("premium").license_tier == "enterprise"
-    assert float(get_plan("starter").amount_usd) == 49.0
+    assert float(get_plan("starter").amount_usd) == 199.0
 
 
 @pytest.mark.unit
@@ -36,7 +36,7 @@ def test_ipn_signature_valid() -> None:
     payload = {
         "payment_id": 12345,
         "payment_status": "finished",
-        "price_amount": 99,
+        "price_amount": 399,
         "price_currency": "usd",
         "order_id": "qf_test_1",
         "pay_currency": "btc",
@@ -52,7 +52,7 @@ def test_ipn_signature_rejects_tamper() -> None:
         "payment_id": 1,
         "payment_status": "finished",
         "order_id": "qf_x",
-        "price_amount": 49,
+        "price_amount": 199,
         "price_currency": "usd",
     }
     secret = "secret"

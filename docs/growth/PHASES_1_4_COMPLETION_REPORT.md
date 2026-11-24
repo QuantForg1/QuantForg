@@ -22,7 +22,7 @@ Public guides in `frontend/src/lib/marketing/learn-catalog.ts`:
 
 Copy is original and matches the implemented report. The catalog test rejects guaranteed-profit language, win-rate claims, percentage figures, and “free trial is available”.
 
-`docs/saas/BILLING_AND_ENTITLEMENTS.md` was aligned to the code: Starter $49, Professional $99, Premium $199 from `plans_public()`, `FREE_TRIAL_AVAILABLE` false, `start_trial` raises `TRIAL_DISCONTINUED`. Billing code was not changed.
+`docs/saas/BILLING_AND_ENTITLEMENTS.md` was aligned to the code: Starter $199, Professional $399, Premium $799 from `plans_public()`, `FREE_TRIAL_AVAILABLE` false, `start_trial` raises `TRIAL_DISCONTINUED`. Billing code was not changed.
 
 Get Started links to `/learn/decision-lifecycle`. That step has no checklist id, so it does not change onboarding completion math and does not record a fake activation event.
 

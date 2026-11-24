@@ -29,7 +29,7 @@ export default function TermsPage() {
       </p>
       <h2 className="text-lg font-semibold text-[var(--fg)]">Subscriptions & crypto payments</h2>
       <ul className="list-disc space-y-2 pl-5">
-        <li>Published plans: Starter ($49), Professional ($99), Premium ($199) per month in USD.</li>
+        <li>Published plans: Starter ($199), Professional ($399), Premium ($799) per month in USD.</li>
         <li>
           Crypto invoices are processed by NOWPayments in LIVE production mode. Supported coins
           and networks are those enabled on the QuantForg merchant account.

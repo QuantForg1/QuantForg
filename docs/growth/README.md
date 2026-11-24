@@ -31,7 +31,7 @@ This folder is the Phase 0 record required before major product, marketing, or l
 ## Baseline that later phases must not invent past
 
 - Public indexable story is one homepage plus pricing, contact, auth, legal pages, and a public XAUUSD chart.
-- Plans in the UI catalog are Starter $49, Professional $99, Premium $199 per month, paid by crypto invoice. Automatic monthly charging is off. `FREE_TRIAL_AVAILABLE` is `false` in `frontend/src/lib/billing/plans.ts`.
+- Plans in the UI catalog are Starter $199, Professional $399, Premium $799 per month, paid by crypto invoice. Automatic monthly charging is off. `FREE_TRIAL_AVAILABLE` is `false` in `frontend/src/lib/billing/plans.ts`.
 - The robot’s public universe is XAUUSD. Capital stays at the customer’s broker.
 - Decision evidence, paper trading, execution intelligence, risk, and broker connectivity already exist as backend routers. They are frozen trading-adjacent surfaces. Growth work reads them. It does not rewrite them.
 - Search Console, analytics spend, and ad accounts are not connected in this repository. Any dashboard must show “not connected” until a real source exists.

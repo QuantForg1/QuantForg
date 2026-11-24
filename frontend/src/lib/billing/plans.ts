@@ -131,7 +131,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     id: "starter",
     licenseTier: "starter",
     name: "Starter",
-    monthlyPriceUsd: 49,
+    monthlyPriceUsd: 199,
     positioning: "For individual traders starting with automated trading.",
     ctaLabel: "Choose Starter",
     entitlements: [
@@ -150,7 +150,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     id: "professional",
     licenseTier: "professional",
     name: "Professional",
-    monthlyPriceUsd: 99,
+    monthlyPriceUsd: 399,
     positioning: "For active traders who need expanded trading intelligence.",
     highlighted: true,
     ctaLabel: "Choose Professional",
@@ -167,7 +167,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     id: "premium",
     licenseTier: "enterprise",
     name: "Premium",
-    monthlyPriceUsd: 199,
+    monthlyPriceUsd: 799,
     positioning: "For advanced operators who want every eligible tool.",
     ctaLabel: "Choose Premium",
     entitlements: [
