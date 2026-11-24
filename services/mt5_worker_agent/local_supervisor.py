@@ -412,7 +412,12 @@ class LocalWorkerSupervisor:
             )
             time.sleep(interval_seconds)
 
-    def provision_guarded(self, *, timeout_seconds: float = 240.0) -> None:
+    def provision_guarded(
+        self,
+        *,
+        timeout_seconds: float = 240.0,
+        heartbeat_every_seconds: float = 30.0,
+    ) -> None:
         """Run one provisioning pass without ever stalling the heartbeat loop.
 
         A stuck MT5 login/IPC call used to block the whole supervisor, so the
@@ -435,7 +440,19 @@ class LocalWorkerSupervisor:
         thread = threading.Thread(target=_work, name="slot-provision", daemon=True)
         self._provision_thread = thread
         thread.start()
-        thread.join(timeout_seconds)
+        # Keep the worker visibly online while a slow MT5 login runs: the API
+        # treats a worker silent for >180s as offline ("verification terminal
+        # is temporarily offline"), so heartbeat every ~30s during the wait.
+        deadline = time.monotonic() + timeout_seconds
+        while thread.is_alive() and time.monotonic() < deadline:
+            thread.join(
+                min(heartbeat_every_seconds, max(0.0, deadline - time.monotonic()))
+            )
+            if thread.is_alive():
+                try:
+                    self.heartbeat_once()
+                except Exception:
+                    logger.exception("slot_heartbeat_during_provision_failed")
         if thread.is_alive():
             logger.warning("slot_provision_timeout seconds=%s", timeout_seconds)
             return

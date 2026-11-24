@@ -161,3 +161,20 @@ def test_provision_guarded_does_not_block_on_stuck_login(
     # A second pass must not start while the first is still stuck.
     sup.provision_guarded(timeout_seconds=0.2)
     release.set()
+
+
+def test_provision_guarded_heartbeats_while_login_is_slow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    sup = _sup(_Railway(), monkeypatch)
+    release = threading.Event()
+    beats: list[int] = []
+    monkeypatch.setattr(
+        sup, "provision_assigned_accounts", lambda **_: release.wait(5) or {"ok": True}
+    )
+    monkeypatch.setattr(sup, "heartbeat_once", lambda: beats.append(1) or {})
+    sup.provision_guarded(timeout_seconds=0.6, heartbeat_every_seconds=0.1)
+    release.set()
+    assert len(beats) >= 3
