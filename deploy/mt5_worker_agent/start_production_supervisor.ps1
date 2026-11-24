@@ -57,4 +57,9 @@ Write-Host "API base configured for Production (URL not re-printed with secrets)
 Write-Host "LIVE terminal override = $env:QF_ALLOW_WORKER_ON_LIVE_TERMINAL (must be false)"
 # Unbuffered so the background task log shows every line immediately.
 $env:PYTHONUNBUFFERED = "1"
-poetry run python -m services.mt5_worker_agent.main supervise
+# Merge stderr into stdout at the cmd level. Python logs to stderr; under
+# $ErrorActionPreference="Stop" a redirected stderr line becomes a terminating
+# NativeCommandError in Windows PowerShell, which killed the supervisor right
+# after its first log line when run from the background task.
+$ErrorActionPreference = "Continue"
+cmd /c "poetry run python -m services.mt5_worker_agent.main supervise 2>&1"
