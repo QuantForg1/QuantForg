@@ -52,6 +52,40 @@ def disk_free_bytes(path: Path) -> int:
     return int(usage.free)
 
 
+_BASE_DIRS = ("Config", "Bases")
+_NEVER_COPY = ("uninstall.exe", "*.log", "Logs", "Tester", "accounts.dat")
+
+
+def _merge_missing_base_dirs(src: Path, dest: Path) -> int:
+    """Copy install-default Config/Bases files the slot lacks (never overwrite).
+
+    A slot built without them starts, logs in and shows charts, but the Python
+    API never answers (``-10005 IPC timeout``); a full copy attaches fine. The
+    Program Files install holds defaults only (user data lives in AppData), and
+    ``accounts.dat`` is never copied.
+    """
+    copied = 0
+    ignore = shutil.ignore_patterns(*_NEVER_COPY)
+    for name in _BASE_DIRS:
+        s_dir = src / name
+        if not s_dir.is_dir():
+            continue
+        d_dir = dest / name
+        d_dir.mkdir(parents=True, exist_ok=True)
+        for item in s_dir.rglob("*"):
+            rel = item.relative_to(s_dir)
+            target = d_dir / rel
+            if item.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            if target.exists() or ignore(str(item.parent), [item.name]):
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
+            copied += 1
+    return copied
+
+
 def prepare_portable_slot(
     slot_id: str,
     *,
@@ -74,7 +108,13 @@ def prepare_portable_slot(
         exe = slot_terminal_exe(slot_id)
         if exe.is_file():
             assert_worker_terminal_path(exe)
-            logger.info("portable_slot_exists slot=%s path=%s", slot_id, dest)
+            merged = _merge_missing_base_dirs(src, dest)
+            logger.info(
+                "portable_slot_exists slot=%s path=%s base_files_added=%s",
+                slot_id,
+                dest,
+                merged,
+            )
             return dest
         raise FileExistsError(f"Slot directory exists but incomplete: {dest}")
 
@@ -103,11 +143,9 @@ def prepare_portable_slot(
     shutil.copytree(
         src,
         dest,
-        # Bases/Config hold the source terminal's servers, accounts and
-        # history; a customer slot must start clean (no other user's data).
-        ignore=shutil.ignore_patterns(
-            "uninstall.exe", "*.log", "Logs", "Tester", "Bases", "Config"
-        ),
+        # Config/Bases are install defaults and are required for the Python
+        # API (IPC) to answer; accounts.dat is never copied.
+        ignore=shutil.ignore_patterns(*_NEVER_COPY),
         dirs_exist_ok=False,
     )
     # Portable marker file (some builds honor this; we also pass /portable).
