@@ -290,9 +290,59 @@ def momentum_exhaustion_buy_reason(score: dict[str, Any] | None) -> str | None:
     return None
 
 
+_BEARISH_BIAS: frozenset[str] = frozenset({"bearish", "down", "downtrend", "sell"})
+# BUY against a bearish backdrop must clear a higher structure bar.
+COUNTER_TREND_BUY_MIN_STRUCTURE = 70
+COUNTER_TREND_BUY_MIN_MTF = 75
+COUNTER_TREND_LTF_GAP = 8
+
+
+def counter_trend_buy_reason(score: dict[str, Any] | None) -> str | None:
+    """Stronger evidence for BUY while gold is trending down.
+
+    Live sample (n=80): BUY won 22% vs SELL 40%. Counter-trend BUYs are only
+    allowed with strong structure and MTF alignment. Uses fields that are
+    present on the score; absent keys never invent a veto.
+    """
+    if not isinstance(score, dict):
+        return None
+    if str(score.get("direction") or "").strip().upper() != "BUY":
+        return None
+    factors = _factors(score)
+    bias = (
+        str(score.get("htf_bias") or score.get("bias") or factors.get("htf_bias") or "")
+        .strip()
+        .lower()
+    )
+    ltf_buy = _i(score.get("ltf_buy_score"), _i(factors.get("ltf_buy_score")))
+    ltf_sell = _i(score.get("ltf_sell_score"), _i(factors.get("ltf_sell_score")))
+    ltf_down = ltf_buy > 0 and ltf_sell >= ltf_buy + COUNTER_TREND_LTF_GAP
+    if bias not in _BEARISH_BIAS and not ltf_down:
+        return None
+    structure = _i(
+        score.get("structure_score"),
+        _i(factors.get("bos"), _i(factors.get("structure"))),
+    )
+    mtf = _i(score.get("mtf_alignment"), _i(factors.get("mtf")))
+    if (
+        structure >= COUNTER_TREND_BUY_MIN_STRUCTURE
+        and mtf >= COUNTER_TREND_BUY_MIN_MTF
+    ):
+        return None
+    return (
+        f"Counter-trend BUY needs structure>={COUNTER_TREND_BUY_MIN_STRUCTURE} and "
+        f"MTF>={COUNTER_TREND_BUY_MIN_MTF} (got structure={structure} mtf={mtf}) "
+        "— prefer no trade"
+    )
+
+
 def evidence_intelligence_reason(score: dict[str, Any] | None) -> str | None:
     """Global evidence vetoes from Phase 3 intelligence (before strategy pick)."""
-    return sniper_chase_or_stale_reason(score) or momentum_exhaustion_buy_reason(score)
+    return (
+        sniper_chase_or_stale_reason(score)
+        or momentum_exhaustion_buy_reason(score)
+        or counter_trend_buy_reason(score)
+    )
 
 
 def filter_candidates_by_ltf_session(
