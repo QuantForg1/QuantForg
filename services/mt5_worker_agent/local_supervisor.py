@@ -214,12 +214,15 @@ class LocalWorkerSupervisor:
             st.last_heartbeat_at = now
             if self.railway is None or not st.worker_id or st.revoked:
                 continue
-            hb = self.railway.heartbeat(
-                worker_id=st.worker_id,
-                slot_id=slot_id,
-                lifecycle=st.lifecycle,
-                ready=st.ready,
-            )
+            try:
+                hb = self.railway.heartbeat(
+                    worker_id=st.worker_id,
+                    slot_id=slot_id,
+                    lifecycle=st.lifecycle,
+                    ready=st.ready,
+                )
+            except Exception as exc:  # connection reset / DNS / TLS during API redeploy
+                hb = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
             payload["railway"][slot_id] = {
                 "ok": bool(hb.get("ok")),
                 "status": hb.get("status"),
@@ -388,7 +391,14 @@ class LocalWorkerSupervisor:
             ",".join(self.slot_ids),
         )
         if self.railway is not None:
-            reg = self.register_with_railway()
+            reg: dict[str, Any] = {}
+            for attempt in range(1, 61):
+                try:
+                    reg = self.register_with_railway()
+                    break
+                except Exception:
+                    logger.exception("railway_register_failed attempt=%s", attempt)
+                    time.sleep(10.0)
             logger.info(
                 "railway_register_complete ok=%s",
                 reg.get("ok"),
@@ -399,7 +409,12 @@ class LocalWorkerSupervisor:
             except Exception:
                 logger.exception("slot_refresh_cycle_failed")
             self.provision_guarded()
-            report = self.heartbeat_once()
+            try:
+                report = self.heartbeat_once()
+            except Exception:
+                logger.exception("heartbeat_cycle_failed")
+                time.sleep(min(interval_seconds, 10.0))
+                continue
             ready_count = sum(1 for s in report["slots"] if s.get("ready"))
             running = sum(1 for s in report["slots"] if s.get("process_running"))
             railway_ok = sum(1 for s in report["slots"] if s.get("railway_ok"))

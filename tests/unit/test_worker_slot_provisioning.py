@@ -187,3 +187,17 @@ def test_window_titles_are_redacted() -> None:
         ["12345678 - HFMarketsGlobal-Live2: Live Account", "  ", "Authorization failed"]
     )
     assert out == ["*** - HFMarketsGlobal-Live2: Live Account", "Authorization failed"]
+
+
+def test_heartbeat_once_survives_connection_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Boom(_Railway):
+        def heartbeat(self, **_: object) -> dict:  # type: ignore[override]
+            raise ConnectionResetError("forcibly closed")
+
+    sup = _sup(_Boom(), monkeypatch)
+    for st in sup.states.values():
+        st.worker_id = st.worker_id or "w1"
+    report = sup.heartbeat_once()
+    assert all(v["ok"] is False for v in report["railway"].values())
