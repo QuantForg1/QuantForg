@@ -201,3 +201,41 @@ def test_heartbeat_once_survives_connection_reset(
         st.worker_id = st.worker_id or "w1"
     report = sup.heartbeat_once()
     assert all(v["ok"] is False for v in report["railway"].values())
+
+
+def test_init_ladder_falls_back_to_prelaunch_attach(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from services.mt5_worker_agent import mt5_session as ms
+
+    calls: list[dict] = []
+
+    class _Mt5:
+        err: tuple[int, str] = (1, "ok")
+
+        def initialize(self, **kw: object) -> bool:
+            calls.append(kw)
+            if "login" in kw:
+                self.err = (-10005, "IPC timeout")
+                return False
+            self.err = (1, "ok")
+            return True
+
+        def last_error(self) -> tuple[int, str]:
+            return self.err
+
+        def shutdown(self) -> None:
+            return None
+
+    launched: list[int] = []
+    killed: list[int] = []
+    monkeypatch.setattr(ms, "kill_slot_terminals", lambda p: killed.append(1))
+    monkeypatch.setattr(
+        ms, "launch_logged_in", lambda *a, **k: launched.append(1) or True
+    )
+    ok, _ = ms.initialize_with_ladder(
+        _Mt5(), tmp_path / "terminal64.exe", login=1234567, password="x", server="S"
+    )
+    assert ok is True
+    assert len(calls) == 2 and "login" in calls[0] and "login" not in calls[1]
+    assert launched == [1] and len(killed) >= 2
