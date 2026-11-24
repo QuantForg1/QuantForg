@@ -13,9 +13,9 @@ import {
 
 assert.equal(BILLING_PLANS.length, 3);
 assert.equal(BILLING_PLANS[0]?.id, "starter");
-assert.equal(BILLING_PLANS[0]?.monthlyPriceUsd, 49);
-assert.equal(BILLING_PLANS[1]?.monthlyPriceUsd, 99);
-assert.equal(BILLING_PLANS[2]?.monthlyPriceUsd, 199);
+assert.equal(BILLING_PLANS[0]?.monthlyPriceUsd, 199);
+assert.equal(BILLING_PLANS[1]?.monthlyPriceUsd, 399);
+assert.equal(BILLING_PLANS[2]?.monthlyPriceUsd, 799);
 assert.equal(BILLING_PLANS[2]?.licenseTier, "enterprise");
 assert.equal(ANNUAL_BILLING_SUPPORTED, false);
 assert.equal(BILLING_PROVIDER.configured, true);
