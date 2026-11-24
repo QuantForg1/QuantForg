@@ -131,6 +131,66 @@ def initialize_portable(terminal_exe: Path | str) -> bool:
     return ok
 
 
+_WINDOWS_PS = r"""
+Add-Type @"
+using System; using System.Text; using System.Collections.Generic;
+using System.Runtime.InteropServices;
+public class QfW {
+  public delegate bool EP(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EP p, IntPtr l);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  public static string[] For(int pid) {
+    var r = new List<string>();
+    EnumWindows((h, l) => { int p; GetWindowThreadProcessId(h, out p);
+      if (p == pid && IsWindowVisible(h)) { var sb = new StringBuilder(256);
+        GetWindowText(h, sb, 256); if (sb.Length > 0) r.Add(sb.ToString()); }
+      return true; }, IntPtr.Zero);
+    return r.ToArray(); } }
+"@
+$t = '__TARGET__'
+Get-CimInstance Win32_Process -Filter "Name='terminal64.exe'" |
+  Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower() -eq $t } |
+  ForEach-Object { [QfW]::For([int]$_.ProcessId) }
+"""
+
+
+def redact_window_titles(titles: list[str]) -> list[str]:
+    """Keep dialog/window text, drop account numbers (4+ digit runs)."""
+    import re
+
+    return [re.sub(r"\d{4,}", "***", t.strip())[:120] for t in titles if t.strip()]
+
+
+def describe_terminal_windows(path: Path) -> list[str]:
+    """Visible window titles of the slot terminal (redacted) for diagnostics.
+
+    Shows modal dialogs (login failed, server not found, terms) that make the
+    Python API time out. Read-only; never raises.
+    """
+    import subprocess
+
+    target = str(path).lower().replace("'", "''")
+    try:
+        out = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                _WINDOWS_PS.replace("__TARGET__", target),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception:
+        return []
+    return redact_window_titles(out.stdout.splitlines())
+
+
 def _initialize_with_ipc_retry(
     mt5: Any,
     path: Path,
@@ -168,6 +228,7 @@ def _initialize_with_ipc_retry(
         path,
         err,
     )
+    logger.warning("mt5_terminal_windows titles=%s", describe_terminal_windows(path))
     try:
         mt5.shutdown()
     except Exception:
@@ -235,7 +296,7 @@ def launch_logged_in(
         encoding="utf-16",
     )
     try:
-        subprocess.Popen(
+        subprocess.Popen(  # noqa: S603
             [str(path), "/portable", f"/config:{ini}"],
             close_fds=True,
         )
