@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -229,9 +230,9 @@ def test_init_ladder_falls_back_to_prelaunch_attach(
 
     launched: list[int] = []
     killed: list[int] = []
-    monkeypatch.setattr(ms, "kill_slot_terminals", lambda p: killed.append(1))
+    monkeypatch.setattr(ms, "kill_slot_terminals", lambda _p: killed.append(1))
     monkeypatch.setattr(
-        ms, "launch_logged_in", lambda *a, **k: launched.append(1) or True
+        ms, "launch_logged_in", lambda *_a, **_k: launched.append(1) or True
     )
     ok, _ = ms.initialize_with_ladder(
         _Mt5(), tmp_path / "terminal64.exe", login=1234567, password="x", server="S"
