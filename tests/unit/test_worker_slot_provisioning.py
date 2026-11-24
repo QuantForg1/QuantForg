@@ -240,3 +240,26 @@ def test_init_ladder_falls_back_to_prelaunch_attach(
     assert ok is True
     assert len(calls) == 2 and "login" in calls[0] and "login" not in calls[1]
     assert launched == [1] and len(killed) >= 2
+
+
+def test_merge_missing_base_dirs_adds_files_without_overwriting(tmp_path: Path) -> None:
+    from services.mt5_worker_agent.slot_manager import _merge_missing_base_dirs
+
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    (src / "Config").mkdir(parents=True)
+    (src / "Bases" / "Broker").mkdir(parents=True)
+    (src / "Config" / "servers.dat").write_text("src")
+    (src / "Config" / "accounts.dat").write_text("secret")
+    (src / "Config" / "common.ini").write_text("src-common")
+    (src / "Bases" / "Broker" / "a.srv").write_text("x")
+    (dest / "Config").mkdir(parents=True)
+    (dest / "Config" / "common.ini").write_text("slot-common")
+
+    added = _merge_missing_base_dirs(src, dest)
+
+    assert added == 2
+    assert (dest / "Config" / "servers.dat").read_text() == "src"
+    assert (dest / "Config" / "common.ini").read_text() == "slot-common"
+    assert not (dest / "Config" / "accounts.dat").exists()
+    assert (dest / "Bases" / "Broker" / "a.srv").is_file()
