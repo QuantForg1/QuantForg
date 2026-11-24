@@ -199,6 +199,7 @@ def _initialize_with_ipc_retry(
     password: str | None = None,
     server: str | None = None,
     timeout_ms: int = _DEFAULT_INIT_TIMEOUT_MS,
+    retry: bool = True,
 ) -> tuple[bool, Any]:
     """Initialize once; on IPC timeout (-10005) shutdown and retry exactly once.
 
@@ -221,7 +222,7 @@ def _initialize_with_ipc_retry(
 
     ok = _call()
     err = mt5.last_error()
-    if ok or _error_code(err) != _IPC_TIMEOUT_CODE:
+    if ok or _error_code(err) != _IPC_TIMEOUT_CODE or not retry:
         return ok, err
     logger.warning(
         "mt5_ipc_timeout path=%s last_error=%s — single retry after shutdown",
@@ -371,6 +372,80 @@ def probe_market_data(mt5: Any) -> tuple[bool, int, str, float | None]:
     return total > 0, total, pick, None
 
 
+_LADDER_TIMEOUT_MS = 60_000
+
+
+def kill_slot_terminals(path: Path) -> None:
+    """Stop only terminals whose executable is exactly this slot's terminal64.exe."""
+    import subprocess
+
+    target = str(path).lower().replace("'", "''")
+    script = (
+        "Get-CimInstance Win32_Process -Filter \"Name='terminal64.exe'\" | "
+        f"Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.ToLower() -eq '{target}' }} | "
+        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+    )
+    try:
+        subprocess.run(  # noqa: S603
+            ["powershell", "-NoProfile", "-Command", script],  # noqa: S607
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        logger.exception("kill_slot_terminals_failed path=%s", path)
+    time.sleep(2.0)
+
+
+def initialize_with_ladder(
+    mt5: Any,
+    path: Path,
+    *,
+    login: int,
+    password: str,
+    server: str,
+) -> tuple[bool, Any]:
+    """Attach to the slot terminal, trying both supported start modes from a clean slate.
+
+    1. Let ``mt5.initialize`` launch the terminal itself with credentials.
+    2. If IPC still times out, restart the terminal pre-logged-in via /config and
+       attach without credentials.
+    A hung terminal is killed between attempts so the next cycle never inherits it.
+    """
+    kill_slot_terminals(path)
+    ok, err = _initialize_with_ipc_retry(
+        mt5,
+        path,
+        login=login,
+        password=password,
+        server=server,
+        timeout_ms=_LADDER_TIMEOUT_MS,
+        retry=False,
+    )
+    if ok or _error_code(err) != _IPC_TIMEOUT_CODE:
+        return ok, err
+    logger.warning("mt5_ladder step=python_launch failed err=%s", err)
+    try:
+        mt5.shutdown()
+    except Exception:
+        logger.exception("mt5_ladder_shutdown_failed")
+    kill_slot_terminals(path)
+    launch_logged_in(path, login=login, password=password, server=server)
+    ok, err = _initialize_with_ipc_retry(
+        mt5, path, timeout_ms=_LADDER_TIMEOUT_MS, retry=False
+    )
+    if ok:
+        return ok, err
+    logger.error("mt5_ladder step=prelaunch_attach failed err=%s", err)
+    try:
+        mt5.shutdown()
+    except Exception:
+        logger.exception("mt5_ladder_shutdown_failed")
+    kill_slot_terminals(path)
+    return ok, err
+
+
 def authenticate_and_verify(
     *,
     terminal_exe: Path | str,
@@ -392,11 +467,7 @@ def authenticate_and_verify(
     except Exception:
         logger.exception("clear_portable_saved_login_failed")
     mt5 = _import_mt5()
-    # Start (or restart) the slot terminal already logged in so its Login
-    # dialog never blocks the API, then attach without re-sending secrets.
-    if not _terminal_running(path):
-        launch_logged_in(path, login=int(login), password=password, server=server)
-    init_ok, init_err = _initialize_with_ipc_retry(
+    init_ok, init_err = initialize_with_ladder(
         mt5,
         path,
         login=int(login),
