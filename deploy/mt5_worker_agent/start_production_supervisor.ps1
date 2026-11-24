@@ -55,4 +55,6 @@ if (($env:QF_ALLOW_WORKER_ON_LIVE_TERMINAL | ForEach-Object { $_.ToLower() }) -e
 Write-Host "QuantForg PRODUCTION MT5 worker supervisor"
 Write-Host "API base configured for Production (URL not re-printed with secrets)."
 Write-Host "LIVE terminal override = $env:QF_ALLOW_WORKER_ON_LIVE_TERMINAL (must be false)"
+# Unbuffered so the background task log shows every line immediately.
+$env:PYTHONUNBUFFERED = "1"
 poetry run python -m services.mt5_worker_agent.main supervise
