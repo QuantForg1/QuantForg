@@ -61,6 +61,20 @@ if ((Test-Path '$LogFile') -and ((Get-Item '$LogFile').Length -gt 2MB)) { Move-I
 "@
 Set-Content -Path $RunScript -Value $Launcher -Encoding UTF8
 
+# Stop any running worker (old code stays in memory otherwise, and the task
+# uses -MultipleInstances IgnoreNew so a new start would be silently ignored).
+Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+  Where-Object {
+    $_.ProcessId -ne $PID -and $_.CommandLine -and
+    $_.CommandLine -match 'services\.mt5_worker_agent|start_production_supervisor|run_worker\.ps1'
+  } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+# Only the worker's own slot terminals (never the LIVE terminal).
+Get-CimInstance Win32_Process -Filter "Name='terminal64.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like '*mt5_worker_slots_production*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 3
+
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
   -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$RunScript`"" `
   -WorkingDirectory $Root
