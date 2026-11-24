@@ -21,7 +21,7 @@ BILLING_PLANS: dict[str, BillingPlan] = {
         plan_id="starter",
         license_tier="starter",
         name="Starter",
-        amount_usd=Decimal("49.00"),
+        amount_usd=Decimal("199.00"),
         positioning="For individual traders starting with automated trading.",
         entitlements=(
             "QuantForg dashboard",
@@ -39,7 +39,7 @@ BILLING_PLANS: dict[str, BillingPlan] = {
         plan_id="professional",
         license_tier="professional",
         name="Professional",
-        amount_usd=Decimal("99.00"),
+        amount_usd=Decimal("399.00"),
         positioning="For active traders who need expanded trading intelligence.",
         entitlements=(
             "Everything in Starter",
@@ -54,7 +54,7 @@ BILLING_PLANS: dict[str, BillingPlan] = {
         plan_id="premium",
         license_tier="enterprise",
         name="Premium",
-        amount_usd=Decimal("199.00"),
+        amount_usd=Decimal("799.00"),
         positioning="For advanced operators who want every eligible tool.",
         entitlements=(
             "Everything in Professional",

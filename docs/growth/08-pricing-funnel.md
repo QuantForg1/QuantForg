@@ -8,9 +8,9 @@
 | Plan | UI price | License tier in code | Robot | Notes in the catalog |
 | --- | --- | --- | --- | --- |
 | No subscription | $0 | — | Cannot start. Cannot open new automated trades | Account, MT5 connect, verification, balance view, strategy and research view |
-| Starter | $49 / month | `starter` | Included | 1 verified broker account, 1 active robot, email support |
-| Professional | $99 / month | `professional` | Included | Marked “Most popular” in code. Priority support |
-| Premium | $199 / month | `enterprise` | Included | Full eligible strategy access, premium onboarding |
+| Starter | $799 / month | `starter` | Included | 1 verified broker account, 1 active robot, email support |
+| Professional | $399 / month | `professional` | Included | Marked “Most popular” in code. Priority support |
+| Premium | $799 / month | `enterprise` | Included | Full eligible strategy access, premium onboarding |
 
 Annual billing is off (`ANNUAL_BILLING_SUPPORTED` is false; the pricing page says so when that flag is false).  
 Payment label: Crypto Payment.  

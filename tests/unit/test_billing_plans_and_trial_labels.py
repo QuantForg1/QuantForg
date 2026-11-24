@@ -15,9 +15,9 @@ from core.config.settings import Settings
 @pytest.mark.unit
 def test_plans_monthly_prices_match_catalog() -> None:
     public = {p["id"]: p for p in plans_public()}
-    assert float(public["starter"]["monthly_price_usd"]) == 49.0
-    assert float(public["professional"]["monthly_price_usd"]) == 99.0
-    assert float(public["premium"]["monthly_price_usd"]) == 199.0
+    assert float(public["starter"]["monthly_price_usd"]) == 199.0
+    assert float(public["professional"]["monthly_price_usd"]) == 399.0
+    assert float(public["premium"]["monthly_price_usd"]) == 799.0
     assert get_plan("starter") is not None
     assert get_plan("premium") is not None
     assert get_plan("premium").license_tier == "enterprise"

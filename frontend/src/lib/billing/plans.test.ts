@@ -27,6 +27,6 @@ assert.ok(UNPAID_ACCESS.some((r) => r.feature === "Start the robot" && !r.allowe
 assert.ok(UNPAID_ACCESS.some((r) => r.feature === "Connect your MT5 broker" && r.allowed));
 assert.ok(PLAN_COMPARISON_ROWS.every((r) => !("trial" in r)));
 assert.equal(getPlan("professional")?.name, "Professional");
-assert.equal(formatUsd(49), "$49");
+assert.equal(formatUsd(199), "$199");
 assert.ok(!JSON.stringify(BILLING_PROVIDER).includes("NOWPayments"));
 console.log("plans.test.ts: ok");

@@ -33,7 +33,7 @@ Authenticated desks such as `/decision-evidence`, `/research`, and `/ai-trading-
 
 ## Conversion facts, not opinions
 
-- **Price is visible** on `/pricing`: $49, $99, $199 per month in `plans.ts`.
+- **Price is visible** on `/pricing`: $199, $399, $799 per month in `plans.ts`.
 - **Unpaid value is visible:** create account, connect MT5, verify, view balance and research. Start robot and new automated trades require a subscription.
 - **Payment friction is explicit:** crypto invoice, access only after a verified completed payment, renew with a new invoice. That will suppress impulse checkout. Hiding it would be a dark pattern. Explain it earlier, do not remove it.
 - **No trial in the catalog.** `FREE_TRIAL_AVAILABLE` is `false`. `docs/saas/BILLING_AND_ENTITLEMENTS.md` still describes a 7-day Starter trial. The rendered site follows the code, not that older doc. Reconcile the doc before anyone writes “free trial” in marketing.

@@ -4,7 +4,7 @@ Updated 19 November 2026 so this note matches the code. It does not change price
 
 ## What the code does
 
-- Plans: Starter ($49), Professional ($99), Premium ($199), from `app/domain/billing/plans.py` and `frontend/src/lib/billing/plans.ts`.
+- Plans: Starter ($199), Professional ($399), Premium ($799), from `app/domain/billing/plans.py` and `frontend/src/lib/billing/plans.ts`.
 - A free trial is not offered. `BillingService.list_plans` returns `trial: None` and `trial_days: 0`. `start_trial` raises `TRIAL_DISCONTINUED` before any trial row is written. `FREE_TRIAL_AVAILABLE` is `false`.
 - Creating an account, connecting MT5, and viewing balance do not require a subscription. Starting the robot does.
 - Customer-facing payment method label: **Crypto Payment**. The processor name stays off normal customer UI. The privacy policy is the disclosure that names the processor.

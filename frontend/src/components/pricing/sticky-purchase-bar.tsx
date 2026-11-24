@@ -32,7 +32,7 @@ export function StickyPurchaseBar() {
             QuantForg plans
           </p>
           <p className="mt-0.5 text-sm text-[var(--fg-muted)]">
-            From $49 / month · software access only
+            From $199 / month · software access only
           </p>
         </div>
         <Link

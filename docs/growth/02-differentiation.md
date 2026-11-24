@@ -37,7 +37,7 @@ These are gaps in the competitor set above, matched to capabilities that already
 
 ## Audience
 
-**Primary.** A person who already has, or is willing to open, an MT5 account at a supported broker, cares about gold, and will pay $49–$199 per month for software that can say no.
+**Primary.** A person who already has, or is willing to open, an MT5 account at a supported broker, cares about gold, and will pay $199–$799 per month for software that can say no.
 
 **Secondary.** A researcher who wants to read decisions and shadow outcomes before allowing live sends.
 

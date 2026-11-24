@@ -43,7 +43,7 @@ These topics reuse facts already public on https://www.quantforg.com or already 
 6. What a decision record contains, and what an empty field means.
 7. What shadow or simulated results are, and why they are not account P/L.
 8. How spread, slippage, reject, and latency would be read, without naming a winner.
-9. Pricing: $49 / $99 / $199, crypto invoice, no automatic renewal charge, robot requires a paid plan.
+9. Pricing: $199 / $399 / $799, crypto invoice, no automatic renewal charge, robot requires a paid plan.
 10. Risk disclosure and who to contact.
 
 ## Later wave, only with new evidence

@@ -243,7 +243,7 @@ function ContactForm() {
             <BrandMark size={40} />
             <p className="qf-label mt-4 text-[var(--accent)]">Subscription plans</p>
             <p className="mt-2 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-tight">
-              From $49
+              From $199
             </p>
             <p className="mt-1 text-sm text-[var(--fg-muted)]">
               Starter · Professional · Premium · monthly
