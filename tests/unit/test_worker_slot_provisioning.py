@@ -139,3 +139,25 @@ def test_missing_service_token_does_nothing(monkeypatch: pytest.MonkeyPatch) -> 
     assert sup.provision_assigned_accounts(authenticate=_auth(), unwrap=_unwrap)[
         "error"
     ] == ("worker_service_token_missing")
+
+
+def test_provision_guarded_does_not_block_on_stuck_login(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+    import time as _time
+
+    sup = _sup(_Railway(), monkeypatch)
+    release = threading.Event()
+
+    def _stuck(**_: object) -> dict[str, object]:
+        release.wait(5)
+        return {"ok": True, "slots": {}}
+
+    monkeypatch.setattr(sup, "provision_assigned_accounts", _stuck)
+    start = _time.monotonic()
+    sup.provision_guarded(timeout_seconds=0.2)
+    assert _time.monotonic() - start < 2.0
+    # A second pass must not start while the first is still stuck.
+    sup.provision_guarded(timeout_seconds=0.2)
+    release.set()

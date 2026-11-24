@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -397,10 +398,7 @@ class LocalWorkerSupervisor:
                 self.refresh_registrations()
             except Exception:
                 logger.exception("slot_refresh_cycle_failed")
-            try:
-                self._log_provision_outcome(self.provision_assigned_accounts())
-            except Exception:
-                logger.exception("slot_provision_cycle_failed")
+            self.provision_guarded()
             report = self.heartbeat_once()
             ready_count = sum(1 for s in report["slots"] if s.get("ready"))
             running = sum(1 for s in report["slots"] if s.get("process_running"))
@@ -413,6 +411,36 @@ class LocalWorkerSupervisor:
                 len(report["resources"]["terminals"]),
             )
             time.sleep(interval_seconds)
+
+    def provision_guarded(self, *, timeout_seconds: float = 240.0) -> None:
+        """Run one provisioning pass without ever stalling the heartbeat loop.
+
+        A stuck MT5 login/IPC call used to block the whole supervisor, so the
+        worker looked offline for hours. The pass runs in a daemon thread; if it
+        exceeds ``timeout_seconds`` the loop moves on (heartbeat continues) and a
+        second pass is not started until the first one ends.
+        """
+        running = getattr(self, "_provision_thread", None)
+        if running is not None and running.is_alive():
+            logger.warning("slot_provision_still_running")
+            return
+        box: dict[str, Any] = {}
+
+        def _work() -> None:
+            try:
+                box["out"] = self.provision_assigned_accounts()
+            except Exception:
+                logger.exception("slot_provision_cycle_failed")
+
+        thread = threading.Thread(target=_work, name="slot-provision", daemon=True)
+        self._provision_thread = thread
+        thread.start()
+        thread.join(timeout_seconds)
+        if thread.is_alive():
+            logger.warning("slot_provision_timeout seconds=%s", timeout_seconds)
+            return
+        if "out" in box:
+            self._log_provision_outcome(box["out"])
 
     @staticmethod
     def _log_provision_outcome(outcome: dict[str, Any]) -> None:
