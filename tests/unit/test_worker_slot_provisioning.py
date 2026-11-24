@@ -178,3 +178,12 @@ def test_provision_guarded_heartbeats_while_login_is_slow(
     sup.provision_guarded(timeout_seconds=0.6, heartbeat_every_seconds=0.1)
     release.set()
     assert len(beats) >= 3
+
+
+def test_window_titles_are_redacted() -> None:
+    from services.mt5_worker_agent.mt5_session import redact_window_titles
+
+    out = redact_window_titles(
+        ["12345678 - HFMarketsGlobal-Live2: Live Account", "  ", "Authorization failed"]
+    )
+    assert out == ["*** - HFMarketsGlobal-Live2: Live Account", "Authorization failed"]
