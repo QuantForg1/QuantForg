@@ -249,7 +249,9 @@ def status_for_user(user_id: UUID | str, *, fetch: Any | None = None) -> dict[st
     }
 
 
-VERIFIER_HEARTBEAT_SECONDS = 180
+# Tolerate worker restarts and slow login cycles: only call the verifier offline
+# after 15 minutes without any heartbeat (workers beat every ~30 s).
+VERIFIER_HEARTBEAT_SECONDS = 900
 
 
 def _verifier_online(fetch: Any) -> bool | None:
