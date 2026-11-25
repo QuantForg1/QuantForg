@@ -642,6 +642,12 @@ class Mt5WorkerApiFacade:
         if verdict is None:
             return  # our side (terminal/IPC): retry, still verifying
         state, code, message = verdict
+        if (
+            code == "INVALID_CREDENTIALS"
+            and bcv.is_auth_failure(str(payload.get("error") or ""))
+            and bcv.count_auth_failure(account_id) < bcv.AUTH_FAILURES_BEFORE_REJECT
+        ):
+            return  # first -6 may be a cold terminal: retry before rejecting
         bcv.mark(account_id, state=state, code=code, message=message)
         # Free the slot: a rejected account is not kept on a terminal.
         try:

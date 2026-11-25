@@ -89,6 +89,59 @@ def classify_failure(error: str) -> tuple[str, str, str] | None:
     return None
 
 
+# A first "-6 Authorization failed" from a freshly started terminal is often
+# only the broker's server list not being downloaded yet. A customer is told
+# "rejected" only after the same account fails twice in a row.
+AUTH_FAILURES_BEFORE_REJECT = 2
+
+
+def is_auth_failure(error: str) -> bool:
+    text = (error or "").lower()
+    return "authorization failed" in text or "(-6," in text
+
+
+def count_auth_failure(
+    broker_account_id: UUID | str,
+    *,
+    fetch: Any | None = None,
+    execute: Any | None = None,
+) -> int:
+    """Increment and return the account's consecutive auth-failure counter."""
+    if fetch is None or execute is None:
+        from app.infrastructure.persistence.direct_postgres import (
+            execute as _execute,
+            fetch as _fetch,
+        )
+
+        fetch = fetch or _fetch
+        execute = execute or _execute
+    try:
+        rows = fetch(
+            "SELECT coalesce(metadata->>'auth_fail_count','0') AS n "
+            "FROM public.broker_accounts WHERE id = $1::uuid",
+            str(broker_account_id),
+        )
+        current = int(str((rows[0] if rows else {}).get("n") or "0") or 0)
+    except Exception:
+        logger.exception("broker_verification_auth_count_read_failed")
+        return AUTH_FAILURES_BEFORE_REJECT  # cannot count: keep old behaviour
+    nxt = current + 1
+    try:
+        execute(
+            """
+            UPDATE public.broker_accounts
+               SET metadata = coalesce(metadata, '{}'::jsonb) || $2::jsonb,
+                   updated_at = now()
+             WHERE id = $1::uuid AND status <> 'revoked'
+            """,
+            str(broker_account_id),
+            json.dumps({"auth_fail_count": str(nxt)}),
+        )
+    except Exception:
+        logger.exception("broker_verification_auth_count_write_failed")
+    return nxt
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
