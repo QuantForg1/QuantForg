@@ -1988,9 +1988,9 @@ function BrokerVerificationPanel({
           data-testid="broker-verifier-offline"
           className="mt-3 rounded-lg border border-[color-mix(in_srgb,var(--warning)_40%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-center text-xs text-[var(--fg)]"
         >
-          Our verification terminal is temporarily offline. Your request is
-          saved and continues automatically as soon as it is back. You don&apos;t
-          need to submit it again.
+          Your request is saved and queued. Verification is taking longer than
+          usual and continues automatically; you don&apos;t need to submit it
+          again.
         </p>
       ) : (
         <p className="mt-3 text-center text-xs text-[var(--fg-subtle)]">
