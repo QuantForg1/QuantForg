@@ -1210,3 +1210,138 @@ header[data-desk-header="overview"] {
   .qf-step-in, .qf-shimmer-text { animation: none; }
   .qf-shimmer-text { color: var(--fg-muted); background: none; }
 }
+
+
+/* ---- Navigation: opaque rail + drawer, animated, reduced-motion safe ---- */
+.qf-nav-surface {
+  background: linear-gradient(180deg, var(--nav-bg-2) 0%, var(--nav-bg) 100%);
+  border-color: var(--nav-edge);
+}
+
+.qf-nav-rail {
+  transition:
+    width 260ms var(--ease-os-out),
+    box-shadow 260ms var(--ease-os-out);
+  will-change: width;
+}
+
+.qf-nav-label {
+  white-space: nowrap;
+  transition:
+    opacity 180ms var(--ease-os),
+    transform 260ms var(--ease-os-out);
+}
+.qf-nav-label[data-hidden="true"] {
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
+}
+
+.qf-nav-item {
+  position: relative;
+  transition:
+    background-color 180ms var(--ease-os),
+    color 180ms var(--ease-os),
+    box-shadow 260ms var(--ease-os-out),
+    transform 160ms var(--ease-os);
+}
+.qf-nav-item:active {
+  transform: scale(0.97);
+}
+.qf-nav-item .qf-nav-icon {
+  transition: transform 260ms var(--ease-os-out);
+}
+.qf-nav-item:hover .qf-nav-icon {
+  transform: scale(1.12);
+}
+.qf-nav-item[data-active="true"] {
+  box-shadow: 0 8px 22px -10px var(--accent-glow), 0 0 0 1px var(--accent-soft);
+}
+.qf-nav-item[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  animation: qf-nav-indicator 320ms var(--ease-os-out) both;
+}
+@keyframes qf-nav-indicator {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.qf-nav-scrim {
+  animation: qf-fade-in 220ms var(--ease-os) both;
+  backdrop-filter: blur(3px);
+}
+.qf-nav-drawer {
+  animation: qf-drawer-in 300ms var(--ease-os-out) both;
+  box-shadow: 24px 0 60px -20px rgba(0, 0, 0, 0.55);
+}
+.qf-nav-drawer[data-closing="true"] {
+  animation: qf-drawer-out 200ms var(--ease-os-in) both;
+}
+.qf-nav-scrim[data-closing="true"] {
+  animation: qf-fade-out 200ms var(--ease-os) both;
+}
+.qf-nav-stagger {
+  animation: qf-nav-rise 360ms var(--ease-os-out) both;
+  animation-delay: calc(var(--i, 0) * 28ms + 80ms);
+}
+@keyframes qf-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes qf-drawer-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+@keyframes qf-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes qf-nav-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qf-nav-rail,
+  .qf-nav-label,
+  .qf-nav-item,
+  .qf-nav-item .qf-nav-icon {
+    transition: none;
+  }
+  .qf-nav-drawer,
+  .qf-nav-scrim,
+  .qf-nav-stagger,
+  .qf-nav-item[data-active="true"]::before {
+    animation: none;
+  }
+}
