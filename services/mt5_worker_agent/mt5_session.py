@@ -445,6 +445,7 @@ def initialize_with_ladder(
     if ok or _error_code(err) != _IPC_TIMEOUT_CODE:
         return ok, err
     logger.warning("mt5_ladder step=python_launch failed err=%s", err)
+    logger.warning("mt5_terminal_windows titles=%s", describe_terminal_windows(path))
     try:
         mt5.shutdown()
     except Exception:
@@ -457,6 +458,7 @@ def initialize_with_ladder(
     if ok:
         return ok, err
     logger.error("mt5_ladder step=prelaunch_attach failed err=%s", err)
+    logger.warning("mt5_terminal_windows titles=%s", describe_terminal_windows(path))
     try:
         mt5.shutdown()
     except Exception:

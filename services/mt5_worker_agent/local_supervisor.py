@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from pathlib import Path
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -34,6 +35,10 @@ from services.mt5_worker_agent.slot_manager import (
 logger = logging.getLogger("quantforg.mt5_worker_agent.supervisor")
 
 
+_RESET_AFTER_INIT_FAILURES = 3
+_RESET_COOLDOWN_SEC = 1800.0
+
+
 @dataclass
 class SlotRuntimeState:
     slot_id: str
@@ -45,6 +50,8 @@ class SlotRuntimeState:
     last_heartbeat_at: str | None = None
     verified_login: str = ""
     verified_server: str = ""
+    init_failures: int = 0
+    last_reset_at: float = 0.0
     worker_id: str = ""
     railway_ok: bool = False
     revoked: bool = False
@@ -341,6 +348,12 @@ class LocalWorkerSupervisor:
                 continue
             finally:
                 material = {}
+            if str(result.error or "").startswith("initialize_failed"):
+                st.init_failures += 1
+                if st.init_failures >= _RESET_AFTER_INIT_FAILURES:
+                    self._reset_slot(slot_id, st)
+            else:
+                st.init_failures = 0
             trade_ok = bool(result.ok and result.trade_allowed)
             env = {0: "demo", 1: "demo", 2: "live"}.get(
                 result.trade_mode if result.trade_mode is not None else -1, "unknown"
@@ -487,6 +500,34 @@ class LocalWorkerSupervisor:
                     slot_id,
                     str(res.get("error") or "unknown")[:200],
                 )
+
+    def _reset_slot(self, slot_id: str, st: SlotRuntimeState) -> None:
+        """Rebuild a slot whose terminal never answers the Python API.
+
+        The old directory is renamed (kept for diagnosis, only one copy), and a
+        clean portable copy is prepared. At most once per ``_RESET_COOLDOWN_SEC``.
+        """
+        import shutil
+        import time as _time
+
+        from services.mt5_worker_agent.mt5_session import kill_slot_terminals
+
+        now = _time.time()
+        if now - st.last_reset_at < _RESET_COOLDOWN_SEC:
+            return
+        st.last_reset_at = now
+        st.init_failures = 0
+        try:
+            exe = Path(self.terminal_exe_for(slot_id))
+            kill_slot_terminals(exe)
+            root = exe.parent
+            for old in root.parent.glob(f"{root.name}.bad_*"):
+                shutil.rmtree(old, ignore_errors=True)
+            root.rename(root.with_name(f"{root.name}.bad_{int(now)}"))
+            prepare_portable_slot(slot_id)
+            logger.warning("slot_reset slot=%s reason=repeated_ipc_failure", slot_id)
+        except Exception:
+            logger.exception("slot_reset_failed slot=%s", slot_id)
 
     def terminal_exe_for(self, slot_id: str) -> str:
         return str(slot_terminal_exe(slot_id))

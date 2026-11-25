@@ -277,3 +277,35 @@ def test_wait_for_login_succeeds_when_session_switches() -> None:
             return next(seq)
 
     assert ms._wait_for_login(_Mt5(), 777, wait_seconds=30) is True
+
+
+def test_repeated_initialize_failures_reset_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    sup = _sup(_Railway(), monkeypatch)
+    resets: list[str] = []
+    monkeypatch.setattr(sup, "_reset_slot", lambda slot_id, _st: resets.append(slot_id))
+    bad = SimpleNamespace(
+        ok=False,
+        trade_allowed=False,
+        trade_mode=None,
+        server="",
+        login=None,
+        market_data_ok=False,
+        balance=None,
+        equity=None,
+        currency="",
+        symbols_total=0,
+        quote_symbol="",
+        error="initialize_failed:(-10005, 'IPC timeout')",
+    )
+    for _ in range(3):
+        for st in sup.states.values():
+            st.ready = False
+        sup.provision_assigned_accounts(
+            authenticate=lambda **_: bad,
+            unwrap=lambda **_: {"login": "1", "secret": "x", "server": "S"},
+        )
+    assert len(resets) >= 1
