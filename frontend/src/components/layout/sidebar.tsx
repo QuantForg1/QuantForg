@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, Fragment, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LifeBuoy, Menu, X } from "lucide-react";
+import { LifeBuoy, LogOut, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   isPrimaryActive,
@@ -28,10 +28,14 @@ function PrimaryLink({
   item,
   collapsed,
   onNavigate,
+  touch,
+  index = 0,
 }: {
   item: PrimaryNavItem;
   collapsed?: boolean;
   onNavigate?: () => void;
+  touch?: boolean;
+  index?: number;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -42,52 +46,49 @@ function PrimaryLink({
     : item.label;
 
   return (
-    <li>
-      <Tooltip delayDuration={400}>
+    <li className={touch ? "qf-nav-stagger" : undefined} style={touch ? ({ "--i": index } as React.CSSProperties) : undefined}>
+      <Tooltip delayDuration={300}>
         <TooltipTrigger asChild>
           <Link
             href={item.href}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             aria-label={title}
+            data-active={active}
             className={cn(
-              "qf-rail-link group relative flex items-center gap-2.5 rounded-xl text-[13px] font-medium",
-              collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
+              "qf-nav-item group flex items-center gap-3 rounded-xl text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+              touch ? "px-3.5 py-3" : "px-[11px] py-2.5",
               active
-                ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-[inset_3px_0_0_0_color-mix(in_srgb,var(--accent-fg)_55%,transparent)]"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)]"
                 : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
             )}
           >
-            <Icon
-              className="h-4 w-4 shrink-0"
-              aria-hidden
-            />
-            {!collapsed ? (
-              <>
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.railBadge ? (
-                  <span
-                    className={cn(
-                      "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                      item.railBadge.tone === "danger"
-                        ? "bg-[var(--danger)] text-white"
-                        : active
-                          ? "bg-[color-mix(in_srgb,var(--accent-fg)_18%,transparent)] text-[var(--accent-fg)]"
-                          : "bg-[var(--accent)] text-[var(--accent-fg)]",
-                    )}
-                  >
-                    {item.railBadge.label}
-                  </span>
-                ) : null}
-                {item.shortcut && !item.railBadge ? (
-                  <kbd className="rounded border border-[var(--border)] px-1 py-px font-mono text-[10px] text-[var(--fg-subtle)] opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 group-focus-visible:opacity-100">
-                    ⌘{item.shortcut}
-                  </kbd>
-                ) : null}
-              </>
-            ) : (
-              <span className="sr-only">{item.label}</span>
-            )}
+            <Icon className="qf-nav-icon h-[18px] w-[18px] shrink-0" aria-hidden />
+            <span
+              className="qf-nav-label min-w-0 flex-1 truncate"
+              data-hidden={collapsed ? "true" : "false"}
+            >
+              {item.label}
+            </span>
+            {!collapsed && item.railBadge ? (
+              <span
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  item.railBadge.tone === "danger"
+                    ? "bg-[var(--danger)] text-white"
+                    : active
+                      ? "bg-[color-mix(in_srgb,var(--accent-fg)_18%,transparent)] text-[var(--accent-fg)]"
+                      : "bg-[var(--accent)] text-[var(--accent-fg)]",
+                )}
+              >
+                {item.railBadge.label}
+              </span>
+            ) : null}
+            {!collapsed && !touch && item.shortcut && !item.railBadge ? (
+              <kbd className="rounded border border-[var(--border)] px-1 py-px font-mono text-[10px] text-[var(--fg-subtle)] opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 group-focus-visible:opacity-100">
+                ⌘{item.shortcut}
+              </kbd>
+            ) : null}
           </Link>
         </TooltipTrigger>
         <TooltipContent side="right" hidden={!collapsed}>
@@ -101,9 +102,11 @@ function PrimaryLink({
 function NavBody({
   collapsed,
   onNavigate,
+  touch,
 }: {
   collapsed?: boolean;
   onNavigate?: () => void;
+  touch?: boolean;
 }) {
   const { user } = useAuth();
   const rail = visiblePrimaryRail(canAccessIteOps(user));
@@ -131,7 +134,7 @@ function NavBody({
   }, []);
 
   return (
-    <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
+    <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 [scrollbar-width:thin]" aria-label="Primary">
       <ul className="space-y-1">
         {rail.map((item, index) => {
           const prev = index > 0 ? rail[index - 1] : undefined;
@@ -164,7 +167,7 @@ function NavBody({
               ) : null}
               {collapsed && sectionChanged && index > 0 ? (
                 <li aria-hidden className="list-none">
-                  <div className="my-1.5" role="separator" />
+                  <div className="mx-2 my-2 h-px bg-[var(--nav-edge)]" role="separator" />
                 </li>
               ) : null}
               {collapsed || open ? (
@@ -172,6 +175,8 @@ function NavBody({
                   item={item}
                   collapsed={collapsed}
                   onNavigate={onNavigate}
+                  touch={touch}
+                  index={index}
                 />
               ) : null}
             </Fragment>
@@ -233,15 +238,15 @@ export function Sidebar() {
         conceal();
       }}
       className={cn(
-        "fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width,box-shadow] duration-200 ease-[var(--ease-os)] lg:flex lg:flex-col",
-        open && "shadow-[var(--shadow-elevated)]",
+        "qf-nav-surface qf-nav-rail fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r lg:flex lg:flex-col",
+        open && "shadow-[24px_0_60px_-24px_rgba(0,0,0,0.55)]",
       )}
       aria-label="Workspace rail"
     >
       <div
         className={cn(
-          "shrink-0 border-b border-[var(--border)]",
-          open ? "px-3 py-3.5" : "px-2 py-3",
+          "shrink-0 border-b border-[var(--nav-edge)]",
+          open ? "px-3.5 py-3.5" : "px-2 py-3",
         )}
       >
         <Link
@@ -258,16 +263,16 @@ export function Sidebar() {
       <Suspense fallback={<div className="flex-1" aria-hidden />}>
         <NavBody collapsed={!open} />
       </Suspense>
-      <div className="shrink-0 border-t border-[var(--border)] p-2">
+      <div className="shrink-0 border-t border-[var(--nav-edge)] p-2">
         <Link
           href="/support"
-          className={cn(
-            "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
-            !open && "justify-center px-0",
-          )}
+          aria-label="Support"
+          className="qf-nav-item group flex items-center gap-3 rounded-xl px-[11px] py-2.5 text-[13px] font-medium text-[var(--fg-muted)] outline-none hover:bg-[var(--surface-2)] hover:text-[var(--fg)] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         >
-          <LifeBuoy className="h-4 w-4 shrink-0" aria-hidden />
-          {open ? <span className="truncate">Support</span> : <span className="sr-only">Support</span>}
+          <LifeBuoy className="qf-nav-icon h-[18px] w-[18px] shrink-0" aria-hidden />
+          <span className="qf-nav-label truncate" data-hidden={open ? "false" : "true"}>
+            Support
+          </span>
         </Link>
       </div>
     </aside>
@@ -275,7 +280,35 @@ export function Sidebar() {
 }
 
 export function MobileNav() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenRaw] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const setOpen = useCallback((next: boolean | ((v: boolean) => boolean)) => {
+    setOpenRaw((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      if (prev && !value) {
+        // Play the slide-out before unmounting (skipped for reduced motion).
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (!reduce) {
+          setClosing(true);
+          if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+          closeTimerRef.current = window.setTimeout(() => {
+            setOpenRaw(false);
+            setClosing(false);
+          }, 200);
+          return true;
+        }
+      }
+      return value;
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -285,13 +318,13 @@ export function MobileNav() {
 
   useEffect(() => {
     setOpen(false);
-  }, [pathname]);
+  }, [pathname, setOpen]);
 
   useEffect(() => {
     const toggle = () => setOpen((v) => !v);
     window.addEventListener("qf-nav-toggle", toggle);
     return () => window.removeEventListener("qf-nav-toggle", toggle);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -320,7 +353,7 @@ export function MobileNav() {
       body.style.overflow = prevOverflow;
       (prev ?? trigger)?.focus?.();
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   return (
     <div className="lg:hidden">
@@ -339,7 +372,8 @@ export function MobileNav() {
         <div className="fixed inset-0 z-[45] lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-[color-mix(in_srgb,var(--bg)_35%,#000)]"
+            className="qf-nav-scrim absolute inset-0 bg-black/55"
+            data-closing={closing}
             aria-label="Dismiss menu"
             onClick={() => setOpen(false)}
           />
@@ -348,14 +382,24 @@ export function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute left-0 top-0 flex max-w-[20rem] flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
+            data-closing={closing}
+            onTouchStart={(e) => {
+              touchStartX.current = e.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(e) => {
+              const start = touchStartX.current;
+              touchStartX.current = null;
+              const end = e.changedTouches[0]?.clientX;
+              if (start !== null && end !== undefined && start - end > 60) setOpen(false);
+            }}
+            className="qf-nav-surface qf-nav-drawer absolute left-0 top-0 flex max-w-[20rem] flex-col overflow-hidden border-r"
             style={{
               width: "min(18.5rem, 86vw)",
               paddingTop: "env(safe-area-inset-top)",
               height: "calc(100dvh - var(--shell-mobile-tab-height) - env(safe-area-inset-bottom))",
             }}
           >
-            <div className="flex items-center justify-between border-b border-[var(--border)] pr-2">
+            <div className="flex items-center justify-between border-b border-[var(--nav-edge)] py-1.5 pr-2">
               <div id={titleId}>
                 <MobileBrand />
               </div>
@@ -370,18 +414,19 @@ export function MobileNav() {
               </Button>
             </div>
             <Suspense fallback={<div className="flex-1" aria-hidden />}>
-              <NavBody onNavigate={() => setOpen(false)} />
+              <NavBody touch onNavigate={() => setOpen(false)} />
             </Suspense>
-            <div className="shrink-0 border-t border-[var(--border)] p-2">
+            <div className="shrink-0 border-t border-[var(--nav-edge)] p-2">
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full justify-start"
+                className="h-11 w-full justify-start gap-3 rounded-xl px-3.5 text-[13px] text-[var(--fg-muted)]"
                 onClick={() => {
                   setOpen(false);
                   void logout().finally(() => router.replace("/login"));
                 }}
               >
+                <LogOut className="h-[18px] w-[18px]" aria-hidden />
                 Sign out
               </Button>
             </div>
