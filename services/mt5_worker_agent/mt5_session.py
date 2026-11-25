@@ -373,6 +373,25 @@ def probe_market_data(mt5: Any) -> tuple[bool, int, str, float | None]:
 
 
 _LADDER_TIMEOUT_MS = 60_000
+_LOGIN_TIMEOUT_MS = 120_000
+_LOGIN_WAIT_SEC = 120.0
+
+
+def _wait_for_login(
+    mt5: Any, login: int, *, wait_seconds: float = _LOGIN_WAIT_SEC
+) -> bool:
+    """Poll account_info until the terminal reports the expected login."""
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        time.sleep(3.0)
+        try:
+            info = mt5.account_info()
+        except Exception:
+            continue
+        if info is not None and int(getattr(info, "login", 0) or 0) == login:
+            logger.info("mt5_login_completed_late suffix=***%s", str(login)[-4:])
+            return True
+    return False
 
 
 def kill_slot_terminals(path: Path) -> None:
@@ -496,8 +515,17 @@ def authenticate_and_verify(
                 str(actual_login)[-4:] if actual_login else "none",
             )
             logged_in = bool(
-                mt5.login(login=int(login), password=password, server=server.strip())
+                mt5.login(
+                    login=int(login),
+                    password=password,
+                    server=server.strip(),
+                    timeout=_LOGIN_TIMEOUT_MS,
+                )
             )
+            if not logged_in and _error_code(mt5.last_error()) == _IPC_TIMEOUT_CODE:
+                # The terminal may still be completing the login; wait for the
+                # session to switch instead of calling it a failure.
+                logged_in = _wait_for_login(mt5, int(login))
             if not logged_in:
                 return Mt5VerifyResult(
                     ok=False,
