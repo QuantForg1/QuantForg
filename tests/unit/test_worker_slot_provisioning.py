@@ -263,3 +263,17 @@ def test_merge_missing_base_dirs_adds_files_without_overwriting(tmp_path: Path) 
     assert (dest / "Config" / "common.ini").read_text() == "slot-common"
     assert not (dest / "Config" / "accounts.dat").exists()
     assert (dest / "Bases" / "Broker" / "a.srv").is_file()
+
+
+def test_wait_for_login_succeeds_when_session_switches() -> None:
+    from types import SimpleNamespace
+
+    from services.mt5_worker_agent import mt5_session as ms
+
+    seq = iter([None, SimpleNamespace(login=1), SimpleNamespace(login=777)])
+
+    class _Mt5:
+        def account_info(self) -> object:
+            return next(seq)
+
+    assert ms._wait_for_login(_Mt5(), 777, wait_seconds=30) is True
