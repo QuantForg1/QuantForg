@@ -187,3 +187,23 @@ def test_status_reports_whether_a_verifier_is_online() -> None:
         return [row]
 
     assert bcv.status_for_user(uuid4(), fetch=broken)["verifier_online"] is None
+
+
+def test_first_auth_failure_is_not_a_rejection() -> None:
+    state = {"n": "0"}
+
+    def fetch(_q, _id):
+        return [{"n": state["n"]}]
+
+    def execute(_q, _id, patch):
+        import json as _json
+
+        state["n"] = _json.loads(patch)["auth_fail_count"]
+
+    first = bcv.count_auth_failure("a", fetch=fetch, execute=execute)
+    second = bcv.count_auth_failure("a", fetch=fetch, execute=execute)
+    assert first < bcv.AUTH_FAILURES_BEFORE_REJECT <= second
+    assert bcv.is_auth_failure(
+        "initialize_failed:(-6, 'Terminal: Authorization failed')"
+    )
+    assert not bcv.is_auth_failure("initialize_failed:(-10005, 'IPC timeout')")
