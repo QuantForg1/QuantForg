@@ -231,6 +231,7 @@ def test_init_ladder_falls_back_to_prelaunch_attach(
     launched: list[int] = []
     killed: list[int] = []
     monkeypatch.setattr(ms, "kill_slot_terminals", lambda _p: killed.append(1))
+    monkeypatch.setattr(ms, "disable_internal_mcp", lambda _p: False)
     monkeypatch.setattr(
         ms, "launch_logged_in", lambda *_a, **_k: launched.append(1) or True
     )
@@ -309,3 +310,25 @@ def test_repeated_initialize_failures_reset_slot(
             unwrap=lambda **_: {"login": "1", "secret": "x", "server": "S"},
         )
     assert len(resets) >= 1
+
+
+def test_disable_internal_mcp_sets_enable_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.mt5_worker_agent import mt5_session as ms
+
+    root = tmp_path / "slot"
+    (root / "Config").mkdir(parents=True)
+    exe = root / "terminal64.exe"
+    exe.write_text("x")
+    monkeypatch.setattr(ms, "assert_worker_terminal_path", lambda p: Path(p))
+    ini = root / "Config" / "assistant.ini"
+    ini.write_text(
+        "[MCP.MetaTrader]\nEnable=1\nPort=22346\n[Other]\nA=1\n", encoding="utf-16"
+    )
+
+    assert ms.disable_internal_mcp(exe) is True
+    out = ini.read_text(encoding="utf-16")
+    assert "[MCP.MetaTrader]\nEnable=0\nPort=22346" in out.replace("\r\n", "\n")
+    assert "[MCP.MetaEditor]" in out and "A=1" in out
+    assert ms.disable_internal_mcp(exe) is False

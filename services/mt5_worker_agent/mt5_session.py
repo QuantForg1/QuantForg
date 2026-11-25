@@ -372,7 +372,7 @@ def probe_market_data(mt5: Any) -> tuple[bool, int, str, float | None]:
     return total > 0, total, pick, None
 
 
-_LADDER_TIMEOUT_MS = 60_000
+_LADDER_TIMEOUT_MS = 180_000
 _LOGIN_TIMEOUT_MS = 120_000
 _LOGIN_WAIT_SEC = 120.0
 
@@ -417,6 +417,57 @@ def kill_slot_terminals(path: Path) -> None:
     time.sleep(2.0)
 
 
+def disable_internal_mcp(terminal_exe: Path | str) -> bool:
+    """Disable the terminal's built-in MCP servers for this slot.
+
+    Builds 6090+ bind ``127.0.0.1:22346`` for MCP; every terminal on the PC
+    shares loopback, so a slot starting while the LIVE terminal runs logs
+    ``MCP bind error ... (10048)``. The slot never needs MCP, so it is turned
+    off in the slot's own ``Config/assistant.ini`` (LIVE is never touched).
+    """
+    root = assert_worker_terminal_path(terminal_exe).parent
+    cfg = root / "Config"
+    if not cfg.is_dir() and (root / "config").is_dir():
+        cfg = root / "config"
+    cfg.mkdir(parents=True, exist_ok=True)
+    ini = cfg / "assistant.ini"
+    text = ""
+    if ini.is_file():
+        try:
+            text = ini.read_text(encoding="utf-16")
+        except UnicodeError:
+            text = ini.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+    for section in ("MCP.MetaTrader", "MCP.MetaEditor"):
+        header = f"[{section}]"
+        try:
+            i = next(n for n, ln in enumerate(lines) if ln.strip() == header)
+        except StopIteration:
+            lines += ["", header, "Enable=0"]
+            continue
+        j = i + 1
+        while j < len(lines) and not lines[j].strip().startswith("["):
+            if lines[j].split("=", 1)[0].strip().lower() == "enable":
+                lines[j] = "Enable=0"
+                break
+            j += 1
+        else:
+            lines.insert(i + 1, "Enable=0")
+            continue
+        if j >= len(lines) or lines[j].strip().startswith("["):
+            lines.insert(i + 1, "Enable=0")
+    payload = "\n".join(lines).strip("\n") + "\n"
+    if payload == text:
+        return False
+    try:
+        ini.write_text(payload, encoding="utf-16")
+    except OSError:
+        logger.exception("disable_internal_mcp_failed path=%s", ini)
+        return False
+    logger.info("disabled_internal_mcp path=%s", ini)
+    return True
+
+
 def initialize_with_ladder(
     mt5: Any,
     path: Path,
@@ -433,6 +484,7 @@ def initialize_with_ladder(
     A hung terminal is killed between attempts so the next cycle never inherits it.
     """
     kill_slot_terminals(path)
+    disable_internal_mcp(path)
     ok, err = _initialize_with_ipc_retry(
         mt5,
         path,
