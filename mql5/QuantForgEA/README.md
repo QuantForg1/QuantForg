@@ -1,4 +1,4 @@
-# QuantForg EA (MQL5 edition) — v1.00 baseline (compiled: 0 errors)
+# QuantForg EA (MQL5 edition) — v1.01 RESEARCH CANDIDATE (not approved for sale)
 
 Standalone Expert Advisor for MQL5 Market. **Independent from the Cloud Robot.**
 It does not share the Cloud's multi-timeframe scoring pipeline, so results are
@@ -11,12 +11,12 @@ uploaded.
 
 ## Risk baseline implemented
 9% max loss at SL (lot is only ever reduced), 25% daily stop, net RR >= 1.5
-after spread, spread <= 0.45, Mon-Fri 07:00-17:00 UTC, default lot 0.01, one
+after spread, spread <= 0.45, Mon-Fri 07:00-12:00 UTC, default lot 0.01, one
 position per symbol, no martingale, no grid, no forced trades.
 
 ## Signal (v0.1, deliberately simple and transparent)
-H1 EMA50/EMA200 trend + confirmed M15 breakout of the last 20-bar range;
-SL = 1.2 x ATR(14, M15); TP = 1.6 x risk.
+H1 EMA50/EMA200 trend + confirmed M15 breakout of the last 40-bar range;
+SL = 2.0 x ATR(14, M15); TP = 2.5 x risk.
 
 ## Status
 - Not compiled or tested yet (no MetaEditor in the build environment).
@@ -24,3 +24,11 @@ SL = 1.2 x ATR(14, M15); TP = 1.6 x risk.
   forward test on DEMO, MQL5 validation, owner review. Do not list before.
 - Quality score >= 75 from the brief is a Cloud-only construct; the EA's own
   filters replace it. No profitability is promised.
+
+## v1.01 status (honest)
+v1.00 failed the gate (PF 0.93). v1.01 uses the parameter set chosen most often by
+rolling walk-forward (9m train / 3m test, 216 variants): OOS PF 1.36, 208 trades,
+but win rate ~35% (gate wants >=40%) and gains are concentrated in the last 3
+windows of 20-27 trades each. Full-sample PF 1.58 is in-sample, not evidence.
+**Do not list on MQL5 Market or run live until: Strategy Tester 1y passes, and a
+DEMO forward test of >= 1 month confirms.** Research script: `research/ea_walkforward.py`.
