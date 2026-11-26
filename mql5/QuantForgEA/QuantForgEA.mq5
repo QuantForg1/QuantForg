@@ -13,16 +13,16 @@
 
 #include <Trade/Trade.mqh>
 
-input group "Risk";
+input group "Risk"
 input double InpLot            = 0.01;  // Default lot
 input double InpMaxRiskPct     = 9.0;   // Max loss at SL, % of equity
 input double InpDailyStopPct   = 25.0;  // Stop trading after this daily loss, %
 input double InpMinRR          = 1.5;   // Min reward/risk after spread
 input double InpMaxSpread      = 0.45;  // Max spread in price units
-input group "Session (UTC)";
+input group "Session (UTC)"
 input int    InpStartHourUTC   = 7;
 input int    InpEndHourUTC     = 17;
-input group "Strategy";
+input group "Strategy"
 input int    InpSwingBars      = 20;    // M15 breakout lookback
 input int    InpAtrPeriod      = 14;
 input double InpAtrSlMult      = 1.2;   // SL distance in ATR
