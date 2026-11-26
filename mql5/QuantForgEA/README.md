@@ -1,4 +1,4 @@
-# QuantForg EA (MQL5 edition) — v1.01 RESEARCH CANDIDATE (not approved for sale)
+# QuantForg EA (MQL5 edition) — v1.01 (owner-approved for sale)
 
 Standalone Expert Advisor for MQL5 Market. **Independent from the Cloud Robot.**
 It does not share the Cloud's multi-timeframe scoring pipeline, so results are
@@ -32,3 +32,9 @@ but win rate ~35% (gate wants >=40%) and gains are concentrated in the last 3
 windows of 20-27 trades each. Full-sample PF 1.58 is in-sample, not evidence.
 **Do not list on MQL5 Market or run live until: Strategy Tester 1y passes, and a
 DEMO forward test of >= 1 month confirms.** Research script: `research/ea_walkforward.py`.
+
+## Release decision
+Owner approved v1.01 for MQL5 Market on 2026-11-26. Recorded for the audit trail: the
+internal backtest gate is NOT met (win rate ~35% vs 40%; OOS evidence is limited).
+The listing therefore makes no profit claims and states the risk plainly
+(see `MQL5_LISTING.md`). Improvements ship as new versions (1.02, 1.03 ...).
