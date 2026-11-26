@@ -2,13 +2,13 @@
 //| QuantForg EA (MQL5 edition) - v0.1 baseline                      |
 //| Standalone: no DLL, no WebRequest, no external licensing.        |
 //| Risk baseline: 9% max risk/trade, 25% daily stop, RR>=1.5 after  |
-//| spread, spread<=0.45, Mon-Fri 07:00-17:00 UTC, one position,     |
+//| spread, spread<=0.45, Mon-Fri 07:00-12:00 UTC, one position,     |
 //| no martingale, no grid, no forced trades.                        |
 //| NOT validated: needs Strategy Tester + forward testing before    |
 //| any listing. Past tests do not promise future results.           |
 //+------------------------------------------------------------------+
 #property copyright "QuantForg"
-#property version   "1.00"
+#property version   "1.01"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -21,12 +21,12 @@ input double InpMinRR          = 1.5;   // Min reward/risk after spread
 input double InpMaxSpread      = 0.45;  // Max spread in price units
 input group "Session (UTC)"
 input int    InpStartHourUTC   = 7;
-input int    InpEndHourUTC     = 17;
+input int    InpEndHourUTC     = 12;
 input group "Strategy"
-input int    InpSwingBars      = 20;    // M15 breakout lookback
+input int    InpSwingBars      = 40;    // M15 breakout lookback
 input int    InpAtrPeriod      = 14;
-input double InpAtrSlMult      = 1.2;   // SL distance in ATR
-input double InpRR             = 1.6;   // Target reward/risk
+input double InpAtrSlMult      = 2.0;   // SL distance in ATR
+input double InpRR             = 2.5;   // Target reward/risk
 input ulong  InpMagic          = 5150001;
 
 CTrade   trade;
