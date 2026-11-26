@@ -398,3 +398,22 @@ def test_self_update_applies_only_when_worker_files_differ(tmp_path):
         return SimpleNamespace(returncode=0)
 
     assert check_and_apply(tmp_path, run=same) is False
+
+
+def test_wait_for_config_consumed_returns_when_journal_shows_login(tmp_path):
+    from services.mt5_worker_agent import mt5_session as ms
+
+    exe = _journal(tmp_path, "0\t1\t1\tNetwork\t'450397410': authorized on XM\n")
+    assert (
+        ms.wait_for_config_consumed(
+            exe, 450397410, ("", 0), timeout_seconds=2.0, poll_seconds=0.1
+        )
+        == "authorized"
+    )
+    quiet = _journal(tmp_path, "0\t1\t1\tTerminal\tstarted\n", name="20261126.log")
+    assert (
+        ms.wait_for_config_consumed(
+            quiet, 450397410, ("", 0), timeout_seconds=0.3, poll_seconds=0.1
+        )
+        == "unknown"
+    )

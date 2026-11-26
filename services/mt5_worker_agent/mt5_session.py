@@ -398,6 +398,26 @@ def remove_startup_ini(terminal_exe: Path | str) -> None:
         logger.exception("startup_ini_remove_failed")
 
 
+def wait_for_config_consumed(
+    path: Path | str,
+    login: int,
+    since: tuple[str, int],
+    *,
+    timeout_seconds: float = 150.0,
+    poll_seconds: float = 3.0,
+) -> str:
+    """Wait until the terminal journal shows activity for this login."""
+    deadline = time.time() + timeout_seconds
+    state = "unknown"
+    while time.time() < deadline:
+        state = journal_auth_state(path, login, since)
+        if state != "unknown":
+            break
+        time.sleep(poll_seconds)
+    logger.info("mt5_startup_config_consumed state=%s", state)
+    return state
+
+
 def launch_logged_in(
     path: Path,
     *,
@@ -417,6 +437,7 @@ def launch_logged_in(
 
     ini = _startup_ini_path(path)
     ini.parent.mkdir(parents=True, exist_ok=True)
+    journal_start = journal_mark(path)
     ini.write_text(
         "[Common]\n"
         f"Login={int(login)}\n"
@@ -439,9 +460,12 @@ def launch_logged_in(
         logger.exception("slot_terminal_launch_failed path=%s", path)
         remove_startup_ini(path)
         return False
-    # The terminal reads the config at start; remove it as soon as it is up.
+    # Keep the config until the terminal has visibly used it. On a slow host the
+    # terminal can take far longer than a few seconds to read it; deleting it
+    # early left the terminal open but never logged in (no Trade tab, no data).
     deadline = time.time() + max(5.0, settle_seconds)
     time.sleep(5.0)
+    wait_for_config_consumed(path, int(login), journal_start)
     remove_startup_ini(path)
     while time.time() < deadline:
         time.sleep(2.0)
