@@ -207,3 +207,40 @@ def test_first_auth_failure_is_not_a_rejection() -> None:
         "initialize_failed:(-6, 'Terminal: Authorization failed')"
     )
     assert not bcv.is_auth_failure("initialize_failed:(-10005, 'IPC timeout')")
+
+
+@pytest.mark.asyncio
+async def test_lookup_prefers_live_account_over_revoked_history() -> None:
+    """Re-adding the same login must find the live row, not a revoked one."""
+    from uuid import uuid4
+
+    from app.domain.entities.broker_integration import BrokerAccount
+    from app.domain.enums.broker import BrokerEnvironment
+    from app.infrastructure.persistence.memory_broker import (
+        InMemoryBrokerAccountRepository,
+    )
+
+    repo = InMemoryBrokerAccountRepository()
+    user_id, broker_id = uuid4(), uuid4()
+
+    def make() -> BrokerAccount:
+        account = BrokerAccount.link(
+            user_id=user_id,
+            broker_id=broker_id,
+            external_account_id="450397410",
+            label="XM",
+            environment=BrokerEnvironment.DEMO,
+            server="XMGlobal-MT5 20",
+            metadata={},
+        )
+        account.activate()
+        return account
+
+    old = make()
+    old.revoke()
+    live = make()
+    await repo.add(old)
+    await repo.add(live)
+
+    found = await repo.get_by_user_broker_external(user_id, broker_id, "450397410")
+    assert found is not None and found.id == live.id

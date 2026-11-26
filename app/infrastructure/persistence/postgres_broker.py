@@ -340,6 +340,7 @@ class PostgresBrokerAccountRepository:
                 WHERE user_id = :user_id
                   AND broker_id = :broker_id
                   AND lower(external_account_id) = lower(:external_account_id)
+                ORDER BY (status = 'revoked') ASC, created_at DESC
                 LIMIT 1
                 """),
             {
