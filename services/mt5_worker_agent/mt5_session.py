@@ -734,10 +734,16 @@ def authenticate_and_verify(
                     trade_allowed=False,
                     error=f"login_failed:journal authorization failed {init_err}",
                 )
+        hint = ""
+        if _error_code(init_err) == _IPC_TIMEOUT_CODE:
+            # Surface what the terminal itself said, so a stuck login is
+            # visible in the verification evidence without PC access.
+            rows = [r.strip()[-60:] for r in slot_journal_tail(path, lines=2)]
+            hint = (" | journal: " + " / ".join(rows)) if rows else ""
         return Mt5VerifyResult(
             ok=False,
             trade_allowed=False,
-            error=f"initialize_failed:{init_err}",
+            error=f"initialize_failed:{init_err}{hint}"[:190],
         )
     try:
         # After attach, confirm account. If initialize ignored login kwargs (warm
