@@ -8,7 +8,7 @@
 //| any listing. Past tests do not promise future results.           |
 //+------------------------------------------------------------------+
 #property copyright "QuantForg"
-#property version   "0.10"
+#property version   "1.00"
 #property strict
 
 #include <Trade/Trade.mqh>

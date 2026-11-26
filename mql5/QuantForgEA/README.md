@@ -1,4 +1,4 @@
-# QuantForg EA (MQL5 edition) — v0.1 baseline
+# QuantForg EA (MQL5 edition) — v1.00 baseline (compiled: 0 errors)
 
 Standalone Expert Advisor for MQL5 Market. **Independent from the Cloud Robot.**
 It does not share the Cloud's multi-timeframe scoring pipeline, so results are
