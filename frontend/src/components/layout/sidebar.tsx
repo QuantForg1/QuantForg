@@ -57,7 +57,7 @@ function PrimaryLink({
             data-active={active}
             className={cn(
               "qf-nav-item group flex items-center gap-3 rounded-xl text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-              touch ? "px-3.5 py-3" : "px-[11px] py-2.5",
+              touch ? "px-3 py-2.5" : "px-[11px] py-2.5",
               active
                 ? "bg-[var(--accent)] text-[var(--accent-fg)]"
                 : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
@@ -392,9 +392,9 @@ export function MobileNav() {
               const end = e.changedTouches[0]?.clientX;
               if (start !== null && end !== undefined && start - end > 60) setOpen(false);
             }}
-            className="qf-nav-surface qf-nav-drawer absolute left-0 top-0 flex max-w-[20rem] flex-col overflow-hidden border-r"
+            className="qf-nav-surface qf-nav-drawer absolute left-0 top-0 flex max-w-[14.5rem] flex-col overflow-hidden border-r"
             style={{
-              width: "min(18.5rem, 86vw)",
+              width: "min(14.5rem, 70vw)",
               paddingTop: "env(safe-area-inset-top)",
               height: "calc(100dvh - var(--shell-mobile-tab-height) - env(safe-area-inset-bottom))",
             }}
