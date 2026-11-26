@@ -558,6 +558,10 @@ def record_broker_confirmed_close(
             confidence = "bound_m1"
         elif sid:
             confidence = "bound_other"
+        elif engine == "ite":
+            # Real ITE-engine entry that no five-pack strategy claimed: record
+            # the true origin without inventing a strategy id.
+            confidence = "engine_only"
         else:
             confidence = "unknown"
         costs_complete = evidence.commission is not None and evidence.swap is not None

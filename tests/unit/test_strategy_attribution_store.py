@@ -133,3 +133,44 @@ def test_live_fill_strategy_survives_sl_comment_overwrite() -> None:
     )
     assert meta.get("strategy_id") == "momentum_scalping"
     assert meta.get("attribution_engine") == "soe"
+
+
+def test_ite_close_without_strategy_is_engine_only(monkeypatch) -> None:
+    """ITE entries no strategy claimed are tagged engine_only, not unknown."""
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    from app.application.services import close_attribution as ca
+    from app.domain.institutional_trading.ai_scalping.strategies import (
+        trade_outcome_store as tos,
+    )
+
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        tos, "record_trade_outcome", lambda **kw: seen.update(kw) or "recorded"
+    )
+    evidence = ca.BrokerExitEvidence(
+        position_id=991001,
+        exit_deal_id=881001,
+        symbol="XAUUSD",
+        side="BUY",
+        volume=Decimal("0.01"),
+        entry_price=Decimal("3500"),
+        exit_price=Decimal("3490"),
+        profit=Decimal("-1"),
+        commission=Decimal("0"),
+        swap=Decimal("0"),
+        net_pnl=Decimal("-1"),
+        close_reason="sl",
+        exit_comment="sl",
+        entry_comment="QF-ITE-abc",
+        entry_deal_id=771001,
+        entry_time=datetime.now(UTC),
+        exit_time=datetime.now(UTC),
+        hold_seconds=60,
+    )
+    ca.record_broker_confirmed_close(
+        evidence=evidence, ledger=ca.CloseAttributionLedger()
+    )
+    assert seen.get("attribution_confidence") == "engine_only"
+    assert not seen.get("strategy_id")
