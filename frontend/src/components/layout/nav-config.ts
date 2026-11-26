@@ -1695,10 +1695,10 @@ export const mobileTabNav: NavItem[] = [
     hint: "Signals",
   },
   {
-    href: "/positions",
-    label: "Positions",
-    icon: Layers3,
-    hint: "Positions",
+    href: "/intelligence",
+    label: "AI",
+    icon: Brain,
+    hint: "AI market intelligence",
   },
   {
     href: "/broker",
