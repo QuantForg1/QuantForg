@@ -536,6 +536,16 @@ export function BrokerConfigWorkspace() {
   const isOperator = canAccessIteOps(user);
   /** Customer accounts waiting for a dedicated worker terminal (never the shared gateway). */
   const [queuedForTerminal, setQueuedForTerminal] = useState(false);
+  const planQ = useQuery({
+    queryKey: ["billing-me"],
+    queryFn: () => billingApi.me(),
+    retry: false,
+    staleTime: 15_000,
+  });
+  const planRequired =
+    !planQ.isLoading &&
+    !planQ.isError &&
+    asRecord(asRecord(planQ.data).robot_access).allowed !== true;
   const queuedRef = useRef(false);
   useEffect(() => {
     queuedRef.current = queuedForTerminal;
@@ -1345,6 +1355,7 @@ export function BrokerConfigWorkspace() {
             }}
             onCancel={() => disconnectMut.mutate()}
             cancelling={disconnectMut.isPending}
+            planRequired={planRequired}
           />
         ) : null}
 
@@ -1899,7 +1910,9 @@ function BrokerVerificationPanel({
   onRetry,
   onCancel,
   cancelling = false,
+  planRequired = false,
 }: {
+  planRequired?: boolean;
   active: boolean;
   onRetry: () => void;
   onCancel?: () => void;
@@ -1919,6 +1932,8 @@ function BrokerVerificationPanel({
   const broker = str(data.broker, "your broker");
   const account = str(data.account, "");
   if (!active && state !== "verifying" && state !== "rejected") return null;
+  // No active plan: the subscribe notice replaces the progress card.
+  if (planRequired && state !== "rejected") return null;
   if (state === "connected") {
     return (
       <div
