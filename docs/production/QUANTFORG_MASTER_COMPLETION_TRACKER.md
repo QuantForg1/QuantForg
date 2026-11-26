@@ -372,3 +372,56 @@ Statuses: COMPLETE_VERIFIED · IMPLEMENTED_NOT_VERIFIED · MISSING · BLOCKED_EX
 3. Finish remaining tip Vercel deploys for `fc924bd9` / `40b021aa` (frontend already SUCCESS on `fc924bd9`; quant-forg pending). #361 queued-banner runtime already PRODUCTION VERIFIED on www. Customer E2E still needs A14.
 4. W2 UI state machine: CONNECTED vs TRADING_PERMISSION_DISABLED vs ROBOT_READY from worker evidence (needs A5).
 5. A5 supervisor + A14 DEMO accounts before any capacity measurement.
+
+## Commercialization: MQL5 + QuantForg Cloud
+
+Owner decision (26 Nov): two independent commercial channels from one strategy
+baseline — (1) QuantForg MT5 EA on MQL5 Market, (2) QuantForg Autonomous Cloud
+Robot on QuantForg.com subscriptions. QuantForg.com is the primary business
+(recurring revenue). This workstream runs in parallel; it never blocks Gateway
+recovery, multi-user workers, risk recovery, RCC, broker integrations, DEMO
+acceptance or LIVE readiness.
+
+Rules carried from the owner brief: entitlements are activated only after
+server-side verified payment (never a browser redirect); an entitlement never
+bypasses risk or broker permission checks; no profit promises or fake
+testimonials; no LIVE test orders; LIVE authorization unchanged; no claim that
+a marketplace listing or subscriptions are "live" before MQL5 approval /
+provider approval and a verified real payment.
+
+### Measured current state (26 Nov)
+
+| Area | State |
+| --- | --- |
+| Payment provider in code | NOWPayments (crypto). `NOWPAYMENTS_API_KEY` / `NOWPAYMENTS_IPN_SECRET` set on Railway production. |
+| Checkout gate | CLOSED on purpose: `POST /billing/checkout` returns 503 `PAYMENTS_NOT_OPEN` for non-owner/admin unless `BILLING_LIVE_CHECKOUT_ENABLED=true`. Variable is not set in production. Owner decision needed. |
+| Server-side verification | Exists: IPN endpoint `/billing/ipn/nowpayments` (HMAC signature) → `_fulfill_finished` activates the license only for a verified `finished` payment. Not yet exercised with a real payment. |
+| UI | Pricing, checkout, invoices pages exist. Unsubscribed users who submit a broker see a Subscribe Now card (#459/#461). |
+| Flutterwave / Paddle | Not integrated. Needs merchant eligibility check (recurring plans, Rwanda Mobile Money, cards). Stripe not assumed. |
+| Plan prices | Code has its own plan table (Professional shown at $399/mo). The brief proposes Starter $49 / Pro $99 / Professional $199 — a pricing decision, not yet applied. |
+| MQL5 EA | Not started. Needs MQL5-native EX5, no DLL/WebRequest licensing, Strategy Tester + forward test, seller identity verification (external). |
+| Strategy evidence | No validated per-strategy backtest yet. XAUUSD M15/H1 (2 y) and M5/M1 (~2 mo) exported by the owner 26 Nov; awaiting upload to run backtest + walk-forward + `backtest_gate`. |
+
+### Phases (from the owner brief)
+
+A Product architecture & IP separation · B MQL5 EA · C MQL5 seller & distribution ·
+D Subscription engine (monthly/quarterly/annual, webhooks, idempotency, renewals,
+grace, refunds) · E Cloud licensing & entitlements · F Customer/Admin commerce
+center · G Marketing · H Commercial acceptance. Order: finish Gateway recovery +
+DEMO multi-user acceptance → Cloud subscription infrastructure → standalone EA →
+MQL5 seller/submission → Cloud subscriptions launch → MQL5 public listing.
+
+### External dependencies (documented, not assumed)
+
+- NOWPayments account/business approval for live collection (owner to confirm).
+- Flutterwave merchant KYC + recurring-plan eligibility; Paddle approval/payout.
+- MQL5 seller identity verification and MetaQuotes product approval.
+- Professional legal review (ToS, license agreement, risk disclosure, refund and
+  privacy policies; no regulated advisory/copy-trading assumptions).
+
+### Next actions
+
+1. Owner: decide on `BILLING_LIVE_CHECKOUT_ENABLED=true` (only after provider approval).
+2. Owner: upload exported XAUUSD CSVs → run per-strategy backtest/walk-forward.
+3. Decide plan prices (brief vs current table) and billing periods (add quarterly).
+4. Investigate Flutterwave recurring-plan eligibility for the merchant account.
