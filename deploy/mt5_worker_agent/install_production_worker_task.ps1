@@ -57,7 +57,12 @@ $RunScript = Join-Path $LogDir "run_worker.ps1"
 $Launcher = @"
 Set-Location '$Root'
 if ((Test-Path '$LogFile') -and ((Get-Item '$LogFile').Length -gt 2MB)) { Move-Item -Force '$LogFile' '${LogFile}.old' }
-& '$Starter' *>> '$LogFile'
+# Loop: the supervisor exits after it applied a newer worker version
+# (self-update); the next iteration starts it on the new code.
+while (`$true) {
+  & '$Starter' *>> '$LogFile'
+  Start-Sleep -Seconds 5
+}
 "@
 Set-Content -Path $RunScript -Value $Launcher -Encoding UTF8
 

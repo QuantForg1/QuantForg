@@ -270,6 +270,61 @@ def log_ladder_diagnostics(path: Path) -> None:
         logger.warning("mt5_slot_journal %s", row)
 
 
+def _newest_journal(path: Path | str) -> Path | None:
+    try:
+        logs = Path(path).parent / "Logs"
+        files = sorted(logs.glob("*.log"), key=lambda f: f.stat().st_mtime)
+        return files[-1] if files else None
+    except Exception:
+        return None
+
+
+def journal_mark(terminal_exe: Path | str) -> tuple[str, int]:
+    """(newest journal name, size) before a launch, so only new lines are read."""
+    f = _newest_journal(terminal_exe)
+    try:
+        return (f.name, f.stat().st_size) if f else ("", 0)
+    except Exception:
+        return ("", 0)
+
+
+def journal_auth_state(
+    terminal_exe: Path | str, login: int, since: tuple[str, int] = ("", 0)
+) -> str:
+    """What the terminal itself says about this login since ``since``.
+
+    Returns ``authorized`` | ``rejected`` | ``investor`` | ``unknown``. Works even
+    when the Python IPC never answers, because the terminal journal is a plain
+    file. Nothing from the journal is logged here.
+    """
+    f = _newest_journal(terminal_exe)
+    if f is None:
+        return "unknown"
+    try:
+        raw = f.read_bytes()
+        if f.name == since[0]:
+            raw = raw[since[1] :]
+        text = raw.decode("utf-16-le", errors="replace")
+        if text.count("\x00") > len(text) // 4:
+            text = raw.decode("utf-8", errors="replace")
+    except Exception:
+        return "unknown"
+    tag = f"'{int(login)}'"
+    state = "unknown"
+    for line in text.splitlines():
+        low = line.lower()
+        if tag not in line:
+            continue
+        if "investor mode" in low or "read-only" in low:
+            state = "investor"
+        elif "authorized on" in low:
+            if state != "investor":
+                state = "authorized"
+        elif "authorization failed" in low or "invalid account" in low:
+            state = "rejected"
+    return state
+
+
 def _initialize_with_ipc_retry(
     mt5: Any,
     path: Path,
@@ -619,6 +674,7 @@ def authenticate_and_verify(
     except Exception:
         logger.exception("clear_portable_saved_login_failed")
     mt5 = _import_mt5()
+    journal_start = journal_mark(path)
     init_ok, init_err = initialize_with_ladder(
         mt5,
         path,
@@ -627,6 +683,33 @@ def authenticate_and_verify(
         server=server.strip(),
     )
     if not init_ok:
+        if _error_code(init_err) == _IPC_TIMEOUT_CODE:
+            # The Python API never answered. The terminal's own journal still
+            # tells whether the broker accepted this login.
+            state = journal_auth_state(path, int(login), journal_start)
+            logger.warning("mt5_journal_auth_state state=%s", state)
+            if state == "authorized":
+                return Mt5VerifyResult(
+                    ok=True,
+                    trade_allowed=True,
+                    login=int(login),
+                    server=server.strip(),
+                    error="",
+                )
+            if state == "investor":
+                return Mt5VerifyResult(
+                    ok=False,
+                    trade_allowed=False,
+                    login=int(login),
+                    server=server.strip(),
+                    error="authenticated_trading_not_enabled",
+                )
+            if state == "rejected":
+                return Mt5VerifyResult(
+                    ok=False,
+                    trade_allowed=False,
+                    error=f"login_failed:journal authorization failed {init_err}",
+                )
         return Mt5VerifyResult(
             ok=False,
             trade_allowed=False,

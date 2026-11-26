@@ -416,7 +416,13 @@ class LocalWorkerSupervisor:
                 "railway_register_complete ok=%s",
                 reg.get("ok"),
             )
+        next_update_check = time.monotonic() + 120.0
         while True:
+            if time.monotonic() >= next_update_check:
+                next_update_check = time.monotonic() + 300.0
+                if self._self_update_enabled() and self._apply_self_update():
+                    logger.warning("worker_restarting_for_update")
+                    raise SystemExit(0)
             try:
                 self.refresh_registrations()
             except Exception:
@@ -439,6 +445,21 @@ class LocalWorkerSupervisor:
                 len(report["resources"]["terminals"]),
             )
             time.sleep(interval_seconds)
+
+    @staticmethod
+    def _self_update_enabled() -> bool:
+        return (os.environ.get("QF_WORKER_SELF_UPDATE") or "1").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+        }
+
+    @staticmethod
+    def _apply_self_update() -> bool:
+        from services.mt5_worker_agent.self_update import check_and_apply
+
+        root = Path(__file__).resolve().parents[2]
+        return check_and_apply(root)
 
     def provision_guarded(
         self,
