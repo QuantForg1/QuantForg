@@ -1213,9 +1213,22 @@ header[data-desk-header="overview"] {
 
 
 /* ---- Navigation: opaque rail + drawer, animated, reduced-motion safe ---- */
+/* Frosted-glass surface: blurred backdrop, no hard white edge lines. */
+:root {
+  --nav-bg: rgba(8, 18, 36, 0.78);
+  --nav-bg-2: rgba(10, 24, 46, 0.72);
+  --nav-edge: rgba(148, 163, 184, 0.08);
+}
+.light {
+  --nav-bg: rgba(255, 255, 255, 0.82);
+  --nav-bg-2: rgba(248, 250, 252, 0.78);
+  --nav-edge: rgba(15, 23, 42, 0.06);
+}
 .qf-nav-surface {
   background: linear-gradient(180deg, var(--nav-bg-2) 0%, var(--nav-bg) 100%);
-  border-color: var(--nav-edge);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
+  border-color: transparent;
 }
 
 .qf-nav-rail {

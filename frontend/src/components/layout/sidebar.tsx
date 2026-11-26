@@ -245,7 +245,7 @@ export function Sidebar() {
     >
       <div
         className={cn(
-          "shrink-0 border-b border-[var(--nav-edge)]",
+          "shrink-0 border-b border-transparent",
           open ? "px-3.5 py-3.5" : "px-2 py-3",
         )}
       >
@@ -263,7 +263,7 @@ export function Sidebar() {
       <Suspense fallback={<div className="flex-1" aria-hidden />}>
         <NavBody collapsed={!open} />
       </Suspense>
-      <div className="shrink-0 border-t border-[var(--nav-edge)] p-2">
+      <div className="shrink-0 border-t border-transparent p-2">
         <Link
           href="/support"
           aria-label="Support"
@@ -399,7 +399,7 @@ export function MobileNav() {
               height: "calc(100dvh - var(--shell-mobile-tab-height) - env(safe-area-inset-bottom))",
             }}
           >
-            <div className="flex items-center justify-between border-b border-[var(--nav-edge)] py-1.5 pr-2">
+            <div className="flex items-center justify-between border-b border-transparent py-1.5 pr-2">
               <div id={titleId}>
                 <MobileBrand />
               </div>
@@ -416,7 +416,7 @@ export function MobileNav() {
             <Suspense fallback={<div className="flex-1" aria-hidden />}>
               <NavBody touch onNavigate={() => setOpen(false)} />
             </Suspense>
-            <div className="shrink-0 border-t border-[var(--nav-edge)] p-2">
+            <div className="shrink-0 border-t border-transparent p-2">
               <Button
                 type="button"
                 variant="ghost"
