@@ -351,3 +351,50 @@ def test_slot_journal_tail_redacts_and_reads_utf16(tmp_path):
     assert any("***0008" in row for row in out)
     assert not any("2002270008" in row or "hunter2" in row for row in out)
     assert ms.slot_journal_tail(tmp_path / "missing" / "terminal64.exe") == []
+
+
+def _journal(tmp_path, text, name="20261125.log"):
+    slot = tmp_path / "demo-a"
+    (slot / "Logs").mkdir(parents=True, exist_ok=True)
+    (slot / "Logs" / name).write_bytes(text.encode("utf-16-le"))
+    return slot / "terminal64.exe"
+
+
+def test_journal_auth_state_reads_terminal_verdict(tmp_path):
+    from services.mt5_worker_agent import mt5_session as ms
+
+    ok = _journal(tmp_path, "0\t1\t1\tNetwork\t'2002270008': authorized on JM-Demo\n")
+    assert ms.journal_auth_state(ok, 2002270008) == "authorized"
+    bad = _journal(tmp_path, "0\t1\t1\tNetwork\t'2002270008': authorization failed\n")
+    assert ms.journal_auth_state(bad, 2002270008) == "rejected"
+    inv = _journal(
+        tmp_path,
+        "'2002270008': authorized on X\n'2002270008': trading has been disabled - "
+        "investor mode\n",
+    )
+    assert ms.journal_auth_state(inv, 2002270008) == "investor"
+    assert ms.journal_auth_state(ok, 999999) == "unknown"
+    # lines before the launch mark are ignored
+    mark = ms.journal_mark(ok)
+    assert ms.journal_auth_state(ok, 2002270008, mark) == "unknown"
+
+
+def test_self_update_applies_only_when_worker_files_differ(tmp_path):
+    from types import SimpleNamespace
+
+    from services.mt5_worker_agent.self_update import check_and_apply
+
+    calls = []
+
+    def runner(cmd, **_kw):
+        calls.append(cmd[1])
+        code = 1 if cmd[1] == "diff" else 0
+        return SimpleNamespace(returncode=code)
+
+    assert check_and_apply(tmp_path, run=runner) is True
+    assert calls == ["fetch", "diff", "checkout"]
+
+    def same(cmd, **_kw):
+        return SimpleNamespace(returncode=0)
+
+    assert check_and_apply(tmp_path, run=same) is False
