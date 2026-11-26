@@ -417,3 +417,11 @@ def test_wait_for_config_consumed_returns_when_journal_shows_login(tmp_path):
         )
         == "unknown"
     )
+
+
+def test_worker_paused_by_env(monkeypatch) -> None:
+    from services.mt5_worker_agent.local_supervisor import LocalWorkerSupervisor
+
+    monkeypatch.setenv("QF_WORKER_PAUSED", "1")
+    assert LocalWorkerSupervisor._paused() is True
+    monkeypatch.delenv("QF_WORKER_PAUSED")

@@ -423,6 +423,14 @@ class LocalWorkerSupervisor:
                 if self._self_update_enabled() and self._apply_self_update():
                     logger.warning("worker_restarting_for_update")
                     raise SystemExit(0)
+            if self._paused():
+                if not getattr(self, "_pause_logged", False):
+                    logger.warning("worker_paused: MT5 terminals closed, idling")
+                    self._pause_logged = True
+                    self._close_slot_terminals()
+                time.sleep(30.0)
+                continue
+            self._pause_logged = False
             try:
                 self.refresh_registrations()
             except Exception:
@@ -445,6 +453,36 @@ class LocalWorkerSupervisor:
                 len(report["resources"]["terminals"]),
             )
             time.sleep(interval_seconds)
+
+    @staticmethod
+    def _paused() -> bool:
+        """Kill switch: worker_state.txt = "paused" (or env) idles the worker.
+
+        Delivered through self-update, so it can be flipped from the repo
+        without touching the PC. The worker keeps checking for updates while
+        paused, so setting the file to "running" resumes it.
+        """
+        if (os.environ.get("QF_WORKER_PAUSED") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            return True
+        root = Path(__file__).resolve().parents[2]
+        state = root / "deploy" / "mt5_worker_agent" / "worker_state.txt"
+        try:
+            return state.read_text(encoding="utf-8").strip().lower() == "paused"
+        except OSError:
+            return False
+
+    def _close_slot_terminals(self) -> None:
+        from services.mt5_worker_agent.mt5_session import kill_slot_terminals
+
+        for slot_id in list(self.states):
+            try:
+                kill_slot_terminals(Path(self.terminal_exe_for(slot_id)))
+            except Exception:
+                logger.exception("pause_close_terminal_failed slot=%s", slot_id)
 
     @staticmethod
     def _self_update_enabled() -> bool:
