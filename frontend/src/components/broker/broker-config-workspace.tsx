@@ -3,12 +3,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   Building2,
   Check,
   CheckCircle2,
   ChevronDown,
   Coins,
+  Crown,
   Eye,
   EyeOff,
   Layers,
@@ -28,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BrokerLogo, Mt5BrandMark } from "@/components/broker/broker-logo";
 import {
+  billingApi,
   brokerConnectivityApi,
   mt5Api,
   marketUniverseApi,
@@ -1336,6 +1339,8 @@ export function BrokerConfigWorkspace() {
           ))}
         </section>
 
+        <BrokerSubscribeNotice />
+
         {!layers.authenticated ? (
           <BrokerVerificationPanel
             active={queuedForTerminal}
@@ -1883,6 +1888,50 @@ export function BrokerConfigWorkspace() {
           </p>
         ) : null}
       </article>
+    </div>
+  );
+}
+
+/**
+ * Shown once a broker account was submitted but the user has no active plan:
+ * the account is received, a subscription is needed to start trading.
+ */
+function BrokerSubscribeNotice() {
+  const meQ = useQuery({
+    queryKey: ["billing-me"],
+    queryFn: () => billingApi.me(),
+    retry: false,
+    staleTime: 15_000,
+  });
+  const statusQ = useQuery({
+    queryKey: ["broker-connect-status"],
+    queryFn: () => weltradeApi.connectStatus(),
+    staleTime: 0,
+  });
+  if (meQ.isLoading || meQ.isError) return null;
+  const allowed = asRecord(asRecord(meQ.data).robot_access).allowed === true;
+  const state = str(asRecord(statusQ.data).state, "");
+  if (allowed || (state !== "verifying" && state !== "connected")) return null;
+  return (
+    <div
+      role="status"
+      data-testid="broker-subscribe-notice"
+      className="mb-4 overflow-hidden rounded-2xl border border-[color-mix(in_srgb,#f25c05_40%,var(--border))] bg-[color-mix(in_srgb,#f25c05_8%,transparent)] px-4 py-5 text-center sm:px-6"
+    >
+      <p className="text-base font-semibold text-[var(--fg)]">
+        Your broker account is received
+      </p>
+      <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-[var(--fg-muted)]">
+        A QuantForg subscription is required to continue. Subscribe to activate
+        the robot on this account.
+      </p>
+      <Link
+        href="/pricing"
+        className="mt-4 inline-flex items-center gap-2.5 rounded-full bg-[linear-gradient(180deg,#ff8a1f,#f25c05)] px-8 py-3 text-base font-semibold text-white shadow-[0_12px_30px_-8px_rgba(242,92,5,0.75)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+      >
+        <Crown className="h-4 w-4" fill="currentColor" aria-hidden />
+        Subscribe Now
+      </Link>
     </div>
   );
 }
