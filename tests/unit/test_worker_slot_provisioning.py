@@ -332,3 +332,22 @@ def test_disable_internal_mcp_sets_enable_zero(
     assert "[MCP.MetaTrader]\nEnable=0\nPort=22346" in out.replace("\r\n", "\n")
     assert "[MCP.MetaEditor]" in out and "A=1" in out
     assert ms.disable_internal_mcp(exe) is False
+
+
+def test_slot_journal_tail_redacts_and_reads_utf16(tmp_path):
+    from services.mt5_worker_agent import mt5_session as ms
+
+    slot = tmp_path / "demo-a"
+    (slot / "Logs").mkdir(parents=True)
+    exe = slot / "terminal64.exe"
+    lines = "\n".join(
+        [
+            "0\t1\t12:00:00.1\tNetwork\t'2002270008': authorization failed",
+            "0\t1\t12:00:01.1\tTerminal\tpassword=hunter2 ok",
+        ]
+    )
+    (slot / "Logs" / "20261125.log").write_bytes(lines.encode("utf-16-le"))
+    out = ms.slot_journal_tail(exe)
+    assert any("***0008" in row for row in out)
+    assert not any("2002270008" in row or "hunter2" in row for row in out)
+    assert ms.slot_journal_tail(tmp_path / "missing" / "terminal64.exe") == []

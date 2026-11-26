@@ -12,6 +12,7 @@ Always pass the intended credentials into ``initialize`` for worker verify.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -189,6 +190,84 @@ def describe_terminal_windows(path: Path) -> list[str]:
     except Exception:
         return []
     return redact_window_titles(out.stdout.splitlines())
+
+
+_REDACT_NUMBERS = re.compile(r"\d{6,}")
+_REDACT_SECRETS = re.compile(r"(?i)(/?password|pass|secret)[=: ]+\S+")
+
+
+def redact_diag_line(line: str) -> str:
+    """Account numbers become ***last4; any password-looking value is dropped."""
+    text = _REDACT_SECRETS.sub(r"\1=***", line.strip())
+    text = _REDACT_NUMBERS.sub(lambda m: "***" + m.group(0)[-4:], text)
+    return text[:240]
+
+
+def slot_journal_tail(terminal_exe: Path | str, lines: int = 14) -> list[str]:
+    """Last lines of the slot terminal's own journal (redacted), for diagnosis.
+
+    The journal says what the terminal itself is doing (authorized, server
+    unreachable, DLL/permission prompts) when the Python API times out.
+    Read-only; never raises.
+    """
+    try:
+        logs = Path(terminal_exe).parent / "Logs"
+        files = sorted(logs.glob("*.log"), key=lambda f: f.stat().st_mtime)
+        if not files:
+            return []
+        raw = files[-1].read_bytes()[-24_000:]
+        text = raw.decode("utf-16-le", errors="replace")
+        if text.count("\x00") > len(text) // 4:
+            text = raw.decode("utf-8", errors="replace")
+        rows = [ln for ln in text.splitlines() if ln.strip()]
+        return [redact_diag_line(ln) for ln in rows[-lines:]]
+    except Exception:
+        return []
+
+
+def describe_slot_processes(path: Path) -> list[str]:
+    """Session / elevation of this Python process and the slot terminal(s)."""
+    import ctypes
+    import os
+    import subprocess
+
+    info: list[str] = []
+    try:
+        sess = ctypes.c_ulong(0)
+        ctypes.windll.kernel32.ProcessIdToSessionId(  # type: ignore[attr-defined]
+            os.getpid(), ctypes.byref(sess)
+        )
+        admin = bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore[attr-defined]
+        info.append(f"python pid={os.getpid()} session={sess.value} admin={admin}")
+    except Exception:
+        info.append("python session/admin unknown")
+    target = str(path).lower().replace("'", "''")
+    script = (
+        "Get-CimInstance Win32_Process -Filter \"Name='terminal64.exe'\" | "
+        f"Where-Object {{ $_.ExecutablePath -and $_.ExecutablePath.ToLower() -eq '{target}' }} | "
+        'ForEach-Object { "terminal pid=$($_.ProcessId) session=$($_.SessionId) '
+        'started=$($_.CreationDate) cmd=$($_.CommandLine)" }'
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        rows = [redact_diag_line(r) for r in out.stdout.splitlines() if r.strip()]
+        info.extend(rows or ["no slot terminal process running"])
+    except Exception:
+        info.append("terminal process query failed")
+    return info
+
+
+def log_ladder_diagnostics(path: Path) -> None:
+    logger.warning("mt5_terminal_windows titles=%s", describe_terminal_windows(path))
+    logger.warning("mt5_slot_processes %s", describe_slot_processes(path))
+    for row in slot_journal_tail(path):
+        logger.warning("mt5_slot_journal %s", row)
 
 
 def _initialize_with_ipc_retry(
@@ -497,7 +576,7 @@ def initialize_with_ladder(
     if ok or _error_code(err) != _IPC_TIMEOUT_CODE:
         return ok, err
     logger.warning("mt5_ladder step=python_launch failed err=%s", err)
-    logger.warning("mt5_terminal_windows titles=%s", describe_terminal_windows(path))
+    log_ladder_diagnostics(path)
     try:
         mt5.shutdown()
     except Exception:
@@ -510,7 +589,7 @@ def initialize_with_ladder(
     if ok:
         return ok, err
     logger.error("mt5_ladder step=prelaunch_attach failed err=%s", err)
-    logger.warning("mt5_terminal_windows titles=%s", describe_terminal_windows(path))
+    log_ladder_diagnostics(path)
     try:
         mt5.shutdown()
     except Exception:
