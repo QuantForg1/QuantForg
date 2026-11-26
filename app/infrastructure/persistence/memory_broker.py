@@ -98,14 +98,18 @@ class InMemoryBrokerAccountRepository:
         external_account_id: str,
     ) -> BrokerAccount | None:
         target = external_account_id.strip().lower()
-        for account in self.items.values():
-            if (
-                account.user_id == user_id
-                and account.broker_id == broker_id
-                and account.external_account_id.lower() == target
-            ):
-                return account
-        return None
+        matches = [
+            account
+            for account in self.items.values()
+            if account.user_id == user_id
+            and account.broker_id == broker_id
+            and account.external_account_id.lower() == target
+        ]
+        if not matches:
+            return None
+        # A live row wins over revoked history (mirrors the Postgres ordering).
+        matches.sort(key=lambda a: a.status.value == "revoked")
+        return matches[0]
 
     async def get_active_global_claim(
         self,
