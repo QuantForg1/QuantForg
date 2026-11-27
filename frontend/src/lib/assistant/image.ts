@@ -1,7 +1,7 @@
 /** Read a user image and downscale it for the assistant (browser only). */
 export const ASSISTANT_MAX_IMAGES = 3;
 export const ASSISTANT_ACCEPTED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-const MAX_EDGE = 1600;
+const MAX_EDGE = 2000; // chart axis text stays legible
 const MAX_INPUT_BYTES = 15 * 1024 * 1024;
 
 export async function prepareChartImage(file: File): Promise<string> {
@@ -29,5 +29,5 @@ export async function prepareChartImage(file: File): Promise<string> {
   const ctx = canvas.getContext("2d");
   if (!ctx) return original;
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.88);
+  return canvas.toDataURL("image/jpeg", 0.92);
 }

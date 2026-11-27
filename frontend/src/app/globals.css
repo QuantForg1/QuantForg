@@ -1358,3 +1358,18 @@ header[data-desk-header="overview"] {
     animation: none;
   }
 }
+
+/* Smooth interactions (additive; disabled for reduced motion) */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  :where(button, [role="button"], a) {
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease,
+      box-shadow 0.18s ease,
+      opacity 0.18s ease,
+      transform 0.16s ease;
+  }
+  :where(button:not(:disabled), [role="button"]):active { transform: scale(0.985); }
+}
