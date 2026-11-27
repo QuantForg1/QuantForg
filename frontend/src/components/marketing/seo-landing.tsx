@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PricingFooter, PricingHeader, pricingBtnPrimary, pricingBtnSecondary } from "@/components/pricing/marketing-chrome";
+import { Reveal } from "@/components/ui/reveal";
 import { AuthFormProviders } from "@/providers/auth-form-providers";
 import { SITE_URL } from "@/lib/seo/strategy-content";
 
@@ -70,20 +71,25 @@ export function SeoLanding({
           </header>
 
           <ul className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {highlights.map((h) => (
-              <li key={h.title} className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5">
+            {highlights.map((h, i) => (
+              <Reveal
+                as="li"
+                key={h.title}
+                delay={(i % 3) * 0.06}
+                className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-5 transition-colors duration-200 hover:border-[var(--accent)]/40"
+              >
                 <h2 className="text-sm font-semibold">{h.title}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-[var(--fg-muted)]">{h.text}</p>
-              </li>
+              </Reveal>
             ))}
           </ul>
 
           <div className="mt-12 max-w-3xl space-y-10">
             {sections.map((s) => (
-              <section key={s.title}>
+              <Reveal as="section" key={s.title}>
                 <h2 className="text-2xl font-semibold tracking-tight">{s.title}</h2>
                 <div className="mt-3 space-y-3 text-sm leading-relaxed text-[var(--fg-muted)] sm:text-base">{s.body}</div>
-              </section>
+              </Reveal>
             ))}
           </div>
 
