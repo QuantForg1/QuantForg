@@ -351,3 +351,13 @@ async def test_unconfigured_sender_sends_nothing() -> None:
     sender.enqueue("hello")
     await sender.drain()  # must not raise or call Telegram
     assert not sender.configured
+
+
+def test_operator_chat_must_be_private_user_chat() -> None:
+    from app.application.services.operator_alerts import is_private_chat_id
+
+    assert is_private_chat_id("123456789")
+    assert not is_private_chat_id("-1001234567890")  # channel / supergroup
+    assert not is_private_chat_id("@QuantForgSignals")
+    assert not is_private_chat_id("")
+    assert not is_private_chat_id(None)
