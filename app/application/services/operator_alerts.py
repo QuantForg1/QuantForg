@@ -1023,6 +1023,16 @@ def get_operator_watch() -> OperatorWatch | None:
     return _watch
 
 
+def is_private_chat_id(chat_id: object) -> bool:
+    """True only for a private user chat (positive numeric Telegram id).
+
+    Channels and groups use negative ids (``-100...``) or ``@username``; operator
+    alerts (orders, daily stop, errors, restarts) must never go there.
+    """
+    text = str(chat_id or "").strip()
+    return text.isdigit() and int(text) > 0
+
+
 async def run_operator_watch(adapter: Any, settings: Any) -> None:
     """Long-running task started from the app lifespan. Never raises."""
     global _watch
@@ -1030,6 +1040,13 @@ async def run_operator_watch(adapter: Any, settings: Any) -> None:
     reveal = getattr(token_obj, "get_secret_value", None)
     token = reveal() if callable(reveal) else token_obj
     chat = getattr(settings, "telegram_operator_chat_id", "") or ""
+    if chat and not is_private_chat_id(chat):
+        logger.warning(
+            "operator_chat_not_private_alerts_logged_only",
+            hint="TELEGRAM_OPERATOR_CHAT_ID must be a private user chat id "
+            "(positive number), never the public signals channel.",
+        )
+        chat = ""
     sender = OperatorTelegramSender(token=token, chat_id=chat)
     alerter = OperatorAlerter(sender)
     journal = TradeJournal(rest=_supabase_rest())
