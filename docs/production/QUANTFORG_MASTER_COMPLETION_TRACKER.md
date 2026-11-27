@@ -399,8 +399,8 @@ provider approval and a verified real payment.
 | UI | Pricing, checkout, invoices pages exist. Unsubscribed users who submit a broker see a Subscribe Now card (#459/#461). |
 | Flutterwave / Paddle | Not integrated. Needs merchant eligibility check (recurring plans, Rwanda Mobile Money, cards). Stripe not assumed. |
 | Plan prices | Code has its own plan table (Professional shown at $399/mo). The brief proposes Starter $49 / Pro $99 / Professional $199 — a pricing decision, not yet applied. |
-| MQL5 EA | Not started. Needs MQL5-native EX5, no DLL/WebRequest licensing, Strategy Tester + forward test, seller identity verification (external). |
-| Strategy evidence | No validated per-strategy backtest yet. XAUUSD M15/H1 (2 y) and M5/M1 (~2 mo) exported by the owner 26 Nov; awaiting upload to run backtest + walk-forward + `backtest_gate`. |
+| MQL5 EA | v1.01 "QuantForg Gold Breakout" built (`mql5/QuantForgEA`), tester 2025-12..2026-11: PF 2.02, 88 trades, win 44%, eq DD 4.4% (history quality 63%). Walk-forward OOS PF 1.36; prior 12 months weak in research. Product page filled on mql5.com and .ex5 (X64 Regular) uploaded by owner 26 Nov; awaiting MQL5 automated validation / moderation. NOT live until MQL5 approves. Pending: stress test 2024-12..2025-11, DEMO forward test >=1 month. Website page `/mt5-expert-advisor` live. |
+| Strategy evidence | EA replicated in Python (`research/ea_walkforward.py`) and matched MT5 tester (PF 0.91 vs 0.93). Per-strategy backtest of the 5 Cloud strategies still not possible from bars alone (needs live MTF pipeline). |
 
 ### Phases (from the owner brief)
 
