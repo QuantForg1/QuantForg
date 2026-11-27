@@ -8,6 +8,7 @@ const COLUMNS = [
       { href: "/#features", label: "Features" },
       { href: "/#platform", label: "Platform" },
       { href: "/gold-trading-robot", label: "Gold Trading Robot" },
+      { href: "/mt5-expert-advisor", label: "MT5 Expert Advisor" },
       { href: "/ai-trading-assistant", label: "QuantForg AI Assistant" },
       { href: "/#how-it-works", label: "How It Works" },
       { href: "/pricing", label: "Pricing" },

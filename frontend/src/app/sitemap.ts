@@ -16,6 +16,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const core: Array<[string, number, "daily" | "weekly" | "monthly"]> = [
     ["/", 1, "weekly"],
     ["/gold-trading-robot", 0.95, "weekly"],
+    ["/mt5-expert-advisor", 0.85, "weekly"],
     ["/ai-trading-assistant", 0.9, "weekly"],
     ["/strategies", 0.9, "weekly"],
     ["/learn", 0.8, "monthly"],
