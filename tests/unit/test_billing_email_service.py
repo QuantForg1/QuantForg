@@ -57,25 +57,8 @@ def test_load_html_falls_back_when_template_file_missing(
     assert "QuantForg" in html
 
 
-@pytest.mark.asyncio
-async def test_renewal_reminders_are_queued_once_per_period(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from datetime import UTC, datetime, timedelta
+def _fake_env(monkeypatch, bes, rows):
     from types import SimpleNamespace
-    from uuid import uuid4
-
-    from app.application.services import billing_email_service as bes
-
-    expires = datetime.now(UTC) + timedelta(hours=30)
-    rows = [
-        {
-            "id": uuid4(),
-            "user_id": uuid4(),
-            "email_norm": "a@x.io",
-            "expires_at": expires,
-        }
-    ]
 
     class _Res:
         def mappings(self):
@@ -108,6 +91,57 @@ async def test_renewal_reminders_are_queued_once_per_period(
 
     monkeypatch.setattr(bes, "_uow", _uow)
     monkeypatch.setattr(bes, "queue_billing_email", _queue)
-    assert await bes.queue_renewal_reminders() == 1
-    assert await bes.queue_renewal_reminders() == 0  # idempotent
-    assert sent[0]["template_key"] == "renewal_reminder"
+    return sent
+
+
+def _row(expires, tier="starter"):
+    from uuid import uuid4
+
+    return {
+        "id": uuid4(),
+        "user_id": uuid4(),
+        "email_norm": "a@x.io",
+        "expires_at": expires,
+        "tier": tier,
+    }
+
+
+@pytest.mark.asyncio
+async def test_renewal_reminder_stages_and_grace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.application.services import billing_email_service as bes
+
+    now = datetime.now(UTC)
+    grace = 2
+    # period ends in 6d -> stage 7; 2.5d -> stage 3; 0.5d -> stage 1; ended -> grace
+    cases = {
+        "7": now + timedelta(days=6 + grace),
+        "3": now + timedelta(days=2, hours=12 + grace * 24),
+        "1": now + timedelta(hours=12 + grace * 24),
+        "0": now + timedelta(hours=24),  # period ended 1d ago, still in grace
+        "far": now + timedelta(days=20 + grace),
+    }
+    rows = [_row(v, tier="premium") for v in cases.values()]
+    sent = _fake_env(monkeypatch, bes, rows)
+    assert await bes.queue_renewal_reminders(grace_days=grace) == 4
+    assert await bes.queue_renewal_reminders(grace_days=grace) == 0  # idempotent
+    keys = sorted(str(k["dedupe_key"]).rsplit(":", 1)[1] for k in sent)
+    assert keys == ["0", "1", "3", "7"]
+    templates = {
+        str(k["dedupe_key"]).rsplit(":", 1)[1]: k["template_key"] for k in sent
+    }
+    assert templates["0"] == "subscription_past_due"
+    assert templates["7"] == "renewal_reminder"
+    payload = sent[0]["payload"]
+    assert payload["cta_url"].endswith("/billing/checkout?plan=premium")
+    assert "_subject" in payload
+
+
+def test_renewal_cta_defaults_to_professional() -> None:
+    from app.application.services.billing_email_service import _renewal_cta_url
+
+    assert _renewal_cta_url("weird").endswith("plan=professional")
+    assert _renewal_cta_url("Starter").endswith("plan=starter")

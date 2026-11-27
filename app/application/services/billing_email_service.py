@@ -54,6 +54,7 @@ _TEMPLATE_FILES: dict[str, str] = {
     "payment_failed": "payment-failed.html",
     "subscription_activated": "subscription-activated.html",
     "renewal_reminder": "subscription-renewal-reminder.html",
+    "subscription_past_due": "subscription-past-due.html",
     "subscription_expired": "subscription-expired.html",
     "subscription_cancelled": "subscription-cancelled.html",
 }
@@ -260,8 +261,9 @@ async def process_billing_email_queue(
 
             try:
                 html = _load_html(template_key, payload)
-                subject = TEMPLATE_SUBJECTS.get(
-                    template_key, "QuantForg billing update"
+                subject = str(
+                    payload.get("_subject")
+                    or TEMPLATE_SUBJECTS.get(template_key, "QuantForg billing update")
                 )
                 message_id = await _send_resend(
                     settings=settings,
@@ -360,12 +362,52 @@ async def queue_trial_expiring_reminders(*, within_hours: int = 48) -> int:
     return queued
 
 
-async def queue_renewal_reminders(*, within_hours: int = 72) -> int:
-    """Queue renewal reminders for paid licenses that expire soon.
+_RENEWAL_STAGES_DAYS = (7, 3, 1)
+_SITE = "https://www.quantforg.com"
+_KNOWN_PLANS = {"starter", "professional", "premium"}
+
+
+def _renewal_cta_url(tier: object) -> str:
+    plan = str(tier or "").strip().lower()
+    if plan not in _KNOWN_PLANS:
+        plan = "professional"
+    return f"{_SITE}/billing/checkout?plan={plan}"
+
+
+def _renewal_stage(*, period_end: Any, now: Any) -> int | None:
+    """Return 7, 3 or 1 (days before period end), 0 once in grace, or None."""
+    left = period_end - now
+    if left.total_seconds() <= 0:
+        return 0
+    days = left.total_seconds() / 86400.0
+    if days > _RENEWAL_STAGES_DAYS[0]:
+        return None
+    for stage in sorted(_RENEWAL_STAGES_DAYS):
+        if days <= stage:
+            return stage
+    return None
+
+
+async def queue_renewal_reminders(
+    *, within_hours: int | None = None, grace_days: int = 2
+) -> int:
+    """Queue renewal reminders 7, 3 and 1 day(s) before the paid period ends.
 
     Crypto payments do not auto-renew: the customer pays a new invoice before
-    the period ends. One reminder per license and expiry date (idempotent).
+    the period ends. ``licenses.expires_at`` already includes the grace period,
+    so the period end is ``expires_at - grace_days``. Once the period has ended
+    (customer is in grace) one "past due" notice states when access stops.
+    One email per license, period end and stage (idempotent via dedupe key).
     """
+    from datetime import UTC, datetime, timedelta
+
+    grace = max(0, int(grace_days))
+    window_h = (
+        int(within_hours)
+        if within_hours is not None
+        else (_RENEWAL_STAGES_DAYS[0] * 24)
+    )
+    window_h = max(1, min(window_h, 336))
     uow = await _uow()
     queued = 0
     try:
@@ -375,7 +417,7 @@ async def queue_renewal_reminders(*, within_hours: int = 72) -> int:
                 await session.execute(
                     text("""
                         SELECT l.id, l.user_id, lower(u.email) AS email_norm,
-                               l.expires_at
+                               l.expires_at, l.tier
                         FROM licenses l
                         JOIN users u ON u.id = l.user_id
                         WHERE l.status = 'active'
@@ -383,10 +425,11 @@ async def queue_renewal_reminders(*, within_hours: int = 72) -> int:
                           AND l.expires_at > timezone('utc', now())
                           AND l.expires_at <= timezone('utc', now())
                                + make_interval(hours => :hours)
+                          AND lower(coalesce(l.tier::text, '')) <> 'trial'
                           AND lower(coalesce(u.role::text, ''))
                               NOT IN ('owner', 'admin')
                         """),
-                    {"hours": max(1, min(int(within_hours), 336))},
+                    {"hours": window_h + grace * 24},
                 )
             )
             .mappings()
@@ -397,18 +440,43 @@ async def queue_renewal_reminders(*, within_hours: int = 72) -> int:
         with contextlib.suppress(Exception):
             await uow.__aexit__(None, None, None)
 
+    now = datetime.now(UTC)
     for row in rows:
         expires = row["expires_at"]
+        period_end = expires - timedelta(days=grace)
+        stage = _renewal_stage(period_end=period_end, now=now)
+        if stage is None:
+            continue
+        cta = _renewal_cta_url(row.get("tier"))
+        end_s = period_end.date().isoformat()
+        stop_s = expires.date().isoformat()
+        if stage == 0:
+            template_key = "subscription_past_due"
+            subject = "Action needed: your QuantForg subscription period has ended"
+            summary = (
+                f"Your subscription period ended on {end_s}. You are in a "
+                f"{grace}-day grace period: the robot keeps working until "
+                f"{stop_s} UTC. Pay a new Crypto Payment invoice before then to "
+                "avoid interruption. Automated trading access stops after the "
+                "grace period."
+            )
+        else:
+            template_key = "renewal_reminder"
+            plural = "" if stage == 1 else "s"
+            subject = f"Your QuantForg subscription ends in {stage} day{plural}"
+            summary = (
+                f"Your QuantForg subscription period ends on {end_s} UTC "
+                f"(about {stage} day{plural} from now). Pay a new Crypto "
+                f"Payment invoice before then to keep the robot running. "
+                f"Automatic crypto charging is not enabled, and a "
+                f"{grace}-day grace period follows the end date."
+            )
         ok = await queue_billing_email(
             user_id=str(row["user_id"]),
             email_norm=str(row["email_norm"] or ""),
-            template_key="renewal_reminder",
-            dedupe_key=f"renewal_reminder:{row['id']}:{expires.date().isoformat()}",
-            payload={
-                "summary": "Your QuantForg subscription period ends on "
-                f"{expires.date().isoformat()}. Pay a new Crypto Payment invoice "
-                "before then to keep the robot running."
-            },
+            template_key=template_key,
+            dedupe_key=f"{template_key}:{row['id']}:{end_s}:{stage}",
+            payload={"summary": summary, "cta_url": cta, "_subject": subject},
         )
         if ok:
             queued += 1
