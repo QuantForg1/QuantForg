@@ -17,6 +17,14 @@ import { asList, asRecord, num, str } from "@/lib/desk";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+const PAYABLE = ["pending_payment", "confirming", "partially_paid", "renewal_due", "past_due"];
+
+function daysUntil(iso: string): number | null {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return Math.ceil((t - Date.now()) / 86_400_000);
+}
+
 type StatusView = { label: string; detail: string; live: boolean };
 
 /** One clear status from server billing state. Never invents a paid plan. */
@@ -41,6 +49,15 @@ function subscriptionStatusView(state: string, robotAllowed: boolean): StatusVie
         detail:
           "Your invoice is waiting for payment or confirmation. The robot starts as soon as the payment is verified.",
         live: false,
+      };
+    case "grace":
+    case "past_due":
+    case "renewal_due":
+      return {
+        label: "Renewal due",
+        detail:
+          "Your paid period has ended or is about to end. Pay the new invoice now to keep the robot trading without interruption.",
+        live: robotAllowed,
       };
     case "expired":
     case "payment_failed":
@@ -129,6 +146,15 @@ export function SubscriptionPanel() {
   const nextBilling = formatBillingDate(
     str(subscription.next_renewal_due || subscription.period_end || subscription.access_until),
   );
+  const nextRaw = str(subscription.next_renewal_due || subscription.period_end || subscription.access_until);
+  const daysLeft = daysUntil(nextRaw);
+  const hasPlan = ["active", "cancelled", "grace", "past_due", "renewal_due", "pending_payment"].includes(state) && Boolean(planDisplay);
+  const payableInvoice = invoices.find(
+    (r) => PAYABLE.includes(str(r.status).toLowerCase()) && str(r.invoice_url, "") !== "",
+  );
+  const payUrl = str(payableInvoice?.invoice_url, "") || str(subscription.invoice_url, "");
+  const renewSoon = state === "active" && daysLeft !== null && daysLeft <= 7;
+  const renewHref = `/billing/checkout?plan=${encodeURIComponent(planKey || "professional")}`;
   const planCopy =
     catalog?.positioning ||
     statusView.detail ||
@@ -170,6 +196,31 @@ export function SubscriptionPanel() {
             {statusView.label}
           </span>
         </div>
+        {payUrl && (state === "pending_payment" || PAYABLE.includes(state)) ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-soft)] px-3.5 py-3">
+            <p className="text-sm text-[var(--fg)]">Your invoice is waiting for payment.</p>
+            <a
+              href={payUrl}
+              className="inline-flex h-9 items-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)]"
+            >
+              Pay now
+            </a>
+          </div>
+        ) : null}
+        {!hasPlan && !meQ.isLoading ? (
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg)] px-4 py-5 text-center">
+            <p className="text-sm font-semibold text-[var(--fg)]">You do not have an active plan</p>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--fg-muted)]">
+              Your broker stays connected. Subscribe to switch the robot on.
+            </p>
+            <Link
+              href="/pricing"
+              className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-semibold text-[var(--accent-fg)]"
+            >
+              Subscribe now
+            </Link>
+          </div>
+        ) : null}
         <p
           data-testid="robot-access"
           className="mt-4 text-sm leading-relaxed text-[var(--fg-muted)]"
@@ -201,39 +252,73 @@ export function SubscriptionPanel() {
         title="Subscription Details"
         description="Plan, billing cycle, next billing date, and amount."
       >
-        <DetailRow label="Plan" value={meQ.isLoading ? "Loading" : planDisplay || "Not available"} />
+        <DetailRow label="Plan" value={meQ.isLoading ? "Loading" : planDisplay || "No plan"} />
         <DetailRow label="Status" value={statusView.label} live={statusView.live} />
         <DetailRow label="Billing Cycle" value={billingCycle} />
-        <DetailRow label="Next Billing Date" value={nextBilling === "—" ? "Not available" : nextBilling} />
-        <DetailRow label="Amount" value={amountLabel} />
+        <DetailRow
+          label="Next Billing Date"
+          value={
+            nextBilling === "—"
+              ? hasPlan
+                ? "Pending payment"
+                : "No plan"
+              : daysLeft !== null && daysLeft >= 0
+                ? `${nextBilling} · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+                : nextBilling
+          }
+        />
+        <DetailRow label="Amount" value={amountLabel === "Not available" ? "—" : amountLabel} />
+        {hasPlan && state !== "cancelled" ? (
+          <p className="mt-3 text-xs leading-relaxed text-[var(--fg-subtle)]">
+            Crypto is not charged automatically. Pay the renewal invoice before the date above to avoid interruption.
+          </p>
+        ) : null}
       </SubCard>
 
       <SubCard
         icon={<CreditCard className="h-4 w-4" aria-hidden />}
         title="Manage Subscription"
-        description="Update your plan or open the existing payment records."
+        description="Pay, renew or change your plan."
       >
         <div className="flex flex-1 flex-col justify-end gap-3">
-          <Link
-            href="/pricing"
-            className="inline-flex h-11 items-center justify-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)]"
-          >
-            Change Plan
-          </Link>
+          {payUrl ? (
+            <a
+              href={payUrl}
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)]"
+            >
+              Pay invoice
+            </a>
+          ) : !hasPlan ? (
+            <Link
+              href="/pricing"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)]"
+            >
+              Subscribe now
+            </Link>
+          ) : renewSoon || state === "grace" || state === "expired" ? (
+            <Link
+              href={renewHref}
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent-fg)]"
+            >
+              Renew now
+            </Link>
+          ) : null}
+          {hasPlan ? (
+            <Link
+              href="/pricing"
+              className={`inline-flex h-11 items-center justify-center rounded-full px-4 text-sm font-semibold ${
+                payUrl || renewSoon ? "border border-[var(--border)] bg-[var(--bg)] text-[var(--fg)]" : "bg-[var(--accent)] text-[var(--accent-fg)]"
+              }`}
+            >
+              Change plan
+            </Link>
+          ) : null}
           <Link
             href="/billing/invoices"
             className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-4 text-sm font-semibold text-[var(--fg)]"
           >
-            Update Payment Method
+            View invoices
           </Link>
-          {state === "pending_payment" && str(subscription.invoice_url, "") ? (
-            <a
-              href={str(subscription.invoice_url)}
-              className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--accent)] px-4 text-sm font-semibold text-[var(--accent)]"
-            >
-              Continue payment
-            </a>
-          ) : null}
           {state === "active" || state === "cancelled" ? (
             <Button
               type="button"
@@ -241,7 +326,7 @@ export function SubscriptionPanel() {
               disabled={cancelMut.isPending || state === "cancelled"}
               onClick={handleCancel}
             >
-              {cancelMut.isPending ? "Cancelling…" : "Cancel renewal"}
+              {cancelMut.isPending ? "Cancelling…" : state === "cancelled" ? "Renewal cancelled" : "Cancel renewal"}
             </Button>
           ) : null}
         </div>
@@ -265,13 +350,16 @@ export function SubscriptionPanel() {
           </p>
         ) : (
           <div className="min-w-0 overflow-x-auto">
-            <table className="w-full min-w-[28rem] text-left text-sm">
+            <table className="w-full min-w-[32rem] text-left text-sm">
               <thead>
                 <tr className="text-xs text-[var(--fg-subtle)]">
                   <th className="pb-2 font-medium">Date</th>
                   <th className="pb-2 font-medium">Description</th>
                   <th className="pb-2 font-medium">Amount</th>
                   <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 text-right font-medium">
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -280,6 +368,9 @@ export function SubscriptionPanel() {
                   const paid = ["finished", "paid", "confirmed", "complete"].includes(
                     str(row.status).toLowerCase(),
                   );
+                  const payable = PAYABLE.includes(str(row.status).toLowerCase());
+                  const rowPay = str(row.invoice_url, "");
+                  const detailHref = `/billing/invoices/${encodeURIComponent(str(row.order_code))}`;
                   return (
                     <tr key={str(row.order_code || row.id)} className="border-t border-[var(--border)]">
                       <td className="py-2 pr-3 text-[var(--fg-muted)]">
@@ -301,11 +392,27 @@ export function SubscriptionPanel() {
                           className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
                             paid
                               ? "bg-[var(--success-soft)] text-[var(--success)]"
-                              : "bg-[var(--surface-2)] text-[var(--fg-muted)]"
+                              : payable
+                                ? "bg-amber-500/15 text-amber-400"
+                                : "bg-[var(--surface-2)] text-[var(--fg-muted)]"
                           }`}
                         >
                           {status.replaceAll("_", " ")}
                         </span>
+                      </td>
+                      <td className="py-2 text-right">
+                        {payable ? (
+                          <a
+                            href={rowPay || detailHref}
+                            className="inline-flex h-8 items-center rounded-full bg-[var(--accent)] px-3 text-xs font-semibold text-[var(--accent-fg)]"
+                          >
+                            Pay now
+                          </a>
+                        ) : (
+                          <Link href={detailHref} className="text-xs font-semibold text-[var(--accent)]">
+                            View
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   );
