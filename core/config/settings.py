@@ -286,7 +286,7 @@ class Settings(BaseSettings):
             le=30,
             description="Grace days after period_end before entitlement expires",
         ),
-    ] = 3
+    ] = 2
     billing_trial_days: Annotated[
         int,
         Field(

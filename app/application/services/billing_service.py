@@ -1435,7 +1435,9 @@ class BillingService:
                 queue_renewal_reminders,
             )
 
-            renewal_queued = await queue_renewal_reminders(within_hours=72)
+            renewal_queued = await queue_renewal_reminders(
+                grace_days=int(self.settings.billing_grace_days)
+            )
 
         email_result: dict[str, Any] = {"ok": True, "processed": 0}
         with contextlib.suppress(Exception):
