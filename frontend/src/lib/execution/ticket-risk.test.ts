@@ -75,7 +75,7 @@ assert.equal(negativeFee.riskUsd, null);
 assert.ok(negativeFee.violations.some((v) => v.includes("cannot be negative")));
 
 // Spread above $0.45, low RR, volume above 0.01, missing SL.
-// Entries only Monday-Friday 07:00-17:00 UTC.
+// Entries Monday-Friday, 24 hours (24/5).
 assert.ok(
   ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4140, spread: 0.46 }).violations.some((v) =>
     v.startsWith("Spread"),
@@ -88,7 +88,7 @@ const night = ticketRisk({
   spread: 0.3,
   now: NIGHT,
 });
-assert.deepEqual(night.violations, ["Entries only Mon–Fri 07:00–17:00 UTC"]);
+assert.deepEqual(night.violations, []); // 24/5: night entries allowed
 const weekend = ticketRisk({
   ...base,
   stopLoss: 4130,
@@ -96,7 +96,7 @@ const weekend = ticketRisk({
   spread: 0.3,
   now: new Date("2026-10-24T10:00:00Z"),
 });
-assert.deepEqual(weekend.violations, ["Entries only Mon–Fri 07:00–17:00 UTC"]);
+assert.deepEqual(weekend.violations, ["Entries only Mon–Fri, 24 hours (24/5) UTC"]);
 const open = ticketRisk({
   ...base,
   stopLoss: 4130,
@@ -112,7 +112,7 @@ const close = ticketRisk({
   spread: 0.3,
   now: new Date("2026-10-22T17:00:00Z"),
 });
-assert.deepEqual(close.violations, ["Entries only Mon–Fri 07:00–17:00 UTC"]);
+assert.deepEqual(close.violations, []); // 17:00 UTC is inside 24/5
 // RR ≈ 0.12 < 1.50 floor (risk 3.3, reward 0.4) — buy TP above entry.
 assert.ok(
   ticketRisk({ ...base, stopLoss: 4130, takeProfit: 4133.4, spread: 0.3 }).violations.some((v) =>

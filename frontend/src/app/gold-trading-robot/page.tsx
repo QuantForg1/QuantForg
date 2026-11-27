@@ -58,6 +58,7 @@ export default function GoldTradingRobotPage() {
         { title: "Built for gold", text: "Every rule, session filter and volatility model is designed for XAUUSD, not adapted from currency pairs." },
         { title: "Risk limits on every trade", text: "Stop loss on every position, per-trade and daily risk caps, and no martingale or grid." },
         { title: "Your broker, your money", text: "Connect the MT5 account you already own. QuantForg never holds your funds." },
+        { title: "Works 24/5", text: "The robot scans gold around the clock from Monday to Friday and only trades when its conditions and risk limits are met. Weekends and broker closures are skipped." },
         { title: "No VPS needed", text: "Analysis runs in the cloud, so the robot keeps working when your computer is off." },
         { title: "QuantForg AI included", text: "Ask about the live gold market, levels and news, or upload a chart screenshot for analysis." },
         { title: "Full transparency", text: "See every decision, every trade and the reason behind it in your dashboard." },
