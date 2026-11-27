@@ -17,10 +17,10 @@ export const OWNER_MAX_PLANNED_RISK_PCT = 9;
 /** Mirror of owner_live_limits.OWNER_MIN_REWARD_RISK (active server floor). */
 export const OWNER_MIN_REWARD_RISK = 1.5;
 export const OWNER_MAX_SPREAD = 0.45;
-export const OWNER_SESSION_START_UTC_HOUR = 7;
-/** Exclusive end: entries 07:00–16:59 UTC, Monday–Friday only. */
-export const OWNER_SESSION_END_UTC_HOUR = 17;
-export const OWNER_SESSION_LABEL = "Mon–Fri 07:00–17:00 UTC";
+export const OWNER_SESSION_START_UTC_HOUR = 0;
+/** Exclusive end: entries all day (24/5), Monday–Friday only. Mirrors OWNER_SESSION_* in owner_live_limits.py. */
+export const OWNER_SESSION_END_UTC_HOUR = 24;
+export const OWNER_SESSION_LABEL = "Mon–Fri, 24 hours (24/5) UTC";
 export const PLANNED_RISK_NOTE =
   "9% is the maximum planned risk per trade, not a cap on realised loss: " +
   "slippage, gaps, commissions and execution failures can make a loss larger.";
