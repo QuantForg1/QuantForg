@@ -75,9 +75,7 @@ def build_public_performance() -> dict[str, Any]:
                 "outcome": (
                     "win"
                     if (p := _dec(r.get("pnl"))) is not None and p > 0
-                    else "loss"
-                    if p is not None and p < 0
-                    else "breakeven"
+                    else "loss" if p is not None and p < 0 else "breakeven"
                 ),
             }
             for r in recent
