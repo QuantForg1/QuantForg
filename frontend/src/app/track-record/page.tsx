@@ -51,7 +51,7 @@ function Card({ title, s }: { title: string; s?: Summary }) {
   );
 }
 
-export default function PerformancePage() {
+export default function TrackRecordPage() {
   const q = useQuery({
     queryKey: ["public-performance"],
     queryFn: () => apiFetch<Perf>("/public/market/performance", { auth: false }),

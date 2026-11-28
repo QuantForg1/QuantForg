@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Live Track Record · QuantForg Gold Robot",
   description:
     "Every closed XAUUSD trade from the QuantForg robot, wins and losses, with no filtering. Read the real results before you decide.",
-  alternates: { canonical: "/performance" },
+  alternates: { canonical: "/track-record" },
   robots: { index: true, follow: true },
 };
 
