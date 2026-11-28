@@ -964,10 +964,10 @@ class TestPublicTelegramChannel:
         await disp.flush()
         notify_pme(_pme_success(action=ManageActionKind.BREAK_EVEN))
         await disp.flush()
-        be = [row for row in captured if "TRADE UPDATE" in row["text"]]
+        be = [row for row in captured if "BREAKEVEN" in row["text"]]
         assert be
         assert be[0]["reply_to_message_id"] == 21
-        assert "Protective management is now active" in be[0]["text"]
+        assert "stop has been moved to the entry price" in be[0]["text"]
         assert "MT5 Ticket" not in be[0]["text"]
 
     @pytest.mark.asyncio
