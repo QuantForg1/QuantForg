@@ -264,10 +264,24 @@ def _heading(direction: str | None) -> str:
     return "🔴" if direction == "SELL" else "🟢"
 
 
+_LABEL_ICON = {
+    "Opportunity": "⭐",
+    "Confidence": "🎚",
+    "Entry": "📍",
+    "Stop Loss": "🛑",
+    "Take Profit": "🎯",
+    "Risk / Reward": "⚖️",
+    "Market Regime": "📈",
+    "Result": "🏁",
+}
+
+
 def _block(label: str, value: str | None) -> list[str]:
+    """One tidy line per field: icon, label, value."""
     if not value:
         return []
-    return [label, value, ""]
+    icon = _LABEL_ICON.get(label, "▪️")
+    return [f"{icon} {label}: {value}"]
 
 
 def _join(lines: list[str | None]) -> str:
@@ -321,6 +335,7 @@ def render_canonical(payload: CanonicalPublicSignal) -> str:
     lines.extend(_block("Take Profit", payload.take_profit))
     lines.extend(_block("Risk / Reward", payload.risk_reward))
     lines.extend(_block("Market Regime", payload.regime))
+    lines.append("")
     for extra in payload.extra_lines:
         lines.append(extra)
     if payload.extra_lines:
@@ -393,8 +408,8 @@ def render_lifecycle_update(event: str, fields: dict[str, Any]) -> str:
         else (symbol.upper() if symbol else None)
     )
     if event == BREAKEVEN_SET:
-        headline = "🟠 TRADE UPDATE"
-        intro = "Protective management is now active on this setup."
+        headline = "🟠 BREAKEVEN"
+        intro = "The stop has been moved to the entry price on this setup."
     elif event == TRAILING_STOP_UPDATED:
         headline = "🟠 TRADE UPDATE"
         intro = "The protective stop has been advanced with the market."
@@ -431,13 +446,21 @@ def render_lifecycle_update(event: str, fields: dict[str, Any]) -> str:
     lines: list[str | None] = [headline, "", pair, "", intro, ""]
     entry = format_public_price(fields.get("entry"), symbol=symbol)
     stop = format_public_price(
-        fields.get("stop_loss") or fields.get("new_sl") or fields.get("new"),
+        fields.get("new_sl") or fields.get("new") or fields.get("stop_loss"),
         symbol=symbol,
     )
     target = format_public_price(fields.get("take_profit"), symbol=symbol)
     lines.extend(_block("Entry", entry))
     lines.extend(_block("Stop Loss", stop))
     lines.extend(_block("Take Profit", target))
+    outcome = {
+        TAKE_PROFIT: "Take profit reached",
+        STOP_LOSS: "Stop loss reached",
+        TRADE_CLOSED: "Closed according to the plan",
+        PARTIAL_CLOSE: "Partial profit taken",
+    }.get(event)
+    lines.extend(_block("Result", outcome))
+    lines.append("")
     lines.extend(_footer())
     text = _join(lines)
     leaks = audit_public_message(text)
