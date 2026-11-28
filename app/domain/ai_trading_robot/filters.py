@@ -133,7 +133,8 @@ def evaluate_volatility_filter(
             name="volatility",
             passed=False,
             reason=(
-                f"ATR {atr_pct}% below min {config.min_atr_pct_of_price}% (dead market)"
+                f"ATR {atr_pct}% below min "
+                f"{config.min_atr_pct_of_price}% (dead market)"
             ),
             current=str(atr_pct),
             threshold=str(config.min_atr_pct_of_price),

@@ -352,9 +352,7 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_reachable and mt5_attached
-                else "degraded"
-                if gateway_reachable
-                else "offline"
+                else "degraded" if gateway_reachable else "offline"
             ),
         }
 
@@ -495,9 +493,7 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_online and mt5_connected
-                else "degraded"
-                if gateway_online
-                else "offline"
+                else "degraded" if gateway_online else "offline"
             ),
         }
 

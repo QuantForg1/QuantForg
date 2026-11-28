@@ -440,7 +440,8 @@ def confidence_tracking(inp: LlpInput, config: LlpConfig) -> ModuleResult:
     if len(pairs) < config.min_observations_for_calibration:
         return _insufficient(
             "confidence_tracking",
-            f"Need ≥{config.min_observations_for_calibration} predicted/observed pairs",
+            f"Need ≥{config.min_observations_for_calibration} "
+            "predicted/observed pairs",
         )
 
     # Simple calibration: bucket by predicted confidence decade

@@ -197,7 +197,8 @@ def collect_execution_worker_status(
         }
         if degraded:
             blockers.append(
-                f"openai_degraded code={err_code} (advisory only — does not block OMS)"
+                f"openai_degraded code={err_code} "
+                "(advisory only — does not block OMS)"
             )
         payload["openai"] = {
             **st,

@@ -114,7 +114,8 @@ class TradeDecisionEngine:
                 else "Tradable"
             )
             reasons.append(
-                f"{label} {direction.value} (confidence={confidence} quality={quality})"
+                f"{label} {direction.value} "
+                f"(confidence={confidence} quality={quality})"
             )
 
         expected = self._duration(confidence, account.atr)

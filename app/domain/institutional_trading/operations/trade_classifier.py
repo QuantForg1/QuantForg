@@ -169,7 +169,9 @@ def classify_trade(
     if score < int(threshold):
         return TradeClassification(
             trade_class=TradeClass.NO_TRADE,
-            reason=(f"Insufficient opportunity (score {score} < {int(threshold)})."),
+            reason=(
+                f"Insufficient opportunity " f"(score {score} < {int(threshold)})."
+            ),
             opportunity_score=score,
             direction=side,
             confidence=conf,
@@ -200,7 +202,7 @@ def classify_trade(
     return TradeClassification(
         trade_class=TradeClass.SCALP,
         reason=(
-            "Opportunity is tradable but holding-quality evidence is insufficient."
+            "Opportunity is tradable but holding-quality evidence " "is insufficient."
         ),
         opportunity_score=score,
         direction=side,

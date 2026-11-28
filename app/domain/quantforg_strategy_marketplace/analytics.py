@@ -482,9 +482,8 @@ def compare_strategies(
     # Rank by overall
     ranked = sorted(
         comparison,
-        key=lambda c: (
-            _f(_as_dict(c.get("health")).get("overall_strategy_score")) or 0.0
-        ),
+        key=lambda c: _f(_as_dict(c.get("health")).get("overall_strategy_score"))
+        or 0.0,
         reverse=True,
     )
     for i, row in enumerate(ranked):

@@ -180,7 +180,7 @@ class Rc1OpsTelemetryService:
                     "severity": "warning",
                     "code": "execution_success_low",
                     "message": (
-                        f"Execution success {success_pct}% (reject {reject_pct}%)"
+                        f"Execution success {success_pct}% " f"(reject {reject_pct}%)"
                     ),
                 }
             )

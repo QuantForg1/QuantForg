@@ -504,9 +504,7 @@ class FinnhubSentimentProvider:
                 label = (
                     "bullish"
                     if score >= 0.55
-                    else "bearish"
-                    if score <= 0.45
-                    else "neutral"
+                    else "bearish" if score <= 0.45 else "neutral"
                 )
             return SentimentSnapshot(
                 symbol=sym,

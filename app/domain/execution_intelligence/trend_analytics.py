@@ -102,10 +102,8 @@ def compute_risk_trends(trades: list[dict[str, Any]]) -> dict[str, Any]:
 
     ordered = sorted(
         trades,
-        key=lambda t: (
-            _parse_ts(t.get("closed_at") or t.get("created_at"))
-            or datetime.min.replace(tzinfo=UTC)
-        ),
+        key=lambda t: _parse_ts(t.get("closed_at") or t.get("created_at"))
+        or datetime.min.replace(tzinfo=UTC),
     )
     equity = 0.0
     peak = 0.0

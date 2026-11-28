@@ -94,7 +94,8 @@ def build_portfolio_risk_dashboard(
         if inp.allocated_pct > config.max_allocation_pct:
             within = False
             reasons.append(
-                f"Allocation {inp.allocated_pct}% exceeds {config.max_allocation_pct}%."
+                f"Allocation {inp.allocated_pct}% exceeds "
+                f"{config.max_allocation_pct}%."
             )
         else:
             reasons.append(f"Capital allocation {inp.allocated_pct}%.")

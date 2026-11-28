@@ -82,9 +82,9 @@ class ParameterExperimentManager:
                 continue
             parsed.append(
                 ExperimentVariant(
-                    variant_id=str(row.get("variant_id") or f"v{i + 1}"),
+                    variant_id=str(row.get("variant_id") or f"v{i+1}"),
                     parameters=dict(params),
-                    label=str(row.get("label") or f"variant-{i + 1}"),
+                    label=str(row.get("label") or f"variant-{i+1}"),
                 )
             )
         batch = ParameterExperimentBatch(

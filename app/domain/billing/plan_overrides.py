@@ -25,20 +25,12 @@ def _dec(value: Any) -> Decimal | None:
 
 async def fetch_overrides(session: Any) -> dict[str, dict[str, Any]]:
     try:
-        rows = (
-            (
-                await session.execute(
-                    text("""
+        rows = (await session.execute(text("""
                     SELECT plan_id, active, monthly_price_usd, annual_price_usd,
                            billing_interval, trial_days, positioning, entitlements,
                            grace_period_days, updated_at, updated_by
                     FROM billing_plan_overrides
-                    """)
-                )
-            )
-            .mappings()
-            .all()
-        )
+                    """))).mappings().all()
     except Exception:
         return {}
     out: dict[str, dict[str, Any]] = {}

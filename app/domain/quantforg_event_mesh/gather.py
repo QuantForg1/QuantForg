@@ -171,11 +171,9 @@ def gather_event_sources() -> dict[str, Any]:
     )
 
     sources["knowledge_graph"] = _safe(
-        lambda: (
-            __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
-            .get_qkg()
-            .store.get_snapshot()
-        ),
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
+        .get_qkg()
+        .store.get_snapshot(),
         {},
     )
     availability["knowledge_graph"] = bool(sources["knowledge_graph"])

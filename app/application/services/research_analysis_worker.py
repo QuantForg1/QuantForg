@@ -235,9 +235,7 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
             else (
                 "READY"
                 if coverage is not None and coverage >= 99.5
-                else "PARTIAL"
-                if coverage is not None
-                else "UNKNOWN"
+                else "PARTIAL" if coverage is not None else "UNKNOWN"
             )
         ),
         last_scan_completed=datetime.now(UTC).isoformat(),

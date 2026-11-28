@@ -90,7 +90,7 @@ def probe_components(
         }
         components["replay_engine"] = {
             "status": "healthy",
-            "detail": f"replay_lane={(inv.get('lanes') or {}).get('replay', 0)}",
+            "detail": f"replay_lane={ (inv.get('lanes') or {}).get('replay', 0) }",
             "observed_at": now,
         }
     except Exception as exc:

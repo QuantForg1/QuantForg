@@ -104,13 +104,11 @@ def gather_lifecycle_sources() -> dict[str, Any]:
     availability["res"] = bool(sources["res"])
 
     sources["irdp"] = _safe(
-        lambda: (
-            __import__(
-                "app.domain.institutional_release_deployment", fromlist=["get_irdp"]
-            )
-            .get_irdp()
-            .store.list_releases(limit=20)
-        ),
+        lambda: __import__(
+            "app.domain.institutional_release_deployment", fromlist=["get_irdp"]
+        )
+        .get_irdp()
+        .store.list_releases(limit=20),
         [],
     )
     if not isinstance(sources["irdp"], list):
@@ -118,11 +116,9 @@ def gather_lifecycle_sources() -> dict[str, Any]:
     availability["irdp"] = True
 
     sources["qkg"] = _safe(
-        lambda: (
-            __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
-            .get_qkg()
-            .store.get_snapshot()
-        ),
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
+        .get_qkg()
+        .store.get_snapshot(),
         {},
     )
     availability["qkg"] = bool(sources["qkg"])

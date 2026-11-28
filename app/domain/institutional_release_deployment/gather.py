@@ -19,36 +19,32 @@ def gather_release_evidence() -> dict[str, Any]:
 
     # Cached snapshots only — never force heavy rebuilds that mutate production
     sources["cvf"] = _safe(
-        lambda: (
-            __import__(
-                "app.domain.continuous_validation_framework", fromlist=["get_cvf"]
-            )
-            .get_cvf()
-            .store.__dict__.get("_snapshot")
-            or {}
-        ),
+        lambda: __import__(
+            "app.domain.continuous_validation_framework", fromlist=["get_cvf"]
+        )
+        .get_cvf()
+        .store.__dict__.get("_snapshot")
+        or {},
         {},
     )
     availability["cvf"] = bool(sources["cvf"])
 
     sources["eqs"] = _safe(
-        lambda: (
-            __import__("app.domain.execution_quality_suite", fromlist=["get_eqs"])
-            .get_eqs()
-            .store.__dict__.get("_snapshot")
-            or {}
-        ),
+        lambda: __import__("app.domain.execution_quality_suite", fromlist=["get_eqs"])
+        .get_eqs()
+        .store.__dict__.get("_snapshot")
+        or {},
         {},
     )
     availability["eqs"] = bool(sources["eqs"])
 
     sources["res"] = _safe(
-        lambda: (
-            __import__("app.domain.reliability_engineering_suite", fromlist=["get_res"])
-            .get_res()
-            .store.__dict__.get("_snapshot")
-            or {}
-        ),
+        lambda: __import__(
+            "app.domain.reliability_engineering_suite", fromlist=["get_res"]
+        )
+        .get_res()
+        .store.__dict__.get("_snapshot")
+        or {},
         {},
     )
     availability["res"] = bool(sources["res"])
@@ -71,24 +67,20 @@ def gather_release_evidence() -> dict[str, Any]:
     availability["ise"] = isinstance(sources["ise"], dict)
 
     sources["qkg"] = _safe(
-        lambda: (
-            __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
-            .get_qkg()
-            .store.get_snapshot()
-        ),
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
+        .get_qkg()
+        .store.get_snapshot(),
         {},
     )
     availability["qkg"] = bool(sources["qkg"])
 
     sources["audit"] = _safe(
-        lambda: (
-            __import__(
-                "app.domain.audit_governance.store",
-                fromlist=["get_audit_store"],
-            )
-            .get_audit_store()
-            .list(limit=40)
-        ),
+        lambda: __import__(
+            "app.domain.audit_governance.store",
+            fromlist=["get_audit_store"],
+        )
+        .get_audit_store()
+        .list(limit=40),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)

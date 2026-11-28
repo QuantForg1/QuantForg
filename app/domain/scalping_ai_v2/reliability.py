@@ -269,9 +269,7 @@ def plan_incident_recovery(
     incident_type = str(
         incident
         if isinstance(incident, str)
-        else (incident or {}).get("type")
-        if isinstance(incident, dict)
-        else "unknown"
+        else (incident or {}).get("type") if isinstance(incident, dict) else "unknown"
     )
     reasons = [
         f"Incident {incident_type}",

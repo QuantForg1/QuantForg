@@ -573,14 +573,14 @@ def hypothesis_report(matched: list[dict[str, Any]]) -> dict[str, Any]:
         if buy_exp is not None and sell_exp is not None:
             if buy_exp < 0 <= sell_exp:
                 out["A_BUY_BIAS"]["verdict"] = SUSPECTED if n < 50 else "NOT_PROVEN"
-                out["A_BUY_BIAS"]["evidence"] = (
-                    f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
-                )
+                out["A_BUY_BIAS"][
+                    "evidence"
+                ] = f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
             elif sell_exp < 0 <= buy_exp:
                 out["B_SELL_BIAS"]["verdict"] = SUSPECTED if n < 50 else "NOT_PROVEN"
-                out["B_SELL_BIAS"]["evidence"] = (
-                    f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
-                )
+                out["B_SELL_BIAS"][
+                    "evidence"
+                ] = f"buy_expectancy={buy_exp:.4f} sell_expectancy={sell_exp:.4f}"
             else:
                 out["A_BUY_BIAS"]["verdict"] = (
                     "CONTRADICTED_BY_DATA" if buy_exp >= 0 else "NOT_PROVEN"

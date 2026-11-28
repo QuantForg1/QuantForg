@@ -134,7 +134,9 @@ def assess_spread(
                 score=0,
                 confidence_penalty=cfg.spread_soft_penalty_max,
                 reject=True,
-                reason=(f"Spread {spread} exceeds {atr_pct_limit}% of ATR ({atr_cap})"),
+                reason=(
+                    f"Spread {spread} exceeds {atr_pct_limit}% of ATR " f"({atr_cap})"
+                ),
                 historical_median=med_s,
                 abnormal_vs_history=abnormal,
             )

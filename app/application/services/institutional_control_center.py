@@ -287,13 +287,11 @@ def section_system_status() -> dict[str, Any]:
 
     # Replay
     replay_ok = _safe(
-        lambda: (
-            __import__(
-                "app.domain.replay_evidence_lab.evidence_store",
-                fromlist=["get_evidence_database"],
-            ).get_evidence_database()
-            is not None
-        )
+        lambda: __import__(
+            "app.domain.replay_evidence_lab.evidence_store",
+            fromlist=["get_evidence_database"],
+        ).get_evidence_database()
+        is not None
     )
     subs.append(
         _subsystem(
@@ -306,14 +304,12 @@ def section_system_status() -> dict[str, Any]:
 
     # Research Lab
     irl = _safe(
-        lambda: (
-            __import__(
-                "app.domain.institutional_research_lab",
-                fromlist=["get_irl"],
-            )
-            .get_irl()
-            .dashboard()
+        lambda: __import__(
+            "app.domain.institutional_research_lab",
+            fromlist=["get_irl"],
         )
+        .get_irl()
+        .dashboard()
     )
     if isinstance(irl, dict):
         counts = irl.get("counts") or {}
@@ -337,14 +333,12 @@ def section_system_status() -> dict[str, Any]:
 
     # Data Warehouse
     inv = _safe(
-        lambda: (
-            __import__(
-                "app.domain.institutional_data_warehouse.store",
-                fromlist=["get_warehouse"],
-            )
-            .get_warehouse()
-            .inventory()
+        lambda: __import__(
+            "app.domain.institutional_data_warehouse.store",
+            fromlist=["get_warehouse"],
         )
+        .get_warehouse()
+        .inventory()
     )
     if isinstance(inv, dict):
         total = int(inv.get("total_records") or 0)
@@ -404,14 +398,12 @@ def section_live_trading() -> dict[str, Any]:
 
     # Session from domain helper if available
     out["session"] = _safe(
-        lambda: (
-            __import__(
-                "app.domain.institutional_trading.session_filter",
-                fromlist=["classify_session_utc"],
-            )
-            .classify_session_utc(datetime.now(UTC))
-            .value
+        lambda: __import__(
+            "app.domain.institutional_trading.session_filter",
+            fromlist=["classify_session_utc"],
         )
+        .classify_session_utc(datetime.now(UTC))
+        .value
     )
 
     regime = _safe(
@@ -427,14 +419,12 @@ def section_live_trading() -> dict[str, Any]:
 
     # Diagnostics latest cycle
     diag = _safe(
-        lambda: (
-            __import__(
-                "app.application.services.strategy_diagnostics",
-                fromlist=["get_strategy_diagnostics_store"],
-            )
-            .get_strategy_diagnostics_store()
-            .snapshot(limit=5)
+        lambda: __import__(
+            "app.application.services.strategy_diagnostics",
+            fromlist=["get_strategy_diagnostics_store"],
         )
+        .get_strategy_diagnostics_store()
+        .snapshot(limit=5)
     )
     if isinstance(diag, dict):
         cycles = list(diag.get("cycles") or [])
@@ -783,14 +773,12 @@ def section_operational_timeline() -> dict[str, Any]:
     events: list[dict[str, Any]] = []
 
     diag = _safe(
-        lambda: (
-            __import__(
-                "app.application.services.strategy_diagnostics",
-                fromlist=["get_strategy_diagnostics_store"],
-            )
-            .get_strategy_diagnostics_store()
-            .snapshot(limit=15)
+        lambda: __import__(
+            "app.application.services.strategy_diagnostics",
+            fromlist=["get_strategy_diagnostics_store"],
         )
+        .get_strategy_diagnostics_store()
+        .snapshot(limit=15)
     )
     if isinstance(diag, dict):
         for c in list(diag.get("cycles") or [])[:10]:
@@ -824,14 +812,12 @@ def section_operational_timeline() -> dict[str, Any]:
     # Warehouse ingest flow
     flow = (
         _safe(
-            lambda: (
-                __import__(
-                    "app.domain.institutional_data_warehouse.store",
-                    fromlist=["get_warehouse"],
-                )
-                .get_warehouse()
-                .event_flow(limit=10)
-            ),
+            lambda: __import__(
+                "app.domain.institutional_data_warehouse.store",
+                fromlist=["get_warehouse"],
+            )
+            .get_warehouse()
+            .event_flow(limit=10),
             [],
         )
         or []
@@ -848,14 +834,12 @@ def section_operational_timeline() -> dict[str, Any]:
     # Research jobs
     jobs = (
         _safe(
-            lambda: (
-                __import__(
-                    "app.domain.institutional_research_lab",
-                    fromlist=["get_irl"],
-                )
-                .get_irl()
-                .list_jobs(limit=5)
-            ),
+            lambda: __import__(
+                "app.domain.institutional_research_lab",
+                fromlist=["get_irl"],
+            )
+            .get_irl()
+            .list_jobs(limit=5),
             [],
         )
         or []

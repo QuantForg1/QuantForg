@@ -140,14 +140,12 @@ def gather_research_context() -> dict[str, Any]:
     availability["prr"] = bool(sources["prr"])
 
     sources["audit"] = _safe(
-        lambda: (
-            __import__(
-                "app.domain.audit_governance.store",
-                fromlist=["get_audit_store"],
-            )
-            .get_audit_store()
-            .list(limit=50)
-        ),
+        lambda: __import__(
+            "app.domain.audit_governance.store",
+            fromlist=["get_audit_store"],
+        )
+        .get_audit_store()
+        .list(limit=50),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)

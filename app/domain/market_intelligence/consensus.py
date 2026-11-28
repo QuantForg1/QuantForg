@@ -97,7 +97,7 @@ def build_strategy_consensus(
     ).quantize(Decimal("0.01"))
     if avg < config.min_consensus_confidence:
         reasons.append(
-            f"Consensus confidence {avg} below {config.min_consensus_confidence}."
+            f"Consensus confidence {avg} below " f"{config.min_consensus_confidence}."
         )
         return ConsensusResult(
             accepted=False,
@@ -110,7 +110,8 @@ def build_strategy_consensus(
         )
 
     reasons.append(
-        f"Consensus {side.upper()} from {len(majority)} strategies (confidence {avg})."
+        f"Consensus {side.upper()} from {len(majority)} strategies "
+        f"(confidence {avg})."
     )
     return ConsensusResult(
         accepted=True,

@@ -329,7 +329,7 @@ def build_launch_readiness(
         market_state = "GATEWAY_UNAVAILABLE"
         market_code = "GATEWAY_OFFLINE"
         market_why = (
-            "Not evaluated — MT5 Gateway offline (not a market-hours determination)"
+            "Not evaluated — MT5 Gateway offline " "(not a market-hours determination)"
         )
         market_value = "UNAVAILABLE"
         market_blocks = False

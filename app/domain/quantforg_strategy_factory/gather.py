@@ -123,11 +123,9 @@ def gather_factory_sources() -> dict[str, Any]:
     availability["qsmr"] = bool(sources["qsmr"])
 
     sources["qkg"] = _safe(
-        lambda: (
-            __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
-            .get_qkg()
-            .store.get_snapshot()
-        ),
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
+        .get_qkg()
+        .store.get_snapshot(),
         {},
     )
     availability["qkg"] = bool(sources["qkg"])
