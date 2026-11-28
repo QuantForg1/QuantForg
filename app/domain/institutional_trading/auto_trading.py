@@ -502,10 +502,7 @@ def evaluate_instrument_spread(
         diag["spread_limit"] = None
         return (
             False,
-            (
-                f"Spread fail-closed — no instrument specification for "
-                f"{symbol_u or '—'}"
-            ),
+            (f"Spread fail-closed — no instrument specification for {symbol_u or '—'}"),
             diag,
         )
     reject, _, _, _ = resolve_spread_limits(
@@ -798,8 +795,7 @@ def evaluate_auto_trade_safety(
         "Maximum open positions",
         opens_ok,
         (
-            f"Open positions {facts.open_positions} at max "
-            f"{policy.max_open_positions}"
+            f"Open positions {facts.open_positions} at max {policy.max_open_positions}"
             if not opens_ok
             else ""
         ),

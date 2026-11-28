@@ -99,12 +99,14 @@ def gather_ops_context() -> dict[str, Any]:
         availability["irl"] = False
 
     diag = _safe(
-        lambda: __import__(
-            "app.application.services.strategy_diagnostics",
-            fromlist=["get_strategy_diagnostics_store"],
-        )
-        .get_strategy_diagnostics_store()
-        .snapshot(limit=40),
+        lambda: (
+            __import__(
+                "app.application.services.strategy_diagnostics",
+                fromlist=["get_strategy_diagnostics_store"],
+            )
+            .get_strategy_diagnostics_store()
+            .snapshot(limit=40)
+        ),
         {},
     )
     sources["diagnostics"] = diag
@@ -158,12 +160,14 @@ def gather_ops_context() -> dict[str, Any]:
     availability["sic"] = bool(sources["sic"])
 
     sources["audit"] = _safe(
-        lambda: __import__(
-            "app.domain.audit_governance.store",
-            fromlist=["get_audit_store"],
-        )
-        .get_audit_store()
-        .list(limit=60),
+        lambda: (
+            __import__(
+                "app.domain.audit_governance.store",
+                fromlist=["get_audit_store"],
+            )
+            .get_audit_store()
+            .list(limit=60)
+        ),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)

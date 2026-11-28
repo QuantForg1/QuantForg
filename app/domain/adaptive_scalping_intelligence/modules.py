@@ -656,7 +656,7 @@ def weekly_ai_coach_report(inp: AsiInput, config: AsiConfig) -> ModuleResult:
                     f"Need ≥{config.min_calibration_samples} observations; "
                     f"have {len(pool)}"
                 ),
-                f"Lookback target {config.coach_lookback_days}d " "(caller-filtered)",
+                f"Lookback target {config.coach_lookback_days}d (caller-filtered)",
                 "Coach never auto-modifies trading rules",
             ),
             details={

@@ -69,8 +69,7 @@ def coach_from_trades(
     if skipped_de >= max(3, n // 4):
         mistakes.append(f"{skipped_de}/{n} trades lack Decision Engine score linkage")
         suggestions.append(
-            "Only size risk when Decision Engine allows PAPER TRADE_IDEA "
-            "— never bypass"
+            "Only size risk when Decision Engine allows PAPER TRADE_IDEA — never bypass"
         )
     else:
         habits.append(

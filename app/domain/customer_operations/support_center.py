@@ -135,8 +135,7 @@ HELP_GUIDES: tuple[dict[str, Any], ...] = (
             "Go to Broker Accounts.",
             "Choose your broker, then pick the exact server from the list.",
             "Enter your MT5 login and the trading (master) password.",
-            "Press Connect. The password is stored encrypted and is never shown "
-            "again.",
+            "Press Connect. The password is stored encrypted and is never shown again.",
             "Your account appears as queued until its own trading terminal has "
             "verified the login. Only then can the robot use it.",
         ),

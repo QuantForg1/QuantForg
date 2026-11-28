@@ -69,7 +69,7 @@ def evaluate_post_trade(inp: BrainInput, config: TradingBrainConfig) -> ModuleRe
         avg = (sum(pnls) / Decimal(len(pnls))).quantize(Decimal("0.01"))
         details["avg_pnl"] = str(avg)
         reasons.append(
-            f"{len(pnls)} PnL samples — win_rate " f"{details['win_rate']}% (supplied)"
+            f"{len(pnls)} PnL samples — win_rate {details['win_rate']}% (supplied)"
         )
         if avg >= 0:
             score += Decimal("15")

@@ -94,12 +94,14 @@ def gather_knowledge_sources() -> dict[str, Any]:
     availability["regime"] = bool(sources["regime"])
 
     sources["diagnostics"] = _safe(
-        lambda: __import__(
-            "app.application.services.strategy_diagnostics",
-            fromlist=["get_strategy_diagnostics_store"],
-        )
-        .get_strategy_diagnostics_store()
-        .snapshot(limit=30),
+        lambda: (
+            __import__(
+                "app.application.services.strategy_diagnostics",
+                fromlist=["get_strategy_diagnostics_store"],
+            )
+            .get_strategy_diagnostics_store()
+            .snapshot(limit=30)
+        ),
         {},
     )
     availability["diagnostics"] = bool(sources["diagnostics"])
@@ -123,12 +125,14 @@ def gather_knowledge_sources() -> dict[str, Any]:
     availability["sic"] = bool(sources["sic"])
 
     sources["audit"] = _safe(
-        lambda: __import__(
-            "app.domain.audit_governance.store",
-            fromlist=["get_audit_store"],
-        )
-        .get_audit_store()
-        .list(limit=40),
+        lambda: (
+            __import__(
+                "app.domain.audit_governance.store",
+                fromlist=["get_audit_store"],
+            )
+            .get_audit_store()
+            .list(limit=40)
+        ),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)

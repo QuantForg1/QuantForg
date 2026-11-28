@@ -88,7 +88,7 @@ def build_investigations(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             timeline.append(
                 {
                     "order": i + 1,
-                    "stage": st.get("stage") or st.get("name") or f"step_{i+1}",
+                    "stage": st.get("stage") or st.get("name") or f"step_{i + 1}",
                     "status": st.get("status") or "UNKNOWN",
                     "reason": st.get("reason") or st.get("detail") or "",
                     "timestamp": st.get("timestamp")

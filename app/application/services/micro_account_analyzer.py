@@ -260,7 +260,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         f"Lots={report.get('calculated_lots')}"
     )
     lines.append(
-        f"- Eligible: **{report.get('eligible_label')}** " f"({report.get('status')})"
+        f"- Eligible: **{report.get('eligible_label')}** ({report.get('status')})"
     )
     lines.append(f"- Reason: {report.get('reason')}")
     if report.get("fifty_dollar_clear_statement"):

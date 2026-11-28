@@ -33,7 +33,7 @@ class AiMarketAdvisor:
         if connected:
             conditions.append(
                 f"Broker session is connected"
-                f"{f' ({broker.get('server')})' if broker.get('server') else ''}."
+                f"{f' ({broker.get("server")})' if broker.get('server') else ''}."
             )
         else:
             conditions.append(

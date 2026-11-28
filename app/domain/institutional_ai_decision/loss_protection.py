@@ -68,8 +68,7 @@ def evaluate_loss_protection(
         if atr_pct > config.max_atr_pct_of_price:
             vol_ok = False
             reasons.append(
-                f"Abnormal volatility ATR {atr_pct}% > "
-                f"{config.max_atr_pct_of_price}%."
+                f"Abnormal volatility ATR {atr_pct}% > {config.max_atr_pct_of_price}%."
             )
         elif atr_pct < config.min_atr_pct_of_price:
             vol_ok = False

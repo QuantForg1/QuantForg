@@ -17,7 +17,7 @@ ROUTES = {
 }
 
 print(
-    "qf_raw_asgi_loaded" f" python={sys.version.split()[0]}" f" module=app.raw_asgi",
+    f"qf_raw_asgi_loaded python={sys.version.split()[0]} module=app.raw_asgi",
     flush=True,
 )
 

@@ -135,7 +135,7 @@ def build_recommendations(
         target = meta.get("target")
         ratio = meta.get("ratio")
         if target and ratio is not None and ratio < 1.0:
-            recs.append(f"Grow {domain} coverage " f"({meta.get('observed')}/{target})")
+            recs.append(f"Grow {domain} coverage ({meta.get('observed')}/{target})")
     completeness = quality.get("completeness_ratio")
     if completeness is not None and completeness < 0.8:
         recs.append("Improve version/correlation key completeness on ingested rows")

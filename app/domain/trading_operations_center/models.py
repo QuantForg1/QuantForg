@@ -36,12 +36,10 @@ CHECKLIST_RESOLVE: dict[str, str] = {
         "Ensure XAUUSD is selectable and tradable on the attached MT5 account"
     ),
     "risk_ready": (
-        "Clear RISK_LOCK / daily loss locks; confirm plane.daily_loss_exceeded "
-        "is false"
+        "Clear RISK_LOCK / daily loss locks; confirm plane.daily_loss_exceeded is false"
     ),
     "safety_ready": (
-        "Clear SAFETY_LOCK by disarming kill switch "
-        "(POST /ite/ops/kill-switch/disarm)"
+        "Clear SAFETY_LOCK by disarming kill switch (POST /ite/ops/kill-switch/disarm)"
     ),
     "execution_enabled": (
         "Set Railway EXECUTION_ENABLED=true; confirm MT5_GATEWAY_BASE_URL; "

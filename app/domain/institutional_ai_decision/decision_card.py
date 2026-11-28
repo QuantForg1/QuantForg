@@ -75,7 +75,7 @@ def build_decision_card(
 
     if health.auto_pause:
         why_no.append(
-            f"Strategy {health.strategy_id} auto-suspended " f"(health {health.score})."
+            f"Strategy {health.strategy_id} auto-suspended (health {health.score})."
         )
 
     if decision == "TRADE_IDEA":

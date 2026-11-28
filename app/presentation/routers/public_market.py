@@ -102,3 +102,23 @@ async def public_market_status(
         "personal_broker_required": False,
         **readiness,
     }
+
+
+@router.get("/performance")
+def public_performance() -> dict[str, Any]:
+    """Audited public track record (all closed trades, wins and losses)."""
+    import time as _t
+
+    from app.application.services.public_performance import build_public_performance
+
+    hit = _PERF_CACHE.get("v")
+    now = _t.monotonic()
+    if hit is not None and now - hit[0] < 300:
+        return dict(hit[1])
+    payload = build_public_performance()
+    if payload.get("available"):
+        _PERF_CACHE["v"] = (now, payload)
+    return payload
+
+
+_PERF_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}

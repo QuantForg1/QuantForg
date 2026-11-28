@@ -96,8 +96,7 @@ class ResearchLabStore:
             "fails": fails,
             "criteria": criteria,
             "note": (
-                "Decision Engine remains the gatekeeper — "
-                "eligibility is advisory only"
+                "Decision Engine remains the gatekeeper — eligibility is advisory only"
             ),
             "never_auto_forwards": True,
         }

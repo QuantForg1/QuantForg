@@ -127,7 +127,9 @@ class PostgresExecutionDecisionRepository:
             # Partial unique (user_id, request_id) WHERE NOT replay enforces
             # at most one canonical row; upsert by PK for same-entity re-add.
             await session.execute(
-                text(insert_sql + """
+                text(
+                    insert_sql
+                    + """
                     ON CONFLICT (id) DO UPDATE SET
                         user_id = EXCLUDED.user_id,
                         request_id = EXCLUDED.request_id,
@@ -144,7 +146,8 @@ class PostgresExecutionDecisionRepository:
                         request_snapshot = EXCLUDED.request_snapshot,
                         idempotent_replay = EXCLUDED.idempotent_replay,
                         decided_at = EXCLUDED.decided_at
-                    """),
+                    """
+                ),
                 params,
             )
         return decision

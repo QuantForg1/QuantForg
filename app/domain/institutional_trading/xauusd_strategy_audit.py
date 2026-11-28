@@ -571,8 +571,7 @@ def build_recommendations(
         if n < _MIN_SESSION_SAMPLES:
             label = name.replace("_", " ").title()
             recs.append(
-                f"Need more {label} evidence "
-                f"(have {n}, want >={_MIN_SESSION_SAMPLES})"
+                f"Need more {label} evidence (have {n}, want >={_MIN_SESSION_SAMPLES})"
             )
 
     regimes = regime_perf.get("buckets") or {}
@@ -590,8 +589,7 @@ def build_recommendations(
 
     if trade_count < 50:
         recs.append(
-            f"Need more completed XAUUSD trade samples "
-            f"(have {trade_count}, want >=50)"
+            f"Need more completed XAUUSD trade samples (have {trade_count}, want >=50)"
         )
     if decision_count < 100:
         recs.append(

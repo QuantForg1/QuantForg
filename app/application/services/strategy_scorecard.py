@@ -360,8 +360,9 @@ class StrategyScorecardService:
             try:
                 tb = await asyncio.wait_for(feed.tick(symbol="XAUUSD"), 6)
                 tick = getattr(tb, "tick", None)
-                bid, ask = _to_float(getattr(tick, "bid", None)), _to_float(
-                    getattr(tick, "ask", None)
+                bid, ask = (
+                    _to_float(getattr(tick, "bid", None)),
+                    _to_float(getattr(tick, "ask", None)),
                 )
                 if bid and ask and 0 < ask - bid < 2:
                     spread = ask - bid

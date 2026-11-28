@@ -179,16 +179,16 @@ class LiveProbeCollector:
             tuple[bool, float, int | None, dict[str, Any] | None, bool] | None
         ) = None
 
-        def _probe_gateway() -> (
-            tuple[bool, float, int | None, dict[str, Any] | None, bool]
-        ):
+        def _probe_gateway() -> tuple[
+            bool, float, int | None, dict[str, Any] | None, bool
+        ]:
             if not gateway_url:
                 return False, 0.0, None, None, False
             return _http_get_json(f"{gateway_url}/health", timeout=gateway_timeout)
 
-        def _probe_railway() -> (
-            tuple[bool, float, int | None, dict[str, Any] | None, bool]
-        ):
+        def _probe_railway() -> tuple[
+            bool, float, int | None, dict[str, Any] | None, bool
+        ]:
             base = domain if domain.startswith("http") else f"https://{domain}"
             return _http_get_json(
                 f"{base.rstrip('/')}/health", timeout=_RAILWAY_PROBE_TIMEOUT_S

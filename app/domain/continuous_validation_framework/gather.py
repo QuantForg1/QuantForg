@@ -125,29 +125,33 @@ def gather_validation_sources() -> dict[str, Any]:
 
     # Cached snapshots only — avoid forcing full EQS/RES rebuilds
     sources["eqs"] = _safe(
-        lambda: __import__("app.domain.execution_quality_suite", fromlist=["get_eqs"])
-        .get_eqs()
-        .store.__dict__.get("_snapshot")
-        or {},
+        lambda: (
+            __import__("app.domain.execution_quality_suite", fromlist=["get_eqs"])
+            .get_eqs()
+            .store.__dict__.get("_snapshot")
+            or {}
+        ),
         {},
     )
     availability["eqs"] = bool(sources["eqs"])
 
     sources["res"] = _safe(
-        lambda: __import__(
-            "app.domain.reliability_engineering_suite", fromlist=["get_res"]
-        )
-        .get_res()
-        .store.__dict__.get("_snapshot")
-        or {},
+        lambda: (
+            __import__("app.domain.reliability_engineering_suite", fromlist=["get_res"])
+            .get_res()
+            .store.__dict__.get("_snapshot")
+            or {}
+        ),
         {},
     )
     availability["res"] = bool(sources["res"])
 
     sources["qkg"] = _safe(
-        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
-        .get_qkg()
-        .store.get_snapshot(),
+        lambda: (
+            __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
+            .get_qkg()
+            .store.get_snapshot()
+        ),
         {},
     )
     availability["qkg"] = bool(sources["qkg"])

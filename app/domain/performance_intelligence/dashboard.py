@@ -595,8 +595,7 @@ def build_recommendations(
         c = int((sess.get(name) or {}).get("trade_count") or 0)
         if c < 15:
             recs.append(
-                f"Need more {name.replace('_', ' ').title()} session samples "
-                f"(have {c})"
+                f"Need more {name.replace('_', ' ').title()} session samples (have {c})"
             )
 
     regs = regimes.get("regimes") or {}

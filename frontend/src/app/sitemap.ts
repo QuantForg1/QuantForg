@@ -22,6 +22,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ["/learn", 0.8, "monthly"],
     ["/pricing", 0.9, "weekly"],
     ["/live", 0.7, "daily"],
+    ["/performance", 0.8, "daily"],
     ["/register", 0.7, "monthly"],
     ["/contact", 0.5, "monthly"],
     ["/login", 0.4, "monthly"],

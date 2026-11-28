@@ -187,7 +187,9 @@ def _health_cards(
     oms_ok = (
         True
         if oms_status in {"PASS", "OK", "HEALTHY"}
-        else False if oms_status in {"FAIL", "CRITICAL"} else None
+        else False
+        if oms_status in {"FAIL", "CRITICAL"}
+        else None
     )
 
     return [
@@ -691,7 +693,9 @@ def _event_stream(
                 "level": (
                     "critical"
                     if st == "FAIL"
-                    else "info" if st == "PASS" else "warning"
+                    else "info"
+                    if st == "PASS"
+                    else "warning"
                 ),
                 "message": f"{node.get('stage')} {st}",
                 "reason": node.get("reason"),
@@ -1377,7 +1381,9 @@ def build_noc_command_center() -> dict[str, Any]:
                 "result": (
                     "PASS"
                     if a.get("accepted")
-                    else "FAIL" if fails else a.get("final_result")
+                    else "FAIL"
+                    if fails
+                    else a.get("final_result")
                 ),
                 "reason": a.get("first_blocker") or (fails[0] if fails else None),
                 "first_blocker": a.get("first_blocker"),

@@ -93,7 +93,9 @@ def promotion_gate(
         blocked["blocker"] = (
             "LOOKAHEAD"
             if lookahead
-            else "INSUFFICIENT_SAMPLE" if n < 20 else "OOS_NOT_POSITIVE"
+            else "INSUFFICIENT_SAMPLE"
+            if n < 20
+            else "OOS_NOT_POSITIVE"
         )
         return blocked
     if not (human_authorized and risk_reviewed and safety_reviewed):
